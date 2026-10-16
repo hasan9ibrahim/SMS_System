@@ -474,7 +474,8 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
       const cRate = cVer?.rate ?? 0;
       const cSys = cRate / cEx;
 
-      const hlrProvider = trunk.hlrProviderIds[0] ?? 0;
+      // HLR rules are checked top to bottom; the first DNID match picks the provider (§13.2).
+      const hlrProvider = trunk.hlrRules.find((r) => dst.startsWith(r.dnidPrefix))?.providerId ?? 0;
       const hlrType = hlrProvider ? (rng.chance(0.6) ? "cached" : "live") : "none";
       const hlrCost = hlrType === "live" ? world.hlrProviders[hlrProvider - 1]!.rateUsd / baseFx : 0;
       const hlrPorted = hlrProvider && rng.chance(0.08) ? 1 : 0;

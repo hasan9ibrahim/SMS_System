@@ -107,7 +107,9 @@ export interface CustomerTrunk {
   share: number;
   /** countries this client sends most to */
   focusCountryIds: number[];
-  hlrProviderIds: number[];
+  /** HLR rules that run on this trunk, in order (direct and inherited, §13.2) */
+  hlrRules: { ruleId: number; providerId: number; dnidPrefix: string }[];
+  /** translation rules that run on this trunk, in order (direct and inherited, §13.2) */
   translationRuleIds: number[];
   otp: boolean;
 }
@@ -135,6 +137,7 @@ export interface VendorTrunk {
   rateTableId: number;
   quality: VendorQuality;
   isDirect: boolean;
+  /** egress translation rules that run on this trunk, in order (direct and inherited, §13.2) */
   translationRuleIds: number[];
 }
 
@@ -191,6 +194,75 @@ export interface RouteRule {
   hlrPolicy: boolean;
 }
 
+/** What a translation or HLR rule applies to (§13.2, option A: the rule keeps its targets). */
+export interface RuleTarget {
+  ruleId: number;
+  type: "trunk" | "enterprise" | "category" | "all";
+  trunkKind: "customer" | "vendor";
+  targetId: number | null;
+  insertAt: "top" | "bottom";
+}
+
+/** Per-trunk order and on/off of one rule; order belongs to the trunk. */
+export interface TrunkRuleSetting {
+  position: number | null;
+  enabled: boolean;
+}
+
+export interface RuleSet {
+  activeRuleIds: Set<number>;
+  targets: RuleTarget[];
+  /** key `${trunkKind}:${trunkId}:${ruleId}` */
+  settings: Map<string, TrunkRuleSetting>;
+}
+
+export interface TrunkRef {
+  id: number;
+  enterpriseId: number;
+  categoryId: number;
+}
+
+export function targetMatches(t: RuleTarget, kind: "customer" | "vendor", trunk: TrunkRef): boolean {
+  if (t.trunkKind !== kind) return false;
+  switch (t.type) {
+    case "trunk":
+      return t.targetId === trunk.id;
+    case "enterprise":
+      return t.targetId === trunk.enterpriseId;
+    case "category":
+      return t.targetId === trunk.categoryId;
+    case "all":
+      return true;
+  }
+}
+
+/**
+ * Rules that run on a trunk, in execution order: rules reaching the trunk through any
+ * target (direct trunk, its enterprise, its category or all trunks), minus inactive rules
+ * and rules switched off for this trunk. Order: unpositioned 'top' rules, then positioned
+ * rules by position, then the remaining rules; ties by rule id. A trunk created later
+ * gets every enterprise, category and all-trunk rule without any extra row.
+ */
+export function rulesForTrunk(set: RuleSet, kind: "customer" | "vendor", trunk: TrunkRef): number[] {
+  const top = new Map<number, boolean>();
+  for (const t of set.targets) {
+    if (!set.activeRuleIds.has(t.ruleId) || !targetMatches(t, kind, trunk)) continue;
+    top.set(t.ruleId, (top.get(t.ruleId) ?? false) || t.insertAt === "top");
+  }
+  const rank = (ruleId: number): [number, number] => {
+    const s = set.settings.get(`${kind}:${trunk.id}:${ruleId}`);
+    if (s?.position != null) return [1, s.position];
+    return [top.get(ruleId) ? 0 : 2, 0];
+  };
+  return [...top.keys()]
+    .filter((id) => set.settings.get(`${kind}:${trunk.id}:${id}`)?.enabled !== false)
+    .sort((a, b) => {
+      const [ga, pa] = rank(a);
+      const [gb, pb] = rank(b);
+      return ga - gb || pa - pb || a - b;
+    });
+}
+
 export interface World {
   anchor: number;
   historyStart: number;
@@ -217,6 +289,8 @@ export interface World {
   routeRules: RouteRule[];
   hlrProviders: { id: number; name: string; rateUsd: number }[];
   numberLists: { id: number; name: string; type: string; entries: string[] }[];
+  translationRules: RuleSet;
+  hlrRules: RuleSet & { rules: Map<number, { providerId: number; dnidPrefix: string }> };
 }
 
 /** Version valid at time t, or null. Versions are sorted by `from`. */

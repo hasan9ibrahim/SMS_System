@@ -11,7 +11,14 @@ import { EDR_COLUMNS, generateEdrs, type EdrWriter } from "../src/generator/edr.
 import { PROFILES, type Profile } from "../src/generator/profiles.js";
 import { TableSink } from "../src/generator/sink.js";
 import { TABLE_ORDER } from "../src/generator/loaders.js";
-import { amAt, type RateVersion, type World } from "../src/generator/world.js";
+import {
+  amAt,
+  rulesForTrunk,
+  targetMatches,
+  type RateVersion,
+  type RuleSet,
+  type World,
+} from "../src/generator/world.js";
 
 const ANCHOR = Date.parse("2026-10-16T12:00:00Z");
 const profile: Profile = { ...PROFILES.small!, enterprises: 40, routeRules: 150 };
@@ -164,7 +171,81 @@ describe("route rules (spec §6.3, §13.27)", () => {
   });
 });
 
+describe("rule targets and per-trunk order (spec §13.2, option A)", () => {
+  test("rules target trunks, enterprises, categories and all trunks", () => {
+    const types = new Set(world.translationRules.targets.map((t) => t.type));
+    for (const type of ["trunk", "enterprise", "category", "all"]) assert.ok(types.has(type as never), type);
+  });
+
+  test("a trunk added later inherits enterprise and category rules", () => {
+    const set = world.translationRules;
+    for (const type of ["enterprise", "category"] as const) {
+      const t = set.targets.find((x) => x.type === type && set.activeRuleIds.has(x.ruleId))!;
+      const newTrunk = {
+        id: 9_999_999,
+        enterpriseId: type === "enterprise" ? t.targetId! : -1,
+        categoryId: type === "category" ? t.targetId! : -1,
+      };
+      assert.ok(rulesForTrunk(set, t.trunkKind, newTrunk).includes(t.ruleId), type);
+    }
+  });
+
+  test("a rule switched off for one trunk does not run there", () => {
+    const set = world.translationRules;
+    const [key] = [...set.settings].find(([, s]) => !s.enabled)!;
+    const [kind, trunkId, ruleId] = key.split(":") as ["customer" | "vendor", string, string];
+    const trunk = (kind === "customer" ? world.customerTrunks : world.vendorTrunks).find(
+      (t) => t.id === Number(trunkId),
+    )!;
+    assert.ok(set.targets.some((t) => t.ruleId === Number(ruleId) && targetMatches(t, kind, trunk)));
+    assert.ok(!rulesForTrunk(set, kind, trunk).includes(Number(ruleId)));
+  });
+
+  test("order: unpositioned top rules, then positioned, then the rest; off and inactive rules skipped", () => {
+    const set: RuleSet = {
+      activeRuleIds: new Set([1, 2, 3, 4, 6]),
+      targets: [
+        { ruleId: 1, type: "enterprise", trunkKind: "customer", targetId: 7, insertAt: "bottom" },
+        { ruleId: 2, type: "trunk", trunkKind: "customer", targetId: 5, insertAt: "bottom" },
+        { ruleId: 3, type: "all", trunkKind: "customer", targetId: null, insertAt: "top" },
+        { ruleId: 4, type: "category", trunkKind: "customer", targetId: 9, insertAt: "bottom" },
+        { ruleId: 5, type: "all", trunkKind: "customer", targetId: null, insertAt: "bottom" },
+        { ruleId: 6, type: "all", trunkKind: "vendor", targetId: null, insertAt: "bottom" },
+      ],
+      settings: new Map([
+        ["customer:5:2", { position: 1, enabled: true }],
+        ["customer:5:4", { position: null, enabled: false }],
+      ]),
+    };
+    assert.deepEqual(rulesForTrunk(set, "customer", { id: 5, enterpriseId: 7, categoryId: 9 }), [3, 2, 1]);
+    assert.deepEqual(rulesForTrunk(set, "vendor", { id: 5, enterpriseId: 7, categoryId: 9 }), [6]);
+  });
+
+  test("each trunk's rule list is computed from targets and settings", () => {
+    for (const t of world.customerTrunks) {
+      assert.deepEqual(t.translationRuleIds, rulesForTrunk(world.translationRules, "customer", t));
+      assert.deepEqual(
+        t.hlrRules.map((r) => r.ruleId),
+        rulesForTrunk(world.hlrRules, "customer", t),
+      );
+    }
+    for (const t of world.vendorTrunks)
+      assert.deepEqual(t.translationRuleIds, rulesForTrunk(world.translationRules, "vendor", t));
+  });
+});
+
 describe("EDRs (spec §9.1, §13.29, §13.30)", () => {
+  test("HLR provider comes from the trunk's first rule matching the number", () => {
+    let withHlr = 0;
+    for (const r of edrs.slice(0, 5000)) {
+      const trunk = world.customerTrunkById.get(Number(cell(r, "c_trunk_id")))!;
+      const first = trunk.hlrRules.find((h) => cell(r, "dst_addr").startsWith(h.dnidPrefix));
+      assert.equal(Number(cell(r, "hlr_provider_id")), first?.providerId ?? 0);
+      if (first) withHlr++;
+    }
+    assert.ok(withHlr > 0);
+  });
+
   test("rows have one value per column", () => {
     assert.ok(edrs.length > 25_000);
     for (const r of edrs.slice(0, 2000)) assert.equal(r.length, EDR_COLUMNS.length);

@@ -41,6 +41,8 @@ export function emptyWorld(anchor: number, profile: Profile): World {
     routeRules: [],
     hlrProviders: [],
     numberLists: [],
+    translationRules: { activeRuleIds: new Set(), targets: [], settings: new Map() },
+    hlrRules: { activeRuleIds: new Set(), targets: [], settings: new Map(), rules: new Map() },
   };
 }
 

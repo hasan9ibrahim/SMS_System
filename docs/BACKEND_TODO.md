@@ -10,6 +10,7 @@ backend team knows exactly what to build. Newest first.
 
 ## Decisions
 
+- 2026-10-16, rule targets (§13.2, option A): a translation or HLR rule keeps what it applies to (specific trunks, a whole enterprise, a product category or all customer / all vendor trunks). A trunk added later to that enterprise or category gets the rule automatically, and its Rules tab shows it as inherited. Order and on/off stay per trunk. Decided by: Hasan Ibrahim.
 - 2026-10-16, MCC/MNC master (§6.1): production uses a list Hasan Ibrahim supplies as an Excel/CSV file, loaded through the MCCMNC Unique Codes import. The public list in `mock/data/` is for fake data only. Backend: the import must match existing codes, add new ones and report codes that disappear but are still used by rate lines or rules. Decided by: Hasan Ibrahim.
 - 2026-10-16, dial-code Master Table / numbering plan (§6.1): production uses a ready list supplied by Hasan Ibrahim and loaded through the Master Table import. The generated prefixes are fake-data only. Decided by: Hasan Ibrahim.
 - 2026-10-16, shared MCCs (e.g. Guam on 310/311): no special rule in the system; the supplied MCC/MNC list decides which country-level codes exist. Decided by: Hasan Ibrahim.
@@ -28,7 +29,8 @@ New tables or columns beyond the reference platform, so the backend builds the s
 - `rate_tables.kind` (customer / vendor): every vendor trunk owns exactly one vendor table, so the Rate Manager treats sell and buy tables alike (§13.12).
 - `rate_lines` keeps every version (`valid_from`, `valid_to`, NULL = open); two exclusion constraints forbid overlapping versions of the same destination (and sender ID). `stated_valid_from` holds the RN date when a back-dated RN is applied from the received time (§13.32).
 - `route_rules.tps_condition`, `revenue_condition`, `hlr_action` are jsonb (§13.8, §13.9, §13.24); `route_rule_vendors.warmup_*` and `route_rule_whitelists` (§13.27).
-- `translation_rule_attachments` and `hlr_rule_attachments`: rules attach directly to trunks with a per-trunk position, no groups (§13.2).
+- `translation_rule_targets` / `hlr_rule_targets`: what a rule applies to (`target_type` trunk / enterprise / category / all, plus `trunk_kind` for translation rules; customer side = ingress, vendor side = egress). `translation_rule_trunk_settings` / `hlr_rule_trunk_settings`: optional per-trunk position, continue flag and on/off. No groups (§13.2).
+- Rules that run on a trunk, in order (the backend must match `rulesForTrunk` in `mock/src/generator/world.ts`): every active rule reaching the trunk through any target, minus rules switched off for that trunk; unpositioned rules whose target says "top" first, then positioned rules by position, then the rest; ties by rule id. HLR rules are then checked top to bottom and the first DNID match picks the provider.
 - `transactions.send_confirmation`, `confirmation_status`, `include_in_soa`, `exclude_reason` (§13.33). `vendor_invoices.our_amount` / `our_volume` / `recon_status` (§13.31).
 - `changes`: one row per save with a field-level diff and `undo_of_id` (§13.10).
 - `deleted_at` / `deleted_by_id` on every archivable record; nothing is hard-deleted (§13.29).
@@ -36,4 +38,4 @@ New tables or columns beyond the reference platform, so the backend builds the s
 
 ## Open questions
 
-- Rules that apply to a whole enterprise, a category or all trunks (§13.2): should the rule remember the target itself, so trunks added later get it automatically (and the trunk's Rules tab shows it as "inherited"), or should saving attach it only to the trunks that exist at that moment? §13.2 mentions "inherited" rules on the trunk tab, which points to the first option. Waiting for confirmation.
+- None open.

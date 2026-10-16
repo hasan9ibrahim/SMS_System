@@ -1,6 +1,7 @@
 /**
  * Number lists, route rules (spec §6.3, §13.8, §13.9, §13.24, §13.27), translation
- * rules and HLR rules attached directly to trunks without groups (spec §13.2).
+ * rules and HLR rules that target trunks, enterprises, categories or all trunks without
+ * groups, with per-trunk order and on/off (spec §13.2, option A).
  * Includes the dirty data the Cleanup Center must find (§13.19): unattached rules,
  * expired and inactive rules, identical copies and references to deleted vendors.
  */
@@ -8,7 +9,20 @@ import { WeightedPicker, type Rng } from "./rng.js";
 import { json, type TableSink } from "./sink.js";
 import { syllableWord } from "./names.js";
 import { usersOf } from "./admin.js";
-import { DAY, type Country, type Mccmnc, type RouteRule, type RouteVendor, type World } from "./world.js";
+import {
+  DAY,
+  rulesForTrunk,
+  targetMatches,
+  type Country,
+  type Mccmnc,
+  type RouteRule,
+  type RouteVendor,
+  type RuleSet,
+  type RuleTarget,
+  type TrunkRef,
+  type TrunkRuleSetting,
+  type World,
+} from "./world.js";
 import type { Profile } from "./profiles.js";
 
 export async function generateRules(world: World, rng: Rng, sink: TableSink, profile: Profile): Promise<void> {
@@ -306,15 +320,13 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
         r.vendors.push({ level: 2, vendorTrunkId: backup, sharePct: null, isBackup: true, warmupCount: null });
     } else {
       r.huntPolicy = "top_down";
-      r.vendors = chosen.map(
-        (id, i): RouteVendor => ({
-          level: i + 1,
-          vendorTrunkId: id,
-          sharePct: null,
-          isBackup: i > 0,
-          warmupCount: null,
-        }),
-      );
+      r.vendors = chosen.map((id, i): RouteVendor => ({
+        level: i + 1,
+        vendorTrunkId: id,
+        sharePct: null,
+        isBackup: i > 0,
+        warmupCount: null,
+      }));
     }
     if (r.vendors[0] && rng.chance(0.04)) r.vendors[0].warmupCount = rng.pick([100, 500, 1000, 5000]); // §13.27
     if (r.vendors.length > 1 && rng.chance(0.02) && tagLists.length) {
@@ -487,8 +499,7 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
     { name: "Map UNKNOWN DLR to UNDELIV", direction: "ingress", row: { dlr_status_map: json({ UNKNOWN: "UNDELIV" }) } },
     { name: "Sender ID template", direction: "egress", row: { sender_conversion: "sender_id_template" } },
   ];
-  const position = new Map<string, number>();
-  let attId = 1;
+  let targetId = 1;
   for (let i = 0; i < profile.translationRules; i++) {
     const tpl = rng.pick(templates);
     const id = i + 1;
@@ -541,28 +552,99 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
     }
     await sink.insert("translation_rules", row);
 
-    // Attach directly to trunks (§13.2); ~15% stay unattached (§13.19).
+    if (row.status === "active") world.translationRules.activeRuleIds.add(id);
+
+    // Targets (§13.2, option A): mostly specific trunks, some whole enterprises,
+    // categories or all trunks of one side; ~15% stay unassigned (§13.19).
     if (rng.chance(0.15)) continue;
     const kind = tpl.direction === "ingress" ? "customer" : "vendor";
-    const pool: { id: number; translationRuleIds: number[] }[] =
-      kind === "customer" ? world.customerTrunks : world.vendorTrunks;
-    for (const t of rng.sample(pool, rng.weighted([1, 2, 3, 6], [55, 25, 12, 8]))) {
-      const key = `${kind}:${t.id}`;
-      const pos = (position.get(key) ?? 0) + 1;
-      position.set(key, pos);
-      const enabled = rng.chance(0.95);
-      if (enabled && row.status === "active") t.translationRuleIds.push(id);
-      await sink.insert("translation_rule_attachments", {
-        id: attId++,
+    for (const t of pickTargets(world, rng, kind, [75, 13, 8, 4])) {
+      const target: RuleTarget = { ruleId: id, ...t, insertAt: rng.chance(0.1) ? "top" : "bottom" };
+      world.translationRules.targets.push(target);
+      await sink.insert("translation_rule_targets", {
+        id: targetId++,
         translation_rule_id: id,
+        target_type: target.type,
         trunk_kind: kind,
-        trunk_id: t.id,
-        position: pos,
-        continue_after: rng.chance(0.85),
-        enabled,
+        target_id: target.targetId,
+        insert_at: target.insertAt,
+        created_by_id: row.created_by_id,
+        inserted_at: row.inserted_at,
       });
     }
   }
+
+  let settingId = 1;
+  for (const kind of ["customer", "vendor"] as const) {
+    const trunks: (TrunkRef & { translationRuleIds: number[] })[] =
+      kind === "customer" ? world.customerTrunks : world.vendorTrunks;
+    for (const t of trunks) {
+      for (const s of trunkSettings(world.translationRules, rng, kind, t)) {
+        world.translationRules.settings.set(`${kind}:${t.id}:${s.ruleId}`, s);
+        await sink.insert("translation_rule_trunk_settings", {
+          id: settingId++,
+          translation_rule_id: s.ruleId,
+          trunk_kind: kind,
+          trunk_id: t.id,
+          position: s.position,
+          continue_after: rng.chance(0.85),
+          enabled: s.enabled,
+        });
+      }
+      t.translationRuleIds = rulesForTrunk(world.translationRules, kind, t);
+    }
+  }
+}
+
+/** One rule's targets: specific trunks, whole enterprises, a category or all trunks of a side. */
+function pickTargets(
+  world: World,
+  rng: Rng,
+  kind: "customer" | "vendor",
+  weights: [number, number, number, number],
+): Omit<RuleTarget, "ruleId" | "insertAt">[] {
+  const pool: TrunkRef[] = kind === "customer" ? world.customerTrunks : world.vendorTrunks;
+  const type = rng.weighted(["trunk", "enterprise", "category", "all"] as const, weights);
+  const ids = (list: number[]) => list.map((targetId) => ({ type, trunkKind: kind, targetId }));
+  switch (type) {
+    case "trunk":
+      return ids(rng.sample(pool, rng.weighted([1, 2, 3, 6], [55, 25, 12, 8])).map((t) => t.id));
+    case "enterprise":
+      return ids(rng.sample([...new Set(pool.map((t) => t.enterpriseId))], rng.int(1, 2)));
+    case "category":
+      return ids([rng.pick([...new Set(pool.map((t) => t.categoryId))])]);
+    case "all":
+      return [{ type, trunkKind: kind, targetId: null }];
+  }
+}
+
+/**
+ * Per-trunk settings rows: every directly targeted rule gets a position; about one in
+ * eight inherited rules is reordered on the trunk or switched off for it.
+ */
+function trunkSettings(
+  set: RuleSet,
+  rng: Rng,
+  kind: "customer" | "vendor",
+  trunk: TrunkRef,
+): (TrunkRuleSetting & { ruleId: number })[] {
+  const direct = new Set<number>();
+  const inherited = new Set<number>();
+  for (const t of set.targets) {
+    if (!targetMatches(t, kind, trunk)) continue;
+    (t.type === "trunk" ? direct : inherited).add(t.ruleId);
+  }
+  const out: (TrunkRuleSetting & { ruleId: number })[] = [];
+  let position = 0;
+  for (const ruleId of [...new Set([...direct, ...inherited])].sort((a, b) => a - b)) {
+    if (direct.has(ruleId)) out.push({ ruleId, position: ++position, enabled: rng.chance(0.95) });
+    else if (rng.chance(0.12)) {
+      out.push(
+        rng.chance(0.35) ? { ruleId, position: null, enabled: false } : { ruleId, position: ++position, enabled: true },
+      );
+    }
+  }
+  return out;
 }
 
 async function generateHlr(world: World, rng: Rng, sink: TableSink, profile: Profile): Promise<void> {
@@ -588,34 +670,55 @@ async function generateHlr(world: World, rng: Rng, sink: TableSink, profile: Pro
       deleted_at: null,
     });
   }
-  const hlrRules: { id: number; providerId: number }[] = [];
+  let targetId = 1;
   for (let i = 0; i < profile.hlrRules; i++) {
+    const id = i + 1;
     const c = rng.pick(world.countries);
     const providerId = rng.int(1, providers.length);
-    hlrRules.push({ id: i + 1, providerId });
+    const status = rng.chance(0.06) ? "inactive" : "active";
+    const updatedBy = rng.pick(editors).id;
+    world.hlrRules.rules.set(id, { providerId, dnidPrefix: c.dialCode });
+    if (status === "active") world.hlrRules.activeRuleIds.add(id);
     await sink.insert("hlr_rules", {
-      id: i + 1,
+      id,
       name: `HLR ${c.name} via ${providers[providerId - 1]}`,
       hlr_provider_id: providerId,
       dnid_pattern: `^${c.dialCode}`,
-      status: rng.chance(0.06) ? "inactive" : "active",
-      updated_by_id: rng.pick(editors).id,
+      status,
+      updated_by_id: updatedBy,
       deleted_at: null,
     });
-  }
-  let attId = 1;
-  for (const t of world.customerTrunks) {
-    if (!rng.chance(0.25)) continue;
-    const picked = rng.sample(hlrRules, rng.int(1, 4));
-    for (const [pos, rule] of picked.entries()) {
-      t.hlrProviderIds.push(rule.providerId);
-      await sink.insert("hlr_rule_attachments", {
-        id: attId++,
-        hlr_rule_id: rule.id,
-        customer_trunk_id: t.id,
-        position: pos + 1,
-        enabled: true,
+    // Targets (§13.2, §13.24): customer trunks only; ~12% stay unassigned (§13.19).
+    if (rng.chance(0.12)) continue;
+    for (const t of pickTargets(world, rng, "customer", [70, 15, 12, 3])) {
+      const target: RuleTarget = { ruleId: id, ...t, insertAt: "bottom" };
+      world.hlrRules.targets.push(target);
+      await sink.insert("hlr_rule_targets", {
+        id: targetId++,
+        hlr_rule_id: id,
+        target_type: target.type,
+        target_id: target.targetId,
+        insert_at: target.insertAt,
+        created_by_id: updatedBy,
+        inserted_at: new Date(world.anchor - rng.int(5, 400) * DAY),
       });
     }
+  }
+  let settingId = 1;
+  for (const t of world.customerTrunks) {
+    for (const s of trunkSettings(world.hlrRules, rng, "customer", t)) {
+      world.hlrRules.settings.set(`customer:${t.id}:${s.ruleId}`, s);
+      await sink.insert("hlr_rule_trunk_settings", {
+        id: settingId++,
+        hlr_rule_id: s.ruleId,
+        customer_trunk_id: t.id,
+        position: s.position,
+        enabled: s.enabled,
+      });
+    }
+    t.hlrRules = rulesForTrunk(world.hlrRules, "customer", t).map((ruleId) => ({
+      ruleId,
+      ...world.hlrRules.rules.get(ruleId)!,
+    }));
   }
 }

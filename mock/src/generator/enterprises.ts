@@ -382,7 +382,7 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         senders: Array.from({ length: rng.int(3, 25) }, () => senderId(rng, homeCountry.dialCode)),
         share: rng.float(0.2, 1),
         focusCountryIds: [...focus],
-        hlrProviderIds: [],
+        hlrRules: [],
         translationRuleIds: [],
         otp: cat === "OTP" || rng.chance(0.4),
       };
