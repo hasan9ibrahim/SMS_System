@@ -20,8 +20,8 @@
     "check": "npm run lint:contract && npm run gen:check && npm run typecheck && npm test && npm run build",
     "dev:mock": "npm run dev -w mock",
     "dev:web": "npm run dev -w web",
-    "seed:small": "npm run gen:small -w mock",
-    "seed:full": "npm run gen:full -w mock",
+    "seed:small": "npm run gen:small -w mock --",
+    "seed:full": "npm run gen:full -w mock --",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
   }

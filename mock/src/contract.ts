@@ -23,6 +23,8 @@ export interface ContractOperation {
   validateBody?: ValidateFunction;
   /** Path parameter validators by name. */
   pathParams: Record<string, ValidateFunction>;
+  /** Query parameters: validator, whether required, and whether the value is numeric. */
+  queryParams: Record<string, { validate: ValidateFunction; required: boolean; numeric: boolean }>;
   /** Response body validators by status code, for tests and dev-mode checks. */
   responses: Record<string, ValidateFunction | undefined>;
 }
@@ -68,13 +70,26 @@ export const operations: ContractOperation[] = Object.entries(document.paths).fl
       responses: Record<string, JsonObject>;
     };
     const pathParams: Record<string, ValidateFunction> = {};
+    const queryParams: ContractOperation["queryParams"] = {};
     (op.parameters ?? []).forEach((param, i) => {
-      const resolved = resolveRef(param) as { name: string; in: string };
-      if (resolved.in !== "path") return;
+      const resolved = resolveRef(param) as {
+        name: string;
+        in: string;
+        required?: boolean;
+        schema?: { type?: unknown };
+      };
       const base = (param as { $ref?: string }).$ref
         ? (param as { $ref: string }).$ref.slice(2).split("/")
         : ["paths", path, m, "parameters", String(i)];
-      pathParams[resolved.name] = compile(...base, "schema");
+      if (resolved.in === "path") pathParams[resolved.name] = compile(...base, "schema");
+      if (resolved.in === "query") {
+        const type = (resolveRef(resolved.schema) as { type?: unknown } | undefined)?.type;
+        queryParams[resolved.name] = {
+          validate: compile(...base, "schema"),
+          required: resolved.required === true,
+          numeric: type === "integer" || type === "number",
+        };
+      }
     });
     const responses: Record<string, ValidateFunction | undefined> = {};
     for (const [status, response] of Object.entries(op.responses)) {
@@ -94,6 +109,7 @@ export const operations: ContractOperation[] = Object.entries(document.paths).fl
         ? compile("paths", path, m, "requestBody", "content", "application/json", "schema")
         : undefined,
       pathParams,
+      queryParams,
       responses,
     };
   }),

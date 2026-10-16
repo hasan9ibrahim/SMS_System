@@ -5,6 +5,23 @@ seeded fake data generator (build-order step 2, `src/generator/`) that fills Pos
 (configuration) and ClickHouse (EDRs) with production-like **fake** data. The live traffic
 simulator will also live here.
 
+## Mock server
+
+`npm run dev:mock` (repo root) serves the contract on `http://127.0.0.1:4010/api/v1` and the
+live socket on `/socket/websocket`. Every route comes from `contract/openapi.yaml`; requests
+and path / query parameters are validated against it.
+
+| Part | Where | Notes |
+| --- | --- | --- |
+| List engine | `src/lists/engine.ts`, `defs.ts`, `fields.ts` | Any `POST /{list}/query`: the filter tree (AND/OR groups, §13.25 operators), quick search, sort and cursor become parameterised SQL on the seeded PostgreSQL. A new list = a field catalogue + SQL column map |
+| Session | `src/api/session.ts` | Acts as seeded user 1 (an administrator) until sign-in exists (§13.28); `MOCK_USER_ID` picks another |
+| Views, search, undo | `src/api/views.ts`, `search.ts`, `changes.ts` | Saved views (§13.25), Ctrl K search, change history with conflict-checked undo (§13.10) |
+| Live socket | `src/live/socket.ts` | Phoenix Channels V2: `live:tps` ticks every second, `alerts:<userId>` incidents every few minutes |
+
+Without a running, seeded database, data operations answer `503` (as the contract allows)
+and `/me` falls back to a demo user, so the shell still opens. Database-backed tests are
+skipped locally in that case; CI seeds a PostgreSQL service and runs them.
+
 ## Run the generator
 
 ```bash

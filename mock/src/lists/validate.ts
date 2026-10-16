@@ -4,6 +4,7 @@ import type { FilterCondition, FilterGroup, ListFields, ListQuery, Problem } fro
 
 const NO_VALUE = new Set(["empty", "not_empty"]);
 const MULTI_VALUE = new Set(["in", "not_in", "between"]);
+const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
 
 export function checkListQuery(query: ListQuery, fields: ListFields): NonNullable<Problem["errors"]> {
   const byName = new Map(fields.fields.map((f) => [f.field, f]));
@@ -24,6 +25,22 @@ export function checkListQuery(query: ListQuery, fields: ListFields): NonNullabl
           errors.push({ path: `${at}/values`, message: `"between" needs exactly 2 values` });
       } else if (!NO_VALUE.has(c.op) && c.value === undefined) {
         errors.push({ path: `${at}/value`, message: `"${c.op}" needs a value` });
+      }
+      // Operands must suit the field type, so the database never sees a bad cast.
+      const operands = c.values ?? (c.value === undefined ? [] : [c.value]);
+      const isNumber = NUMERIC.has(f.type);
+      const isTime = f.type === "date" || f.type === "datetime";
+      for (const v of operands) {
+        if (
+          isNumber &&
+          !(typeof v === "number" || (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))))
+        ) {
+          errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a number` });
+        } else if (isTime && (typeof v !== "string" || Number.isNaN(Date.parse(v)))) {
+          errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a date (ISO 8601)` });
+        } else if (f.type === "boolean" && typeof v !== "boolean") {
+          errors.push({ path: `${at}/value`, message: "expected true or false" });
+        }
       }
       if (c.op === "regex" && typeof c.value === "string") {
         try {

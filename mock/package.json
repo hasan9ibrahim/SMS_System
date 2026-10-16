@@ -5,8 +5,8 @@
   "description": "Mock server answering contract/openapi.yaml, plus the fake data generator (frontend phase)",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "node --env-file-if-exists=../.env --watch --import tsx src/index.ts",
+    "start": "node --env-file-if-exists=../.env --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "gen": "node --env-file-if-exists=../.env --max-old-space-size=6144 --import tsx src/generator/cli.ts",
@@ -16,6 +16,7 @@
     "build:mccmnc": "tsx scripts/build-mccmnc.ts data/source/mcc-mnc-table.csv data/mccmnc.csv"
   },
   "dependencies": {
+    "@fastify/websocket": "^11.3.4",
     "@sms/contract": "*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
@@ -28,6 +29,7 @@
     "@types/node": "^22.20.5",
     "@types/pg": "^8.11.10",
     "@types/pg-copy-streams": "^1.2.5",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }

@@ -44,6 +44,72 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/me/preferences": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change the signed-in user's UI preferences
+     * @description Theme (§15.2), open-in-new-tab (§13.5) and animations (§13.3). Only the fields sent change.
+     */
+    patch: operations["updatePreferences"];
+    trace?: never;
+  };
+  "/me/workspace": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The user's open page tabs
+     * @description Restored after re-login, per user (§13.5). Empty for a new user.
+     */
+    get: operations["getWorkspace"];
+    /**
+     * Save the user's open page tabs
+     * @description Sent by the GUI (debounced) whenever tabs are opened, closed, moved or pinned (§13.5).
+     */
+    put: operations["saveWorkspace"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Jump-to search across records (Ctrl K)
+     * @description Case-insensitive match on names, aliases, usernames and IDs of enterprises, trunks,
+     *     rate tables, route rules and users (§15.1). Pages are searched in the GUI itself.
+     *     Account manager masking (§13.17) applies: masked names are not searchable.
+     */
+    get: operations["search"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/meta/lists/{list}/fields": {
     parameters: {
       query?: never;
@@ -97,6 +163,109 @@ export type paths = {
     get: operations["getEnterprise"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** List users (server-side filter, sort and paging) */
+    post: operations["queryUsers"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/views": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Saved views of a list visible to the user
+     * @description The user's own views plus views other users shared with them (read-only),
+     *     decided 2026-10-16 (§13.25).
+     */
+    get: operations["listViews"];
+    put?: never;
+    /** Save the current filters, sort and columns as a named view */
+    post: operations["createView"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/views/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Change a view (owner only) */
+    put: operations["updateView"];
+    post?: never;
+    /** Delete a view (owner only) */
+    delete: operations["deleteView"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/changes/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change history (server-side filter, sort and paging)
+     * @description One row per save (§13.10). Filter on `entityType` + `entityId` for a record's
+     *     History tab, on `userId` for "My changes".
+     */
+    post: operations["queryChanges"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/changes/{id}/undo": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Undo one change (§13.10)
+     * @description Restores only the fields that change touched, so other users' later edits to
+     *     other fields are kept. If someone else has since changed one of those fields,
+     *     the server answers 409 with both values; the GUI then asks the user to keep the
+     *     current value, restore theirs, or cancel, and calls again with `resolution`.
+     *     The undo is itself a change and is returned. Users may undo their own changes;
+     *     undoing someone else's needs the "undo others' changes" permission (403 otherwise).
+     */
+    post: operations["undoChange"];
     delete?: never;
     options?: never;
     head?: never;
@@ -183,11 +352,133 @@ export type components = {
       /** @description GUI Access Group permission keys; buttons not covered are hidden (§1). */
       permissions: string[];
     };
+    PreferencesUpdate: {
+      theme?: components["schemas"]["Theme"];
+      openInNewTab?: boolean;
+      animations?: boolean;
+    };
+    /** @description One open page tab (§13.5). Per-tab page state (filters, scroll) stays in the browser. */
+    WorkspaceTab: {
+      id: string;
+      /** @description GUI route of the page, with its query string. */
+      path: string;
+      title: string;
+      pinned: boolean;
+    };
+    Workspace: {
+      tabs: components["schemas"]["WorkspaceTab"][];
+      activeTabId: string | null;
+    };
+    SearchHit: {
+      /** @enum {string} */
+      kind: "enterprise" | "customer_trunk" | "vendor_trunk" | "rate_table" | "route_rule" | "user";
+      id: components["schemas"]["Id"];
+      /** @description Display name, e.g. "Name – Alias (ID)" for enterprises. */
+      label: string;
+      /** @description Secondary text, e.g. the trunk's enterprise or the rule's priority. */
+      detail?: string | null;
+    };
+    SearchResults: {
+      hits: components["schemas"]["SearchHit"][];
+    };
+    UserSummary: {
+      id: components["schemas"]["Id"];
+      username: string;
+      displayName: string;
+      email: string;
+      department?: string | null;
+      accessGroup?: string | null;
+      status: components["schemas"]["RecordStatus"];
+      isAccountManager: boolean;
+    };
+    UserPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["UserSummary"][];
+    };
+    /** @description What a saved view restores on a grid. */
+    ViewState: {
+      filter?: components["schemas"]["FilterGroup"];
+      search?: string;
+      sort?: components["schemas"]["SortKey"][];
+      /** @description Visible columns in display order (field names). */
+      columns?: string[];
+    };
+    SavedViewInput: {
+      list: components["schemas"]["ListId"];
+      name: string;
+      /** @description Colleagues who see the view read-only (decided 2026-10-16). Empty = private. */
+      sharedWithUserIds?: components["schemas"]["Id"][];
+      state: components["schemas"]["ViewState"];
+    };
+    SavedView: {
+      id: components["schemas"]["Id"];
+      list: components["schemas"]["ListId"];
+      name: string;
+      owner: {
+        id: components["schemas"]["Id"];
+        displayName: string;
+      };
+      sharedWithUserIds: components["schemas"]["Id"][];
+      /** @description True when the view was shared with the user by someone else. */
+      readOnly: boolean;
+      state: components["schemas"]["ViewState"];
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    /** @enum {string} */
+    ChangeType:
+      "create" | "edit" | "clone" | "delete" | "reorder" | "enable" | "disable" | "bulk" | "undo";
+    /** @description One field of one record, before and after the save. */
+    ChangeField: {
+      entityId: components["schemas"]["Id"];
+      field: string;
+      before: unknown;
+      after: unknown;
+    };
+    Change: {
+      id: components["schemas"]["Id"];
+      /** @description e.g. route_rule, rate_line, translation_rule, hlr_rule, customer_trunk. */
+      entityType: string;
+      entityIds: components["schemas"]["Id"][];
+      changeType: components["schemas"]["ChangeType"];
+      diff: components["schemas"]["ChangeField"][];
+      note?: string | null;
+      userId: components["schemas"]["Id"];
+      userName: string;
+      ip?: string | null;
+      at: components["schemas"]["Timestamp"];
+      /** @description Set on an undo; the change it reverted. */
+      undoOfId: components["schemas"]["Id"] | null;
+      /** @description Set when a later undo reverted this change. */
+      undoneById: components["schemas"]["Id"] | null;
+    };
+    ChangePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["Change"][];
+    };
+    UndoRequest: {
+      /**
+       * @description Answer to a 409. `restore_mine` overwrites the later values; `keep_current`
+       *     undoes only the fields nobody changed since.
+       * @enum {string}
+       */
+      resolution?: "restore_mine" | "keep_current";
+      note?: string;
+    };
+    UndoConflict: components["schemas"]["Problem"] & {
+      conflicts: {
+        entityId: components["schemas"]["Id"];
+        field: string;
+        /** @description The value this change set (what undo would replace). */
+        mine: unknown;
+        /** @description The value set later by someone else. */
+        current: unknown;
+        changedBy: string;
+        changedAt: components["schemas"]["Timestamp"];
+      }[];
+    };
     /**
      * @description A list page whose fields are described by `/meta/lists/{list}/fields`.
      * @enum {string}
      */
-    ListId: "enterprises";
+    ListId: "enterprises" | "users" | "changes";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -337,6 +628,9 @@ export type components = {
       status: components["schemas"]["RecordStatus"];
       businessCompanyId: components["schemas"]["Id"];
       accountManagerId: components["schemas"]["Id"];
+      /** @description Display name of the current account manager (§13.30 keeps the history). */
+      accountManagerName?: string | null;
+      businessCompanyName?: string;
       /** @description ISO 3166-1 alpha-2. */
       country?: string | null;
     } & components["schemas"]["Audit"];
@@ -365,6 +659,28 @@ export type components = {
     };
     /** @description No such record */
     NotFound: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+    /** @description Signed in, but this record or action belongs to someone else */
+    Forbidden: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+    /**
+     * @description The data store behind this operation is not reachable. In the frontend phase this
+     *     means the local databases are not running or not seeded (`npm run db:up`,
+     *     `npm run seed:small`).
+     */
+    Unavailable: {
       headers: {
         [name: string]: unknown;
       };
@@ -425,6 +741,107 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
     };
   };
+  updatePreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PreferencesUpdate"];
+      };
+    };
+    responses: {
+      /** @description The user with the new preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrentUser"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+    };
+  };
+  getWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Open tabs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Workspace"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  saveWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["Workspace"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Workspace"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  search: {
+    parameters: {
+      query: {
+        q: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Best matches, grouped by kind in the GUI */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SearchResults"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
   getListFields: {
     parameters: {
       query?: never;
@@ -474,6 +891,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
     };
   };
   getEnterprise: {
@@ -498,6 +916,208 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryUsers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of users */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listViews: {
+    parameters: {
+      query: {
+        list: components["schemas"]["ListId"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Views, own first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SavedView"][];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedViewInput"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SavedView"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedViewInput"];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SavedView"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  deleteView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryChanges: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of changes, newest first by default */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChangePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  undoChange: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["UndoRequest"];
+      };
+    };
+    responses: {
+      /** @description The new change that records the undo */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Change"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description A later change by someone else touched the same field(s) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["UndoConflict"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
     };
   };
 }

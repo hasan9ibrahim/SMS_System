@@ -8,6 +8,19 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Seeded PostgreSQL for the mock server's database-backed tests (values as in .env.example).
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_DB: sms_config
+          POSTGRES_USER: sms_dev
+          POSTGRES_PASSWORD: sms_dev_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sms_dev -d sms_config"
+          --health-interval 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +33,8 @@ jobs:
       - name: Generated types match the contract
         run: npm run gen:check
       - run: npm run typecheck
+      - name: Seed fake data (small profile, configuration only)
+        run: npm run seed:small -- --skip-edrs
       - run: npm test
       - run: npm run build
       - name: docker-compose file is valid

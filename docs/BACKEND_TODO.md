@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-16 | App shell (all pages) | Contract v0.2.0: `PATCH /me/preferences` (theme, open-in-new-tab, animations); `GET`/`PUT /me/workspace` (open tabs, restored after re-login); `GET /search` (Ctrl K jump-to across enterprises, trunks, rate tables, route rules, users); `POST /users/query`; saved views `GET /views?list=`, `POST /views`, `PUT`/`DELETE /views/{id}` (private, shared read-only with chosen users); `POST /changes/query` and `POST /changes/{id}/undo` (409 `UndoConflict` with both values, `resolution` = `restore_mine` / `keep_current`); `Enterprise` rows gain `accountManagerName` and `businessCompanyName`; `ListId` adds `users`, `changes`; data operations may answer `503 Unavailable`. Migration `db/postgres/migrations/002_user_workspace_views.sql` | §3, §13.5, §13.10, §13.25, §15.1, §15.2 | Build step 3 | Mock done |
 | 2026-10-16 | (all, data layer) | No contract change. Database schemas for the Elixir backend to reuse: `db/postgres/migrations/001_config_schema.sql` (configuration in schema `sms`, Ecto conventions, safe-delete columns) and `db/clickhouse/migrations/001_edr.sql` (EDRs + hourly summary). See "Schema notes" | §6–§13, §14 | Build step 2 | Draft |
 | 2026-10-16 | (all) | Contract skeleton v0.1.0: `GET /health`, `GET /me`, `GET /meta/lists/{list}/fields`, `POST /enterprises/query`, `GET /enterprises/{id}`; list conventions (`ListQuery` filter tree with AND/OR groups and the §13.25 operators, sort, cursor paging, `problem+json` errors); WebSocket frame = Phoenix Channels V2, events `live:dashboard/summary`, `live:tps/tick`, `alerts:<userId>/incident` | §1, §3, §5.1, §13.3, §13.6, §13.25, §14.2, §15.1 | Build step 1 | Mock done |
 
@@ -17,7 +18,7 @@ backend team knows exactly what to build. Newest first.
 - 2026-10-16, re-routed messages: the customer is billed once, on the final attempt; the vendor is billed for every attempt it accepted (per its billing type). Decided by: Hasan Ibrahim.
 - 2026-10-16, billing data retention (§13.29): EDRs, invoices, SOAs, payments, credit notes, balance history, disputes, rate history and audit records are kept for 7 years and cannot be purged before that (anonymising a closed client's contact details stays allowed, as §13.29 says). Decided by: Hasan Ibrahim.
 - 2026-10-16, excluded payments (§13.33): a payment with "Include in SOA" unticked is left off the partner's SOA (and shown in the SOA preview's collapsed "excluded" section) but still counts in the partner's balance and in finance reports. Decided by: Hasan Ibrahim.
-- 2026-10-16, saved filter views (§13.25): a saved view is private to the user who saved it. The owner can share it with named colleagues (chosen users), who see it read-only in their view list. No department-wide or company-wide sharing. To be added to the contract with the views endpoint. Decided by: Hasan Ibrahim.
+- 2026-10-16, saved filter views (§13.25): a saved view is private to the user who saved it. The owner can share it with named colleagues (chosen users), who see it read-only in their view list. No department-wide or company-wide sharing. In the contract since v0.2.0 (`/views`). Decided by: Hasan Ibrahim.
 
 ## Schema notes (build step 2, fake data generator)
 
@@ -35,6 +36,16 @@ New tables or columns beyond the reference platform, so the backend builds the s
 - `changes`: one row per save with a field-level diff and `undo_of_id` (§13.10).
 - `deleted_at` / `deleted_by_id` on every archivable record; nothing is hard-deleted (§13.29).
 - EDRs copy rate, cost, exchange rate and base-currency values at send time (§13.29, §13.32).
+
+## App shell notes (build step 3)
+
+What the Phoenix backend must match so the screens need no change:
+
+- **List queries** (`POST /{list}/query`): the mock's engine in `mock/src/lists/engine.ts` is the reference for semantics. Text operators are case-insensitive (`ILIKE`, `lower()`); `like` uses `%` / `_` with backslash escape; `regex` is POSIX case-insensitive (`~*`), and a pattern PostgreSQL rejects answers 400; negative operators (`neq`, `not_like`, `not_in`) keep rows whose value is empty; every sort ends with the record ID as tie-breaker; quick search matches the list's text columns. The mock's cursor is an offset; the backend may use keyset paging as long as the cursor stays opaque.
+- **Field catalogues** (`GET /meta/lists/{list}/fields`) drive the grid's column filters and the filter builder; adding a field to a list needs no screen change.
+- **Undo** (`POST /changes/{id}/undo`): restores only the fields the change touched; a later change by another user to the same record and field (not itself undone) is a conflict; undo of `create` archives the record, undo of `delete` restores it; the undo is a new change with `undo_of_id`; a change can be undone once (400 afterwards); undoing someone else's change needs the `undo_others` permission (403 otherwise).
+- **Live socket**: `/socket/websocket?vsn=2.0.0`, Phoenix Channels V2 frames. The shell joins `live:tps` (tick once a second) and `alerts:<userId>` (incidents). The browser opens one socket in the main window and relays it to tabs dragged into other windows.
+- **Workspace**: the GUI saves the open tabs (path, title, pinned) about a second after each change; page state (filters, sort, columns) is inside each tab's path.
 
 ## Open questions
 

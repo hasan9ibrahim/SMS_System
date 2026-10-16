@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.1.0
+  version: 0.2.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -35,6 +35,14 @@ tags:
     description: Field catalogue for grids and the filter builder (§13.25)
   - name: enterprises
     description: Partners - customers, vendors and reciprocals (§5)
+  - name: users
+    description: Staff users (§11), e.g. for sharing saved views
+  - name: views
+    description: Saved filter views of a list (§13.25)
+  - name: history
+    description: Change history and per-user undo (§13.10)
+  - name: search
+    description: Jump-to search across records (Ctrl K, §15.1)
 
 security:
   - sessionCookie: []
@@ -73,6 +81,111 @@ paths:
                 $ref: "#/components/schemas/CurrentUser"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /me/preferences:
+    patch:
+      tags: [session]
+      operationId: updatePreferences
+      summary: Change the signed-in user's UI preferences
+      description: Theme (§15.2), open-in-new-tab (§13.5) and animations (§13.3). Only the fields sent change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesUpdate"
+      responses:
+        "200":
+          description: The user with the new preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/workspace:
+    get:
+      tags: [session]
+      operationId: getWorkspace
+      summary: The user's open page tabs
+      description: Restored after re-login, per user (§13.5). Empty for a new user.
+      responses:
+        "200":
+          description: Open tabs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [session]
+      operationId: saveWorkspace
+      summary: Save the user's open page tabs
+      description: Sent by the GUI (debounced) whenever tabs are opened, closed, moved or pinned (§13.5).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Workspace"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /search:
+    get:
+      tags: [search]
+      operationId: search
+      summary: Jump-to search across records (Ctrl K)
+      description: |
+        Case-insensitive match on names, aliases, usernames and IDs of enterprises, trunks,
+        rate tables, route rules and users (§15.1). Pages are searched in the GUI itself.
+        Account manager masking (§13.17) applies: masked names are not searchable.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Best matches, grouped by kind in the GUI
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
   /meta/lists/{list}/fields:
     get:
@@ -120,6 +233,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
   /enterprises/{id}:
     get:
@@ -139,6 +254,206 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /users/query:
+    post:
+      tags: [users]
+      operationId: queryUsers
+      summary: List users (server-side filter, sort and paging)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /views:
+    get:
+      tags: [views]
+      operationId: listViews
+      summary: Saved views of a list visible to the user
+      description: |
+        The user's own views plus views other users shared with them (read-only),
+        decided 2026-10-16 (§13.25).
+      parameters:
+        - name: list
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/ListId"
+      responses:
+        "200":
+          description: Views, own first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      tags: [views]
+      operationId: createView
+      summary: Save the current filters, sort and columns as a named view
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedViewInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /views/{id}:
+    put:
+      tags: [views]
+      operationId: updateView
+      summary: Change a view (owner only)
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedViewInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      tags: [views]
+      operationId: deleteView
+      summary: Delete a view (owner only)
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /changes/query:
+    post:
+      tags: [history]
+      operationId: queryChanges
+      summary: Change history (server-side filter, sort and paging)
+      description: |
+        One row per save (§13.10). Filter on `entityType` + `entityId` for a record's
+        History tab, on `userId` for "My changes".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of changes, newest first by default
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /changes/{id}/undo:
+    post:
+      tags: [history]
+      operationId: undoChange
+      summary: Undo one change (§13.10)
+      description: |
+        Restores only the fields that change touched, so other users' later edits to
+        other fields are kept. If someone else has since changed one of those fields,
+        the server answers 409 with both values; the GUI then asks the user to keep the
+        current value, restore theirs, or cancel, and calls again with `resolution`.
+        The undo is itself a change and is returned. Users may undo their own changes;
+        undoing someone else's needs the "undo others' changes" permission (403 otherwise).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UndoRequest"
+      responses:
+        "200":
+          description: The new change that records the undo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Change"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A later change by someone else touched the same field(s)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/UndoConflict"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
 components:
   securitySchemes:
@@ -178,6 +493,21 @@ components:
             $ref: "#/components/schemas/Problem"
     NotFound:
       description: No such record
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Signed in, but this record or action belongs to someone else
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unavailable:
+      description: |
+        The data store behind this operation is not reachable. In the frontend phase this
+        means the local databases are not running or not seeded (`npm run db:up`,
+        `npm run seed:small`).
       content:
         application/problem+json:
           schema:
@@ -304,11 +634,293 @@ components:
           items:
             type: string
 
+    PreferencesUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        theme:
+          $ref: "#/components/schemas/Theme"
+        openInNewTab:
+          type: boolean
+        animations:
+          type: boolean
+
+    WorkspaceTab:
+      type: object
+      description: One open page tab (§13.5). Per-tab page state (filters, scroll) stays in the browser.
+      required: [id, path, title, pinned]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          maxLength: 64
+        path:
+          type: string
+          maxLength: 2000
+          description: GUI route of the page, with its query string.
+        title:
+          type: string
+          maxLength: 200
+        pinned:
+          type: boolean
+
+    Workspace:
+      type: object
+      required: [tabs, activeTabId]
+      additionalProperties: false
+      properties:
+        tabs:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/WorkspaceTab"
+        activeTabId:
+          type: [string, "null"]
+
+    SearchHit:
+      type: object
+      required: [kind, id, label]
+      properties:
+        kind:
+          type: string
+          enum: [enterprise, customer_trunk, vendor_trunk, rate_table, route_rule, user]
+        id:
+          $ref: "#/components/schemas/Id"
+        label:
+          type: string
+          description: Display name, e.g. "Name – Alias (ID)" for enterprises.
+        detail:
+          type: [string, "null"]
+          description: Secondary text, e.g. the trunk's enterprise or the rule's priority.
+
+    SearchResults:
+      type: object
+      required: [hits]
+      properties:
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHit"
+
+    # ------------------------------------------------------------------ users (§11)
+    UserSummary:
+      type: object
+      required: [id, username, displayName, email, status, isAccountManager]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        username:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+        department:
+          type: [string, "null"]
+        accessGroup:
+          type: [string, "null"]
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        isAccountManager:
+          type: boolean
+
+    UserPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserSummary"
+
+    # ------------------------------------------------------------- saved views (§13.25)
+    ViewState:
+      type: object
+      description: What a saved view restores on a grid.
+      additionalProperties: false
+      properties:
+        filter:
+          $ref: "#/components/schemas/FilterGroup"
+        search:
+          type: string
+          maxLength: 200
+        sort:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/SortKey"
+        columns:
+          type: array
+          description: Visible columns in display order (field names).
+          maxItems: 200
+          items:
+            type: string
+
+    SavedViewInput:
+      type: object
+      required: [list, name, state]
+      additionalProperties: false
+      properties:
+        list:
+          $ref: "#/components/schemas/ListId"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        sharedWithUserIds:
+          type: array
+          description: Colleagues who see the view read-only (decided 2026-10-16). Empty = private.
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/Id"
+        state:
+          $ref: "#/components/schemas/ViewState"
+
+    SavedView:
+      type: object
+      required: [id, list, name, owner, sharedWithUserIds, readOnly, state, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        list:
+          $ref: "#/components/schemas/ListId"
+        name:
+          type: string
+        owner:
+          type: object
+          required: [id, displayName]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            displayName:
+              type: string
+        sharedWithUserIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        readOnly:
+          type: boolean
+          description: True when the view was shared with the user by someone else.
+        state:
+          $ref: "#/components/schemas/ViewState"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    # ------------------------------------------------------------- history and undo (§13.10)
+    ChangeType:
+      type: string
+      enum: [create, edit, clone, delete, reorder, enable, disable, bulk, undo]
+
+    ChangeField:
+      type: object
+      description: One field of one record, before and after the save.
+      required: [entityId, field, before, after]
+      properties:
+        entityId:
+          $ref: "#/components/schemas/Id"
+        field:
+          type: string
+        before: {}
+        after: {}
+
+    Change:
+      type: object
+      required: [id, entityType, entityIds, changeType, diff, userId, userName, at, undoOfId, undoneById]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        entityType:
+          type: string
+          description: e.g. route_rule, rate_line, translation_rule, hlr_rule, customer_trunk.
+        entityIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        changeType:
+          $ref: "#/components/schemas/ChangeType"
+        diff:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChangeField"
+        note:
+          type: [string, "null"]
+        userId:
+          $ref: "#/components/schemas/Id"
+        userName:
+          type: string
+        ip:
+          type: [string, "null"]
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        undoOfId:
+          description: Set on an undo; the change it reverted.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        undoneById:
+          description: Set when a later undo reverted this change.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+
+    ChangePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/Change"
+
+    UndoRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        resolution:
+          type: string
+          enum: [restore_mine, keep_current]
+          description: |
+            Answer to a 409. `restore_mine` overwrites the later values; `keep_current`
+            undoes only the fields nobody changed since.
+        note:
+          type: string
+          maxLength: 500
+
+    UndoConflict:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [conflicts]
+          properties:
+            conflicts:
+              type: array
+              items:
+                type: object
+                required: [entityId, field, mine, current, changedBy, changedAt]
+                properties:
+                  entityId:
+                    $ref: "#/components/schemas/Id"
+                  field:
+                    type: string
+                  mine:
+                    description: The value this change set (what undo would replace).
+                  current:
+                    description: The value set later by someone else.
+                  changedBy:
+                    type: string
+                  changedAt:
+                    $ref: "#/components/schemas/Timestamp"
+
     # ------------------------------------------------------------- list query (§13.25)
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises]
+      enum: [enterprises, users, changes]
 
     FilterOperator:
       type: string
@@ -526,6 +1138,11 @@ components:
               $ref: "#/components/schemas/Id"
             accountManagerId:
               $ref: "#/components/schemas/Id"
+            accountManagerName:
+              type: [string, "null"]
+              description: Display name of the current account manager (§13.30 keeps the history).
+            businessCompanyName:
+              type: string
             country:
               type: [string, "null"]
               description: ISO 3166-1 alpha-2.

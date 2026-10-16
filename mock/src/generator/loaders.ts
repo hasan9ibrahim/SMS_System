@@ -11,6 +11,7 @@ import { createGzip } from "node:zlib";
 import pg from "pg";
 import { from as copyFrom } from "pg-copy-streams";
 import { EDR_COLUMNS, type EdrWriter } from "./edr.js";
+import { PG_CONFIG, PG_SCHEMA } from "../db.js";
 
 const DB_DIR = fileURLToPath(new URL("../../../db/", import.meta.url));
 
@@ -57,17 +58,6 @@ export const TABLE_ORDER = [
   "changes",
 ];
 
-// Connection settings come from the repo's .env (see .env.example); defaults match it.
-const env = process.env;
-export const PG_CONFIG = {
-  host: env.POSTGRES_HOST ?? "localhost",
-  port: Number(env.POSTGRES_PORT ?? 5432),
-  database: env.POSTGRES_DB ?? "sms_config",
-  user: env.POSTGRES_USER ?? "sms_dev",
-  password: env.POSTGRES_PASSWORD ?? "sms_dev_password",
-};
-/** Application schema (db/postgres/init creates it; the Elixir backend uses the same one). */
-const PG_SCHEMA = "sms";
 
 export async function loadPostgres(dir: string, opts: { reset: boolean; log: (s: string) => void }): Promise<void> {
   const client = new pg.Client({ ...PG_CONFIG, options: `-c search_path=${PG_SCHEMA},public` });
@@ -130,6 +120,7 @@ export async function loadPostgres(dir: string, opts: { reset: boolean; log: (s:
   }
 }
 
+const env = process.env;
 const CH_URL = `http://${env.CLICKHOUSE_HOST ?? "localhost"}:${env.CLICKHOUSE_HTTP_PORT ?? 8123}`;
 const CH_DB = env.CLICKHOUSE_DB ?? "sms_edr";
 const CH_USER = env.CLICKHOUSE_USER ?? "sms_dev";

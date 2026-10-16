@@ -3,7 +3,19 @@
 import type { FieldDescriptor, FilterOperator, ListFields, ListId } from "@sms/contract";
 
 const TEXT: FilterOperator[] = ["like", "not_like", "eq", "neq", "in", "not_in", "empty", "not_empty", "regex"];
-const NUMBER: FilterOperator[] = ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "not_in", "empty", "not_empty"];
+const NUMBER: FilterOperator[] = [
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "between",
+  "in",
+  "not_in",
+  "empty",
+  "not_empty",
+];
 const ENUM: FilterOperator[] = ["in", "not_in", "eq", "neq"];
 const DATETIME: FilterOperator[] = ["between", "gt", "gte", "lt", "lte", "empty", "not_empty"];
 
@@ -64,11 +76,97 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "inactive", label: "Inactive" },
         ],
       }),
-      field({ field: "businessCompanyId", label: "Business Company", type: "integer", defaultOperator: "eq", hidden: true }),
-      field({ field: "accountManagerId", label: "Account Manager", type: "integer", defaultOperator: "eq" }),
+      field({ field: "businessCompany", label: "Business Company", type: "text", defaultOperator: "like" }),
+      field({
+        field: "businessCompanyId",
+        label: "Business Company ID",
+        type: "integer",
+        defaultOperator: "eq",
+        hidden: true,
+      }),
+      field({ field: "accountManager", label: "Account Manager", type: "text", defaultOperator: "like" }),
+      field({
+        field: "accountManagerId",
+        label: "Account Manager ID",
+        type: "integer",
+        defaultOperator: "eq",
+        hidden: true,
+      }),
       field({ field: "country", label: "Country", type: "text", defaultOperator: "eq", hidden: true }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+    ],
+  },
+
+  // Users (§11), e.g. the "share with" picker of saved views
+  users: {
+    list: "users",
+    defaultSort: [{ field: "displayName", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "username", label: "UserName", type: "text", defaultOperator: "like" }),
+      field({ field: "displayName", label: "Name", type: "text", defaultOperator: "like" }),
+      field({ field: "email", label: "Email", type: "text", defaultOperator: "like" }),
+      field({ field: "department", label: "Department", type: "text", defaultOperator: "like" }),
+      field({ field: "accessGroup", label: "GUI Access Group", type: "text", defaultOperator: "like" }),
+      field({
+        field: "status",
+        label: "Status",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "active", label: "Active" },
+          { value: "inactive", label: "Inactive" },
+        ],
+      }),
+      field({ field: "isAccountManager", label: "Account Manager", type: "boolean", defaultOperator: "eq" }),
+    ],
+  },
+
+  // Change history and undo (§13.10)
+  changes: {
+    list: "changes",
+    defaultSort: [{ field: "at", dir: "desc" }],
+    fields: [
+      field({ field: "id", label: "Change", type: "integer", defaultOperator: "eq" }),
+      field({ field: "at", label: "Time (UTC)", type: "datetime", defaultOperator: "between" }),
+      field({ field: "userName", label: "User", type: "text", defaultOperator: "like" }),
+      field({
+        field: "entityType",
+        label: "Record type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "route_rule", label: "Route rule" },
+          { value: "rate_line", label: "Rate line" },
+          { value: "translation_rule", label: "Translation rule" },
+          { value: "hlr_rule", label: "HLR rule" },
+          { value: "customer_trunk", label: "Customer trunk" },
+          { value: "vendor_trunk", label: "Vendor trunk" },
+        ],
+      }),
+      field({
+        field: "entityId",
+        label: "Record ID",
+        type: "integer",
+        defaultOperator: "eq",
+        operators: ["eq", "in"],
+        sortable: false,
+      }),
+      field({
+        field: "changeType",
+        label: "Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: ["create", "edit", "clone", "delete", "reorder", "enable", "disable", "bulk", "undo"].map((v) => ({
+          value: v,
+          label: v[0]!.toUpperCase() + v.slice(1),
+        })),
+      }),
+      field({ field: "note", label: "Note", type: "text", defaultOperator: "like" }),
+      field({ field: "userId", label: "User ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "undoOfId", label: "Undo of", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "ip", label: "IP", type: "text", defaultOperator: "like", hidden: true }),
     ],
   },
 };

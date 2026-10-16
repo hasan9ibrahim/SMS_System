@@ -56,7 +56,9 @@ export async function generateHistory(world: World, rng: Rng, sink: TableSink): 
           at,
         });
       } else if (kind < 0.6) {
-        const after = Math.max(1, Math.min(100, priority + rng.pick([-5, -2, 2, 5])));
+        // Always a real change: step the other way at the 1–100 bounds.
+        const step = rng.pick([-5, -2, 2, 5]);
+        const after = priority + step >= 1 && priority + step <= 100 ? priority + step : priority - step;
         drafts.push({
           entityType: "route_rule",
           entityIds: [r.id],

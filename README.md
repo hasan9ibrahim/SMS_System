@@ -40,6 +40,8 @@ npm run db:up             # postgres :5432, clickhouse :8123/:9000, redis :6379
 npm run seed:small        # fake data: config in postgres, EDRs in clickhouse (seed:full for production volume)
 npm run dev:mock          # mock API on http://127.0.0.1:4010/api/v1
 npm run dev:web           # GUI on http://localhost:5173 (proxies /api and /socket to the mock)
+
+How the GUI works (tabs, Ctrl K, column filters, saved views, undo): `web/README.md`.
 ```
 
 ## Everyday commands

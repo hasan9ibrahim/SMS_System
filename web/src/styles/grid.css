@@ -1,0 +1,208 @@
+/* Standard grid (§15.1): header, filter row with one filter per column, rows 38 px, checkbox
+   first, numbers right-aligned with tabular figures, selected row tinted, filters in use in
+   the accent colour. */
+.grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  outline: none;
+}
+.grid:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.grid-inner {
+  min-width: 100%;
+  position: relative;
+}
+.gh,
+.gf {
+  position: sticky;
+  z-index: 2;
+  display: flex;
+  background: var(--color-panel);
+}
+.gh {
+  top: 0;
+  height: 36px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-page-bg) 55%, var(--color-panel));
+}
+.gf {
+  top: 36px;
+  height: 40px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.gh-cell {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+.gh-cell.sortable {
+  cursor: pointer;
+}
+.gh-cell.sortable:hover {
+  color: var(--color-text);
+}
+.gh-cell.sorted {
+  color: var(--color-accent);
+}
+.gh-cell.align-right {
+  justify-content: flex-end;
+}
+.gh-cell.align-center {
+  justify-content: center;
+}
+.gh-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gh-sort {
+  font-size: 9px;
+}
+.gh-sort sub {
+  font-size: 9px;
+}
+.gh-resize {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  bottom: 6px;
+  width: 6px;
+  cursor: col-resize;
+  border-right: var(--border-width) solid transparent;
+}
+.gh-cell:hover .gh-resize {
+  border-right-color: var(--color-border);
+}
+.gc-check {
+  flex: none;
+  width: 40px;
+  justify-content: center;
+  display: flex;
+  align-items: center;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: inherit;
+}
+.gf-cell {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+}
+.gf-input {
+  width: 100%;
+  height: 26px;
+  padding: 3px 8px;
+  font-size: 12.5px;
+}
+.gf-input::placeholder {
+  color: color-mix(in srgb, var(--color-text-secondary) 75%, transparent);
+}
+.gf-input.in-use,
+.gf-select.in-use {
+  border-color: var(--color-accent);
+  background: var(--accent-softer);
+  color: var(--color-accent);
+}
+.gf-input.invalid {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+.gf-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  height: 26px;
+  min-width: 56px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.gf-select span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gb {
+  position: relative;
+}
+.gr {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--grid-row-height);
+  display: flex;
+  align-items: center;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-panel);
+  cursor: default;
+}
+.gr:hover {
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
+}
+.gr.checked {
+  background: var(--accent-softer);
+}
+.gr.active {
+  background: var(--accent-soft);
+}
+.gr.loader {
+  color: var(--color-text-secondary);
+}
+.gc {
+  flex: none;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gc.align-right {
+  text-align: right;
+}
+.gc.align-center {
+  text-align: center;
+}
+.gc.num {
+  font-variant-numeric: tabular-nums;
+}
+.gc-trailing {
+  display: flex;
+  align-items: center;
+}
+.grid-message {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+}
+.page > .grid-message {
+  position: static;
+}
+.grid-message.error {
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+}
+.grid-message ul {
+  margin: 6px 0 0;
+}

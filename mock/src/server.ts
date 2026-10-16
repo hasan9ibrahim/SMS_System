@@ -3,17 +3,21 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { operations } from "./contract.js";
 import { handlers as defaultHandlers, type Handler } from "./handlers.js";
 import { ajvErrors, sendProblem } from "./problem.js";
+import { registerSocket } from "./live/socket.js";
 
 export const API_PREFIX = "/api/v1";
 
 export interface ServerOptions {
   logger?: boolean;
+  /** Serve the Phoenix-protocol WebSocket at /socket/websocket (default true). */
+  socket?: boolean;
   handlers?: Partial<Record<string, Handler>>;
 }
 
 export async function buildServer(options: ServerOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false });
   const handlers: Partial<Record<string, Handler>> = options.handlers ?? defaultHandlers;
+  if (options.socket !== false) await registerSocket(app);
 
   await app.register(
     async (api) => {
@@ -35,6 +39,25 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
               }
               params[name] = value;
             }
+            const query = (request.query ?? {}) as Record<string, unknown>;
+            for (const [name, param] of Object.entries(op.queryParams)) {
+              const raw = query[name];
+              if (raw === undefined) {
+                if (param.required) {
+                  return sendProblem(reply, 400, `Missing query parameter "${name}"`, {
+                    errors: [{ path: `/${name}`, message: "required" }],
+                  });
+                }
+                continue;
+              }
+              const value = param.numeric && typeof raw === "string" && /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
+              if (!param.validate(value)) {
+                return sendProblem(reply, 400, `Invalid query parameter "${name}"`, {
+                  errors: ajvErrors(param.validate.errors, `/${name}`),
+                });
+              }
+              query[name] = value;
+            }
             if (op.validateBody && !op.validateBody(request.body ?? {})) {
               return sendProblem(reply, 400, "Request body does not match the contract", {
                 errors: ajvErrors(op.validateBody.errors),
@@ -42,7 +65,11 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
             }
             const handler = handlers[op.operationId];
             if (!handler) {
-              return sendProblem(reply, 501, `${op.operationId} is in the contract but not implemented by the mock yet`);
+              return sendProblem(
+                reply,
+                501,
+                `${op.operationId} is in the contract but not implemented by the mock yet`,
+              );
             }
             return handler(request, reply);
           },

@@ -5,9 +5,14 @@ import assert from "node:assert/strict";
 import type { LightMyRequestResponse } from "fastify";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
+import { closeDb, dbReady } from "../src/db.js";
 
-const app = await buildServer();
-after(() => app.close());
+const app = await buildServer({ socket: false });
+const ready = await dbReady();
+after(async () => {
+  await app.close();
+  await closeDb();
+});
 
 function assertMatchesContract(operationId: string, res: LightMyRequestResponse) {
   const op = operations.find((o) => o.operationId === operationId);
@@ -56,18 +61,25 @@ test("POST /enterprises/query accepts a valid filter tree (§13.25)", async () =
       logic: "and",
       conditions: [
         { field: "name", op: "like", value: "%demo%" },
-        { logic: "or", conditions: [{ field: "type", op: "in", values: ["customer", "reciprocal"] }, { field: "id", op: "gte", value: 10 }] },
+        {
+          logic: "or",
+          conditions: [
+            { field: "type", op: "in", values: ["customer", "reciprocal"] },
+            { field: "id", op: "gte", value: 10 },
+          ],
+        },
       ],
     },
     sort: [{ field: "name", dir: "asc" }],
     limit: 200,
   });
-  assert.equal(res.statusCode, 200);
+  // Without the seeded database the mock answers the contract's 503.
+  assert.equal(res.statusCode, ready ? 200 : 503);
   assertMatchesContract("queryEnterprises", res);
 });
 
 test("POST /enterprises/query rejects bad queries with field-level errors", async () => {
-  const cases = [
+  const cases: object[] = [
     { filter: { logic: "and", conditions: [{ field: "nope", op: "eq", value: 1 }] } },
     { filter: { logic: "and", conditions: [{ field: "type", op: "regex", value: "x" }] } },
     { filter: { logic: "and", conditions: [{ field: "id", op: "between", values: [1] }] } },
@@ -76,6 +88,10 @@ test("POST /enterprises/query rejects bad queries with field-level errors", asyn
     { sort: [{ field: "nope", dir: "asc" }] },
     { limit: 0 },
   ];
+  cases.push(
+    { filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: "abc" }] } },
+    { filter: { logic: "and", conditions: [{ field: "updatedAt", op: "gte", value: "yesterday" }] } },
+  );
   for (const body of cases) {
     const res = await call("POST", "/enterprises/query", body);
     assert.equal(res.statusCode, 400, JSON.stringify(body));
@@ -85,11 +101,26 @@ test("POST /enterprises/query rejects bad queries with field-level errors", asyn
 });
 
 test("GET /enterprises/{id}", async () => {
-  for (const id of ["42", "abc"]) {
+  const cases: [string, number][] = [
+    ["42", ready ? 200 : 503],
+    ["99999999", ready ? 404 : 503],
+    ["abc", 404],
+  ];
+  for (const [id, status] of cases) {
     const res = await call("GET", `/enterprises/${id}`);
-    assert.equal(res.statusCode, 404);
+    assert.equal(res.statusCode, status, id);
     assertMatchesContract("getEnterprise", res);
   }
+});
+
+test("query parameters are checked against the contract", async () => {
+  const missing = await call("GET", "/search");
+  assert.equal(missing.statusCode, 400);
+  const tooLong = await call("GET", `/search?q=${"x".repeat(101)}`);
+  assert.equal(tooLong.statusCode, 400);
+  const badList = await call("GET", "/views?list=nope");
+  assert.equal(badList.statusCode, 400);
+  assertMatchesContract("listViews", badList);
 });
 
 test("paths outside the contract answer 404 problem+json", async () => {
