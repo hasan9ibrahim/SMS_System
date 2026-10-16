@@ -128,6 +128,20 @@ describe("vendor costs and client rates (§13.16)", { skip }, () => {
     }
   });
 
+  test("converted figures are in the platform currency (EUR by default, decided 2026-10-16)", async () => {
+    const ref = await ok("getReference", call("GET", "/meta/reference"));
+    assert.equal(ref.platformCurrency, process.env.PLATFORM_CURRENCY ?? "EUR");
+    const n = await busyNetwork();
+    const r = await ok("lookupRates", call("POST", "/rate-lookup", { mccmnc: n.mccmnc }));
+    assert.equal(r.lookupCurrency, ref.platformCurrency);
+    const { rows } = await db().query("SELECT iso, rate_per_usd FROM currency_latest");
+    const perUsd = new Map(rows.map((x) => [String(x.iso).trim(), Number(x.rate_per_usd)]));
+    for (const line of [...r.vendors.slice(0, 5), ...r.clients.slice(0, 5)]) {
+      const expected = (line.rate / perUsd.get(line.currency)!) * perUsd.get(ref.platformCurrency)!;
+      assert.ok(Math.abs(line.rateConverted - expected) < 2e-6, `${line.rate} ${line.currency}`);
+    }
+  });
+
   test("a past date shows the rate charged then; my clients only", async () => {
     const { rows } = await db().query(
       `SELECT l.mccmnc, l.rate, l.rate_table_id, l.valid_from + (l.valid_to - l.valid_from) / 2 AS mid

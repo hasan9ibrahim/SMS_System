@@ -18,7 +18,7 @@ import type {
   UserSummary,
 } from "@sms/contract";
 import { ApiError } from "../../api/client";
-import { useReference } from "../../api/records";
+import { usePlatformCurrency, useReference } from "../../api/records";
 import { exportMatrix, fetchMatrixPage, useDeleteLookup, useSaveLookup, useSavedLookups } from "../../api/lookup";
 import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { confirmDialog, toast } from "../../ui/feedback";
@@ -510,7 +510,8 @@ export function AdvancedLookup({
   const first = matrix.data?.pages[0];
   const rows = useMemo(() => matrix.data?.pages.flatMap((p) => p.rows) ?? [], [matrix.data]);
   const view = first?.view ?? applied?.view ?? "vendor_costs";
-  const ccy = first?.lookupCurrency ?? "USD";
+  const platform = usePlatformCurrency();
+  const ccy = first?.lookupCurrency ?? platform;
   const shownConverted = applied?.currency === "converted";
 
   usePageStatus({

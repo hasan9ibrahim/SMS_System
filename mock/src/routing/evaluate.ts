@@ -16,7 +16,7 @@ export interface MessageContext {
   mccmnc: string | null;
   destination: string | null;
   tps: number | null;
-  /** Customer rate for the message, base currency (§13.9 per message). */
+  /** Customer rate for the message, platform currency (§13.9 per message). */
   sellRate: number | null;
   accumulatedRevenue: number | null;
   hlrPorted: boolean | null;
@@ -28,7 +28,7 @@ export interface MessageContext {
 export interface VendorOption {
   vendorTrunkId: number;
   name: string;
-  /** Buy rate for the destination in base currency; null when the vendor has none. */
+  /** Buy rate for the destination in platform currency; null when the vendor has none. */
   cost: number | null;
   /** Recent delivered %, for QBR ordering. */
   dlr: number | null;

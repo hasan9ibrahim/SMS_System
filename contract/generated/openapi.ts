@@ -1636,6 +1636,11 @@ export type components = {
         id: components["schemas"]["Id"];
         displayName: string;
       }[];
+      /**
+       * @description ISO code of the platform currency (decided 2026-10-16: EUR by default, configurable).
+       *     Converted rates, margins, revenue conditions and every cross-company total are in it.
+       */
+      platformCurrency: string;
       /** @description Route rule groups for chaining with Next group (§6.3, optional since §13.2). */
       routeRuleGroups: components["schemas"]["Named"][];
       /** @description Number lists for sender, receiver and whitelist conditions (§6.4, §13.27). */
@@ -2222,7 +2227,7 @@ export type components = {
       dialCode: string | null;
       senderId: string | null;
       rate: number;
-      /** @description The rate in the base currency (USD). */
+      /** @description The rate in the platform currency (`ReferenceData.platformCurrency`, EUR by default). */
       sysRate: number;
       currency: string;
       /** @description Cheapest current vendor rate for the destination and product category, in the table currency. */
@@ -2335,7 +2340,7 @@ export type components = {
       /** @description Back past the value by this % before switching back. */
       releasePct?: number;
     };
-    /** @description Revenue condition (§13.9), base currency. */
+    /** @description Revenue condition (§13.9), platform currency. */
     RevenueCondition: {
       /** @enum {string} */
       type: "per_message" | "accumulated";
@@ -2546,7 +2551,7 @@ export type components = {
       asr: number | null;
       /** @description Delivered %. */
       dlr: number | null;
-      /** @description Margin in the base currency. */
+      /** @description Margin in the platform currency. */
       margin: number | null;
       startsAt: components["schemas"]["Timestamp"];
       stopsAt: components["schemas"]["Timestamp"];
@@ -2614,7 +2619,7 @@ export type components = {
       mccmnc?: string;
       /** @description Simulated TPS (§13.8). */
       tps?: number;
-      /** @description Simulated per-message revenue in the base currency (§13.9); default from the trunk's rate. */
+      /** @description Simulated per-message revenue in the platform currency (§13.9); default from the trunk's rate. */
       revenuePerMessage?: number;
       /** @description Simulated revenue already earned in the period (§13.9). */
       accumulatedRevenue?: number;
@@ -2631,7 +2636,7 @@ export type components = {
       vendorTrunkId: components["schemas"]["Id"];
       name: string;
       level: number;
-      /** @description Buy rate for the destination in the base currency. */
+      /** @description Buy rate for the destination in the platform currency. */
       cost: number | null;
       margin: number | null;
       note: string | null;
@@ -2654,7 +2659,7 @@ export type components = {
       mccmnc: string | null;
       /** @description Country · network of the destination. */
       destination: string | null;
-      /** @description Customer rate for the message in the base currency, when a customer trunk is given. */
+      /** @description Customer rate for the message in the platform currency, when a customer trunk is given. */
       sellRate: number | null;
     };
     RouteSimulation: {
@@ -2869,7 +2874,7 @@ export type components = {
       destinations: components["schemas"]["LookupDestination"][];
     };
     /**
-     * @description Rates in their table currency, or converted to the lookup currency (USD).
+     * @description Rates in their table currency, or converted to the platform currency (`lookupCurrency`).
      * @enum {string}
      */
     CurrencyMode: "original" | "converted";
@@ -2892,7 +2897,7 @@ export type components = {
       rateTableId: components["schemas"]["Id"];
       rate: number;
       currency: string;
-      /** @description In the lookup currency (USD) at the latest exchange rate. */
+      /** @description In the platform currency at the latest exchange rate. */
       rateConverted: number;
       effectiveFrom: components["schemas"]["Timestamp"];
       validTo: components["schemas"]["Timestamp"] | null;
@@ -2939,24 +2944,24 @@ export type components = {
       routedVendor: null | {
         vendorTrunkId: components["schemas"]["Id"];
         name: string;
-        /** @description Buy rate in the lookup currency. */
+        /** @description Buy rate in the platform currency. */
         cost: number | null;
         decidedBy: string;
         ruleId: components["schemas"]["Id"];
       };
-      /** @description Sell minus the best vendor cost, lookup currency. */
+      /** @description Sell minus the best vendor cost, platform currency. */
       marginBest: number | null;
       marginBestPct: number | null;
-      /** @description Sell minus the routed vendor's cost, lookup currency. */
+      /** @description Sell minus the routed vendor's cost, platform currency. */
       marginRouted: number | null;
       marginRoutedPct: number | null;
     };
     RateLookupResult: {
       destination: components["schemas"]["LookupDestination"];
       asOf: components["schemas"]["Timestamp"];
-      /** @description Currency of the converted figures and margins. */
+      /** @description Currency of the converted figures and margins (the platform currency). */
       lookupCurrency: string;
-      /** @description Cheapest active vendor cost, lookup currency. */
+      /** @description Cheapest active vendor cost, platform currency. */
       bestCost: number | null;
       vendors: components["schemas"]["LookupVendorCost"][];
       clients: components["schemas"]["LookupClientRate"][];
@@ -3049,6 +3054,7 @@ export type components = {
     RateMatrix: {
       view: components["schemas"]["MatrixView"];
       asOf: components["schemas"]["Timestamp"];
+      /** @description Currency of the converted figures and margins (the platform currency). */
       lookupCurrency: string;
       columns: components["schemas"]["MatrixColumn"][];
       columnsTruncated: boolean;

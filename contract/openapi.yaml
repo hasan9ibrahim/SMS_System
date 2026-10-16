@@ -2716,7 +2716,7 @@ components:
     # ------------------------------------------------------------- reference data
     ReferenceData:
       type: object
-      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers, routeRuleGroups, numberLists]
+      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers, routeRuleGroups, numberLists, platformCurrency]
       properties:
         businessCompanies:
           type: array
@@ -2791,6 +2791,11 @@ components:
                 $ref: "#/components/schemas/Id"
               displayName:
                 type: string
+        platformCurrency:
+          type: string
+          description: |
+            ISO code of the platform currency (decided 2026-10-16: EUR by default, configurable).
+            Converted rates, margins, revenue conditions and every cross-company total are in it.
         routeRuleGroups:
           description: Route rule groups for chaining with Next group (§6.3, optional since §13.2).
           type: array
@@ -4057,7 +4062,7 @@ components:
           type: number
         sysRate:
           type: number
-          description: The rate in the base currency (USD).
+          description: The rate in the platform currency (`ReferenceData.platformCurrency`, EUR by default).
         currency:
           type: string
         bestBuy:
@@ -4297,7 +4302,7 @@ components:
 
     RevenueCondition:
       type: object
-      description: Revenue condition (§13.9), base currency.
+      description: Revenue condition (§13.9), platform currency.
       required: [type, op, value]
       additionalProperties: false
       properties:
@@ -4655,7 +4660,7 @@ components:
           description: Delivered %.
         margin:
           type: [number, "null"]
-          description: Margin in the base currency.
+          description: Margin in the platform currency.
         startsAt:
           $ref: "#/components/schemas/Timestamp"
         stopsAt:
@@ -4821,7 +4826,7 @@ components:
         revenuePerMessage:
           type: number
           minimum: 0
-          description: Simulated per-message revenue in the base currency (§13.9); default from the trunk's rate.
+          description: Simulated per-message revenue in the platform currency (§13.9); default from the trunk's rate.
         accumulatedRevenue:
           type: number
           minimum: 0
@@ -4856,7 +4861,7 @@ components:
           type: integer
         cost:
           type: [number, "null"]
-          description: Buy rate for the destination in the base currency.
+          description: Buy rate for the destination in the platform currency.
         margin:
           type: [number, "null"]
         note:
@@ -4903,7 +4908,7 @@ components:
           description: Country · network of the destination.
         sellRate:
           type: [number, "null"]
-          description: Customer rate for the message in the base currency, when a customer trunk is given.
+          description: Customer rate for the message in the platform currency, when a customer trunk is given.
 
     RouteSimulation:
       type: object
@@ -5230,7 +5235,7 @@ components:
     CurrencyMode:
       type: string
       enum: [original, converted]
-      description: Rates in their table currency, or converted to the lookup currency (USD).
+      description: Rates in their table currency, or converted to the platform currency (`lookupCurrency`).
 
     RateLookupRequest:
       type: object
@@ -5272,7 +5277,7 @@ components:
           type: string
         rateConverted:
           type: number
-          description: In the lookup currency (USD) at the latest exchange rate.
+          description: In the platform currency at the latest exchange rate.
         effectiveFrom:
           $ref: "#/components/schemas/Timestamp"
         validTo:
@@ -5377,19 +5382,19 @@ components:
                       type: string
                     cost:
                       type: [number, "null"]
-                      description: Buy rate in the lookup currency.
+                      description: Buy rate in the platform currency.
                     decidedBy:
                       type: string
                     ruleId:
                       $ref: "#/components/schemas/Id"
             marginBest:
               type: [number, "null"]
-              description: Sell minus the best vendor cost, lookup currency.
+              description: Sell minus the best vendor cost, platform currency.
             marginBestPct:
               type: [number, "null"]
             marginRouted:
               type: [number, "null"]
-              description: Sell minus the routed vendor's cost, lookup currency.
+              description: Sell minus the routed vendor's cost, platform currency.
             marginRoutedPct:
               type: [number, "null"]
 
@@ -5403,10 +5408,10 @@ components:
           $ref: "#/components/schemas/Timestamp"
         lookupCurrency:
           type: string
-          description: Currency of the converted figures and margins.
+          description: Currency of the converted figures and margins (the platform currency).
         bestCost:
           type: [number, "null"]
-          description: Cheapest active vendor cost, lookup currency.
+          description: Cheapest active vendor cost, platform currency.
         vendors:
           type: array
           items:
@@ -5629,6 +5634,7 @@ components:
           $ref: "#/components/schemas/Timestamp"
         lookupCurrency:
           type: string
+          description: Currency of the converted figures and margins (the platform currency).
         columns:
           type: array
           items:

@@ -3,6 +3,7 @@
 // route rule groups and number lists (§6.3, §6.4).
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { ReferenceData } from "@sms/contract";
+import { PLATFORM_CURRENCY } from "../currency.js";
 import { withDb } from "../db.js";
 import { TIMEZONES } from "./records.js";
 
@@ -31,6 +32,7 @@ export function getReference(_request: FastifyRequest, reply: FastifyReply) {
       accountManagers: ams.rows.map((r) => ({ id: r.id, displayName: r.display_name })),
       routeRuleGroups: groups.rows.map((r) => ({ id: r.id, name: r.name })),
       numberLists: lists.rows.map((r) => ({ id: r.id, name: r.name, listType: r.list_type })),
+      platformCurrency: PLATFORM_CURRENCY,
     };
   });
 }

@@ -21,6 +21,7 @@ import type {
   SavedLookup,
   SavedLookupInput,
 } from "@sms/contract";
+import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { sendProblem } from "../problem.js";
@@ -31,8 +32,8 @@ import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
 import { inputProblem, inTransaction, writeShares } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
-/** Converted figures are in USD: exchange rates are kept per USD (§6.1 currencies). */
-export const LOOKUP_CURRENCY = "USD";
+/** Converted figures and margins are in the platform currency (decided 2026-10-16: EUR by default). */
+export const LOOKUP_CURRENCY = PLATFORM_CURRENCY;
 const MAX_COLUMNS = 60;
 const EXPIRING_MS = 14 * 86_400_000;
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -180,12 +181,12 @@ interface Line {
   tableId: number;
   rate: number;
   currency: string;
-  usd: number;
+  conv: number;
   code: string;
   senderId: string | null;
   from: string;
   to: string | null;
-  next: { rate: number; usd: number; from: string } | null;
+  next: { rate: number; conv: number; from: string } | null;
 }
 
 interface VendorLine extends Line {
@@ -229,7 +230,7 @@ const valid = (alias: string, at: string) =>
 
 /** Next version of a line after the one valid at `at` (§13.12 scheduled change). */
 const NEXT = `LEFT JOIN LATERAL (
-    SELECT n.rate, n.rate / ncl.rate_per_usd AS usd, n.valid_from FROM rate_lines n
+    SELECT n.rate, ${toPlatformSql("n.rate", "ncl.rate_per_usd")} AS conv, n.valid_from FROM rate_lines n
       JOIN currency_latest ncl ON ncl.iso = n.currency
      WHERE n.rate_table_id = x.table_id AND n.mccmnc = x.code AND n.sender_id IS NOT DISTINCT FROM x.sender_id
        AND n.valid_from > $4 AND NOT n.is_blocked
@@ -240,7 +241,7 @@ const lineOf = (r: Record<string, unknown>): Line => ({
   tableId: Number(r.table_id),
   rate: Number(r.rate),
   currency: String(r.currency).trim(),
-  usd: round6(Number(r.usd)),
+  conv: round6(Number(r.conv)),
   code: r.code as string,
   senderId: (r.sender_id as string | null) ?? null,
   from: (r.valid_from as Date).toISOString(),
@@ -248,7 +249,7 @@ const lineOf = (r: Record<string, unknown>): Line => ({
   next:
     r.next_rate === null || r.next_rate === undefined
       ? null
-      : { rate: Number(r.next_rate), usd: round6(Number(r.next_usd)), from: (r.next_from as Date).toISOString() },
+      : { rate: Number(r.next_rate), conv: round6(Number(r.next_conv)), from: (r.next_from as Date).toISOString() },
 });
 
 function tableFilters(f: Filters, values: unknown[], side: "vendor" | "customer"): string {
@@ -282,9 +283,9 @@ export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<Ve
   const values: unknown[] = [p.req, p.code, p.pref, f.at, f.senderId];
   const extra = tableFilters(f, values, "vendor");
   const { rows } = await db.query(
-    `SELECT x.*, nx.rate AS next_rate, nx.usd AS next_usd, nx.valid_from AS next_from FROM (
+    `SELECT x.*, nx.rate AS next_rate, nx.conv AS next_conv, nx.valid_from AS next_from FROM (
        SELECT DISTINCT ON (d.req, rt.id) d.req, rt.id AS table_id, l.mccmnc AS code, l.rate, l.currency,
-              l.rate / cl.rate_per_usd AS usd, l.sender_id, l.valid_from, l.valid_to,
+              ${toPlatformSql("l.rate")} AS conv, l.sender_id, l.valid_from, l.valid_to,
               vt.id AS trunk_id, vt.name AS trunk_name, vt.status, e.id AS enterprise_id, e.name AS enterprise_name,
               e.tier, pc.name AS category
          FROM unnest($1::text[], $2::text[], $3::int[]) AS d(req, code, pref)
@@ -319,9 +320,9 @@ export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<Cl
   const values: unknown[] = [p.req, p.code, p.pref, f.at, f.senderId];
   const extra = tableFilters(f, values, "customer");
   const { rows } = await db.query(
-    `SELECT x.*, nx.rate AS next_rate, nx.usd AS next_usd, nx.valid_from AS next_from FROM (
+    `SELECT x.*, nx.rate AS next_rate, nx.conv AS next_conv, nx.valid_from AS next_from FROM (
        SELECT DISTINCT ON (d.req, ct.id) d.req, rt.id AS table_id, rt.name AS table_name, l.mccmnc AS code, l.rate,
-              l.currency, l.rate / cl.rate_per_usd AS usd, l.sender_id, l.valid_from, l.valid_to,
+              l.currency, ${toPlatformSql("l.rate")} AS conv, l.sender_id, l.valid_from, l.valid_to,
               ct.id AS trunk_id, ct.name AS trunk_name, ct.status, ct.product_category_id AS trunk_category_id,
               e.id AS enterprise_id, e.name AS enterprise_name, pc.name AS category,
               am.id AS am_id, am.first_name || ' ' || am.last_name AS am_name
@@ -404,7 +405,7 @@ async function routingOptions(
   const out = new Map(reqs.map((r) => [r, base()]));
   for (const l of lines) {
     const o = out.get(l.req)?.get(l.trunkId);
-    if (o) o.cost = l.usd;
+    if (o) o.cost = l.conv;
   }
   return out;
 }
@@ -442,7 +443,7 @@ export async function routedVendors(
     const listed = new Set(candidates.filter((r) => r.customerTrunkMode !== "all").flatMap((r) => r.customerTrunkIds));
     const memo = new Map<string, Routed | null>();
     for (const c of lines) {
-      const key = `${c.trunkCategoryId}|${listed.has(c.trunkId) ? c.trunkId : "-"}|${c.usd}|${c.senderId ?? ""}`;
+      const key = `${c.trunkCategoryId}|${listed.has(c.trunkId) ? c.trunkId : "-"}|${c.conv}|${c.senderId ?? ""}`;
       if (memo.has(key)) {
         out.set(`${c.req}|${c.trunkId}`, memo.get(key)!);
         continue;
@@ -459,7 +460,7 @@ export async function routedVendors(
           mccmnc,
           destination: null,
           tps: null,
-          sellRate: c.usd,
+          sellRate: c.conv,
           accumulatedRevenue: null,
           hlrPorted: null,
           warmupSent: Number.MAX_SAFE_INTEGER,
@@ -547,13 +548,13 @@ const rateFields = (l: Line, showScheduled: boolean) => ({
   rateTableId: l.tableId,
   rate: l.rate,
   currency: l.currency,
-  rateConverted: l.usd,
+  rateConverted: l.conv,
   effectiveFrom: l.from,
   validTo: l.to,
   matchedCode: l.code,
   senderId: l.senderId,
   scheduled:
-    showScheduled && l.next ? { rate: l.next.rate, rateConverted: l.next.usd, effectiveFrom: l.next.from } : null,
+    showScheduled && l.next ? { rate: l.next.rate, rateConverted: l.next.conv, effectiveFrom: l.next.from } : null,
 });
 
 export function lookupRates(request: FastifyRequest, reply: FastifyReply) {
@@ -581,10 +582,10 @@ export function lookupRates(request: FastifyRequest, reply: FastifyReply) {
     const routed = await routedVendors(pool, cLines, vendorsAsRoutingSees(f, vLines));
     const routedIds = new Set([...routed.values()].filter((r): r is Routed => !!r).map((r) => r.vendorTrunkId));
     const active = vLines.filter((v) => v.status === "active");
-    const bestCost = active.length ? Math.min(...active.map((v) => v.usd)) : null;
+    const bestCost = active.length ? Math.min(...active.map((v) => v.conv)) : null;
     const show = !!input.showScheduled;
     const vendors: LookupVendorCost[] = vLines
-      .sort((a, b) => a.usd - b.usd || a.trunkName.localeCompare(b.trunkName))
+      .sort((a, b) => a.conv - b.conv || a.trunkName.localeCompare(b.trunkName))
       .map((v) => {
         const t = vTraffic?.get(`${dest!.mccmnc}|${v.trunkId}`);
         return {
@@ -605,8 +606,8 @@ export function lookupRates(request: FastifyRequest, reply: FastifyReply) {
     const clients: LookupClientRate[] = cLines
       .map((c) => {
         const r = routed.get(`${c.req}|${c.trunkId}`) ?? null;
-        const marginBest = bestCost === null ? null : round6(c.usd - bestCost);
-        const marginRouted = r?.cost === null || r?.cost === undefined ? null : round6(c.usd - r.cost);
+        const marginBest = bestCost === null ? null : round6(c.conv - bestCost);
+        const marginRouted = r?.cost === null || r?.cost === undefined ? null : round6(c.conv - r.cost);
         return {
           ...rateFields(c, show),
           customerTrunkId: c.trunkId,
@@ -620,9 +621,9 @@ export function lookupRates(request: FastifyRequest, reply: FastifyReply) {
           messages7d: cTraffic ? (cTraffic.get(`${dest!.mccmnc}|${c.trunkId}`)?.n ?? 0) : null,
           routedVendor: r,
           marginBest,
-          marginBestPct: pct(marginBest, c.usd),
+          marginBestPct: pct(marginBest, c.conv),
           marginRouted,
-          marginRoutedPct: pct(marginRouted, c.usd),
+          marginRoutedPct: pct(marginRouted, c.conv),
         };
       })
       // Busiest clients first, then by name.
@@ -737,18 +738,18 @@ async function rowData(db: Db, dests: Dest[], f: Filters, needRouting: boolean):
   for (const c of cLines) cBy.set(c.req, [...(cBy.get(c.req) ?? []), c]);
   const soon = f.at.getTime() + EXPIRING_MS;
   return dests.map((dest) => {
-    const vendors = (vBy.get(dest.mccmnc) ?? []).sort((a, b) => a.usd - b.usd);
+    const vendors = (vBy.get(dest.mccmnc) ?? []).sort((a, b) => a.conv - b.conv);
     const clients = cBy.get(dest.mccmnc) ?? [];
     const active = vendors.filter((v) => v.status === "active");
     const best = active[0] ?? null;
     const highlights: MatrixHighlight[] = [];
-    if (best && clients.some((c) => c.usd < best.usd)) highlights.push("below_cost");
+    if (best && clients.some((c) => c.conv < best.conv)) highlights.push("below_cost");
     if (
       best &&
       needRouting &&
       clients.some((c) => {
         const r = routed.get(`${dest.mccmnc}|${c.trunkId}`);
-        return !!r && r.cost !== null && best.usd < r.cost - 1e-9;
+        return !!r && r.cost !== null && best.conv < r.cost - 1e-9;
       })
     )
       highlights.push("cheaper_than_routed");
@@ -759,7 +760,7 @@ async function rowData(db: Db, dests: Dest[], f: Filters, needRouting: boolean):
       vendors,
       clients,
       routed,
-      bestCost: best?.usd ?? null,
+      bestCost: best?.conv ?? null,
       bestVendor: best?.trunkName ?? null,
       highlights,
     };
@@ -868,7 +869,7 @@ async function buildMatrix(
     const base = (l: Line) => ({
       rate: l.rate,
       currency: l.currency,
-      rateConverted: l.usd,
+      rateConverted: l.conv,
       rateTableId: l.tableId,
       expiring: expiresBy(l, soon),
       scheduled: l.next ? { rate: l.next.rate, effectiveFrom: l.next.from } : null,
@@ -879,7 +880,7 @@ async function buildMatrix(
       cells = cols.columns.map((c) => {
         const v = by.get(c.id!);
         return v
-          ? { ...base(v), best: v.status === "active" && v.usd === d.bestCost, routed: routedIds.has(v.trunkId) }
+          ? { ...base(v), best: v.status === "active" && v.conv === d.bestCost, routed: routedIds.has(v.trunkId) }
           : null;
       });
     } else if (view === "cheapest") {
@@ -905,10 +906,10 @@ async function buildMatrix(
         const r = d.routed.get(`${d.dest.mccmnc}|${c.trunkId}`) ?? null;
         return {
           ...base(c),
-          marginBest: d.bestCost === null ? null : round6(c.usd - d.bestCost),
+          marginBest: d.bestCost === null ? null : round6(c.conv - d.bestCost),
           ...(view === "margin"
             ? {
-                marginRouted: r?.cost === null || r?.cost === undefined ? null : round6(c.usd - r.cost),
+                marginRouted: r?.cost === null || r?.cost === undefined ? null : round6(c.conv - r.cost),
                 routedVendor: r?.name ?? null,
               }
             : {}),

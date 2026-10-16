@@ -1,5 +1,6 @@
 // Field catalogues served by GET /meta/lists/{list}/fields (§13.25).
 // Operators per field type follow §13.25 and the column filter widgets in §15.1.
+import { PLATFORM_CURRENCY } from "../currency.js";
 import type { FieldDescriptor, FilterOperator, ListFields, ListId } from "@sms/contract";
 
 const TEXT: FilterOperator[] = ["like", "not_like", "eq", "neq", "in", "not_in", "empty", "not_empty", "regex"];
@@ -297,7 +298,13 @@ export const listFields: Record<ListId, ListFields> = {
         hidden: true,
       }),
       field({ field: "dialCode", label: "Dial Code", type: "prefix", defaultOperator: "like", hidden: true }),
-      field({ field: "sysRate", label: "Sys Rate (USD)", type: "decimal", defaultOperator: "gte", hidden: true }),
+      field({
+        field: "sysRate",
+        label: `Sys Rate (${PLATFORM_CURRENCY})`,
+        type: "decimal",
+        defaultOperator: "gte",
+        hidden: true,
+      }),
       field({ field: "rateNote", label: "Rate Note", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),

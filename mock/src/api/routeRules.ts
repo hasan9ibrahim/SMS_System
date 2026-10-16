@@ -15,6 +15,7 @@ import type {
   RouteWhitelist,
   TrafficWindow,
 } from "@sms/contract";
+import { toPlatformSql } from "../currency.js";
 import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { listFields } from "../lists/fields.js";
@@ -837,7 +838,7 @@ async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]
     if (sellRate === null && mccmnc) {
       // The first of the trunk's rate tables with a line for the destination (§5.4).
       const { rows: rate } = await db.query(
-        `SELECT l.rate / cl.rate_per_usd AS usd FROM customer_trunk_rate_tables x
+        `SELECT ${toPlatformSql("l.rate")} AS conv FROM customer_trunk_rate_tables x
            JOIN rate_lines l ON l.rate_table_id = x.rate_table_id
            JOIN currency_latest cl ON cl.iso = l.currency
           WHERE x.customer_trunk_id = $1 AND l.mccmnc = ANY($2) AND l.sender_id IS NULL AND NOT l.is_blocked
@@ -845,7 +846,7 @@ async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]
           ORDER BY x.position, length(l.mccmnc) DESC LIMIT 1`,
         [input.customerTrunkId, [mccmnc, mccmnc.slice(0, 3)]],
       );
-      sellRate = rate[0] ? Math.round(Number(rate[0].usd) * 1e6) / 1e6 : null;
+      sellRate = rate[0] ? Math.round(Number(rate[0].conv) * 1e6) / 1e6 : null;
     }
   }
   const values = [input.sender ?? "", input.receiver];
@@ -874,7 +875,7 @@ async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]
   };
 }
 
-/** Live vendor trunks with their buy rate (base currency) for the destination. */
+/** Live vendor trunks with their buy rate (platform currency) for the destination. */
 export async function vendorOptions(
   db: Db,
   mccmnc: string | null,
@@ -882,9 +883,9 @@ export async function vendorOptions(
 ): Promise<Map<number, VendorOption>> {
   const quality = await vendorQuality();
   const { rows } = await db.query(
-    `SELECT vt.id, vt.name, vt.product_category_id, c.usd FROM vendor_trunks vt
+    `SELECT vt.id, vt.name, vt.product_category_id, c.conv FROM vendor_trunks vt
        LEFT JOIN LATERAL (
-         SELECT l.rate / cl.rate_per_usd AS usd FROM rate_tables rt
+         SELECT ${toPlatformSql("l.rate")} AS conv FROM rate_tables rt
            JOIN rate_lines l ON l.rate_table_id = rt.id
            JOIN currency_latest cl ON cl.iso = l.currency
           WHERE rt.vendor_trunk_id = vt.id AND l.mccmnc = ANY($1) AND l.sender_id IS NULL AND NOT l.is_blocked
@@ -899,7 +900,7 @@ export async function vendorOptions(
       {
         vendorTrunkId: Number(r.id),
         name: r.name as string,
-        cost: r.usd === null ? null : Math.round(Number(r.usd) * 1e6) / 1e6,
+        cost: r.conv === null ? null : Math.round(Number(r.conv) * 1e6) / 1e6,
         dlr: quality.get(Number(r.id)) ?? null,
         categoryId: r.product_category_id ?? null,
       },

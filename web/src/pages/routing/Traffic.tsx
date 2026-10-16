@@ -3,7 +3,7 @@
 // the 24h column with a selectable time frame.
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { RouteTraffic, TrafficWindow } from "@sms/contract";
-import { useReference } from "../../api/records";
+import { usePlatformCurrency } from "../../api/records";
 import { useRouteTraffic } from "../../api/routing";
 import { Chart, useChartColors } from "../../ui/Chart";
 import { Popover } from "../../ui/primitives";
@@ -12,11 +12,7 @@ import { compact } from "./ruleModel";
 
 export const WINDOWS: TrafficWindow[] = ["15m", "1h", "24h", "7d", "30d"];
 
-/** Rule figures are in the base currency (see BACKEND_TODO open question on mixed bases). */
-export function useBaseCurrency(): string {
-  const ref = useReference();
-  return ref.data?.businessCompanies[0]?.baseCurrency ?? "USD";
-}
+export { usePlatformCurrency };
 
 export function money(v: number | null | undefined, ccy: string): string {
   if (v === null || v === undefined) return "—";
@@ -165,7 +161,7 @@ function Unavailable({ data }: { data: RouteTraffic | undefined }) {
 export function TrafficSection({ ruleId }: { ruleId: number }) {
   const [win, setWin] = useState<TrafficWindow>("24h");
   const traffic = useRouteTraffic(ruleId, win);
-  const ccy = useBaseCurrency();
+  const ccy = usePlatformCurrency();
   const d = traffic.data;
   return (
     <div className="traffic">
@@ -220,7 +216,7 @@ export function TrafficSection({ ruleId }: { ruleId: number }) {
 export function TrafficAside({ ruleId }: { ruleId: number }) {
   const traffic = useRouteTraffic(ruleId, "24h");
   const c = useChartColors();
-  const ccy = useBaseCurrency();
+  const ccy = usePlatformCurrency();
   const d = traffic.data;
   const option = useMemo(
     () => ({
@@ -263,7 +259,7 @@ export function TrafficAside({ ruleId }: { ruleId: number }) {
 function Breakdown({ ruleId, initial }: { ruleId: number; initial: TrafficWindow }) {
   const [win, setWin] = useState<TrafficWindow>(initial);
   const traffic = useRouteTraffic(ruleId, win);
-  const ccy = useBaseCurrency();
+  const ccy = usePlatformCurrency();
   const d = traffic.data;
   return (
     <div className="breakdown">

@@ -4,6 +4,7 @@
 // when that is earlier than now.
 import type { RouteTraffic, TrafficWindow } from "@sms/contract";
 import { db } from "../db.js";
+import { sysToPlatformFactor } from "../currency.js";
 import { chRows } from "../edr.js";
 
 export const WINDOWS: Record<TrafficWindow, { sql: string; bucket: string; ms: number }> = {
@@ -14,10 +15,13 @@ export const WINDOWS: Record<TrafficWindow, { sql: string; bucket: string; ms: n
   "30d": { sql: "INTERVAL 30 DAY", bucket: "toStartOfDay", ms: 30 * 86_400_000 },
 };
 
-const FIGURES = `count() AS n,
+/** Margin in the platform currency: each EDR's *_sys amounts are in its company's base currency. */
+const marginSql = (factor: string) => `round(sum((revenue_sys - cost_sys) * ${factor}), 2)`;
+
+const figuresSql = (factor: string) => `count() AS n,
   round(countIf(is_submit_success = 1) / count() * 100, 1) AS asr,
   round(countIf(msg_status = 'DELIVRD') / greatest(countIf(is_submit_success = 1), 1) * 100, 1) AS dlr,
-  round(sum(revenue_sys) - sum(cost_sys), 2) AS margin`;
+  ${marginSql(factor)} AS margin`;
 
 /** End of the traffic windows: now, or the latest EDR when the fake data ends earlier. */
 export async function windowEnd(): Promise<string | null> {
@@ -34,6 +38,7 @@ export async function refreshRouteTraffic(): Promise<void> {
   try {
     const end = await windowEnd();
     if (!end) return;
+    const FIGURES = figuresSql(await sysToPlatformFactor());
     const results = await Promise.all(
       (Object.keys(WINDOWS) as TrafficWindow[]).map(async (w) => ({
         w,
@@ -103,6 +108,8 @@ export async function ruleTraffic(ruleId: number, window: TrafficWindow): Promis
     series: [],
   };
   if (!end) return empty;
+  const factor = await sysToPlatformFactor();
+  const FIGURES = figuresSql(factor);
   const where = `route_rule_id = ${Number(ruleId)} AND submit_time > toDateTime64('${end}', 3) - ${w.sql}
     AND submit_time <= toDateTime64('${end}', 3)`;
   const [total, byC, byV, series] = await Promise.all([
@@ -116,7 +123,7 @@ export async function ruleTraffic(ruleId: number, window: TrafficWindow): Promis
       `SELECT v_trunk_id AS id, ${FIGURES} FROM edr WHERE ${where} GROUP BY id ORDER BY n DESC LIMIT 50`,
     ),
     chRows<{ at: string; n: string; margin: number }>(
-      `SELECT toString(${w.bucket}(submit_time)) AS at, count() AS n, round(sum(revenue_sys) - sum(cost_sys), 2) AS margin
+      `SELECT toString(${w.bucket}(submit_time)) AS at, count() AS n, ${marginSql(factor)} AS margin
          FROM edr WHERE ${where} GROUP BY at ORDER BY at`,
     ),
   ]);

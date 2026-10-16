@@ -1,5 +1,6 @@
 // SQL side of each list: FROM clause, an expression per catalogue field, and the
 // mapping from database row to the contract's row schema.
+import { toPlatformSql } from "../currency.js";
 import type {
   Change,
   Destination,
@@ -306,7 +307,7 @@ export const rateLineList: ListDef<RateLineRow> = {
     isBlocked: { sql: "l.is_blocked" },
     negativeMargin: { sql: `(COALESCE(l.rate < ${bestBuySql}, false))` },
     dialCode: { sql: "l.dial_code" },
-    sysRate: { sql: "(l.rate / cl.rate_per_usd)" },
+    sysRate: { sql: toPlatformSql("l.rate") },
     rateNote: { sql: "l.rate_note" },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "l.updated_at" },
@@ -314,7 +315,7 @@ export const rateLineList: ListDef<RateLineRow> = {
   search: ["country", "network", "mccmnc", "senderId", "bestVendor"],
   idSql: "l.id",
   select: `l.id, l.rate_table_id, l.mccmnc_id, l.mccmnc, co.name AS country, co.iso AS country_iso, m.network,
-    l.dial_code, l.sender_id, l.rate, (l.rate / cl.rate_per_usd) AS sys_rate, l.currency,
+    l.dial_code, l.sender_id, l.rate, ${toPlatformSql("l.rate")} AS sys_rate, l.currency,
     ${bestBuySql} AS best_buy, bb.vendor_trunk_id AS best_vendor_trunk_id, bv.name AS best_vendor,
     ${marginSql} AS margin, ${marginPctSql} AS margin_pct, ${changeTypeSql} AS change_type, ${changePctSql} AS change_pct,
     l.valid_from, l.valid_to, l.stated_valid_from, nxt.rate AS next_rate, nxt.valid_from AS next_from,

@@ -57,6 +57,11 @@ export function useReference() {
   });
 }
 
+/** Margins, converted rates and totals are in the platform currency (decided 2026-10-16: EUR by default). */
+export function usePlatformCurrency(): string {
+  return useReference().data?.platformCurrency ?? "EUR";
+}
+
 // ---------------------------------------------------------------- enterprise
 
 export function useEnterprise(id: number | null) {

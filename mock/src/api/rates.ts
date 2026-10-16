@@ -14,6 +14,7 @@ import type {
   RateTableRow,
   RateTableUpdate,
 } from "@sms/contract";
+import { PLATFORM_CURRENCY } from "../currency.js";
 import { withDb } from "../db.js";
 import { marginPct, trafficTodayByRateTable } from "../edr.js";
 import { listFields } from "../lists/fields.js";
@@ -43,6 +44,8 @@ async function trafficFigures(db: Db, rows: { id: number; kind: string; currency
     return new Map<number, { money: number | null; margin: number | null; n: number | null }>();
   const { rows: fx } = await db.query("SELECT iso, rate_per_usd FROM currency_latest");
   const perUsd = new Map(fx.map((r) => [String(r.iso), Number(r.rate_per_usd)]));
+  // Traffic money is in the platform currency; show it in the table's currency.
+  const platformPerUsd = perUsd.get(PLATFORM_CURRENCY) ?? 1;
   return new Map(
     rows.map((r) => {
       const t = (r.kind === "customer" ? traffic.customer : traffic.vendor).get(r.id);
@@ -50,7 +53,7 @@ async function trafficFigures(db: Db, rows: { id: number; kind: string; currency
       return [
         r.id,
         {
-          money: Math.round(sys * (perUsd.get(r.currency) ?? 1) * 100) / 100,
+          money: Math.round((sys / platformPerUsd) * (perUsd.get(r.currency) ?? 1) * 100) / 100,
           margin: marginPct(t),
           n: t?.messages ?? 0,
         },

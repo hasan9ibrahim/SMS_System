@@ -3,6 +3,7 @@
 // vendor costs and client rates, with quick toggles above them.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LookupClientRate, LookupDestination, LookupVendorCost, RateLookupRequest } from "@sms/contract";
+import { usePlatformCurrency } from "../../api/records";
 import { downloadBlob, useLookupResolve, useRateLookup } from "../../api/lookup";
 import { emptyState, encodeState } from "../../grid/filterModel";
 import { useTabNavigate } from "../../shell/tabContext";
@@ -97,7 +98,8 @@ export function EasyLookup({
     : null;
   const result = useRateLookup(req);
   const r = result.data;
-  const ccy = r?.lookupCurrency ?? "USD";
+  const platform = usePlatformCurrency();
+  const ccy = r?.lookupCurrency ?? platform;
   const shown = (l: { rate: number; currency: string; rateConverted: number }) =>
     state.converted ? money(l.rateConverted, ccy) : money(l.rate, l.currency);
   const shownNext = (l: LookupVendorCost | LookupClientRate) =>

@@ -19,7 +19,7 @@ import { AddCondition, ConditionsSection, RuleTitle, useRuleSaver as useSaver } 
 import { BulkDialog, RuleDialog, VendorSplitEditor, problemText } from "./dialogs";
 import { compact, routeTypeOf } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
-import { TrafficAside, TrafficHover, TrafficSection, money, useBaseCurrency } from "./Traffic";
+import { TrafficAside, TrafficHover, TrafficSection, money, usePlatformCurrency } from "./Traffic";
 import { VendorsSection } from "./VendorsSection";
 
 const page = pageForPath("/routing/rules")!;
@@ -101,7 +101,7 @@ export function RouteRulesPage() {
   const clone = useCloneRouteRule();
   const notifySaved = useNotifySaved();
   const deleteRecord = useDeleteRecord();
-  const ccy = useBaseCurrency();
+  const ccy = usePlatformCurrency();
   const [selectId, setSelectId] = useState<number | null>(null);
   const sectionState = useState<string | null>(null);
   const [, setSection] = sectionState;

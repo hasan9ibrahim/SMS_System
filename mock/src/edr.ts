@@ -1,6 +1,8 @@
 // Read access to the EDR store (ClickHouse) for figures that come from traffic, such as
 // today's revenue and margin per rate table (§13.12). Optional: when ClickHouse does not
 // answer, callers get null and screens show "—" instead of failing.
+import { sysToPlatformFactor } from "./currency.js";
+
 const env = process.env;
 const CH_URL = `http://${env.CLICKHOUSE_HOST ?? "localhost"}:${env.CLICKHOUSE_HTTP_PORT ?? 8123}`;
 const CH_DB = env.CLICKHOUSE_DB ?? "sms_edr";
@@ -21,6 +23,7 @@ export async function chRows<T>(sql: string): Promise<T[] | null> {
   }
 }
 
+/** Revenue and cost are in the platform currency (converted per business company). */
 export interface TrafficToday {
   messages: number;
   revenueSys: number;
@@ -35,9 +38,10 @@ let cache: { at: number; customer: Map<number, TrafficToday>; vendor: Map<number
  */
 export async function trafficTodayByRateTable() {
   if (cache && Date.now() - cache.at < 60_000) return cache;
+  const factor = await sysToPlatformFactor();
   const q = (col: string) =>
     chRows<{ id: number; n: string; rev: string; cost: string }>(
-      `SELECT ${col} AS id, count() AS n, sum(revenue_sys) AS rev, sum(cost_sys) AS cost
+      `SELECT ${col} AS id, count() AS n, sum(revenue_sys * ${factor}) AS rev, sum(cost_sys * ${factor}) AS cost
          FROM edr WHERE submit_time >= toStartOfDay(now('UTC')) GROUP BY id`,
     );
   const [c, v] = await Promise.all([q("c_rate_table_id"), q("v_rate_table_id")]);
