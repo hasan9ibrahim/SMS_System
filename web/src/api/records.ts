@@ -8,6 +8,7 @@ import type {
   CustomerTrunkDetail,
   CustomerTrunkInput,
   Dependencies,
+  DestinationSaved,
   EnterpriseBilling,
   EnterpriseBillingInput,
   EnterpriseDetail,
@@ -201,6 +202,18 @@ export function useSaveTrunkRules(kind: TrunkKind, id: number) {
       kind === "customer"
         ? unwrap(api.PUT("/customer-trunks/{id}/rules", { params: { path: { id } }, body }))
         : unwrap(api.PUT("/vendor-trunks/{id}/rules", { params: { path: { id } }, body })),
+    onSuccess: () => void refresh(),
+  });
+}
+
+// ---------------------------------------------------------------- destinations (§6.1)
+
+/** Set or remove a destination's DLR target (decided 2026-10-16); one undoable change. */
+export function useSetDlrTarget() {
+  const refresh = useRefreshRecords();
+  return useMutation({
+    mutationFn: ({ id, targetPct }: { id: number; targetPct: number | null }): Promise<DestinationSaved> =>
+      unwrap(api.PUT("/destinations/{id}/dlr-target", { params: { path: { id } }, body: { targetPct } })),
     onSuccess: () => void refresh(),
   });
 }

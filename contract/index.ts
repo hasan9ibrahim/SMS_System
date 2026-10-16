@@ -157,3 +157,5 @@ export type MatrixRow = Schemas["MatrixRow"];
 export type RateMatrix = Schemas["RateMatrix"];
 export type SavedLookupInput = Schemas["SavedLookupInput"];
 export type SavedLookup = Schemas["SavedLookup"];
+export type DlrTargetInput = Schemas["DlrTargetInput"];
+export type DestinationSaved = Schemas["DestinationSaved"];

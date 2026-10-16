@@ -28,6 +28,8 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
   translation_rule: { table: "translation_rules", columns: { status: "status", name: "name" } },
   hlr_rule: { table: "hlr_rules", columns: { status: "status", name: "name" } },
   enterprise_doc: { table: "enterprise_docs", columns: {} },
+  // DLR targets live on the MCCMNC master (decided 2026-10-16).
+  destination: { table: "mccmnc", columns: { dlrTargetPct: "dlr_target_pct" } },
 };
 
 const TABLES: Record<string, string> = {

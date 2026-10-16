@@ -3,6 +3,7 @@
  * categories (spec §5.5, §7), countries, the real MCC/MNC master with per-country
  * "All networks" codes, and the dial-code Master Table (spec §6.1, §13.21).
  */
+import { fakeDestinationTarget } from "./dlrTargets.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Rng } from "./rng.js";
@@ -391,6 +392,7 @@ export async function generateReference(world: World, rng: Rng, sink: TableSink)
       country_id: m.countryId,
       network: m.network,
       is_all_networks: m.isAllNetworks,
+      dlr_target_pct: fakeDestinationTarget(m.code, m.isAllNetworks),
     });
   }
 

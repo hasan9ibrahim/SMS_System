@@ -42,6 +42,7 @@ const INPUT_KEYS = [
   "margin",
   "qbrFormula",
   "skipVendorAtTpsPct",
+  "dlrTargetPct",
   "hlrAction",
   "denyMultipart",
   "threshold",

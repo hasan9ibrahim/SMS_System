@@ -5,6 +5,7 @@
  * Includes the dirty data the Cleanup Center must find (§13.19): unattached rules,
  * expired and inactive rules, identical copies and references to deleted vendors.
  */
+import { fakeRuleTarget } from "./dlrTargets.js";
 import { WeightedPicker, type Rng } from "./rng.js";
 import { json, type TableSink } from "./sink.js";
 import { syllableWord } from "./names.js";
@@ -198,6 +199,7 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       mccmnc_mode: r.mccmncs.length ? "inclusive" : "all",
       mccmncs: r.mccmncs,
       mccmnc_pattern: null,
+      dlr_target_pct: fakeRuleTarget(r.id),
       sender_pattern: r.senderPattern,
       sender_pattern_negate: r.senderPatternNegate,
       receiver_pattern: null,

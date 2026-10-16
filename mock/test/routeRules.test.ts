@@ -252,6 +252,55 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     await ok("archiveRouteRule", call("POST", `/route-rules/${draft.id}/archive`, {}));
   });
 
+  test("DLR target: the rule's own, else its destinations' lowest; block rules have none", async () => {
+    const f = await fixtures();
+    // Two networks of one country, the country with a target and one network with its own.
+    const { rows } = await db().query(
+      `SELECT n.id, n.mccmnc, c.id AS country_id, c.mccmnc AS country FROM mccmnc n JOIN mccmnc c ON c.mccmnc = n.mcc AND c.is_all_networks
+        WHERE NOT n.is_all_networks ORDER BY n.id LIMIT 2`,
+    );
+    const [a, b] = rows;
+    const set = (id: number, targetPct: number | null) =>
+      ok("setDestinationDlrTarget", call("PUT", `/destinations/${id}/dlr-target`, { targetPct }));
+    const saved = [await set(a.country_id, 70), await set(a.id, 62.5), await set(b.id, null)];
+    const created = (
+      await ok(
+        "createRouteRule",
+        call("POST", "/route-rules", ruleInput(f, { name: `DLR ${run}`, mccmncs: [a.mccmnc, b.mccmnc] })),
+        201,
+      )
+    ).record;
+    const row = async () =>
+      (await query({ ...and({ field: "id", op: "eq", value: created.id }) })).rows[0] as {
+        dlrTarget: number | null;
+        dlrTargetSource: string | null;
+      };
+    assert.deepEqual(await row(), { ...(await row()), dlrTarget: 62.5, dlrTargetSource: "destination" });
+    await ok(
+      "updateRouteRule",
+      call("PUT", `/route-rules/${created.id}`, {
+        ...ruleInput(f, { name: `DLR ${run}`, mccmncs: [a.mccmnc, b.mccmnc] }),
+        dlrTargetPct: 90,
+      }),
+    );
+    assert.equal((await row()).dlrTarget, 90);
+    assert.equal((await row()).dlrTargetSource, "rule");
+    await ok(
+      "updateRouteRule",
+      call("PUT", `/route-rules/${created.id}`, {
+        ...ruleInput(f, { name: `DLR ${run}`, mccmncs: [a.mccmnc] }),
+        routeType: "block",
+        vendors: [],
+        whitelists: [],
+      }),
+    );
+    assert.equal((await row()).dlrTarget, null, "block rules are not judged on delivery");
+    const below = await query({ ...and({ field: "dlrBelowTarget", op: "eq", value: true }), limit: 50 });
+    for (const r of below.rows) assert.ok(r.dlr !== null && r.dlrTarget !== null && r.dlr < r.dlrTarget);
+    for (const s of saved.reverse()) if (s.change) await undo(s.change.id);
+    await ok("archiveRouteRule", call("POST", `/route-rules/${created.id}/archive`, {}));
+  });
+
   test("traffic per customer and vendor (§13.27)", async () => {
     const busiest = await query({ sort: [{ field: "messages", dir: "desc" }], limit: 1 });
     const t = await ok("getRouteRuleTraffic", call("GET", `/route-rules/${busiest.rows[0].id}/traffic?window=24h`));

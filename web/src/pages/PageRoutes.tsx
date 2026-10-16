@@ -7,6 +7,7 @@ import { EnterprisePage } from "./enterprise/EnterprisePage";
 import { EnterprisesPage } from "./EnterprisesPage";
 import { HomePage } from "./HomePage";
 import { NotFoundPage, PlaceholderPage } from "./PlaceholderPage";
+import { MccmncPage } from "./destinations/MccmncPage";
 import { RateManagerPage } from "./rates/RateManagerPage";
 import { TrunkPage } from "./trunk/TrunkPage";
 import { TrunksPage } from "./TrunksPage";
@@ -20,6 +21,7 @@ const BUILT = new Set([
   "/enterprises/customer-trunks",
   "/enterprises/vendor-trunks",
   "/rates/manager",
+  "/rates/mccmnc",
   "/routing/rules",
   "/routing/rate-lookup",
   "/admin/changes",
@@ -37,6 +39,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/enterprises/vendor-trunks/:id" element={<TrunkPage key="vendor" kind="vendor" />} />
       <Route path="/enterprises/:id" element={<EnterprisePage />} />
       <Route path="/rates/manager" element={<RateManagerPage />} />
+      <Route path="/rates/mccmnc" element={<MccmncPage />} />
       <Route
         path="/routing/rate-lookup"
         element={

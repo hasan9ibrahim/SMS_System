@@ -26,7 +26,15 @@ export const problemText = (e: unknown) => {
 
 type General = Pick<
   RouteRuleInput,
-  "name" | "priority" | "status" | "routeType" | "groupId" | "nextGroupId" | "continueRouting" | "comment"
+  | "name"
+  | "priority"
+  | "status"
+  | "routeType"
+  | "groupId"
+  | "nextGroupId"
+  | "continueRouting"
+  | "comment"
+  | "dlrTargetPct"
 >;
 
 /** New rule (rule = null) or the rule's settings (E edit). */
@@ -45,6 +53,7 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
           nextGroupId: rule.nextGroupId,
           continueRouting: rule.continueRouting,
           comment: rule.comment,
+          dlrTargetPct: rule.dlrTargetPct,
         }
       : {
           name: "",
@@ -56,6 +65,7 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
           nextGroupId: null,
           continueRouting: "stop",
           comment: null,
+          dlrTargetPct: null,
         },
   );
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +184,23 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
           </select>
         </label>
       </div>
+      <label className="field">
+        <span>DLR target %</span>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={0.5}
+          placeholder="Empty = the destinations' targets"
+          value={g.dlrTargetPct ?? ""}
+          onChange={(e) =>
+            set({ dlrTargetPct: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })
+          }
+        />
+        <small className="muted">
+          The grid shows the rule's DLR in amber below it. Destination targets are set on the MCCMNC codes page.
+        </small>
+      </label>
       <label className="field">
         <span>Comment</span>
         <textarea

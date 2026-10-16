@@ -24,8 +24,14 @@ import { VendorsSection } from "./VendorsSection";
 
 const page = pageForPath("/routing/rules")!;
 
-/** DLR below this % shows amber (§15.4). See BACKEND_TODO open questions. */
-export const DLR_WARN_PCT = 60;
+/**
+ * DLR shows amber below the rule's target (§15.4; decided 2026-10-16): its own target, else
+ * its destinations' (set on the MCCMNC codes page). No target = no colour.
+ */
+const dlrTitle = (r: RouteRuleRow) =>
+  r.dlrTarget === null
+    ? "No DLR target (set one on the rule or on its destinations)"
+    : `Target ${r.dlrTarget}% (${r.dlrTargetSource === "rule" ? "this rule" : "its destinations"})`;
 
 const SHORTCUTS = "↑↓ move · Space select · E edit · D duplicate · Ctrl+Z undo";
 
@@ -235,12 +241,14 @@ export function RouteRulesPage() {
       asr: { width: 70, render: (r: RouteRuleRow) => formatPct(r.asr) },
       dlr: {
         width: 70,
-        render: (r: RouteRuleRow) =>
-          r.dlr !== null && r.dlr < DLR_WARN_PCT ? (
-            <span className="tone-warning strong">{formatPct(r.dlr)}</span>
-          ) : (
-            formatPct(r.dlr)
-          ),
+        render: (r: RouteRuleRow) => (
+          <span
+            className={r.dlr !== null && r.dlrTarget !== null && r.dlr < r.dlrTarget ? "tone-warning strong" : ""}
+            title={dlrTitle(r)}
+          >
+            {formatPct(r.dlr)}
+          </span>
+        ),
       },
       margin: {
         width: 84,

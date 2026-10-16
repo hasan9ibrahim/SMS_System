@@ -327,6 +327,7 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "mcc", label: "MCC", type: "text", defaultOperator: "eq", hidden: true }),
       field({ field: "mnc", label: "MNC", type: "text", defaultOperator: "eq", hidden: true }),
       field({ field: "allNetworks", label: "All networks", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "dlrTargetPct", label: "DLR target", type: "percent", defaultOperator: "gte" }),
     ],
   },
 
@@ -393,6 +394,15 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "active", label: "On" },
           { value: "inactive", label: "Off" },
         ],
+      }),
+      field({ field: "dlrTarget", label: "DLR target", type: "percent", defaultOperator: "gte", hidden: true }),
+      field({
+        field: "dlrBelowTarget",
+        label: "DLR below target",
+        type: "boolean",
+        defaultOperator: "eq",
+        sortable: false,
+        hidden: true,
       }),
       field({
         field: "window",

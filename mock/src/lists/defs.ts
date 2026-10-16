@@ -367,10 +367,12 @@ export const destinationList: ListDef<Destination> = {
     mcc: { sql: "m.mcc" },
     mnc: { sql: "m.mnc" },
     allNetworks: { sql: "m.is_all_networks" },
+    dlrTargetPct: { sql: "m.dlr_target_pct" },
   },
   search: ["country", "network", "mccmnc"],
   idSql: "m.id",
-  select: "m.id, m.mccmnc, m.mcc, m.mnc, co.name AS country, co.iso AS country_iso, m.network, m.is_all_networks",
+  select:
+    "m.id, m.mccmnc, m.mcc, m.mnc, co.name AS country, co.iso AS country_iso, m.network, m.is_all_networks, m.dlr_target_pct",
   mapRow: (r) => ({
     id: r.id as number,
     mccmnc: r.mccmnc as string,
@@ -380,6 +382,7 @@ export const destinationList: ListDef<Destination> = {
     countryIso: String(r.country_iso),
     network: r.is_all_networks ? "All networks" : (r.network as string),
     allNetworks: r.is_all_networks as boolean,
+    dlrTargetPct: r.dlr_target_pct == null ? null : Number(r.dlr_target_pct),
   }),
 };
 
@@ -392,6 +395,16 @@ export function trafficWindow(query: ListQuery): TrafficWindow {
   const found = JSON.stringify(query.filter ?? {}).match(/"field":"window","op":"eq","value":"([^"]+)"/);
   return found && WINDOW_VALUES.has(found[1]!) ? (found[1] as TrafficWindow) : "24h";
 }
+
+/**
+ * A rule's DLR target (decided 2026-10-16): its own, else the lowest target among the
+ * destinations it lists (a network without one uses its country's); null = no target. Block
+ * rules deliver nothing by design, so they have none.
+ */
+const dlrTargetSql = `CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r.dlr_target_pct,
+  CASE WHEN r.mccmnc_mode = 'inclusive' THEN (
+    SELECT min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) FROM unnest(r.mccmncs) AS c(code)
+      LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)) END) END`;
 
 const trunkNamesSql = `(SELECT string_agg(t.name, ', ') FROM customer_trunks t WHERE t.id = ANY(r.customer_trunk_ids))`;
 const vendorNamesSql = `(SELECT string_agg(vt.name, ', ') FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
@@ -444,6 +457,8 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     messages: { sql: "tr.messages" },
     asr: { sql: "tr.asr" },
     dlr: { sql: "tr.dlr" },
+    dlrTarget: { sql: dlrTargetSql },
+    dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetSql})` },
     margin: { sql: "tr.margin" },
     status: { sql: "r.status" },
     window: { sql: "NULL", where: () => "TRUE" },
@@ -482,7 +497,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     (SELECT json_agg(json_build_object('n', vt.name, 's', v.share_pct, 'l', v.level, 'b', v.is_backup)
                      ORDER BY v.level, v.share_pct DESC NULLS LAST, v.id)
        FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id WHERE v.route_rule_id = r.id) AS vendors,
-    tr.messages, tr.asr, tr.dlr, tr.margin, r.starts_at, r.stops_at, g.name AS group_name, ub.username AS updated_by,
+    tr.messages, tr.asr, tr.dlr, ${dlrTargetSql} AS dlr_target, r.dlr_target_pct, tr.margin, r.starts_at, r.stops_at, g.name AS group_name, ub.username AS updated_by,
     r.updated_at, r.deleted_at`,
   mapRow: (r) => {
     const names = (r.trunk_names as string[]) ?? [];
@@ -538,6 +553,8 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
       messages: (r.messages as number | null) ?? null,
       asr: r.asr == null ? null : Number(r.asr),
       dlr: r.dlr == null ? null : Number(r.dlr),
+      dlrTarget: r.dlr_target == null ? null : Number(r.dlr_target),
+      dlrTargetSource: r.dlr_target == null ? null : r.dlr_target_pct != null ? "rule" : "destination",
       margin: r.margin == null ? null : Number(r.margin),
       startsAt: iso(r.starts_at)!,
       stopsAt: iso(r.stops_at)!,

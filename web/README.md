@@ -50,8 +50,8 @@ The header has Undo, History, Export (CSV of the filtered rules), Simulate (Rout
 and New rule. The filter row shows the chips, Clear all and Save as view, and on the right "n selected · X msgs"
 and the Bulk edit menu (turn on / off, set or shift priority, replace vendor, delete). The grid
 shows a coloured type dot, customer trunks "+N" (hover for all), the vendor split (click it to edit
-level 1 in place), and the 24h volume (hover for the per-customer breakdown with a 15m–30d time frame). DLR
-turns amber below the threshold and margin red when negative. Click the On dot to toggle.
+level 1 in place), and the 24h volume (hover for the per-customer breakdown with a 15m–30d time frame). Margin
+turns red when negative. Click the On dot to toggle.
 The detail panel has:
 
 - **Conditions:** "#id name", "all must match" (click to switch to any), + Add condition, and
@@ -64,6 +64,8 @@ The detail panel has:
 - **History**, and **Test** (a sample number through the rule).
 - **Right side:** the 24h trend.
 
+DLR turns amber below the rule's target (its own, else its destinations'; the tooltip says
+which). Destination targets are set on the MCCMNC codes page (`/rates/mccmnc`, `src/pages/destinations/`).
 Shortcuts: E edit (rule settings dialog), D duplicate (inactive copy). Each save is one change with
 Undo. Charts use `src/ui/Chart.tsx`, which reads the theme tokens and redraws when the theme changes.
 

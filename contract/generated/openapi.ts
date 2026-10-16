@@ -1029,6 +1029,27 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/destinations/{id}/dlr-target": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set or remove a destination's DLR target (decided 2026-10-16)
+     * @description Route rules sending to the destination show their DLR in amber below this target (§15.4),
+     *     unless the rule has its own. One undoable change (§13.10).
+     */
+    put: operations["setDestinationDlrTarget"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -2307,6 +2328,19 @@ export type components = {
       countryIso: string;
       network: string;
       allNetworks: boolean;
+      /**
+       * @description DLR target for route rules sending here (decided 2026-10-16). A country-level code
+       *     covers its networks unless a network has its own; null = no target.
+       */
+      dlrTargetPct: number | null;
+    };
+    DlrTargetInput: {
+      /** @description Null removes the target. */
+      targetPct: number | null;
+    };
+    DestinationSaved: {
+      record: components["schemas"]["Destination"];
+      change: components["schemas"]["Change"] | null;
     };
     DestinationPage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["Destination"][];
@@ -2448,6 +2482,8 @@ export type components = {
       qbrFormula?: string | null;
       /** @description Skip a vendor at this % of its TPS limit (§13.8 vendor capacity option). */
       skipVendorAtTpsPct?: number | null;
+      /** @description The rule's own DLR target; null = its destinations' targets (decided 2026-10-16). */
+      dlrTargetPct?: number | null;
       hlrAction?: components["schemas"]["HlrAction"] | null;
       denyMultipart?: boolean;
       threshold?: number | null;
@@ -2505,6 +2541,7 @@ export type components = {
       | "margin"
       | "qbrFormula"
       | "skipVendorAtTpsPct"
+      | "dlrTargetPct"
       | "hlrAction"
       | "denyMultipart"
       | "threshold"
@@ -2551,6 +2588,14 @@ export type components = {
       asr: number | null;
       /** @description Delivered %. */
       dlr: number | null;
+      /**
+       * @description The rule's DLR target: its own, else the lowest target among its destinations (a
+       *     network without one uses its country's). Null = no target. The grid shows DLR in amber
+       *     below it (§15.4). Later the traffic alert thresholds (§13.6) take over.
+       */
+      dlrTarget: number | null;
+      /** @enum {string|null} */
+      dlrTargetSource: "rule" | "destination" | null;
       /** @description Margin in the platform currency. */
       margin: number | null;
       startsAt: components["schemas"]["Timestamp"];
@@ -4782,6 +4827,36 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setDestinationDlrTarget: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DlrTargetInput"];
+      };
+    };
+    responses: {
+      /** @description The destination and the change (null when nothing changed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DestinationSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

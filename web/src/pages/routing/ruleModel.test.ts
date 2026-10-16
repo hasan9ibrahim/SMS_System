@@ -54,6 +54,7 @@ const rule = (over: Partial<RouteRuleDetail> = {}): RouteRuleDetail => ({
   margin: 0,
   qbrFormula: null,
   skipVendorAtTpsPct: null,
+  dlrTargetPct: null,
   hlrAction: null,
   denyMultipart: false,
   threshold: null,

@@ -87,6 +87,7 @@ const SCALARS: FieldSpec[] = [
   { api: "margin", col: "margin" },
   { api: "qbrFormula", col: "qbr_formula" },
   { api: "skipVendorAtTpsPct", col: "skip_vendor_at_tps_pct" },
+  { api: "dlrTargetPct", col: "dlr_target_pct" },
   { api: "denyMultipart", col: "deny_multipart" },
   { api: "threshold", col: "threshold" },
   { api: "thresholdInterval", col: "threshold_interval" },
@@ -147,6 +148,7 @@ function rowToRule(r: Record<string, unknown>, vendors: RouteVendor[], whitelist
   const hlr = out.hlrAction as { customerTrunkIds?: unknown[] } | null;
   if (hlr) hlr.customerTrunkIds = (hlr.customerTrunkIds ?? []).map(Number);
   out.margin = Number(r.margin);
+  out.dlrTargetPct = r.dlr_target_pct == null ? null : Number(r.dlr_target_pct);
   out.vendors = vendors;
   out.whitelists = whitelists;
   return out as RuleCore;
@@ -272,6 +274,7 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     vendorTrunkIds: [],
     maxRouteLevel: 1,
     margin: 0,
+    dlrTargetPct: null,
     qbrFormula: null,
     skipVendorAtTpsPct: null,
     hlrAction: null,

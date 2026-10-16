@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.6.0
+  version: 0.7.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1656,6 +1656,38 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+
+  /destinations/{id}/dlr-target:
+    put:
+      tags: [rates]
+      operationId: setDestinationDlrTarget
+      summary: "Set or remove a destination's DLR target (decided 2026-10-16)"
+      description: |
+        Route rules sending to the destination show their DLR in amber below this target (§15.4),
+        unless the rule has its own. One undoable change (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DlrTargetInput"
+      responses:
+        "200":
+          description: The destination and the change (null when nothing changed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinationSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
   /route-rules/query:
     post:
@@ -4219,7 +4251,7 @@ components:
 
     Destination:
       type: object
-      required: [id, mccmnc, mcc, mnc, country, countryIso, network, allNetworks]
+      required: [id, mccmnc, mcc, mnc, country, countryIso, network, allNetworks, dlrTargetPct]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -4237,6 +4269,33 @@ components:
           type: string
         allNetworks:
           type: boolean
+        dlrTargetPct:
+          type: [number, "null"]
+          description: |
+            DLR target for route rules sending here (decided 2026-10-16). A country-level code
+            covers its networks unless a network has its own; null = no target.
+
+    DlrTargetInput:
+      type: object
+      additionalProperties: false
+      required: [targetPct]
+      properties:
+        targetPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: Null removes the target.
+
+    DestinationSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/Destination"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
 
     DestinationPage:
       allOf:
@@ -4528,6 +4587,11 @@ components:
           minimum: 1
           maximum: 100
           description: Skip a vendor at this % of its TPS limit (§13.8 vendor capacity option).
+        dlrTargetPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: The rule's own DLR target; null = its destinations' targets (decided 2026-10-16).
         hlrAction:
           oneOf:
             - $ref: "#/components/schemas/HlrAction"
@@ -4567,7 +4631,7 @@ components:
           type: string
 
     RouteRuleDetail:
-      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
+      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
       allOf:
         - $ref: "#/components/schemas/RouteRuleFields"
         - type: object
@@ -4617,7 +4681,7 @@ components:
 
     RouteRuleRow:
       type: object
-      required: [id, name, priority, routeType, status, categoryLabel, customerTrunksLabel, customerTrunkNames, customerTrunkCount, destinationLabel, vendorsLabel, messages, asr, dlr, margin, startsAt, stopsAt, groupName, updatedBy, updatedAt, archived]
+      required: [id, name, priority, routeType, status, categoryLabel, customerTrunksLabel, customerTrunkNames, customerTrunkCount, destinationLabel, vendorsLabel, messages, asr, dlr, dlrTarget, dlrTargetSource, margin, startsAt, stopsAt, groupName, updatedBy, updatedAt, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -4658,6 +4722,15 @@ components:
         dlr:
           type: [number, "null"]
           description: Delivered %.
+        dlrTarget:
+          type: [number, "null"]
+          description: |
+            The rule's DLR target: its own, else the lowest target among its destinations (a
+            network without one uses its country's). Null = no target. The grid shows DLR in amber
+            below it (§15.4). Later the traffic alert thresholds (§13.6) take over.
+        dlrTargetSource:
+          type: [string, "null"]
+          enum: [rule, destination, null]
         margin:
           type: [number, "null"]
           description: Margin in the platform currency.
