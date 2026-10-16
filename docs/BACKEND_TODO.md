@@ -20,6 +20,7 @@ backend team knows exactly what to build. Newest first.
 - 2026-10-16, re-routed messages: the customer is billed once, on the final attempt; the vendor is billed for every attempt it accepted (per its billing type). Decided by: Hasan Ibrahim.
 - 2026-10-16, billing data retention (§13.29): EDRs, invoices, SOAs, payments, credit notes, balance history, disputes, rate history and audit records are kept for 7 years and cannot be purged before that (anonymising a closed client's contact details stays allowed, as §13.29 says). Decided by: Hasan Ibrahim.
 - 2026-10-16, excluded payments (§13.33): a payment with "Include in SOA" unticked is left off the partner's SOA (and shown in the SOA preview's collapsed "excluded" section) but still counts in the partner's balance and in finance reports. Decided by: Hasan Ibrahim.
+- 2026-10-16, best buy (§13.12): a sell rate is compared only with vendor trunks of the same product category (a DIRECT sell table against DIRECT vendors). Destinations no vendor of that category covers show no best buy and no margin. Decided by: Hasan Ibrahim.
 - 2026-10-16, trunk delete (§13.29): a trunk delete is blocked only by live binds. Balance, unpaid or draft invoices and open disputes belong to the enterprise and block only the enterprise delete; an open enterprise balance does not block deleting one of its trunks. Decided by: Hasan Ibrahim.
 - 2026-10-16, saved filter views (§13.25): a saved view is private to the user who saved it. The owner can share it with named colleagues (chosen users), who see it read-only in their view list. No department-wide or company-wide sharing. In the contract since v0.2.0 (`/views`). Decided by: Hasan Ibrahim.
 
@@ -74,4 +75,4 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- §13.12 "best buy rate and best vendor": the mock compares a sell rate with vendors of the same product category only (e.g. a DIRECT sell table against DIRECT vendor trunks), so destinations that no vendor of that category covers show no best buy and no margin. Should best buy instead look across all categories, or across a list of categories mapped to each sell category?
+- None open.
