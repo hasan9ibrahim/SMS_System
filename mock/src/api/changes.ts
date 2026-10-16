@@ -8,6 +8,8 @@ import { changeSelect, mapChange } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
 import { CURRENT_USER_ID, canUndoOthers, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { applyEnterpriseField } from "./enterprises.js";
+import { applyTrunkField } from "./trunks.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -17,35 +19,49 @@ interface DiffEntry {
 }
 
 /**
- * Record fields that are real columns, so undo also restores the record itself. Other
- * fields (e.g. a vendor share inside a route) are recorded in the history only until
- * their screens exist.
+ * Record fields that are plain columns, for records whose screens don't have their own field
+ * map yet. Other fields (e.g. a vendor share inside a route) are history-only until then.
  */
 const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, string> }> = {
   route_rule: {
     table: "route_rules",
     columns: { priority: "priority", status: "status", margin: "margin", name: "name" },
   },
-  customer_trunk: { table: "customer_trunks", columns: { tps: "tps", status: "status", name: "name" } },
-  vendor_trunk: { table: "vendor_trunks", columns: { tps: "tps", status: "status", name: "name" } },
   translation_rule: { table: "translation_rules", columns: { status: "status", name: "name" } },
   hlr_rule: { table: "hlr_rules", columns: { status: "status", name: "name" } },
+  enterprise_doc: { table: "enterprise_docs", columns: {} },
 };
 
-async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEntry[], changeType: string) {
-  const target = ENTITY_COLUMNS[entityType];
-  if (!target) return;
+const TABLES: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(ENTITY_COLUMNS).map(([k, v]) => [k, v.table])),
+  enterprise: "enterprises",
+  customer_trunk: "customer_trunks",
+  vendor_trunk: "vendor_trunks",
+};
+
+/** Puts each entry's `before` value back (undo restores what the change replaced). */
+async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEntry[], userId: number) {
   for (const e of entries) {
-    // Undoing a create archives the record; undoing a delete restores it (§13.10, §13.29).
-    if (e.field === "*") {
-      if (changeType === "create")
-        await c.query(`UPDATE ${target.table} SET deleted_at = now() WHERE id = $1`, [e.entity_id]);
-      if (changeType === "delete")
-        await c.query(`UPDATE ${target.table} SET deleted_at = NULL WHERE id = $1`, [e.entity_id]);
+    // "*" = the record itself: no value before means it was created, so undo archives it;
+    // a value before means it was deleted, so undo restores it (§13.10, §13.29).
+    if (e.field === "*" || (e.field === "archived" && entityType in ENTITY_COLUMNS)) {
+      const table = TABLES[entityType];
+      const archive = e.field === "*" ? e.before == null : e.before === true;
+      if (table)
+        await c.query(`UPDATE ${table} SET deleted_at = ${archive ? "now()" : "NULL"} WHERE id = $1`, [e.entity_id]);
       continue;
     }
-    const column = target.columns[e.field];
-    if (column)
+    if (entityType === "enterprise") {
+      await applyEnterpriseField(c, e.entity_id, e.field, e.before, e.after, userId);
+      continue;
+    }
+    if (entityType === "customer_trunk" || entityType === "vendor_trunk") {
+      await applyTrunkField(c, entityType === "customer_trunk" ? "customer" : "vendor", e.entity_id, e.field, e.before, e.after, userId);
+      continue;
+    }
+    const target = ENTITY_COLUMNS[entityType];
+    const column = target?.columns[e.field];
+    if (target && column)
       await c.query(`UPDATE ${target.table} SET ${column} = $2, updated_at = now() WHERE id = $1`, [
         e.entity_id,
         e.before,
@@ -129,7 +145,7 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
       return sendProblem(reply, 400, "Nothing left to undo: every field was changed by someone else since");
 
     const newId = await inTransaction(pool, async (c) => {
-      await applyFields(c, target.entity_type, revert, target.change_type);
+      await applyFields(c, target.entity_type, revert, me.id);
       const { rows: ins } = await c.query(
         `INSERT INTO changes (entity_type, entity_ids, change_type, diff, note, undo_of_id, user_id, ip)
          VALUES ($1, $2, 'undo', $3, $4, $5, $6, $7) RETURNING id`,

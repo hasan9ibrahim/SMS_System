@@ -27,6 +27,12 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/users/query", { body })) as Promise<ListPage<Row>>;
     case "changes":
       return unwrap(api.POST("/changes/query", { body })) as Promise<ListPage<Row>>;
+    case "customer_trunks":
+      return unwrap(api.POST("/customer-trunks/query", { body })) as Promise<ListPage<Row>>;
+    case "vendor_trunks":
+      return unwrap(api.POST("/vendor-trunks/query", { body })) as Promise<ListPage<Row>>;
+    case "rate_tables":
+      return unwrap(api.POST("/rate-tables/query", { body })) as Promise<ListPage<Row>>;
   }
 }
 

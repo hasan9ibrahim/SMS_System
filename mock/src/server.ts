@@ -15,7 +15,8 @@ export interface ServerOptions {
 }
 
 export async function buildServer(options: ServerOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: options.logger ?? false });
+  // Document uploads carry up to 10 MB as base64 (§5.2), so the body limit is raised.
+  const app = Fastify({ logger: options.logger ?? false, bodyLimit: 16 * 1024 * 1024 });
   const handlers: Partial<Record<string, Handler>> = options.handlers ?? defaultHandlers;
   if (options.socket !== false) await registerSocket(app);
 

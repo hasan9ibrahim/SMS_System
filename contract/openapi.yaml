@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.2.0
+  version: 0.3.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -35,6 +35,10 @@ tags:
     description: Field catalogue for grids and the filter builder (§13.25)
   - name: enterprises
     description: Partners - customers, vendors and reciprocals (§5)
+  - name: trunks
+    description: Customer and vendor trunks (§5.4, §5.5)
+  - name: rates
+    description: Rate tables (§6.2, §13.12)
   - name: users
     description: Staff users (§11), e.g. for sharing saved views
   - name: views
@@ -236,27 +240,6 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
-  /enterprises/{id}:
-    get:
-      tags: [enterprises]
-      operationId: getEnterprise
-      summary: One enterprise (General Info tab, §5.1)
-      parameters:
-        - $ref: "#/components/parameters/RecordId"
-      responses:
-        "200":
-          description: The enterprise
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Enterprise"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/Unavailable"
-
   /users/query:
     post:
       tags: [users]
@@ -455,6 +438,931 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /meta/reference:
+    get:
+      tags: [meta]
+      operationId: getReference
+      summary: Small reference lists for forms
+      description: |
+        Business companies, countries, product categories (§6.1), currencies, billing cycles (§7),
+        time zones and account managers, for the pickers in record forms.
+      responses:
+        "200":
+          description: Reference data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferenceData"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises:
+    post:
+      tags: [enterprises]
+      operationId: createEnterprise
+      summary: Add an enterprise (§5.1)
+      description: |
+        The account manager given here opens the enterprise's AM history (§13.30). A name used by
+        an archived enterprise stays reserved until that one is renamed (§13.29).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterpriseInput"
+      responses:
+        "201":
+          description: Created, with the change that records it (§13.10)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}:
+    get:
+      tags: [enterprises]
+      operationId: getEnterprise
+      summary: One enterprise
+      description: |
+        General Info tab (§5.1). Archived enterprises stay readable (§13.29).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The enterprise
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [enterprises]
+      operationId: updateEnterprise
+      summary: Change a enterprise
+      description: |
+        Saves the whole record; the change lists only the fields that differ (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterpriseInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/dependencies:
+    get:
+      tags: [enterprises]
+      operationId: getEnterpriseDependencies
+      summary: What depends on a enterprise (safe delete, §13.29)
+      description: |
+        Live binds, active trunks, rate tables and route rules using its trunks, unpaid invoices,
+        unpaid balance, open disputes and traffic in the last 30 days.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/archive:
+    post:
+      tags: [enterprises]
+      operationId: archiveEnterprise
+      summary: Archive (delete) a enterprise (§13.29)
+      description: |
+        Delete means archive: the record leaves lists, pickers and routing and stops carrying
+        traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+        sends `override` with a reason, which is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/restore:
+    post:
+      tags: [enterprises]
+      operationId: restoreEnterprise
+      summary: Restore an archived enterprise (§13.29)
+      description: |
+        Administrators only; the restore is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/billing:
+    get:
+      tags: [enterprises]
+      operationId: getEnterpriseBilling
+      summary: Billing tab (§5.3)
+      description: |
+        Customer and vendor billing settings with current balances, and the beneficiary.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Billing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseBilling"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [enterprises]
+      operationId: updateEnterpriseBilling
+      summary: Change billing settings (§5.3, §12.3)
+      description: |
+        A side (customer or vendor) is present when the enterprise type has that side.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterpriseBillingInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/account-managers:
+    get:
+      tags: [enterprises]
+      operationId: getAccountManagerHistory
+      summary: AM history (§13.30)
+      description: |
+        Who managed the account when; the open row is the current AM, a future row a scheduled handover.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Periods, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AmPeriod"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/handover:
+    post:
+      tags: [enterprises]
+      operationId: handOverEnterprise
+      summary: Hand the account to another AM (§13.30)
+      description: |
+        Immediate or scheduled. Results before the effective time stay with the previous AM,
+        because EDRs store the AM at send time. A scheduled handover replaces an earlier pending one.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HandoverRequest"
+      responses:
+        "200":
+          description: The new history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandoverSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/docs:
+    get:
+      tags: [enterprises]
+      operationId: listEnterpriseDocs
+      summary: "Docs tab: contract and KYC files (§5.2)"
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Documents, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EnterpriseDoc"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      tags: [enterprises]
+      operationId: uploadEnterpriseDoc
+      summary: Add a document (§5.2)
+      description: |
+        The file travels base64-encoded in JSON (at most 10 MB).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterpriseDocUpload"
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseDoc"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/docs/{docId}:
+    delete:
+      tags: [enterprises]
+      operationId: deleteEnterpriseDoc
+      summary: Delete a document
+      description: |
+        Archives it (§13.29); it no longer lists.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/DocId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/docs/{docId}/file:
+    get:
+      tags: [enterprises]
+      operationId: downloadEnterpriseDoc
+      summary: Download a document
+      description: |
+        Saved as Docs_{enterpriseId}_{docId} with the original extension (§12.3).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/DocId"
+      responses:
+        "200":
+          description: The file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/query:
+    post:
+      tags: [trunks]
+      operationId: queryCustomerTrunks
+      summary: List customer trunks (server-side filter, sort and paging)
+      description: |
+        Filter on `enterpriseId` for an enterprise's customer trunk tab. Archived ones list only when the
+        filter asks for `archived` (§13.29).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of customer trunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerTrunkPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks:
+    post:
+      tags: [trunks]
+      operationId: createCustomerTrunk
+      summary: Add a customer trunk
+      description: |
+        The password is write-only: it is never returned, only `passwordSet`. Usernames of archived
+        trunks stay reserved (§13.29).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerTrunkInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerTrunkSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/{id}:
+    get:
+      tags: [trunks]
+      operationId: getCustomerTrunk
+      summary: One customer trunk
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The customer trunk
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerTrunkDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [trunks]
+      operationId: updateCustomerTrunk
+      summary: Change a customer trunk
+      description: |
+        Saves the whole record; the change lists only the fields that differ (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerTrunkInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerTrunkSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/{id}/dependencies:
+    get:
+      tags: [trunks]
+      operationId: getCustomerTrunkDependencies
+      summary: What depends on a customer trunk (safe delete, §13.29)
+      description: |
+        Live binds, route rules that use the trunk and traffic in the last 30 days.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/{id}/archive:
+    post:
+      tags: [trunks]
+      operationId: archiveCustomerTrunk
+      summary: Archive (delete) a customer trunk (§13.29)
+      description: |
+        Delete means archive: the record leaves lists, pickers and routing and stops carrying
+        traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+        sends `override` with a reason, which is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerTrunkSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/{id}/restore:
+    post:
+      tags: [trunks]
+      operationId: restoreCustomerTrunk
+      summary: Restore an archived customer trunk (§13.29)
+      description: |
+        Administrators only; the restore is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerTrunkSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/{id}/rules:
+    get:
+      tags: [trunks]
+      operationId: getCustomerTrunkRules
+      summary: Rules tab of a customer trunk (§13.2)
+      description: |
+        Every translation rule (and for customer trunks every HLR rule) that runs on the trunk, in
+        execution order, with where it comes from: the trunk itself, its enterprise, its product
+        category or all trunks.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Rules in execution order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkRules"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [trunks]
+      operationId: updateCustomerTrunkRules
+      summary: Reorder, switch on/off or detach rules on a customer trunk (§13.2)
+      description: |
+        Order belongs to the trunk: the listed rules get positions 1..n in the order sent. Detaching
+        removes a direct trunk target; inherited rules can only be switched off for this trunk.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrunkRulesInput"
+      responses:
+        "200":
+          description: The rules after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkRulesSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/query:
+    post:
+      tags: [trunks]
+      operationId: queryVendorTrunks
+      summary: List vendor trunks (server-side filter, sort and paging)
+      description: |
+        Filter on `enterpriseId` for an enterprise's vendor trunk tab. Archived ones list only when the
+        filter asks for `archived` (§13.29).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of vendor trunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorTrunkPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks:
+    post:
+      tags: [trunks]
+      operationId: createVendorTrunk
+      summary: Add a vendor trunk
+      description: |
+        The password is write-only: it is never returned, only `passwordSet`. Usernames of archived
+        trunks stay reserved (§13.29).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorTrunkInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorTrunkSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}:
+    get:
+      tags: [trunks]
+      operationId: getVendorTrunk
+      summary: One vendor trunk
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The vendor trunk
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorTrunkDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [trunks]
+      operationId: updateVendorTrunk
+      summary: Change a vendor trunk
+      description: |
+        Saves the whole record; the change lists only the fields that differ (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorTrunkInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorTrunkSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}/dependencies:
+    get:
+      tags: [trunks]
+      operationId: getVendorTrunkDependencies
+      summary: What depends on a vendor trunk (safe delete, §13.29)
+      description: |
+        Live binds, route rules that use the trunk and traffic in the last 30 days.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}/archive:
+    post:
+      tags: [trunks]
+      operationId: archiveVendorTrunk
+      summary: Archive (delete) a vendor trunk (§13.29)
+      description: |
+        Delete means archive: the record leaves lists, pickers and routing and stops carrying
+        traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+        sends `override` with a reason, which is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorTrunkSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}/restore:
+    post:
+      tags: [trunks]
+      operationId: restoreVendorTrunk
+      summary: Restore an archived vendor trunk (§13.29)
+      description: |
+        Administrators only; the restore is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorTrunkSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}/rules:
+    get:
+      tags: [trunks]
+      operationId: getVendorTrunkRules
+      summary: Rules tab of a vendor trunk (§13.2)
+      description: |
+        Every translation rule (and for customer trunks every HLR rule) that runs on the trunk, in
+        execution order, with where it comes from: the trunk itself, its enterprise, its product
+        category or all trunks.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Rules in execution order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkRules"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [trunks]
+      operationId: updateVendorTrunkRules
+      summary: Reorder, switch on/off or detach rules on a vendor trunk (§13.2)
+      description: |
+        Order belongs to the trunk: the listed rules get positions 1..n in the order sent. Detaching
+        removes a direct trunk target; inherited rules can only be switched off for this trunk.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrunkRulesInput"
+      responses:
+        "200":
+          description: The rules after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkRulesSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-tables/query:
+    post:
+      tags: [rates]
+      operationId: queryRateTables
+      summary: List rate tables (server-side filter, sort and paging)
+      description: |
+        Customer (sell) and vendor (buy) tables; the trunk form's rate table picker and, later, the
+        Rate Manager (§13.12).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of rate tables
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateTablePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+
 components:
   securitySchemes:
     sessionCookie:
@@ -464,6 +1372,12 @@ components:
       description: Session cookie set at sign-in (login flow added in a later revision).
 
   parameters:
+    DocId:
+      name: docId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
     RecordId:
       name: id
       in: path
@@ -916,11 +1830,1118 @@ components:
                   changedAt:
                     $ref: "#/components/schemas/Timestamp"
 
+    # ------------------------------------------------------------- reference data
+    ReferenceData:
+      type: object
+      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers]
+      properties:
+        businessCompanies:
+          type: array
+          items:
+            type: object
+            required: [id, name, baseCurrency]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+              baseCurrency:
+                type: string
+        countries:
+          type: array
+          description: Sorted by name (§13.25).
+          items:
+            type: object
+            required: [id, name, iso, dialCode]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+              iso:
+                type: string
+              dialCode:
+                type: string
+        productCategories:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+        currencies:
+          type: array
+          items:
+            type: object
+            required: [iso, name, symbol]
+            properties:
+              iso:
+                type: string
+              name:
+                type: string
+              symbol:
+                type: string
+        billingCycles:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+        timezones:
+          type: array
+          items:
+            type: string
+        accountManagers:
+          type: array
+          items:
+            type: object
+            required: [id, displayName]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              displayName:
+                type: string
+
+    # ------------------------------------------------------------- safe delete (§13.29)
+    Archived:
+      description: Set when the record is archived (deleted, §13.29); null otherwise.
+      oneOf:
+        - type: object
+          required: [at, by]
+          properties:
+            at:
+              $ref: "#/components/schemas/Timestamp"
+            by:
+              type: [string, "null"]
+        - type: "null"
+
+    DependencyItem:
+      type: object
+      required: [key, label, count, blocking]
+      properties:
+        key:
+          type: string
+          description: e.g. live_binds, trunks, route_rules, unpaid_invoices, balance, disputes, traffic_30d.
+        label:
+          type: string
+        count:
+          type: [number, "null"]
+          description: Number (or amount for balance); null when it could not be determined.
+        blocking:
+          type: boolean
+          description: Must be settled before archiving (§13.29).
+        detail:
+          type: [string, "null"]
+
+    Dependencies:
+      type: object
+      required: [blocked, items]
+      properties:
+        blocked:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DependencyItem"
+
+    ArchiveRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+        override:
+          type: boolean
+          description: Administrators only, with a reason. Archives despite blocking dependencies.
+
+    ArchiveBlocked:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [dependencies]
+          properties:
+            dependencies:
+              $ref: "#/components/schemas/Dependencies"
+
+    # ------------------------------------------------------------- enterprise record (§5.1)
+    Contact:
+      type: object
+      required: [emails]
+      additionalProperties: false
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 200
+        phone:
+          type: [string, "null"]
+          maxLength: 50
+        emails:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            format: email
+
+    Contacts:
+      type: object
+      required: [commercial, technical, rates, finance]
+      additionalProperties: false
+      properties:
+        commercial:
+          $ref: "#/components/schemas/Contact"
+        technical:
+          $ref: "#/components/schemas/Contact"
+        rates:
+          $ref: "#/components/schemas/Contact"
+        finance:
+          $ref: "#/components/schemas/Contact"
+
+    Address:
+      type: object
+      required: [line1]
+      additionalProperties: false
+      properties:
+        line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        line2:
+          type: [string, "null"]
+          maxLength: 200
+        city:
+          type: [string, "null"]
+          maxLength: 100
+        state:
+          type: [string, "null"]
+          maxLength: 100
+        countryId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        zip:
+          type: [string, "null"]
+          maxLength: 20
+
+    CreditAlertPercent:
+      type: object
+      required: [notice, warning, critical]
+      additionalProperties: false
+      description: Credit alert levels in % of the credit limit (defaults 50 / 70 / 90).
+      properties:
+        notice:
+          type: integer
+          minimum: 1
+          maximum: 100
+        warning:
+          type: integer
+          minimum: 1
+          maximum: 100
+        critical:
+          type: integer
+          minimum: 1
+          maximum: 100
+
+    EnterpriseInput:
+      type: object
+      description: Add/Edit form (§5.1). The account manager is set on create; later changes go through handover (§13.30).
+      required: [name, alias, type, tier, status, businessCompanyId, address, contacts, creditAlertPercent]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        alias:
+          type: string
+          minLength: 1
+          maxLength: 100
+        type:
+          $ref: "#/components/schemas/EnterpriseType"
+        tier:
+          $ref: "#/components/schemas/EnterpriseTier"
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        businessCompanyId:
+          $ref: "#/components/schemas/Id"
+        accountManagerId:
+          $ref: "#/components/schemas/Id"
+          description: Required on create; ignored on update (use handover).
+        bindAlert:
+          type: boolean
+        creditAlert:
+          type: boolean
+        creditAlertPercent:
+          $ref: "#/components/schemas/CreditAlertPercent"
+        address:
+          $ref: "#/components/schemas/Address"
+        website:
+          type: [string, "null"]
+          maxLength: 300
+        fax:
+          type: [string, "null"]
+          maxLength: 50
+        registrationNumber:
+          type: [string, "null"]
+          maxLength: 100
+        vatNumber:
+          type: [string, "null"]
+          maxLength: 100
+        billingTimezone:
+          type: string
+          description: Day and month totals are cut at midnight in this zone (§13.31).
+        rateNoticeDays:
+          type: integer
+          minimum: 0
+          maximum: 90
+          description: Notice period for rate increases (§13.14, §13.32).
+        contacts:
+          $ref: "#/components/schemas/Contacts"
+
+    EnterpriseDetail:
+      allOf:
+        - $ref: "#/components/schemas/Enterprise"
+        - type: object
+          required: [bindAlert, creditAlert, creditAlertPercent, address, contacts, billingTimezone, rateNoticeDays, archived, trunkCounts]
+          properties:
+            bindAlert:
+              type: boolean
+            creditAlert:
+              type: boolean
+            creditAlertPercent:
+              $ref: "#/components/schemas/CreditAlertPercent"
+            address:
+              $ref: "#/components/schemas/Address"
+            website:
+              type: [string, "null"]
+            fax:
+              type: [string, "null"]
+            registrationNumber:
+              type: [string, "null"]
+            vatNumber:
+              type: [string, "null"]
+            billingTimezone:
+              type: string
+            rateNoticeDays:
+              type: integer
+            contacts:
+              $ref: "#/components/schemas/Contacts"
+            archived:
+              $ref: "#/components/schemas/Archived"
+            trunkCounts:
+              type: object
+              required: [customer, vendor]
+              properties:
+                customer:
+                  type: integer
+                vendor:
+                  type: integer
+
+    EnterpriseSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/EnterpriseDetail"
+        change:
+          description: The change this save recorded, for the Undo toast (§13.10); null when nothing differed.
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    # ------------------------------------------------------------- billing (§5.3)
+    BillingSideFields:
+      type: object
+      description: Shared fields of a billing side form and record.
+      properties:
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        billingCycleId:
+          $ref: "#/components/schemas/Id"
+        timezone:
+          type: string
+        billingType:
+          type: [string, "null"]
+          enum: [prepaid, postpaid, null]
+          description: Customer side only.
+        creditLimit:
+          type: [number, "null"]
+          minimum: 0
+          description: Customer side, postpaid.
+        openingBalance:
+          type: number
+        autoInvoicing:
+          type: boolean
+          description: Customer side only.
+        sendPaymentConfirmation:
+          type: boolean
+          description: Default for new payments (§13.33).
+        description:
+          type: [string, "null"]
+          maxLength: 1000
+
+    BillingSideInput:
+      allOf:
+        - $ref: "#/components/schemas/BillingSideFields"
+      required: [currency, billingCycleId, timezone, openingBalance]
+      unevaluatedProperties: false
+
+    BillingSide:
+      required: [currency, billingCycleId, timezone, openingBalance]
+      allOf:
+        - $ref: "#/components/schemas/BillingSideFields"
+        - type: object
+          required: [balance, billingCycleName, updatedBy, updatedAt]
+          properties:
+            balance:
+              type: number
+              description: Opening balance + usage charges − payments and credits + debits, in the side's currency.
+            billingCycleName:
+              type: string
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+
+    Beneficiary:
+      type: object
+      additionalProperties: false
+      properties:
+        beneficiaryName:
+          type: [string, "null"]
+        address:
+          type: [string, "null"]
+        bank:
+          type: [string, "null"]
+        bankAddress:
+          type: [string, "null"]
+        currency:
+          type: [string, "null"]
+        accountNumber:
+          type: [string, "null"]
+        iban:
+          type: [string, "null"]
+        swift:
+          type: [string, "null"]
+        walletAddress:
+          type: [string, "null"]
+          description: Crypto wallet.
+
+    EnterpriseBilling:
+      type: object
+      required: [customer, vendor, beneficiary]
+      properties:
+        customer:
+          oneOf:
+            - $ref: "#/components/schemas/BillingSide"
+            - type: "null"
+        vendor:
+          oneOf:
+            - $ref: "#/components/schemas/BillingSide"
+            - type: "null"
+        beneficiary:
+          $ref: "#/components/schemas/Beneficiary"
+
+    EnterpriseBillingInput:
+      type: object
+      additionalProperties: false
+      properties:
+        customer:
+          $ref: "#/components/schemas/BillingSideInput"
+        vendor:
+          $ref: "#/components/schemas/BillingSideInput"
+        beneficiary:
+          $ref: "#/components/schemas/Beneficiary"
+
+    BillingSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/EnterpriseBilling"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    # ------------------------------------------------------------- AM handover (§13.30)
+    AmPeriod:
+      type: object
+      required: [userId, userName, startsAt, endsAt, note]
+      properties:
+        userId:
+          $ref: "#/components/schemas/Id"
+        userName:
+          type: string
+        startsAt:
+          $ref: "#/components/schemas/Timestamp"
+        endsAt:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        note:
+          type: [string, "null"]
+
+    HandoverRequest:
+      type: object
+      required: [userId]
+      additionalProperties: false
+      properties:
+        userId:
+          $ref: "#/components/schemas/Id"
+        effectiveAt:
+          $ref: "#/components/schemas/Timestamp"
+          description: Default now. A future time schedules the handover.
+        note:
+          type: string
+          maxLength: 500
+
+    HandoverSaved:
+      type: object
+      required: [periods, change]
+      properties:
+        periods:
+          type: array
+          items:
+            $ref: "#/components/schemas/AmPeriod"
+        change:
+          $ref: "#/components/schemas/Change"
+
+    # ------------------------------------------------------------- docs (§5.2)
+    EnterpriseDoc:
+      type: object
+      required: [id, name, fileName, contentType, size, createdBy, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        fileName:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+        createdBy:
+          type: [string, "null"]
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    EnterpriseDocUpload:
+      type: object
+      required: [name, fileName, dataBase64]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        contentType:
+          type: string
+          maxLength: 100
+        dataBase64:
+          type: string
+          maxLength: 14000000
+          description: File content, base64 (at most 10 MB decoded).
+
+    # ------------------------------------------------------------- trunks (§5.4, §5.5)
+    TrunkProtocol:
+      type: string
+      enum: [smpp, http]
+    BillingType:
+      type: string
+      enum: [attempt, submit, reported, delivery]
+      description: The event that makes a message billable (§7).
+    SslType:
+      type: string
+      enum: [none, tls1.2, tls1.3]
+      description: TLS 1.2/1.3 replace the reference platform's SSLv2/SSLv3/TLSv1 (§16).
+    LimitPeriod:
+      type: string
+      enum: [hour, day, week, month, billing_cycle]
+
+    TrunkListRow:
+      type: object
+      required: [id, enterpriseId, enterpriseName, name, username, categoryId, category, protocol, tps, status, bindType, rulesCount, updatedBy, updatedAt, archived]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterpriseName:
+          type: string
+        name:
+          type: string
+        username:
+          type: string
+        categoryId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        category:
+          type: [string, "null"]
+        protocol:
+          $ref: "#/components/schemas/TrunkProtocol"
+        tps:
+          type: integer
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        bindType:
+          type: string
+        rulesCount:
+          type: integer
+          description: Translation rules running on the trunk (replaces "Translation Rule Group", §13.2).
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archived:
+          type: boolean
+
+    CustomerTrunkPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrunkListRow"
+
+    VendorTrunkPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrunkListRow"
+
+    CustomerTrunkFields:
+      description: Shared fields of the customer trunk form and record.
+      type: object
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        protocol:
+          $ref: "#/components/schemas/TrunkProtocol"
+        categoryId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        billingType:
+          $ref: "#/components/schemas/BillingType"
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        bindType:
+          type: string
+          enum: [TX, RX, TR, AUTO]
+        considerHlrRate:
+          type: boolean
+        serviceTypeRouting:
+          type: boolean
+        partWiseRouting:
+          type: boolean
+        hostIps:
+          type: array
+          minItems: 1
+          maxItems: 50
+          description: Allowed client IP addresses.
+          items:
+            anyOf:
+              - type: string
+                format: ipv4
+              - type: string
+                format: ipv6
+        username:
+          type: string
+          minLength: 1
+          maxLength: 16
+          description: SMPP system_id.
+        password:
+          type: string
+          minLength: 1
+          maxLength: 9
+          writeOnly: true
+          description: SMPP password (system_id max 16, password max 9 characters in SMPP v3.4). Required on create; omit to keep.
+        maxConnections:
+          type: integer
+          minimum: 1
+          maximum: 10
+        systemType:
+          type: [string, "null"]
+          maxLength: 13
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        sslType:
+          $ref: "#/components/schemas/SslType"
+        dlrPushUrl:
+          type: [string, "null"]
+          maxLength: 500
+        moPushUrl:
+          type: [string, "null"]
+          maxLength: 500
+        delayedSubmit:
+          type: boolean
+        sendBind:
+          type: boolean
+        dlrSessionAffinity:
+          type: string
+          enum: [strict, same_ip, same_trunk]
+          description: Where receipts go when the submitting session is gone (§13.1).
+        dlrHoldHours:
+          type: integer
+          minimum: 0
+          maximum: 720
+        tps:
+          type: integer
+          minimum: 1
+          maximum: 100000
+        overflowBuffer:
+          type: integer
+          minimum: 0
+        loopDetection:
+          type: boolean
+        defaultCoding:
+          type: integer
+          enum: [0, 3]
+        rateTableIds:
+          type: array
+          description: Rate tables in order; the first with a line for the destination wins (§5.4).
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Id"
+        expressVendorTrunkId:
+          description: Express vendor selection - bypass routing (§5.4).
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        expressMargin:
+          type: [number, "null"]
+        revenueLimit:
+          type: [number, "null"]
+          minimum: 0
+        revenueLimitPeriod:
+          oneOf:
+            - $ref: "#/components/schemas/LimitPeriod"
+            - type: "null"
+
+
+    CustomerTrunkInput:
+      description: Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26).
+      allOf:
+        - $ref: "#/components/schemas/CustomerTrunkFields"
+      required: [enterpriseId, name, protocol, billingType, status, bindType, hostIps, username, maxConnections, port, tps]
+      unevaluatedProperties: false
+
+    TrunkDetailCommon:
+      type: object
+      required: [id, enterpriseName, passwordSet, archived, ownRateTableId]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        enterpriseName:
+          type: string
+        passwordSet:
+          type: boolean
+          description: Passwords are never shown (§16 rebuild notes).
+        archived:
+          $ref: "#/components/schemas/Archived"
+        ownRateTableId:
+          description: Vendor trunks own one buy table (§13.12); null for customer trunks.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+
+    CustomerTrunkDetail:
+      allOf:
+        - $ref: "#/components/schemas/TrunkDetailCommon"
+        - $ref: "#/components/schemas/CustomerTrunkFields"
+        - $ref: "#/components/schemas/Audit"
+      required: [enterpriseId, name, protocol, billingType, status, bindType, hostIps, username, maxConnections, port, tps]
+
+    VendorTrunkFields:
+      description: Shared fields of the vendor trunk form and record.
+      type: object
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        protocol:
+          $ref: "#/components/schemas/TrunkProtocol"
+        categoryId:
+          $ref: "#/components/schemas/Id"
+        billingType:
+          $ref: "#/components/schemas/BillingType"
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        bindType:
+          type: string
+          enum: [TX, RX, TR]
+        username:
+          type: string
+          minLength: 1
+          maxLength: 16
+        password:
+          type: string
+          minLength: 1
+          maxLength: 9
+          writeOnly: true
+          description: Required on create; omit to keep.
+        host:
+          type: string
+          minLength: 1
+          maxLength: 255
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        sourceHost:
+          type: [string, "null"]
+          maxLength: 64
+        maxConnections:
+          type: integer
+          minimum: 1
+          maximum: 10
+        systemType:
+          type: [string, "null"]
+          maxLength: 13
+        serviceType:
+          type: [string, "null"]
+          maxLength: 6
+        sslType:
+          $ref: "#/components/schemas/SslType"
+        submitIntervalMs:
+          type: integer
+          minimum: 0
+        submitTimeoutS:
+          type: integer
+          minimum: 1
+        enquireLinkTimeoutS:
+          type: integer
+          minimum: 1
+        msgIdType:
+          type: string
+          enum: [default, decimal, hexadecimal]
+        http:
+          $ref: "#/components/schemas/VendorHttpSettings"
+        tps:
+          type: integer
+          minimum: 1
+          maximum: 100000
+        overflowBuffer:
+          type: integer
+          minimum: 0
+        windowSize:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        allowedDataCodings:
+          type: array
+          items:
+            type: integer
+            enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14]
+        rerouteOn:
+          type: array
+          items:
+            type: string
+            enum: [EXPIRED, DELETED, UNDELIV, UNKNOWN, REJECTD]
+        allowedSrcTon:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+        allowedDstTon:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+        allowedSrcNpi:
+          type: array
+          items:
+            type: integer
+            enum: [0, 1, 3, 4, 6, 8, 9, 10, 14, 18]
+        allowedDstNpi:
+          type: array
+          items:
+            type: integer
+            enum: [0, 1, 3, 4, 6, 8, 9, 10, 14, 18]
+        maxMsgLen:
+          type: integer
+          minimum: 1
+          maximum: 2000
+        supportMultipart:
+          type: boolean
+        dlrTimeoutS:
+          type: integer
+          minimum: 0
+        dlrTimeoutStat:
+          type: string
+          enum: [DELIVRD, EXPIRED, UNDELIV, REJECTD, UNKNOWN]
+        bindAddrTon:
+          type: integer
+          minimum: 0
+          maximum: 6
+        bindAddrNpi:
+          type: integer
+          minimum: 0
+          maximum: 18
+        bindAddrRange:
+          type: [string, "null"]
+          maxLength: 41
+        costLimit:
+          type: [number, "null"]
+          minimum: 0
+        costLimitPeriod:
+          oneOf:
+            - $ref: "#/components/schemas/LimitPeriod"
+            - type: "null"
+
+
+    VendorTrunkInput:
+      description: Vendor trunk form (§5.5) with cost limit (§13.26).
+      allOf:
+        - $ref: "#/components/schemas/VendorTrunkFields"
+      required: [enterpriseId, name, protocol, categoryId, billingType, status, bindType, username, host, port, maxConnections, tps]
+      unevaluatedProperties: false
+
+    VendorHttpSettings:
+      type: object
+      description: Generic HTTP-API adapter (§5.5), used when protocol is http.
+      additionalProperties: false
+      properties:
+        url:
+          type: [string, "null"]
+          maxLength: 1000
+        receiverPort:
+          type: [integer, "null"]
+        successRegex:
+          type: [string, "null"]
+        messageIdRegex:
+          type: [string, "null"]
+        callbackUrl:
+          type: [string, "null"]
+        callbackIntervalS:
+          type: [integer, "null"]
+        dlrStatusRegex:
+          type: [string, "null"]
+        dlrMidRegex:
+          type: [string, "null"]
+        dlrSuccessStats:
+          type: [string, "null"]
+        dlrFailStats:
+          type: [string, "null"]
+        extraHeaders:
+          type: [string, "null"]
+        postData:
+          type: [string, "null"]
+        callbackExtraHeaders:
+          type: [string, "null"]
+        callbackPostData:
+          type: [string, "null"]
+
+    VendorTrunkDetail:
+      allOf:
+        - $ref: "#/components/schemas/TrunkDetailCommon"
+        - $ref: "#/components/schemas/VendorTrunkFields"
+        - $ref: "#/components/schemas/Audit"
+      required: [enterpriseId, name, protocol, categoryId, billingType, status, bindType, username, host, port, maxConnections, tps]
+
+    CustomerTrunkSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/CustomerTrunkDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    VendorTrunkSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/VendorTrunkDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    # ------------------------------------------------------------- trunk rules (§13.2)
+    TrunkRule:
+      type: object
+      required: [ruleId, kind, name, source, position, enabled, continueAfter, ruleActive, detail]
+      properties:
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        kind:
+          type: string
+          enum: [translation, hlr]
+        name:
+          type: string
+        source:
+          type: object
+          description: How the rule reaches this trunk.
+          required: [type, label]
+          properties:
+            type:
+              type: string
+              enum: [trunk, enterprise, category, all]
+            label:
+              type: string
+        position:
+          type: [integer, "null"]
+          description: Position set on this trunk; null = default order.
+        enabled:
+          type: boolean
+          description: Off for this trunk only.
+        continueAfter:
+          type: boolean
+        ruleActive:
+          type: boolean
+          description: The rule's own status; inactive rules do not run anywhere.
+        detail:
+          type: [string, "null"]
+          description: Short summary, e.g. action and patterns, or the HLR provider and DNID pattern.
+
+    TrunkRules:
+      type: object
+      required: [translation, hlr]
+      properties:
+        translation:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrunkRule"
+        hlr:
+          type: array
+          description: Customer trunks only; empty for vendor trunks.
+          items:
+            $ref: "#/components/schemas/TrunkRule"
+
+    TrunkRuleSetting:
+      type: object
+      required: [ruleId, enabled]
+      additionalProperties: false
+      properties:
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        enabled:
+          type: boolean
+        continueAfter:
+          type: boolean
+
+    TrunkRulesInput:
+      type: object
+      additionalProperties: false
+      properties:
+        translation:
+          type: array
+          description: The new order (positions 1..n) and on/off per rule.
+          items:
+            $ref: "#/components/schemas/TrunkRuleSetting"
+        hlr:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrunkRuleSetting"
+        detachTranslationRuleIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        detachHlrRuleIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+
+    TrunkRulesSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/TrunkRules"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    # ------------------------------------------------------------- rate tables (§6.2, §13.12)
+    RateTableRow:
+      type: object
+      required: [id, name, kind, categoryId, category, currency, vendorTrunkId, vendorTrunkName, trunkCount, activeLines, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [customer, vendor]
+        categoryId:
+          $ref: "#/components/schemas/Id"
+        category:
+          type: string
+        currency:
+          type: string
+        vendorTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        vendorTrunkName:
+          type: [string, "null"]
+        trunkCount:
+          type: integer
+          description: Customer trunks using the table.
+        activeLines:
+          type: integer
+          description: Lines valid now.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    RateTablePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/RateTableRow"
+
     # ------------------------------------------------------------- list query (§13.25)
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables]
 
     FilterOperator:
       type: string
@@ -1146,6 +3167,11 @@ components:
             country:
               type: [string, "null"]
               description: ISO 3166-1 alpha-2.
+            archivedAt:
+              description: Set when the enterprise is archived (§13.29); archived rows show only with the "archived" filter.
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
         - $ref: "#/components/schemas/Audit"
 
     EnterprisePage:

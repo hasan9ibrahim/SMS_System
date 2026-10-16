@@ -7,7 +7,34 @@ import { contractVersion } from "./contract.js";
 import { listFields } from "./lists/fields.js";
 import { sendProblem } from "./problem.js";
 import { getCurrentUser, getWorkspace, saveWorkspace, updatePreferences } from "./api/session.js";
-import { getEnterprise, queryList } from "./api/lists.js";
+import { queryList } from "./api/lists.js";
+import {
+  archiveEnterprise,
+  createEnterprise,
+  deleteEnterpriseDoc,
+  downloadEnterpriseDoc,
+  getAccountManagerHistory,
+  getEnterprise,
+  getEnterpriseBilling,
+  getEnterpriseDependencies,
+  handOverEnterprise,
+  listEnterpriseDocs,
+  restoreEnterprise,
+  updateEnterprise,
+  updateEnterpriseBilling,
+  uploadEnterpriseDoc,
+} from "./api/enterprises.js";
+import {
+  archiveTrunk,
+  createTrunk,
+  getTrunk,
+  getTrunkDependencies,
+  getTrunkRules,
+  restoreTrunk,
+  updateTrunk,
+  updateTrunkRules,
+} from "./api/trunks.js";
+import { getReference } from "./api/reference.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
 import { undoChange } from "./api/changes.js";
@@ -15,7 +42,7 @@ import { undoChange } from "./api/changes.js";
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -37,8 +64,46 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
     return listFields[list] ?? sendProblem(reply, 404, `Unknown list "${list}"`);
   },
 
+  getReference,
+
+  // Enterprises (§5.1–5.3, §13.29, §13.30)
   queryEnterprises: queryList("enterprises"),
+  createEnterprise,
   getEnterprise,
+  updateEnterprise,
+  getEnterpriseDependencies,
+  archiveEnterprise,
+  restoreEnterprise,
+  getEnterpriseBilling,
+  updateEnterpriseBilling,
+  getAccountManagerHistory,
+  handOverEnterprise,
+  listEnterpriseDocs,
+  uploadEnterpriseDoc,
+  deleteEnterpriseDoc,
+  downloadEnterpriseDoc,
+
+  // Trunks (§5.4, §5.5, §13.1, §13.2, §13.26)
+  queryCustomerTrunks: queryList("customer_trunks"),
+  createCustomerTrunk: createTrunk("customer"),
+  getCustomerTrunk: getTrunk("customer"),
+  updateCustomerTrunk: updateTrunk("customer"),
+  getCustomerTrunkDependencies: getTrunkDependencies("customer"),
+  archiveCustomerTrunk: archiveTrunk("customer"),
+  restoreCustomerTrunk: restoreTrunk("customer"),
+  getCustomerTrunkRules: getTrunkRules("customer"),
+  updateCustomerTrunkRules: updateTrunkRules("customer"),
+  queryVendorTrunks: queryList("vendor_trunks"),
+  createVendorTrunk: createTrunk("vendor"),
+  getVendorTrunk: getTrunk("vendor"),
+  updateVendorTrunk: updateTrunk("vendor"),
+  getVendorTrunkDependencies: getTrunkDependencies("vendor"),
+  archiveVendorTrunk: archiveTrunk("vendor"),
+  restoreVendorTrunk: restoreTrunk("vendor"),
+  getVendorTrunkRules: getTrunkRules("vendor"),
+  updateVendorTrunkRules: updateTrunkRules("vendor"),
+
+  queryRateTables: queryList("rate_tables"),
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),
   undoChange,

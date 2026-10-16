@@ -298,11 +298,15 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
       world.vendorTrunkById.set(v.id, v);
       const editor = rng.pick(noc).id;
       const costLimit = rng.chance(0.1) ? Math.round(rng.logNormal(2000, 0.7)) : null;
+      const protocol = rng.chance(0.9) ? "smpp" : "http";
+      // HTTP adapter settings (§5.5) on a reserved .example domain; derived from the id
+      // so the random sequence (and the rest of the data) stays the same.
+      const http = protocol === "http";
       await sink.insert("vendor_trunks", {
         id: v.id,
         enterprise_id: e.id,
         name: v.name,
-        protocol: rng.chance(0.9) ? "smpp" : "http",
+        protocol,
         product_category_id: v.categoryId,
         billing_type: v.billingType,
         status: v.status,
@@ -320,7 +324,20 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         submit_timeout_s: rng.pick([15, 30, 60]),
         enquire_link_timeout_s: rng.pick([15, 30, 60]),
         msg_id_type: v.msgIdType,
-        http_url: null,
+        http_url: http ? `https://api.${e.alias.toLowerCase()}.example/sms/send` : null,
+        http_receiver_port: http ? 8080 + (v.id % 20) : null,
+        http_success_regex: http ? '"status"\\s*:\\s*"(ok|accepted)"' : null,
+        http_message_id_regex: http ? '"message_id"\\s*:\\s*"([^"]+)"' : null,
+        http_callback_url: http ? `https://dlr.${e.alias.toLowerCase()}.example/status` : null,
+        http_callback_interval_s: http ? 60 : null,
+        http_dlr_status_regex: http ? "status=([A-Z]+)" : null,
+        http_dlr_mid_regex: http ? "id=([0-9a-f-]+)" : null,
+        http_dlr_success_stats: http ? "DELIVRD,DELIVERED" : null,
+        http_dlr_fail_stats: http ? "UNDELIV,REJECTD,EXPIRED,FAILED" : null,
+        http_extra_headers: http ? "Content-Type: application/json" : null,
+        http_post_data: http ? '{"to":"{dst}","from":"{src}","text":"{text}"}' : null,
+        http_callback_extra_headers: null,
+        http_callback_post_data: null,
         tps: v.tps,
         overflow_buffer: rng.pick([0, 1000, 5000, 10000]),
         window_size: rng.pick([1, 5, 10, 20, 50]),

@@ -114,7 +114,8 @@ export async function loadPostgres(dir: string, opts: { reset: boolean; log: (s:
     opts.log(
       `postgres: ${constraints.length} foreign key and exclusion constraints validated in ${((Date.now() - started) / 1000).toFixed(1)}s`,
     );
-    await client.query("ANALYZE");
+    // VACUUM also sets the visibility map, so count queries can use index-only scans.
+    await client.query("VACUUM ANALYZE");
   } finally {
     await client.end();
   }

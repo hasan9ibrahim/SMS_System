@@ -35,6 +35,64 @@ function field(def: Def): FieldDescriptor {
   return { sortable: true, hidden: false, ...def, operators };
 }
 
+/** "Show deleted" (§13.29): archived records are hidden unless this filter is set. */
+const ARCHIVED = field({
+  field: "archived",
+  label: "Deleted",
+  type: "boolean",
+  defaultOperator: "eq",
+  hidden: true,
+});
+
+const STATUS_VALUES = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+// Customer and vendor trunk lists (§5.4, §5.5): the Enterprise screen's trunk tabs.
+function trunkFields(list: "customer_trunks" | "vendor_trunks"): ListFields {
+  const customer = list === "customer_trunks";
+  return {
+    list,
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Trunk Name", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseName", label: "Enterprise", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "username", label: "UserName", type: "text", defaultOperator: "like" }),
+      field({ field: "category", label: "Product Category", type: "text", defaultOperator: "like" }),
+      field({ field: "categoryId", label: "Category ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({
+        field: "protocol",
+        label: "Protocol",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "smpp", label: "SMPP" },
+          { value: "http", label: "HTTP" },
+        ],
+      }),
+      field({ field: "tps", label: "TPS", type: "integer", defaultOperator: "gte" }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
+      field({
+        field: "bindType",
+        label: "Bind Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: ["TX", "RX", "TR", ...(customer ? ["AUTO"] : [])].map((v) => ({ value: v, label: v })),
+      }),
+      field({ field: "rulesCount", label: "Rules", type: "integer", defaultOperator: "gte" }),
+      ...(customer
+        ? []
+        : [field({ field: "host", label: "Host", type: "text", defaultOperator: "like", hidden: true })]),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  };
+}
+
 export const listFields: Record<ListId, ListFields> = {
   // Enterprise list and selector (§5, §5.1)
   enterprises: {
@@ -95,6 +153,39 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "country", label: "Country", type: "text", defaultOperator: "eq", hidden: true }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  },
+
+  customer_trunks: trunkFields("customer_trunks"),
+  vendor_trunks: trunkFields("vendor_trunks"),
+
+  // Rate tables (§6.2, §13.12): customer (sell) tables and each vendor trunk's buy table
+  rate_tables: {
+    list: "rate_tables",
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
+      field({
+        field: "kind",
+        label: "Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "customer", label: "Customer (sell)" },
+          { value: "vendor", label: "Vendor (buy)" },
+        ],
+      }),
+      field({ field: "category", label: "Product Category", type: "text", defaultOperator: "like" }),
+      field({ field: "categoryId", label: "Category ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq" }),
+      field({ field: "vendorTrunkName", label: "Vendor Trunk", type: "text", defaultOperator: "like" }),
+      field({ field: "vendorTrunkId", label: "Vendor Trunk ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "trunkCount", label: "Customer Trunks", type: "integer", defaultOperator: "gte" }),
+      field({ field: "activeLines", label: "Active Lines", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
     ],
   },
 
@@ -143,6 +234,8 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "hlr_rule", label: "HLR rule" },
           { value: "customer_trunk", label: "Customer trunk" },
           { value: "vendor_trunk", label: "Vendor trunk" },
+          { value: "enterprise", label: "Enterprise" },
+          { value: "enterprise_doc", label: "Enterprise document" },
         ],
       }),
       field({

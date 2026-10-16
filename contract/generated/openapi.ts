@@ -152,23 +152,6 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
-  "/enterprises/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** One enterprise (General Info tab, §5.1) */
-    get: operations["getEnterprise"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/users/query": {
     parameters: {
       query?: never;
@@ -266,6 +249,586 @@ export type paths = {
      *     undoing someone else's needs the "undo others' changes" permission (403 otherwise).
      */
     post: operations["undoChange"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/meta/reference": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Small reference lists for forms
+     * @description Business companies, countries, product categories (§6.1), currencies, billing cycles (§7),
+     *     time zones and account managers, for the pickers in record forms.
+     */
+    get: operations["getReference"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an enterprise (§5.1)
+     * @description The account manager given here opens the enterprise's AM history (§13.30). A name used by
+     *     an archived enterprise stays reserved until that one is renamed (§13.29).
+     */
+    post: operations["createEnterprise"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One enterprise
+     * @description General Info tab (§5.1). Archived enterprises stay readable (§13.29).
+     */
+    get: operations["getEnterprise"];
+    /**
+     * Change a enterprise
+     * @description Saves the whole record; the change lists only the fields that differ (§13.10).
+     */
+    put: operations["updateEnterprise"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a enterprise (safe delete, §13.29)
+     * @description Live binds, active trunks, rate tables and route rules using its trunks, unpaid invoices,
+     *     unpaid balance, open disputes and traffic in the last 30 days.
+     */
+    get: operations["getEnterpriseDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a enterprise (§13.29)
+     * @description Delete means archive: the record leaves lists, pickers and routing and stops carrying
+     *     traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+     *     sends `override` with a reason, which is logged.
+     */
+    post: operations["archiveEnterprise"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived enterprise (§13.29)
+     * @description Administrators only; the restore is logged.
+     */
+    post: operations["restoreEnterprise"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/billing": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Billing tab (§5.3)
+     * @description Customer and vendor billing settings with current balances, and the beneficiary.
+     */
+    get: operations["getEnterpriseBilling"];
+    /**
+     * Change billing settings (§5.3, §12.3)
+     * @description A side (customer or vendor) is present when the enterprise type has that side.
+     */
+    put: operations["updateEnterpriseBilling"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/account-managers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * AM history (§13.30)
+     * @description Who managed the account when; the open row is the current AM, a future row a scheduled handover.
+     */
+    get: operations["getAccountManagerHistory"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/handover": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Hand the account to another AM (§13.30)
+     * @description Immediate or scheduled. Results before the effective time stay with the previous AM,
+     *     because EDRs store the AM at send time. A scheduled handover replaces an earlier pending one.
+     */
+    post: operations["handOverEnterprise"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/docs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Docs tab: contract and KYC files (§5.2) */
+    get: operations["listEnterpriseDocs"];
+    put?: never;
+    /**
+     * Add a document (§5.2)
+     * @description The file travels base64-encoded in JSON (at most 10 MB).
+     */
+    post: operations["uploadEnterpriseDoc"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/docs/{docId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a document
+     * @description Archives it (§13.29); it no longer lists.
+     */
+    delete: operations["deleteEnterpriseDoc"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/docs/{docId}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download a document
+     * @description Saved as Docs_{enterpriseId}_{docId} with the original extension (§12.3).
+     */
+    get: operations["downloadEnterpriseDoc"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List customer trunks (server-side filter, sort and paging)
+     * @description Filter on `enterpriseId` for an enterprise's customer trunk tab. Archived ones list only when the
+     *     filter asks for `archived` (§13.29).
+     */
+    post: operations["queryCustomerTrunks"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a customer trunk
+     * @description The password is write-only: it is never returned, only `passwordSet`. Usernames of archived
+     *     trunks stay reserved (§13.29).
+     */
+    post: operations["createCustomerTrunk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One customer trunk */
+    get: operations["getCustomerTrunk"];
+    /**
+     * Change a customer trunk
+     * @description Saves the whole record; the change lists only the fields that differ (§13.10).
+     */
+    put: operations["updateCustomerTrunk"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a customer trunk (safe delete, §13.29)
+     * @description Live binds, route rules that use the trunk and traffic in the last 30 days.
+     */
+    get: operations["getCustomerTrunkDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a customer trunk (§13.29)
+     * @description Delete means archive: the record leaves lists, pickers and routing and stops carrying
+     *     traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+     *     sends `override` with a reason, which is logged.
+     */
+    post: operations["archiveCustomerTrunk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived customer trunk (§13.29)
+     * @description Administrators only; the restore is logged.
+     */
+    post: operations["restoreCustomerTrunk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/{id}/rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Rules tab of a customer trunk (§13.2)
+     * @description Every translation rule (and for customer trunks every HLR rule) that runs on the trunk, in
+     *     execution order, with where it comes from: the trunk itself, its enterprise, its product
+     *     category or all trunks.
+     */
+    get: operations["getCustomerTrunkRules"];
+    /**
+     * Reorder, switch on/off or detach rules on a customer trunk (§13.2)
+     * @description Order belongs to the trunk: the listed rules get positions 1..n in the order sent. Detaching
+     *     removes a direct trunk target; inherited rules can only be switched off for this trunk.
+     */
+    put: operations["updateCustomerTrunkRules"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List vendor trunks (server-side filter, sort and paging)
+     * @description Filter on `enterpriseId` for an enterprise's vendor trunk tab. Archived ones list only when the
+     *     filter asks for `archived` (§13.29).
+     */
+    post: operations["queryVendorTrunks"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a vendor trunk
+     * @description The password is write-only: it is never returned, only `passwordSet`. Usernames of archived
+     *     trunks stay reserved (§13.29).
+     */
+    post: operations["createVendorTrunk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One vendor trunk */
+    get: operations["getVendorTrunk"];
+    /**
+     * Change a vendor trunk
+     * @description Saves the whole record; the change lists only the fields that differ (§13.10).
+     */
+    put: operations["updateVendorTrunk"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a vendor trunk (safe delete, §13.29)
+     * @description Live binds, route rules that use the trunk and traffic in the last 30 days.
+     */
+    get: operations["getVendorTrunkDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a vendor trunk (§13.29)
+     * @description Delete means archive: the record leaves lists, pickers and routing and stops carrying
+     *     traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+     *     sends `override` with a reason, which is logged.
+     */
+    post: operations["archiveVendorTrunk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived vendor trunk (§13.29)
+     * @description Administrators only; the restore is logged.
+     */
+    post: operations["restoreVendorTrunk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}/rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Rules tab of a vendor trunk (§13.2)
+     * @description Every translation rule (and for customer trunks every HLR rule) that runs on the trunk, in
+     *     execution order, with where it comes from: the trunk itself, its enterprise, its product
+     *     category or all trunks.
+     */
+    get: operations["getVendorTrunkRules"];
+    /**
+     * Reorder, switch on/off or detach rules on a vendor trunk (§13.2)
+     * @description Order belongs to the trunk: the listed rules get positions 1..n in the order sent. Detaching
+     *     removes a direct trunk target; inherited rules can only be switched off for this trunk.
+     */
+    put: operations["updateVendorTrunkRules"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List rate tables (server-side filter, sort and paging)
+     * @description Customer (sell) and vendor (buy) tables; the trunk form's rate table picker and, later, the
+     *     Rate Manager (§13.12).
+     */
+    post: operations["queryRateTables"];
     delete?: never;
     options?: never;
     head?: never;
@@ -474,11 +1037,524 @@ export type components = {
         changedAt: components["schemas"]["Timestamp"];
       }[];
     };
+    ReferenceData: {
+      businessCompanies: {
+        id: components["schemas"]["Id"];
+        name: string;
+        baseCurrency: string;
+      }[];
+      /** @description Sorted by name (§13.25). */
+      countries: {
+        id: components["schemas"]["Id"];
+        name: string;
+        iso: string;
+        dialCode: string;
+      }[];
+      productCategories: {
+        id: components["schemas"]["Id"];
+        name: string;
+      }[];
+      currencies: {
+        iso: string;
+        name: string;
+        symbol: string;
+      }[];
+      billingCycles: {
+        id: components["schemas"]["Id"];
+        name: string;
+      }[];
+      timezones: string[];
+      accountManagers: {
+        id: components["schemas"]["Id"];
+        displayName: string;
+      }[];
+    };
+    /** @description Set when the record is archived (deleted, §13.29); null otherwise. */
+    Archived: {
+      at: components["schemas"]["Timestamp"];
+      by: string | null;
+    } | null;
+    DependencyItem: {
+      /** @description e.g. live_binds, trunks, route_rules, unpaid_invoices, balance, disputes, traffic_30d. */
+      key: string;
+      label: string;
+      /** @description Number (or amount for balance); null when it could not be determined. */
+      count: number | null;
+      /** @description Must be settled before archiving (§13.29). */
+      blocking: boolean;
+      detail?: string | null;
+    };
+    Dependencies: {
+      blocked: boolean;
+      items: components["schemas"]["DependencyItem"][];
+    };
+    ArchiveRequest: {
+      reason?: string;
+      /** @description Administrators only, with a reason. Archives despite blocking dependencies. */
+      override?: boolean;
+    };
+    ArchiveBlocked: components["schemas"]["Problem"] & {
+      dependencies: components["schemas"]["Dependencies"];
+    };
+    Contact: {
+      name?: string | null;
+      phone?: string | null;
+      emails: string[];
+    };
+    Contacts: {
+      commercial: components["schemas"]["Contact"];
+      technical: components["schemas"]["Contact"];
+      rates: components["schemas"]["Contact"];
+      finance: components["schemas"]["Contact"];
+    };
+    Address: {
+      line1: string;
+      line2?: string | null;
+      city?: string | null;
+      state?: string | null;
+      countryId?: components["schemas"]["Id"] | null;
+      zip?: string | null;
+    };
+    /** @description Credit alert levels in % of the credit limit (defaults 50 / 70 / 90). */
+    CreditAlertPercent: {
+      notice: number;
+      warning: number;
+      critical: number;
+    };
+    /** @description Add/Edit form (§5.1). The account manager is set on create; later changes go through handover (§13.30). */
+    EnterpriseInput: {
+      name: string;
+      alias: string;
+      type: components["schemas"]["EnterpriseType"];
+      tier: components["schemas"]["EnterpriseTier"];
+      status: components["schemas"]["RecordStatus"];
+      businessCompanyId: components["schemas"]["Id"];
+      /** @description Required on create; ignored on update (use handover). */
+      accountManagerId?: components["schemas"]["Id"];
+      bindAlert?: boolean;
+      creditAlert?: boolean;
+      creditAlertPercent: components["schemas"]["CreditAlertPercent"];
+      address: components["schemas"]["Address"];
+      website?: string | null;
+      fax?: string | null;
+      registrationNumber?: string | null;
+      vatNumber?: string | null;
+      /** @description Day and month totals are cut at midnight in this zone (§13.31). */
+      billingTimezone?: string;
+      /** @description Notice period for rate increases (§13.14, §13.32). */
+      rateNoticeDays?: number;
+      contacts: components["schemas"]["Contacts"];
+    };
+    EnterpriseDetail: components["schemas"]["Enterprise"] & {
+      bindAlert: boolean;
+      creditAlert: boolean;
+      creditAlertPercent: components["schemas"]["CreditAlertPercent"];
+      address: components["schemas"]["Address"];
+      website?: string | null;
+      fax?: string | null;
+      registrationNumber?: string | null;
+      vatNumber?: string | null;
+      billingTimezone: string;
+      rateNoticeDays: number;
+      contacts: components["schemas"]["Contacts"];
+      archived: components["schemas"]["Archived"];
+      trunkCounts: {
+        customer: number;
+        vendor: number;
+      };
+    };
+    EnterpriseSaved: {
+      record: components["schemas"]["EnterpriseDetail"];
+      /** @description The change this save recorded, for the Undo toast (§13.10); null when nothing differed. */
+      change: components["schemas"]["Change"] | null;
+    };
+    /** @description Shared fields of a billing side form and record. */
+    BillingSideFields: {
+      currency?: string;
+      billingCycleId?: components["schemas"]["Id"];
+      timezone?: string;
+      /**
+       * @description Customer side only.
+       * @enum {string|null}
+       */
+      billingType?: "prepaid" | "postpaid" | null;
+      /** @description Customer side, postpaid. */
+      creditLimit?: number | null;
+      openingBalance?: number;
+      /** @description Customer side only. */
+      autoInvoicing?: boolean;
+      /** @description Default for new payments (§13.33). */
+      sendPaymentConfirmation?: boolean;
+      description?: string | null;
+    };
+    BillingSideInput: WithRequired<
+      components["schemas"]["BillingSideFields"],
+      "currency" | "billingCycleId" | "timezone" | "openingBalance"
+    >;
+    BillingSide: WithRequired<
+      components["schemas"]["BillingSideFields"],
+      "currency" | "billingCycleId" | "timezone" | "openingBalance"
+    > & {
+      /** @description Opening balance + usage charges − payments and credits + debits, in the side's currency. */
+      balance: number;
+      billingCycleName: string;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    Beneficiary: {
+      beneficiaryName?: string | null;
+      address?: string | null;
+      bank?: string | null;
+      bankAddress?: string | null;
+      currency?: string | null;
+      accountNumber?: string | null;
+      iban?: string | null;
+      swift?: string | null;
+      /** @description Crypto wallet. */
+      walletAddress?: string | null;
+    };
+    EnterpriseBilling: {
+      customer: components["schemas"]["BillingSide"] | null;
+      vendor: components["schemas"]["BillingSide"] | null;
+      beneficiary: components["schemas"]["Beneficiary"];
+    };
+    EnterpriseBillingInput: {
+      customer?: components["schemas"]["BillingSideInput"];
+      vendor?: components["schemas"]["BillingSideInput"];
+      beneficiary?: components["schemas"]["Beneficiary"];
+    };
+    BillingSaved: {
+      record: components["schemas"]["EnterpriseBilling"];
+      change: components["schemas"]["Change"] | null;
+    };
+    AmPeriod: {
+      userId: components["schemas"]["Id"];
+      userName: string;
+      startsAt: components["schemas"]["Timestamp"];
+      endsAt: components["schemas"]["Timestamp"] | null;
+      note: string | null;
+    };
+    HandoverRequest: {
+      userId: components["schemas"]["Id"];
+      /** @description Default now. A future time schedules the handover. */
+      effectiveAt?: components["schemas"]["Timestamp"];
+      note?: string;
+    };
+    HandoverSaved: {
+      periods: components["schemas"]["AmPeriod"][];
+      change: components["schemas"]["Change"];
+    };
+    EnterpriseDoc: {
+      id: components["schemas"]["Id"];
+      name: string;
+      fileName: string;
+      contentType: string;
+      size: number;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+    };
+    EnterpriseDocUpload: {
+      name: string;
+      fileName: string;
+      contentType?: string;
+      /** @description File content, base64 (at most 10 MB decoded). */
+      dataBase64: string;
+    };
+    /** @enum {string} */
+    TrunkProtocol: "smpp" | "http";
+    /**
+     * @description The event that makes a message billable (§7).
+     * @enum {string}
+     */
+    BillingType: "attempt" | "submit" | "reported" | "delivery";
+    /**
+     * @description TLS 1.2/1.3 replace the reference platform's SSLv2/SSLv3/TLSv1 (§16).
+     * @enum {string}
+     */
+    SslType: "none" | "tls1.2" | "tls1.3";
+    /** @enum {string} */
+    LimitPeriod: "hour" | "day" | "week" | "month" | "billing_cycle";
+    TrunkListRow: {
+      id: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      name: string;
+      username: string;
+      categoryId: components["schemas"]["Id"] | null;
+      category: string | null;
+      protocol: components["schemas"]["TrunkProtocol"];
+      tps: number;
+      status: components["schemas"]["RecordStatus"];
+      bindType: string;
+      /** @description Translation rules running on the trunk (replaces "Translation Rule Group", §13.2). */
+      rulesCount: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archived: boolean;
+    };
+    CustomerTrunkPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["TrunkListRow"][];
+    };
+    VendorTrunkPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["TrunkListRow"][];
+    };
+    /** @description Shared fields of the customer trunk form and record. */
+    CustomerTrunkFields: {
+      enterpriseId?: components["schemas"]["Id"];
+      name?: string;
+      protocol?: components["schemas"]["TrunkProtocol"];
+      categoryId?: components["schemas"]["Id"] | null;
+      billingType?: components["schemas"]["BillingType"];
+      status?: components["schemas"]["RecordStatus"];
+      /** @enum {string} */
+      bindType?: "TX" | "RX" | "TR" | "AUTO";
+      considerHlrRate?: boolean;
+      serviceTypeRouting?: boolean;
+      partWiseRouting?: boolean;
+      /** @description Allowed client IP addresses. */
+      hostIps?: string[];
+      /** @description SMPP system_id. */
+      username?: string;
+      /** @description SMPP password (system_id max 16, password max 9 characters in SMPP v3.4). Required on create; omit to keep. */
+      password?: string;
+      maxConnections?: number;
+      systemType?: string | null;
+      port?: number;
+      sslType?: components["schemas"]["SslType"];
+      dlrPushUrl?: string | null;
+      moPushUrl?: string | null;
+      delayedSubmit?: boolean;
+      sendBind?: boolean;
+      /**
+       * @description Where receipts go when the submitting session is gone (§13.1).
+       * @enum {string}
+       */
+      dlrSessionAffinity?: "strict" | "same_ip" | "same_trunk";
+      dlrHoldHours?: number;
+      tps?: number;
+      overflowBuffer?: number;
+      loopDetection?: boolean;
+      /** @enum {integer} */
+      defaultCoding?: 0 | 3;
+      /** @description Rate tables in order; the first with a line for the destination wins (§5.4). */
+      rateTableIds?: components["schemas"]["Id"][];
+      /** @description Express vendor selection - bypass routing (§5.4). */
+      expressVendorTrunkId?: components["schemas"]["Id"] | null;
+      expressMargin?: number | null;
+      revenueLimit?: number | null;
+      revenueLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
+    };
+    /** @description Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26). */
+    CustomerTrunkInput: WithRequired<
+      components["schemas"]["CustomerTrunkFields"],
+      | "enterpriseId"
+      | "name"
+      | "protocol"
+      | "billingType"
+      | "status"
+      | "bindType"
+      | "hostIps"
+      | "username"
+      | "maxConnections"
+      | "port"
+      | "tps"
+    >;
+    TrunkDetailCommon: {
+      id: components["schemas"]["Id"];
+      enterpriseName: string;
+      /** @description Passwords are never shown (§16 rebuild notes). */
+      passwordSet: boolean;
+      archived: components["schemas"]["Archived"];
+      /** @description Vendor trunks own one buy table (§13.12); null for customer trunks. */
+      ownRateTableId: components["schemas"]["Id"] | null;
+    };
+    CustomerTrunkDetail: components["schemas"]["TrunkDetailCommon"] &
+      WithRequired<
+        components["schemas"]["CustomerTrunkFields"],
+        | "enterpriseId"
+        | "name"
+        | "protocol"
+        | "billingType"
+        | "status"
+        | "bindType"
+        | "hostIps"
+        | "username"
+        | "maxConnections"
+        | "port"
+        | "tps"
+      > &
+      components["schemas"]["Audit"];
+    /** @description Shared fields of the vendor trunk form and record. */
+    VendorTrunkFields: {
+      enterpriseId?: components["schemas"]["Id"];
+      name?: string;
+      protocol?: components["schemas"]["TrunkProtocol"];
+      categoryId?: components["schemas"]["Id"];
+      billingType?: components["schemas"]["BillingType"];
+      status?: components["schemas"]["RecordStatus"];
+      /** @enum {string} */
+      bindType?: "TX" | "RX" | "TR";
+      username?: string;
+      /** @description Required on create; omit to keep. */
+      password?: string;
+      host?: string;
+      port?: number;
+      sourceHost?: string | null;
+      maxConnections?: number;
+      systemType?: string | null;
+      serviceType?: string | null;
+      sslType?: components["schemas"]["SslType"];
+      submitIntervalMs?: number;
+      submitTimeoutS?: number;
+      enquireLinkTimeoutS?: number;
+      /** @enum {string} */
+      msgIdType?: "default" | "decimal" | "hexadecimal";
+      http?: components["schemas"]["VendorHttpSettings"];
+      tps?: number;
+      overflowBuffer?: number;
+      windowSize?: number;
+      allowedDataCodings?: (0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 13 | 14)[];
+      rerouteOn?: ("EXPIRED" | "DELETED" | "UNDELIV" | "UNKNOWN" | "REJECTD")[];
+      allowedSrcTon?: number[];
+      allowedDstTon?: number[];
+      allowedSrcNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[];
+      allowedDstNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[];
+      maxMsgLen?: number;
+      supportMultipart?: boolean;
+      dlrTimeoutS?: number;
+      /** @enum {string} */
+      dlrTimeoutStat?: "DELIVRD" | "EXPIRED" | "UNDELIV" | "REJECTD" | "UNKNOWN";
+      bindAddrTon?: number;
+      bindAddrNpi?: number;
+      bindAddrRange?: string | null;
+      costLimit?: number | null;
+      costLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
+    };
+    /** @description Vendor trunk form (§5.5) with cost limit (§13.26). */
+    VendorTrunkInput: WithRequired<
+      components["schemas"]["VendorTrunkFields"],
+      | "enterpriseId"
+      | "name"
+      | "protocol"
+      | "categoryId"
+      | "billingType"
+      | "status"
+      | "bindType"
+      | "username"
+      | "host"
+      | "port"
+      | "maxConnections"
+      | "tps"
+    >;
+    /** @description Generic HTTP-API adapter (§5.5), used when protocol is http. */
+    VendorHttpSettings: {
+      url?: string | null;
+      receiverPort?: number | null;
+      successRegex?: string | null;
+      messageIdRegex?: string | null;
+      callbackUrl?: string | null;
+      callbackIntervalS?: number | null;
+      dlrStatusRegex?: string | null;
+      dlrMidRegex?: string | null;
+      dlrSuccessStats?: string | null;
+      dlrFailStats?: string | null;
+      extraHeaders?: string | null;
+      postData?: string | null;
+      callbackExtraHeaders?: string | null;
+      callbackPostData?: string | null;
+    };
+    VendorTrunkDetail: components["schemas"]["TrunkDetailCommon"] &
+      WithRequired<
+        components["schemas"]["VendorTrunkFields"],
+        | "enterpriseId"
+        | "name"
+        | "protocol"
+        | "categoryId"
+        | "billingType"
+        | "status"
+        | "bindType"
+        | "username"
+        | "host"
+        | "port"
+        | "maxConnections"
+        | "tps"
+      > &
+      components["schemas"]["Audit"];
+    CustomerTrunkSaved: {
+      record: components["schemas"]["CustomerTrunkDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    VendorTrunkSaved: {
+      record: components["schemas"]["VendorTrunkDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    TrunkRule: {
+      ruleId: components["schemas"]["Id"];
+      /** @enum {string} */
+      kind: "translation" | "hlr";
+      name: string;
+      /** @description How the rule reaches this trunk. */
+      source: {
+        /** @enum {string} */
+        type: "trunk" | "enterprise" | "category" | "all";
+        label: string;
+      };
+      /** @description Position set on this trunk; null = default order. */
+      position: number | null;
+      /** @description Off for this trunk only. */
+      enabled: boolean;
+      continueAfter: boolean;
+      /** @description The rule's own status; inactive rules do not run anywhere. */
+      ruleActive: boolean;
+      /** @description Short summary, e.g. action and patterns, or the HLR provider and DNID pattern. */
+      detail: string | null;
+    };
+    TrunkRules: {
+      translation: components["schemas"]["TrunkRule"][];
+      /** @description Customer trunks only; empty for vendor trunks. */
+      hlr: components["schemas"]["TrunkRule"][];
+    };
+    TrunkRuleSetting: {
+      ruleId: components["schemas"]["Id"];
+      enabled: boolean;
+      continueAfter?: boolean;
+    };
+    TrunkRulesInput: {
+      /** @description The new order (positions 1..n) and on/off per rule. */
+      translation?: components["schemas"]["TrunkRuleSetting"][];
+      hlr?: components["schemas"]["TrunkRuleSetting"][];
+      detachTranslationRuleIds?: components["schemas"]["Id"][];
+      detachHlrRuleIds?: components["schemas"]["Id"][];
+    };
+    TrunkRulesSaved: {
+      record: components["schemas"]["TrunkRules"];
+      change: components["schemas"]["Change"] | null;
+    };
+    RateTableRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @enum {string} */
+      kind: "customer" | "vendor";
+      categoryId: components["schemas"]["Id"];
+      category: string;
+      currency: string;
+      vendorTrunkId: components["schemas"]["Id"] | null;
+      vendorTrunkName: string | null;
+      /** @description Customer trunks using the table. */
+      trunkCount: number;
+      /** @description Lines valid now. */
+      activeLines: number;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    RateTablePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RateTableRow"][];
+    };
     /**
      * @description A list page whose fields are described by `/meta/lists/{list}/fields`.
      * @enum {string}
      */
-    ListId: "enterprises" | "users" | "changes";
+    ListId:
+      "enterprises" | "users" | "changes" | "customer_trunks" | "vendor_trunks" | "rate_tables";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -633,6 +1709,8 @@ export type components = {
       businessCompanyName?: string;
       /** @description ISO 3166-1 alpha-2. */
       country?: string | null;
+      /** @description Set when the enterprise is archived (§13.29); archived rows show only with the "archived" filter. */
+      archivedAt?: components["schemas"]["Timestamp"] | null;
     } & components["schemas"]["Audit"];
     EnterprisePage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["Enterprise"][];
@@ -690,6 +1768,7 @@ export type components = {
     };
   };
   parameters: {
+    DocId: components["schemas"]["Id"];
     RecordId: components["schemas"]["Id"];
     /** @description Identifier of a list page. */
     ListId: components["schemas"]["ListId"];
@@ -894,31 +1973,6 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
-  getEnterprise: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: components["parameters"]["RecordId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The enterprise */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Enterprise"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-      503: components["responses"]["Unavailable"];
-    };
-  };
   queryUsers: {
     parameters: {
       query?: never;
@@ -1120,4 +2174,954 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  getReference: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reference data */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReferenceData"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createEnterprise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnterpriseInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change that records it (§13.10) */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getEnterprise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The enterprise */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateEnterprise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnterpriseInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getEnterpriseDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveEnterprise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreEnterprise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getEnterpriseBilling: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Billing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseBilling"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateEnterpriseBilling: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnterpriseBillingInput"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BillingSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getAccountManagerHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Periods, oldest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AmPeriod"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  handOverEnterprise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HandoverRequest"];
+      };
+    };
+    responses: {
+      /** @description The new history */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HandoverSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listEnterpriseDocs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Documents, newest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseDoc"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  uploadEnterpriseDoc: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnterpriseDocUpload"];
+      };
+    };
+    responses: {
+      /** @description Stored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseDoc"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  deleteEnterpriseDoc: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+        docId: components["parameters"]["DocId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadEnterpriseDoc: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+        docId: components["parameters"]["DocId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/octet-stream": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryCustomerTrunks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of customer trunks */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerTrunkPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createCustomerTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CustomerTrunkInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerTrunkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getCustomerTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The customer trunk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerTrunkDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateCustomerTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CustomerTrunkInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerTrunkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getCustomerTrunkDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveCustomerTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerTrunkSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreCustomerTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerTrunkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getCustomerTrunkRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Rules in execution order */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkRules"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateCustomerTrunkRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TrunkRulesInput"];
+      };
+    };
+    responses: {
+      /** @description The rules after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkRulesSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryVendorTrunks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of vendor trunks */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorTrunkPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createVendorTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorTrunkInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorTrunkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The vendor trunk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorTrunkDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateVendorTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorTrunkInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorTrunkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorTrunkDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveVendorTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorTrunkSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreVendorTrunk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorTrunkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorTrunkRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Rules in execution order */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkRules"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateVendorTrunkRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TrunkRulesInput"];
+      };
+    };
+    responses: {
+      /** @description The rules after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkRulesSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRateTables: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of rate tables */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateTablePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
 }
+type WithRequired<T, K extends keyof T> = T & {
+  [P in K]-?: T[P];
+};

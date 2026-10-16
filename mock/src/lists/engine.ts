@@ -24,6 +24,11 @@ export interface ListDef<Row> {
   from: string;
   /** Always applied, e.g. hiding archived records (§13.29). */
   baseWhere?: string;
+  /**
+   * A filter on this field ("Show deleted", §13.29) lifts baseWhere, so archived rows can be
+   * listed (archived = true) or shown next to live ones (archived in [true, false]).
+   */
+  archivedField?: string;
   /** SQL for every field of the catalogue. */
   columns: Record<string, ColumnSql>;
   /** Fields matched by the quick search box. */
@@ -85,7 +90,9 @@ function conditionSql(c: FilterCondition, field: FieldDescriptor, col: ColumnSql
       ? `${p(vs.map(Number))}::numeric[]`
       : time
         ? `${p(vs)}::timestamptz[]`
-        : `${p(vs.map((v) => String(v).toLowerCase()))}::text[]`;
+        : field.type === "boolean"
+          ? `${p(vs.map((v) => v === true || v === "true"))}::boolean[]`
+          : `${p(vs.map((v) => String(v).toLowerCase()))}::text[]`;
   const subject = numeric || time || field.type === "boolean" ? x : `lower((${x})::text)`;
   const values = c.values ?? [];
   switch (c.op) {
@@ -135,12 +142,17 @@ function groupSql(
   return `(${parts.join(group.logic === "or" ? " OR " : " AND ")})`;
 }
 
+function mentions(group: FilterGroup, field: string): boolean {
+  return group.conditions.some((n) => ("logic" in n ? mentions(n, field) : (n as FilterCondition).field === field));
+}
+
 /** Builds the page and count statements. The query must have passed checkListQuery. */
 export function compileQuery(def: ListDef<unknown>, query: ListQuery) {
   const byName = new Map(def.fields.fields.map((f) => [f.field, f]));
   const params = new Params();
   const where: string[] = [];
-  if (def.baseWhere) where.push(def.baseWhere);
+  const showArchived = !!def.archivedField && !!query.filter && mentions(query.filter, def.archivedField);
+  if (def.baseWhere && !showArchived) where.push(def.baseWhere);
   if (query.filter) where.push(groupSql(query.filter, def, byName, params.add));
   if (query.search?.trim()) {
     const pattern = params.add(searchPattern(query.search.trim()));
