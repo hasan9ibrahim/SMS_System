@@ -5,6 +5,7 @@ import type { ListFields, ListId } from "@sms/contract";
 import { db } from "../db.js";
 
 const SOURCES: Partial<Record<ListId, Record<string, string>>> = {
+  countries: { region: "SELECT DISTINCT region AS value, region AS label FROM countries ORDER BY 1" },
   route_rules: {
     category: "SELECT id::text AS value, name AS label FROM product_categories WHERE deleted_at IS NULL ORDER BY name",
   },

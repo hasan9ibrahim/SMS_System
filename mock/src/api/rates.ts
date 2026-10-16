@@ -659,7 +659,9 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
     const codes = [...new Set(body.items.flatMap((it) => (it.lineId === undefined && it.mccmnc ? [it.mccmnc] : [])))];
     const mccmncIds = new Map<string, number>();
     if (codes.length) {
-      const { rows } = await pool.query("SELECT id, mccmnc FROM mccmnc WHERE mccmnc = ANY($1)", [codes]);
+      const { rows } = await pool.query("SELECT id, mccmnc FROM mccmnc WHERE mccmnc = ANY($1) AND deleted_at IS NULL", [
+        codes,
+      ]);
       for (const r of rows) mccmncIds.set(r.mccmnc, r.id);
       body.items.forEach((it, i) => {
         if (it.lineId === undefined && it.mccmnc && !mccmncIds.has(it.mccmnc))

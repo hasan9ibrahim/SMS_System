@@ -39,6 +39,17 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/destinations/query", { body })) as Promise<ListPage<Row>>;
     case "route_rules":
       return unwrap(api.POST("/route-rules/query", { body })) as Promise<ListPage<Row>>;
+    case "product_categories":
+      return unwrap(api.POST("/product-categories/query", { body })) as Promise<ListPage<Row>>;
+    case "countries":
+      return unwrap(api.POST("/countries/query", { body })) as Promise<ListPage<Row>>;
+    case "dial_code_profiles":
+      return unwrap(api.POST("/dial-code-profiles/query", { body })) as Promise<ListPage<Row>>;
+    case "dial_codes":
+      // Needs a profileId condition: the Master Table page adds it (rule 4).
+      return unwrap(api.POST("/dial-codes/query", { body })) as Promise<ListPage<Row>>;
+    case "mo_numbers":
+      return unwrap(api.POST("/mo-numbers/query", { body })) as Promise<ListPage<Row>>;
     case "enterprise_report":
       // The report needs its settings with every query: the page passes its own fetchPage.
       return Promise.reject(new Error("The Enterprise report is fetched with its settings"));

@@ -113,9 +113,13 @@ describe("MCC/MNC master (spec §6.1, §13.21)", () => {
     assert.equal(world.mccmncByCode.get("208")?.isAllNetworks, true);
   });
 
-  test("dial-code prefixes start with the country dial code and are unique", () => {
+  test("dial-code prefixes start with the country dial code and are unique per profile", () => {
     const rows = readCsv(dirA, "dial_codes");
-    assert.equal(new Set(rows.map((r) => r.prefix)).size, rows.length);
+    // The extra Master Table profiles (masterData.ts) reuse prefixes of "All" by design.
+    for (const profile of new Set(rows.map((r) => r.profile))) {
+      const own = rows.filter((r) => r.profile === profile);
+      assert.equal(new Set(own.map((r) => r.prefix)).size, own.length, profile);
+    }
     for (const r of rows) {
       const m = world.mccmncById.get(Number(r.mccmnc_id))!;
       assert.ok(r.prefix!.startsWith(world.countryById.get(m.countryId)!.dialCode), r.prefix);

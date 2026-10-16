@@ -72,7 +72,7 @@ export async function resolveDestinations(db: Db, q: string, live: boolean): Pro
     const { rows } = await db.query(
       `SELECT d.prefix, m.id, m.country_id, m.mccmnc, m.mcc, m.network, m.is_all_networks, co.name AS country, co.iso AS country_iso
          FROM dial_codes d JOIN mccmnc m ON m.id = d.mccmnc_id JOIN countries co ON co.id = m.country_id
-        WHERE d.prefix = ANY($1) ORDER BY length(d.prefix) DESC LIMIT 1`,
+        WHERE d.prefix = ANY($1) AND d.profile = 'All' AND d.deleted_at IS NULL ORDER BY length(d.prefix) DESC LIMIT 1`,
       [prefixesOf(digits)],
     );
     const hit = rows[0];
@@ -110,8 +110,8 @@ export async function resolveDestinations(db: Db, q: string, live: boolean): Pro
                 CASE WHEN m.mccmnc = $1 THEN 0 WHEN co.dial_code = $1 AND m.is_all_networks THEN 1
                      WHEN co.dial_code = $1 THEN 2 WHEN m.mccmnc LIKE $1 || '%' THEN 3 ELSE 4 END AS rank
            FROM mccmnc m JOIN countries co ON co.id = m.country_id
-          WHERE m.mccmnc LIKE $1 || '%' OR co.dial_code = $1
-             OR m.id IN (SELECT mccmnc_id FROM dial_codes WHERE prefix = $1)
+          WHERE m.deleted_at IS NULL AND (m.mccmnc LIKE $1 || '%' OR co.dial_code = $1
+             OR m.id IN (SELECT mccmnc_id FROM dial_codes WHERE prefix = $1 AND profile = 'All' AND deleted_at IS NULL))
           ORDER BY m.mccmnc) x
         ORDER BY rank, length(mccmnc), mccmnc LIMIT 20`,
       [text],
@@ -121,7 +121,7 @@ export async function resolveDestinations(db: Db, q: string, live: boolean): Pro
   const { rows } = await db.query(
     `SELECT m.mccmnc, m.mcc, m.network, m.is_all_networks, co.name AS country, co.iso AS country_iso
        FROM mccmnc m JOIN countries co ON co.id = m.country_id
-      WHERE co.name ILIKE $1 || '%' OR co.name ILIKE '% ' || $1 || '%' OR m.network ILIKE '%' || $1 || '%'
+      WHERE m.deleted_at IS NULL AND (co.name ILIKE $1 || '%' OR co.name ILIKE '% ' || $1 || '%' OR m.network ILIKE '%' || $1 || '%')
       ORDER BY CASE WHEN co.name ILIKE $1 || '%' THEN (CASE WHEN m.is_all_networks THEN 0 ELSE 1 END)
                     WHEN m.network ILIKE $1 || '%' THEN 2 ELSE 3 END,
                co.name, m.is_all_networks DESC, m.network
@@ -663,7 +663,7 @@ async function queryDestinations(
     const { rows } = await db.query(
       `SELECT DISTINCT ON (x.n) x.n, m.mccmnc, m.mcc, m.network, m.is_all_networks, co.name AS country, co.iso AS country_iso
          FROM (SELECT n, left(n, k) AS p FROM unnest($1::text[]) n, generate_series(1, 15) k WHERE k <= length(n)) x
-         JOIN dial_codes d ON d.prefix = x.p
+         JOIN dial_codes d ON d.prefix = x.p AND d.profile = 'All' AND d.deleted_at IS NULL
          JOIN mccmnc m ON m.id = d.mccmnc_id JOIN countries co ON co.id = m.country_id
         ORDER BY x.n, length(d.prefix) DESC`,
       [numbers],

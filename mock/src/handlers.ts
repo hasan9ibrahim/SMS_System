@@ -74,6 +74,39 @@ import {
   updateSavedLookup,
 } from "./api/rateLookup.js";
 import { setDestinationDlrTarget } from "./api/destinations.js";
+import {
+  archiveDestination,
+  archiveDialCodeProfile,
+  archiveMoNumber,
+  archiveProductCategory,
+  createCountry,
+  createDestination,
+  createDialCode,
+  createDialCodeProfile,
+  createMoNumber,
+  createProductCategory,
+  deleteDialCodes,
+  exportCountries,
+  exportDestinations,
+  exportDialCodes,
+  exportMoNumbers,
+  getDestinationDependencies,
+  getProductCategoryDependencies,
+  importDestinations,
+  importDialCodes,
+  importMoNumbers,
+  queryDialCodes,
+  restoreDestination,
+  restoreDialCodeProfile,
+  restoreMoNumber,
+  restoreProductCategory,
+  updateCountry,
+  updateDestination,
+  updateDialCode,
+  updateDialCodeProfile,
+  updateMoNumber,
+  updateProductCategory,
+} from "./api/masterData.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -82,7 +115,7 @@ import { undoChange } from "./api/changes.js";
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.9.0";
+const VERSION = "0.10.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -182,6 +215,43 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   createSavedLookup,
   updateSavedLookup,
   deleteSavedLookup,
+  // Product reference data (§6.1)
+  queryProductCategories: queryList("product_categories"),
+  createProductCategory,
+  updateProductCategory,
+  getProductCategoryDependencies,
+  archiveProductCategory,
+  restoreProductCategory,
+  queryCountries: queryList("countries"),
+  createCountry,
+  updateCountry,
+  exportCountries,
+  createDestination,
+  updateDestination,
+  getDestinationDependencies,
+  archiveDestination,
+  restoreDestination,
+  importDestinations,
+  exportDestinations,
+  queryDialCodeProfiles: queryList("dial_code_profiles"),
+  createDialCodeProfile,
+  updateDialCodeProfile,
+  archiveDialCodeProfile,
+  restoreDialCodeProfile,
+  importDialCodes,
+  exportDialCodes,
+  queryDialCodes,
+  createDialCode,
+  updateDialCode,
+  deleteDialCodes,
+  queryMoNumbers: queryList("mo_numbers"),
+  createMoNumber,
+  updateMoNumber,
+  archiveMoNumber,
+  restoreMoNumber,
+  importMoNumbers,
+  exportMoNumbers,
+
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),
   undoChange,

@@ -27,6 +27,7 @@ export const TABLE_ORDER = [
   "product_categories",
   "countries",
   "mccmnc",
+  "dial_code_profiles",
   "dial_codes",
   "enterprises",
   "enterprise_contacts",
@@ -55,6 +56,7 @@ export const TABLE_ORDER = [
   "invoices",
   "transactions",
   "vendor_invoices",
+  "mo_numbers",
   "changes",
 ];
 

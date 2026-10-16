@@ -8,6 +8,10 @@ import { EnterprisesPage } from "./EnterprisesPage";
 import { HomePage } from "./HomePage";
 import { NotFoundPage, PlaceholderPage } from "./PlaceholderPage";
 import { MccmncPage } from "./destinations/MccmncPage";
+import { CountriesPage } from "./reference/CountriesPage";
+import { MasterTablePage } from "./reference/MasterTablePage";
+import { MoBookPage } from "./reference/MoBookPage";
+import { ProductCategoriesPage } from "./reference/ProductCategoriesPage";
 import { RateManagerPage } from "./rates/RateManagerPage";
 import { EnterpriseReportPage } from "./reports/EnterpriseReportPage";
 import { TrunkPage } from "./trunk/TrunkPage";
@@ -25,6 +29,10 @@ const BUILT = new Set([
   "/enterprises/vendor-trunks",
   "/rates/manager",
   "/rates/mccmnc",
+  "/rates/categories",
+  "/rates/countries",
+  "/rates/master-table",
+  "/rates/mo-book",
   "/reports/enterprise",
   "/routing/rules",
   "/routing/rate-lookup",
@@ -52,6 +60,10 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/enterprises/:id" element={<EnterprisePage />} />
       <Route path="/rates/manager" element={<RateManagerPage />} />
       <Route path="/rates/mccmnc" element={<MccmncPage />} />
+      <Route path="/rates/categories" element={<ProductCategoriesPage />} />
+      <Route path="/rates/countries" element={<CountriesPage />} />
+      <Route path="/rates/master-table" element={<MasterTablePage />} />
+      <Route path="/rates/mo-book" element={<MoBookPage />} />
       <Route path="/reports/enterprise" element={<EnterpriseReportPage />} />
       <Route
         path="/routing/rate-lookup"

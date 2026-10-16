@@ -363,7 +363,9 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
     ),
   ]);
   if (r.mccmncs.length) {
-    const { rows } = await db.query("SELECT mccmnc FROM mccmnc WHERE mccmnc = ANY($1)", [r.mccmncs]);
+    const { rows } = await db.query("SELECT mccmnc FROM mccmnc WHERE mccmnc = ANY($1) AND deleted_at IS NULL", [
+      r.mccmncs,
+    ]);
     const ok = new Set(rows.map((x) => x.mccmnc));
     const missing = r.mccmncs.filter((c) => !ok.has(c));
     if (missing.length) errors.push({ path: "/mccmncs", message: `not in the MCCMNC master: ${missing.join(", ")}` });
@@ -826,7 +828,7 @@ async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]
     : await db.query(
         `SELECT m.mccmnc, m.network, m.is_all_networks, co.name AS country FROM dial_codes d
            JOIN mccmnc m ON m.id = d.mccmnc_id JOIN countries co ON co.id = m.country_id
-          WHERE d.prefix = ANY($1) ORDER BY length(d.prefix) DESC LIMIT 1`,
+          WHERE d.prefix = ANY($1) AND d.profile = 'All' AND d.deleted_at IS NULL ORDER BY length(d.prefix) DESC LIMIT 1`,
         [prefixes],
       );
   const d = dest.rows[0];

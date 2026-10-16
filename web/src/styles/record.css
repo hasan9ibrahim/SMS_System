@@ -455,3 +455,70 @@
   text-align: left;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- import dialog (§6.1 import modals) ---------- */
+.imp-help p {
+  margin: 0 0 10px;
+}
+.imp-help code {
+  font-size: 12px;
+}
+.imp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.imp-row label.btn {
+  cursor: pointer;
+}
+.imp-mode {
+  margin: 6px 0 10px;
+}
+.imp-report {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+.imp-counts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.imp-counts > div {
+  display: flex;
+  flex-direction: column;
+}
+.imp-counts strong {
+  font-size: 18px;
+  text-align: left;
+}
+.imp-issues {
+  margin-top: 6px;
+}
+.imp-issues summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.imp-issues.error summary {
+  color: var(--color-error);
+}
+.imp-issues.warning summary {
+  color: var(--color-warning);
+}
+.imp-issues ul {
+  max-height: 180px;
+  overflow: auto;
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+.ro-value {
+  display: inline-block;
+  padding: 6px 0;
+}
+.fgrid > .wide,
+.fgrid > p.wide {
+  grid-column: 1 / -1;
+}

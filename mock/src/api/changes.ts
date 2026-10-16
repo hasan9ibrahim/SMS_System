@@ -28,8 +28,39 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
   translation_rule: { table: "translation_rules", columns: { status: "status", name: "name" } },
   hlr_rule: { table: "hlr_rules", columns: { status: "status", name: "name" } },
   enterprise_doc: { table: "enterprise_docs", columns: {} },
-  // DLR targets live on the MCCMNC master (decided 2026-10-16).
-  destination: { table: "mccmnc", columns: { dlrTargetPct: "dlr_target_pct" } },
+  // MCCMNC master (§6.1); DLR targets live here too (decided 2026-10-16).
+  destination: {
+    table: "mccmnc",
+    columns: {
+      dlrTargetPct: "dlr_target_pct",
+      mcc: "mcc",
+      mnc: "mnc",
+      mccmnc: "mccmnc",
+      allNetworks: "is_all_networks",
+      originalMnc: "original_mnc",
+      countryId: "country_id",
+      network: "network",
+    },
+  },
+  // Product reference data (§6.1)
+  product_category: { table: "product_categories", columns: { name: "name" } },
+  country: { table: "countries", columns: { name: "name", iso: "iso", dialCode: "dial_code", region: "region" } },
+  dial_code_profile: { table: "dial_code_profiles", columns: { name: "name" } },
+  dial_code: { table: "dial_codes", columns: { prefix: "prefix", destinationId: "mccmnc_id" } },
+  mo_number: {
+    table: "mo_numbers",
+    columns: {
+      customerTrunkId: "customer_trunk_id",
+      number: "number",
+      keyword: "keyword",
+      rate: "rate",
+      vendorRate: "vendor_rate",
+      currency: "currency",
+      destinationId: "mccmnc_id",
+      setupCharge: "setup_charge",
+      fixCharge: "fix_charge",
+    },
+  },
 };
 
 const TABLES: Record<string, string> = {

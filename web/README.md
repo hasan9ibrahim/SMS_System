@@ -116,6 +116,25 @@ view in a new tab (`/live/analytics?customer=`, `vendor=`, `customerTrunk=`, `ve
 `mccmnc=`; the page itself comes in build step 5). The chart buffer and colour rules are pure
 functions in `dashboardModel.ts` with tests.
 
+## Product reference data (build step 5.1)
+
+`src/pages/reference/` and `src/pages/destinations/MccmncPage.tsx` (§6.1), all on the standard grid
+with a filter under every column:
+
+- **Product categories** (`/rates/categories`): add, rename, delete (blocked while in use; the
+  delete dialog lists what uses it), "Show deleted" = Delete History.
+- **Countries** (`/rates/countries`): add, edit, export; the region set feeds the destination picker.
+- **MCCMNC codes** (`/rates/mccmnc`): the spec's columns (MCC, MNC, Original MNC, MCCMNC, ISO,
+  Country, Country Code, network) plus the DLR target cell; add, edit, delete, import, export.
+- **Master table** (`/rates/master-table`): profiles; a profile opens its dial codes in the same tab
+  (`?profile=<id>`), with add, edit, bulk delete (select rows), import and export.
+- **MO reference book** (`/rates/mo-book`): add, edit, delete, import, export.
+
+Imports share one dialog (`shared.tsx` `openImport`): choose a CSV, the server checks it (dry run),
+the dialog shows the counts, errors by line, rows kept because they are in use, and remarks; Import
+is enabled only without errors. "Replace" mode archives what the file leaves out. Templates are
+downloadable from the dialog. Every save, delete and import is one undoable change.
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag

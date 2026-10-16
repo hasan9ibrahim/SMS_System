@@ -20,6 +20,8 @@ export interface Profile {
   translationRules: number;
   hlrRules: number;
   numberLists: number;
+  /** MO reference book entries (§6.1) */
+  moNumbers: number;
   edrs: number;
   edrDays: number;
 }
@@ -39,6 +41,7 @@ export const PROFILES: Record<string, Profile> = {
     translationRules: 80,
     hlrRules: 30,
     numberLists: 12,
+    moNumbers: 60,
     edrs: 200_000,
     edrDays: 3,
   },
@@ -56,6 +59,7 @@ export const PROFILES: Record<string, Profile> = {
     translationRules: 800,
     hlrRules: 150,
     numberLists: 60,
+    moNumbers: 600,
     edrs: 5_000_000,
     edrDays: 30,
   },

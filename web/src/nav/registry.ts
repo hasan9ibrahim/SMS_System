@@ -230,11 +230,11 @@ export const PAGES: PageDef[] = [
     "/rates/categories",
     "folder",
     "§6.1",
-    "5",
+    "5.1",
     "Traffic classes (DIRECT, HQ, OTP, …)",
   ),
-  p("rates", "countries", "Countries", "/rates/countries", "globe", "§6.1", "5", "Countries and dial codes"),
-  p("rates", "mccmnc", "MCCMNC codes", "/rates/mccmnc", "grid", "§6.1, §13.21", "5", "The destination master list"),
+  p("rates", "countries", "Countries", "/rates/countries", "globe", "§6.1", "5.1", "Countries and dial codes"),
+  p("rates", "mccmnc", "MCCMNC codes", "/rates/mccmnc", "grid", "§6.1, §13.21", "5.1", "The destination master list"),
   p(
     "rates",
     "master-table",
@@ -242,10 +242,10 @@ export const PAGES: PageDef[] = [
     "/rates/master-table",
     "grid",
     "§6.1",
-    "5",
+    "5.1",
     "Dial-code prefixes to MCCMNC",
   ),
-  p("rates", "mo-book", "MO reference book", "/rates/mo-book", "book", "§6.1", "5", "Two-way and MO billing numbers"),
+  p("rates", "mo-book", "MO reference book", "/rates/mo-book", "book", "§6.1", "5.1", "Two-way and MO billing numbers"),
 
   p(
     "routing",

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.9.0
+  version: 0.10.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -51,6 +51,8 @@ tags:
     description: Jump-to search across records (Ctrl K, §15.1)
   - name: reports
     description: Traffic reports from the EDR store (§10, §13.31)
+  - name: reference
+    description: Product reference data - categories, countries, MCCMNC codes, Master Table, MO reference book (§6.1)
 
 security:
   - sessionCookie: []
@@ -1691,6 +1693,1054 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /product-categories/query:
+    post:
+      tags: [reference]
+      operationId: queryProductCategories
+      summary: "List product categories (server-side filter, sort and paging)"
+      description: |
+        Traffic classes (DIRECT, HQ, OTP, …, §6.1) with how many trunks and rate tables use each.
+        The hidden `archived` filter field shows deleted categories ("Delete history").
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of product categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductCategoryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /product-categories:
+    post:
+      tags: [reference]
+      operationId: createProductCategory
+      summary: "Add a product category (§6.1)"
+      description: |
+        Names are unique (case-insensitive) among live categories: 409 otherwise. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductCategoryInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductCategorySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /product-categories/{id}:
+    put:
+      tags: [reference]
+      operationId: updateProductCategory
+      summary: "Rename a product category"
+      description: |
+        One undoable change (§13.10). 409 when another live category has the name.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductCategoryInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductCategorySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /product-categories/{id}/dependencies:
+    get:
+      tags: [reference]
+      operationId: getProductCategoryDependencies
+      summary: "What depends on a product category (safe delete, §13.29)"
+      description: |
+        Customer and vendor trunks, rate tables, route rules and translation / HLR rules that use the
+        category; all blocking (move them to another category first).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /product-categories/{id}/archive:
+    post:
+      tags: [reference]
+      operationId: archiveProductCategory
+      summary: "Archive (delete) a product category (§13.29)"
+      description: |
+        Delete means archive: the record leaves lists and pickers but nothing is removed, and the
+        change can be undone (§13.10). Blocking dependencies answer 409 unless an administrator
+        sends `override` with a reason, which is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductCategorySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /product-categories/{id}/restore:
+    post:
+      tags: [reference]
+      operationId: restoreProductCategory
+      summary: "Restore an archived product category (§13.29)"
+      description: |
+        Shown under "Delete history" (archived filter). The restore is one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductCategorySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /countries/query:
+    post:
+      tags: [reference]
+      operationId: queryCountries
+      summary: "List countries (server-side filter, sort and paging)"
+      description: |
+        Countries with ISO code, dial code, picker region (§13.21) and how many MCCMNC codes each has.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of countries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /countries:
+    post:
+      tags: [reference]
+      operationId: createCountry
+      summary: "Add a country (§6.1)"
+      description: |
+        Adds the country and its "All networks" code (the MCC is set when the first MCCMNC code is
+        added, so the country starts without one). Names are unique: 409 otherwise. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CountryInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountrySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /countries/{id}:
+    put:
+      tags: [reference]
+      operationId: updateCountry
+      summary: "Change a country"
+      description: |
+        One undoable change (§13.10). Countries are not deleted: they hold the MCCMNC codes.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CountryInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountrySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /countries/export:
+    post:
+      tags: [reference]
+      operationId: exportCountries
+      summary: "Export the filtered countries as CSV"
+      description: |
+        Same filter, search and sort as the grid; every matching row. The file can be imported again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations:
+    post:
+      tags: [reference]
+      operationId: createDestination
+      summary: "Add an MCCMNC code (§6.1)"
+      description: |
+        An empty MNC adds the country-level "All networks" code (MCC only). The code (MCC + MNC) must be
+        unique among live codes: 409 otherwise. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DestinationInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinationSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations/{id}:
+    put:
+      tags: [reference]
+      operationId: updateDestination
+      summary: "Change an MCCMNC code"
+      description: |
+        Changing MCC or MNC changes the code that rate lines, rules and dial codes refer to, so it is
+        refused (409) while any of them use it; network name, original MNC and country can always change.
+        One undoable change (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DestinationInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinationSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations/{id}/dependencies:
+    get:
+      tags: [reference]
+      operationId: getDestinationDependencies
+      summary: "What depends on an MCCMNC code (safe delete, §13.29)"
+      description: |
+        Open and scheduled rate lines, route rules, translation rules, dial codes and MO numbers using the
+        code (blocking), and its EDR traffic in the last 30 days (information).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations/{id}/archive:
+    post:
+      tags: [reference]
+      operationId: archiveDestination
+      summary: "Archive (delete) an MCCMNC code (§13.29)"
+      description: |
+        Delete means archive: the record leaves lists and pickers but nothing is removed, and the
+        change can be undone (§13.10). Blocking dependencies answer 409 unless an administrator
+        sends `override` with a reason, which is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinationSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations/{id}/restore:
+    post:
+      tags: [reference]
+      operationId: restoreDestination
+      summary: "Restore an archived MCCMNC code (§13.29)"
+      description: |
+        Shown under "Delete history" (archived filter). The restore is one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinationSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations/import:
+    post:
+      tags: [reference]
+      operationId: importDestinations
+      summary: "Import MCCMNC codes from CSV (dry run first)"
+      description: |
+        "MCCMNC Unique Codes Import" (§6.1; production loads the list Hasan Ibrahim supplies, decision
+        2026-10-16). Columns: `mcc`, `mnc` (empty = All networks), `original_mnc`, `country` (name; or `iso`
+        when unambiguous), `network`; an optional `mccmnc` column is checked against MCC + MNC. Existing
+        codes are matched by MCC + MNC and updated, new ones added. Codes missing from the file are reported:
+        in `replace` mode the unused ones are archived and the ones still in use are listed under `kept`.
+        All or nothing: with any error nothing is saved. The import is one undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRequest"
+      responses:
+        "200":
+          description: What the import adds, changes and reports; `applied` says whether it was saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations/export:
+    post:
+      tags: [reference]
+      operationId: exportDestinations
+      summary: "Export the filtered MCCMNC codes as CSV"
+      description: |
+        Same filter, search and sort as the grid; every matching row. The file can be imported again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-code-profiles/query:
+    post:
+      tags: [reference]
+      operationId: queryDialCodeProfiles
+      summary: "List dial-code profiles (server-side filter, sort and paging)"
+      description: |
+        Master Table profiles (§6.1): named sets of dial-code prefixes mapped to MCCMNC codes. "All" is the
+        default profile and cannot be deleted. The hidden `archived` filter field shows deleted profiles.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of dial-code profiles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodeProfilePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-code-profiles:
+    post:
+      tags: [reference]
+      operationId: createDialCodeProfile
+      summary: "Add a dial-code profile (§6.1)"
+      description: |
+        `copyFromId` starts the profile with a copy of another profile's prefixes. Names are unique: 409
+        otherwise. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialCodeProfileInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodeProfileSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-code-profiles/{id}:
+    put:
+      tags: [reference]
+      operationId: updateDialCodeProfile
+      summary: "Rename a dial-code profile"
+      description: |
+        "All" keeps its name (400). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialCodeProfileUpdate"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodeProfileSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-code-profiles/{id}/archive:
+    post:
+      tags: [reference]
+      operationId: archiveDialCodeProfile
+      summary: "Archive (delete) a dial-code profile (§13.29)"
+      description: |
+        Archives the profile with its prefixes; "All" cannot be deleted (400). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodeProfileSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-code-profiles/{id}/restore:
+    post:
+      tags: [reference]
+      operationId: restoreDialCodeProfile
+      summary: "Restore an archived dial-code profile (§13.29)"
+      description: |
+        Shown under "Delete history" (archived filter). The restore is one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodeProfileSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-code-profiles/{id}/import:
+    post:
+      tags: [reference]
+      operationId: importDialCodes
+      summary: "Import dial codes into a profile from CSV (dry run first)"
+      description: |
+        "Master Data Import" (§6.1). Columns: `prefix` (digits), `mccmnc` (a live code). A prefix already
+        in the profile is updated, a new one added. In `replace` mode prefixes missing from the file are
+        archived. All or nothing; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRequest"
+      responses:
+        "200":
+          description: What the import adds, changes and reports; `applied` says whether it was saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-code-profiles/{id}/export:
+    get:
+      tags: [reference]
+      operationId: exportDialCodes
+      summary: "Export a profile's dial codes as CSV"
+      description: |
+        Columns `prefix`, `mccmnc`, `country`, `network`; the file can be imported again.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-codes/query:
+    post:
+      tags: [reference]
+      operationId: queryDialCodes
+      summary: "List dial codes (server-side filter, sort and paging)"
+      description: |
+        Prefixes of one profile: the `profileId` filter (eq) is required. Search matches prefix, MCCMNC,
+        country and network; a prefix filter `like 4475%` finds a range.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of dial codes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-codes:
+    post:
+      tags: [reference]
+      operationId: createDialCode
+      summary: "Add a dial-code prefix"
+      description: |
+        Unique per profile among live prefixes: 409 otherwise. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialCodeInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodeSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-codes/{id}:
+    put:
+      tags: [reference]
+      operationId: updateDialCode
+      summary: "Change a dial-code prefix"
+      description: |
+        Prefix or MCCMNC; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialCodeUpdate"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialCodeSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /dial-codes/delete:
+    post:
+      tags: [reference]
+      operationId: deleteDialCodes
+      summary: "Delete (archive) dial-code prefixes"
+      description: |
+        Archives the given prefixes as one undoable change (§13.10, §13.29).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdList"
+      responses:
+        "200":
+          description: The change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /mo-numbers/query:
+    post:
+      tags: [reference]
+      operationId: queryMoNumbers
+      summary: "List MO reference book entries (server-side filter, sort and paging)"
+      description: |
+        Two-way and MO billing numbers (§6.1): the number (long number or short code) and optional
+        keyword a customer trunk receives MO traffic on, with the rate charged to the customer, the vendor
+        rate, the destination and the setup and fixed charges. Hidden `archived` field = deleted entries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of MO reference book entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoNumberPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /mo-numbers:
+    post:
+      tags: [reference]
+      operationId: createMoNumber
+      summary: "Add an MO reference book entry (§6.1)"
+      description: |
+        Number + keyword is unique among live entries (any customer trunk): 409 otherwise. One undoable
+        change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoNumberInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoNumberSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /mo-numbers/{id}:
+    put:
+      tags: [reference]
+      operationId: updateMoNumber
+      summary: "Change an MO reference book entry"
+      description: |
+        One undoable change (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoNumberInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoNumberSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /mo-numbers/{id}/archive:
+    post:
+      tags: [reference]
+      operationId: archiveMoNumber
+      summary: "Archive (delete) an MO reference book entry (§13.29)"
+      description: |
+        Archives the entry; one undoable change. MO traffic already billed keeps its charges.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoNumberSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /mo-numbers/{id}/restore:
+    post:
+      tags: [reference]
+      operationId: restoreMoNumber
+      summary: "Restore an archived MO reference book entry (§13.29)"
+      description: |
+        Shown under "Delete history" (archived filter). The restore is one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoNumberSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /mo-numbers/import:
+    post:
+      tags: [reference]
+      operationId: importMoNumbers
+      summary: "Import MO reference book entries from CSV (dry run first)"
+      description: |
+        "MO Reference Book Import" (§6.1). Columns: `customer_trunk` (name), `number`, `keyword`, `rate`,
+        `vendor_rate`, `currency` (empty = the platform currency), `mccmnc`, `setup_charge`, `fix_charge`.
+        Rows are matched by number + keyword. `replace` archives entries missing from the file. All or
+        nothing; one undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRequest"
+      responses:
+        "200":
+          description: What the import adds, changes and reports; `applied` says whether it was saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /mo-numbers/export:
+    post:
+      tags: [reference]
+      operationId: exportMoNumbers
+      summary: "Export the filtered MO reference book entries as CSV"
+      description: |
+        Same filter, search and sort as the grid; every matching row. The file can be imported again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -2385,6 +3435,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: The record clashes with another live record (e.g. a duplicate name or code) or is in use
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     Forbidden:
       description: Signed in, but this record or action belongs to someone else
       content:
@@ -2729,7 +3785,7 @@ components:
     # ------------------------------------------------------------- history and undo (§13.10)
     ChangeType:
       type: string
-      enum: [create, edit, clone, delete, reorder, enable, disable, bulk, undo]
+      enum: [create, edit, clone, delete, reorder, enable, disable, bulk, undo, import]
 
     ChangeField:
       type: object
@@ -4350,8 +5406,26 @@ components:
 
     Destination:
       type: object
-      required: [id, mccmnc, mcc, mnc, country, countryIso, network, allNetworks, dlrTargetPct]
+      required: [id, mccmnc, mcc, mnc, originalMnc, countryId, country, countryIso, dialCode, network, allNetworks, dlrTargetPct, updatedBy, updatedAt, archivedAt]
       properties:
+        originalMnc:
+          type: [string, "null"]
+          description: The MNC as the operator publishes it, when the code uses another form.
+        countryId:
+          $ref: "#/components/schemas/Id"
+        dialCode:
+          type: string
+          description: The country's calling code ("Country Code" in §6.1).
+        updatedBy:
+          type: [string, "null"]
+          description: Username of the last change; null for seeded records.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Set when deleted (archived, §13.29).
+
         id:
           $ref: "#/components/schemas/Id"
         mccmnc:
@@ -4406,6 +5480,502 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/Destination"
+
+    # ------------------------------------------------------------- Product reference data (§6.1)
+    ProductCategory:
+      type: object
+      required: [id, name, customerTrunks, vendorTrunks, rateTables, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        customerTrunks:
+          type: integer
+        vendorTrunks:
+          type: integer
+        rateTables:
+          type: integer
+        updatedBy:
+          type: [string, "null"]
+          description: Username of the last change; null for seeded records.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Set when deleted (archived, §13.29).
+
+    ProductCategoryInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+
+    ProductCategorySaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/ProductCategory"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    ProductCategoryPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductCategory"
+
+    Country:
+      type: object
+      required: [id, name, iso, dialCode, region, networks, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        iso:
+          type: string
+          description: ISO 3166-1 alpha-2; not unique (e.g. Abkhazia shares GE).
+        dialCode:
+          type: string
+          description: Country calling code without "+".
+        region:
+          type: string
+          description: Region set of the destination picker (§13.21).
+        networks:
+          type: integer
+          description: Live MCCMNC codes of the country, its All networks code included.
+        updatedBy:
+          type: [string, "null"]
+          description: Username of the last change; null for seeded records.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    CountryInput:
+      type: object
+      additionalProperties: false
+      required: [name, iso, dialCode, region]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        iso:
+          type: string
+          pattern: "^[A-Z]{2}$"
+        dialCode:
+          type: string
+          pattern: "^[0-9]{1,4}$"
+        region:
+          type: string
+          minLength: 1
+          maxLength: 40
+
+    CountrySaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/Country"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    CountryPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/Country"
+
+    DestinationInput:
+      type: object
+      additionalProperties: false
+      required: [mcc, mnc, countryId, network]
+      properties:
+        mcc:
+          type: string
+          pattern: "^[0-9]{3}$"
+        mnc:
+          type: string
+          pattern: "^([0-9]{2,3})?$"
+          description: Empty = the country-level "All networks" code.
+        originalMnc:
+          type: [string, "null"]
+          maxLength: 10
+          description: The MNC as the operator publishes it, when the code uses another (e.g. a 2-digit form).
+        countryId:
+          $ref: "#/components/schemas/Id"
+        network:
+          type: string
+          minLength: 1
+          maxLength: 120
+
+    ImportRequest:
+      type: object
+      additionalProperties: false
+      required: [csv, dryRun]
+      properties:
+        csv:
+          type: string
+          maxLength: 20000000
+          description: The file's text, UTF-8, with a header row (comma or semicolon separated).
+        dryRun:
+          type: boolean
+          description: Only check and count; nothing is saved. The GUI always runs a dry run first.
+        mode:
+          type: string
+          enum: [merge, replace]
+          description: "merge (when omitted): add and update only. replace: also archive what the file leaves out."
+
+    ImportIssue:
+      type: object
+      required: [line, key, message]
+      properties:
+        line:
+          type: [integer, "null"]
+          description: Line in the file (header = 1); null when not tied to a line.
+        key:
+          type: [string, "null"]
+          description: The row's key, e.g. the MCCMNC code or prefix.
+        message:
+          type: string
+
+    ImportResult:
+      type: object
+      required: [applied, dryRun, total, added, updated, unchanged, archived, errors, warnings, kept, change]
+      properties:
+        applied:
+          type: boolean
+          description: True when saved (not a dry run and no errors).
+        dryRun:
+          type: boolean
+        total:
+          type: integer
+          description: Data rows in the file.
+        added:
+          type: integer
+        updated:
+          type: integer
+        unchanged:
+          type: integer
+        archived:
+          type: integer
+          description: Records left out of the file and archived (replace mode).
+        errors:
+          type: array
+          description: Rows that stop the import (at most 200 listed).
+          items:
+            $ref: "#/components/schemas/ImportIssue"
+        warnings:
+          type: array
+          description: Rows imported with a remark, e.g. a duplicate row (at most 200 listed).
+          items:
+            $ref: "#/components/schemas/ImportIssue"
+        kept:
+          type: array
+          description: Records missing from the file but kept because they are still in use (at most 200 listed).
+          items:
+            $ref: "#/components/schemas/ImportIssue"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    DialCodeProfile:
+      type: object
+      required: [id, name, isDefault, prefixes, destinations, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        isDefault:
+          type: boolean
+          description: The "All" profile.
+        prefixes:
+          type: integer
+        destinations:
+          type: integer
+          description: Distinct MCCMNC codes the prefixes map to.
+        updatedBy:
+          type: [string, "null"]
+          description: Username of the last change; null for seeded records.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Set when deleted (archived, §13.29).
+
+    DialCodeProfileInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        copyFromId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+
+    DialCodeProfileUpdate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+
+    DialCodeProfileSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/DialCodeProfile"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    DialCodeProfilePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/DialCodeProfile"
+
+    DialCode:
+      type: object
+      required: [id, profileId, profile, prefix, destinationId, mccmnc, country, network, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        profileId:
+          $ref: "#/components/schemas/Id"
+        profile:
+          type: string
+        prefix:
+          type: string
+        destinationId:
+          $ref: "#/components/schemas/Id"
+        mccmnc:
+          type: string
+        country:
+          type: string
+        network:
+          type: string
+        updatedBy:
+          type: [string, "null"]
+          description: Username of the last change; null for seeded records.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    DialCodeInput:
+      type: object
+      additionalProperties: false
+      required: [profileId, prefix, destinationId]
+      properties:
+        profileId:
+          $ref: "#/components/schemas/Id"
+        prefix:
+          type: string
+          pattern: "^[0-9]{1,15}$"
+        destinationId:
+          $ref: "#/components/schemas/Id"
+
+    DialCodeUpdate:
+      type: object
+      additionalProperties: false
+      required: [prefix, destinationId]
+      properties:
+        prefix:
+          type: string
+          pattern: "^[0-9]{1,15}$"
+        destinationId:
+          $ref: "#/components/schemas/Id"
+
+    DialCodeSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/DialCode"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    DialCodePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/DialCode"
+
+    IdList:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/Id"
+
+    ChangeResult:
+      type: object
+      required: [change]
+      properties:
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    MoNumber:
+      type: object
+      required: [id, customerTrunkId, customerTrunk, enterpriseId, enterprise, number, keyword, rate, vendorRate, currency, destinationId, mccmnc, destination, setupCharge, fixCharge, createdAt, createdBy, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        customerTrunkId:
+          $ref: "#/components/schemas/Id"
+        customerTrunk:
+          type: string
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        number:
+          type: string
+          description: Long number (MSISDN, digits) or short code the MO traffic is sent to.
+        keyword:
+          type: [string, "null"]
+          description: First word of the message that selects this entry; null = any message to the number.
+        rate:
+          type: number
+          description: Charged to the customer per MO message.
+        vendorRate:
+          type: [number, "null"]
+          description: Paid to the vendor per MO message; null when no vendor is involved.
+        currency:
+          type: string
+        destinationId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        mccmnc:
+          type: [string, "null"]
+        destination:
+          type: [string, "null"]
+          description: Country and network of the MCCMNC code.
+        setupCharge:
+          type: number
+          description: One-off charge when the number is set up.
+        fixCharge:
+          type: number
+          description: Fixed charge per billing cycle for the number.
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        createdBy:
+          type: [string, "null"]
+        updatedBy:
+          type: [string, "null"]
+          description: Username of the last change; null for seeded records.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Set when deleted (archived, §13.29).
+
+    MoNumberInput:
+      type: object
+      additionalProperties: false
+      required: [customerTrunkId, number, keyword, rate, vendorRate, currency, destinationId, setupCharge, fixCharge]
+      properties:
+        customerTrunkId:
+          $ref: "#/components/schemas/Id"
+        number:
+          type: string
+          pattern: "^[0-9]{3,20}$"
+        keyword:
+          type: [string, "null"]
+          maxLength: 40
+        rate:
+          type: number
+          minimum: 0
+        vendorRate:
+          type: [number, "null"]
+          minimum: 0
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        destinationId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        setupCharge:
+          type: number
+          minimum: 0
+        fixCharge:
+          type: number
+          minimum: 0
+
+    MoNumberSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/MoNumber"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    MoNumberPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoNumber"
 
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
@@ -5112,7 +6682,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers]
 
     FilterOperator:
       type: string

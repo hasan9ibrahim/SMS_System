@@ -32,7 +32,15 @@ import { api, unwrap } from "./client";
 export type TrunkKind = "customer" | "vendor";
 export type TrunkDetail = CustomerTrunkDetail | VendorTrunkDetail;
 export type TrunkInput = CustomerTrunkInput | VendorTrunkInput;
-export type RecordKind = "enterprise" | TrunkKind | "rate_table" | "route_rule";
+export type RecordKind =
+  | "enterprise"
+  | TrunkKind
+  | "rate_table"
+  | "route_rule"
+  | "product_category"
+  | "destination"
+  | "dial_code_profile"
+  | "mo_number";
 
 export interface Saved<T> {
   record: T;
@@ -225,6 +233,10 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   if (kind === "enterprise") return unwrap(api.GET("/enterprises/{id}/dependencies", params));
   if (kind === "rate_table") return unwrap(api.GET("/rate-tables/{id}/dependencies", params));
   if (kind === "route_rule") return unwrap(api.GET("/route-rules/{id}/dependencies", params));
+  if (kind === "product_category") return unwrap(api.GET("/product-categories/{id}/dependencies", params));
+  if (kind === "destination") return unwrap(api.GET("/destinations/{id}/dependencies", params));
+  // Nothing depends on a dial-code profile or an MO entry (§6.1).
+  if (kind === "dial_code_profile" || kind === "mo_number") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -237,6 +249,10 @@ export function useArchive(kind: RecordKind) {
       if (kind === "enterprise") return unwrap(api.POST("/enterprises/{id}/archive", req));
       if (kind === "rate_table") return unwrap(api.POST("/rate-tables/{id}/archive", req));
       if (kind === "route_rule") return unwrap(api.POST("/route-rules/{id}/archive", req));
+      if (kind === "product_category") return unwrap(api.POST("/product-categories/{id}/archive", req));
+      if (kind === "destination") return unwrap(api.POST("/destinations/{id}/archive", req));
+      if (kind === "dial_code_profile") return unwrap(api.POST("/dial-code-profiles/{id}/archive", req));
+      if (kind === "mo_number") return unwrap(api.POST("/mo-numbers/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -252,6 +268,10 @@ export function useRestore(kind: RecordKind) {
       if (kind === "enterprise") return unwrap(api.POST("/enterprises/{id}/restore", req));
       if (kind === "rate_table") return unwrap(api.POST("/rate-tables/{id}/restore", req));
       if (kind === "route_rule") return unwrap(api.POST("/route-rules/{id}/restore", req));
+      if (kind === "product_category") return unwrap(api.POST("/product-categories/{id}/restore", req));
+      if (kind === "destination") return unwrap(api.POST("/destinations/{id}/restore", req));
+      if (kind === "dial_code_profile") return unwrap(api.POST("/dial-code-profiles/{id}/restore", req));
+      if (kind === "mo_number") return unwrap(api.POST("/mo-numbers/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

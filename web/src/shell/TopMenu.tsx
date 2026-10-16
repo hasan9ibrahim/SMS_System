@@ -66,9 +66,7 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
             >
               <Icon name={pg.icon} size={14} />
               <span>{pg.label}</span>
-              {pg.step !== "3" && (
-                <span className="menu-step">{pg.step.startsWith("4") ? `step ${pg.step}` : "later"}</span>
-              )}
+              {pg.step !== "3" && <span className="menu-step">{pg.step === "5" ? "later" : `step ${pg.step}`}</span>}
             </button>
           ))}
         </div>

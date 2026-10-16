@@ -14,6 +14,7 @@ import { generateRates } from "./rates.js";
 import { generateRules } from "./rules.js";
 import { generateFinance } from "./finance.js";
 import { generateHistory } from "./history.js";
+import { generateMasterData } from "./masterData.js";
 
 export function emptyWorld(anchor: number, profile: Profile): World {
   return {
@@ -68,6 +69,8 @@ export async function generateWorld(opts: {
   await step("rules", (rng) => generateRules(world, rng, opts.sink, opts.profile));
   await step("finance", (rng) => generateFinance(world, rng, opts.sink, opts.profile));
   await step("history", (rng) => generateHistory(world, rng, opts.sink));
+  // Last, so it draws nothing the earlier steps depend on (§6.1 screens, build step 5).
+  await step("master data", (rng) => generateMasterData(world, rng, opts.sink, opts.profile));
   return world;
 }
 

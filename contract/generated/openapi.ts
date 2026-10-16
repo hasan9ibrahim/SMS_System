@@ -1050,6 +1050,733 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/product-categories/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List product categories (server-side filter, sort and paging)
+     * @description Traffic classes (DIRECT, HQ, OTP, …, §6.1) with how many trunks and rate tables use each.
+     *     The hidden `archived` filter field shows deleted categories ("Delete history").
+     */
+    post: operations["queryProductCategories"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/product-categories": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a product category (§6.1)
+     * @description Names are unique (case-insensitive) among live categories: 409 otherwise. One undoable change.
+     */
+    post: operations["createProductCategory"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/product-categories/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Rename a product category
+     * @description One undoable change (§13.10). 409 when another live category has the name.
+     */
+    put: operations["updateProductCategory"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/product-categories/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a product category (safe delete, §13.29)
+     * @description Customer and vendor trunks, rate tables, route rules and translation / HLR rules that use the
+     *     category; all blocking (move them to another category first).
+     */
+    get: operations["getProductCategoryDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/product-categories/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a product category (§13.29)
+     * @description Delete means archive: the record leaves lists and pickers but nothing is removed, and the
+     *     change can be undone (§13.10). Blocking dependencies answer 409 unless an administrator
+     *     sends `override` with a reason, which is logged.
+     */
+    post: operations["archiveProductCategory"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/product-categories/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived product category (§13.29)
+     * @description Shown under "Delete history" (archived filter). The restore is one undoable change.
+     */
+    post: operations["restoreProductCategory"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List countries (server-side filter, sort and paging)
+     * @description Countries with ISO code, dial code, picker region (§13.21) and how many MCCMNC codes each has.
+     */
+    post: operations["queryCountries"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a country (§6.1)
+     * @description Adds the country and its "All networks" code (the MCC is set when the first MCCMNC code is
+     *     added, so the country starts without one). Names are unique: 409 otherwise. One undoable change.
+     */
+    post: operations["createCountry"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change a country
+     * @description One undoable change (§13.10). Countries are not deleted: they hold the MCCMNC codes.
+     */
+    put: operations["updateCountry"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/countries/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export the filtered countries as CSV
+     * @description Same filter, search and sort as the grid; every matching row. The file can be imported again.
+     */
+    post: operations["exportCountries"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an MCCMNC code (§6.1)
+     * @description An empty MNC adds the country-level "All networks" code (MCC only). The code (MCC + MNC) must be
+     *     unique among live codes: 409 otherwise. One undoable change.
+     */
+    post: operations["createDestination"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change an MCCMNC code
+     * @description Changing MCC or MNC changes the code that rate lines, rules and dial codes refer to, so it is
+     *     refused (409) while any of them use it; network name, original MNC and country can always change.
+     *     One undoable change (§13.10).
+     */
+    put: operations["updateDestination"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on an MCCMNC code (safe delete, §13.29)
+     * @description Open and scheduled rate lines, route rules, translation rules, dial codes and MO numbers using the
+     *     code (blocking), and its EDR traffic in the last 30 days (information).
+     */
+    get: operations["getDestinationDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) an MCCMNC code (§13.29)
+     * @description Delete means archive: the record leaves lists and pickers but nothing is removed, and the
+     *     change can be undone (§13.10). Blocking dependencies answer 409 unless an administrator
+     *     sends `override` with a reason, which is logged.
+     */
+    post: operations["archiveDestination"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived MCCMNC code (§13.29)
+     * @description Shown under "Delete history" (archived filter). The restore is one undoable change.
+     */
+    post: operations["restoreDestination"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import MCCMNC codes from CSV (dry run first)
+     * @description "MCCMNC Unique Codes Import" (§6.1; production loads the list Hasan Ibrahim supplies, decision
+     *     2026-10-16). Columns: `mcc`, `mnc` (empty = All networks), `original_mnc`, `country` (name; or `iso`
+     *     when unambiguous), `network`; an optional `mccmnc` column is checked against MCC + MNC. Existing
+     *     codes are matched by MCC + MNC and updated, new ones added. Codes missing from the file are reported:
+     *     in `replace` mode the unused ones are archived and the ones still in use are listed under `kept`.
+     *     All or nothing: with any error nothing is saved. The import is one undoable change.
+     */
+    post: operations["importDestinations"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export the filtered MCCMNC codes as CSV
+     * @description Same filter, search and sort as the grid; every matching row. The file can be imported again.
+     */
+    post: operations["exportDestinations"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-code-profiles/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List dial-code profiles (server-side filter, sort and paging)
+     * @description Master Table profiles (§6.1): named sets of dial-code prefixes mapped to MCCMNC codes. "All" is the
+     *     default profile and cannot be deleted. The hidden `archived` filter field shows deleted profiles.
+     */
+    post: operations["queryDialCodeProfiles"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-code-profiles": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a dial-code profile (§6.1)
+     * @description `copyFromId` starts the profile with a copy of another profile's prefixes. Names are unique: 409
+     *     otherwise. One undoable change.
+     */
+    post: operations["createDialCodeProfile"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-code-profiles/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Rename a dial-code profile
+     * @description "All" keeps its name (400). One undoable change.
+     */
+    put: operations["updateDialCodeProfile"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-code-profiles/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a dial-code profile (§13.29)
+     * @description Archives the profile with its prefixes; "All" cannot be deleted (400). One undoable change.
+     */
+    post: operations["archiveDialCodeProfile"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-code-profiles/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived dial-code profile (§13.29)
+     * @description Shown under "Delete history" (archived filter). The restore is one undoable change.
+     */
+    post: operations["restoreDialCodeProfile"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-code-profiles/{id}/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import dial codes into a profile from CSV (dry run first)
+     * @description "Master Data Import" (§6.1). Columns: `prefix` (digits), `mccmnc` (a live code). A prefix already
+     *     in the profile is updated, a new one added. In `replace` mode prefixes missing from the file are
+     *     archived. All or nothing; one undoable change.
+     */
+    post: operations["importDialCodes"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-code-profiles/{id}/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export a profile's dial codes as CSV
+     * @description Columns `prefix`, `mccmnc`, `country`, `network`; the file can be imported again.
+     */
+    get: operations["exportDialCodes"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-codes/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List dial codes (server-side filter, sort and paging)
+     * @description Prefixes of one profile: the `profileId` filter (eq) is required. Search matches prefix, MCCMNC,
+     *     country and network; a prefix filter `like 4475%` finds a range.
+     */
+    post: operations["queryDialCodes"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-codes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a dial-code prefix
+     * @description Unique per profile among live prefixes: 409 otherwise. One undoable change.
+     */
+    post: operations["createDialCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-codes/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change a dial-code prefix
+     * @description Prefix or MCCMNC; one undoable change.
+     */
+    put: operations["updateDialCode"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dial-codes/delete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) dial-code prefixes
+     * @description Archives the given prefixes as one undoable change (§13.10, §13.29).
+     */
+    post: operations["deleteDialCodes"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mo-numbers/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List MO reference book entries (server-side filter, sort and paging)
+     * @description Two-way and MO billing numbers (§6.1): the number (long number or short code) and optional
+     *     keyword a customer trunk receives MO traffic on, with the rate charged to the customer, the vendor
+     *     rate, the destination and the setup and fixed charges. Hidden `archived` field = deleted entries.
+     */
+    post: operations["queryMoNumbers"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mo-numbers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an MO reference book entry (§6.1)
+     * @description Number + keyword is unique among live entries (any customer trunk): 409 otherwise. One undoable
+     *     change.
+     */
+    post: operations["createMoNumber"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mo-numbers/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change an MO reference book entry
+     * @description One undoable change (§13.10).
+     */
+    put: operations["updateMoNumber"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mo-numbers/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) an MO reference book entry (§13.29)
+     * @description Archives the entry; one undoable change. MO traffic already billed keeps its charges.
+     */
+    post: operations["archiveMoNumber"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mo-numbers/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived MO reference book entry (§13.29)
+     * @description Shown under "Delete history" (archived filter). The restore is one undoable change.
+     */
+    post: operations["restoreMoNumber"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mo-numbers/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import MO reference book entries from CSV (dry run first)
+     * @description "MO Reference Book Import" (§6.1). Columns: `customer_trunk` (name), `number`, `keyword`, `rate`,
+     *     `vendor_rate`, `currency` (empty = the platform currency), `mccmnc`, `setup_charge`, `fix_charge`.
+     *     Rows are matched by number + keyword. `replace` archives entries missing from the file. All or
+     *     nothing; one undoable change.
+     */
+    post: operations["importMoNumbers"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/mo-numbers/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export the filtered MO reference book entries as CSV
+     * @description Same filter, search and sort as the grid; every matching row. The file can be imported again.
+     */
+    post: operations["exportMoNumbers"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -1637,7 +2364,16 @@ export type components = {
     };
     /** @enum {string} */
     ChangeType:
-      "create" | "edit" | "clone" | "delete" | "reorder" | "enable" | "disable" | "bulk" | "undo";
+      | "create"
+      | "edit"
+      | "clone"
+      | "delete"
+      | "reorder"
+      | "enable"
+      | "disable"
+      | "bulk"
+      | "undo"
+      | "import";
     /** @description One field of one record, before and after the save. */
     ChangeField: {
       entityId: components["schemas"]["Id"];
@@ -2386,6 +3122,19 @@ export type components = {
       }[];
     };
     Destination: {
+      /** @description The MNC as the operator publishes it, when the code uses another form. */
+      originalMnc: string | null;
+      countryId: components["schemas"]["Id"];
+      /** @description The country's calling code ("Country Code" in §6.1). */
+      dialCode: string;
+      /** @description Username of the last change; null for seeded records. */
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /**
+       * Format: date-time
+       * @description Set when deleted (archived, §13.29).
+       */
+      archivedAt: string | null;
       id: components["schemas"]["Id"];
       mccmnc: string;
       mcc: string;
@@ -2410,6 +3159,223 @@ export type components = {
     };
     DestinationPage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["Destination"][];
+    };
+    ProductCategory: {
+      id: components["schemas"]["Id"];
+      name: string;
+      customerTrunks: number;
+      vendorTrunks: number;
+      rateTables: number;
+      /** @description Username of the last change; null for seeded records. */
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /**
+       * Format: date-time
+       * @description Set when deleted (archived, §13.29).
+       */
+      archivedAt: string | null;
+    };
+    ProductCategoryInput: {
+      name: string;
+    };
+    ProductCategorySaved: {
+      record: components["schemas"]["ProductCategory"];
+      change: components["schemas"]["Change"] | null;
+    };
+    ProductCategoryPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["ProductCategory"][];
+    };
+    Country: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @description ISO 3166-1 alpha-2; not unique (e.g. Abkhazia shares GE). */
+      iso: string;
+      /** @description Country calling code without "+". */
+      dialCode: string;
+      /** @description Region set of the destination picker (§13.21). */
+      region: string;
+      /** @description Live MCCMNC codes of the country, its All networks code included. */
+      networks: number;
+      /** @description Username of the last change; null for seeded records. */
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    CountryInput: {
+      name: string;
+      iso: string;
+      dialCode: string;
+      region: string;
+    };
+    CountrySaved: {
+      record: components["schemas"]["Country"];
+      change: components["schemas"]["Change"] | null;
+    };
+    CountryPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["Country"][];
+    };
+    DestinationInput: {
+      mcc: string;
+      /** @description Empty = the country-level "All networks" code. */
+      mnc: string;
+      /** @description The MNC as the operator publishes it, when the code uses another (e.g. a 2-digit form). */
+      originalMnc?: string | null;
+      countryId: components["schemas"]["Id"];
+      network: string;
+    };
+    ImportRequest: {
+      /** @description The file's text, UTF-8, with a header row (comma or semicolon separated). */
+      csv: string;
+      /** @description Only check and count; nothing is saved. The GUI always runs a dry run first. */
+      dryRun: boolean;
+      /**
+       * @description merge (when omitted): add and update only. replace: also archive what the file leaves out.
+       * @enum {string}
+       */
+      mode?: "merge" | "replace";
+    };
+    ImportIssue: {
+      /** @description Line in the file (header = 1); null when not tied to a line. */
+      line: number | null;
+      /** @description The row's key, e.g. the MCCMNC code or prefix. */
+      key: string | null;
+      message: string;
+    };
+    ImportResult: {
+      /** @description True when saved (not a dry run and no errors). */
+      applied: boolean;
+      dryRun: boolean;
+      /** @description Data rows in the file. */
+      total: number;
+      added: number;
+      updated: number;
+      unchanged: number;
+      /** @description Records left out of the file and archived (replace mode). */
+      archived: number;
+      /** @description Rows that stop the import (at most 200 listed). */
+      errors: components["schemas"]["ImportIssue"][];
+      /** @description Rows imported with a remark, e.g. a duplicate row (at most 200 listed). */
+      warnings: components["schemas"]["ImportIssue"][];
+      /** @description Records missing from the file but kept because they are still in use (at most 200 listed). */
+      kept: components["schemas"]["ImportIssue"][];
+      change: components["schemas"]["Change"] | null;
+    };
+    DialCodeProfile: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @description The "All" profile. */
+      isDefault: boolean;
+      prefixes: number;
+      /** @description Distinct MCCMNC codes the prefixes map to. */
+      destinations: number;
+      /** @description Username of the last change; null for seeded records. */
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /**
+       * Format: date-time
+       * @description Set when deleted (archived, §13.29).
+       */
+      archivedAt: string | null;
+    };
+    DialCodeProfileInput: {
+      name: string;
+      copyFromId?: components["schemas"]["Id"] | null;
+    };
+    DialCodeProfileUpdate: {
+      name: string;
+    };
+    DialCodeProfileSaved: {
+      record: components["schemas"]["DialCodeProfile"];
+      change: components["schemas"]["Change"] | null;
+    };
+    DialCodeProfilePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["DialCodeProfile"][];
+    };
+    DialCode: {
+      id: components["schemas"]["Id"];
+      profileId: components["schemas"]["Id"];
+      profile: string;
+      prefix: string;
+      destinationId: components["schemas"]["Id"];
+      mccmnc: string;
+      country: string;
+      network: string;
+      /** @description Username of the last change; null for seeded records. */
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    DialCodeInput: {
+      profileId: components["schemas"]["Id"];
+      prefix: string;
+      destinationId: components["schemas"]["Id"];
+    };
+    DialCodeUpdate: {
+      prefix: string;
+      destinationId: components["schemas"]["Id"];
+    };
+    DialCodeSaved: {
+      record: components["schemas"]["DialCode"];
+      change: components["schemas"]["Change"] | null;
+    };
+    DialCodePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["DialCode"][];
+    };
+    IdList: {
+      ids: components["schemas"]["Id"][];
+    };
+    ChangeResult: {
+      change: components["schemas"]["Change"] | null;
+    };
+    MoNumber: {
+      id: components["schemas"]["Id"];
+      customerTrunkId: components["schemas"]["Id"];
+      customerTrunk: string;
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      /** @description Long number (MSISDN, digits) or short code the MO traffic is sent to. */
+      number: string;
+      /** @description First word of the message that selects this entry; null = any message to the number. */
+      keyword: string | null;
+      /** @description Charged to the customer per MO message. */
+      rate: number;
+      /** @description Paid to the vendor per MO message; null when no vendor is involved. */
+      vendorRate: number | null;
+      currency: string;
+      destinationId: components["schemas"]["Id"] | null;
+      mccmnc: string | null;
+      /** @description Country and network of the MCCMNC code. */
+      destination: string | null;
+      /** @description One-off charge when the number is set up. */
+      setupCharge: number;
+      /** @description Fixed charge per billing cycle for the number. */
+      fixCharge: number;
+      createdAt: components["schemas"]["Timestamp"];
+      createdBy: string | null;
+      /** @description Username of the last change; null for seeded records. */
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /**
+       * Format: date-time
+       * @description Set when deleted (archived, §13.29).
+       */
+      archivedAt: string | null;
+    };
+    MoNumberInput: {
+      customerTrunkId: components["schemas"]["Id"];
+      number: string;
+      keyword: string | null;
+      rate: number;
+      vendorRate: number | null;
+      currency: string;
+      destinationId: components["schemas"]["Id"] | null;
+      setupCharge: number;
+      fixCharge: number;
+    };
+    MoNumberSaved: {
+      record: components["schemas"]["MoNumber"];
+      change: components["schemas"]["Change"] | null;
+    };
+    MoNumberPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["MoNumber"][];
     };
     /**
      * @description Time frame for traffic figures (§13.27).
@@ -2798,7 +3764,12 @@ export type components = {
       | "rate_lines"
       | "destinations"
       | "route_rules"
-      | "enterprise_report";
+      | "enterprise_report"
+      | "product_categories"
+      | "countries"
+      | "dial_code_profiles"
+      | "dial_codes"
+      | "mo_numbers";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -3358,6 +4329,15 @@ export type components = {
     };
     /** @description No such record */
     NotFound: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
+    /** @description The record clashes with another live record (e.g. a duplicate name or code) or is in use */
+    Conflict: {
       headers: {
         [name: string]: unknown;
       };
@@ -5066,6 +6046,1012 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryProductCategories: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of product categories */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProductCategoryPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createProductCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProductCategoryInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProductCategorySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateProductCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProductCategoryInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProductCategorySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getProductCategoryDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveProductCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProductCategorySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreProductCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProductCategorySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryCountries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of countries */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CountryPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createCountry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CountryInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CountrySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateCountry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CountryInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CountrySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportCountries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createDestination: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DestinationInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DestinationSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateDestination: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DestinationInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DestinationSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getDestinationDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveDestination: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DestinationSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreDestination: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DestinationSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  importDestinations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportRequest"];
+      };
+    };
+    responses: {
+      /** @description What the import adds, changes and reports; `applied` says whether it was saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportDestinations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryDialCodeProfiles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of dial-code profiles */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodeProfilePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createDialCodeProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DialCodeProfileInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodeProfileSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateDialCodeProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DialCodeProfileUpdate"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodeProfileSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveDialCodeProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodeProfileSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreDialCodeProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodeProfileSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  importDialCodes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportRequest"];
+      };
+    };
+    responses: {
+      /** @description What the import adds, changes and reports; `applied` says whether it was saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportDialCodes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryDialCodes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of dial codes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createDialCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DialCodeInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodeSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateDialCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DialCodeUpdate"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DialCodeSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  deleteDialCodes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IdList"];
+      };
+    };
+    responses: {
+      /** @description The change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChangeResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryMoNumbers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of MO reference book entries */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MoNumberPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createMoNumber: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MoNumberInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MoNumberSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateMoNumber: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MoNumberInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MoNumberSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveMoNumber: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MoNumberSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreMoNumber: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MoNumberSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  importMoNumbers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportRequest"];
+      };
+    };
+    responses: {
+      /** @description What the import adds, changes and reports; `applied` says whether it was saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportMoNumbers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };
   };

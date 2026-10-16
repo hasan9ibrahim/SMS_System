@@ -3,7 +3,12 @@
 import { toPlatformSql } from "../currency.js";
 import type {
   Change,
+  Country,
   Destination,
+  DialCode,
+  DialCodeProfile,
+  MoNumber,
+  ProductCategory,
   Enterprise,
   ListId,
   RateLineRow,
@@ -357,32 +362,246 @@ export const rateLineList: ListDef<RateLineRow> = {
 
 export const destinationList: ListDef<Destination> = {
   fields: listFields.destinations,
-  from: "mccmnc m JOIN countries co ON co.id = m.country_id",
+  from: "mccmnc m JOIN countries co ON co.id = m.country_id LEFT JOIN users ub ON ub.id = m.updated_by_id",
+  baseWhere: "m.deleted_at IS NULL",
+  archivedField: "archived",
   columns: {
     id: { sql: "m.id" },
     country: { sql: "co.name" },
+    countryId: { sql: "m.country_id" },
     countryIso: { sql: "co.iso" },
+    dialCode: { sql: "co.dial_code" },
     network: { sql: "m.network" },
     mccmnc: { sql: "m.mccmnc" },
     mcc: { sql: "m.mcc" },
     mnc: { sql: "m.mnc" },
+    originalMnc: { sql: "m.original_mnc" },
     allNetworks: { sql: "m.is_all_networks" },
     dlrTargetPct: { sql: "m.dlr_target_pct" },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "m.updated_at" },
+    archived: { sql: "(m.deleted_at IS NOT NULL)" },
   },
   search: ["country", "network", "mccmnc"],
   idSql: "m.id",
-  select:
-    "m.id, m.mccmnc, m.mcc, m.mnc, co.name AS country, co.iso AS country_iso, m.network, m.is_all_networks, m.dlr_target_pct",
+  select: `m.id, m.mccmnc, m.mcc, m.mnc, m.original_mnc, m.country_id, co.name AS country, co.iso AS country_iso,
+    co.dial_code, m.network, m.is_all_networks, m.dlr_target_pct, ub.username AS updated_by, m.updated_at, m.deleted_at`,
   mapRow: (r) => ({
     id: r.id as number,
     mccmnc: r.mccmnc as string,
     mcc: String(r.mcc),
     mnc: r.mnc as string,
+    originalMnc: (r.original_mnc as string | null) ?? null,
+    countryId: r.country_id as number,
     country: r.country as string,
     countryIso: String(r.country_iso),
+    dialCode: r.dial_code as string,
     network: r.is_all_networks ? "All networks" : (r.network as string),
     allNetworks: r.is_all_networks as boolean,
     dlrTargetPct: r.dlr_target_pct == null ? null : Number(r.dlr_target_pct),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+// ---------------------------------------------------------------- product reference data (§6.1)
+
+const usedBy = (table: string, col = "product_category_id") =>
+  `(SELECT count(*) FROM ${table} x WHERE x.${col} = pc.id AND x.deleted_at IS NULL)`;
+
+export const productCategoryList: ListDef<ProductCategory> = {
+  fields: listFields.product_categories,
+  from: "product_categories pc LEFT JOIN users ub ON ub.id = pc.updated_by_id",
+  baseWhere: "pc.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "pc.id" },
+    name: { sql: "pc.name" },
+    customerTrunks: { sql: usedBy("customer_trunks") },
+    vendorTrunks: { sql: usedBy("vendor_trunks") },
+    rateTables: { sql: usedBy("rate_tables") },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "pc.updated_at" },
+    archived: { sql: "(pc.deleted_at IS NOT NULL)" },
+  },
+  search: ["name"],
+  idSql: "pc.id",
+  select: `pc.id, pc.name, ${usedBy("customer_trunks")} AS customer_trunks, ${usedBy("vendor_trunks")} AS vendor_trunks,
+    ${usedBy("rate_tables")} AS rate_tables, ub.username AS updated_by, pc.updated_at, pc.deleted_at`,
+  mapRow: (r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    customerTrunks: Number(r.customer_trunks),
+    vendorTrunks: Number(r.vendor_trunks),
+    rateTables: Number(r.rate_tables),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+const countryNetworks = "(SELECT count(*) FROM mccmnc x WHERE x.country_id = co.id AND x.deleted_at IS NULL)";
+
+export const countryList: ListDef<Country> = {
+  fields: listFields.countries,
+  from: "countries co LEFT JOIN users ub ON ub.id = co.updated_by_id",
+  columns: {
+    id: { sql: "co.id" },
+    name: { sql: "co.name" },
+    iso: { sql: "co.iso" },
+    dialCode: { sql: "co.dial_code" },
+    region: { sql: "co.region" },
+    networks: { sql: countryNetworks },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "co.updated_at" },
+  },
+  search: ["name", "iso", "dialCode"],
+  idSql: "co.id",
+  select: `co.id, co.name, co.iso, co.dial_code, co.region, ${countryNetworks} AS networks, ub.username AS updated_by,
+    co.updated_at`,
+  mapRow: (r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    iso: String(r.iso),
+    dialCode: r.dial_code as string,
+    region: r.region as string,
+    networks: Number(r.networks),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+  }),
+};
+
+const profilePrefixes = "(SELECT count(*) FROM dial_codes x WHERE x.profile = dp.name AND x.deleted_at IS NULL)";
+const profileCodes =
+  "(SELECT count(DISTINCT x.mccmnc_id) FROM dial_codes x WHERE x.profile = dp.name AND x.deleted_at IS NULL)";
+// A profile shows the latest change to it or its prefixes.
+const profileUpdated = `GREATEST(dp.updated_at,
+  (SELECT max(x.updated_at) FROM dial_codes x WHERE x.profile = dp.name AND x.updated_by_id IS NOT NULL))`;
+const profileUpdatedBy = `COALESCE((SELECT u.username FROM dial_codes x JOIN users u ON u.id = x.updated_by_id
+  WHERE x.profile = dp.name AND x.updated_at > dp.updated_at ORDER BY x.updated_at DESC LIMIT 1), ub.username)`;
+
+export const dialCodeProfileList: ListDef<DialCodeProfile> = {
+  fields: listFields.dial_code_profiles,
+  from: "dial_code_profiles dp LEFT JOIN users ub ON ub.id = dp.updated_by_id",
+  baseWhere: "dp.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "dp.id" },
+    name: { sql: "dp.name" },
+    prefixes: { sql: profilePrefixes },
+    destinations: { sql: profileCodes },
+    updatedBy: { sql: profileUpdatedBy },
+    updatedAt: { sql: profileUpdated },
+    archived: { sql: "(dp.deleted_at IS NOT NULL)" },
+  },
+  search: ["name"],
+  idSql: "dp.id",
+  select: `dp.id, dp.name, ${profilePrefixes} AS prefixes, ${profileCodes} AS destinations,
+    ${profileUpdatedBy} AS updated_by, ${profileUpdated} AS updated_at, dp.deleted_at`,
+  mapRow: (r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    isDefault: r.name === "All",
+    prefixes: Number(r.prefixes),
+    destinations: Number(r.destinations),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+export const dialCodeList: ListDef<DialCode> = {
+  fields: listFields.dial_codes,
+  from: `dial_codes d JOIN dial_code_profiles dp ON dp.name = d.profile JOIN mccmnc m ON m.id = d.mccmnc_id
+    JOIN countries co ON co.id = m.country_id LEFT JOIN users ub ON ub.id = d.updated_by_id`,
+  baseWhere: "d.deleted_at IS NULL",
+  columns: {
+    id: { sql: "d.id" },
+    profileId: { sql: "dp.id" },
+    prefix: { sql: "d.prefix" },
+    mccmnc: { sql: "m.mccmnc" },
+    country: { sql: "co.name" },
+    network: { sql: "CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END" },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "d.updated_at" },
+  },
+  search: ["prefix", "mccmnc", "country", "network"],
+  idSql: "d.id",
+  select: `d.id, dp.id AS profile_id, dp.name AS profile, d.prefix, m.id AS mccmnc_id, m.mccmnc, co.name AS country,
+    CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END AS network, ub.username AS updated_by, d.updated_at`,
+  mapRow: (r) => ({
+    id: r.id as number,
+    profileId: r.profile_id as number,
+    profile: r.profile as string,
+    prefix: r.prefix as string,
+    destinationId: r.mccmnc_id as number,
+    mccmnc: r.mccmnc as string,
+    country: r.country as string,
+    network: r.network as string,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+  }),
+};
+
+const moDestination =
+  "CASE WHEN m.id IS NULL THEN NULL WHEN m.is_all_networks THEN co.name || ' · All networks' ELSE co.name || ' · ' || m.network END";
+
+export const moNumberList: ListDef<MoNumber> = {
+  fields: listFields.mo_numbers,
+  from: `mo_numbers mo JOIN customer_trunks ct ON ct.id = mo.customer_trunk_id JOIN enterprises e ON e.id = ct.enterprise_id
+    LEFT JOIN mccmnc m ON m.id = mo.mccmnc_id LEFT JOIN countries co ON co.id = m.country_id
+    LEFT JOIN users cb ON cb.id = mo.created_by_id LEFT JOIN users ub ON ub.id = mo.updated_by_id`,
+  baseWhere: "mo.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "mo.id" },
+    customerTrunk: { sql: "ct.name" },
+    customerTrunkId: { sql: "mo.customer_trunk_id" },
+    enterprise: { sql: "e.name" },
+    enterpriseId: { sql: "ct.enterprise_id" },
+    number: { sql: "mo.number" },
+    keyword: { sql: "mo.keyword" },
+    rate: { sql: "mo.rate" },
+    vendorRate: { sql: "mo.vendor_rate" },
+    currency: { sql: "mo.currency" },
+    mccmnc: { sql: "m.mccmnc" },
+    destination: { sql: moDestination },
+    setupCharge: { sql: "mo.setup_charge" },
+    fixCharge: { sql: "mo.fix_charge" },
+    createdAt: { sql: "mo.inserted_at" },
+    createdBy: { sql: "cb.username" },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "mo.updated_at" },
+    archived: { sql: "(mo.deleted_at IS NOT NULL)" },
+  },
+  search: ["number", "keyword", "customerTrunk", "enterprise", "mccmnc", "destination"],
+  idSql: "mo.id",
+  select: `mo.id, mo.customer_trunk_id, ct.name AS customer_trunk, ct.enterprise_id, e.name AS enterprise, mo.number,
+    mo.keyword, mo.rate, mo.vendor_rate, mo.currency, mo.mccmnc_id, m.mccmnc, ${moDestination} AS destination,
+    mo.setup_charge, mo.fix_charge, mo.inserted_at, cb.username AS created_by, ub.username AS updated_by, mo.updated_at,
+    mo.deleted_at`,
+  mapRow: (r) => ({
+    id: r.id as number,
+    customerTrunkId: r.customer_trunk_id as number,
+    customerTrunk: r.customer_trunk as string,
+    enterpriseId: r.enterprise_id as number,
+    enterprise: r.enterprise as string,
+    number: r.number as string,
+    keyword: (r.keyword as string | null) ?? null,
+    rate: Number(r.rate),
+    vendorRate: r.vendor_rate == null ? null : Number(r.vendor_rate),
+    currency: String(r.currency),
+    destinationId: (r.mccmnc_id as number | null) ?? null,
+    mccmnc: (r.mccmnc as string | null) ?? null,
+    destination: (r.destination as string | null) ?? null,
+    setupCharge: Number(r.setup_charge),
+    fixCharge: Number(r.fix_charge),
+    createdAt: iso(r.inserted_at)!,
+    createdBy: (r.created_by as string | null) ?? null,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
   }),
 };
 
@@ -661,4 +880,9 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   rate_lines: rateLineList as ListDef<unknown>,
   destinations: destinationList as ListDef<unknown>,
   route_rules: routeRuleList as ListDef<unknown>,
+  product_categories: productCategoryList as ListDef<unknown>,
+  countries: countryList as ListDef<unknown>,
+  dial_code_profiles: dialCodeProfileList as ListDef<unknown>,
+  dial_codes: dialCodeList as ListDef<unknown>,
+  mo_numbers: moNumberList as ListDef<unknown>,
 };
