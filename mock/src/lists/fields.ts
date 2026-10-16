@@ -323,6 +323,107 @@ export const listFields: Record<ListId, ListFields> = {
     ],
   },
 
+  // Route rules grid (§15.4): the columns of the screenshot, a filter under each header.
+  // Traffic columns follow the `window` field (§13.27); the category list comes from the
+  // database when the catalogue is served.
+  route_rules: {
+    list: "route_rules",
+    defaultSort: [
+      { field: "priority", dir: "asc" },
+      { field: "id", dir: "asc" },
+    ],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Rule", type: "text", defaultOperator: "like" }),
+      field({ field: "priority", label: "Pri", type: "integer", defaultOperator: "between" }),
+      field({
+        field: "routeType",
+        label: "Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "static", label: "Static" },
+          { value: "dynamic", label: "Least cost" },
+          { value: "qbr", label: "Quality" },
+          { value: "block", label: "Block" },
+        ],
+      }),
+      field({
+        field: "category",
+        label: "Category",
+        type: "enum",
+        defaultOperator: "in",
+        operators: ["in"],
+        sortable: false,
+        enumValues: [{ value: "all", label: "All categories" }],
+      }),
+      field({
+        field: "customerTrunks",
+        label: "Customer trunks",
+        type: "text",
+        defaultOperator: "like",
+        sortable: false,
+      }),
+      field({
+        field: "destination",
+        label: "Destination",
+        type: "mccmnc",
+        defaultOperator: "like",
+        operators: ["like", "eq", "empty", "not_empty"],
+        sortable: false,
+      }),
+      field({ field: "vendors", label: "Vendors", type: "text", defaultOperator: "like", sortable: false }),
+      field({ field: "messages", label: "24h", type: "integer", defaultOperator: "gte" }),
+      field({ field: "asr", label: "ASR", type: "percent", defaultOperator: "gte" }),
+      field({ field: "dlr", label: "DLR", type: "percent", defaultOperator: "lte" }),
+      field({ field: "margin", label: "Margin", type: "money", defaultOperator: "lt" }),
+      field({
+        field: "status",
+        label: "On",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "active", label: "On" },
+          { value: "inactive", label: "Off" },
+        ],
+      }),
+      field({
+        field: "window",
+        label: "Traffic window",
+        type: "enum",
+        defaultOperator: "eq",
+        operators: ["eq"],
+        hidden: true,
+        sortable: false,
+        enumValues: ["15m", "1h", "24h", "7d", "30d"].map((v) => ({ value: v, label: v })),
+      }),
+      field({
+        field: "customerTrunkId",
+        label: "Customer trunk ID",
+        type: "integer",
+        defaultOperator: "eq",
+        operators: ["eq"],
+        hidden: true,
+        sortable: false,
+      }),
+      field({
+        field: "vendorTrunkId",
+        label: "Vendor trunk ID",
+        type: "integer",
+        defaultOperator: "eq",
+        operators: ["eq"],
+        hidden: true,
+        sortable: false,
+      }),
+      field({ field: "groupName", label: "Group", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "startsAt", label: "Start Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      field({ field: "stopsAt", label: "Stop Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  },
+
   // Users (§11), e.g. the "share with" picker of saved views
   users: {
     list: "users",

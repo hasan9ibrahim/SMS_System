@@ -1029,6 +1029,258 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/route-rules/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List route rules (server-side filter, sort and paging)
+     * @description The Route Rules grid (§15.4). Traffic columns (messages, ASR, DLR, margin) are for the window
+     *     in the `window` filter field (15m, 1h, 24h, 7d, 30d; default 24h, §13.27).
+     */
+    post: operations["queryRouteRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export the filtered route rules as CSV
+     * @description Same filter, search and sort as the grid; every matching row.
+     */
+    post: operations["exportRouteRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a route rule (§6.3)
+     * @description Every field of the rule, including vendors, warm-up thresholds and number whitelists (§13.27).
+     */
+    post: operations["createRouteRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One route rule
+     * @description Conditions, vendors and settings of one rule, with names for every id (§15.4 detail panel).
+     */
+    get: operations["getRouteRule"];
+    /**
+     * Change a route rule
+     * @description Saves the whole record; the change lists only the fields that differ (§13.10).
+     */
+    put: operations["updateRouteRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a route rule (safe delete, §13.29)
+     * @description Traffic in the last 30 days and rules that hand over to its group. Nothing blocks archiving a
+     *     rule; archived rules stop routing at once.
+     */
+    get: operations["getRouteRuleDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a route rule (§13.29)
+     * @description Delete means archive: the record leaves lists, pickers and routing and stops carrying
+     *     traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+     *     sends `override` with a reason, which is logged.
+     */
+    post: operations["archiveRouteRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived route rule (§13.29)
+     * @description Administrators only; the restore is logged.
+     */
+    post: operations["restoreRouteRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/{id}/clone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Duplicate a route rule (D)
+     * @description The copy is inactive and named "<name> (copy)", so it never routes twice by accident.
+     */
+    post: operations["cloneRouteRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/bulk": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Bulk operation on route rules (§6.3 Bulk Operation, §13.11)
+     * @description Enable, disable, set or shift priority, replace a vendor trunk or archive many rules. The whole
+     *     operation is one change and is undone as one (§13.10).
+     */
+    post: operations["bulkRouteRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/{id}/traffic": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Traffic of a rule per customer and vendor (§13.27)
+     * @description Volume, ASR, DLR and margin for the window, per customer trunk (hover breakdown) and per
+     *     vendor trunk, with a time series for the trend line.
+     */
+    get: operations["getRouteRuleTraffic"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/{id}/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a sample message through one rule (Test)
+     * @description Shows each condition's result and, when the rule matches, the vendor and what decided it:
+     *     whitelist, warm-up threshold or the normal split (§13.27).
+     */
+    post: operations["testRouteRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-rules/simulate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Route Simulator: run a sample message through all rules
+     * @description Rules are tried by priority; the first that matches decides (continue YES moves on). Takes a
+     *     simulated TPS and revenue (§13.8, §13.9).
+     */
+    post: operations["simulateRoute"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -1924,6 +2176,368 @@ export type components = {
       rows: components["schemas"]["Destination"][];
     };
     /**
+     * @description Time frame for traffic figures (§13.27).
+     * @enum {string}
+     */
+    TrafficWindow: "15m" | "1h" | "24h" | "7d" | "30d";
+    /** @enum {string} */
+    CompareOp: ">" | ">=" | "=" | "<=" | "<" | "between";
+    /**
+     * @description All, only the listed ones (inclusive) or all but them (exclusive).
+     * @enum {string}
+     */
+    MatchMode: "all" | "inclusive" | "exclusive";
+    /** @description Live TPS condition (§13.8). */
+    TpsCondition: {
+      op: components["schemas"]["CompareOp"];
+      value: number;
+      /** @description Upper bound for between. */
+      value2?: number | null;
+      /** @description ± margin for =, default 5 %. */
+      tolerancePct?: number;
+      /** @enum {string} */
+      scope: "customer_trunk" | "customer_enterprise" | "destination" | "sender_id" | "rule";
+      /** @enum {integer} */
+      windowS?: 1 | 5 | 10 | 60;
+      /** @description Must stay past the value this long before switching (hysteresis). */
+      holdS?: number;
+      /** @description Back past the value by this % before switching back. */
+      releasePct?: number;
+    };
+    /** @description Revenue condition (§13.9), base currency. */
+    RevenueCondition: {
+      /** @enum {string} */
+      type: "per_message" | "accumulated";
+      op: components["schemas"]["CompareOp"];
+      value: number;
+      value2?: number | null;
+      /**
+       * @description Accumulated only.
+       * @enum {string}
+       */
+      scope?: "customer_trunk" | "customer_enterprise" | "destination" | "sender_id" | "rule";
+      /**
+       * @description Accumulated only.
+       * @enum {string}
+       */
+      period?: "15m" | "60m" | "today" | "week" | "month" | "billing_cycle";
+      /** @description Also require at least this margin for the chosen vendor. */
+      minMargin?: number | null;
+      /** @enum {string} */
+      minMarginUnit?: "amount" | "percent";
+    };
+    /** @description Do HLR with a policy for the chosen customer trunks of the rule (§13.24); empty list = all of them. */
+    HlrAction: {
+      policy: string;
+      customerTrunkIds: components["schemas"]["Id"][];
+    };
+    /** @description One vendor on a route level (§6.3) with an optional warm-up threshold (§13.27). */
+    RouteVendor: {
+      level: number;
+      vendorTrunkId: components["schemas"]["Id"];
+      /** @description Percentage hunt policy; shares of a level add up to 100. */
+      sharePct?: number | null;
+      isBackup?: boolean;
+      /** @description Send the first N messages to this vendor before the normal split. */
+      warmupCount?: number | null;
+      /** @enum {string|null} */
+      warmupReset?: "hour" | "day" | "week" | null;
+      /** @enum {string|null} */
+      warmupPer?: "rule" | "customer_trunk" | null;
+    };
+    /** @description Numbers pinned to one vendor of the rule (§13.27); checked before warm-up and split. */
+    RouteWhitelist: {
+      vendorTrunkId: components["schemas"]["Id"];
+      numberListId?: components["schemas"]["Id"] | null;
+      numbers: string[];
+    };
+    /** @description Shared fields of the route rule form and record (§6.3 General Information and Route Information). */
+    RouteRuleFields: {
+      name?: string;
+      /** @description Evaluation order, low first. */
+      priority?: number;
+      status?: components["schemas"]["RecordStatus"];
+      startsAt?: components["schemas"]["Timestamp"];
+      stopsAt?: components["schemas"]["Timestamp"];
+      groupId?: components["schemas"]["Id"] | null;
+      nextGroupId?: components["schemas"]["Id"] | null;
+      /**
+       * @description YES keeps evaluating, STOP ends, NEXT jumps to the next group.
+       * @enum {string}
+       */
+      continueRouting?: "yes" | "stop" | "next";
+      /**
+       * @description All conditions must match, or any one.
+       * @enum {string}
+       */
+      matchMode?: "all" | "any";
+      comment?: string | null;
+      categoryMode?: components["schemas"]["MatchMode"];
+      categoryIds?: components["schemas"]["Id"][];
+      customerTrunkMode?: components["schemas"]["MatchMode"];
+      customerTrunkIds?: components["schemas"]["Id"][];
+      mccmncMode?: components["schemas"]["MatchMode"];
+      /** @description Codes; a 3-digit code is the whole country (§13.21). */
+      mccmncs?: string[];
+      /** @description Dynamic regular expression on the MCCMNC (§13.21). */
+      mccmncPattern?: string | null;
+      senderPattern?: string | null;
+      senderPatternNegate?: boolean;
+      receiverPattern?: string | null;
+      receiverPatternNegate?: boolean;
+      contentPattern?: string | null;
+      contentPatternNegate?: boolean;
+      senderListId?: components["schemas"]["Id"] | null;
+      receiverListId?: components["schemas"]["Id"] | null;
+      tps?: components["schemas"]["TpsCondition"] | null;
+      revenue?: components["schemas"]["RevenueCondition"] | null;
+      /** @description Match only ported (true) or not-ported (false) numbers; null = either. */
+      hlrPorted?: boolean | null;
+      /**
+       * @description Block, Static (fixed vendors), Dynamic (least cost) or QBR (quality).
+       * @enum {string}
+       */
+      routeType?: "block" | "static" | "dynamic" | "qbr";
+      /** @enum {string} */
+      huntPolicy?: "top_down" | "round_robin" | "percentage";
+      enableBackupRoutes?: boolean;
+      vendorCategoryMode?: components["schemas"]["MatchMode"];
+      vendorCategoryIds?: components["schemas"]["Id"][];
+      vendorTrunkMode?: components["schemas"]["MatchMode"];
+      /** @description Vendor scope of dynamic and QBR routing. */
+      vendorTrunkIds?: components["schemas"]["Id"][];
+      maxRouteLevel?: number;
+      /** @description Margin (Flat) - vendors leaving less are skipped. */
+      margin?: number;
+      qbrFormula?: string | null;
+      /** @description Skip a vendor at this % of its TPS limit (§13.8 vendor capacity option). */
+      skipVendorAtTpsPct?: number | null;
+      hlrAction?: components["schemas"]["HlrAction"] | null;
+      denyMultipart?: boolean;
+      threshold?: number | null;
+      /** @enum {string|null} */
+      thresholdInterval?: "day" | "hour" | "minute" | null;
+      vendors?: components["schemas"]["RouteVendor"][];
+      whitelists?: components["schemas"]["RouteWhitelist"][];
+    };
+    RouteRuleInput: WithRequired<
+      components["schemas"]["RouteRuleFields"],
+      "name" | "priority" | "status" | "routeType"
+    >;
+    Named: {
+      id: components["schemas"]["Id"];
+      name: string;
+    };
+    RouteRuleDetail: WithRequired<
+      components["schemas"]["RouteRuleFields"],
+      | "name"
+      | "priority"
+      | "status"
+      | "startsAt"
+      | "stopsAt"
+      | "groupId"
+      | "nextGroupId"
+      | "continueRouting"
+      | "matchMode"
+      | "comment"
+      | "categoryMode"
+      | "categoryIds"
+      | "customerTrunkMode"
+      | "customerTrunkIds"
+      | "mccmncMode"
+      | "mccmncs"
+      | "mccmncPattern"
+      | "senderPattern"
+      | "senderPatternNegate"
+      | "receiverPattern"
+      | "receiverPatternNegate"
+      | "contentPattern"
+      | "contentPatternNegate"
+      | "senderListId"
+      | "receiverListId"
+      | "tps"
+      | "revenue"
+      | "hlrPorted"
+      | "routeType"
+      | "huntPolicy"
+      | "enableBackupRoutes"
+      | "vendorCategoryMode"
+      | "vendorCategoryIds"
+      | "vendorTrunkMode"
+      | "vendorTrunkIds"
+      | "maxRouteLevel"
+      | "margin"
+      | "qbrFormula"
+      | "skipVendorAtTpsPct"
+      | "hlrAction"
+      | "denyMultipart"
+      | "threshold"
+      | "thresholdInterval"
+      | "vendors"
+      | "whitelists"
+    > & {
+      id: components["schemas"]["Id"];
+      /** @description Names for the ids in the rule, for chips and tables. */
+      labels: {
+        customerTrunks: components["schemas"]["Named"][];
+        categories: components["schemas"]["Named"][];
+        vendorTrunks: components["schemas"]["Named"][];
+        numberLists: components["schemas"]["Named"][];
+        groups: components["schemas"]["Named"][];
+      };
+      archived: components["schemas"]["Archived"];
+    } & components["schemas"]["Audit"];
+    RouteRuleSaved: {
+      record: components["schemas"]["RouteRuleDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    RouteRuleRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      priority: number;
+      /** @enum {string} */
+      routeType: "block" | "static" | "dynamic" | "qbr";
+      status: components["schemas"]["RecordStatus"];
+      /** @description e.g. "All", "Direct", "Promo, OTP". */
+      categoryLabel: string;
+      /** @description First trunks plus "+N", "All trunks", or "All but …". */
+      customerTrunksLabel: string;
+      /** @description Up to 30 names for the hover list. */
+      customerTrunkNames: string[];
+      customerTrunkCount: number;
+      /** @description e.g. "505 · all", "50501, 50502", "All", or the pattern. */
+      destinationLabel: string;
+      /** @description e.g. "Kite_DIR 60 · Orbit_DIR 40", "LCR · 6 vendors", "—" for block. */
+      vendorsLabel: string;
+      /** @description Messages in the traffic window; null without the EDR store. */
+      messages: number | null;
+      /** @description Delivery-attempt success %. */
+      asr: number | null;
+      /** @description Delivered %. */
+      dlr: number | null;
+      /** @description Margin in the base currency. */
+      margin: number | null;
+      startsAt: components["schemas"]["Timestamp"];
+      stopsAt: components["schemas"]["Timestamp"];
+      groupName: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archived: boolean;
+    };
+    RouteRulePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RouteRuleRow"][];
+    };
+    RouteBulkRequest: {
+      ruleIds: components["schemas"]["Id"][];
+      /** @enum {string} */
+      action:
+        "enable" | "disable" | "set_priority" | "shift_priority" | "replace_vendor" | "archive";
+      priority?: number;
+      shift?: number;
+      fromVendorTrunkId?: components["schemas"]["Id"];
+      toVendorTrunkId?: components["schemas"]["Id"];
+      note?: string;
+    };
+    RouteBulkSaved: {
+      change: components["schemas"]["Change"] | null;
+      affected: number;
+    };
+    TrafficFigures: {
+      messages: number;
+      asr: number | null;
+      dlr: number | null;
+      margin: number;
+    };
+    RouteTraffic: {
+      window: components["schemas"]["TrafficWindow"];
+      /** @description False when the EDR store does not answer (figures are then empty). */
+      available: boolean;
+      from: components["schemas"]["Timestamp"];
+      to: components["schemas"]["Timestamp"];
+      total: components["schemas"]["TrafficFigures"];
+      byCustomer: (components["schemas"]["TrafficFigures"] & {
+        customerTrunkId: components["schemas"]["Id"];
+        name: string;
+        enterpriseName: string;
+        sharePct: number;
+      })[];
+      byVendor: (components["schemas"]["TrafficFigures"] & {
+        vendorTrunkId: components["schemas"]["Id"];
+        name: string;
+        sharePct: number;
+      })[];
+      /** @description Buckets over the window (minutes for 15m and 1h, hours for 24h, days for 7d and 30d). */
+      series: {
+        at: components["schemas"]["Timestamp"];
+        messages: number;
+        margin: number;
+      }[];
+    };
+    /** @description A sample message for the rule Test and the Route Simulator. */
+    RouteTestRequest: {
+      customerTrunkId?: components["schemas"]["Id"];
+      receiver: string;
+      sender?: string;
+      content?: string;
+      /** @description Overrides the destination found from the number (e.g. after HLR). */
+      mccmnc?: string;
+      /** @description Simulated TPS (§13.8). */
+      tps?: number;
+      /** @description Simulated per-message revenue in the base currency (§13.9); default from the trunk's rate. */
+      revenuePerMessage?: number;
+      /** @description Simulated revenue already earned in the period (§13.9). */
+      accumulatedRevenue?: number;
+      hlrPorted?: boolean;
+      /** @description Messages already counted towards warm-up thresholds (§13.27). */
+      warmupSent?: number;
+    };
+    RouteCheck: {
+      condition: string;
+      ok: boolean;
+      detail: string;
+    };
+    RouteCandidate: {
+      vendorTrunkId: components["schemas"]["Id"];
+      name: string;
+      level: number;
+      /** @description Buy rate for the destination in the base currency. */
+      cost: number | null;
+      margin: number | null;
+      note: string | null;
+    };
+    RouteDecision: {
+      ruleId: components["schemas"]["Id"];
+      matched: boolean;
+      checks: components["schemas"]["RouteCheck"][];
+      /** @enum {string} */
+      outcome: "route" | "block" | "no_vendor" | "not_matched";
+      vendor: {
+        vendorTrunkId: components["schemas"]["Id"];
+        name: string;
+        level: number;
+        /** @enum {string} */
+        decidedBy:
+          "whitelist" | "warmup" | "percentage" | "top_down" | "round_robin" | "lcr" | "qbr";
+      } | null;
+      candidates: components["schemas"]["RouteCandidate"][];
+      mccmnc: string | null;
+      /** @description Country · network of the destination. */
+      destination: string | null;
+      /** @description Customer rate for the message in the base currency, when a customer trunk is given. */
+      sellRate: number | null;
+    };
+    RouteSimulation: {
+      /** @description Rules tried in priority order, up to the deciding one (at most 100 listed). */
+      tried: {
+        ruleId: components["schemas"]["Id"];
+        name: string;
+        priority: number;
+        matched: boolean;
+        reason: string;
+      }[];
+      decision: components["schemas"]["RouteDecision"] | null;
+    };
+    /**
      * @description A list page whose fields are described by `/meta/lists/{list}/fields`.
      * @enum {string}
      */
@@ -1935,7 +2549,8 @@ export type components = {
       | "vendor_trunks"
       | "rate_tables"
       | "rate_lines"
-      | "destinations";
+      | "destinations"
+      | "route_rules";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -2149,6 +2764,7 @@ export type components = {
     };
   };
   parameters: {
+    TrafficWindow: components["schemas"]["TrafficWindow"];
     /** @description Which lines (§13.12 view tabs). */
     RateView: "current" | "scheduled" | "closed";
     DocId: components["schemas"]["Id"];
@@ -3791,6 +4407,369 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DestinationPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRouteRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of route rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRulePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportRouteRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RouteRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The route rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RouteRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRouteRuleDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cloneRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The copy, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  bulkRouteRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RouteBulkRequest"];
+      };
+    };
+    responses: {
+      /** @description Applied, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteBulkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRouteRuleTraffic: {
+    parameters: {
+      query?: {
+        window?: components["parameters"]["TrafficWindow"];
+      };
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Traffic */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteTraffic"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  testRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RouteTestRequest"];
+      };
+    };
+    responses: {
+      /** @description The decision */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteDecision"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  simulateRoute: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RouteTestRequest"];
+      };
+    };
+    responses: {
+      /** @description The rules tried and the decision */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteSimulation"];
         };
       };
       400: components["responses"]["BadRequest"];

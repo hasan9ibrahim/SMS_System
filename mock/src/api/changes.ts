@@ -11,6 +11,7 @@ import { inTransaction } from "./views.js";
 import { applyEnterpriseField } from "./enterprises.js";
 import { applyTrunkField } from "./trunks.js";
 import { applyRateTableEntries } from "./rates.js";
+import { applyRouteRuleField } from "./routeRules.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -24,10 +25,6 @@ interface DiffEntry {
  * map yet. Other fields (e.g. a vendor share inside a route) are history-only until then.
  */
 const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, string> }> = {
-  route_rule: {
-    table: "route_rules",
-    columns: { priority: "priority", status: "status", margin: "margin", name: "name" },
-  },
   translation_rule: { table: "translation_rules", columns: { status: "status", name: "name" } },
   hlr_rule: { table: "hlr_rules", columns: { status: "status", name: "name" } },
   enterprise_doc: { table: "enterprise_docs", columns: {} },
@@ -37,6 +34,7 @@ const TABLES: Record<string, string> = {
   ...Object.fromEntries(Object.entries(ENTITY_COLUMNS).map(([k, v]) => [k, v.table])),
   enterprise: "enterprises",
   rate_table: "rate_tables",
+  route_rule: "route_rules",
   customer_trunk: "customer_trunks",
   vendor_trunk: "vendor_trunks",
 };
@@ -66,6 +64,10 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
     }
     if (entityType === "enterprise") {
       await applyEnterpriseField(c, e.entity_id, e.field, e.before, e.after, userId);
+      continue;
+    }
+    if (entityType === "route_rule") {
+      await applyRouteRuleField(c, e.entity_id, e.field, e.before, userId);
       continue;
     }
     if (entityType === "customer_trunk" || entityType === "vendor_trunk") {

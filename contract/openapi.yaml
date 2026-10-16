@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.4.0
+  version: 0.5.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -37,6 +37,8 @@ tags:
     description: Partners - customers, vendors and reciprocals (§5)
   - name: trunks
     description: Customer and vendor trunks (§5.4, §5.5)
+  - name: routing
+    description: Route rules, route simulator (§6.3, §13.8–13.11, §13.27)
   - name: rates
     description: Rate tables (§6.2, §13.12)
   - name: users
@@ -1655,6 +1657,367 @@ paths:
           $ref: "#/components/responses/Unavailable"
 
 
+  /route-rules/query:
+    post:
+      tags: [routing]
+      operationId: queryRouteRules
+      summary: "List route rules (server-side filter, sort and paging)"
+      description: |
+        The Route Rules grid (§15.4). Traffic columns (messages, ASR, DLR, margin) are for the window
+        in the `window` filter field (15m, 1h, 24h, 7d, 30d; default 24h, §13.27).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of route rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRulePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/export:
+    post:
+      tags: [routing]
+      operationId: exportRouteRules
+      summary: "Export the filtered route rules as CSV"
+      description: |
+        Same filter, search and sort as the grid; every matching row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules:
+    post:
+      tags: [routing]
+      operationId: createRouteRule
+      summary: "Add a route rule (§6.3)"
+      description: |
+        Every field of the rule, including vendors, warm-up thresholds and number whitelists (§13.27).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRuleInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}:
+    get:
+      tags: [routing]
+      operationId: getRouteRule
+      summary: "One route rule"
+      description: |
+        Conditions, vendors and settings of one rule, with names for every id (§15.4 detail panel).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The route rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [routing]
+      operationId: updateRouteRule
+      summary: "Change a route rule"
+      description: |
+        Saves the whole record; the change lists only the fields that differ (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRuleInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}/dependencies:
+    get:
+      tags: [routing]
+      operationId: getRouteRuleDependencies
+      summary: "What depends on a route rule (safe delete, §13.29)"
+      description: |
+        Traffic in the last 30 days and rules that hand over to its group. Nothing blocks archiving a
+        rule; archived rules stop routing at once.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}/archive:
+    post:
+      tags: [routing]
+      operationId: archiveRouteRule
+      summary: "Archive (delete) a route rule (§13.29)"
+      description: |
+        Delete means archive: the record leaves lists, pickers and routing and stops carrying
+        traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+        sends `override` with a reason, which is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}/restore:
+    post:
+      tags: [routing]
+      operationId: restoreRouteRule
+      summary: "Restore an archived route rule (§13.29)"
+      description: |
+        Administrators only; the restore is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}/clone:
+    post:
+      tags: [routing]
+      operationId: cloneRouteRule
+      summary: "Duplicate a route rule (D)"
+      description: |
+        The copy is inactive and named "<name> (copy)", so it never routes twice by accident.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "201":
+          description: The copy, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/bulk:
+    post:
+      tags: [routing]
+      operationId: bulkRouteRules
+      summary: "Bulk operation on route rules (§6.3 Bulk Operation, §13.11)"
+      description: |
+        Enable, disable, set or shift priority, replace a vendor trunk or archive many rules. The whole
+        operation is one change and is undone as one (§13.10).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteBulkRequest"
+      responses:
+        "200":
+          description: Applied, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteBulkSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}/traffic:
+    get:
+      tags: [routing]
+      operationId: getRouteRuleTraffic
+      summary: "Traffic of a rule per customer and vendor (§13.27)"
+      description: |
+        Volume, ASR, DLR and margin for the window, per customer trunk (hover breakdown) and per
+        vendor trunk, with a time series for the trend line.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/TrafficWindow"
+      responses:
+        "200":
+          description: Traffic
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteTraffic"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}/test:
+    post:
+      tags: [routing]
+      operationId: testRouteRule
+      summary: "Run a sample message through one rule (Test)"
+      description: |
+        Shows each condition's result and, when the rule matches, the vendor and what decided it:
+        whitelist, warm-up threshold or the normal split (§13.27).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteTestRequest"
+      responses:
+        "200":
+          description: The decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteDecision"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/simulate:
+    post:
+      tags: [routing]
+      operationId: simulateRoute
+      summary: "Route Simulator: run a sample message through all rules"
+      description: |
+        Rules are tried by priority; the first that matches decides (continue YES moves on). Takes a
+        simulated TPS and revenue (§13.8, §13.9).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteTestRequest"
+      responses:
+        "200":
+          description: The rules tried and the decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteSimulation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1664,6 +2027,12 @@ components:
       description: Session cookie set at sign-in (login flow added in a later revision).
 
   parameters:
+    TrafficWindow:
+      name: window
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/TrafficWindow"
     RateView:
       name: view
       in: query
@@ -3643,11 +4012,698 @@ components:
               items:
                 $ref: "#/components/schemas/Destination"
 
+    # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
+    TrafficWindow:
+      type: string
+      enum: [15m, 1h, 24h, 7d, 30d]
+      description: Time frame for traffic figures (§13.27).
+
+    CompareOp:
+      type: string
+      enum: [">", ">=", "=", "<=", "<", between]
+
+    MatchMode:
+      type: string
+      enum: [all, inclusive, exclusive]
+      description: All, only the listed ones (inclusive) or all but them (exclusive).
+
+    TpsCondition:
+      type: object
+      description: Live TPS condition (§13.8).
+      required: [op, value, scope]
+      additionalProperties: false
+      properties:
+        op:
+          $ref: "#/components/schemas/CompareOp"
+        value:
+          type: number
+          minimum: 0
+        value2:
+          type: [number, "null"]
+          description: Upper bound for between.
+        tolerancePct:
+          type: number
+          minimum: 0
+          maximum: 50
+          description: "± margin for =, default 5 %."
+        scope:
+          type: string
+          enum: [customer_trunk, customer_enterprise, destination, sender_id, rule]
+        windowS:
+          type: integer
+          enum: [1, 5, 10, 60]
+        holdS:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          description: Must stay past the value this long before switching (hysteresis).
+        releasePct:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Back past the value by this % before switching back.
+
+    RevenueCondition:
+      type: object
+      description: Revenue condition (§13.9), base currency.
+      required: [type, op, value]
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [per_message, accumulated]
+        op:
+          $ref: "#/components/schemas/CompareOp"
+        value:
+          type: number
+          minimum: 0
+        value2:
+          type: [number, "null"]
+        scope:
+          type: string
+          enum: [customer_trunk, customer_enterprise, destination, sender_id, rule]
+          description: Accumulated only.
+        period:
+          type: string
+          enum: [15m, 60m, today, week, month, billing_cycle]
+          description: Accumulated only.
+        minMargin:
+          type: [number, "null"]
+          description: Also require at least this margin for the chosen vendor.
+        minMarginUnit:
+          type: string
+          enum: [amount, percent]
+
+    HlrAction:
+      type: object
+      description: Do HLR with a policy for the chosen customer trunks of the rule (§13.24); empty list = all of them.
+      required: [policy, customerTrunkIds]
+      additionalProperties: false
+      properties:
+        policy:
+          type: string
+          minLength: 1
+          maxLength: 100
+        customerTrunkIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+
+    RouteVendor:
+      type: object
+      description: One vendor on a route level (§6.3) with an optional warm-up threshold (§13.27).
+      required: [level, vendorTrunkId]
+      additionalProperties: false
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 10
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        sharePct:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+          description: Percentage hunt policy; shares of a level add up to 100.
+        isBackup:
+          type: boolean
+        warmupCount:
+          type: [integer, "null"]
+          minimum: 1
+          description: Send the first N messages to this vendor before the normal split.
+        warmupReset:
+          type: [string, "null"]
+          enum: [hour, day, week, null]
+        warmupPer:
+          type: [string, "null"]
+          enum: [rule, customer_trunk, null]
+
+    RouteWhitelist:
+      type: object
+      description: Numbers pinned to one vendor of the rule (§13.27); checked before warm-up and split.
+      required: [vendorTrunkId, numbers]
+      additionalProperties: false
+      properties:
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        numberListId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        numbers:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+            pattern: "^[0-9]{5,15}$"
+
+    RouteRuleFields:
+      type: object
+      description: Shared fields of the route rule form and record (§6.3 General Information and Route Information).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Evaluation order, low first.
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        startsAt:
+          $ref: "#/components/schemas/Timestamp"
+        stopsAt:
+          $ref: "#/components/schemas/Timestamp"
+        groupId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        nextGroupId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        continueRouting:
+          type: string
+          enum: ["yes", stop, next]
+          description: YES keeps evaluating, STOP ends, NEXT jumps to the next group.
+        matchMode:
+          type: string
+          enum: [all, any]
+          description: All conditions must match, or any one.
+        comment:
+          type: [string, "null"]
+          maxLength: 1000
+        categoryMode:
+          $ref: "#/components/schemas/MatchMode"
+        categoryIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        customerTrunkMode:
+          $ref: "#/components/schemas/MatchMode"
+        customerTrunkIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        mccmncMode:
+          $ref: "#/components/schemas/MatchMode"
+        mccmncs:
+          type: array
+          description: Codes; a 3-digit code is the whole country (§13.21).
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
+        mccmncPattern:
+          type: [string, "null"]
+          maxLength: 200
+          description: Dynamic regular expression on the MCCMNC (§13.21).
+        senderPattern:
+          type: [string, "null"]
+          maxLength: 200
+        senderPatternNegate:
+          type: boolean
+        receiverPattern:
+          type: [string, "null"]
+          maxLength: 200
+        receiverPatternNegate:
+          type: boolean
+        contentPattern:
+          type: [string, "null"]
+          maxLength: 200
+        contentPatternNegate:
+          type: boolean
+        senderListId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        receiverListId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        tps:
+          oneOf:
+            - $ref: "#/components/schemas/TpsCondition"
+            - type: "null"
+        revenue:
+          oneOf:
+            - $ref: "#/components/schemas/RevenueCondition"
+            - type: "null"
+        hlrPorted:
+          type: [boolean, "null"]
+          description: Match only ported (true) or not-ported (false) numbers; null = either.
+        routeType:
+          type: string
+          enum: [block, static, dynamic, qbr]
+          description: Block, Static (fixed vendors), Dynamic (least cost) or QBR (quality).
+        huntPolicy:
+          type: string
+          enum: [top_down, round_robin, percentage]
+        enableBackupRoutes:
+          type: boolean
+        vendorCategoryMode:
+          $ref: "#/components/schemas/MatchMode"
+        vendorCategoryIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        vendorTrunkMode:
+          $ref: "#/components/schemas/MatchMode"
+        vendorTrunkIds:
+          type: array
+          description: Vendor scope of dynamic and QBR routing.
+          items:
+            $ref: "#/components/schemas/Id"
+        maxRouteLevel:
+          type: integer
+          minimum: 1
+          maximum: 10
+        margin:
+          type: number
+          description: Margin (Flat) - vendors leaving less are skipped.
+        qbrFormula:
+          type: [string, "null"]
+          maxLength: 500
+        skipVendorAtTpsPct:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100
+          description: Skip a vendor at this % of its TPS limit (§13.8 vendor capacity option).
+        hlrAction:
+          oneOf:
+            - $ref: "#/components/schemas/HlrAction"
+            - type: "null"
+        denyMultipart:
+          type: boolean
+        threshold:
+          type: [integer, "null"]
+          minimum: 1
+        thresholdInterval:
+          type: [string, "null"]
+          enum: [day, hour, minute, null]
+        vendors:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/RouteVendor"
+        whitelists:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RouteWhitelist"
+
+    RouteRuleInput:
+      allOf:
+        - $ref: "#/components/schemas/RouteRuleFields"
+      required: [name, priority, status, routeType]
+      unevaluatedProperties: false
+
+    Named:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+
+    RouteRuleDetail:
+      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
+      allOf:
+        - $ref: "#/components/schemas/RouteRuleFields"
+        - type: object
+          required: [id, labels, archived]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            labels:
+              type: object
+              description: Names for the ids in the rule, for chips and tables.
+              required: [customerTrunks, categories, vendorTrunks, numberLists, groups]
+              properties:
+                customerTrunks:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Named"
+                categories:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Named"
+                vendorTrunks:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Named"
+                numberLists:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Named"
+                groups:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Named"
+            archived:
+              $ref: "#/components/schemas/Archived"
+        - $ref: "#/components/schemas/Audit"
+
+    RouteRuleSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/RouteRuleDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    RouteRuleRow:
+      type: object
+      required: [id, name, priority, routeType, status, categoryLabel, customerTrunksLabel, customerTrunkNames, customerTrunkCount, destinationLabel, vendorsLabel, messages, asr, dlr, margin, startsAt, stopsAt, groupName, updatedBy, updatedAt, archived]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        priority:
+          type: integer
+        routeType:
+          type: string
+          enum: [block, static, dynamic, qbr]
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        categoryLabel:
+          type: string
+          description: e.g. "All", "Direct", "Promo, OTP".
+        customerTrunksLabel:
+          type: string
+          description: First trunks plus "+N", "All trunks", or "All but …".
+        customerTrunkNames:
+          type: array
+          description: Up to 30 names for the hover list.
+          items:
+            type: string
+        customerTrunkCount:
+          type: integer
+        destinationLabel:
+          type: string
+          description: e.g. "505 · all", "50501, 50502", "All", or the pattern.
+        vendorsLabel:
+          type: string
+          description: e.g. "Kite_DIR 60 · Orbit_DIR 40", "LCR · 6 vendors", "—" for block.
+        messages:
+          type: [integer, "null"]
+          description: Messages in the traffic window; null without the EDR store.
+        asr:
+          type: [number, "null"]
+          description: Delivery-attempt success %.
+        dlr:
+          type: [number, "null"]
+          description: Delivered %.
+        margin:
+          type: [number, "null"]
+          description: Margin in the base currency.
+        startsAt:
+          $ref: "#/components/schemas/Timestamp"
+        stopsAt:
+          $ref: "#/components/schemas/Timestamp"
+        groupName:
+          type: [string, "null"]
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archived:
+          type: boolean
+
+    RouteRulePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/RouteRuleRow"
+
+    RouteBulkRequest:
+      type: object
+      required: [ruleIds, action]
+      additionalProperties: false
+      properties:
+        ruleIds:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/Id"
+        action:
+          type: string
+          enum: [enable, disable, set_priority, shift_priority, replace_vendor, archive]
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 100
+        shift:
+          type: integer
+          minimum: -99
+          maximum: 99
+        fromVendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        toVendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        note:
+          type: string
+          maxLength: 500
+
+    RouteBulkSaved:
+      type: object
+      required: [change, affected]
+      properties:
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+        affected:
+          type: integer
+
+    TrafficFigures:
+      type: object
+      required: [messages, asr, dlr, margin]
+      properties:
+        messages:
+          type: integer
+        asr:
+          type: [number, "null"]
+        dlr:
+          type: [number, "null"]
+        margin:
+          type: number
+
+    RouteTraffic:
+      type: object
+      required: [window, available, from, to, total, byCustomer, byVendor, series]
+      properties:
+        window:
+          $ref: "#/components/schemas/TrafficWindow"
+        available:
+          type: boolean
+          description: False when the EDR store does not answer (figures are then empty).
+        from:
+          $ref: "#/components/schemas/Timestamp"
+        to:
+          $ref: "#/components/schemas/Timestamp"
+        total:
+          $ref: "#/components/schemas/TrafficFigures"
+        byCustomer:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/TrafficFigures"
+              - type: object
+                required: [customerTrunkId, name, enterpriseName, sharePct]
+                properties:
+                  customerTrunkId:
+                    $ref: "#/components/schemas/Id"
+                  name:
+                    type: string
+                  enterpriseName:
+                    type: string
+                  sharePct:
+                    type: number
+        byVendor:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/TrafficFigures"
+              - type: object
+                required: [vendorTrunkId, name, sharePct]
+                properties:
+                  vendorTrunkId:
+                    $ref: "#/components/schemas/Id"
+                  name:
+                    type: string
+                  sharePct:
+                    type: number
+        series:
+          type: array
+          description: Buckets over the window (minutes for 15m and 1h, hours for 24h, days for 7d and 30d).
+          items:
+            type: object
+            required: [at, messages, margin]
+            properties:
+              at:
+                $ref: "#/components/schemas/Timestamp"
+              messages:
+                type: integer
+              margin:
+                type: number
+
+    RouteTestRequest:
+      type: object
+      description: A sample message for the rule Test and the Route Simulator.
+      required: [receiver]
+      additionalProperties: false
+      properties:
+        customerTrunkId:
+          $ref: "#/components/schemas/Id"
+        receiver:
+          type: string
+          pattern: "^[0-9]{5,15}$"
+        sender:
+          type: string
+          maxLength: 20
+        content:
+          type: string
+          maxLength: 1600
+        mccmnc:
+          type: string
+          pattern: "^[0-9]{3,6}$"
+          description: Overrides the destination found from the number (e.g. after HLR).
+        tps:
+          type: number
+          minimum: 0
+          description: Simulated TPS (§13.8).
+        revenuePerMessage:
+          type: number
+          minimum: 0
+          description: Simulated per-message revenue in the base currency (§13.9); default from the trunk's rate.
+        accumulatedRevenue:
+          type: number
+          minimum: 0
+          description: Simulated revenue already earned in the period (§13.9).
+        hlrPorted:
+          type: boolean
+        warmupSent:
+          type: integer
+          minimum: 0
+          description: Messages already counted towards warm-up thresholds (§13.27).
+
+    RouteCheck:
+      type: object
+      required: [condition, ok, detail]
+      properties:
+        condition:
+          type: string
+        ok:
+          type: boolean
+        detail:
+          type: string
+
+    RouteCandidate:
+      type: object
+      required: [vendorTrunkId, name, level, cost, margin, note]
+      properties:
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        level:
+          type: integer
+        cost:
+          type: [number, "null"]
+          description: Buy rate for the destination in the base currency.
+        margin:
+          type: [number, "null"]
+        note:
+          type: [string, "null"]
+
+    RouteDecision:
+      type: object
+      required: [ruleId, matched, checks, outcome, vendor, candidates, mccmnc, destination, sellRate]
+      properties:
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        matched:
+          type: boolean
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteCheck"
+        outcome:
+          type: string
+          enum: [route, block, no_vendor, not_matched]
+        vendor:
+          oneOf:
+            - type: object
+              required: [vendorTrunkId, name, level, decidedBy]
+              properties:
+                vendorTrunkId:
+                  $ref: "#/components/schemas/Id"
+                name:
+                  type: string
+                level:
+                  type: integer
+                decidedBy:
+                  type: string
+                  enum: [whitelist, warmup, percentage, top_down, round_robin, lcr, qbr]
+            - type: "null"
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteCandidate"
+        mccmnc:
+          type: [string, "null"]
+        destination:
+          type: [string, "null"]
+          description: Country · network of the destination.
+        sellRate:
+          type: [number, "null"]
+          description: Customer rate for the message in the base currency, when a customer trunk is given.
+
+    RouteSimulation:
+      type: object
+      required: [tried, decision]
+      properties:
+        tried:
+          type: array
+          description: Rules tried in priority order, up to the deciding one (at most 100 listed).
+          items:
+            type: object
+            required: [ruleId, name, priority, matched, reason]
+            properties:
+              ruleId:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+              priority:
+                type: integer
+              matched:
+                type: boolean
+              reason:
+                type: string
+        decision:
+          oneOf:
+            - $ref: "#/components/schemas/RouteDecision"
+            - type: "null"
+
     # ------------------------------------------------------------- list query (§13.25)
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules]
 
     FilterOperator:
       type: string

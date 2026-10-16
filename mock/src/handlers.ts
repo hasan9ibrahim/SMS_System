@@ -36,6 +36,22 @@ import {
 } from "./api/trunks.js";
 import { getReference } from "./api/reference.js";
 import {
+  archiveRouteRule,
+  bulkRouteRules,
+  cloneRouteRule,
+  createRouteRule,
+  exportRouteRules,
+  getRouteRule,
+  getRouteRuleDependencies,
+  getRouteRuleTraffic,
+  queryRouteRules,
+  restoreRouteRule,
+  simulateRoute,
+  testRouteRule,
+  updateRouteRule,
+} from "./api/routeRules.js";
+import { withEnumsFromDb } from "./lists/dynamic.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -54,7 +70,7 @@ import { undoChange } from "./api/changes.js";
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -73,7 +89,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
 
   getListFields: (request, reply) => {
     const { list } = request.params as { list: ListId };
-    return listFields[list] ?? sendProblem(reply, 404, `Unknown list "${list}"`);
+    if (!listFields[list]) return sendProblem(reply, 404, `Unknown list "${list}"`);
+    return withEnumsFromDb(list, listFields[list]);
   },
 
   getReference,
@@ -127,6 +144,21 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryRateLines,
   changeRateLines,
   queryDestinations: queryList("destinations"),
+
+  // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
+  queryRouteRules,
+  exportRouteRules,
+  createRouteRule,
+  getRouteRule,
+  updateRouteRule,
+  getRouteRuleDependencies,
+  archiveRouteRule,
+  restoreRouteRule,
+  cloneRouteRule,
+  bulkRouteRules,
+  getRouteRuleTraffic,
+  testRouteRule,
+  simulateRoute,
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),
   undoChange,

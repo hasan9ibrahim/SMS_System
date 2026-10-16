@@ -20,8 +20,8 @@ export interface ColumnSql {
 
 export interface ListDef<Row> {
   fields: ListFields;
-  /** FROM clause with joins. */
-  from: string;
+  /** FROM clause with joins; a function when it depends on the query (e.g. a time window). */
+  from: string | ((query: ListQuery) => string);
   /** Always applied, e.g. hiding archived records (§13.29). */
   baseWhere?: string;
   /**
@@ -179,10 +179,11 @@ export function compileQuery(def: ListDef<unknown>, query: ListQuery) {
   const countValues = [...params.values];
   const limitP = params.add(limit + 1);
   const offsetP = params.add(offset);
+  const from = typeof def.from === "function" ? def.from(query) : def.from;
   return {
-    sql: `SELECT ${def.select} FROM ${def.from} ${whereSql} ORDER BY ${orderSql} LIMIT ${limitP} OFFSET ${offsetP}`,
+    sql: `SELECT ${def.select} FROM ${from} ${whereSql} ORDER BY ${orderSql} LIMIT ${limitP} OFFSET ${offsetP}`,
     values: params.values,
-    countSql: `SELECT count(*)::bigint AS n FROM ${def.from} ${whereSql}`,
+    countSql: `SELECT count(*)::bigint AS n FROM ${from} ${whereSql}`,
     countValues,
     limit,
     offset,

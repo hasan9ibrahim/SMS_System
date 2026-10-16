@@ -7,9 +7,12 @@ import type {
   ListId,
   RateLineRow,
   RateTableRow,
+  RouteRuleRow,
+  TrafficWindow,
   TrunkListRow,
   UserSummary,
 } from "@sms/contract";
+import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
 import type { ListDef } from "./engine.js";
 
@@ -379,6 +382,172 @@ export const destinationList: ListDef<Destination> = {
   }),
 };
 
+// ---------------------------------------------------------------- route rules (§15.4 grid)
+
+const WINDOW_VALUES = new Set(["15m", "1h", "24h", "7d", "30d"]);
+
+/** The traffic window asked for in the filter (default 24h). */
+export function trafficWindow(query: ListQuery): TrafficWindow {
+  const found = JSON.stringify(query.filter ?? {}).match(/"field":"window","op":"eq","value":"([^"]+)"/);
+  return found && WINDOW_VALUES.has(found[1]!) ? (found[1] as TrafficWindow) : "24h";
+}
+
+const trunkNamesSql = `(SELECT string_agg(t.name, ', ') FROM customer_trunks t WHERE t.id = ANY(r.customer_trunk_ids))`;
+const vendorNamesSql = `(SELECT string_agg(vt.name, ', ') FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
+   WHERE v.route_rule_id = r.id)`;
+
+export const routeRuleList: ListDef<RouteRuleRow> = {
+  fields: listFields.route_rules,
+  // The window is one of five fixed values (checked in trafficWindow), so it is inlined.
+  from: (query) => `route_rules r
+    LEFT JOIN route_rule_traffic tr ON tr.route_rule_id = r.id AND tr.time_window = '${trafficWindow(query)}'
+    LEFT JOIN route_rule_groups g ON g.id = r.route_rule_group_id
+    LEFT JOIN users ub ON ub.id = r.updated_by_id`,
+  baseWhere: "r.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "r.id" },
+    name: { sql: "r.name" },
+    priority: { sql: "r.priority" },
+    routeType: { sql: "r.route_type" },
+    // A rule matches a category when it takes all, lists it, or doesn't exclude it.
+    category: {
+      sql: "NULL",
+      where: (_op, c, p) => {
+        const values = (c.values ?? []).map(String);
+        const ids = values.filter((v) => /^\d+$/.test(v)).map(Number);
+        const parts: string[] = [];
+        if (values.includes("all")) parts.push("r.category_mode = 'all'");
+        if (ids.length) {
+          const arr = `${p(ids)}::bigint[]`;
+          parts.push(`(r.category_mode = 'inclusive' AND r.category_ids && ${arr})`);
+          parts.push(`(r.category_mode = 'exclusive' AND NOT (r.category_ids @> ${arr}))`);
+        }
+        return parts.length ? `(${parts.join(" OR ")})` : "FALSE";
+      },
+    },
+    customerTrunks: { sql: `(CASE WHEN r.customer_trunk_mode = 'all' THEN 'All trunks' ELSE ${trunkNamesSql} END)` },
+    // "505" finds rules on 505 and its networks (50501…), and rules on 50501 find 505.
+    destination: {
+      sql: "array_to_string(r.mccmncs, ',')",
+      where: (op, c, p) => {
+        if (op === "empty") return "(r.mccmnc_mode = 'all')";
+        if (op === "not_empty") return "(r.mccmnc_mode <> 'all')";
+        const v = p(String(c.value ?? "").replace(/[%_]/g, ""));
+        return op === "eq"
+          ? `(${v} = ANY(r.mccmncs))`
+          : `(EXISTS (SELECT 1 FROM unnest(r.mccmncs) m WHERE m LIKE ${v} || '%' OR ${v} LIKE m || '%'))`;
+      },
+    },
+    vendors: { sql: vendorNamesSql },
+    messages: { sql: "tr.messages" },
+    asr: { sql: "tr.asr" },
+    dlr: { sql: "tr.dlr" },
+    margin: { sql: "tr.margin" },
+    status: { sql: "r.status" },
+    window: { sql: "NULL", where: () => "TRUE" },
+    // Rules that apply to a trunk: all trunks, a list naming it, or an exclusion not naming it.
+    customerTrunkId: {
+      sql: "NULL",
+      where: (_op, c, p) => {
+        const id = `${p(Number(c.value))}::bigint`;
+        return `(r.customer_trunk_mode = 'all' OR (r.customer_trunk_mode = 'inclusive' AND ${id} = ANY(r.customer_trunk_ids))
+          OR (r.customer_trunk_mode = 'exclusive' AND NOT ${id} = ANY(r.customer_trunk_ids)))`;
+      },
+    },
+    vendorTrunkId: {
+      sql: "NULL",
+      where: (_op, c, p) => {
+        const id = `${p(Number(c.value))}::bigint`;
+        return `(EXISTS (SELECT 1 FROM route_rule_vendors v WHERE v.route_rule_id = r.id AND v.vendor_trunk_id = ${id})
+          OR (r.vendor_trunk_mode = 'inclusive' AND ${id} = ANY(r.vendor_trunk_ids)))`;
+      },
+    },
+    groupName: { sql: "g.name" },
+    startsAt: { sql: "r.starts_at" },
+    stopsAt: { sql: "r.stops_at" },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "r.updated_at" },
+    archived: { sql: "(r.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "customerTrunks", "vendors", "destination"],
+  idSql: "r.id",
+  select: `r.id, r.name, r.priority, r.route_type, r.status, r.hunt_policy, r.category_mode, r.customer_trunk_mode,
+    r.mccmnc_mode, r.mccmncs, r.mccmnc_pattern, r.vendor_trunk_mode, cardinality(r.vendor_trunk_ids) AS scope_count,
+    cardinality(r.customer_trunk_ids) AS trunk_count,
+    (SELECT string_agg(pc.name, ', ' ORDER BY pc.name) FROM product_categories pc WHERE pc.id = ANY(r.category_ids)) AS categories,
+    ARRAY(SELECT t.name FROM unnest(r.customer_trunk_ids) WITH ORDINALITY u(id, o) JOIN customer_trunks t ON t.id = u.id
+           ORDER BY u.o LIMIT 30) AS trunk_names,
+    (SELECT json_agg(json_build_object('n', vt.name, 's', v.share_pct, 'l', v.level, 'b', v.is_backup)
+                     ORDER BY v.level, v.share_pct DESC NULLS LAST, v.id)
+       FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id WHERE v.route_rule_id = r.id) AS vendors,
+    tr.messages, tr.asr, tr.dlr, tr.margin, r.starts_at, r.stops_at, g.name AS group_name, ub.username AS updated_by,
+    r.updated_at, r.deleted_at`,
+  mapRow: (r) => {
+    const names = (r.trunk_names as string[]) ?? [];
+    const count = r.trunk_count as number;
+    const first = names.slice(0, 2).join(", ") + (count > 2 ? ` +${count - 2}` : "");
+    const mode = r.customer_trunk_mode as string;
+    const codes = (r.mccmncs as string[]) ?? [];
+    const vendors = ((r.vendors as { n: string; s: number | null; l: number; b: boolean }[] | null) ?? []).filter(
+      (v) => !v.b,
+    );
+    const level1 = vendors.filter((v) => v.l === (vendors[0]?.l ?? 1));
+    const type = r.route_type as RouteRuleRow["routeType"];
+    const hunt = r.hunt_policy as string;
+    const lcrCount = vendors.length || (r.vendor_trunk_mode === "inclusive" ? (r.scope_count as number) : 0);
+    const vendorsLabel =
+      type === "block"
+        ? "—"
+        : type === "dynamic"
+          ? `LCR · ${lcrCount ? `${lcrCount} vendor${lcrCount === 1 ? "" : "s"}` : "all vendors"}`
+          : level1.length === 0
+            ? type === "qbr"
+              ? "Quality · all vendors"
+              : "No vendor"
+            : level1.length === 1
+              ? `${level1[0]!.n} 100%`
+              : hunt === "percentage"
+                ? level1.map((v) => `${v.n} ${v.s ?? 0}`).join(" · ")
+                : level1.map((v) => v.n).join(hunt === "round_robin" ? " / " : " › ");
+    return {
+      id: r.id as number,
+      name: r.name as string,
+      priority: r.priority as number,
+      routeType: type,
+      status: r.status as RouteRuleRow["status"],
+      categoryLabel:
+        r.category_mode === "all"
+          ? "All"
+          : `${r.category_mode === "exclusive" ? "All but " : ""}${(r.categories as string | null) ?? "—"}`,
+      customerTrunksLabel: mode === "all" ? "All trunks" : mode === "exclusive" ? `All but ${first}` : first || "—",
+      customerTrunkNames: names,
+      customerTrunkCount: count,
+      destinationLabel:
+        r.mccmnc_mode === "all"
+          ? "All"
+          : r.mccmnc_pattern
+            ? `/${String(r.mccmnc_pattern)}/`
+            : (r.mccmnc_mode === "exclusive" ? "All but " : "") +
+              (codes
+                .slice(0, 3)
+                .map((c) => (c.length === 3 ? `${c} · all` : c))
+                .join(", ") + (codes.length > 3 ? ` +${codes.length - 3}` : "") || "—"),
+      vendorsLabel,
+      messages: (r.messages as number | null) ?? null,
+      asr: r.asr == null ? null : Number(r.asr),
+      dlr: r.dlr == null ? null : Number(r.dlr),
+      margin: r.margin == null ? null : Number(r.margin),
+      startsAt: iso(r.starts_at)!,
+      stopsAt: iso(r.stops_at)!,
+      groupName: (r.group_name as string | null) ?? null,
+      updatedBy: (r.updated_by as string | null) ?? null,
+      updatedAt: iso(r.updated_at)!,
+      archived: r.deleted_at != null,
+    };
+  },
+};
+
 export const userList: ListDef<UserSummary> = {
   fields: listFields.users,
   from: `users u
@@ -470,4 +639,5 @@ export const listDefs: Record<ListId, ListDef<unknown>> = {
   rate_tables: rateTableList as ListDef<unknown>,
   rate_lines: rateLineList as ListDef<unknown>,
   destinations: destinationList as ListDef<unknown>,
+  route_rules: routeRuleList as ListDef<unknown>,
 };

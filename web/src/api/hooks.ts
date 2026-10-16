@@ -37,6 +37,8 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/rate-lines/query", { body })) as Promise<ListPage<Row>>;
     case "destinations":
       return unwrap(api.POST("/destinations/query", { body })) as Promise<ListPage<Row>>;
+    case "route_rules":
+      return unwrap(api.POST("/route-rules/query", { body })) as Promise<ListPage<Row>>;
   }
 }
 

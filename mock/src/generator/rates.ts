@@ -227,7 +227,7 @@ async function writeTable(
 
   // Events: first load, then changes every gapDays; maybe one scheduled future event.
   const events: number[] = [table.insertedAt];
-  for (let t = table.insertedAt; ; ) {
+  for (let t = table.insertedAt; ;) {
     t += rng.int(model.gapDays[0], model.gapDays[1]) * DAY + rng.int(0, DAY);
     if (deletedAt && t >= deletedAt) break;
     if (t >= world.anchor) {
