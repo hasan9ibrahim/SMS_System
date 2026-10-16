@@ -22,7 +22,16 @@ docker-compose.yml postgres, clickhouse, redis
 
 ## Getting started
 
-Requires Node 22 (`.nvmrc`) and Docker.
+Requires Node 22 (`.nvmrc`), Git and Docker Desktop.
+
+**Windows PowerShell:** if `npm` fails with "running scripts is disabled on this system",
+run this once (it only affects your user account), then reopen PowerShell:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+Or use `npm.cmd` instead of `npm`, or run the commands in Command Prompt (cmd).
 
 ```bash
 cp .env.example .env      # fake local-only values; never commit .env
