@@ -25,3 +25,6 @@ npm-debug.log*
 backend/_build/
 backend/deps/
 backend/.elixir_ls/
+
+# Generator output (mock/out, CSV and EDR files)
+mock/out/

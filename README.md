@@ -13,8 +13,8 @@ contract; the Elixir backend replaces the mock later behind the same contract.
 docs/              PRODUCT_SPEC.md, design/ screenshots, BACKEND_TODO.md
 contract/          openapi.yaml, events/*.json, generated/ TypeScript types
 web/               React + Vite GUI
-mock/              Fastify mock server (data generator and live traffic simulator follow)
-db/                PostgreSQL and ClickHouse init scripts and migrations
+mock/              Fastify mock server and fake data generator (live traffic simulator follows)
+db/                PostgreSQL and ClickHouse init scripts and migrations (config schema, EDR tables)
 backend/           Elixir umbrella (later phase)
 tools/smpp-sim/    SMPP simulator and load tests (later phase)
 docker-compose.yml postgres, clickhouse, redis
@@ -37,6 +37,7 @@ Or use `npm.cmd` instead of `npm`, or run the commands in Command Prompt (cmd).
 cp .env.example .env      # fake local-only values; never commit .env
 npm install
 npm run db:up             # postgres :5432, clickhouse :8123/:9000, redis :6379
+npm run seed:small        # fake data: config in postgres, EDRs in clickhouse (seed:full for production volume)
 npm run dev:mock          # mock API on http://127.0.0.1:4010/api/v1
 npm run dev:web           # GUI on http://localhost:5173 (proxies /api and /socket to the mock)
 ```
@@ -49,6 +50,7 @@ npm run dev:web           # GUI on http://localhost:5173 (proxies /api and /sock
 | `npm run check` | Everything CI runs: contract lint, generated-types check, typecheck, tests, build |
 | `npm run lint:contract` | Lint `contract/openapi.yaml` (Redocly) |
 | `npm test` | Contract self-tests and mock-server tests (every response checked against the contract) |
+| `npm run seed:small` / `seed:full` | Recreate the database schemas and fill them with fake data (see `mock/README.md`) |
 | `npm run db:down` | Stop the databases (data stays in Docker volumes) |
 
 ## Rules for this phase
