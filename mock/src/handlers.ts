@@ -63,6 +63,16 @@ import {
   restoreRateTable,
   updateRateTable,
 } from "./api/rates.js";
+import {
+  createSavedLookup,
+  deleteSavedLookup,
+  exportRateLookupMatrix,
+  listSavedLookups,
+  lookupRates,
+  rateLookupMatrix,
+  resolveLookupDestinations,
+  updateSavedLookup,
+} from "./api/rateLookup.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
 import { undoChange } from "./api/changes.js";
@@ -70,7 +80,7 @@ import { undoChange } from "./api/changes.js";
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -159,6 +169,14 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   getRouteRuleTraffic,
   testRouteRule,
   simulateRoute,
+  resolveLookupDestinations,
+  lookupRates,
+  rateLookupMatrix,
+  exportRateLookupMatrix,
+  listSavedLookups,
+  createSavedLookup,
+  updateSavedLookup,
+  deleteSavedLookup,
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),
   undoChange,

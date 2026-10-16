@@ -103,13 +103,106 @@ const inMode = (mode: string, hit: boolean) => (mode === "all" ? true : mode ===
 export const destinationHit = (codes: string[], mccmnc: string) =>
   codes.some((c) => c === mccmnc || (c.length === 3 && mccmnc.startsWith(c)));
 
+const compiled = new Map<string, RegExp | null>();
 function regex(pattern: string, value: string): boolean {
-  try {
-    return new RegExp(pattern, "i").test(value);
-  } catch {
-    return false;
+  let re = compiled.get(pattern);
+  if (re === undefined) {
+    try {
+      re = new RegExp(pattern, "i");
+    } catch {
+      re = null;
+    }
+    if (compiled.size > 5000) compiled.clear();
+    compiled.set(pattern, re);
   }
+  return re ? re.test(value) : false;
 }
+
+const liveTimes = new WeakMap<object, [number, number]>();
+
+/**
+ * Whether a rule matches, without the check details: the same answer as
+ * matches(conditionChecks(rule, m), rule.matchMode), for routing many messages at once.
+ * "all" stops at the first failed condition, "any" at the first passed one.
+ */
+export function quickMatch(rule: Rule, m: MessageContext): boolean {
+  if (rule.status !== "active") return false;
+  let t = liveTimes.get(rule);
+  if (!t) liveTimes.set(rule, (t = [Date.parse(rule.startsAt), Date.parse(rule.stopsAt)]));
+  if (!(t[0] <= m.now && m.now < t[1])) return false;
+  const all = rule.matchMode === "all";
+  let set = false;
+  let ok: boolean;
+  if (rule.categoryMode !== "all") {
+    ok = inMode(rule.categoryMode, m.categoryId !== null && rule.categoryIds.includes(m.categoryId));
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.customerTrunkMode !== "all") {
+    ok = inMode(
+      rule.customerTrunkMode,
+      m.customerTrunkId !== null && rule.customerTrunkIds.includes(m.customerTrunkId),
+    );
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.mccmncMode !== "all" || rule.mccmncPattern) {
+    ok = !m.mccmnc
+      ? false
+      : rule.mccmncPattern
+        ? regex(rule.mccmncPattern, m.mccmnc)
+        : inMode(rule.mccmncMode, destinationHit(rule.mccmncs, m.mccmnc));
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.senderPattern) {
+    ok = regex(rule.senderPattern, m.sender) !== rule.senderPatternNegate;
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.receiverPattern) {
+    ok = regex(rule.receiverPattern, m.receiver) !== rule.receiverPatternNegate;
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.contentPattern) {
+    ok = regex(rule.contentPattern, m.content) !== rule.contentPatternNegate;
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.senderListId) {
+    ok = m.listHas(rule.senderListId, m.sender);
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.receiverListId) {
+    ok = m.listHas(rule.receiverListId, m.receiver);
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.tps) {
+    const tp = rule.tps;
+    ok = m.tps !== null && compare(tp.op, m.tps, tp.value, tp.value2, tp.tolerancePct ?? 5);
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.revenue) {
+    const r = rule.revenue;
+    const actual = r.type === "per_message" ? m.sellRate : m.accumulatedRevenue;
+    ok = actual !== null && compare(r.op, actual, r.value, r.value2);
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.hlrPorted !== null && rule.hlrPorted !== undefined) {
+    ok = m.hlrPorted === rule.hlrPorted;
+    if (all !== ok) return ok;
+    set = true;
+  }
+  return all || !set;
+}
+
+/** Sorted least-cost / quality pools per vendor options map and rule (they don't depend on the message). */
+const pools = new WeakMap<Map<number, VendorOption>, WeakMap<object, VendorOption[]>>();
 
 /** Condition checks. `set` = the rule actually uses the condition (matters for "any"). */
 export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { set: boolean; gate: boolean })[] {
@@ -290,10 +383,16 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
         ? listed.includes(o.vendorTrunkId)
         : inMode(rule.vendorTrunkMode, rule.vendorTrunkIds.includes(o.vendorTrunkId))) &&
       inMode(rule.vendorCategoryMode, o.categoryId !== null && rule.vendorCategoryIds.includes(o.categoryId));
-    const pool = [...options.values()].filter((o) => o.cost !== null && inScope(o));
-    pool.sort((a, b) =>
-      rule.routeType === "qbr" ? (b.dlr ?? -1) - (a.dlr ?? -1) || a.cost! - b.cost! : a.cost! - b.cost!,
-    );
+    let byRule = pools.get(options);
+    if (!byRule) pools.set(options, (byRule = new WeakMap()));
+    let pool = byRule.get(rule);
+    if (!pool) {
+      pool = [...options.values()].filter((o) => o.cost !== null && inScope(o));
+      pool.sort((a, b) =>
+        rule.routeType === "qbr" ? (b.dlr ?? -1) - (a.dlr ?? -1) || a.cost! - b.cost! : a.cost! - b.cost!,
+      );
+      byRule.set(rule, pool);
+    }
     const candidates = pool.slice(0, 10).map((o, i) => candidate(o.vendorTrunkId, i + 1, null));
     for (const c of candidates) if (!marginOk(c)) c.note = `margin below ${rule.margin}`;
     const pick = candidates.find(marginOk);
@@ -364,4 +463,20 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
       };
   }
   return { ...base, outcome: "no_vendor", vendor: null, candidates };
+}
+
+/**
+ * Rules that can still match a message to this destination at `now`: on, live, and (for
+ * "all must match" rules) with a destination condition that passes. Running many messages
+ * to one destination (Rate Lookup's routed vendor per client, §13.16) only needs these;
+ * the order is kept, so routing through them gives the same answer as through all rules.
+ */
+export function rulesForDestination<R extends Rule>(rules: R[], mccmnc: string, now: number): R[] {
+  return rules.filter((r) => {
+    if (r.status !== "active") return false;
+    if (!(Date.parse(r.startsAt) <= now && now < Date.parse(r.stopsAt))) return false;
+    if (r.matchMode !== "all" || (r.mccmncMode === "all" && !r.mccmncPattern)) return true;
+    if (r.mccmncPattern) return regex(r.mccmncPattern, mccmnc);
+    return inMode(r.mccmncMode, destinationHit(r.mccmncs, mccmnc));
+  });
 }

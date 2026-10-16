@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.5.0
+  version: 0.6.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -40,7 +40,7 @@ tags:
   - name: routing
     description: Route rules, route simulator (§6.3, §13.8–13.11, §13.27)
   - name: rates
-    description: Rate tables (§6.2, §13.12)
+    description: Rate tables and Rate Lookup (§6.2, §13.12, §13.16)
   - name: users
     description: Staff users (§11), e.g. for sharing saved views
   - name: views
@@ -2014,6 +2014,220 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookup/destinations:
+    get:
+      tags: [rates]
+      operationId: resolveLookupDestinations
+      summary: "Rate Lookup: find destinations as you type (§13.16)"
+      description: |
+        `q` is a country, network, MCCMNC, dial code or a full phone number. A number is resolved
+        to its network by the longest dial-code prefix, or by a (simulated) HLR lookup with
+        `live=true`. Country matches list the country-level code ("505 · all") first.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: live
+          in: query
+          required: false
+          description: Resolve a phone number by HLR instead of by prefix.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Matching destinations, best first (at most 20)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupResolution"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookup:
+    post:
+      tags: [rates]
+      operationId: lookupRates
+      summary: "Rate Lookup easy mode: vendor costs and client rates for one destination"
+      description: |
+        Two panels (§13.16): every vendor trunk with a rate, cheapest first, and every customer
+        trunk selling the destination with its margin against the best vendor and against the
+        vendor routing would use for that trunk today (§6.3 rules). A network falls back to the
+        country-level line ("all networks") when a table has no line for it; sender-ID lines
+        are left out unless `senderId` is given.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateLookupRequest"
+      responses:
+        "200":
+          description: The two panels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLookupResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookup/matrix:
+    post:
+      tags: [rates]
+      operationId: rateLookupMatrix
+      summary: "Rate Lookup advanced mode: many destinations at once, paged"
+      description: |
+        Rows are destinations, paged with `limit` and `cursor`; columns depend on the view
+        (§13.16): vendor trunks (cost comparison), customer trunks (client rates or margin
+        matrix), or ranks 1..N (cheapest vendors with quality). At most 60 columns, the trunks
+        covering most of the destinations first (`columnsTruncated` says when more exist).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateMatrixRequest"
+      responses:
+        "200":
+          description: One page of the matrix
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateMatrix"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookup/matrix/export:
+    post:
+      tags: [rates]
+      operationId: exportRateLookupMatrix
+      summary: "Export the whole advanced lookup as CSV (§13.16)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateMatrixRequest"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row; every destination row (up to 20,000)
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookups:
+    get:
+      tags: [rates]
+      operationId: listSavedLookups
+      summary: Saved lookups visible to the user (own and shared with them)
+      responses:
+        "200":
+          description: Saved lookups, own first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedLookup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      tags: [rates]
+      operationId: createSavedLookup
+      summary: "Save an advanced lookup, e.g. \"Ahmad's clients – GCC\" (§13.16)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedLookupInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedLookup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookups/{id}:
+    put:
+      tags: [rates]
+      operationId: updateSavedLookup
+      summary: Change a saved lookup (owner only)
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedLookupInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedLookup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      tags: [rates]
+      operationId: deleteSavedLookup
+      summary: Delete a saved lookup (owner only)
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/Unavailable"
 
@@ -4965,3 +5179,518 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/Enterprise"
+
+    # ------------------------------------------------------------- Rate Lookup (§13.16)
+    LookupDestination:
+      type: object
+      required: [mccmnc, mcc, country, countryIso, network, allNetworks]
+      properties:
+        mccmnc:
+          type: string
+          description: A 3-digit code is the whole country (§13.21).
+        mcc:
+          type: string
+        country:
+          type: string
+        countryIso:
+          type: string
+        network:
+          type: string
+        allNetworks:
+          type: boolean
+
+    LookupResolution:
+      type: object
+      required: [kind, destinations]
+      properties:
+        kind:
+          type: string
+          enum: [text, number]
+          description: "`number` when the query is a phone number (digits, optional +, 6 or more)."
+        number:
+          description: How a phone number was resolved.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [resolvedBy, prefix, ported]
+              properties:
+                resolvedBy:
+                  type: string
+                  enum: [prefix, hlr]
+                prefix:
+                  type: [string, "null"]
+                  description: The dial-code prefix that matched.
+                ported:
+                  type: [boolean, "null"]
+                  description: HLR only; the number was ported away from the prefix's network.
+        destinations:
+          type: array
+          items:
+            $ref: "#/components/schemas/LookupDestination"
+
+    CurrencyMode:
+      type: string
+      enum: [original, converted]
+      description: Rates in their table currency, or converted to the lookup currency (USD).
+
+    RateLookupRequest:
+      type: object
+      additionalProperties: false
+      required: [mccmnc]
+      properties:
+        mccmnc:
+          type: string
+          pattern: "^[0-9]{3,6}$"
+        myClientsOnly:
+          type: boolean
+          description: Only clients whose account manager is the signed-in user.
+        includeInactive:
+          type: boolean
+          description: Include inactive trunks (archived ones never show).
+        showScheduled:
+          type: boolean
+          description: Include the next scheduled rate of each line.
+        currency:
+          $ref: "#/components/schemas/CurrencyMode"
+        asOf:
+          description: Rates valid at this time; default now. A past date shows what was charged then.
+          $ref: "#/components/schemas/Timestamp"
+        senderId:
+          type: string
+          maxLength: 20
+          description: Use the sender-ID line where a table has one (§6.2).
+
+    LookupRate:
+      type: object
+      description: One rate line as the lookup shows it.
+      required: [rateTableId, rate, currency, rateConverted, effectiveFrom, validTo, matchedCode, scheduled]
+      properties:
+        rateTableId:
+          $ref: "#/components/schemas/Id"
+        rate:
+          type: number
+        currency:
+          type: string
+        rateConverted:
+          type: number
+          description: In the lookup currency (USD) at the latest exchange rate.
+        effectiveFrom:
+          $ref: "#/components/schemas/Timestamp"
+        validTo:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        matchedCode:
+          type: string
+          description: The line's code; the country code when a network falls back to "all networks".
+        senderId:
+          type: [string, "null"]
+        scheduled:
+          description: The next rate after this one, when asked for.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [rate, rateConverted, effectiveFrom]
+              properties:
+                rate:
+                  type: number
+                rateConverted:
+                  type: number
+                effectiveFrom:
+                  $ref: "#/components/schemas/Timestamp"
+
+    LookupVendorCost:
+      allOf:
+        - $ref: "#/components/schemas/LookupRate"
+        - type: object
+          required: [vendorTrunkId, vendorTrunkName, enterpriseId, enterpriseName, tier, category, status, routed, messages24h, asr24h, dlr24h]
+          properties:
+            vendorTrunkId:
+              $ref: "#/components/schemas/Id"
+            vendorTrunkName:
+              type: string
+            enterpriseId:
+              $ref: "#/components/schemas/Id"
+            enterpriseName:
+              type: string
+            tier:
+              type: string
+              enum: [tier1, tier2, tier3]
+            category:
+              type: string
+            status:
+              $ref: "#/components/schemas/RecordStatus"
+            routed:
+              type: boolean
+              description: Routing sends this destination to the vendor for at least one client today.
+            messages24h:
+              type: [integer, "null"]
+              description: Messages to this destination over the last 24 h; null without the EDR store.
+            asr24h:
+              type: [number, "null"]
+            dlr24h:
+              type: [number, "null"]
+
+    LookupClientRate:
+      allOf:
+        - $ref: "#/components/schemas/LookupRate"
+        - type: object
+          required:
+            [customerTrunkId, customerTrunkName, enterpriseId, enterpriseName, rateTableName, category, status,
+             accountManager, messages7d, routedVendor, marginBest, marginBestPct, marginRouted, marginRoutedPct]
+          properties:
+            customerTrunkId:
+              $ref: "#/components/schemas/Id"
+            customerTrunkName:
+              type: string
+            enterpriseId:
+              $ref: "#/components/schemas/Id"
+            enterpriseName:
+              type: string
+            rateTableName:
+              type: string
+            category:
+              type: [string, "null"]
+            status:
+              $ref: "#/components/schemas/RecordStatus"
+            accountManager:
+              oneOf:
+                - type: "null"
+                - type: object
+                  required: [id, name]
+                  properties:
+                    id:
+                      $ref: "#/components/schemas/Id"
+                    name:
+                      type: string
+            messages7d:
+              type: [integer, "null"]
+            routedVendor:
+              description: The vendor today's route rules pick for this trunk and destination; null when blocked or unrouted.
+              oneOf:
+                - type: "null"
+                - type: object
+                  required: [vendorTrunkId, name, cost, decidedBy, ruleId]
+                  properties:
+                    vendorTrunkId:
+                      $ref: "#/components/schemas/Id"
+                    name:
+                      type: string
+                    cost:
+                      type: [number, "null"]
+                      description: Buy rate in the lookup currency.
+                    decidedBy:
+                      type: string
+                    ruleId:
+                      $ref: "#/components/schemas/Id"
+            marginBest:
+              type: [number, "null"]
+              description: Sell minus the best vendor cost, lookup currency.
+            marginBestPct:
+              type: [number, "null"]
+            marginRouted:
+              type: [number, "null"]
+              description: Sell minus the routed vendor's cost, lookup currency.
+            marginRoutedPct:
+              type: [number, "null"]
+
+    RateLookupResult:
+      type: object
+      required: [destination, asOf, lookupCurrency, bestCost, vendors, clients]
+      properties:
+        destination:
+          $ref: "#/components/schemas/LookupDestination"
+        asOf:
+          $ref: "#/components/schemas/Timestamp"
+        lookupCurrency:
+          type: string
+          description: Currency of the converted figures and margins.
+        bestCost:
+          type: [number, "null"]
+          description: Cheapest active vendor cost, lookup currency.
+        vendors:
+          type: array
+          items:
+            $ref: "#/components/schemas/LookupVendorCost"
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/LookupClientRate"
+
+    MatrixView:
+      type: string
+      enum: [vendor_costs, client_rates, margin, cheapest]
+
+    MatrixHighlight:
+      type: string
+      enum: [below_cost, cheaper_than_routed, expiring_soon, single_vendor]
+      description: |
+        below_cost: a client sells under the best vendor cost; cheaper_than_routed: a vendor is
+        cheaper than the one routing uses; expiring_soon: a rate ends within 14 days with no
+        version after it; single_vendor: only one vendor has a rate. Filtering on highlights
+        scans at most 1,000 destinations.
+
+    RateLookupQuery:
+      type: object
+      description: What to look up in advanced mode, and how (saved with a lookup).
+      required: [view]
+      properties:
+        countryIds:
+          type: array
+          maxItems: 300
+          items:
+            $ref: "#/components/schemas/Id"
+        mccmncs:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
+        numbers:
+          type: array
+          maxItems: 5000
+          description: Pasted or uploaded numbers, resolved by dial-code prefix.
+          items:
+            type: string
+            pattern: "^\\+?[0-9]{6,15}$"
+        accountManagerIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        customerEnterpriseIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        customerTrunkIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        rateTableIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        vendorEnterpriseIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        vendorTrunkIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        tiers:
+          type: array
+          items:
+            type: string
+            enum: [tier1, tier2, tier3]
+        categoryIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        businessCompanyIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        currencies:
+          type: array
+          description: Only rate tables in these currencies.
+          items:
+            type: string
+        senderId:
+          type: string
+          maxLength: 20
+        asOf:
+          $ref: "#/components/schemas/Timestamp"
+        view:
+          $ref: "#/components/schemas/MatrixView"
+        cheapestN:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
+        currency:
+          $ref: "#/components/schemas/CurrencyMode"
+        includeInactive:
+          type: boolean
+        highlights:
+          type: array
+          description: Keep only destinations with any of these highlights.
+          items:
+            $ref: "#/components/schemas/MatrixHighlight"
+
+    RateMatrixRequest:
+      allOf:
+        - $ref: "#/components/schemas/RateLookupQuery"
+        - type: object
+          properties:
+            limit:
+              type: integer
+              minimum: 1
+              maximum: 200
+              default: 50
+            cursor:
+              type: [string, "null"]
+      unevaluatedProperties: false
+
+    MatrixColumn:
+      type: object
+      required: [key, kind, id, name, detail]
+      properties:
+        key:
+          type: string
+        kind:
+          type: string
+          enum: [vendor, client, rank]
+        id:
+          type: [integer, "null"]
+          description: Vendor or customer trunk ID; null for rank columns.
+        name:
+          type: string
+        detail:
+          type: string
+          description: Enterprise name, or "Cheapest 1" for ranks.
+
+    MatrixCell:
+      type: object
+      required: [rate, currency, rateConverted]
+      properties:
+        rate:
+          type: number
+        currency:
+          type: string
+        rateConverted:
+          type: number
+        rateTableId:
+          $ref: "#/components/schemas/Id"
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+          description: Rank columns - the vendor in that place.
+        vendorName:
+          type: string
+        asr:
+          type: [number, "null"]
+        dlr:
+          type: [number, "null"]
+        marginBest:
+          type: [number, "null"]
+        marginRouted:
+          type: [number, "null"]
+        routedVendor:
+          type: [string, "null"]
+        best:
+          type: boolean
+          description: The cheapest vendor cell of the row.
+        routed:
+          type: boolean
+          description: Vendor columns - routing uses this vendor for the destination.
+        expiring:
+          type: boolean
+          description: The rate ends within 14 days with no version after it.
+        scheduled:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [rate, effectiveFrom]
+              properties:
+                rate:
+                  type: number
+                effectiveFrom:
+                  $ref: "#/components/schemas/Timestamp"
+
+    MatrixRow:
+      type: object
+      required: [destination, bestCost, bestVendor, vendorCount, highlights, cells]
+      properties:
+        destination:
+          $ref: "#/components/schemas/LookupDestination"
+        bestCost:
+          type: [number, "null"]
+        bestVendor:
+          type: [string, "null"]
+        vendorCount:
+          type: integer
+        highlights:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatrixHighlight"
+        cells:
+          type: array
+          description: One per column, in column order; null where there is no rate.
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/MatrixCell"
+              - type: "null"
+
+    RateMatrix:
+      type: object
+      required: [view, asOf, lookupCurrency, columns, columnsTruncated, rows, total, nextCursor, unresolved]
+      properties:
+        view:
+          $ref: "#/components/schemas/MatrixView"
+        asOf:
+          $ref: "#/components/schemas/Timestamp"
+        lookupCurrency:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatrixColumn"
+        columnsTruncated:
+          type: boolean
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatrixRow"
+        total:
+          type: integer
+          description: Destinations after the highlight filter.
+        nextCursor:
+          type: [string, "null"]
+        unresolved:
+          type: array
+          description: Numbers or codes that matched no destination (at most 50).
+          items:
+            type: string
+
+    SavedLookupInput:
+      type: object
+      additionalProperties: false
+      required: [name, query]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        sharedWithUserIds:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/Id"
+        query:
+          $ref: "#/components/schemas/RateLookupQuery"
+
+    SavedLookup:
+      type: object
+      required: [id, name, owner, sharedWithUserIds, readOnly, query, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        owner:
+          type: object
+          required: [id, displayName]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            displayName:
+              type: string
+        sharedWithUserIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Id"
+        readOnly:
+          type: boolean
+        query:
+          $ref: "#/components/schemas/RateLookupQuery"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"

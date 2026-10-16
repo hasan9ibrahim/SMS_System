@@ -1281,6 +1281,128 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rate-lookup/destinations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Rate Lookup: find destinations as you type (§13.16)
+     * @description `q` is a country, network, MCCMNC, dial code or a full phone number. A number is resolved
+     *     to its network by the longest dial-code prefix, or by a (simulated) HLR lookup with
+     *     `live=true`. Country matches list the country-level code ("505 · all") first.
+     */
+    get: operations["resolveLookupDestinations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lookup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Rate Lookup easy mode: vendor costs and client rates for one destination
+     * @description Two panels (§13.16): every vendor trunk with a rate, cheapest first, and every customer
+     *     trunk selling the destination with its margin against the best vendor and against the
+     *     vendor routing would use for that trunk today (§6.3 rules). A network falls back to the
+     *     country-level line ("all networks") when a table has no line for it; sender-ID lines
+     *     are left out unless `senderId` is given.
+     */
+    post: operations["lookupRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lookup/matrix": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Rate Lookup advanced mode: many destinations at once, paged
+     * @description Rows are destinations, paged with `limit` and `cursor`; columns depend on the view
+     *     (§13.16): vendor trunks (cost comparison), customer trunks (client rates or margin
+     *     matrix), or ranks 1..N (cheapest vendors with quality). At most 60 columns, the trunks
+     *     covering most of the destinations first (`columnsTruncated` says when more exist).
+     */
+    post: operations["rateLookupMatrix"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lookup/matrix/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Export the whole advanced lookup as CSV (§13.16) */
+    post: operations["exportRateLookupMatrix"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lookups": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Saved lookups visible to the user (own and shared with them) */
+    get: operations["listSavedLookups"];
+    put?: never;
+    /** Save an advanced lookup, e.g. "Ahmad's clients – GCC" (§13.16) */
+    post: operations["createSavedLookup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lookups/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Change a saved lookup (owner only) */
+    put: operations["updateSavedLookup"];
+    post?: never;
+    /** Delete a saved lookup (owner only) */
+    delete: operations["deleteSavedLookup"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -2719,6 +2841,240 @@ export type components = {
     } & components["schemas"]["Audit"];
     EnterprisePage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["Enterprise"][];
+    };
+    LookupDestination: {
+      /** @description A 3-digit code is the whole country (§13.21). */
+      mccmnc: string;
+      mcc: string;
+      country: string;
+      countryIso: string;
+      network: string;
+      allNetworks: boolean;
+    };
+    LookupResolution: {
+      /**
+       * @description `number` when the query is a phone number (digits, optional +, 6 or more).
+       * @enum {string}
+       */
+      kind: "text" | "number";
+      /** @description How a phone number was resolved. */
+      number?: null | {
+        /** @enum {string} */
+        resolvedBy: "prefix" | "hlr";
+        /** @description The dial-code prefix that matched. */
+        prefix: string | null;
+        /** @description HLR only; the number was ported away from the prefix's network. */
+        ported: boolean | null;
+      };
+      destinations: components["schemas"]["LookupDestination"][];
+    };
+    /**
+     * @description Rates in their table currency, or converted to the lookup currency (USD).
+     * @enum {string}
+     */
+    CurrencyMode: "original" | "converted";
+    RateLookupRequest: {
+      mccmnc: string;
+      /** @description Only clients whose account manager is the signed-in user. */
+      myClientsOnly?: boolean;
+      /** @description Include inactive trunks (archived ones never show). */
+      includeInactive?: boolean;
+      /** @description Include the next scheduled rate of each line. */
+      showScheduled?: boolean;
+      currency?: components["schemas"]["CurrencyMode"];
+      /** @description Rates valid at this time; default now. A past date shows what was charged then. */
+      asOf?: components["schemas"]["Timestamp"];
+      /** @description Use the sender-ID line where a table has one (§6.2). */
+      senderId?: string;
+    };
+    /** @description One rate line as the lookup shows it. */
+    LookupRate: {
+      rateTableId: components["schemas"]["Id"];
+      rate: number;
+      currency: string;
+      /** @description In the lookup currency (USD) at the latest exchange rate. */
+      rateConverted: number;
+      effectiveFrom: components["schemas"]["Timestamp"];
+      validTo: components["schemas"]["Timestamp"] | null;
+      /** @description The line's code; the country code when a network falls back to "all networks". */
+      matchedCode: string;
+      senderId?: string | null;
+      /** @description The next rate after this one, when asked for. */
+      scheduled: null | {
+        rate: number;
+        rateConverted: number;
+        effectiveFrom: components["schemas"]["Timestamp"];
+      };
+    };
+    LookupVendorCost: components["schemas"]["LookupRate"] & {
+      vendorTrunkId: components["schemas"]["Id"];
+      vendorTrunkName: string;
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      /** @enum {string} */
+      tier: "tier1" | "tier2" | "tier3";
+      category: string;
+      status: components["schemas"]["RecordStatus"];
+      /** @description Routing sends this destination to the vendor for at least one client today. */
+      routed: boolean;
+      /** @description Messages to this destination over the last 24 h; null without the EDR store. */
+      messages24h: number | null;
+      asr24h: number | null;
+      dlr24h: number | null;
+    };
+    LookupClientRate: components["schemas"]["LookupRate"] & {
+      customerTrunkId: components["schemas"]["Id"];
+      customerTrunkName: string;
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      rateTableName: string;
+      category: string | null;
+      status: components["schemas"]["RecordStatus"];
+      accountManager: null | {
+        id: components["schemas"]["Id"];
+        name: string;
+      };
+      messages7d: number | null;
+      /** @description The vendor today's route rules pick for this trunk and destination; null when blocked or unrouted. */
+      routedVendor: null | {
+        vendorTrunkId: components["schemas"]["Id"];
+        name: string;
+        /** @description Buy rate in the lookup currency. */
+        cost: number | null;
+        decidedBy: string;
+        ruleId: components["schemas"]["Id"];
+      };
+      /** @description Sell minus the best vendor cost, lookup currency. */
+      marginBest: number | null;
+      marginBestPct: number | null;
+      /** @description Sell minus the routed vendor's cost, lookup currency. */
+      marginRouted: number | null;
+      marginRoutedPct: number | null;
+    };
+    RateLookupResult: {
+      destination: components["schemas"]["LookupDestination"];
+      asOf: components["schemas"]["Timestamp"];
+      /** @description Currency of the converted figures and margins. */
+      lookupCurrency: string;
+      /** @description Cheapest active vendor cost, lookup currency. */
+      bestCost: number | null;
+      vendors: components["schemas"]["LookupVendorCost"][];
+      clients: components["schemas"]["LookupClientRate"][];
+    };
+    /** @enum {string} */
+    MatrixView: "vendor_costs" | "client_rates" | "margin" | "cheapest";
+    /**
+     * @description below_cost: a client sells under the best vendor cost; cheaper_than_routed: a vendor is
+     *     cheaper than the one routing uses; expiring_soon: a rate ends within 14 days with no
+     *     version after it; single_vendor: only one vendor has a rate. Filtering on highlights
+     *     scans at most 1,000 destinations.
+     * @enum {string}
+     */
+    MatrixHighlight: "below_cost" | "cheaper_than_routed" | "expiring_soon" | "single_vendor";
+    /** @description What to look up in advanced mode, and how (saved with a lookup). */
+    RateLookupQuery: {
+      countryIds?: components["schemas"]["Id"][];
+      mccmncs?: string[];
+      /** @description Pasted or uploaded numbers, resolved by dial-code prefix. */
+      numbers?: string[];
+      accountManagerIds?: components["schemas"]["Id"][];
+      customerEnterpriseIds?: components["schemas"]["Id"][];
+      customerTrunkIds?: components["schemas"]["Id"][];
+      rateTableIds?: components["schemas"]["Id"][];
+      vendorEnterpriseIds?: components["schemas"]["Id"][];
+      vendorTrunkIds?: components["schemas"]["Id"][];
+      tiers?: ("tier1" | "tier2" | "tier3")[];
+      categoryIds?: components["schemas"]["Id"][];
+      businessCompanyIds?: components["schemas"]["Id"][];
+      /** @description Only rate tables in these currencies. */
+      currencies?: string[];
+      senderId?: string;
+      asOf?: components["schemas"]["Timestamp"];
+      view: components["schemas"]["MatrixView"];
+      /** @default 3 */
+      cheapestN: number;
+      currency?: components["schemas"]["CurrencyMode"];
+      includeInactive?: boolean;
+      /** @description Keep only destinations with any of these highlights. */
+      highlights?: components["schemas"]["MatrixHighlight"][];
+    };
+    RateMatrixRequest: components["schemas"]["RateLookupQuery"] & {
+      /** @default 50 */
+      limit: number;
+      cursor?: string | null;
+    };
+    MatrixColumn: {
+      key: string;
+      /** @enum {string} */
+      kind: "vendor" | "client" | "rank";
+      /** @description Vendor or customer trunk ID; null for rank columns. */
+      id: number | null;
+      name: string;
+      /** @description Enterprise name, or "Cheapest 1" for ranks. */
+      detail: string;
+    };
+    MatrixCell: {
+      rate: number;
+      currency: string;
+      rateConverted: number;
+      rateTableId?: components["schemas"]["Id"];
+      /** @description Rank columns - the vendor in that place. */
+      vendorTrunkId?: components["schemas"]["Id"];
+      vendorName?: string;
+      asr?: number | null;
+      dlr?: number | null;
+      marginBest?: number | null;
+      marginRouted?: number | null;
+      routedVendor?: string | null;
+      /** @description The cheapest vendor cell of the row. */
+      best?: boolean;
+      /** @description Vendor columns - routing uses this vendor for the destination. */
+      routed?: boolean;
+      /** @description The rate ends within 14 days with no version after it. */
+      expiring?: boolean;
+      scheduled?: null | {
+        rate: number;
+        effectiveFrom: components["schemas"]["Timestamp"];
+      };
+    };
+    MatrixRow: {
+      destination: components["schemas"]["LookupDestination"];
+      bestCost: number | null;
+      bestVendor: string | null;
+      vendorCount: number;
+      highlights: components["schemas"]["MatrixHighlight"][];
+      /** @description One per column, in column order; null where there is no rate. */
+      cells: (components["schemas"]["MatrixCell"] | null)[];
+    };
+    RateMatrix: {
+      view: components["schemas"]["MatrixView"];
+      asOf: components["schemas"]["Timestamp"];
+      lookupCurrency: string;
+      columns: components["schemas"]["MatrixColumn"][];
+      columnsTruncated: boolean;
+      rows: components["schemas"]["MatrixRow"][];
+      /** @description Destinations after the highlight filter. */
+      total: number;
+      nextCursor: string | null;
+      /** @description Numbers or codes that matched no destination (at most 50). */
+      unresolved: string[];
+    };
+    SavedLookupInput: {
+      name: string;
+      sharedWithUserIds?: components["schemas"]["Id"][];
+      query: components["schemas"]["RateLookupQuery"];
+    };
+    SavedLookup: {
+      id: components["schemas"]["Id"];
+      name: string;
+      owner: {
+        id: components["schemas"]["Id"];
+        displayName: string;
+      };
+      sharedWithUserIds: components["schemas"]["Id"][];
+      readOnly: boolean;
+      query: components["schemas"]["RateLookupQuery"];
+      updatedAt: components["schemas"]["Timestamp"];
     };
   };
   responses: {
@@ -4783,6 +5139,218 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  resolveLookupDestinations: {
+    parameters: {
+      query: {
+        q: string;
+        /** @description Resolve a phone number by HLR instead of by prefix. */
+        live?: boolean;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Matching destinations, best first (at most 20) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LookupResolution"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  lookupRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateLookupRequest"];
+      };
+    };
+    responses: {
+      /** @description The two panels */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateLookupResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  rateLookupMatrix: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateMatrixRequest"];
+      };
+    };
+    responses: {
+      /** @description One page of the matrix */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateMatrix"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportRateLookupMatrix: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateMatrixRequest"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row; every destination row (up to 20,000) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listSavedLookups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Saved lookups, own first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SavedLookup"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createSavedLookup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedLookupInput"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SavedLookup"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateSavedLookup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedLookupInput"];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SavedLookup"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  deleteSavedLookup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

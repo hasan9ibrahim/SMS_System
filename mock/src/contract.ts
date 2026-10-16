@@ -24,7 +24,7 @@ export interface ContractOperation {
   /** Path parameter validators by name. */
   pathParams: Record<string, ValidateFunction>;
   /** Query parameters: validator, whether required, and whether the value is numeric. */
-  queryParams: Record<string, { validate: ValidateFunction; required: boolean; numeric: boolean }>;
+  queryParams: Record<string, { validate: ValidateFunction; required: boolean; numeric: boolean; boolean: boolean }>;
   /** Response body validators by status code, for tests and dev-mode checks. */
   responses: Record<string, ValidateFunction | undefined>;
 }
@@ -88,6 +88,7 @@ export const operations: ContractOperation[] = Object.entries(document.paths).fl
           validate: compile(...base, "schema"),
           required: resolved.required === true,
           numeric: type === "integer" || type === "number",
+          boolean: type === "boolean",
         };
       }
     });

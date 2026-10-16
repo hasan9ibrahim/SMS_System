@@ -22,7 +22,7 @@ import { routeRuleList } from "../lists/defs.js";
 import { compileQuery, runList } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
-import { decide, type MessageContext, type VendorOption } from "../routing/evaluate.js";
+import { decide, quickMatch, type MessageContext, type VendorOption } from "../routing/evaluate.js";
 import { archiveGate } from "./enterprises.js";
 import {
   archivedInfo,
@@ -120,7 +120,10 @@ const ruleSelect = `SELECT r.*, du.username AS deleted_by, cb.username AS create
   LEFT JOIN users cb ON cb.id = r.created_by_id
   LEFT JOIN users ub ON ub.id = r.updated_by_id`;
 
-type RuleCore = Omit<RouteRuleDetail, "labels" | "archived" | "createdBy" | "createdAt" | "updatedBy" | "updatedAt"> & {
+export type RuleCore = Omit<
+  RouteRuleDetail,
+  "labels" | "archived" | "createdBy" | "createdAt" | "updatedBy" | "updatedAt"
+> & {
   id: number;
 };
 
@@ -799,7 +802,7 @@ export function getRouteRuleTraffic(request: FastifyRequest, reply: FastifyReply
 let qualityCache: { at: number; dlr: Map<number, number> } | null = null;
 
 /** Delivered % per vendor trunk over 7 days, for QBR ordering (cached a minute). */
-async function vendorQuality(): Promise<Map<number, number>> {
+export async function vendorQuality(): Promise<Map<number, number>> {
   if (qualityCache && Date.now() - qualityCache.at < 60_000) return qualityCache.dlr;
   const rows = await chRows<{ id: number; dlr: number }>(
     `SELECT v_trunk_id AS id, round(countIf(msg_status = 'DELIVRD') / greatest(countIf(is_submit_success = 1), 1) * 100, 1) AS dlr
@@ -872,7 +875,7 @@ async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]
 }
 
 /** Live vendor trunks with their buy rate (base currency) for the destination. */
-async function vendorOptions(
+export async function vendorOptions(
   db: Db,
   mccmnc: string | null,
   onlyIds: number[] | null,
@@ -935,22 +938,41 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
-export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
-  const input = request.body as RouteTestRequest;
-  return withDb(reply, async (pool) => {
-    const errors = await checkTestInput(pool, input);
-    if (errors.length) return badInput(reply, errors);
-    const { rows } = await pool.query(`${ruleSelect} WHERE r.deleted_at IS NULL ORDER BY r.priority, r.id`);
-    const ids = rows.map((r) => r.id as number);
-    const { vendors, whitelists } = await vendorsOf(pool, ids);
-    const rules = rows.map((r) => rowToRule(r, vendors.get(r.id) ?? [], whitelists.get(r.id) ?? []));
-    const m = await messageContext(pool, input, listIdsOf(rules));
-    const options = await vendorOptions(pool, m.mccmnc, null);
-    const tried: { ruleId: number; name: string; priority: number; matched: boolean; reason: string }[] = [];
-    let group: number | null = null;
-    for (const rule of rules) {
-      if (group !== null && rule.groupId !== group) continue;
-      const decision = decide(rule, m, options);
+/** Every live rule in evaluation order (priority, then ID), with vendors and whitelists. */
+export async function loadRulesInOrder(db: Db): Promise<RuleCore[]> {
+  const { rows } = await db.query(`${ruleSelect} WHERE r.deleted_at IS NULL ORDER BY r.priority, r.id`);
+  const ids = rows.map((r) => r.id as number);
+  const { vendors, whitelists } = await vendorsOf(db, ids);
+  return rows.map((r) => rowToRule(r, vendors.get(r.id) ?? [], whitelists.get(r.id) ?? []));
+}
+
+export interface TriedRule {
+  ruleId: number;
+  name: string;
+  priority: number;
+  matched: boolean;
+  reason: string;
+}
+
+/**
+ * Runs a message through the rules in order, as the switch will: the first matching rule
+ * decides, unless it finds no vendor and says continue (YES) or jump to the next group
+ * (NEXT). `keep` limits how many tried rules are listed.
+ */
+export function routeThrough(
+  rules: RuleCore[],
+  m: MessageContext,
+  options: Map<number, VendorOption>,
+  keep = 100,
+): { tried: TriedRule[]; decision: RouteDecision | null } {
+  const tried: TriedRule[] = [];
+  let group: number | null = null;
+  for (const rule of rules) {
+    if (group !== null && rule.groupId !== group) continue;
+    // Without a list to report, skip non-matching rules cheaply.
+    if (keep === 0 && !quickMatch(rule, m)) continue;
+    const decision = decide(rule, m, options);
+    if (keep > 0) {
       const failed = decision.checks.find((c) => !c.ok);
       const reason = decision.matched
         ? decision.outcome === "route"
@@ -960,16 +982,27 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
             : "no vendor qualifies"
         : `${failed?.condition ?? "condition"}: ${failed?.detail ?? "no match"}`;
       // Only matching rules and the first non-matching ones are listed, to keep the answer small.
-      if (decision.matched || tried.length < 100)
+      if (decision.matched || tried.length < keep)
         tried.push({ ruleId: rule.id, name: rule.name, priority: rule.priority, matched: decision.matched, reason });
-      if (!decision.matched) continue;
-      if (decision.outcome === "no_vendor" && rule.continueRouting === "yes") continue;
-      if (rule.continueRouting === "next" && rule.nextGroupId && decision.outcome === "no_vendor") {
-        group = rule.nextGroupId;
-        continue;
-      }
-      return { tried: tried.slice(-100), decision };
     }
-    return { tried: tried.slice(-100), decision: null };
+    if (!decision.matched) continue;
+    if (decision.outcome === "no_vendor" && rule.continueRouting === "yes") continue;
+    if (rule.continueRouting === "next" && rule.nextGroupId && decision.outcome === "no_vendor") {
+      group = rule.nextGroupId;
+      continue;
+    }
+    return { tried: tried.slice(-keep), decision };
+  }
+  return { tried: tried.slice(-keep), decision: null };
+}
+
+export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
+  const input = request.body as RouteTestRequest;
+  return withDb(reply, async (pool) => {
+    const errors = await checkTestInput(pool, input);
+    if (errors.length) return badInput(reply, errors);
+    const rules = await loadRulesInOrder(pool);
+    const m = await messageContext(pool, input, listIdsOf(rules));
+    return routeThrough(rules, m, await vendorOptions(pool, m.mccmnc, null));
   });
 }

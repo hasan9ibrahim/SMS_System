@@ -35,7 +35,7 @@ function checkInput(input: SavedViewInput) {
 }
 
 /** Unique name per owner and list, and shared users must exist. */
-function inputProblem(reply: FastifyReply, err: unknown) {
+export function inputProblem(reply: FastifyReply, err: unknown) {
   const code = (err as { code?: string }).code;
   if (code === "23505")
     return sendProblem(reply, 400, "You already have a view with this name on this list", {
@@ -48,7 +48,7 @@ function inputProblem(reply: FastifyReply, err: unknown) {
   throw err;
 }
 
-async function writeShares(client: pg.PoolClient, viewId: number, userIds: number[]) {
+export async function writeShares(client: pg.PoolClient, viewId: number, userIds: number[]) {
   await client.query("DELETE FROM saved_view_shares WHERE saved_view_id = $1", [viewId]);
   const others = [...new Set(userIds)].filter((u) => u !== CURRENT_USER_ID);
   if (others.length) {

@@ -5,8 +5,12 @@ import assert from "node:assert/strict";
 import {
   bucket,
   compare,
+  conditionChecks,
   decide,
   destinationHit,
+  matches,
+  quickMatch,
+  rulesForDestination,
   type MessageContext,
   type VendorOption,
 } from "../src/routing/evaluate.js";
@@ -168,4 +172,41 @@ test("TPS and revenue conditions (§13.8, §13.9)", () => {
   const rev = rule({ revenue: { type: "per_message", op: ">=", value: 0.04 } });
   assert.equal(decide(rev, msg({ sellRate: 0.05 }), options).matched, true);
   assert.equal(decide(rev, msg({ sellRate: 0.03 }), options).matched, false);
+});
+
+test("the fast match agrees with the full checks; destination pre-filter keeps the order", () => {
+  // Every combination of a few rule shapes and messages (Rate Lookup routes in bulk, §13.16).
+  const rules = [
+    rule(),
+    rule({ matchMode: "any" }),
+    rule({ customerTrunkMode: "exclusive", mccmncs: ["50501", "26201"] }),
+    rule({ categoryMode: "inclusive", categoryIds: [2], customerTrunkMode: "all", mccmncMode: "all" }),
+    rule({ mccmncMode: "all", mccmncPattern: "^505", senderPattern: null, matchMode: "any" }),
+    rule({ revenue: { type: "per_message", op: ">=", value: 0.04 }, tps: { op: ">", value: 50, scope: "rule" } }),
+    rule({ hlrPorted: true, contentPattern: "code", contentPatternNegate: false }),
+    rule({ status: "inactive" }),
+    rule({ stopsAt: "2021-01-01T00:00:00Z" }),
+    rule({ customerTrunkMode: "all", mccmncMode: "all", senderPattern: null }),
+  ];
+  const msgs = [
+    msg(),
+    msg({ sender: "TEST1" }),
+    msg({ customerTrunkId: 8, categoryId: 2 }),
+    msg({ mccmnc: "26201", sellRate: 0.03, tps: 60 }),
+    msg({ hlrPorted: true, content: "no" }),
+    msg({ mccmnc: null }),
+  ];
+  for (const [i, r] of rules.entries())
+    for (const [j, m] of msgs.entries())
+      assert.equal(
+        quickMatch(r, m),
+        matches(conditionChecks(r, m), (r as { matchMode: "all" | "any" }).matchMode),
+        `rule ${i} × message ${j}`,
+      );
+  const numbered = rules.map((r, i) => ({ ...(r as object), id: i + 1 })) as never[];
+  const kept = rulesForDestination(numbered, "50501", msg().now) as { id: number }[];
+  assert.deepEqual(
+    kept.map((r) => r.id),
+    [1, 2, 3, 4, 5, 6, 7, 10],
+  );
 });

@@ -51,7 +51,12 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
                 }
                 continue;
               }
-              const value = param.numeric && typeof raw === "string" && /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
+              const value =
+                param.numeric && typeof raw === "string" && /^-?\d+(\.\d+)?$/.test(raw)
+                  ? Number(raw)
+                  : param.boolean && (raw === "true" || raw === "false")
+                    ? raw === "true"
+                    : raw;
               if (!param.validate(value)) {
                 return sendProblem(reply, 400, `Invalid query parameter "${name}"`, {
                   errors: ajvErrors(param.validate.errors, `/${name}`),

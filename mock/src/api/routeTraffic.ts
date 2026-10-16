@@ -20,7 +20,7 @@ const FIGURES = `count() AS n,
   round(sum(revenue_sys) - sum(cost_sys), 2) AS margin`;
 
 /** End of the traffic windows: now, or the latest EDR when the fake data ends earlier. */
-async function windowEnd(): Promise<string | null> {
+export async function windowEnd(): Promise<string | null> {
   const rows = await chRows<{ t: string }>("SELECT toString(least(now64(3), max(submit_time))) AS t FROM edr");
   return rows?.[0]?.t ?? null;
 }
