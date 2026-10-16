@@ -1,5 +1,5 @@
-// Enterprise list (§5) on the standard grid. The full Enterprise screen (General Info,
-// Docs, Billing and trunk tabs, forms) is build step 4.1; this page proves the grid at work.
+// Enterprise list (§5) on the standard grid. A row opens the enterprise record in its own
+// tab (General, Docs, Billing, trunks, account managers, History).
 import type { Enterprise } from "@sms/contract";
 import { pageForPath } from "../nav/registry";
 import { ListScreen } from "../page/ListScreen";
@@ -14,7 +14,11 @@ export function EnterprisesPage() {
     <ListScreen<Enterprise>
       list="enterprises"
       page={page}
-      primary={{ label: "New enterprise", disabled: true, title: "The enterprise form arrives with build step 4.1" }}
+      historyScope={{ entityTypes: ["enterprise"] }}
+      primary={{
+        label: "New enterprise",
+        onClick: () => navigate("/enterprises/new", { newTab: true, title: "New enterprise" }),
+      }}
       columns={{
         name: { width: 240, render: (r) => <strong>{r.name}</strong> },
         accountManager: { render: (r) => r.accountManagerName ?? "—" },
@@ -62,14 +66,22 @@ export function EnterprisesPage() {
             ),
           },
           {
-            key: "trunks",
-            label: "Trunks",
-            content: <p className="muted">Customer and vendor trunks arrive with build step 4.1 (§5.4, §5.5).</p>,
-          },
-          {
-            key: "billing",
-            label: "Billing",
-            content: <p className="muted">Billing, balances and beneficiary arrive with build step 4.1 (§5.3).</p>,
+            key: "open",
+            label: "Record",
+            content: (
+              <p>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => navigate(`/enterprises/${r.id}`, { newTab: true, title: `Enterprise · ${r.name}` })}
+                >
+                  Open {r.name}
+                </button>{" "}
+                <span className="muted">
+                  for docs, billing, trunks, account managers and history (double-click or Enter).
+                </span>
+              </p>
+            ),
           },
         ],
         aside: (
@@ -78,6 +90,12 @@ export function EnterprisesPage() {
             <dd className="num">{r.id}</dd>
             <dt>Created</dt>
             <dd>{r.createdAt?.slice(0, 10) ?? "—"}</dd>
+            {r.archivedAt && (
+              <>
+                <dt>State</dt>
+                <dd className="tone-warning">Deleted {r.archivedAt.slice(0, 10)}</dd>
+              </>
+            )}
           </dl>
         ),
       })}

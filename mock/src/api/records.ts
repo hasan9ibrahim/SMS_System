@@ -94,10 +94,7 @@ export async function updateColumns(
     sets.push(`${s.col} = $${params.length}${s.cast ?? ""}`);
   }
   if (sets.length === 0) return;
-  await c.query(
-    `UPDATE ${table} SET ${sets.join(", ")}, updated_by_id = $2, updated_at = now() WHERE id = $1`,
-    params,
-  );
+  await c.query(`UPDATE ${table} SET ${sets.join(", ")}, updated_by_id = $2, updated_at = now() WHERE id = $1`, params);
 }
 
 export async function insertRow(
@@ -121,7 +118,10 @@ export async function insertRow(
     cols.push(col);
     ph.push(`$${params.length}`);
   }
-  const { rows } = await c.query(`INSERT INTO ${table} (${cols.join(", ")}) VALUES (${ph.join(", ")}) RETURNING id`, params);
+  const { rows } = await c.query(
+    `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${ph.join(", ")}) RETURNING id`,
+    params,
+  );
   return rows[0].id as number;
 }
 

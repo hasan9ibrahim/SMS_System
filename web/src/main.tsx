@@ -6,6 +6,7 @@ import { App } from "./App";
 import "./styles/base.css";
 import "./styles/shell.css";
 import "./styles/grid.css";
+import "./styles/record.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 15_000 } },

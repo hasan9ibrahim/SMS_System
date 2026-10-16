@@ -1340,3 +1340,12 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+.toggle-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}

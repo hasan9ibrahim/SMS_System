@@ -7,7 +7,7 @@ socket (`src/live/`).
 ```bash
 npm run dev:mock     # repo root, after npm run db:up && npm run seed:small
 npm run dev:web      # http://localhost:5173
-npm test -w web      # filter model, tab rules, saved views
+npm test -w web      # filter model, tab rules, saved views, form helpers
 ```
 
 ## App shell (build step 3)
@@ -21,6 +21,33 @@ npm test -w web      # filter model, tab rules, saved views
 | Light and dark themes from the §15.2 tokens, saved as a preference | `src/styles/tokens.css`, `src/shell/theme.ts` | §15.2 |
 | Status bar: rows, shortcuts, autosave, server time (UTC) | `src/shell/StatusBar.tsx` | §15.1 |
 | Incident pop-up cards and tab alert dots | `src/shell/IncidentPopups.tsx`, `src/live/store.ts` | §13.5, §13.6 |
+
+## Enterprises and trunks (build step 4.1)
+
+| Screen | Path | Files | Spec |
+| --- | --- | --- | --- |
+| Enterprise list, Customer trunks, Vendor trunks (Show deleted, Undo, History) | `/enterprises`, `/enterprises/customer-trunks`, `/enterprises/vendor-trunks` | `src/pages/EnterprisesPage.tsx`, `TrunksPage.tsx` | §5, §13.29 |
+| Enterprise record: "Name – Alias (ID)" picker; General, Docs, Billing, Customer trunks, Vendor trunks, Account managers (Hand over now or scheduled), History | `/enterprises/:id`, `/enterprises/new` | `src/pages/enterprise/` | §5.1–5.3, §13.30 |
+| Trunk record: General form, Rules (order, on/off, continue, detach direct rules), History; Clone; write-only password | `/enterprises/customer-trunks/:id`, `/enterprises/vendor-trunks/:id`, `…/new?enterprise=ID`, `…/new?clone=ID` | `src/pages/trunk/` | §5.4, §5.5, §13.1, §13.2, §13.26 |
+| Safe delete: dependencies, blockers, admin override with reason; archived banner with Restore | — | `src/records/parts.tsx` | §13.29 |
+
+## Building a record page
+
+- **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag
+  and field errors; `form.fail(err)` maps a `400` answer's `errors[].path` (e.g. `/address/city`)
+  to the field. Fields: `TextField`, `NumberField`, `SelectField`, `CheckField`, `ListField`
+  (emails, IPs), `MultiCheck`, `TextArea`, `ReadOnly`, laid out in `Section`s. Required fields
+  show a red `*`.
+- **Record parts** (`src/records/parts.tsx`): `useSectionTab` keeps the section in the tab URL
+  (`?tab=billing`); `HeaderAction` puts the active section's main action in the page header as
+  the page's one filled button; `ChildGrid` is a server-side grid with a fixed filter (an
+  enterprise's trunks); `ListLookup` picks a record from a list by quick search;
+  `useDeleteRecord` opens the safe-delete dialog; `ArchivedBanner` shows deleted records with
+  Restore (admins).
+- **Saves** answer `{record, change}`: reset the form to `record` and pass `change` to
+  `useNotifySaved()` for the 10-second Undo toast. Record queries live under `["record", …]`,
+  so a save or an undo refreshes every open view of the record. Sections stay mounted once
+  opened, so switching sections keeps unsaved edits, and the tab shows the unsaved dot.
 
 ## Building a list page
 
@@ -57,4 +84,5 @@ Column filter shorthand (`src/grid/filterModel.ts`):
 
 `src/history/undo.tsx`: `useUndo()` (handles the 409 conflict dialog), `useUndoLast(scope)`
 and `useUndoShortcut(scope)` for the header Undo button and Ctrl+Z, `useNotifySaved()` for
-the 10-second Undo toast after a save, and `<HistoryDrawer>` for a record's History tab.
+the 10-second Undo toast after a save, `<HistoryList>` for a record's History section and
+`<HistoryDrawer>` for a page's History button.

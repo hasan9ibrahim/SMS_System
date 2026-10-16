@@ -51,14 +51,18 @@ function useBootstrap(): boolean {
   return ready;
 }
 
-/** The address bar shows the active tab's page, so it can be copied or bookmarked. */
-function useUrlSync() {
+/**
+ * The address bar shows the active tab's page, so it can be copied or bookmarked. It waits
+ * for the workspace, so a deep link in the address bar survives until it opens its tab.
+ */
+function useUrlSync(ready: boolean) {
   const path = useTabs((s) => s.tabs.find((t) => t.id === s.activeId)?.path ?? "/");
   const title = useTabs((s) => s.tabs.find((t) => t.id === s.activeId)?.title ?? "");
   useEffect(() => {
+    if (!ready) return;
     if (currentUrl() !== path) history.replaceState(null, "", path);
     document.title = title && title !== "Home" ? `${title} · SMS Platform` : "SMS Platform";
-  }, [path, title]);
+  }, [path, title, ready]);
 }
 
 /** Ctrl/Cmd+K opens jump-to anywhere (§15.1). */
@@ -80,7 +84,7 @@ function usePaletteShortcut() {
 export function Shell() {
   const ready = useBootstrap();
   useThemeSync();
-  useUrlSync();
+  useUrlSync(ready);
   usePaletteShortcut();
   useTabAlertDots();
   const tabs = useTabs((s) => s.tabs);

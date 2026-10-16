@@ -119,6 +119,26 @@ function ColumnsMenu({
   );
 }
 
+/** "Show deleted" (§13.29): lists archived rows next to live ones, greyed out. */
+export function ShowDeleted({ state, onChange }: { state: GridState; onChange: (s: GridState) => void }) {
+  const on = !!state.columns.archived;
+  return (
+    <label className="toggle-inline">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => {
+          const columns = { ...state.columns };
+          if (e.target.checked) columns.archived = { field: "archived", op: "in", values: [true, false] };
+          else delete columns.archived;
+          onChange({ ...state, columns });
+        }}
+      />
+      Show deleted
+    </label>
+  );
+}
+
 function DetailPanel({ content, onClose }: { content: DetailContent; onClose: () => void }) {
   const [section, setSection] = useState(content.sections[0]?.key);
   const current = content.sections.find((s) => s.key === section) ?? content.sections[0];
@@ -263,18 +283,20 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
       />
       <div className="filter-row">
         <span className="muted">Filters:</span>
-        {Object.values(state.columns).map((c) => (
-          <span key={c.field} className="chip accent">
-            {conditionLabel(byName.get(c.field), c)}
-            <button
-              type="button"
-              aria-label={`Remove filter ${byName.get(c.field)?.label ?? c.field}`}
-              onClick={() => removeColumn(c.field)}
-            >
-              <Icon name="x" size={11} />
-            </button>
-          </span>
-        ))}
+        {Object.values(state.columns)
+          .filter((c) => c.field !== "archived")
+          .map((c) => (
+            <span key={c.field} className="chip accent">
+              {conditionLabel(byName.get(c.field), c)}
+              <button
+                type="button"
+                aria-label={`Remove filter ${byName.get(c.field)?.label ?? c.field}`}
+                onClick={() => removeColumn(c.field)}
+              >
+                <Icon name="x" size={11} />
+              </button>
+            </span>
+          ))}
         {builderCount > 0 && (
           <span className="chip accent">
             <button type="button" className="chip-text" onClick={() => setBuilderOpen(true)}>
@@ -320,6 +342,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
           </button>
         )}
         {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
+        {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
         <ViewsMenu list={list} state={state} onApply={setState} />
         <span className="fb-spacer" />
         {selected.size > 0 && (

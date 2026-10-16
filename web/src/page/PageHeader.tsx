@@ -4,12 +4,23 @@ import type { ReactNode } from "react";
 import { pagesOf, type PageDef } from "../nav/registry";
 import { useTabNavigate } from "../shell/tabContext";
 
-export function PageHeader({ page, title, actions }: { page: PageDef; title?: string; actions?: ReactNode }) {
+export function PageHeader({
+  page,
+  title,
+  heading,
+  actions,
+}: {
+  page: PageDef;
+  title?: string;
+  /** Replaces the plain title, e.g. a record picker (§5.1); must contain the page's h1. */
+  heading?: ReactNode;
+  actions?: ReactNode;
+}) {
   const navigate = useTabNavigate();
   const siblings = page.key === "home" ? [] : pagesOf(page.section);
   return (
     <div className="page-header">
-      <h1>{title ?? page.label}</h1>
+      {heading ?? <h1>{title ?? page.label}</h1>}
       {siblings.length > 1 && (
         <nav className="siblings" aria-label={`${page.label} and related pages`}>
           {siblings.map((s) => (

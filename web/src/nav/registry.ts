@@ -90,6 +90,26 @@ export const PAGES: PageDef[] = [
     "4.1",
     "Partners: general info, docs, billing, customer and vendor trunks",
   ),
+  p(
+    "enterprises",
+    "customer-trunks",
+    "Customer trunks",
+    "/enterprises/customer-trunks",
+    "network",
+    "§5.4, §13.1",
+    "4.1",
+    "Client connections: binds, IPs, TPS, receipts and rate tables",
+  ),
+  p(
+    "enterprises",
+    "vendor-trunks",
+    "Vendor trunks",
+    "/enterprises/vendor-trunks",
+    "send",
+    "§5.5",
+    "4.1",
+    "Vendor connections: SMPP or HTTP, capacity and message rules",
+  ),
 
   p(
     "finance",

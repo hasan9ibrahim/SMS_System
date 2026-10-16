@@ -206,3 +206,10 @@
 .grid-message ul {
   margin: 6px 0 0;
 }
+
+/* Archived rows, listed with "Show deleted" (§13.29) */
+.gr.archived .gc:not(.gc-check) {
+  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
+}

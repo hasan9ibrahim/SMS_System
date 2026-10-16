@@ -100,6 +100,7 @@ export function useUndo() {
           result = await call({ resolution });
         }
         // Records and history may both have changed.
+        await qc.invalidateQueries({ queryKey: ["record"] });
         await qc.invalidateQueries({ queryKey: ["list"] });
         await qc.invalidateQueries({ queryKey: ["history"] });
         if (!quiet) {
@@ -215,14 +216,14 @@ export function ChangeEntry({
   );
 }
 
-/** Side drawer with the History list of a record or page scope. */
-export function HistoryDrawer({ scope, title, onClose }: { scope: HistoryScope; title: string; onClose: () => void }) {
+/** The History list of a record or page scope, newest first, with Undo per change. */
+export function HistoryList({ scope }: { scope: HistoryScope }) {
   const { data: me } = useMe();
   const undo = useUndo();
   const canUndoOthers = !!me && (me.permissions.includes("*") || me.permissions.includes("undo_others"));
   const filter = scopeFilter(scope);
   const history = useInfiniteQuery({
-    queryKey: ["history", "drawer", scope],
+    queryKey: ["history", "list", scope],
     queryFn: ({ pageParam }) =>
       fetchListPage<Change>("changes", { ...(filter ? { filter } : {}), limit: 50, cursor: pageParam } as ListQuery),
     initialPageParam: null as string | null,
@@ -231,39 +232,47 @@ export function HistoryDrawer({ scope, title, onClose }: { scope: HistoryScope; 
   });
   const rows = history.data?.pages.flatMap((p) => p.rows) ?? [];
   return (
+    <>
+      {history.isError && <p className="error-text pad">{String((history.error as Error).message)}</p>}
+      <ul className="change-list">
+        {rows.map((c) => (
+          <ChangeEntry
+            key={c.id}
+            change={c}
+            meId={me?.id}
+            canUndoOthers={canUndoOthers}
+            onUndo={(ch) => void undo(ch.id)}
+          />
+        ))}
+      </ul>
+      {history.hasNextPage && (
+        <div className="pad">
+          <Button small onClick={() => void history.fetchNextPage()} disabled={history.isFetchingNextPage}>
+            Load older changes
+          </Button>
+        </div>
+      )}
+      {!history.isPending && rows.length === 0 && !history.isError && (
+        <p className="muted pad">No changes recorded yet.</p>
+      )}
+    </>
+  );
+}
+
+/** Side drawer with the History list of a record or page scope. */
+export function HistoryDrawer({ scope, title, onClose }: { scope: HistoryScope; title: string; onClose: () => void }) {
+  return (
     <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="drawer" role="dialog" aria-label={`History: ${title}`}>
         <div className="drawer-head">
           <Icon name="history" />
           <h2>History · {title}</h2>
-          <span className="muted small">{history.data?.pages[0]?.total ?? ""} changes</span>
           <span className="fb-spacer" />
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
             <Icon name="x" />
           </button>
         </div>
-        {history.isError && <p className="error-text pad">{String((history.error as Error).message)}</p>}
-        <ul className="change-list">
-          {rows.map((c) => (
-            <ChangeEntry
-              key={c.id}
-              change={c}
-              meId={me?.id}
-              canUndoOthers={canUndoOthers}
-              onUndo={(ch) => void undo(ch.id)}
-            />
-          ))}
-        </ul>
-        {history.hasNextPage && (
-          <div className="pad">
-            <Button small onClick={() => void history.fetchNextPage()} disabled={history.isFetchingNextPage}>
-              Load older changes
-            </Button>
-          </div>
-        )}
-        {!history.isPending && rows.length === 0 && !history.isError && (
-          <p className="muted pad">No changes recorded yet.</p>
-        )}
+        <HistoryList scope={scope} />
       </aside>
     </div>
   );

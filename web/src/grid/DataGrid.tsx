@@ -138,6 +138,12 @@ interface RowProps<Row> {
   trailing?: DataGridProps<{ id: number }>["trailing"];
 }
 
+/** Archived rows (shown with "Show deleted", §13.29) are greyed out. */
+const isArchived = (row: object) => {
+  const r = row as { archived?: unknown; archivedAt?: unknown };
+  return r.archived === true || !!r.archivedAt;
+};
+
 function GridRowInner<Row extends { id: number }>({
   row,
   index,
@@ -152,7 +158,7 @@ function GridRowInner<Row extends { id: number }>({
 }: RowProps<Row>) {
   return (
     <div
-      className={`gr${active ? " active" : ""}${checked ? " checked" : ""}`}
+      className={`gr${active ? " active" : ""}${checked ? " checked" : ""}${isArchived(row) ? " archived" : ""}`}
       style={{ transform: `translateY(${top}px)` }}
       role="row"
       aria-rowindex={index + 2}

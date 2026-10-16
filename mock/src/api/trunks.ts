@@ -166,10 +166,7 @@ type TrunkRecord = Record<string, unknown> & {
 };
 
 async function loadTrunk(db: Db, k: KindDef, id: number): Promise<TrunkRecord | null> {
-  const own =
-    k.kind === "vendor"
-      ? "(SELECT r.id FROM rate_tables r WHERE r.vendor_trunk_id = t.id)"
-      : "NULL::bigint";
+  const own = k.kind === "vendor" ? "(SELECT r.id FROM rate_tables r WHERE r.vendor_trunk_id = t.id)" : "NULL::bigint";
   const tables =
     k.kind === "customer"
       ? `, ARRAY(SELECT x.rate_table_id FROM customer_trunk_rate_tables x WHERE x.customer_trunk_id = t.id ORDER BY x.position) AS rate_table_ids`
@@ -254,7 +251,8 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
     if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null))
       errors.push({ path: "/revenueLimitPeriod", message: "set both the limit and its period, or neither" });
     const ids = c.rateTableIds ?? [];
-    if (new Set(ids).size !== ids.length) errors.push({ path: "/rateTableIds", message: "a rate table is listed twice" });
+    if (new Set(ids).size !== ids.length)
+      errors.push({ path: "/rateTableIds", message: "a rate table is listed twice" });
     if (ids.length) {
       const { rows } = await db.query(
         "SELECT id FROM rate_tables WHERE id = ANY($1) AND kind = 'customer' AND deleted_at IS NULL",
@@ -262,7 +260,8 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
       );
       const ok = new Set(rows.map((r) => r.id));
       ids.forEach((rid, i) => {
-        if (!ok.has(rid)) errors.push({ path: `/rateTableIds/${i}`, message: `rate table ${rid} is not a live customer table` });
+        if (!ok.has(rid))
+          errors.push({ path: `/rateTableIds/${i}`, message: `rate table ${rid} is not a live customer table` });
       });
     }
     if (c.expressVendorTrunkId != null) {
@@ -373,7 +372,8 @@ export function updateTrunk(kind: TrunkKind) {
       const me = await getCurrentUser();
       const before = await loadTrunk(pool, k, id);
       if (!before) return notFound(reply, k, id);
-      if (before.archived) return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
+      if (before.archived)
+        return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
       const errors = await checkInput(pool, k, input, before);
       if (errors.length) return badInput(reply, errors);
 
@@ -452,9 +452,27 @@ async function trunkDependencies(db: Db, k: KindDef, id: number) {
       [id],
     );
     items.push(
-      { key: "route_rules", label: "Route rules naming it", count: rows[0].route_rules, blocking: false, detail: "It drops out of these rules" },
-      { key: "rate_tables", label: "Rate tables attached", count: rows[0].rate_tables, blocking: false, detail: "Tables stay; only the link goes" },
-      { key: "translation_rules", label: "Rules attached directly", count: rows[0].rules, blocking: false, detail: null },
+      {
+        key: "route_rules",
+        label: "Route rules naming it",
+        count: rows[0].route_rules,
+        blocking: false,
+        detail: "It drops out of these rules",
+      },
+      {
+        key: "rate_tables",
+        label: "Rate tables attached",
+        count: rows[0].rate_tables,
+        blocking: false,
+        detail: "Tables stay; only the link goes",
+      },
+      {
+        key: "translation_rules",
+        label: "Rules attached directly",
+        count: rows[0].rules,
+        blocking: false,
+        detail: null,
+      },
     );
   } else {
     const { rows } = await db.query(
@@ -466,10 +484,34 @@ async function trunkDependencies(db: Db, k: KindDef, id: number) {
       [id],
     );
     items.push(
-      { key: "route_rules", label: "Route rules sending to it", count: rows[0].route_rules, blocking: false, detail: "Routing skips it from now on" },
-      { key: "express", label: "Customer trunks using it as express vendor", count: rows[0].express, blocking: false, detail: "Those trunks fall back to routing" },
-      { key: "rate_tables", label: "Own buy rate table", count: 1, blocking: false, detail: "Kept with its full history" },
-      { key: "translation_rules", label: "Rules attached directly", count: rows[0].rules, blocking: false, detail: null },
+      {
+        key: "route_rules",
+        label: "Route rules sending to it",
+        count: rows[0].route_rules,
+        blocking: false,
+        detail: "Routing skips it from now on",
+      },
+      {
+        key: "express",
+        label: "Customer trunks using it as express vendor",
+        count: rows[0].express,
+        blocking: false,
+        detail: "Those trunks fall back to routing",
+      },
+      {
+        key: "rate_tables",
+        label: "Own buy rate table",
+        count: 1,
+        blocking: false,
+        detail: "Kept with its full history",
+      },
+      {
+        key: "translation_rules",
+        label: "Rules attached directly",
+        count: rows[0].rules,
+        blocking: false,
+        detail: null,
+      },
     );
   }
   items.push({
@@ -536,7 +578,8 @@ export function restoreTrunk(kind: TrunkKind) {
       );
       if (!rows[0]) return notFound(reply, k, id);
       if (!rows[0].deleted_at) return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is not archived`);
-      if (rows[0].enterprise_deleted_at) return sendProblem(reply, 400, "Its enterprise is archived; restore the enterprise first");
+      if (rows[0].enterprise_deleted_at)
+        return sendProblem(reply, 400, "Its enterprise is archived; restore the enterprise first");
       try {
         const change = await inTransaction(pool, async (c) => {
           await c.query(`UPDATE ${k.table} SET deleted_at = NULL, deleted_by_id = NULL WHERE id = $1`, [id]);
@@ -589,7 +632,13 @@ async function trunkRef(db: Db, k: KindDef, id: number) {
     [id],
   );
   return rows[0] as
-    | { id: number; enterprise_id: number; product_category_id: number | null; enterprise_name: string; category_name: string | null }
+    | {
+        id: number;
+        enterprise_id: number;
+        product_category_id: number | null;
+        enterprise_name: string;
+        category_name: string | null;
+      }
     | undefined;
 }
 
@@ -666,10 +715,10 @@ async function reachingRules(db: Db, k: KindDef, which: "translation" | "hlr", t
     }
     cur.top ||= r.insert_at === "top";
     cur.direct ||= src === "trunk";
-    if (SPECIFICITY[src] < SPECIFICITY[cur.rule.source.type as Source]) cur.rule.source = { type: src, label: label(src) };
+    if (SPECIFICITY[src] < SPECIFICITY[cur.rule.source.type as Source])
+      cur.rule.source = { type: src, label: label(src) };
   }
-  const rank = (x: Reach): [number, number] =>
-    x.rule.position != null ? [1, x.rule.position] : [x.top ? 0 : 2, 0];
+  const rank = (x: Reach): [number, number] => (x.rule.position != null ? [1, x.rule.position] : [x.top ? 0 : 2, 0]);
   return [...byRule.values()].sort((a, b) => {
     const [ga, pa] = rank(a);
     const [gb, pb] = rank(b);
@@ -695,7 +744,13 @@ const stateOf = (list: Reach[]): RuleState[] =>
     }))
     .sort((a, b) => a.ruleId - b.ruleId);
 
-async function applyRuleState(c: pg.PoolClient, kind: TrunkKind, which: "translation" | "hlr", trunkId: number, state: RuleState[]) {
+async function applyRuleState(
+  c: pg.PoolClient,
+  kind: TrunkKind,
+  which: "translation" | "hlr",
+  trunkId: number,
+  state: RuleState[],
+) {
   for (const s of state) {
     const isDefault = s.position === null && s.enabled && s.continueAfter;
     if (which === "translation") {
@@ -730,10 +785,10 @@ async function applyRuleState(c: pg.PoolClient, kind: TrunkKind, which: "transla
           [s.ruleId, trunkId],
         );
       else
-        await c.query("DELETE FROM hlr_rule_targets WHERE hlr_rule_id = $1 AND target_type = 'trunk' AND target_id = $2", [
-          s.ruleId,
-          trunkId,
-        ]);
+        await c.query(
+          "DELETE FROM hlr_rule_targets WHERE hlr_rule_id = $1 AND target_type = 'trunk' AND target_id = $2",
+          [s.ruleId, trunkId],
+        );
       if (s.position === null && s.enabled)
         await c.query("DELETE FROM hlr_rule_trunk_settings WHERE hlr_rule_id = $1 AND customer_trunk_id = $2", [
           s.ruleId,
@@ -770,7 +825,8 @@ export function updateTrunkRules(kind: TrunkKind) {
       const me = await getCurrentUser();
       const t = await loadTrunk(pool, k, id);
       if (!t) return notFound(reply, k, id);
-      if (t.archived) return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
+      if (t.archived)
+        return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
       if (k.kind === "vendor" && (input.hlr?.length || input.detachHlrRuleIds?.length))
         return badInput(reply, [{ path: "/hlr", message: "HLR rules run on customer trunks only" }]);
 

@@ -271,7 +271,10 @@ export function updateEnterprise(request: FastifyRequest, reply: FastifyReply) {
       // A side that has trunks can't disappear (§5.3: trunks need their billing side).
       const keep = sidesOf(input.type);
       if (!keep.includes("customer") && before.trunkCounts.customer > 0)
-        errors.push({ path: "/type", message: `has ${before.trunkCounts.customer} customer trunks; archive them first` });
+        errors.push({
+          path: "/type",
+          message: `has ${before.trunkCounts.customer} customer trunks; archive them first`,
+        });
       if (!keep.includes("vendor") && before.trunkCounts.vendor > 0)
         errors.push({ path: "/type", message: `has ${before.trunkCounts.vendor} vendor trunks; archive them first` });
     }
@@ -282,12 +285,7 @@ export function updateEnterprise(request: FastifyRequest, reply: FastifyReply) {
     const values = flatten({ ...input, name: input.name.trim(), alias: input.alias.trim() }, SPECS);
     for (const [path, v] of Object.entries(values)) if (v !== undefined) setPath(after, path, v);
     for (const t of CONTACT_TYPES) setPath(after, `contacts.${t}`, normContact(input.contacts[t]));
-    const diff = diffPaths(
-      id,
-      before,
-      after,
-      [...SPECS.map((s) => s.api), ...CONTACT_PATHS],
-    );
+    const diff = diffPaths(id, before, after, [...SPECS.map((s) => s.api), ...CONTACT_PATHS]);
     if (diff.length === 0) return { record: before, change: null };
 
     const change = await inTransaction(pool, async (c) => {
@@ -335,7 +333,8 @@ export async function applyEnterpriseField(
   }
   if (head === "billing" && (a === "customer" || a === "vendor")) {
     if (!b) {
-      if (value === null) await c.query("DELETE FROM enterprise_billing WHERE enterprise_id = $1 AND side = $2", [id, a]);
+      if (value === null)
+        await c.query("DELETE FROM enterprise_billing WHERE enterprise_id = $1 AND side = $2", [id, a]);
       else await upsertBillingSide(c, id, a, value as BillingSideInput, userId);
       return;
     }
@@ -632,7 +631,13 @@ export function handOverEnterprise(request: FastifyRequest, reply: FastifyReply)
       await c.query(
         `INSERT INTO enterprise_am_history (enterprise_id, user_id, starts_at, note, created_by_id)
          VALUES ($1, $2, $3, $4, $5)`,
-        [id, input.userId, effective, input.note?.trim() || (at > now + 60_000 ? "Scheduled handover" : "Handover"), me.id],
+        [
+          id,
+          input.userId,
+          effective,
+          input.note?.trim() || (at > now + 60_000 ? "Scheduled handover" : "Handover"),
+          me.id,
+        ],
       );
       await applyDueHandovers(c, id);
       const after = await amRows(c, id);

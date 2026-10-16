@@ -84,7 +84,9 @@ describe("reference data and lists", { skip }, () => {
     assert.ok(page.total > 10);
     const top = page.rows[0];
     const rules = await ok("getCustomerTrunkRules", call("GET", `/customer-trunks/${top.id}/rules`));
-    const running = rules.translation.filter((r: { ruleActive: boolean; enabled: boolean }) => r.ruleActive && r.enabled);
+    const running = rules.translation.filter(
+      (r: { ruleActive: boolean; enabled: boolean }) => r.ruleActive && r.enabled,
+    );
     assert.equal(top.rulesCount, running.length);
 
     const vendors = await ok(
@@ -136,7 +138,10 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.equal(saved.change.changeType, "create");
     assert.equal(saved.record.contacts.rates.emails[0], "rates@example.test");
 
-    const dup = await call("POST", "/enterprises", { ...saved.record, accountManagerId: saved.record.accountManagerId });
+    const dup = await call("POST", "/enterprises", {
+      ...saved.record,
+      accountManagerId: saved.record.accountManagerId,
+    });
     assert.equal(dup.statusCode, 400, "body with read-only fields is rejected by the contract");
 
     const input = {
@@ -218,7 +223,14 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     const edited = await ok(
       "updateEnterpriseBilling",
       call("PUT", `/enterprises/${id}/billing`, {
-        customer: { ...created.record.customer, creditLimit: 9000, balance: undefined, billingCycleName: undefined, updatedBy: undefined, updatedAt: undefined },
+        customer: {
+          ...created.record.customer,
+          creditLimit: 9000,
+          balance: undefined,
+          billingCycleName: undefined,
+          updatedBy: undefined,
+          updatedAt: undefined,
+        },
       }),
     );
     assert.deepEqual(
@@ -244,12 +256,19 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     await ok("handOverEnterprise", call("POST", `/enterprises/${id}/handover`, { userId: am3.id, effectiveAt: later }));
     const replaced = await ok(
       "handOverEnterprise",
-      call("POST", `/enterprises/${id}/handover`, { userId: ref.accountManagers[0].id, effectiveAt: later, note: "Moved" }),
+      call("POST", `/enterprises/${id}/handover`, {
+        userId: ref.accountManagers[0].id,
+        effectiveAt: later,
+        note: "Moved",
+      }),
     );
     assert.equal(replaced.periods.length, 3, "the first scheduled handover was replaced, not stacked");
     assert.equal((await ok("getEnterprise", call("GET", `/enterprises/${id}`))).accountManagerId, am2.id);
 
-    const past = await call("POST", `/enterprises/${id}/handover`, { userId: am3.id, effectiveAt: "2020-01-01T00:00:00Z" });
+    const past = await call("POST", `/enterprises/${id}/handover`, {
+      userId: am3.id,
+      effectiveAt: "2020-01-01T00:00:00Z",
+    });
     assert.equal(past.statusCode, 400);
     check("handOverEnterprise", past);
 
@@ -264,7 +283,11 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     const body = Buffer.from("fake contract text");
     const doc = await ok(
       "uploadEnterpriseDoc",
-      call("POST", `/enterprises/${id}/docs`, { name: "Contract", fileName: "contract.txt", dataBase64: body.toString("base64") }),
+      call("POST", `/enterprises/${id}/docs`, {
+        name: "Contract",
+        fileName: "contract.txt",
+        dataBase64: body.toString("base64"),
+      }),
       201,
     );
     assert.equal(doc.contentType, "text/plain");
@@ -310,7 +333,9 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.match(archived.change.note, /Override: Test of override/);
     const list = await ok(
       "queryEnterprises",
-      call("POST", "/enterprises/query", { filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: id }] } }),
+      call("POST", "/enterprises/query", {
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: id }] },
+      }),
     );
     assert.equal(list.total, 0, "archived enterprises leave normal lists");
     const edit = await call("PUT", `/enterprises/${id}`, {});
@@ -360,15 +385,25 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.ok(!("password" in saved.record));
     assert.deepEqual(saved.record.hostIps, ["192.0.2.10", "2001:db8::1"]);
 
-    const clash = await call("POST", "/customer-trunks", { ...customerTrunk(ent.id, "b"), username: saved.record.username });
+    const clash = await call("POST", "/customer-trunks", {
+      ...customerTrunk(ent.id, "b"),
+      username: saved.record.username,
+    });
     assert.equal(clash.statusCode, 400);
     check("createCustomerTrunk", clash);
     assert.ok(clash.json().errors.some((e: { path: string }) => e.path === "/username"));
     const noPassword = await call("POST", "/customer-trunks", { ...customerTrunk(ent.id, "c"), password: undefined });
     assert.equal(noPassword.statusCode, 400);
 
-    const { rows: tables } = await db().query("SELECT id FROM rate_tables WHERE kind = 'customer' AND deleted_at IS NULL LIMIT 2");
-    const input = { ...customerTrunk(ent.id, "a"), password: undefined, tps: 75, rateTableIds: tables.map((t) => t.id) };
+    const { rows: tables } = await db().query(
+      "SELECT id FROM rate_tables WHERE kind = 'customer' AND deleted_at IS NULL LIMIT 2",
+    );
+    const input = {
+      ...customerTrunk(ent.id, "a"),
+      password: undefined,
+      tps: 75,
+      rateTableIds: tables.map((t) => t.id),
+    };
     const edited = await ok("updateCustomerTrunk", call("PUT", `/customer-trunks/${id}`, input));
     assert.deepEqual(edited.change.diff.map((d: { field: string }) => d.field).sort(), ["rateTableIds", "tps"]);
     await ok("undoChange", call("POST", `/changes/${edited.change.id}/undo`, {}));
@@ -376,7 +411,10 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(back.tps, 50);
     assert.deepEqual(back.rateTableIds, []);
 
-    const pw = await ok("updateCustomerTrunk", call("PUT", `/customer-trunks/${id}`, { ...input, password: "newpass" }));
+    const pw = await ok(
+      "updateCustomerTrunk",
+      call("PUT", `/customer-trunks/${id}`, { ...input, password: "newpass" }),
+    );
     const entry = pw.change.diff.find((d: { field: string }) => d.field === "password");
     assert.equal(entry.after, "(changed)", "credentials stay out of the change log (§13.22)");
   });
@@ -449,7 +487,11 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
       "updateCustomerTrunkRules",
       call("PUT", `/customer-trunks/${id}/rules`, { detachTranslationRuleIds: [direct.ruleId] }),
     );
-    assert.ok(!detached.record.translation.some((r: { ruleId: number; source: { type: string } }) => r.ruleId === direct.ruleId && r.source.type === "trunk"));
+    assert.ok(
+      !detached.record.translation.some(
+        (r: { ruleId: number; source: { type: string } }) => r.ruleId === direct.ruleId && r.source.type === "trunk",
+      ),
+    );
 
     await ok("undoChange", call("POST", `/changes/${detached.change.id}/undo`, {}));
     await ok("undoChange", call("POST", `/changes/${reordered.change.id}/undo`, {}));
@@ -463,9 +505,15 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     const id = saved.record.id;
     const deps = await ok("getCustomerTrunkDependencies", call("GET", `/customer-trunks/${id}/dependencies`));
     assert.equal(deps.blocked, false);
-    const archived = await ok("archiveCustomerTrunk", call("POST", `/customer-trunks/${id}/archive`, { reason: "Test" }));
+    const archived = await ok(
+      "archiveCustomerTrunk",
+      call("POST", `/customer-trunks/${id}/archive`, { reason: "Test" }),
+    );
     assert.ok(archived.record.archived);
-    const reuse = await call("POST", "/customer-trunks", { ...customerTrunk(ent.id, "h"), username: saved.record.username });
+    const reuse = await call("POST", "/customer-trunks", {
+      ...customerTrunk(ent.id, "h"),
+      username: saved.record.username,
+    });
     assert.equal(reuse.statusCode, 400, "an archived trunk's username stays reserved");
     const restored = await ok("restoreCustomerTrunk", call("POST", `/customer-trunks/${id}/restore`));
     assert.equal(restored.record.archived, null);

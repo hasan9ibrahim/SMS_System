@@ -56,7 +56,15 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
       continue;
     }
     if (entityType === "customer_trunk" || entityType === "vendor_trunk") {
-      await applyTrunkField(c, entityType === "customer_trunk" ? "customer" : "vendor", e.entity_id, e.field, e.before, e.after, userId);
+      await applyTrunkField(
+        c,
+        entityType === "customer_trunk" ? "customer" : "vendor",
+        e.entity_id,
+        e.field,
+        e.before,
+        e.after,
+        userId,
+      );
       continue;
     }
     const target = ENTITY_COLUMNS[entityType];
