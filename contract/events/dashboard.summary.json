@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "dashboard.summary.json",
   "title": "DashboardSummaryEvent",
-  "description": "Topic live:dashboard, event \"summary\". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Money is in the platform currency (`currency`, EUR by default).",
+  "description": "Topic live:dashboard, event \"summary\". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Today is the day in the platform time zone (`ReferenceData.platformTimezone`, UTC by default). Money is in the platform currency (`currency`, EUR by default).",
   "type": "object",
   "required": [
     "at",

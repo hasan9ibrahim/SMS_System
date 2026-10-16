@@ -18,6 +18,7 @@ import type {
   TrunkTps,
 } from "@sms/contract";
 import { useMe, useUpdatePreferences } from "../../api/hooks";
+import { useReference } from "../../api/records";
 import { LiveSocket, socketUrl } from "../../live/socket";
 import { pageForPath } from "../../nav/registry";
 import { PageHeader } from "../../page/PageHeader";
@@ -324,10 +325,20 @@ function SummaryBar({
   onOpen: Open;
 }) {
   const cur = s?.currency ?? "EUR";
+  // Today is the day in the platform time zone (decision 2026-10-16).
+  const tz = useReference().data?.platformTimezone ?? "UTC";
   const ratioTone = (v: number | undefined, good: number, warn: number) =>
     v === undefined ? undefined : v >= good ? undefined : v >= warn ? "warn" : "bad";
   return (
-    <Section title="Today" className="dash-summary" extra={<span className="muted small">UTC day · {cur}</span>}>
+    <Section
+      title="Today"
+      className="dash-summary"
+      extra={
+        <span className="muted small">
+          {tz} day · {cur}
+        </span>
+      }
+    >
       <div className="dash-kpis">
         <Counter label="Attempts" value={s?.attempts} format={int} animate={animate} />
         <Counter label="Submitted" value={s?.submitted} format={int} animate={animate} />

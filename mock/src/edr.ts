@@ -2,6 +2,7 @@
 // today's revenue and margin per rate table (§13.12). Optional: when ClickHouse does not
 // answer, callers get null and screens show "—" instead of failing.
 import { sysToPlatformFactor } from "./currency.js";
+import { PLATFORM_DAY_START_SQL } from "./platform.js";
 
 const env = process.env;
 const CH_URL = `http://${env.CLICKHOUSE_HOST ?? "localhost"}:${env.CLICKHOUSE_HTTP_PORT ?? 8123}`;
@@ -33,7 +34,7 @@ export interface TrafficToday {
 let cache: { at: number; customer: Map<number, TrafficToday>; vendor: Map<number, TrafficToday> } | null = null;
 
 /**
- * Today's traffic (UTC day) per customer rate table (priced by) and vendor rate table
+ * Today's traffic (day in the platform time zone) per customer rate table (priced by) and vendor rate table
  * (costed by), cached for a minute. Null when the EDR store is unavailable.
  */
 export async function trafficTodayByRateTable() {
@@ -42,7 +43,7 @@ export async function trafficTodayByRateTable() {
   const q = (col: string) =>
     chRows<{ id: number; n: string; rev: string; cost: string }>(
       `SELECT ${col} AS id, count() AS n, sum(revenue_sys * ${factor}) AS rev, sum(cost_sys * ${factor}) AS cost
-         FROM edr WHERE submit_time >= toStartOfDay(now('UTC')) GROUP BY id`,
+         FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} GROUP BY id`,
     );
   const [c, v] = await Promise.all([q("c_rate_table_id"), q("v_rate_table_id")]);
   if (!c || !v) return null;

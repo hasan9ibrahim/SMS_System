@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "dashboard.tops.json",
   "title": "DashboardTopsEvent",
-  "description": "Topic live:dashboard, event \"tops\". Daily top clients, top vendors (§13.3 item 5) and top destinations (item 6) for today (UTC), pushed every 5 s. Money is in the platform currency.",
+  "description": "Topic live:dashboard, event \"tops\". Daily top clients, top vendors (§13.3 item 5) and top destinations (item 6) for today (the day in the platform time zone, `ReferenceData.platformTimezone`), pushed every 5 s. Money is in the platform currency.",
   "type": "object",
   "required": [
     "at",

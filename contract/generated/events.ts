@@ -110,7 +110,7 @@ export interface MoverRow {
   dlr: number | null;
 }
 /**
- * Topic live:dashboard, event "summary". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Money is in the platform currency (`currency`, EUR by default).
+ * Topic live:dashboard, event "summary". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Today is the day in the platform time zone (`ReferenceData.platformTimezone`, UTC by default). Money is in the platform currency (`currency`, EUR by default).
  */
 export interface DashboardSummaryEvent {
   at: EventTimestamp;
@@ -154,7 +154,7 @@ export interface TopDestination {
   attempts: number;
 }
 /**
- * Topic live:dashboard, event "tops". Daily top clients, top vendors (§13.3 item 5) and top destinations (item 6) for today (UTC), pushed every 5 s. Money is in the platform currency.
+ * Topic live:dashboard, event "tops". Daily top clients, top vendors (§13.3 item 5) and top destinations (item 6) for today (the day in the platform time zone, `ReferenceData.platformTimezone`), pushed every 5 s. Money is in the platform currency.
  */
 export interface DashboardTopsEvent {
   at: EventTimestamp;

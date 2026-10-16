@@ -2,7 +2,7 @@
 // rates, ASR and DLR come from the last 7 days of EDRs, so the live view agrees with the
 // reports; each customer trunk follows a timeline of segments (steady, ramping up or down,
 // starting, stopping, idle) so the traffic movers panel has movers to show. Today's totals
-// start from the EDR store and grow with the simulated traffic. Two hours of history are
+// (the day in the platform time zone) start from the EDR store and grow with the simulated traffic. Two hours of history are
 // seeded at start, so every panel is full from the first second.
 import type {
   DashboardMoversEvent,
@@ -14,6 +14,7 @@ import type {
 } from "@sms/contract";
 import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
 import { db } from "../db.js";
+import { PLATFORM_DAY_START_SQL, platformDay } from "../platform.js";
 import { chRows } from "../edr.js";
 
 const TOTAL_TPS = Number(process.env.SIM_TOTAL_TPS ?? 1800);
@@ -110,7 +111,6 @@ const pick = <T>(xs: [T, number][]): T => {
   for (const [x, w] of xs) if ((r -= w) <= 0) return x;
   return xs[0]![0];
 };
-const utcDay = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 // ---------------------------------------------------------------- behaviour
 
@@ -165,7 +165,7 @@ export function levelAt(segs: Segment[], t: number): number {
 async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendor[]; today: DayTotals }> {
   const now = Date.now();
   const today: DayTotals = {
-    day: utcDay(now),
+    day: platformDay(now),
     attempts: 0,
     submitted: 0,
     delivered: 0,
@@ -200,7 +200,7 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
     chRows<Stat & { name?: string }>(
       `SELECT ${col} AS id, count() AS n, toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
               countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl
-         FROM edr WHERE submit_time >= toStartOfDay(now('UTC')) AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
+         FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
       15_000,
     );
   const [cStats, vStats, cDay, vDay, dDay] = await Promise.all([
@@ -365,7 +365,7 @@ export async function createSimulator(): Promise<Simulator> {
       trunks,
       vendors: [],
       today: {
-        day: utcDay(now),
+        day: platformDay(now),
         attempts: 0,
         submitted: 0,
         delivered: 0,
@@ -390,8 +390,8 @@ export function step(sim: Simulator, now = Date.now()) {
   const prevMinute = Math.floor(sim.lastTick / 60_000);
   const prevSlot = Math.floor(sim.lastTick / (SLOT_S * 1000));
   sim.lastTick = now;
-  if (utcDay(now) !== sim.today.day) {
-    sim.today = { ...sim.today, day: utcDay(now), attempts: 0, submitted: 0, delivered: 0, revenue: 0, cost: 0 };
+  if (platformDay(now) !== sim.today.day) {
+    sim.today = { ...sim.today, day: platformDay(now), attempts: 0, submitted: 0, delivered: 0, revenue: 0, cost: 0 };
     sim.today.clients = new Map();
     sim.today.vendors = new Map();
     sim.today.destinations = new Map();
