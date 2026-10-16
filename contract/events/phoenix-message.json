@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "phoenix-message.json",
+  "title": "PhoenixMessage",
+  "description": "Wire frame of the Phoenix Channels V2 JSON serializer, used by the mock traffic generator now and by the Phoenix backend later (CLAUDE.md rule 5). Socket URL: /socket/websocket?vsn=2.0.0. Frame: [join_ref, ref, topic, event, payload]. Server pushes have ref = null.",
+  "type": "array",
+  "prefixItems": [
+    { "type": ["string", "null"], "description": "join_ref: ref of the phx_join that opened the channel" },
+    { "type": ["string", "null"], "description": "ref: request ref for replies, null for server pushes" },
+    { "type": "string", "description": "topic, e.g. live:dashboard" },
+    { "type": "string", "description": "event name, e.g. summary, phx_join, phx_reply, heartbeat" },
+    { "type": "object", "description": "payload; for server pushes, one of the event schemas in this folder" }
+  ],
+  "items": false,
+  "minItems": 5,
+  "maxItems": 5,
+  "examples": [
+    ["1", null, "live:dashboard", "summary", { "at": "2026-10-16T08:00:01Z" }]
+  ]
+}

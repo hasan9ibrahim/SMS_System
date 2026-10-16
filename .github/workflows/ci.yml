@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**", "Claude/**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Lint contract
+        run: npm run lint:contract
+      - name: Generated types match the contract
+        run: npm run gen:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: docker-compose file is valid
+        run: docker compose config -q

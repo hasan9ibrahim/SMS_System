@@ -1,0 +1,46 @@
+/* Colour tokens, exactly as in spec §15.2. Light is the default; dark applies with
+   [data-theme="dark"] on <html>. Use these variables everywhere, never raw colours. */
+:root {
+  --color-page-bg: #eef1f5;
+  --color-panel: #f9fafb;
+  --color-text: #273142;
+  --color-text-secondary: #5b6577;
+  --color-border: #dde2ea;
+  --color-accent: #4a6fa5;
+  --color-good: #3f8f6b;
+  --color-warning: #b7832f;
+  --color-error: #c0565b;
+  --color-menu-bar: #2b3445;
+
+  /* §15.3 common styling */
+  --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-size-body: 13px;
+  --font-size-title: 17px;
+  --radius-sm: 7px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --border-width: 1px;
+
+  /* §15.1 layout sizes */
+  --menu-bar-height: 46px;
+  --tab-strip-height: 40px;
+  --grid-row-height: 38px;
+  --status-bar-height: 26px;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --color-page-bg: #1b2029;
+  --color-panel: #222833;
+  --color-text: #dfe4ec;
+  --color-text-secondary: #a3acbb;
+  --color-border: #323a47;
+  --color-accent: #7ea2d8;
+  --color-good: #74c29a;
+  --color-warning: #dbb26b;
+  --color-error: #e08a8f;
+  --color-menu-bar: #151920;
+
+  color-scheme: dark;
+}

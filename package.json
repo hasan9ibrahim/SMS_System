@@ -1,0 +1,26 @@
+{
+  "name": "sms-platform",
+  "private": true,
+  "description": "SMPP SMS aggregation platform: GUI, API contract and mock server (frontend phase)",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "contract",
+    "mock",
+    "web"
+  ],
+  "scripts": {
+    "gen": "npm run gen -w contract",
+    "gen:check": "npm run gen:check -w contract",
+    "lint:contract": "npm run lint -w contract",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "check": "npm run lint:contract && npm run gen:check && npm run typecheck && npm test && npm run build",
+    "dev:mock": "npm run dev -w mock",
+    "dev:web": "npm run dev -w web",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  }
+}

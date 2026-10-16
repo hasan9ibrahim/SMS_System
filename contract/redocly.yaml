@@ -1,0 +1,8 @@
+extends:
+  - recommended
+rules:
+  security-defined: error
+  operation-4xx-response: error
+  info-license: off
+  info-license-strict: off
+  no-server-example.com: off

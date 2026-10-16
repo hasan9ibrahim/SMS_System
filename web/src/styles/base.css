@@ -1,0 +1,28 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-page-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: 1.4;
+}
+
+/* Grids and figures use tabular numbers (§15.3). */
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

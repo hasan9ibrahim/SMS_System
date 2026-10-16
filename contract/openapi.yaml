@@ -1,0 +1,543 @@
+openapi: 3.1.0
+info:
+  title: SMS Aggregation Platform API
+  version: 0.1.0
+  summary: The single contract between the GUI and the backend.
+  description: |
+    The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
+    In the frontend phase the TypeScript mock server in `mock/` answers it; later the
+    Elixir/Phoenix backend answers the same contract, with no screen changes.
+
+    ## Conventions
+
+    * All times are UTC, ISO 8601 (spec §1 "Global conventions").
+    * Every record carries `updatedBy` / `updatedAt`; most carry `createdBy` / `createdAt`.
+    * Errors use `application/problem+json` (RFC 9457), see `Problem`.
+    * **Lists are server-side** (CLAUDE.md rule 3, spec §13.25, §14.2). Every list is read
+      with `POST /{list}/query` and a `ListQuery` body: the filter tree, sort, quick search,
+      a page size and an opaque cursor. The server filters, sorts and pages; the browser
+      never loads all rows. Grids scroll with virtualisation and fetch the next page with
+      `nextCursor` as the user scrolls.
+    * The fields a list can be filtered and sorted on, including hidden columns, are
+      described by `GET /meta/lists/{list}/fields`, so the filter builder needs no
+      per-screen code.
+    * Live data (dashboard, analytics, alerts, hover volumes) is not in this file; it is
+      pushed over WebSocket as Phoenix Channels messages, see `contract/events/`.
+servers:
+  - url: /api/v1
+    description: Same origin (web dev server proxies to the mock server)
+tags:
+  - name: system
+    description: Health and server information
+  - name: session
+    description: The signed-in user
+  - name: meta
+    description: Field catalogue for grids and the filter builder (§13.25)
+  - name: enterprises
+    description: Partners - customers, vendors and reciprocals (§5)
+
+security:
+  - sessionCookie: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Liveness, versions and server time
+      description: Used by the status bar for the server clock (UTC, §15.1) and by deploy checks.
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /me:
+    get:
+      tags: [session]
+      operationId: getCurrentUser
+      summary: The signed-in user, role and UI preferences
+      description: |
+        Drives the avatar menu (§3), the theme (§15.2) and which buttons are shown
+        (GUI Access Group, §1). Authentication itself (login, 2FA, monthly password
+        change, §13.28) is added in a later contract revision.
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /meta/lists/{list}/fields:
+    get:
+      tags: [meta]
+      operationId: getListFields
+      summary: Filterable and sortable fields of a list
+      description: |
+        Every column of a list page, including hidden ones, with its type and the
+        operators allowed on it (§13.25). The grid builds its column filters and the
+        multi-field filter builder from this.
+      parameters:
+        - $ref: "#/components/parameters/ListId"
+      responses:
+        "200":
+          description: Field catalogue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListFields"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /enterprises/query:
+    post:
+      tags: [enterprises]
+      operationId: queryEnterprises
+      summary: List enterprises (server-side filter, sort and paging)
+      description: Enterprise list and the enterprise selector "Name – Alias (ID)" (§5).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of enterprises
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterprisePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /enterprises/{id}:
+    get:
+      tags: [enterprises]
+      operationId: getEnterprise
+      summary: One enterprise (General Info tab, §5.1)
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The enterprise
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enterprise"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sms_session
+      description: Session cookie set at sign-in (login flow added in a later revision).
+
+  parameters:
+    RecordId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
+    ListId:
+      name: list
+      in: path
+      required: true
+      description: Identifier of a list page.
+      schema:
+        $ref: "#/components/schemas/ListId"
+
+  responses:
+    BadRequest:
+      description: The request does not match the contract (e.g. unknown filter field or operator)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Not signed in, or not allowed by the user's GUI Access Group (§1)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: No such record
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    # ------------------------------------------------------------------ common
+    Id:
+      type: integer
+      format: int64
+      minimum: 1
+      description: Numeric record ID, shown to users (e.g. "Name – Alias (ID)").
+
+    Timestamp:
+      type: string
+      format: date-time
+      description: UTC, ISO 8601.
+
+    Audit:
+      type: object
+      description: Who changed the record and when (spec §1).
+      required: [updatedBy, updatedAt]
+      properties:
+        createdBy:
+          type: [string, "null"]
+        createdAt:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        updatedBy:
+          type: string
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details.
+      required: [title, status]
+      properties:
+        type:
+          type: string
+          default: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        errors:
+          type: array
+          description: Field-level errors, for forms and for invalid filters.
+          items:
+            type: object
+            required: [path, message]
+            properties:
+              path:
+                type: string
+                description: JSON pointer into the request, e.g. `/filter/conditions/0/field`.
+              message:
+                type: string
+
+    # ------------------------------------------------------------------ system
+    Health:
+      type: object
+      required: [status, version, contractVersion, serverTime, backend]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        version:
+          type: string
+          description: Build version of the server answering the contract.
+        contractVersion:
+          type: string
+          description: The `info.version` of this contract the server implements.
+        serverTime:
+          $ref: "#/components/schemas/Timestamp"
+        backend:
+          type: string
+          enum: [mock, elixir]
+          description: Which implementation answers the contract.
+
+    Theme:
+      type: string
+      enum: [light, dark]
+      description: Colour theme (§15.2).
+
+    CurrentUser:
+      type: object
+      required: [id, username, displayName, role, businessCompany, preferences, permissions]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        username:
+          type: string
+        displayName:
+          type: string
+        initials:
+          type: string
+          description: Shown in the avatar (§3).
+        role:
+          type: string
+          description: e.g. Admin, NOC, Rates, Finance, Account Manager.
+        businessCompany:
+          type: string
+          description: The selling entity the user belongs to.
+        preferences:
+          type: object
+          required: [theme]
+          properties:
+            theme:
+              $ref: "#/components/schemas/Theme"
+            openInNewTab:
+              type: boolean
+              default: true
+              description: Menu items open in a new tab or the current tab (§13.5).
+            animations:
+              type: boolean
+              default: true
+              description: Live value animations on/off (§13.3).
+        permissions:
+          type: array
+          description: GUI Access Group permission keys; buttons not covered are hidden (§1).
+          items:
+            type: string
+
+    # ------------------------------------------------------------- list query (§13.25)
+    ListId:
+      type: string
+      description: A list page whose fields are described by `/meta/lists/{list}/fields`.
+      enum: [enterprises]
+
+    FilterOperator:
+      type: string
+      description: |
+        Operators from §13.25. All text comparisons are case-insensitive.
+
+        * `eq`, `neq`: equals / not equals.
+        * `like`, `not_like`: wildcard match, `%` = any text, `_` = one character
+          (`re%` starts with, `%re` ends with, `%re%` contains). A literal `%` or `_`
+          is escaped with a backslash.
+        * `in`, `not_in`: value in list (`values`).
+        * `between`: inclusive range, `values` = [from, to].
+        * `gt`, `gte`, `lt`, `lte`: greater / less than.
+        * `empty`, `not_empty`: null or empty string; no value.
+        * `regex`: POSIX regular expression, case-insensitive.
+      enum: [eq, neq, like, not_like, in, not_in, between, gt, gte, lt, lte, empty, not_empty, regex]
+
+    FilterValue:
+      description: A single filter operand. Dates and times are ISO 8601 strings.
+      type: [string, number, boolean]
+
+    FilterCondition:
+      type: object
+      description: One "field + operator + value" condition (a column filter or a builder row).
+      required: [field, op]
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+          description: A field name from the list's field catalogue (hidden fields included).
+        op:
+          $ref: "#/components/schemas/FilterOperator"
+        value:
+          $ref: "#/components/schemas/FilterValue"
+          description: Operand for single-value operators.
+        values:
+          type: array
+          description: Operands for `in`, `not_in` (any length) and `between` (exactly 2).
+          items:
+            $ref: "#/components/schemas/FilterValue"
+
+    FilterGroup:
+      type: object
+      description: |
+        Conditions combined with AND or OR. Groups nest, so the builder can express
+        "A AND (B OR C)". Column filters and builder conditions are sent together as
+        one tree; the top level is normally `and`.
+      required: [logic, conditions]
+      additionalProperties: false
+      properties:
+        logic:
+          type: string
+          enum: [and, or]
+        conditions:
+          type: array
+          maxItems: 200
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/FilterCondition"
+              - $ref: "#/components/schemas/FilterGroup"
+
+    SortKey:
+      type: object
+      required: [field, dir]
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+        dir:
+          type: string
+          enum: [asc, desc]
+
+    ListQuery:
+      type: object
+      description: |
+        Server-side filter, sort and paging for every list (§13.25, §14.2). The first
+        request has no `cursor`; each next page sends the previous response's
+        `nextCursor` with the same filter and sort. Without `sort` the server applies
+        the list's default (for destination lists: country name, then network name).
+      additionalProperties: false
+      properties:
+        filter:
+          $ref: "#/components/schemas/FilterGroup"
+        search:
+          type: string
+          maxLength: 200
+          description: Quick search across the list's text columns (case-insensitive, wildcards allowed).
+        sort:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/SortKey"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 4000
+          default: 100
+          description: Rows per page (page-size choices in §1 go up to 4,000).
+        cursor:
+          type: [string, "null"]
+          description: Opaque position from the previous page's `nextCursor`.
+        withTotal:
+          type: boolean
+          default: true
+          description: Compute `total`. Very large lists (EDRs) may return an estimate.
+
+    ListPageMeta:
+      type: object
+      required: [total, totalIsEstimate, nextCursor]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Rows matching the filter (shown as the row count, §13.25 / §15.4 status bar).
+        totalIsEstimate:
+          type: boolean
+          description: True when `total` is an estimate (very large lists).
+        nextCursor:
+          type: [string, "null"]
+          description: Pass as `cursor` to fetch the next page; null on the last page.
+
+    FieldType:
+      type: string
+      description: Decides the column filter widget (§15.1) and the allowed operators.
+      enum: [text, prefix, integer, decimal, money, percent, enum, boolean, date, datetime, mccmnc]
+
+    FieldDescriptor:
+      type: object
+      required: [field, label, type, operators, sortable, hidden]
+      properties:
+        field:
+          type: string
+        label:
+          type: string
+        type:
+          $ref: "#/components/schemas/FieldType"
+        operators:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterOperator"
+        defaultOperator:
+          $ref: "#/components/schemas/FilterOperator"
+          description: Operator used by the column filter box under the header.
+        sortable:
+          type: boolean
+        hidden:
+          type: boolean
+          description: Not shown as a column by default, but still filterable (§13.25).
+        enumValues:
+          type: array
+          description: Choices for `enum` fields (dropdown filter with Select All, §1).
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value:
+                type: string
+              label:
+                type: string
+
+    ListFields:
+      type: object
+      required: [list, fields, defaultSort]
+      properties:
+        list:
+          $ref: "#/components/schemas/ListId"
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldDescriptor"
+        defaultSort:
+          type: array
+          items:
+            $ref: "#/components/schemas/SortKey"
+
+    # ------------------------------------------------------------- enterprises (§5)
+    EnterpriseType:
+      type: string
+      enum: [customer, vendor, reciprocal]
+      description: Reciprocal = both customer and vendor.
+
+    EnterpriseTier:
+      type: string
+      enum: [tier1, tier2, tier3]
+
+    RecordStatus:
+      type: string
+      enum: [active, inactive]
+
+    Enterprise:
+      description: |
+        Skeleton of the General Info record (§5.1). Address, contacts, credit alert
+        percentages, docs and billing are added with the Enterprises screen (build step 4.1).
+      allOf:
+        - type: object
+          required: [id, name, alias, type, tier, status, businessCompanyId, accountManagerId]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            name:
+              type: string
+              minLength: 1
+              maxLength: 200
+            alias:
+              type: string
+              minLength: 1
+              maxLength: 100
+            type:
+              $ref: "#/components/schemas/EnterpriseType"
+            tier:
+              $ref: "#/components/schemas/EnterpriseTier"
+            status:
+              $ref: "#/components/schemas/RecordStatus"
+            businessCompanyId:
+              $ref: "#/components/schemas/Id"
+            accountManagerId:
+              $ref: "#/components/schemas/Id"
+            country:
+              type: [string, "null"]
+              description: ISO 3166-1 alpha-2.
+        - $ref: "#/components/schemas/Audit"
+
+    EnterprisePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/Enterprise"
