@@ -713,7 +713,7 @@ CREATE TABLE transactions (
   description       text,
   send_confirmation boolean NOT NULL DEFAULT false,          -- §13.33
   confirmation_status text NOT NULL DEFAULT 'not_sent' CHECK (confirmation_status IN ('sent','not_sent','failed')),
-  include_in_soa    boolean NOT NULL DEFAULT true,           -- §13.33
+  include_in_soa    boolean NOT NULL DEFAULT true,           -- §13.33: false = left off the SOA, still in the balance
   exclude_reason    text,
   created_by_id     bigint REFERENCES users(id),
   updated_by_id     bigint REFERENCES users(id),

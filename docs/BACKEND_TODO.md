@@ -10,6 +10,8 @@ backend team knows exactly what to build. Newest first.
 
 ## Decisions
 
+- 2026-10-16, billing data retention (§13.29): EDRs, invoices, SOAs, payments, credit notes, balance history, disputes, rate history and audit records are kept for 7 years and cannot be purged before that (anonymising a closed client's contact details stays allowed, as §13.29 says). Decided by: Hasan Ibrahim.
+- 2026-10-16, excluded payments (§13.33): a payment with "Include in SOA" unticked is left off the partner's SOA (and shown in the SOA preview's collapsed "excluded" section) but still counts in the partner's balance and in finance reports. Decided by: Hasan Ibrahim.
 - 2026-10-16, saved filter views (§13.25): a saved view is private to the user who saved it. The owner can share it with named colleagues (chosen users), who see it read-only in their view list. No department-wide or company-wide sharing. To be added to the contract with the views endpoint. Decided by: Hasan Ibrahim.
 
 ## Schema notes (build step 2, fake data generator)
@@ -30,8 +32,6 @@ New tables or columns beyond the reference platform, so the backend builds the s
 
 ## Open questions
 
-- Billing data retention period (spec §13.29 uses 7 years as a placeholder; confirm with accounting).
-- Excluded payments (§13.33): should they also be removed from the partner balance, or only from the SOA?
 - MCC/MNC master (§6.1): the spec says about 1,965 entries; the generator uses a public list with 2,063 networks after cleaning, plus one "All networks" code per MCC. Which list is the source of truth for production, and who maintains it?
 - Dial-code Master Table (§6.1): the generator makes up the prefixes below each real country dial code. Production needs a real numbering-plan source (and MNP/HLR for ported numbers). Which one?
 - Shared MCCs (e.g. Guam uses the US MCCs 310/311): the generator gives the "All networks" code to the country with most networks on that MCC and none to the other. Is that the rule we want, or should territories get their own country-level code?

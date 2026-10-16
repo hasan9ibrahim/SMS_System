@@ -139,7 +139,7 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
             });
             balance = money(balance - amount);
             if (rng.chance(0.25)) {
-              // Bank charges kept off the SOA (§13.33).
+              // Bank charges: left off the SOA but still counted in the balance (§13.33).
               const fee = money(rng.float(5, 40));
               await sink.insert("transactions", {
                 id: txId++,
@@ -164,6 +164,7 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
                 updated_at: payDate,
                 deleted_at: null,
               });
+              balance = money(balance + fee);
             }
           }
         }
