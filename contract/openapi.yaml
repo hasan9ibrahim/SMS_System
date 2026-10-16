@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.3.0
+  version: 0.4.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1340,8 +1340,8 @@ paths:
       operationId: queryRateTables
       summary: List rate tables (server-side filter, sort and paging)
       description: |
-        Customer (sell) and vendor (buy) tables; the trunk form's rate table picker and, later, the
-        Rate Manager (§13.12).
+        Customer (sell) and vendor (buy) tables: the Rate Manager list (§13.12) and the trunk form's
+        rate table picker. Filter `accountManagerId` for an AM's tables.
       requestBody:
         required: true
         content:
@@ -1363,6 +1363,298 @@ paths:
           $ref: "#/components/responses/Unavailable"
 
 
+  /rate-tables:
+    post:
+      tags: [rates]
+      operationId: createRateTable
+      summary: "Add a customer (sell) rate table (§6.2, §13.12)"
+      description: |
+        Vendor (buy) tables come with their vendor trunk. `copyFrom` builds the new table from a
+        vendor trunk's current rates plus a margin %, valid from now.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateTableInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateTableSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-tables/{id}:
+    get:
+      tags: [rates]
+      operationId: getRateTable
+      summary: "One rate table"
+      description: |
+        Header and summary cards of the Rate Manager detail (§13.12).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The rate table
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateTableDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [rates]
+      operationId: updateRateTable
+      summary: "Change a rate table"
+      description: |
+        Saves the whole record; the change lists only the fields that differ (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateTableUpdate"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateTableSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-tables/{id}/dependencies:
+    get:
+      tags: [rates]
+      operationId: getRateTableDependencies
+      summary: "What depends on a rate table (safe delete, §13.29)"
+      description: |
+        Customer trunks using the table (blocking: detach it first) and traffic in the last 30 days.
+        A vendor table is archived with its vendor trunk.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-tables/{id}/archive:
+    post:
+      tags: [rates]
+      operationId: archiveRateTable
+      summary: "Archive (delete) a rate table (§13.29)"
+      description: |
+        Delete means archive: the record leaves lists, pickers and routing and stops carrying
+        traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+        sends `override` with a reason, which is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateTableSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-tables/{id}/restore:
+    post:
+      tags: [rates]
+      operationId: restoreRateTable
+      summary: "Restore an archived rate table (§13.29)"
+      description: |
+        Administrators only; the restore is logged.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateTableSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-tables/{id}/export:
+    get:
+      tags: [rates]
+      operationId: exportRateLines
+      summary: "Export rate lines as CSV (§6.2 Export Rate)"
+      description: |
+        The lines of one view (current, scheduled or closed) with destination names, best buy and margin.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/RateView"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-tables/{id}/lines/changes:
+    post:
+      tags: [rates]
+      operationId: changeRateLines
+      summary: "Change rate lines as one undoable change (§13.12, §13.10)"
+      description: |
+        Set a rate (by line or for a new destination), close lines or block them. A set rate starts
+        at `effectiveFrom` (default now, never in the past): the line valid then is closed at that
+        time and a new version opens; scheduled versions after it are replaced. Increases on a
+        customer table that start sooner than the notice period of an enterprise using the table
+        answer 409 unless `acceptNoticeBreach` is true (§13.14). Everything is one change in History.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateLineChanges"
+      responses:
+        "200":
+          description: Applied, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLineChangesSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Increases sooner than a client's notice period
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/NoticeBreach"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lines/query:
+    post:
+      tags: [rates]
+      operationId: queryRateLines
+      summary: "List rate lines of one table (server-side filter, sort and paging)"
+      description: |
+        The filter must hold a top-level `rateTableId eq` condition. `view` picks current (valid now,
+        the default), scheduled (starting later) or closed lines. Rows carry best buy, margin and the
+        next scheduled rate (§13.12).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of rate lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLinePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /destinations/query:
+    post:
+      tags: [rates]
+      operationId: queryDestinations
+      summary: "List destinations of the MCCMNC master (§6.1, §13.21)"
+      description: |
+        Search by country, network or code for the destination picker.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of destinations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinationPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1372,6 +1664,15 @@ components:
       description: Session cookie set at sign-in (login flow added in a later revision).
 
   parameters:
+    RateView:
+      name: view
+      in: query
+      required: false
+      description: Which lines (§13.12 view tabs).
+      schema:
+        type: string
+        enum: [current, scheduled, closed]
+        default: current
     DocId:
       name: docId
       in: path
@@ -2896,7 +3197,7 @@ components:
     # ------------------------------------------------------------- rate tables (§6.2, §13.12)
     RateTableRow:
       type: object
-      required: [id, name, kind, categoryId, category, currency, vendorTrunkId, vendorTrunkName, trunkCount, activeLines, updatedAt]
+      required: [id, name, kind, categoryId, category, currency, vendorTrunkId, vendorTrunkName, trunkCount, activeLines, updatedAt, description, trunkNames, enterpriseNames, scheduledChanges, nextChangeAt, negativeMarginLines, avgMarginPct, moneyToday, updatedBy, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -2925,6 +3226,38 @@ components:
           description: Lines valid now.
         updatedAt:
           $ref: "#/components/schemas/Timestamp"
+        description:
+          type: [string, "null"]
+        trunkNames:
+          type: array
+          description: Up to five customer trunks using the table (§13.12 "trunks using it").
+          items:
+            type: string
+        enterpriseNames:
+          type: array
+          description: Up to five clients using the table, or the vendor.
+          items:
+            type: string
+        scheduledChanges:
+          type: integer
+          description: Lines starting later.
+        nextChangeAt:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        negativeMarginLines:
+          type: [integer, "null"]
+          description: Current sell rates below the best buy rate; null for vendor tables.
+        avgMarginPct:
+          type: [number, "null"]
+          description: Margin of today's traffic, weighted by volume; null without traffic or EDR store.
+        moneyToday:
+          type: [number, "null"]
+          description: Today's revenue (customer table) or cost (vendor table) in the table currency.
+        updatedBy:
+          type: [string, "null"]
+        archived:
+          type: boolean
 
     RateTablePage:
       allOf:
@@ -2937,11 +3270,384 @@ components:
               items:
                 $ref: "#/components/schemas/RateTableRow"
 
+    # ------------------------------------------------------------- Rate Manager (§13.12)
+    RateTableInput:
+      type: object
+      description: New customer (sell) rate table (§6.2 Add form).
+      required: [name, categoryId, currency]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        categoryId:
+          $ref: "#/components/schemas/Id"
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        description:
+          type: [string, "null"]
+          maxLength: 500
+        copyFrom:
+          description: Copy Rate From Vendor Rate (§6.2) - the vendor trunk's current rates plus a margin.
+          type: object
+          required: [vendorTrunkId, marginPct]
+          additionalProperties: false
+          properties:
+            vendorTrunkId:
+              $ref: "#/components/schemas/Id"
+            marginPct:
+              type: number
+              minimum: -50
+              maximum: 500
+
+    RateTableUpdate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: [string, "null"]
+          maxLength: 500
+
+    RateTableTrunk:
+      type: object
+      required: [id, name, kind, enterpriseId, enterpriseName, status]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [customer, vendor]
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterpriseName:
+          type: string
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+
+    RateTableSummary:
+      type: object
+      description: Summary cards (§13.12). Traffic figures are null when the EDR store does not answer.
+      required: [activeRates, countries, scheduledChanges, nextChangeAt, scheduledIncreases, closedLines, negativeMarginLines, avgMarginPct, moneyToday, messagesToday]
+      properties:
+        activeRates:
+          type: integer
+        countries:
+          type: integer
+        scheduledChanges:
+          type: integer
+        nextChangeAt:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        scheduledIncreases:
+          type: integer
+        closedLines:
+          type: integer
+        negativeMarginLines:
+          type: [integer, "null"]
+          description: Current sell rates below the best buy rate; null for vendor tables.
+        avgMarginPct:
+          type: [number, "null"]
+          description: Margin of today's traffic priced by this table, weighted by volume.
+        moneyToday:
+          type: [number, "null"]
+          description: Today's revenue (customer table) or cost (vendor table), in the table currency.
+        messagesToday:
+          type: [integer, "null"]
+
+    RateTableDetail:
+      allOf:
+        - type: object
+          required: [id, name, kind, categoryId, category, currency, description, vendorTrunkId, vendorTrunkName, trunks, lastImport, archived, summary]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            name:
+              type: string
+            kind:
+              type: string
+              enum: [customer, vendor]
+            categoryId:
+              $ref: "#/components/schemas/Id"
+            category:
+              type: string
+            currency:
+              type: string
+            description:
+              type: [string, "null"]
+            vendorTrunkId:
+              oneOf:
+                - $ref: "#/components/schemas/Id"
+                - type: "null"
+            vendorTrunkName:
+              type: [string, "null"]
+            trunks:
+              type: array
+              description: Customer trunks using the table, or the vendor trunk that owns it.
+              items:
+                $ref: "#/components/schemas/RateTableTrunk"
+            lastImport:
+              oneOf:
+                - type: object
+                  required: [at, by, fileName, operation, status]
+                  properties:
+                    at:
+                      $ref: "#/components/schemas/Timestamp"
+                    by:
+                      type: [string, "null"]
+                    fileName:
+                      type: string
+                    operation:
+                      type: string
+                    status:
+                      type: string
+                - type: "null"
+            archived:
+              $ref: "#/components/schemas/Archived"
+            summary:
+              $ref: "#/components/schemas/RateTableSummary"
+        - $ref: "#/components/schemas/Audit"
+
+    RateTableSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/RateTableDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    RateLineRow:
+      type: object
+      required: [id, rateTableId, mccmncId, mccmnc, country, countryIso, network, dialCode, senderId, rate, sysRate, currency, bestBuy, bestVendorTrunkId, bestVendor, margin, marginPct, changeType, changePct, validFrom, validTo, statedValidFrom, nextRate, nextFrom, isBlocked, rateNote, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        rateTableId:
+          $ref: "#/components/schemas/Id"
+        mccmncId:
+          $ref: "#/components/schemas/Id"
+        mccmnc:
+          type: string
+          description: A 3-digit code is the country's All networks line (§6.1).
+        country:
+          type: string
+        countryIso:
+          type: string
+        network:
+          type: string
+        dialCode:
+          type: [string, "null"]
+        senderId:
+          type: [string, "null"]
+        rate:
+          type: number
+        sysRate:
+          type: number
+          description: The rate in the base currency (USD).
+        currency:
+          type: string
+        bestBuy:
+          type: [number, "null"]
+          description: Cheapest current vendor rate for the destination and product category, in the table currency.
+        bestVendorTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        bestVendor:
+          type: [string, "null"]
+        margin:
+          type: [number, "null"]
+          description: rate - bestBuy (customer tables).
+        marginPct:
+          type: [number, "null"]
+          description: margin / rate x 100.
+        changeType:
+          type: string
+          enum: [new, same, increase, decrease, closed]
+        changePct:
+          type: [number, "null"]
+          description: Change against the previous version, in %.
+        validFrom:
+          $ref: "#/components/schemas/Timestamp"
+        validTo:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        statedValidFrom:
+          description: The vendor RN's stated date when it was back-dated (§13.32).
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        nextRate:
+          type: [number, "null"]
+          description: The next scheduled rate of the destination, if any.
+        nextFrom:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        isBlocked:
+          type: boolean
+        rateNote:
+          type: [string, "null"]
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    RateLinePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/RateLineRow"
+
+    RateLineEdit:
+      type: object
+      description: |
+        One edit. `set`: a new rate from `effectiveFrom` for an existing line (`lineId`) or for a
+        destination (`mccmnc`, optional `senderId`). `close`: end the line at `at` (default now; a
+        scheduled line is removed). `block`: block or unblock the line (§6.2 IsBlock).
+      required: [action]
+      additionalProperties: false
+      properties:
+        action:
+          type: string
+          enum: [set, close, block]
+        lineId:
+          $ref: "#/components/schemas/Id"
+        mccmnc:
+          type: string
+          pattern: "^[0-9]{3,6}$"
+        senderId:
+          type: [string, "null"]
+          maxLength: 20
+        rate:
+          type: number
+          minimum: 0
+        effectiveFrom:
+          $ref: "#/components/schemas/Timestamp"
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        blocked:
+          type: boolean
+        rateNote:
+          type: [string, "null"]
+          maxLength: 500
+
+    RateLineChanges:
+      type: object
+      required: [items]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/RateLineEdit"
+        note:
+          type: string
+          maxLength: 500
+        acceptNoticeBreach:
+          type: boolean
+          description: Apply increases that start sooner than a client's notice period (§13.14).
+
+    RateLineChangesSaved:
+      type: object
+      required: [change, applied, skipped]
+      properties:
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+        applied:
+          type: integer
+          description: Edits that changed something.
+        skipped:
+          type: integer
+          description: Edits that changed nothing (e.g. the same rate).
+
+    NoticeBreach:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [breaches]
+          properties:
+            breaches:
+              type: array
+              items:
+                type: object
+                required: [mccmnc, currentRate, newRate, effectiveFrom, noticeDays, earliestAllowed, enterpriseName]
+                properties:
+                  mccmnc:
+                    type: string
+                  currentRate:
+                    type: number
+                  newRate:
+                    type: number
+                  effectiveFrom:
+                    $ref: "#/components/schemas/Timestamp"
+                  noticeDays:
+                    type: integer
+                  earliestAllowed:
+                    $ref: "#/components/schemas/Timestamp"
+                  enterpriseName:
+                    type: string
+
+    Destination:
+      type: object
+      required: [id, mccmnc, mcc, mnc, country, countryIso, network, allNetworks]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        mccmnc:
+          type: string
+        mcc:
+          type: string
+        mnc:
+          type: string
+        country:
+          type: string
+        countryIso:
+          type: string
+        network:
+          type: string
+        allNetworks:
+          type: boolean
+
+    DestinationPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/Destination"
+
     # ------------------------------------------------------------- list query (§13.25)
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations]
 
     FilterOperator:
       type: string

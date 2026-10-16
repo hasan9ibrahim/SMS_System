@@ -53,6 +53,10 @@ export interface DataGridProps<Row extends { id: number }> {
   onOpen?: (row: Row, e: MouseEvent | KeyboardEvent) => void;
   onMeta?: (meta: GridMeta) => void;
   trailing?: { header: string; width: number; render: (row: Row) => ReactNode };
+  /** Extra class for a row, e.g. a negative-margin tint (§13.12). */
+  rowClass?: (row: Row) => string | undefined;
+  /** The rows loaded so far (for actions on the selection). */
+  onRows?: (rows: Row[]) => void;
 }
 
 /** Default cell text by field type. */
@@ -136,6 +140,7 @@ interface RowProps<Row> {
   onDoubleClick: (row: Row, e: MouseEvent) => void;
   onCheck: (row: Row, shift: boolean) => void;
   trailing?: DataGridProps<{ id: number }>["trailing"];
+  extraClass?: string | undefined;
 }
 
 /** Archived rows (shown with "Show deleted", §13.29) are greyed out. */
@@ -155,10 +160,11 @@ function GridRowInner<Row extends { id: number }>({
   onDoubleClick,
   onCheck,
   trailing,
+  extraClass,
 }: RowProps<Row>) {
   return (
     <div
-      className={`gr${active ? " active" : ""}${checked ? " checked" : ""}${isArchived(row) ? " archived" : ""}`}
+      className={`gr${active ? " active" : ""}${checked ? " checked" : ""}${isArchived(row) ? " archived" : ""}${extraClass ? ` ${extraClass}` : ""}`}
       style={{ transform: `translateY(${top}px)` }}
       role="row"
       aria-rowindex={index + 2}
@@ -215,6 +221,8 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     onOpen,
     onMeta,
     trailing,
+    rowClass,
+    onRows,
   } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastChecked = useRef<number | null>(null);
@@ -230,6 +238,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 1,
   });
   const rows = useMemo(() => result.data?.pages.flatMap((p) => p.rows) ?? [], [result.data]);
+  useEffect(() => onRows?.(rows), [rows, onRows]);
   const first = result.data?.pages[0];
   const error =
     result.error instanceof ApiError
@@ -414,16 +423,18 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
           <div className="gf-cell gc-check" />
           {cells.map((c) => (
             <div key={c.field.field} className="gf-cell" style={{ width: c.width }}>
-              <ColumnFilter
-                field={c.field}
-                condition={state.columns[c.field.field]}
-                onChange={(cond) => {
-                  const columns = { ...state.columns };
-                  if (cond) columns[c.field.field] = cond;
-                  else delete columns[c.field.field];
-                  onStateChange({ ...state, columns, viewId: state.viewId });
-                }}
-              />
+              {c.field.operators.length > 0 && (
+                <ColumnFilter
+                  field={c.field}
+                  condition={state.columns[c.field.field]}
+                  onChange={(cond) => {
+                    const columns = { ...state.columns };
+                    if (cond) columns[c.field.field] = cond;
+                    else delete columns[c.field.field];
+                    onStateChange({ ...state, columns, viewId: state.viewId });
+                  }}
+                />
+              )}
             </div>
           ))}
           {trailing && <div className="gf-cell" style={{ width: trailing.width }} />}
@@ -470,6 +481,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
                 onDoubleClick={onRowDouble}
                 onCheck={onCheck}
                 trailing={trailing as RowProps<Row>["trailing"]}
+                extraClass={rowClass?.(row)}
               />
             );
           })}

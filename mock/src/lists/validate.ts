@@ -36,6 +36,8 @@ export function checkListQuery(query: ListQuery, fields: ListFields): NonNullabl
           !(typeof v === "number" || (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))))
         ) {
           errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a number` });
+        } else if (isNumber && f.type === "integer" && !Number.isInteger(Number(v))) {
+          errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a whole number` });
         } else if (isTime && (typeof v !== "string" || Number.isNaN(Date.parse(v)))) {
           errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a date (ISO 8601)` });
         } else if (f.type === "boolean" && typeof v !== "boolean") {

@@ -52,6 +52,8 @@ export interface ListScreenProps<Row extends { id: number }> {
   primary?: { label: string; icon?: IconName; onClick?: () => void; disabled?: boolean; title?: string };
   /** Filters applied when the tab has none in its URL. */
   initialState?: Partial<GridState>;
+  /** Page-specific controls in the filter row (e.g. an account manager picker). */
+  toolbar?: (state: GridState, setState: (s: GridState) => void) => ReactNode;
   shortcuts?: string;
 }
 
@@ -184,6 +186,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     primary,
     initialState,
     shortcuts,
+    toolbar,
   } = props;
   const { active } = useTab();
   const fields = useListFields(list);
@@ -343,6 +346,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
         )}
         {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
         {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
+        {toolbar?.(state, setState)}
         <ViewsMenu list={list} state={state} onApply={setState} />
         <span className="fb-spacer" />
         {selected.size > 0 && (

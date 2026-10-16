@@ -10,6 +10,7 @@ import { CURRENT_USER_ID, canUndoOthers, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { applyEnterpriseField } from "./enterprises.js";
 import { applyTrunkField } from "./trunks.js";
+import { applyRateTableEntries } from "./rates.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -35,12 +36,24 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
 const TABLES: Record<string, string> = {
   ...Object.fromEntries(Object.entries(ENTITY_COLUMNS).map(([k, v]) => [k, v.table])),
   enterprise: "enterprises",
+  rate_table: "rate_tables",
   customer_trunk: "customer_trunks",
   vendor_trunk: "vendor_trunks",
 };
 
 /** Puts each entry's `before` value back (undo restores what the change replaced). */
 async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEntry[], userId: number) {
+  if (entityType === "rate_table") {
+    // Rate lines need ordered writes (no overlapping versions at any step).
+    const rest = entries.filter((e) => e.field === "*");
+    await applyRateTableEntries(
+      c,
+      entries.filter((e) => e.field !== "*"),
+      "before",
+      userId,
+    );
+    entries = rest;
+  }
   for (const e of entries) {
     // "*" = the record itself: no value before means it was created, so undo archives it;
     // a value before means it was deleted, so undo restores it (§13.10, §13.29).
@@ -159,9 +172,13 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
          VALUES ($1, $2, 'undo', $3, $4, $5, $6, $7) RETURNING id`,
         [
           target.entity_type,
-          [...new Set(revert.map((d) => d.entity_id))],
+          // Same records as the change it undoes (rate edits list line ids in the diff only).
+          target.entity_ids,
+          // The inverse runs the entries backwards, so undoing this undo replays them in order.
           JSON.stringify(
-            revert.map((d) => ({ entity_id: d.entity_id, field: d.field, before: d.after, after: d.before })),
+            [...revert]
+              .reverse()
+              .map((d) => ({ entity_id: d.entity_id, field: d.field, before: d.after, after: d.before })),
           ),
           body.note ?? `Undo of #${id} by ${me.displayName}`,
           id,

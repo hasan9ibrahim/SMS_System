@@ -93,6 +93,10 @@ code {
   cursor: pointer;
   white-space: nowrap;
 }
+a.btn {
+  color: inherit;
+  text-decoration: none;
+}
 .btn:hover:not(:disabled) {
   background: var(--hover);
 }

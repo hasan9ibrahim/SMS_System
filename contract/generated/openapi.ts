@@ -825,10 +825,204 @@ export type paths = {
     put?: never;
     /**
      * List rate tables (server-side filter, sort and paging)
-     * @description Customer (sell) and vendor (buy) tables; the trunk form's rate table picker and, later, the
-     *     Rate Manager (§13.12).
+     * @description Customer (sell) and vendor (buy) tables: the Rate Manager list (§13.12) and the trunk form's
+     *     rate table picker. Filter `accountManagerId` for an AM's tables.
      */
     post: operations["queryRateTables"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a customer (sell) rate table (§6.2, §13.12)
+     * @description Vendor (buy) tables come with their vendor trunk. `copyFrom` builds the new table from a
+     *     vendor trunk's current rates plus a margin %, valid from now.
+     */
+    post: operations["createRateTable"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One rate table
+     * @description Header and summary cards of the Rate Manager detail (§13.12).
+     */
+    get: operations["getRateTable"];
+    /**
+     * Change a rate table
+     * @description Saves the whole record; the change lists only the fields that differ (§13.10).
+     */
+    put: operations["updateRateTable"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a rate table (safe delete, §13.29)
+     * @description Customer trunks using the table (blocking: detach it first) and traffic in the last 30 days.
+     *     A vendor table is archived with its vendor trunk.
+     */
+    get: operations["getRateTableDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a rate table (§13.29)
+     * @description Delete means archive: the record leaves lists, pickers and routing and stops carrying
+     *     traffic, but nothing is removed. Blocking dependencies answer 409 unless an administrator
+     *     sends `override` with a reason, which is logged.
+     */
+    post: operations["archiveRateTable"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived rate table (§13.29)
+     * @description Administrators only; the restore is logged.
+     */
+    post: operations["restoreRateTable"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables/{id}/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export rate lines as CSV (§6.2 Export Rate)
+     * @description The lines of one view (current, scheduled or closed) with destination names, best buy and margin.
+     */
+    get: operations["exportRateLines"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-tables/{id}/lines/changes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change rate lines as one undoable change (§13.12, §13.10)
+     * @description Set a rate (by line or for a new destination), close lines or block them. A set rate starts
+     *     at `effectiveFrom` (default now, never in the past): the line valid then is closed at that
+     *     time and a new version opens; scheduled versions after it are replaced. Increases on a
+     *     customer table that start sooner than the notice period of an enterprise using the table
+     *     answer 409 unless `acceptNoticeBreach` is true (§13.14). Everything is one change in History.
+     */
+    post: operations["changeRateLines"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lines/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List rate lines of one table (server-side filter, sort and paging)
+     * @description The filter must hold a top-level `rateTableId eq` condition. `view` picks current (valid now,
+     *     the default), scheduled (starting later) or closed lines. Rows carry best buy, margin and the
+     *     next scheduled rate (§13.12).
+     */
+    post: operations["queryRateLines"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/destinations/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List destinations of the MCCMNC master (§6.1, §13.21)
+     * @description Search by country, network or code for the destination picker.
+     */
+    post: operations["queryDestinations"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1545,16 +1739,203 @@ export type components = {
       /** @description Lines valid now. */
       activeLines: number;
       updatedAt: components["schemas"]["Timestamp"];
+      description: string | null;
+      /** @description Up to five customer trunks using the table (§13.12 "trunks using it"). */
+      trunkNames: string[];
+      /** @description Up to five clients using the table, or the vendor. */
+      enterpriseNames: string[];
+      /** @description Lines starting later. */
+      scheduledChanges: number;
+      nextChangeAt: components["schemas"]["Timestamp"] | null;
+      /** @description Current sell rates below the best buy rate; null for vendor tables. */
+      negativeMarginLines: number | null;
+      /** @description Margin of today's traffic, weighted by volume; null without traffic or EDR store. */
+      avgMarginPct: number | null;
+      /** @description Today's revenue (customer table) or cost (vendor table) in the table currency. */
+      moneyToday: number | null;
+      updatedBy: string | null;
+      archived: boolean;
     };
     RateTablePage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["RateTableRow"][];
+    };
+    /** @description New customer (sell) rate table (§6.2 Add form). */
+    RateTableInput: {
+      name: string;
+      categoryId: components["schemas"]["Id"];
+      currency: string;
+      description?: string | null;
+      /** @description Copy Rate From Vendor Rate (§6.2) - the vendor trunk's current rates plus a margin. */
+      copyFrom?: {
+        vendorTrunkId: components["schemas"]["Id"];
+        marginPct: number;
+      };
+    };
+    RateTableUpdate: {
+      name: string;
+      description?: string | null;
+    };
+    RateTableTrunk: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @enum {string} */
+      kind: "customer" | "vendor";
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      status: components["schemas"]["RecordStatus"];
+    };
+    /** @description Summary cards (§13.12). Traffic figures are null when the EDR store does not answer. */
+    RateTableSummary: {
+      activeRates: number;
+      countries: number;
+      scheduledChanges: number;
+      nextChangeAt: components["schemas"]["Timestamp"] | null;
+      scheduledIncreases: number;
+      closedLines: number;
+      /** @description Current sell rates below the best buy rate; null for vendor tables. */
+      negativeMarginLines: number | null;
+      /** @description Margin of today's traffic priced by this table, weighted by volume. */
+      avgMarginPct: number | null;
+      /** @description Today's revenue (customer table) or cost (vendor table), in the table currency. */
+      moneyToday: number | null;
+      messagesToday: number | null;
+    };
+    RateTableDetail: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @enum {string} */
+      kind: "customer" | "vendor";
+      categoryId: components["schemas"]["Id"];
+      category: string;
+      currency: string;
+      description: string | null;
+      vendorTrunkId: components["schemas"]["Id"] | null;
+      vendorTrunkName: string | null;
+      /** @description Customer trunks using the table, or the vendor trunk that owns it. */
+      trunks: components["schemas"]["RateTableTrunk"][];
+      lastImport: {
+        at: components["schemas"]["Timestamp"];
+        by: string | null;
+        fileName: string;
+        operation: string;
+        status: string;
+      } | null;
+      archived: components["schemas"]["Archived"];
+      summary: components["schemas"]["RateTableSummary"];
+    } & components["schemas"]["Audit"];
+    RateTableSaved: {
+      record: components["schemas"]["RateTableDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    RateLineRow: {
+      id: components["schemas"]["Id"];
+      rateTableId: components["schemas"]["Id"];
+      mccmncId: components["schemas"]["Id"];
+      /** @description A 3-digit code is the country's All networks line (§6.1). */
+      mccmnc: string;
+      country: string;
+      countryIso: string;
+      network: string;
+      dialCode: string | null;
+      senderId: string | null;
+      rate: number;
+      /** @description The rate in the base currency (USD). */
+      sysRate: number;
+      currency: string;
+      /** @description Cheapest current vendor rate for the destination and product category, in the table currency. */
+      bestBuy: number | null;
+      bestVendorTrunkId: components["schemas"]["Id"] | null;
+      bestVendor: string | null;
+      /** @description rate - bestBuy (customer tables). */
+      margin: number | null;
+      /** @description margin / rate x 100. */
+      marginPct: number | null;
+      /** @enum {string} */
+      changeType: "new" | "same" | "increase" | "decrease" | "closed";
+      /** @description Change against the previous version, in %. */
+      changePct: number | null;
+      validFrom: components["schemas"]["Timestamp"];
+      validTo: components["schemas"]["Timestamp"] | null;
+      /** @description The vendor RN's stated date when it was back-dated (§13.32). */
+      statedValidFrom: components["schemas"]["Timestamp"] | null;
+      /** @description The next scheduled rate of the destination, if any. */
+      nextRate: number | null;
+      nextFrom: components["schemas"]["Timestamp"] | null;
+      isBlocked: boolean;
+      rateNote: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    RateLinePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RateLineRow"][];
+    };
+    /**
+     * @description One edit. `set`: a new rate from `effectiveFrom` for an existing line (`lineId`) or for a
+     *     destination (`mccmnc`, optional `senderId`). `close`: end the line at `at` (default now; a
+     *     scheduled line is removed). `block`: block or unblock the line (§6.2 IsBlock).
+     */
+    RateLineEdit: {
+      /** @enum {string} */
+      action: "set" | "close" | "block";
+      lineId?: components["schemas"]["Id"];
+      mccmnc?: string;
+      senderId?: string | null;
+      rate?: number;
+      effectiveFrom?: components["schemas"]["Timestamp"];
+      at?: components["schemas"]["Timestamp"];
+      blocked?: boolean;
+      rateNote?: string | null;
+    };
+    RateLineChanges: {
+      items: components["schemas"]["RateLineEdit"][];
+      note?: string;
+      /** @description Apply increases that start sooner than a client's notice period (§13.14). */
+      acceptNoticeBreach?: boolean;
+    };
+    RateLineChangesSaved: {
+      change: components["schemas"]["Change"] | null;
+      /** @description Edits that changed something. */
+      applied: number;
+      /** @description Edits that changed nothing (e.g. the same rate). */
+      skipped: number;
+    };
+    NoticeBreach: components["schemas"]["Problem"] & {
+      breaches: {
+        mccmnc: string;
+        currentRate: number;
+        newRate: number;
+        effectiveFrom: components["schemas"]["Timestamp"];
+        noticeDays: number;
+        earliestAllowed: components["schemas"]["Timestamp"];
+        enterpriseName: string;
+      }[];
+    };
+    Destination: {
+      id: components["schemas"]["Id"];
+      mccmnc: string;
+      mcc: string;
+      mnc: string;
+      country: string;
+      countryIso: string;
+      network: string;
+      allNetworks: boolean;
+    };
+    DestinationPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["Destination"][];
     };
     /**
      * @description A list page whose fields are described by `/meta/lists/{list}/fields`.
      * @enum {string}
      */
     ListId:
-      "enterprises" | "users" | "changes" | "customer_trunks" | "vendor_trunks" | "rate_tables";
+      | "enterprises"
+      | "users"
+      | "changes"
+      | "customer_trunks"
+      | "vendor_trunks"
+      | "rate_tables"
+      | "rate_lines"
+      | "destinations";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -1768,6 +2149,8 @@ export type components = {
     };
   };
   parameters: {
+    /** @description Which lines (§13.12 view tabs). */
+    RateView: "current" | "scheduled" | "closed";
     DocId: components["schemas"]["Id"];
     RecordId: components["schemas"]["Id"];
     /** @description Identifier of a list page. */
@@ -3114,6 +3497,300 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RateTablePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createRateTable: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateTableInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateTableSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRateTable: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rate table */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateTableDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateRateTable: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateTableUpdate"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateTableSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRateTableDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveRateTable: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateTableSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreRateTable: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateTableSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportRateLines: {
+    parameters: {
+      query?: {
+        /** @description Which lines (§13.12 view tabs). */
+        view?: components["parameters"]["RateView"];
+      };
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  changeRateLines: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateLineChanges"];
+      };
+    };
+    responses: {
+      /** @description Applied, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateLineChangesSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Increases sooner than a client's notice period */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["NoticeBreach"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRateLines: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of rate lines */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateLinePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryDestinations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of destinations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DestinationPage"];
         };
       };
       400: components["responses"]["BadRequest"];

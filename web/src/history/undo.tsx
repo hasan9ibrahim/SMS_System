@@ -27,8 +27,22 @@ export function scopeFilter(scope: HistoryScope | null, userId?: number): Filter
   return conditions.length ? { logic: "and", conditions } : undefined;
 }
 
+/** A rate line snapshot (rate table changes, §13.12) reads as "20801 0.0450 until 2026-10-20". */
+function showLine(v: Record<string, unknown>): string {
+  const code = `${String(v.mccmnc)}${v.senderId ? `/${String(v.senderId)}` : ""}`;
+  const until = v.to ? ` until ${String(v.to).slice(0, 10)}` : "";
+  const from = Date.parse(String(v.from)) > Date.now() ? ` from ${String(v.from).slice(0, 10)}` : "";
+  return `${code} ${String(v.rate)}${from}${until}${v.blocked ? " blocked" : ""}`;
+}
+
 const show = (v: unknown) =>
-  v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v);
+  v === null || v === undefined
+    ? "—"
+    : typeof v === "object"
+      ? "rate" in (v as object) && "mccmnc" in (v as object)
+        ? showLine(v as Record<string, unknown>)
+        : JSON.stringify(v)
+      : String(v);
 
 export function describeDiff(diff: ChangeField[], max = 3): string {
   const parts = diff

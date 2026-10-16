@@ -25,7 +25,9 @@ export function db(): pg.Pool {
     ...PG_CONFIG,
     max: 10,
     connectionTimeoutMillis: 2000,
-    options: `-c search_path=${PG_SCHEMA},public -c statement_timeout=15000`,
+    // JIT compilation costs seconds on list queries with many small subqueries (rate tables,
+    // rate grid) and saves nothing at this volume, so it is off for API connections.
+    options: `-c search_path=${PG_SCHEMA},public -c statement_timeout=15000 -c jit=off`,
   });
   return pool;
 }

@@ -97,3 +97,19 @@ export type RecordStatus = Schemas["RecordStatus"];
 export type CustomerTrunkFields = Schemas["CustomerTrunkFields"];
 export type VendorTrunkFields = Schemas["VendorTrunkFields"];
 export type BillingSideFields = Schemas["BillingSideFields"];
+
+// v0.4.0: Rate Manager (§13.12)
+export type RateTableInput = Schemas["RateTableInput"];
+export type RateTableUpdate = Schemas["RateTableUpdate"];
+export type RateTableTrunk = Schemas["RateTableTrunk"];
+export type RateTableSummary = Schemas["RateTableSummary"];
+export type RateTableDetail = Schemas["RateTableDetail"];
+export type RateTableSaved = Schemas["RateTableSaved"];
+export type RateLineRow = Schemas["RateLineRow"];
+export type RateLinePage = Schemas["RateLinePage"];
+export type RateLineEdit = Schemas["RateLineEdit"];
+export type RateLineChanges = Schemas["RateLineChanges"];
+export type RateLineChangesSaved = Schemas["RateLineChangesSaved"];
+export type NoticeBreach = Schemas["NoticeBreach"];
+export type Destination = Schemas["Destination"];
+export type DestinationPage = Schemas["DestinationPage"];

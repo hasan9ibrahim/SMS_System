@@ -40,7 +40,7 @@ test("operators compile to case-insensitive, parameterised SQL", () => {
   assert.match(sql, /\(e\.name\)::text ILIKE \$1/);
   assert.match(sql, /lower\(\(e\.alias\)::text\) = \$2/);
   assert.match(sql, /lower\(\(e\.type\)::text\) = ANY\(\$3::text\[\]\)/);
-  assert.match(sql, /e\.id BETWEEN \$4::numeric AND \$5::numeric/);
+  assert.match(sql, /e\.id BETWEEN \$4::bigint AND \$5::bigint/);
   assert.match(sql, /e\.updated_at >= \$6::timestamptz/);
   assert.match(sql, /\(co\.iso IS NULL OR \(co\.iso\)::text = ''\)/);
   assert.match(sql, /\(e\.name\)::text ~\* \$7/);
@@ -74,7 +74,7 @@ test("AND/OR groups nest and archived records stay hidden", () => {
   });
   assert.match(
     sql,
-    /WHERE e\.deleted_at IS NULL AND \(lower\(\(e\.status\)::text\) = \$1 AND \(lower\(\(e\.tier\)::text\) = \$2 OR e\.id < \$3::numeric\)\)/,
+    /WHERE e\.deleted_at IS NULL AND \(lower\(\(e\.status\)::text\) = \$1 AND \(lower\(\(e\.tier\)::text\) = \$2 OR e\.id < \$3::bigint\)\)/,
   );
 });
 

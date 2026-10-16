@@ -15,6 +15,11 @@ import type {
   EnterpriseDocUpload,
   EnterpriseInput,
   HandoverRequest,
+  RateLineChanges,
+  RateLineChangesSaved,
+  RateTableDetail,
+  RateTableInput,
+  RateTableUpdate,
   ReferenceData,
   TrunkRules,
   TrunkRulesInput,
@@ -26,7 +31,7 @@ import { api, unwrap } from "./client";
 export type TrunkKind = "customer" | "vendor";
 export type TrunkDetail = CustomerTrunkDetail | VendorTrunkDetail;
 export type TrunkInput = CustomerTrunkInput | VendorTrunkInput;
-export type RecordKind = "enterprise" | TrunkKind;
+export type RecordKind = "enterprise" | TrunkKind | "rate_table";
 
 export interface Saved<T> {
   record: T;
@@ -200,6 +205,7 @@ export function useSaveTrunkRules(kind: TrunkKind, id: number) {
 export function fetchDependencies(kind: RecordKind, id: number): Promise<Dependencies> {
   const params = { params: { path: { id } } };
   if (kind === "enterprise") return unwrap(api.GET("/enterprises/{id}/dependencies", params));
+  if (kind === "rate_table") return unwrap(api.GET("/rate-tables/{id}/dependencies", params));
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -210,6 +216,7 @@ export function useArchive(kind: RecordKind) {
     mutationFn: ({ id, body }: { id: number; body: ArchiveRequest }): Promise<Saved<unknown>> => {
       const req = { params: { path: { id } }, body };
       if (kind === "enterprise") return unwrap(api.POST("/enterprises/{id}/archive", req));
+      if (kind === "rate_table") return unwrap(api.POST("/rate-tables/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -223,9 +230,47 @@ export function useRestore(kind: RecordKind) {
     mutationFn: (id: number): Promise<Saved<unknown>> => {
       const req = { params: { path: { id } } };
       if (kind === "enterprise") return unwrap(api.POST("/enterprises/{id}/restore", req));
+      if (kind === "rate_table") return unwrap(api.POST("/rate-tables/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },
     onSuccess: () => void refresh(),
   });
 }
+
+// ---------------------------------------------------------------- Rate Manager (§13.12)
+
+export function useRateTable(id: number | null) {
+  return useQuery<RateTableDetail>({
+    queryKey: ["record", "rate_table", id],
+    queryFn: () => unwrap(api.GET("/rate-tables/{id}", { params: { path: { id: id! } } })),
+    enabled: id !== null,
+    retry: false,
+  });
+}
+
+export function useSaveRateTable() {
+  const refresh = useRefreshRecords();
+  return useMutation({
+    mutationFn: (
+      arg: { id: null; input: RateTableInput } | { id: number; input: RateTableUpdate },
+    ): Promise<Saved<RateTableDetail>> =>
+      arg.id === null
+        ? unwrap(api.POST("/rate-tables", { body: arg.input }))
+        : unwrap(api.PUT("/rate-tables/{id}", { params: { path: { id: arg.id } }, body: arg.input })),
+    onSuccess: () => void refresh(),
+  });
+}
+
+/** One batch of rate edits = one undoable change. A 409 carries the notice breaches. */
+export function useChangeRateLines(id: number) {
+  const refresh = useRefreshRecords();
+  return useMutation({
+    mutationFn: (body: RateLineChanges): Promise<RateLineChangesSaved> =>
+      unwrap(api.POST("/rate-tables/{id}/lines/changes", { params: { path: { id } }, body })),
+    onSuccess: () => void refresh(),
+  });
+}
+
+export const rateExportUrl = (id: number, view: "current" | "scheduled" | "closed") =>
+  `/api/v1/rate-tables/${id}/export?view=${view}`;

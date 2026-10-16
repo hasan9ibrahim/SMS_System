@@ -82,12 +82,22 @@ function conditionSql(c: FilterCondition, field: FieldDescriptor, col: ColumnSql
   const x = col.sql;
   const numeric = NUMERIC.has(field.type);
   const time = TIME.has(field.type);
-  const cast = numeric ? "::numeric" : time ? "::timestamptz" : field.type === "boolean" ? "::boolean" : "";
+  // Integer fields compare as bigint so ID filters use their indexes (a numeric cast doesn't).
+  const integer = field.type === "integer";
+  const cast = integer
+    ? "::bigint"
+    : numeric
+      ? "::numeric"
+      : time
+        ? "::timestamptz"
+        : field.type === "boolean"
+          ? "::boolean"
+          : "";
   const value = (v: unknown) =>
     numeric || time || field.type === "boolean" ? p(v) + cast : p(String(v).toLowerCase());
   const list = (vs: unknown[]) =>
     numeric
-      ? `${p(vs.map(Number))}::numeric[]`
+      ? `${p(vs.map(Number))}::${integer ? "bigint" : "numeric"}[]`
       : time
         ? `${p(vs)}::timestamptz[]`
         : field.type === "boolean"

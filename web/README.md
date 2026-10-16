@@ -31,6 +31,18 @@ npm test -w web      # filter model, tab rules, saved views, form helpers
 | Trunk record: General form, Rules (order, on/off, continue, detach direct rules), History; Clone; write-only password | `/enterprises/customer-trunks/:id`, `/enterprises/vendor-trunks/:id`, `…/new?enterprise=ID`, `…/new?clone=ID` | `src/pages/trunk/` | §5.4, §5.5, §13.1, §13.2, §13.26 |
 | Safe delete: dependencies, blockers, admin override with reason; archived banner with Restore | — | `src/records/parts.tsx` | §13.29 |
 
+## Rate Manager (build step 4.2)
+
+`/rates/manager` (`src/pages/rates/`, §13.12). The list of all rate tables fills the page (clients,
+trunks, active rates, scheduled changes, negative-margin lines, avg margin and money today from
+the EDR store, account manager filter). Opening a table (`?table=ID`, also from trunk pages)
+shows the left panel (Customer / Vendor switch, filter, tables by category) and the table:
+header with its trunks and last import, summary cards, views Current / Scheduled / Closed /
+Change log, and the rate grid with best buy, margin and the next scheduled rate. Click a sell
+rate to edit it in place; select rows for the bulk bar (set rate, change by % / amount / best buy
++ margin, effective date, block, close). "Save n changes" sends one batch (`pending.ts`), which is
+one change with Undo; increases inside a client's notice period ask for confirmation first.
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag

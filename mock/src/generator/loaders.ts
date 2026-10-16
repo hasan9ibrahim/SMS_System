@@ -58,7 +58,6 @@ export const TABLE_ORDER = [
   "changes",
 ];
 
-
 export async function loadPostgres(dir: string, opts: { reset: boolean; log: (s: string) => void }): Promise<void> {
   const client = new pg.Client({ ...PG_CONFIG, options: `-c search_path=${PG_SCHEMA},public` });
   await client.connect();
@@ -114,6 +113,9 @@ export async function loadPostgres(dir: string, opts: { reset: boolean; log: (s:
     opts.log(
       `postgres: ${constraints.length} foreign key and exclusion constraints validated in ${((Date.now() - started) / 1000).toFixed(1)}s`,
     );
+    // Views and counts built on the loaded rates (migration 004, §13.12).
+    await client.query("REFRESH MATERIALIZED VIEW best_buy_rates");
+    await client.query("SELECT refresh_rate_table_stats()");
     // VACUUM also sets the visibility map, so count queries can use index-only scans.
     await client.query("VACUUM ANALYZE");
   } finally {

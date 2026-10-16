@@ -35,6 +35,18 @@ import {
   updateTrunkRules,
 } from "./api/trunks.js";
 import { getReference } from "./api/reference.js";
+import {
+  archiveRateTable,
+  changeRateLines,
+  createRateTable,
+  exportRateLines,
+  getRateTable,
+  getRateTableDependencies,
+  queryRateLines,
+  queryRateTables,
+  restoreRateTable,
+  updateRateTable,
+} from "./api/rates.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
 import { undoChange } from "./api/changes.js";
@@ -42,7 +54,7 @@ import { undoChange } from "./api/changes.js";
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -103,7 +115,18 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   getVendorTrunkRules: getTrunkRules("vendor"),
   updateVendorTrunkRules: updateTrunkRules("vendor"),
 
-  queryRateTables: queryList("rate_tables"),
+  // Rate Manager (§13.12)
+  queryRateTables,
+  createRateTable,
+  getRateTable,
+  updateRateTable,
+  getRateTableDependencies,
+  archiveRateTable,
+  restoreRateTable,
+  exportRateLines,
+  queryRateLines,
+  changeRateLines,
+  queryDestinations: queryList("destinations"),
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),
   undoChange,

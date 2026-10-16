@@ -7,6 +7,7 @@ import "./styles/base.css";
 import "./styles/shell.css";
 import "./styles/grid.css";
 import "./styles/record.css";
+import "./styles/rates.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 15_000 } },

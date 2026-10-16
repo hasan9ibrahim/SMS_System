@@ -341,7 +341,9 @@ export function FilterBuilder({
   onApply: (g: FilterGroup | null) => void;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<FilterGroup>(value ?? { logic: "and", conditions: [newCondition(fields.fields)] });
+  // Fields without operators (e.g. figures from the EDR store) can't be filtered.
+  const filterable = fields.fields.filter((f) => f.operators.length > 0);
+  const [draft, setDraft] = useState<FilterGroup>(value ?? { logic: "and", conditions: [newCondition(filterable)] });
   const [tried, setTried] = useState(false);
   const problems = treeProblems(draft, fields);
   return (
@@ -380,7 +382,7 @@ export function FilterBuilder({
         <code>re%</code> starts with re, <code>%re</code> ends with re. These conditions combine with the filters under
         the column headers.
       </p>
-      <GroupEditor fields={fields.fields} group={draft} depth={0} onChange={setDraft} />
+      <GroupEditor fields={filterable} group={draft} depth={0} onChange={setDraft} />
       {tried && problems.length > 0 && (
         <ul className="fb-problems">
           {problems.map((p) => (
