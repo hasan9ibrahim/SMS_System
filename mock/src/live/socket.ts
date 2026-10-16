@@ -2,89 +2,82 @@
 // so the GUI client works unchanged against the Phoenix backend later.
 // Frames: [join_ref, ref, topic, event, payload]; see contract/events/phoenix-message.json.
 //
-// Minimal live traffic simulator for the app shell: `live:tps` ticks once a second (TPS
-// pill, §15.1) and `alerts:<userId>` incidents now and then (bell and pop-ups, §13.6).
-// The full traffic simulator (dashboard, analytics, hover volumes) grows from here.
+// Live traffic simulator (simulator.ts): `live:tps` ticks once a second (TPS pill §15.1 and
+// the dashboard tables §13.3) and sends an hour of history on join; `live:dashboard` pushes
+// the summary bar each second and the movers and tops panels every 5 seconds; `alerts:<userId>`
+// raises incidents now and then (bell and pop-ups, §13.6).
 import type { FastifyInstance } from "fastify";
 import websocket from "@fastify/websocket";
 import type { WebSocket } from "ws";
-import type { IncidentEvent, TpsTickEvent } from "@sms/contract";
-import { db } from "../db.js";
+import type { IncidentEvent } from "@sms/contract";
 import { CURRENT_USER_ID } from "../api/session.js";
+import {
+  computeMovers,
+  createSimulator,
+  historyEvent,
+  step,
+  summaryEvent,
+  tickEvent,
+  topsEvent,
+  type Simulator,
+} from "./simulator.js";
 
 type Frame = [string | null, string | null, string, string, Record<string, unknown>];
-
-interface SimTrunk {
-  id: number;
-  name: string;
-  limit: number;
-  base: number;
-  tps: number;
-}
 
 interface Client {
   socket: WebSocket;
   topics: Map<string, string | null>; // topic -> join_ref
+  movers: { windowMinutes: number; thresholdPct: number };
 }
 
 const clients = new Set<Client>();
-let trunks: SimTrunk[] | null = null;
+let sim: Simulator | null = null;
+let loading: Promise<Simulator> | null = null;
 let timer: NodeJS.Timeout | null = null;
+let ticks = 0;
 let nextIncidentAt = 0;
 let incidentSeq = 5000;
 const openIncidents: { at: number; event: IncidentEvent }[] = [];
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
-async function loadTrunks(): Promise<SimTrunk[]> {
-  try {
-    const { rows } = await db().query(
-      `SELECT t.id, t.name, t.tps FROM customer_trunks t
-        WHERE t.deleted_at IS NULL AND t.status = 'active' ORDER BY random() LIMIT 60`,
-    );
-    if (rows.length)
-      return rows.map((r) => ({ id: r.id, name: r.name, limit: r.tps, base: r.tps * rand(0.05, 0.6), tps: 0 }));
-  } catch {
-    // No database: fall back to fake trunks so the shell still shows live values.
-  }
-  return Array.from({ length: 20 }, (_, i) => {
-    const limit = [50, 100, 200, 500][i % 4]!;
-    return { id: i + 1, name: `DEMO_TRUNK_${i + 1}`, limit, base: limit * rand(0.05, 0.6), tps: 0 };
-  });
+function getSimulator() {
+  loading ??= createSimulator().then((s) => (sim = s));
+  return loading;
 }
 
-function push(topic: string, event: string, payload: Record<string, unknown>) {
-  for (const c of clients) {
-    for (const [t, joinRef] of c.topics) {
-      if (t === topic) c.socket.send(JSON.stringify([joinRef, null, topic, event, payload] satisfies Frame));
-    }
-  }
+function send(c: Client, topic: string, event: string, payload: object) {
+  if (!c.topics.has(topic)) return;
+  c.socket.send(JSON.stringify([c.topics.get(topic) ?? null, null, topic, event, payload]));
+}
+
+function push(topic: string, event: string, payload: object) {
+  for (const c of clients) send(c, topic, event, payload);
+}
+
+function moversFor(s: Simulator, c: Client, now: number) {
+  send(c, "live:dashboard", "movers", computeMovers(s.trunks, c.movers.windowMinutes, c.movers.thresholdPct, now));
 }
 
 function tick() {
-  if (!trunks) return;
+  if (!sim) return;
   const now = Date.now();
-  for (const t of trunks) {
-    // Random walk around a base load, with rare bursts above the limit.
-    t.tps = Math.max(0, t.tps * 0.7 + t.base * 0.3 + rand(-0.15, 0.15) * t.base + (Math.random() < 0.01 ? t.limit : 0));
+  step(sim, now);
+  ticks++;
+  push("live:tps", "tick", tickEvent(sim, now));
+  push("live:dashboard", "summary", summaryEvent(sim, now));
+  if (ticks % 5 === 0) {
+    push("live:dashboard", "tops", topsEvent(sim, now));
+    for (const c of clients) if (c.topics.has("live:dashboard")) moversFor(sim, c, now);
   }
-  const active = trunks.filter((t) => t.tps > 0.05).sort((a, b) => b.tps - a.tps);
-  const tick: TpsTickEvent = {
-    at: new Date(now).toISOString(),
-    totalTps: Math.round(active.reduce((s, t) => s + t.tps, 0) * 10) / 10,
-    trunks: active.slice(0, 40).map((t) => ({
-      trunk: { kind: "customer_trunk", id: t.id, name: t.name },
-      tps: Math.round(t.tps * 10) / 10,
-      tpsLimit: t.limit,
-      queueDepth: t.tps > t.limit ? Math.round((t.tps - t.limit) * 5) : 0,
-    })),
-  };
-  push("live:tps", "tick", tick as unknown as Record<string, unknown>);
+  incidents(sim, now);
+}
 
-  // Incidents: one every 1.5-4 minutes, recovering after 3-8 minutes.
-  if (now >= nextIncidentAt) {
+// Incidents: one every 1.5-4 minutes, recovering after 3-8 minutes.
+function incidents(s: Simulator, now: number) {
+  if (now >= nextIncidentAt && s.trunks.length) {
     nextIncidentAt = now + rand(90_000, 240_000);
-    const t = trunks[Math.floor(Math.random() * trunks.length)]!;
+    const t = s.trunks[Math.floor(Math.random() * s.trunks.length)]!;
     const metric = Math.random() < 0.6 ? "dlr" : "asr";
     const baseline = Math.round(rand(88, 97));
     const current = Math.round(baseline - rand(15, 35));
@@ -105,7 +98,7 @@ function tick() {
       acknowledgedBy: null,
     };
     openIncidents.push({ at: now + rand(180_000, 480_000), event });
-    push(`alerts:${CURRENT_USER_ID}`, "incident", event as unknown as Record<string, unknown>);
+    push(`alerts:${CURRENT_USER_ID}`, "incident", event);
   }
   for (let i = openIncidents.length - 1; i >= 0; i--) {
     const o = openIncidents[i]!;
@@ -124,7 +117,7 @@ function start() {
   nextIncidentAt = Date.now() + rand(20_000, 60_000);
   timer = setInterval(tick, 1000);
   timer.unref();
-  if (!trunks) void loadTrunks().then((t) => (trunks = t));
+  void getSimulator();
 }
 
 function stop() {
@@ -134,13 +127,23 @@ function stop() {
   }
 }
 
+/** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes and 30 %. */
+function moverParams(p: Record<string, unknown>): Client["movers"] | null {
+  const w = p.windowMinutes ?? 15;
+  const th = p.thresholdPct ?? 30;
+  const extra = Object.keys(p).filter((k) => k !== "windowMinutes" && k !== "thresholdPct");
+  if (extra.length || ![5, 15, 30, 60].includes(w as number)) return null;
+  if (typeof th !== "number" || th < 5 || th > 500) return null;
+  return { windowMinutes: w as number, thresholdPct: th };
+}
+
 const KNOWN_TOPICS = (topic: string) =>
   topic === "live:tps" || topic === "live:dashboard" || topic.startsWith("alerts:");
 
 export async function registerSocket(app: FastifyInstance) {
   await app.register(websocket);
   app.get("/socket/websocket", { websocket: true }, (socket) => {
-    const client: Client = { socket, topics: new Map() };
+    const client: Client = { socket, topics: new Map(), movers: { windowMinutes: 15, thresholdPct: 30 } };
     clients.add(client);
     start();
     socket.on("message", (data) => {
@@ -150,14 +153,30 @@ export async function registerSocket(app: FastifyInstance) {
       } catch {
         return;
       }
-      const [joinRef, ref, topic, event] = frame;
+      const [joinRef, ref, topic, event, payload] = frame;
       const reply = (status: "ok" | "error", response: Record<string, unknown> = {}) =>
         socket.send(JSON.stringify([joinRef, ref, topic, "phx_reply", { status, response }] satisfies Frame));
       if (topic === "phoenix" && event === "heartbeat") return reply("ok");
       if (event === "phx_join") {
         if (!KNOWN_TOPICS(topic)) return reply("error", { reason: "unknown topic" });
+        if (topic === "live:dashboard") {
+          const params = moverParams(payload ?? {});
+          if (!params) return reply("error", { reason: "invalid join params" });
+          client.movers = params;
+        }
         client.topics.set(topic, joinRef);
-        return reply("ok");
+        reply("ok");
+        // Panels fill at once instead of after the first 5-second push.
+        void getSimulator().then((s) => {
+          const now = Date.now();
+          if (topic === "live:tps") send(client, topic, "history", historyEvent(s, now));
+          if (topic === "live:dashboard") {
+            send(client, topic, "summary", summaryEvent(s, now));
+            send(client, topic, "tops", topsEvent(s, now));
+            moversFor(s, client, now);
+          }
+        });
+        return;
       }
       if (event === "phx_leave") {
         client.topics.delete(topic);
@@ -173,7 +192,8 @@ export async function registerSocket(app: FastifyInstance) {
 
 /** Test hook: run one simulator step now. */
 export async function simulateTick(forceIncident = false) {
-  trunks ??= await loadTrunks();
+  await getSimulator();
   if (forceIncident) nextIncidentAt = 0;
+  ticks = 4; // the next step also pushes movers and tops
   tick();
 }

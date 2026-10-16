@@ -1542,6 +1542,7 @@ export type components = {
          * @default true
          */
         animations: boolean;
+        dashboard: components["schemas"]["DashboardSettings"];
       };
       /** @description GUI Access Group permission keys; buttons not covered are hidden (§1). */
       permissions: string[];
@@ -1550,6 +1551,23 @@ export type components = {
       theme?: components["schemas"]["Theme"];
       openInNewTab?: boolean;
       animations?: boolean;
+      dashboard?: components["schemas"]["DashboardSettings"];
+    };
+    /** @description The live dashboard's time window, thresholds and panels, saved per user (§13.3). */
+    DashboardSettings: {
+      /**
+       * @description Traffic movers compare this window with the one before.
+       * @enum {integer}
+       */
+      windowMinutes: 5 | 15 | 30 | 60;
+      /** @description A client counts as increasing or decreasing beyond this change. */
+      thresholdPct: number;
+      /**
+       * @description Length of the live TPS chart.
+       * @enum {integer}
+       */
+      chartMinutes: 5 | 15 | 60;
+      hiddenPanels: ("summary" | "movers" | "chart" | "tps" | "tops" | "destinations")[];
     };
     /** @description One open page tab (§13.5). Per-tab page state (filters, scroll) stays in the browser. */
     WorkspaceTab: {

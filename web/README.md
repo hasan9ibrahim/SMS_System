@@ -100,6 +100,22 @@ Run report applies the settings, which go into the tab URL. The result is the st
 (`ListScreen` with `fetchPage`): a filter under every column, server-side sort and paging, Columns to
 pick among the 27 metrics, totals above the grid, and Export (CSV with the time zone printed).
 
+## Live dashboard (build step 4.6)
+
+`/dashboard` (`src/pages/dashboard/`, §4, §13.3), loaded on first use. All data is pushed: the page
+opens its own Phoenix socket, joins `live:tps` (an hour of history on join, then a tick a second) and
+`live:dashboard` with the movers window and threshold as join params (re-joined when they change).
+Panels: today's summary bar with rolling counters, traffic movers (started with a "new" badge and
+pulse, increasing, decreasing, stopped, each with a sparkline), the live TPS chart (5 / 15 / 60 min,
+total on the left axis and the top-10 client trunks on the right, toggled from the legend), TPS per
+client and vendor trunk (limit bar amber above 80 %, red at 100 %, queue depth, rows slide when the
+order changes), top clients and vendors, top destinations. Window, threshold, chart length and
+hidden panels (Panels menu) are saved in `preferences.dashboard`; motion follows the user menu's
+"Turn animations off" (and `prefers-reduced-motion`). Rows, chips and chart lines open the Analytics
+view in a new tab (`/live/analytics?customer=`, `vendor=`, `customerTrunk=`, `vendorTrunk=` or
+`mccmnc=`; the page itself comes in build step 5). The chart buffer and colour rules are pure
+functions in `dashboardModel.ts` with tests.
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag

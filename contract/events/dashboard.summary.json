@@ -2,37 +2,112 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "dashboard.summary.json",
   "title": "DashboardSummaryEvent",
-  "description": "Topic live:dashboard, event \"summary\". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Money is in the system base currency.",
+  "description": "Topic live:dashboard, event \"summary\". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Money is in the platform currency (`currency`, EUR by default).",
   "type": "object",
-  "required": ["at", "attempts", "submitted", "delivered", "revenue", "cost", "margin", "marginPct", "asr", "dlr", "tps", "onlineCustomers", "onlineVendors", "topDestinations"],
+  "required": [
+    "at",
+    "currency",
+    "attempts",
+    "submitted",
+    "delivered",
+    "revenue",
+    "cost",
+    "margin",
+    "marginPct",
+    "asr",
+    "dlr",
+    "tps",
+    "onlineCustomers",
+    "onlineVendors",
+    "topDestinations"
+  ],
   "additionalProperties": false,
   "properties": {
-    "at": { "$ref": "common.json#/$defs/Timestamp" },
-    "attempts": { "type": "integer", "minimum": 0 },
-    "submitted": { "type": "integer", "minimum": 0 },
-    "delivered": { "type": "integer", "minimum": 0 },
-    "revenue": { "type": "number" },
-    "cost": { "type": "number" },
-    "margin": { "type": "number", "description": "revenue - cost" },
-    "marginPct": { "type": "number" },
-    "asr": { "type": "number", "minimum": 0, "maximum": 100, "description": "Succeeded / Attempts x 100" },
-    "dlr": { "type": "number", "minimum": 0, "maximum": 100, "description": "Delivered / Succeeded x 100" },
-    "tps": { "type": "number", "minimum": 0, "description": "Current total TPS" },
-    "onlineCustomers": { "type": "integer", "minimum": 0 },
-    "onlineVendors": { "type": "integer", "minimum": 0 },
+    "at": {
+      "$ref": "common.json#/$defs/Timestamp"
+    },
+    "currency": {
+      "type": "string",
+      "description": "Platform currency (ISO code)."
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "submitted": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "delivered": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "revenue": {
+      "type": "number"
+    },
+    "cost": {
+      "type": "number"
+    },
+    "margin": {
+      "type": "number",
+      "description": "revenue - cost"
+    },
+    "marginPct": {
+      "type": "number"
+    },
+    "asr": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Succeeded / Attempts x 100"
+    },
+    "dlr": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Delivered / Succeeded x 100"
+    },
+    "tps": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Current total TPS"
+    },
+    "onlineCustomers": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "onlineVendors": {
+      "type": "integer",
+      "minimum": 0
+    },
     "topDestinations": {
       "type": "array",
       "maxItems": 5,
       "items": {
         "title": "TopDestination",
         "type": "object",
-        "required": ["mccmnc", "country", "network", "attempts"],
+        "required": [
+          "mccmnc",
+          "country",
+          "network",
+          "attempts"
+        ],
         "additionalProperties": false,
         "properties": {
-          "mccmnc": { "type": "string", "pattern": "^[0-9]{5,6}$" },
-          "country": { "type": "string" },
-          "network": { "type": "string" },
-          "attempts": { "type": "integer", "minimum": 0 }
+          "mccmnc": {
+            "type": "string",
+            "pattern": "^[0-9]{5,6}$"
+          },
+          "country": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       }
     }
@@ -40,12 +115,26 @@
   "examples": [
     {
       "at": "2026-10-16T08:00:01Z",
-      "attempts": 1250000, "submitted": 1190000, "delivered": 1032000,
-      "revenue": 4210.55, "cost": 3655.1, "margin": 555.45, "marginPct": 13.19,
-      "asr": 95.2, "dlr": 86.72, "tps": 412.5,
-      "onlineCustomers": 38, "onlineVendors": 21,
+      "currency": "EUR",
+      "attempts": 1250000,
+      "submitted": 1190000,
+      "delivered": 1032000,
+      "revenue": 4210.55,
+      "cost": 3655.1,
+      "margin": 555.45,
+      "marginPct": 13.19,
+      "asr": 95.2,
+      "dlr": 86.72,
+      "tps": 412.5,
+      "onlineCustomers": 38,
+      "onlineVendors": 21,
       "topDestinations": [
-        { "mccmnc": "99901", "country": "Fakeland", "network": "Example Mobile", "attempts": 182000 }
+        {
+          "mccmnc": "99901",
+          "country": "Fakeland",
+          "network": "Example Mobile",
+          "attempts": 182000
+        }
       ]
     }
   ]

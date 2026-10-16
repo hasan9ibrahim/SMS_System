@@ -70,7 +70,8 @@ test("ListQuery accepts nested AND/OR filters and rejects unknown operators (§1
 });
 
 test("event catalog lists every payload schema and only existing files", () => {
-  const listed = new Set(catalog.events.map((e) => e.schema));
+  // Server pushes (events) and client join parameters (joins).
+  const listed = new Set([...catalog.events, ...(catalog.joins ?? [])].map((e) => e.schema));
   for (const f of listed) assert.ok(schemaFiles.includes(f), `catalog.json lists missing ${f}`);
   for (const f of schemaFiles) {
     if (f === "common.json" || f === "phoenix-message.json") continue;

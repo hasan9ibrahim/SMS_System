@@ -2,8 +2,16 @@
 // Sign-in arrives with §13.28; until then the mock acts as one seeded user.
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
-import type { CurrentUser, PreferencesUpdate, Workspace } from "@sms/contract";
+import type { CurrentUser, DashboardSettings, PreferencesUpdate, Workspace } from "@sms/contract";
 import { db, withDb } from "../db.js";
+
+/** Live dashboard defaults (§13.3): 15-minute window, ±30 %, 15-minute chart, every panel. */
+export const DEFAULT_DASHBOARD: DashboardSettings = {
+  windowMinutes: 15,
+  thresholdPct: 30,
+  chartMinutes: 15,
+  hiddenPanels: [],
+};
 
 /** The fake user the mock signs in as (user 1 is a seeded administrator). */
 export const CURRENT_USER_ID = Number(process.env.MOCK_USER_ID ?? 1);
@@ -16,13 +24,13 @@ export const demoUser: CurrentUser = {
   initials: "DA",
   role: "Administrator",
   businessCompany: "Demo Carrier Ltd (fake)",
-  preferences: { theme: "light", openInNewTab: true, animations: true },
+  preferences: { theme: "light", openInNewTab: true, animations: true, dashboard: DEFAULT_DASHBOARD },
   permissions: ["*"],
 };
 
 export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser | null> {
   const { rows } = await pool.query(
-    `SELECT u.id, u.username, u.first_name, u.last_name, u.is_admin, u.theme, u.open_in_new_tab, u.animations,
+    `SELECT u.id, u.username, u.first_name, u.last_name, u.is_admin, u.theme, u.open_in_new_tab, u.animations, u.dashboard_settings,
             g.name AS access_group, g.permissions, bc.name AS business_company
        FROM users u
        LEFT JOIN access_groups g ON g.id = u.access_group_id
@@ -40,7 +48,12 @@ export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser |
     initials: `${r.first_name[0] ?? ""}${r.last_name[0] ?? ""}`.toUpperCase(),
     role: r.access_group ?? (r.is_admin ? "Administrator" : "User"),
     businessCompany: r.business_company ?? "",
-    preferences: { theme: r.theme, openInNewTab: r.open_in_new_tab, animations: r.animations },
+    preferences: {
+      theme: r.theme,
+      openInNewTab: r.open_in_new_tab,
+      animations: r.animations,
+      dashboard: { ...DEFAULT_DASHBOARD, ...(r.dashboard_settings ?? {}) },
+    },
     // GUI Access Group keys "page:action"; "*" = everything (§1).
     permissions: r.is_admin
       ? ["*"]
@@ -67,8 +80,15 @@ export function updatePreferences(request: FastifyRequest, reply: FastifyReply) 
   return withDb(reply, async (pool) => {
     await pool.query(
       `UPDATE users SET theme = COALESCE($2, theme), open_in_new_tab = COALESCE($3, open_in_new_tab),
-              animations = COALESCE($4, animations), updated_at = now() WHERE id = $1`,
-      [CURRENT_USER_ID, body.theme ?? null, body.openInNewTab ?? null, body.animations ?? null],
+              animations = COALESCE($4, animations), dashboard_settings = COALESCE($5, dashboard_settings),
+              updated_at = now() WHERE id = $1`,
+      [
+        CURRENT_USER_ID,
+        body.theme ?? null,
+        body.openInNewTab ?? null,
+        body.animations ?? null,
+        body.dashboard ? JSON.stringify(body.dashboard) : null,
+      ],
     );
     return (await loadUser(pool, CURRENT_USER_ID)) ?? demoUser;
   });

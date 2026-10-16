@@ -70,3 +70,45 @@ test("join, heartbeat, then tps ticks and incidents that match the event schemas
   assert.ok(validIncident(incident[4]), JSON.stringify(validIncident.errors));
   ws.close();
 });
+
+test("live:dashboard: join params, then summary, movers and tops; history on live:tps join", async () => {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/socket/websocket?vsn=2.0.0`);
+  const frames: Frame[] = [];
+  ws.on("message", (d) => frames.push(JSON.parse(String(d)) as Frame));
+  const waitFor = async (pred: (f: Frame) => boolean, ms = 20_000) => {
+    const until = Date.now() + ms;
+    for (;;) {
+      const f = frames.find(pred);
+      if (f) return f;
+      if (Date.now() > until) throw new Error("timed out waiting for frame");
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  };
+  await new Promise((r) => ws.once("open", r));
+  ws.send(JSON.stringify(["9", "9", "live:dashboard", "phx_join", { windowMinutes: 7 }]));
+  assert.equal((await waitFor((f) => f[1] === "9"))[4].status, "error", "window outside the enum");
+  ws.send(JSON.stringify(["1", "1", "live:dashboard", "phx_join", { windowMinutes: 5, thresholdPct: 20 }]));
+  ws.send(JSON.stringify(["2", "2", "live:tps", "phx_join", {}]));
+  assert.equal((await waitFor((f) => f[1] === "1"))[4].status, "ok");
+
+  const valid = (schema: string, payload: unknown) => {
+    const v = ajv.getSchema(schema)!;
+    assert.ok(v(payload), `${schema}: ${JSON.stringify(v.errors)}`);
+  };
+  const history = await waitFor((f) => f[3] === "history");
+  valid("traffic.tps_history.json", history[4]);
+  assert.equal((history[4].total as number[]).length, 720, "an hour in 5-second steps");
+  const movers = await waitFor((f) => f[3] === "movers");
+  valid("dashboard.movers.json", movers[4]);
+  assert.equal(movers[4].windowMinutes, 5, "the join params drive the movers");
+  assert.equal(movers[4].thresholdPct, 20);
+  valid("dashboard.tops.json", (await waitFor((f) => f[3] === "tops"))[4]);
+  valid("dashboard.summary.json", (await waitFor((f) => f[3] === "summary"))[4]);
+
+  frames.length = 0;
+  await simulateTick();
+  valid("dashboard.movers.json", (await waitFor((f) => f[3] === "movers"))[4]);
+  const tick = (await waitFor((f) => f[3] === "tick"))[4] as { trunks: { trunk: { kind: string } }[] };
+  valid("traffic.tps_tick.json", tick);
+  ws.close();
+});

@@ -168,3 +168,4 @@ export type EnterpriseReportExport = Schemas["EnterpriseReportExport"];
 export type ReportMetrics = Schemas["ReportMetrics"];
 export type EnterpriseReportRow = Schemas["EnterpriseReportRow"];
 export type EnterpriseReportPage = Schemas["EnterpriseReportPage"];
+export type DashboardSettings = Schemas["DashboardSettings"];

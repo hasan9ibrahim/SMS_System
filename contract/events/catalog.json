@@ -1,10 +1,50 @@
 {
-  "$comment": "Topic and event to payload-schema map for server pushes. Used by the mock traffic generator, the web client and the contract tests. '*' in a topic is a placeholder (e.g. the user ID).",
+  "$comment": "Topic and event to payload-schema map for server pushes. Used by the mock traffic generator, the web client and the contract tests. '*' in a topic is a placeholder (e.g. the user ID). 'joins' lists the phx_join payload a topic accepts (client to server).",
   "socketPath": "/socket/websocket",
   "serializer": "phoenix-v2-json",
   "events": [
-    { "topic": "live:dashboard", "event": "summary", "schema": "dashboard.summary.json", "spec": "§13.3" },
-    { "topic": "live:tps", "event": "tick", "schema": "traffic.tps_tick.json", "spec": "§13.3, §15.1" },
-    { "topic": "alerts:*", "event": "incident", "schema": "alerts.incident.json", "spec": "§13.6" }
+    {
+      "topic": "live:dashboard",
+      "event": "summary",
+      "schema": "dashboard.summary.json",
+      "spec": "§13.3"
+    },
+    {
+      "topic": "live:dashboard",
+      "event": "movers",
+      "schema": "dashboard.movers.json",
+      "spec": "§13.3"
+    },
+    {
+      "topic": "live:dashboard",
+      "event": "tops",
+      "schema": "dashboard.tops.json",
+      "spec": "§13.3"
+    },
+    {
+      "topic": "live:tps",
+      "event": "tick",
+      "schema": "traffic.tps_tick.json",
+      "spec": "§13.3, §15.1"
+    },
+    {
+      "topic": "live:tps",
+      "event": "history",
+      "schema": "traffic.tps_history.json",
+      "spec": "§13.3"
+    },
+    {
+      "topic": "alerts:*",
+      "event": "incident",
+      "schema": "alerts.incident.json",
+      "spec": "§13.6"
+    }
+  ],
+  "joins": [
+    {
+      "topic": "live:dashboard",
+      "schema": "dashboard.join.json",
+      "spec": "§13.3"
+    }
   ]
 }

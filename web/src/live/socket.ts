@@ -7,7 +7,10 @@ type Handler = (event: string, payload: Record<string, unknown>) => void;
 export class LiveSocket {
   private ws: WebSocket | null = null;
   private ref = 0;
-  private topics = new Map<string, { joinRef: string | null; handlers: Set<Handler> }>();
+  private topics = new Map<
+    string,
+    { joinRef: string | null; handlers: Set<Handler>; params: Record<string, unknown> }
+  >();
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private retry = 0;
   private closed = false;
@@ -52,10 +55,11 @@ export class LiveSocket {
     for (const h of this.topics.get(topic)?.handlers ?? []) h(event, payload);
   }
 
-  subscribe(topic: string, handler: Handler): () => void {
+  /** Joins `topic` on first use; `params` is the phx_join payload (contract/events catalog "joins"). */
+  subscribe(topic: string, handler: Handler, params: Record<string, unknown> = {}): () => void {
     let entry = this.topics.get(topic);
     if (!entry) {
-      entry = { joinRef: null, handlers: new Set() };
+      entry = { joinRef: null, handlers: new Set(), params };
       this.topics.set(topic, entry);
       if (this.ws?.readyState === WebSocket.OPEN) this.join(topic);
     }
@@ -71,7 +75,7 @@ export class LiveSocket {
   private join(topic: string) {
     const ref = this.nextRef();
     this.topics.get(topic)!.joinRef = ref;
-    this.send([ref, ref, topic, "phx_join", {}]);
+    this.send([ref, ref, topic, "phx_join", this.topics.get(topic)!.params]);
   }
 
   private send(frame: PhxFrame) {

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "traffic.tps_history.json",
+  "title": "TpsHistoryEvent",
+  "description": "Topic live:tps, event \"history\". Pushed once right after joining: total TPS and the TPS of the 10 busiest customer trunks over the last 60 minutes, so the live TPS chart (§13.3 item 3) starts full; \"tick\" events continue it.",
+  "type": "object",
+  "required": [
+    "at",
+    "stepSeconds",
+    "total",
+    "series"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "at": {
+      "$ref": "common.json#/$defs/Timestamp",
+      "description": "Time of the last point."
+    },
+    "stepSeconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "total": {
+      "type": "array",
+      "maxItems": 3600,
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Total TPS per step, oldest first."
+    },
+    "series": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "title": "TpsSeries",
+        "type": "object",
+        "required": [
+          "trunk",
+          "values"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "trunk": {
+            "$ref": "common.json#/$defs/PartyRef"
+          },
+          "values": {
+            "type": "array",
+            "maxItems": 3600,
+            "items": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "at": "2026-10-16T08:00:00Z",
+      "stepSeconds": 5,
+      "total": [
+        400.5,
+        410.2
+      ],
+      "series": [
+        {
+          "trunk": {
+            "kind": "customer_trunk",
+            "id": 101,
+            "name": "Acme_DIRECT"
+          },
+          "values": [
+            80,
+            85
+          ]
+        }
+      ]
+    }
+  ]
+}

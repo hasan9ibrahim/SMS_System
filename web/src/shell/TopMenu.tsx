@@ -168,6 +168,12 @@ function Avatar() {
               icon: "external",
               onSelect: () => prefs.mutate({ openInNewTab: me?.preferences.openInNewTab === false }),
             },
+            {
+              // Live value animations (§13.3): counter roll, bar grow, row reorder.
+              label: me?.preferences.animations === false ? "Turn animations on" : "Turn animations off",
+              icon: "sparkles",
+              onSelect: () => prefs.mutate({ animations: me?.preferences.animations === false }),
+            },
             "separator",
             { label: "My changes", icon: "history", onSelect: () => open(`/admin/changes?mine=1`) },
             { label: "Sign out", icon: "logout", disabled: true, hint: "§13.28", onSelect: () => undefined },

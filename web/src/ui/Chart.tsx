@@ -51,11 +51,16 @@ export function Chart({
   height,
   className,
   label,
+  merge = false,
+  onClick,
 }: {
   option: EChartsCoreOption;
   height: number;
   className?: string;
   label: string;
+  /** Merge updates into the drawn chart (streaming data) instead of redrawing it. */
+  merge?: boolean;
+  onClick?: (params: { seriesId?: string; seriesName?: string; dataIndex: number }) => void;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
@@ -72,7 +77,20 @@ export function Chart({
     };
   }, []);
   useEffect(() => {
-    chart.current?.setOption(option, { notMerge: true });
-  }, [option]);
+    chart.current?.setOption(option, merge ? { lazyUpdate: true } : { notMerge: true });
+  }, [option, merge]);
+  const clickRef = useRef(onClick);
+  useEffect(() => {
+    clickRef.current = onClick;
+  });
+  useEffect(() => {
+    const c = chart.current;
+    if (!c) return;
+    const h = (p: unknown) => clickRef.current?.(p as { seriesId?: string; seriesName?: string; dataIndex: number });
+    c.on("click", h);
+    return () => {
+      c.off("click", h);
+    };
+  }, []);
   return <div ref={el} className={className} style={{ height, width: "100%" }} role="img" aria-label={label} />;
 }

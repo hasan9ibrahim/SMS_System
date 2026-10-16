@@ -15,8 +15,14 @@ interchangeable for the GUI.
 | Topic | Event | Payload schema | Spec |
 | --- | --- | --- | --- |
 | `live:dashboard` | `summary` | `dashboard.summary.json` | §13.3 |
+| `live:dashboard` | `movers` | `dashboard.movers.json` | §13.3 |
+| `live:dashboard` | `tops` | `dashboard.tops.json` | §13.3 |
 | `live:tps` | `tick` | `traffic.tps_tick.json` | §13.3, §15.1 |
+| `live:tps` | `history` (once, after joining) | `traffic.tps_history.json` | §13.3 |
 | `alerts:<userId>` | `incident` | `alerts.incident.json` | §13.6 |
+
+Join parameters (client to server) are listed under `joins` in `catalog.json`:
+`live:dashboard` takes `dashboard.join.json` (movers window and threshold).
 
 Shared definitions live in `common.json`. Every schema carries an `examples`
 entry; the contract tests validate each example against its schema.

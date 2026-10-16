@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "traffic.tps_tick.json",
   "title": "TpsTickEvent",
-  "description": "Topic live:tps, event \"tick\". Per-trunk TPS samples, pushed once a second, for the live TPS chart and table (§13.3 items 3-4) and the TPS pill in the top menu bar (§15.1). Only trunks with traffic or a change since the last tick are listed.",
+  "description": "Topic live:tps, event \"tick\". Per-trunk TPS samples, pushed once a second, for the live TPS chart and table (§13.3 items 3-4) and the TPS pill in the top menu bar (§15.1). Only trunks with traffic are listed: client trunks then vendor trunks, busiest first (the mock sends at most 60 and 40). totalTps is the platform total, counted on the client side.",
   "type": "object",
   "required": ["at", "totalTps", "trunks"],
   "additionalProperties": false,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.8.0
+  version: 0.9.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -2504,7 +2504,7 @@ components:
           description: The selling entity the user belongs to.
         preferences:
           type: object
-          required: [theme]
+          required: [theme, dashboard]
           properties:
             theme:
               $ref: "#/components/schemas/Theme"
@@ -2516,6 +2516,8 @@ components:
               type: boolean
               default: true
               description: Live value animations on/off (§13.3).
+            dashboard:
+              $ref: "#/components/schemas/DashboardSettings"
         permissions:
           type: array
           description: GUI Access Group permission keys; buttons not covered are hidden (§1).
@@ -2533,6 +2535,33 @@ components:
           type: boolean
         animations:
           type: boolean
+        dashboard:
+          $ref: "#/components/schemas/DashboardSettings"
+
+    DashboardSettings:
+      type: object
+      additionalProperties: false
+      description: The live dashboard's time window, thresholds and panels, saved per user (§13.3).
+      required: [windowMinutes, thresholdPct, chartMinutes, hiddenPanels]
+      properties:
+        windowMinutes:
+          type: integer
+          enum: [5, 15, 30, 60]
+          description: Traffic movers compare this window with the one before.
+        thresholdPct:
+          type: number
+          minimum: 5
+          maximum: 500
+          description: A client counts as increasing or decreasing beyond this change.
+        chartMinutes:
+          type: integer
+          enum: [5, 15, 60]
+          description: Length of the live TPS chart.
+        hiddenPanels:
+          type: array
+          items:
+            type: string
+            enum: [summary, movers, chart, tps, tops, destinations]
 
     WorkspaceTab:
       type: object

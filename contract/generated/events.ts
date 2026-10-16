@@ -9,13 +9,21 @@ export type Severity = "info" | "warning" | "critical";
  * UTC, ISO 8601.
  */
 export type EventTimestamp = string;
+/**
+ * UTC, ISO 8601.
+ */
+export type EventTimestamp1 = string;
 
 /**
  * All WebSocket event payloads (see contract/events/catalog.json).
  */
 export interface ContractEvents {
   "alerts.incident"?: IncidentEvent;
+  "dashboard.join"?: DashboardJoinParams;
+  "dashboard.movers"?: DashboardMoversEvent;
   "dashboard.summary"?: DashboardSummaryEvent;
+  "dashboard.tops"?: DashboardTopsEvent;
+  "traffic.tps_history"?: TpsHistoryEvent;
   "traffic.tps_tick"?: TpsTickEvent;
 }
 /**
@@ -59,10 +67,57 @@ export interface PartyRef {
   name: string;
 }
 /**
- * Topic live:dashboard, event "summary". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Money is in the system base currency.
+ * Client to server: the phx_join payload for topic live:dashboard. Window and threshold of the traffic movers panel (§13.3); the user's saved dashboard preferences. To change them, leave and join again.
+ */
+export interface DashboardJoinParams {
+  windowMinutes?: 5 | 15 | 30 | 60;
+  thresholdPct?: number;
+}
+/**
+ * Topic live:dashboard, event "movers". Traffic movers panel (§13.3 item 2), pushed every 5 s: clients that started sending, increased or decreased by more than the threshold, or stopped, comparing the last window with the window before. Window and threshold come from the join parameters (dashboard.join.json).
+ */
+export interface DashboardMoversEvent {
+  at: EventTimestamp;
+  windowMinutes: number;
+  thresholdPct: number;
+  started: MoverRow[];
+  increasing: MoverRow[];
+  decreasing: MoverRow[];
+  stopped: MoverRow[];
+}
+export interface MoverRow {
+  trunk: PartyRef;
+  enterprise: PartyRef;
+  /**
+   * Average TPS over the last window.
+   */
+  tpsNow: number;
+  /**
+   * Average TPS over the window before.
+   */
+  tpsBefore: number;
+  /**
+   * Change in %; null when there was no traffic before (started).
+   */
+  changePct: number | null;
+  /**
+   * Average TPS per minute over the last 60 minutes, oldest first.
+   *
+   * @maxItems 60
+   */
+  sparkline: number[];
+  asr: number | null;
+  dlr: number | null;
+}
+/**
+ * Topic live:dashboard, event "summary". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Money is in the platform currency (`currency`, EUR by default).
  */
 export interface DashboardSummaryEvent {
   at: EventTimestamp;
+  /**
+   * Platform currency (ISO code).
+   */
+  currency: string;
   attempts: number;
   submitted: number;
   delivered: number;
@@ -99,7 +154,71 @@ export interface TopDestination {
   attempts: number;
 }
 /**
- * Topic live:tps, event "tick". Per-trunk TPS samples, pushed once a second, for the live TPS chart and table (§13.3 items 3-4) and the TPS pill in the top menu bar (§15.1). Only trunks with traffic or a change since the last tick are listed.
+ * Topic live:dashboard, event "tops". Daily top clients, top vendors (§13.3 item 5) and top destinations (item 6) for today (UTC), pushed every 5 s. Money is in the platform currency.
+ */
+export interface DashboardTopsEvent {
+  at: EventTimestamp;
+  currency: string;
+  /**
+   * @maxItems 20
+   */
+  clients: TopParty[];
+  /**
+   * @maxItems 20
+   */
+  vendors: TopParty[];
+  /**
+   * @maxItems 20
+   */
+  destinations: TopDestinationRow[];
+}
+export interface TopParty {
+  party: PartyRef;
+  attempts: number;
+  /**
+   * Revenue for a client, cost for a vendor.
+   */
+  money: number;
+  margin: number;
+  asr: number | null;
+  dlr: number | null;
+}
+export interface TopDestinationRow {
+  mccmnc: string;
+  country: string;
+  network: string;
+  attempts: number;
+  revenue: number;
+  margin: number;
+  asr: number | null;
+  dlr: number | null;
+}
+/**
+ * Topic live:tps, event "history". Pushed once right after joining: total TPS and the TPS of the 10 busiest customer trunks over the last 60 minutes, so the live TPS chart (§13.3 item 3) starts full; "tick" events continue it.
+ */
+export interface TpsHistoryEvent {
+  at: EventTimestamp1;
+  stepSeconds: number;
+  /**
+   * Total TPS per step, oldest first.
+   *
+   * @maxItems 3600
+   */
+  total: number[];
+  /**
+   * @maxItems 10
+   */
+  series: TpsSeries[];
+}
+export interface TpsSeries {
+  trunk: PartyRef;
+  /**
+   * @maxItems 3600
+   */
+  values: number[];
+}
+/**
+ * Topic live:tps, event "tick". Per-trunk TPS samples, pushed once a second, for the live TPS chart and table (§13.3 items 3-4) and the TPS pill in the top menu bar (§15.1). Only trunks with traffic are listed: client trunks then vendor trunks, busiest first (the mock sends at most 60 and 40). totalTps is the platform total, counted on the client side.
  */
 export interface TpsTickEvent {
   at: EventTimestamp;
