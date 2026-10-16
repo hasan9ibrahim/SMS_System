@@ -11,7 +11,7 @@ export interface Picked<K extends string | number> {
   label: string;
 }
 
-function MultiPick<Row extends { id: number }, K extends string | number>({
+export function MultiPick<Row extends { id: number }, K extends string | number>({
   list,
   value,
   onChange,

@@ -2037,10 +2037,9 @@ paths:
         - name: live
           in: query
           required: false
-          description: Resolve a phone number by HLR instead of by prefix.
+          description: Resolve a phone number by HLR instead of by prefix (default false).
           schema:
             type: boolean
-            default: false
       responses:
         "200":
           description: Matching destinations, best first (at most 20)
@@ -5506,7 +5505,7 @@ components:
           type: integer
           minimum: 1
           maximum: 10
-          default: 3
+          description: Cheapest view only; 3 when not given.
         currency:
           $ref: "#/components/schemas/CurrencyMode"
         includeInactive:
@@ -5526,7 +5525,7 @@ components:
               type: integer
               minimum: 1
               maximum: 200
-              default: 50
+              description: Destinations per page; 50 when not given.
             cursor:
               type: [string, "null"]
       unevaluatedProperties: false

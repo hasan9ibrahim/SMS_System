@@ -1,0 +1,383 @@
+/* Rate Lookup (§13.16). Tokens only (§15.2); colour carries meaning only (§15.3). */
+
+/* ---------- virtual table ---------- */
+.vt {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.vt-inner {
+  min-width: 100%;
+  position: relative;
+}
+.vt-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  height: 40px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-page-bg) 55%, var(--color-panel));
+}
+.vt-head .vt-cell {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.vt-head .vt-cell.sticky {
+  background: color-mix(in srgb, var(--color-page-bg) 55%, var(--color-panel));
+}
+.vt-body {
+  position: relative;
+}
+.vt-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.vt-row:hover,
+.vt-row:hover .vt-cell.sticky {
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
+}
+.vt-cell {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.vt-cell.sticky {
+  background: var(--color-panel);
+}
+.vt-cell.sticky + .vt-cell:not(.sticky) {
+  border-left: var(--border-width) solid var(--color-border);
+}
+.vt-cell.align-right {
+  justify-content: flex-end;
+  text-align: right;
+}
+.vt-cell.align-center {
+  justify-content: center;
+}
+.vt-row.inactive .vt-cell {
+  color: var(--color-text-secondary);
+}
+.vt-row.negative .vt-cell:first-child {
+  box-shadow: inset 3px 0 0 var(--color-error);
+}
+.vt-empty {
+  padding: 18px;
+}
+
+/* ---------- easy mode ---------- */
+.lk-easy,
+.lk-adv {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lk-search-row,
+.lk-toggles,
+.lk-dest,
+.lk-results-bar,
+.lk-form-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.lk-search {
+  position: relative;
+  flex: 0 1 640px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px 0 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  color: var(--color-text-secondary);
+}
+.lk-search:focus-within {
+  border-color: var(--color-accent);
+}
+.lk-search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  color: var(--color-text);
+  outline: none;
+}
+.lk-suggest {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 340px;
+  overflow: auto;
+  padding: 4px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+.lk-suggest button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.lk-suggest button:hover,
+.lk-suggest button.cursor {
+  background: var(--hover);
+}
+.lk-suggest button.on {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.lk-dest h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.lk-hint {
+  padding: 24px 4px;
+}
+.lk-panels {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 12px;
+}
+.lk-panel {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lk-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lk-panel-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lk-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.lk-foot {
+  margin: 0;
+}
+.lk-foot .dot {
+  vertical-align: middle;
+}
+
+/* ---------- advanced mode ---------- */
+.lk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.lk-form-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+.lk-form-main .field {
+  margin-bottom: 0;
+}
+.lk-country-input {
+  position: relative;
+  display: inline-flex;
+}
+.lk-country-input input {
+  width: 180px;
+  height: 26px;
+}
+.lk-country-input .lk-suggest {
+  right: auto;
+  min-width: 240px;
+}
+.lk-paste textarea {
+  resize: vertical;
+  font-variant-numeric: tabular-nums;
+}
+.lk-file {
+  padding-top: 22px;
+}
+.btn.has-value {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.lk-filters-pop {
+  padding: 12px 14px;
+  max-height: min(640px, 80vh);
+  overflow: auto;
+}
+.lk-filters {
+  display: grid;
+  grid-template-columns: repeat(3, 280px);
+  gap: 18px;
+}
+.lk-filters h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+.check-row {
+  display: flex;
+  gap: 12px;
+}
+.pick-list.short {
+  max-height: 140px;
+}
+.lk-saved {
+  min-width: 300px;
+}
+.lk-saved-row {
+  display: flex;
+  align-items: center;
+}
+.lk-saved-row .menu-item {
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.lk-saved-row.on .menu-item {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.lk-matrix {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lk-colhead {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.lk-colhead span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lk-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.lk-dot.accent {
+  background: var(--color-accent);
+}
+.lk-dot.warning {
+  background: var(--color-warning);
+}
+.lk-cheap {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.lk-cheap-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lk-margin {
+  display: inline-flex;
+  gap: 4px;
+}
+.lk-flags {
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+}
+.lk-flag {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+@media (max-width: 1100px) {
+  .lk-panels {
+    grid-template-columns: 1fr;
+  }
+  .lk-form-main {
+    grid-template-columns: 1fr;
+  }
+  .lk-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+.choice-row input[type="checkbox"] {
+  flex: none;
+}
+button.chip {
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding-right: 10px;
+}
+button.chip.accent {
+  color: var(--color-accent);
+}
+/* Rates open Rate Manager: plain text that underlines on hover, so colour keeps its meaning. */
+:where(.lk-link) {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+:where(.lk-link):hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}

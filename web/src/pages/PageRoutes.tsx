@@ -13,6 +13,7 @@ import { TrunksPage } from "./TrunksPage";
 
 // Pages with charts load on first use, so ECharts stays out of the main bundle.
 const RouteRulesPage = lazy(() => import("./routing/RouteRulesPage").then((m) => ({ default: m.RouteRulesPage })));
+const RateLookupPage = lazy(() => import("./lookup/RateLookupPage").then((m) => ({ default: m.RateLookupPage })));
 
 const BUILT = new Set([
   "/enterprises",
@@ -20,6 +21,7 @@ const BUILT = new Set([
   "/enterprises/vendor-trunks",
   "/rates/manager",
   "/routing/rules",
+  "/routing/rate-lookup",
   "/admin/changes",
 ]);
 
@@ -35,6 +37,14 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/enterprises/vendor-trunks/:id" element={<TrunkPage key="vendor" kind="vendor" />} />
       <Route path="/enterprises/:id" element={<EnterprisePage />} />
       <Route path="/rates/manager" element={<RateManagerPage />} />
+      <Route
+        path="/routing/rate-lookup"
+        element={
+          <Suspense fallback={<div className="grid-message muted">Loading…</div>}>
+            <RateLookupPage />
+          </Suspense>
+        }
+      />
       <Route
         path="/routing/rules"
         element={

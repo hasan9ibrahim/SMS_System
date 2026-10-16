@@ -2991,16 +2991,16 @@ export type components = {
       senderId?: string;
       asOf?: components["schemas"]["Timestamp"];
       view: components["schemas"]["MatrixView"];
-      /** @default 3 */
-      cheapestN: number;
+      /** @description Cheapest view only; 3 when not given. */
+      cheapestN?: number;
       currency?: components["schemas"]["CurrencyMode"];
       includeInactive?: boolean;
       /** @description Keep only destinations with any of these highlights. */
       highlights?: components["schemas"]["MatrixHighlight"][];
     };
     RateMatrixRequest: components["schemas"]["RateLookupQuery"] & {
-      /** @default 50 */
-      limit: number;
+      /** @description Destinations per page; 50 when not given. */
+      limit?: number;
       cursor?: string | null;
     };
     MatrixColumn: {
@@ -5146,7 +5146,7 @@ export interface operations {
     parameters: {
       query: {
         q: string;
-        /** @description Resolve a phone number by HLR instead of by prefix. */
+        /** @description Resolve a phone number by HLR instead of by prefix (default false). */
         live?: boolean;
       };
       header?: never;

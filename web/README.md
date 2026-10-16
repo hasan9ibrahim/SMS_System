@@ -67,6 +67,22 @@ The detail panel has:
 Shortcuts: E edit (rule settings dialog), D duplicate (inactive copy). Each save is one change with
 Undo. Charts use `src/ui/Chart.tsx`, which reads the theme tokens and redraws when the theme changes.
 
+## Rate Lookup (build step 4.4)
+
+`/routing/rate-lookup` (`src/pages/lookup/`, §13.16). **Easy** mode has one search box (country,
+network, MCCMNC, dial code or phone number, optionally by live HLR). As you type, the best match
+loads into two panels: vendor costs (cheapest first, tier, scheduled change, 24h ASR/DLR, routed
+marker) and client rates (account manager, 7-day volume, margin against the best vendor and against
+the routed vendor, negatives in red). Toggles: my clients, include inactive, scheduled rates,
+currency. Rates open Rate Manager and names open the trunk, both in a new tab; each panel copies
+to the clipboard or downloads as CSV.
+
+**Advanced** mode looks up many destinations at once: countries, pasted MCCMNCs or numbers, or an
+uploaded file. It has filters, an "as of" date, views (vendor costs, client rates, margin matrix,
+cheapest N) and highlight filters. The matrix pages on the server and scrolls virtualised
+(`VirtualTable.tsx`, sticky header and first columns). Results export to CSV, and lookups can be
+saved and shared. The mode, destination and lookup live in the tab URL.
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag
