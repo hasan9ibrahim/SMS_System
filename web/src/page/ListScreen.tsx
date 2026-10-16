@@ -30,12 +30,13 @@ import { HistoryDrawer, useUndoLast, useUndoShortcut, type HistoryScope } from "
 import type { PageDef } from "../nav/registry";
 import { usePageStatus, useTab, useTabNavigate } from "../shell/tabContext";
 import { Icon, type IconName } from "../ui/Icon";
-import { Button, Popover } from "../ui/primitives";
+import { Button, Menu, Popover, type MenuItem } from "../ui/primitives";
 import { PageHeader } from "./PageHeader";
 
 export interface DetailContent {
   title: ReactNode;
-  sections: { key: string; label: string; content: ReactNode }[];
+  /** `actions` sit at the right of the title row while that section is shown. */
+  sections: { key: string; label: string; content: ReactNode; actions?: ReactNode }[];
   aside?: ReactNode;
 }
 
@@ -55,6 +56,22 @@ export interface ListScreenProps<Row extends { id: number }> {
   /** Page-specific controls in the filter row (e.g. an account manager picker). */
   toolbar?: (state: GridState, setState: (s: GridState) => void) => ReactNode;
   shortcuts?: string;
+  /** Extra header actions, placed before the primary button (e.g. Simulate). */
+  actions?: ReactNode;
+  /** Enables the header Export button; receives the current filters (§13.22). */
+  onExport?: (state: GridState) => void;
+  /** Selection summary and the Bulk edit menu (§13.11). */
+  selection?: {
+    summary?: (rows: Row[], ids: ReadonlySet<number>) => ReactNode;
+    bulk?: (ids: number[], clear: () => void) => (MenuItem | "separator")[];
+  };
+  /** Page shortcuts on the grid (e.g. E edit, D duplicate); return true when handled. */
+  onKey?: (key: string, row: Row | null) => boolean;
+  rowClass?: (row: Row) => string | undefined;
+  /** Makes this row the active one once it is loaded (e.g. a rule just added). */
+  selectId?: number | null;
+  /** Controlled detail section, when the page opens a section itself. */
+  section?: [string | null, (key: string) => void];
 }
 
 /** Grid state in the tab URL: ?g=<encoded>. Filter changes replace, not push. */
@@ -141,8 +158,17 @@ export function ShowDeleted({ state, onChange }: { state: GridState; onChange: (
   );
 }
 
-function DetailPanel({ content, onClose }: { content: DetailContent; onClose: () => void }) {
-  const [section, setSection] = useState(content.sections[0]?.key);
+function DetailPanel({
+  content,
+  onClose,
+  section,
+  setSection,
+}: {
+  content: DetailContent;
+  onClose: () => void;
+  section: string | null;
+  setSection: (key: string) => void;
+}) {
   const current = content.sections.find((s) => s.key === section) ?? content.sections[0];
   return (
     <section className="detail" aria-label="Details">
@@ -162,6 +188,7 @@ function DetailPanel({ content, onClose }: { content: DetailContent; onClose: ()
         <div className="detail-title">
           {content.title}
           <span className="fb-spacer" />
+          {current?.actions}
           <button type="button" className="icon-btn" aria-label="Close details" onClick={onClose}>
             <Icon name="x" />
           </button>
@@ -187,12 +214,24 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     initialState,
     shortcuts,
     toolbar,
+    actions,
+    onExport,
+    selection,
+    onKey,
+    rowClass,
+    selectId = null,
   } = props;
   const { active } = useTab();
   const fields = useListFields(list);
   const [state, setState] = useGridUrlState(initialState);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // The open detail section stays the same while the user moves between rows.
+  const ownSection = useState<string | null>(null);
+  const [section, setSection] = props.section ?? ownSection;
+  const [rows, setRows] = useState<Row[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const bulkRef = useRef<HTMLButtonElement>(null);
   const [meta, setMeta] = useState<GridMeta>({
     total: null,
     loaded: 0,
@@ -218,6 +257,21 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   });
 
   const onMeta = useCallback((m: GridMeta) => setMeta(m), []);
+  // Keep the active row in step with refreshed rows (a save or undo changes its figures),
+  // and pick up a row the page asked for.
+  const applied = useRef<number | null>(null);
+  useEffect(() => {
+    if (selectId !== null && applied.current !== selectId) {
+      const wanted = rows.find((r) => r.id === selectId);
+      if (wanted) {
+        applied.current = selectId;
+        return setActiveRow(wanted);
+      }
+    }
+    if (!activeRow) return;
+    const fresh = rows.find((r) => r.id === activeRow.id);
+    if (fresh && fresh !== activeRow) setActiveRow(fresh);
+  }, [rows, selectId]); // eslint-disable-line react-hooks/exhaustive-deps
   // A new filter or search changes the rows: drop a selection the user can no longer see,
   // so Bulk edit never acts on hidden rows.
   const filterKey = JSON.stringify([state.columns, state.builder, state.search]);
@@ -265,11 +319,17 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             )}
             <Button
               icon="download"
-              disabled
-              title="Export follows the current filters; it arrives with import/export (§13.22)"
+              disabled={!onExport}
+              onClick={() => onExport?.(state)}
+              title={
+                onExport
+                  ? "Export the rows matching the current filters (CSV)"
+                  : "Export follows the current filters; it arrives with import/export (§13.22)"
+              }
             >
               Export
             </Button>
+            {actions}
             {primary && (
               <Button
                 variant="primary"
@@ -351,20 +411,43 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
         <span className="fb-spacer" />
         {selected.size > 0 && (
           <>
-            <span className="muted">{selected.size} selected</span>
+            <span className="muted">
+              {selection?.summary ? selection.summary(rows, selected) : `${selected.size} selected`}
+            </span>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
               Clear selection
             </button>
           </>
         )}
-        <Button
-          small
-          icon="layers"
-          disabled={selected.size === 0}
-          title="Bulk edit opens the bulk workspace (§13.11, build step 5)"
-        >
-          Bulk edit
-        </Button>
+        {selection?.bulk ? (
+          <>
+            <button
+              ref={bulkRef}
+              type="button"
+              className="btn btn-default btn-sm"
+              disabled={selected.size === 0}
+              aria-haspopup="menu"
+              onClick={() => setBulkOpen((v) => !v)}
+            >
+              Bulk edit <Icon name="chevronDown" size={12} />
+            </button>
+            <Popover anchor={bulkRef} open={bulkOpen} onClose={() => setBulkOpen(false)} align="end">
+              <Menu
+                items={selection.bulk([...selected], () => setSelected(new Set()))}
+                onClose={() => setBulkOpen(false)}
+              />
+            </Popover>
+          </>
+        ) : (
+          <Button
+            small
+            icon="layers"
+            disabled={selected.size === 0}
+            title="Bulk edit opens the bulk workspace (§13.11, build step 5)"
+          >
+            Bulk edit
+          </Button>
+        )}
         <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
       </div>
       <div className={`list-body${detail && activeRow ? " with-detail" : ""}`}>
@@ -381,13 +464,22 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             selected={selected}
             onSelectedChange={setSelected}
             {...(onOpen ? { onOpen } : {})}
+            {...(onKey ? { onKeyAction: onKey } : {})}
+            {...(rowClass ? { rowClass } : {})}
+            onRows={setRows}
             onMeta={onMeta}
           />
         ) : (
           <div className="grid-message muted">Loading…</div>
         )}
         {detail && activeRow && (
-          <DetailPanel key={activeRow.id} content={detail(activeRow)} onClose={() => setActiveRow(null)} />
+          <DetailPanel
+            key={activeRow.id}
+            content={detail(activeRow)}
+            section={section}
+            setSection={setSection}
+            onClose={() => setActiveRow(null)}
+          />
         )}
       </div>
       {builderOpen && fields.data && (

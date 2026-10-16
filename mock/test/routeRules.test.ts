@@ -229,6 +229,29 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     await ok("restoreRouteRule", call("POST", `/route-rules/${created.id}/restore`));
   });
 
+  test("a static draft may be saved without vendors, but not turned on", async () => {
+    const draft = (
+      await ok(
+        "createRouteRule",
+        call("POST", "/route-rules", { name: `Draft ${run}`, priority: 99, status: "inactive", routeType: "static" }),
+        201,
+      )
+    ).record;
+    assert.equal(draft.vendors.length, 0);
+    const on = await call("POST", "/route-rules/bulk", { ruleIds: [draft.id], action: "enable" });
+    assert.equal(on.statusCode, 400);
+    check("bulkRouteRules", on);
+    const put = await call("PUT", `/route-rules/${draft.id}`, {
+      name: `Draft ${run}`,
+      priority: 99,
+      status: "active",
+      routeType: "static",
+    });
+    assert.equal(put.statusCode, 400);
+    assert.equal(put.json().errors[0].path, "/vendors");
+    await ok("archiveRouteRule", call("POST", `/route-rules/${draft.id}/archive`, {}));
+  });
+
   test("traffic per customer and vendor (§13.27)", async () => {
     const busiest = await query({ sort: [{ field: "messages", dir: "desc" }], limit: 1 });
     const t = await ok("getRouteRuleTraffic", call("GET", `/route-rules/${busiest.rows[0].id}/traffic?window=24h`));

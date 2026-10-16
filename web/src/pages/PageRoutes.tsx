@@ -1,4 +1,5 @@
 // The route tree each tab renders from its own path (§13.5).
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
 import { ChangeHistoryPage } from "./ChangeHistoryPage";
@@ -10,11 +11,15 @@ import { RateManagerPage } from "./rates/RateManagerPage";
 import { TrunkPage } from "./trunk/TrunkPage";
 import { TrunksPage } from "./TrunksPage";
 
+// Pages with charts load on first use, so ECharts stays out of the main bundle.
+const RouteRulesPage = lazy(() => import("./routing/RouteRulesPage").then((m) => ({ default: m.RouteRulesPage })));
+
 const BUILT = new Set([
   "/enterprises",
   "/enterprises/customer-trunks",
   "/enterprises/vendor-trunks",
   "/rates/manager",
+  "/routing/rules",
   "/admin/changes",
 ]);
 
@@ -30,6 +35,14 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/enterprises/vendor-trunks/:id" element={<TrunkPage key="vendor" kind="vendor" />} />
       <Route path="/enterprises/:id" element={<EnterprisePage />} />
       <Route path="/rates/manager" element={<RateManagerPage />} />
+      <Route
+        path="/routing/rules"
+        element={
+          <Suspense fallback={<div className="grid-message muted">Loading…</div>}>
+            <RouteRulesPage />
+          </Suspense>
+        }
+      />
       <Route path="/admin/changes" element={<ChangeHistoryPage />} />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (
         <Route key={p.key} path={p.path} element={<PlaceholderPage page={p} />} />

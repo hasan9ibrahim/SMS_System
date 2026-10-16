@@ -377,8 +377,9 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
     errors.push({ path: "/revenue", message: "accumulated revenue needs a scope and a period" });
   if ((r.threshold === null) !== (r.thresholdInterval === null))
     errors.push({ path: "/thresholdInterval", message: "set both the threshold and its interval, or neither" });
-  if (r.routeType === "static" && !r.vendors.some((v) => !v.isBackup))
-    errors.push({ path: "/vendors", message: "a static route needs at least one vendor" });
+  // A draft may be saved without vendors; it cannot be on without them.
+  if (r.routeType === "static" && r.status === "active" && !r.vendors.some((v) => !v.isBackup))
+    errors.push({ path: "/vendors", message: "an active static route needs at least one vendor" });
   r.vendors.forEach((v, i) => {
     if (v.level > r.maxRouteLevel)
       errors.push({ path: `/vendors/${i}/level`, message: `above the max route level ${r.maxRouteLevel}` });
@@ -719,10 +720,19 @@ export function bulkRouteRules(request: FastifyRequest, reply: FastifyReply) {
     if (errors.length) return badInput(reply, errors);
     const ids = [...new Set(body.ruleIds)];
     const { rows } = await pool.query(
-      "SELECT id, status, priority, deleted_at FROM route_rules WHERE id = ANY($1) AND deleted_at IS NULL",
+      "SELECT id, status, priority, route_type, deleted_at FROM route_rules WHERE id = ANY($1) AND deleted_at IS NULL",
       [ids],
     );
     const { vendors, whitelists } = await vendorsOf(pool, ids);
+    if (body.action === "enable") {
+      const empty = rows
+        .filter((r) => r.route_type === "static" && !(vendors.get(r.id) ?? []).some((v) => !v.isBackup))
+        .map((r) => r.id as number);
+      if (empty.length)
+        return badInput(reply, [
+          { path: "/ruleIds", message: `static rules without vendors cannot be turned on: #${empty.join(", #")}` },
+        ]);
+    }
     const diff: DiffEntry[] = [];
     for (const r of rows) {
       const id = r.id as number;

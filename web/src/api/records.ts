@@ -31,7 +31,7 @@ import { api, unwrap } from "./client";
 export type TrunkKind = "customer" | "vendor";
 export type TrunkDetail = CustomerTrunkDetail | VendorTrunkDetail;
 export type TrunkInput = CustomerTrunkInput | VendorTrunkInput;
-export type RecordKind = "enterprise" | TrunkKind | "rate_table";
+export type RecordKind = "enterprise" | TrunkKind | "rate_table" | "route_rule";
 
 export interface Saved<T> {
   record: T;
@@ -206,6 +206,7 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   const params = { params: { path: { id } } };
   if (kind === "enterprise") return unwrap(api.GET("/enterprises/{id}/dependencies", params));
   if (kind === "rate_table") return unwrap(api.GET("/rate-tables/{id}/dependencies", params));
+  if (kind === "route_rule") return unwrap(api.GET("/route-rules/{id}/dependencies", params));
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -217,6 +218,7 @@ export function useArchive(kind: RecordKind) {
       const req = { params: { path: { id } }, body };
       if (kind === "enterprise") return unwrap(api.POST("/enterprises/{id}/archive", req));
       if (kind === "rate_table") return unwrap(api.POST("/rate-tables/{id}/archive", req));
+      if (kind === "route_rule") return unwrap(api.POST("/route-rules/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -231,6 +233,7 @@ export function useRestore(kind: RecordKind) {
       const req = { params: { path: { id } } };
       if (kind === "enterprise") return unwrap(api.POST("/enterprises/{id}/restore", req));
       if (kind === "rate_table") return unwrap(api.POST("/rate-tables/{id}/restore", req));
+      if (kind === "route_rule") return unwrap(api.POST("/route-rules/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

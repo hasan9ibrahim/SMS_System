@@ -28,6 +28,8 @@ const PAGE_SIZE = 200;
 
 export interface ColumnOverride<Row> {
   width?: number;
+  /** Header text instead of the field label (e.g. the traffic window "24h"). */
+  label?: string;
   render?: (row: Row) => ReactNode;
   align?: "left" | "right" | "center";
 }
@@ -57,6 +59,8 @@ export interface DataGridProps<Row extends { id: number }> {
   rowClass?: (row: Row) => string | undefined;
   /** The rows loaded so far (for actions on the selection). */
   onRows?: (rows: Row[]) => void;
+  /** Keys the grid does not handle itself (page shortcuts); return true when handled. */
+  onKeyAction?: (key: string, row: Row | null) => boolean;
 }
 
 /** Default cell text by field type. */
@@ -91,7 +95,9 @@ function HeaderCell({
   width,
   onResizeStart,
   align,
+  label,
 }: {
+  label?: string | undefined;
   field: FieldDescriptor;
   state: GridState;
   onStateChange: (s: GridState) => void;
@@ -112,7 +118,7 @@ function HeaderCell({
       }
       title={field.sortable ? "Click to sort, Shift-click to add a second sort" : field.label}
     >
-      <span className="gh-label">{field.label}</span>
+      <span className="gh-label">{label ?? field.label}</span>
       {dir && (
         <span className="gh-sort">
           {dir === "asc" ? "▲" : "▼"}
@@ -133,7 +139,13 @@ interface RowProps<Row> {
   row: Row;
   index: number;
   top: number;
-  cells: { field: FieldDescriptor; width: number; align: string; render?: (row: Row) => ReactNode }[];
+  cells: {
+    field: FieldDescriptor;
+    width: number;
+    align: string;
+    label?: string | undefined;
+    render?: ((row: Row) => ReactNode) | undefined;
+  }[];
   active: boolean;
   checked: boolean;
   onClick: (row: Row, e: MouseEvent) => void;
@@ -223,6 +235,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     trailing,
     rowClass,
     onRows,
+    onKeyAction,
   } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastChecked = useRef<number | null>(null);
@@ -304,6 +317,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
           width: h.getSize(),
           align: o?.align ?? (isNumeric(f) ? "right" : f.field === "status" ? "center" : "left"),
           render: o?.render,
+          label: o?.label,
         };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -368,7 +382,10 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     } else if (e.key === "Enter" && activeIndex >= 0) {
       onOpen?.(rows[activeIndex]!, e);
       return;
-    } else return;
+    } else {
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && onKeyAction?.(e.key, rows[activeIndex] ?? null)) e.preventDefault();
+      return;
+    }
     e.preventDefault();
     if (next >= 0 && rows[next]) {
       onActiveChange(rows[next]!);
@@ -410,6 +427,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
               onStateChange={onStateChange}
               width={c.width}
               align={c.align}
+              label={c.label}
               onResizeStart={headers[i]!.getResizeHandler()}
             />
           ))}

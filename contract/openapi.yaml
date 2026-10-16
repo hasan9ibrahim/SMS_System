@@ -2503,7 +2503,7 @@ components:
     # ------------------------------------------------------------- reference data
     ReferenceData:
       type: object
-      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers]
+      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers, routeRuleGroups, numberLists]
       properties:
         businessCompanies:
           type: array
@@ -2578,6 +2578,25 @@ components:
                 $ref: "#/components/schemas/Id"
               displayName:
                 type: string
+        routeRuleGroups:
+          description: Route rule groups for chaining with Next group (§6.3, optional since §13.2).
+          type: array
+          items:
+            $ref: "#/components/schemas/Named"
+        numberLists:
+          description: Number lists for sender, receiver and whitelist conditions (§6.4, §13.27).
+          type: array
+          items:
+            type: object
+            required: [id, name, listType]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+              listType:
+                type: string
+                enum: [random, tag, sender_id_template]
 
     # ------------------------------------------------------------- safe delete (§13.29)
     Archived:

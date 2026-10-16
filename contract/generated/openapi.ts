@@ -1514,6 +1514,15 @@ export type components = {
         id: components["schemas"]["Id"];
         displayName: string;
       }[];
+      /** @description Route rule groups for chaining with Next group (§6.3, optional since §13.2). */
+      routeRuleGroups: components["schemas"]["Named"][];
+      /** @description Number lists for sender, receiver and whitelist conditions (§6.4, §13.27). */
+      numberLists: {
+        id: components["schemas"]["Id"];
+        name: string;
+        /** @enum {string} */
+        listType: "random" | "tag" | "sender_id_template";
+      }[];
     };
     /** @description Set when the record is archived (deleted, §13.29); null otherwise. */
     Archived: {

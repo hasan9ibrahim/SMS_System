@@ -7,7 +7,7 @@ socket (`src/live/`).
 ```bash
 npm run dev:mock     # repo root, after npm run db:up && npm run seed:small
 npm run dev:web      # http://localhost:5173
-npm test -w web      # filter model, tab rules, saved views, form helpers
+npm test -w web      # filter model, tab rules, saved views, form helpers, rate and route rule models
 ```
 
 ## App shell (build step 3)
@@ -43,6 +43,30 @@ rate to edit it in place; select rows for the bulk bar (set rate, change by % / 
 + margin, effective date, block, close). "Save n changes" sends one batch (`pending.ts`), which is
 one change with Undo; increases inside a client's notice period ask for confirmation first.
 
+## Route Rules (build step 4.3)
+
+`/routing/rules` (`src/pages/routing/`, §15.4) copies the reference screenshot's layout and form.
+The header has Undo, History, Export (CSV of the filtered rules), Simulate (Route Simulator dialog)
+and New rule. The filter row shows the chips, Clear all and Save as view, and on the right "n selected · X msgs"
+and the Bulk edit menu (turn on / off, set or shift priority, replace vendor, delete). The grid
+shows a coloured type dot, customer trunks "+N" (hover for all), the vendor split (click it to edit
+level 1 in place), and the 24h volume (hover for the per-customer breakdown with a 15m–30d time frame). DLR
+turns amber below the threshold and margin red when negative. Click the On dot to toggle.
+The detail panel has:
+
+- **Conditions:** "#id name", "all must match" (click to switch to any), + Add condition, and
+  chips for trunk, category, destination (§13.21 picker), sender / receiver / content, TPS (§13.8),
+  revenue (§13.9), time, HLR ported, HLR action (§13.24) and multipart. Click a chip to edit it; its
+  × removes it.
+- **Vendors:** route type, hunt policy, levels with share, backup and warm-up (§13.27), vendor scope for least cost and QBR,
+  limits, number whitelists.
+- **Traffic:** an ECharts chart plus per-customer and per-vendor tables.
+- **History**, and **Test** (a sample number through the rule).
+- **Right side:** the 24h trend.
+
+Shortcuts: E edit (rule settings dialog), D duplicate (inactive copy). Each save is one change with
+Undo. Charts use `src/ui/Chart.tsx`, which reads the theme tokens and redraws when the theme changes.
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag
@@ -77,6 +101,11 @@ status-bar text. A page only names its list and overrides what it needs:
   historyScope={{ entityTypes: ["route_rule"] }}   // header Undo / History and Ctrl+Z (§13.10)
 />
 ```
+
+Optional: `actions` (extra header buttons), `onExport`, `selection` (summary text and Bulk edit
+menu items), `onKey` (page shortcuts on the grid), `rowClass`, `selectId` (activate a row once
+loaded) and `section` (control the open detail section). A column override can set `label` to
+rename its header, and a detail section can add `actions` to the title row.
 
 The grid (`src/grid/DataGrid.tsx`) filters, sorts and pages on the server; rows are
 virtualised and the next page loads as you scroll. Grid state is kept in the tab's URL
