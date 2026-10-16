@@ -10,6 +10,10 @@ backend team knows exactly what to build. Newest first.
 
 ## Decisions
 
+- 2026-10-16, MCC/MNC master (§6.1): production uses a list Hasan Ibrahim supplies as an Excel/CSV file, loaded through the MCCMNC Unique Codes import. The public list in `mock/data/` is for fake data only. Backend: the import must match existing codes, add new ones and report codes that disappear but are still used by rate lines or rules. Decided by: Hasan Ibrahim.
+- 2026-10-16, dial-code Master Table / numbering plan (§6.1): production uses a ready list supplied by Hasan Ibrahim and loaded through the Master Table import. The generated prefixes are fake-data only. Decided by: Hasan Ibrahim.
+- 2026-10-16, shared MCCs (e.g. Guam on 310/311): no special rule in the system; the supplied MCC/MNC list decides which country-level codes exist. Decided by: Hasan Ibrahim.
+- 2026-10-16, re-routed messages: the customer is billed once, on the final attempt; the vendor is billed for every attempt it accepted (per its billing type). Decided by: Hasan Ibrahim.
 - 2026-10-16, billing data retention (§13.29): EDRs, invoices, SOAs, payments, credit notes, balance history, disputes, rate history and audit records are kept for 7 years and cannot be purged before that (anonymising a closed client's contact details stays allowed, as §13.29 says). Decided by: Hasan Ibrahim.
 - 2026-10-16, excluded payments (§13.33): a payment with "Include in SOA" unticked is left off the partner's SOA (and shown in the SOA preview's collapsed "excluded" section) but still counts in the partner's balance and in finance reports. Decided by: Hasan Ibrahim.
 - 2026-10-16, saved filter views (§13.25): a saved view is private to the user who saved it. The owner can share it with named colleagues (chosen users), who see it read-only in their view list. No department-wide or company-wide sharing. To be added to the contract with the views endpoint. Decided by: Hasan Ibrahim.
@@ -32,8 +36,4 @@ New tables or columns beyond the reference platform, so the backend builds the s
 
 ## Open questions
 
-- MCC/MNC master (§6.1): the spec says about 1,965 entries; the generator uses a public list with 2,063 networks after cleaning, plus one "All networks" code per MCC. Which list is the source of truth for production, and who maintains it?
-- Dial-code Master Table (§6.1): the generator makes up the prefixes below each real country dial code. Production needs a real numbering-plan source (and MNP/HLR for ported numbers). Which one?
-- Shared MCCs (e.g. Guam uses the US MCCs 310/311): the generator gives the "All networks" code to the country with most networks on that MCC and none to the other. Is that the rule we want, or should territories get their own country-level code?
-- Customer billing on re-routed messages: the generator bills the customer once, on the final attempt only, and the vendor on every attempt it accepted. Confirm this matches finance's expectation.
-- Translation/HLR rules "Applies to" an enterprise, a category or all trunks (§13.2): the schema stores only direct trunk attachments. Should scope targets be stored as their own rows (and expanded at run time), or expanded into trunk attachments on save?
+- Rules that apply to a whole enterprise, a category or all trunks (§13.2): should the rule remember the target itself, so trunks added later get it automatically (and the trunk's Rules tab shows it as "inherited"), or should saving attach it only to the trunks that exist at that moment? §13.2 mentions "inherited" rules on the trunk tab, which points to the first option. Waiting for confirmation.
