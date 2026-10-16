@@ -92,7 +92,7 @@ function baseAggregates(side: "customer" | "vendor", factor: string): string {
 }
 
 const ratio = (num: string, den: string, scale: number, digits: number) =>
-  `if(${den} = 0, NULL, round(${num} / ${den} * ${scale}, ${digits}))`;
+  `if((${den}) = 0, NULL, round((${num}) / (${den}) * ${scale}, ${digits}))`;
 
 /** The §10 metric columns from the sums (ClickHouse, so they can be filtered and sorted). */
 const DERIVED: Record<keyof ReportMetrics, string> = {

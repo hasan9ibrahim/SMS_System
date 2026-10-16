@@ -378,7 +378,7 @@ export function EnterpriseReportPage() {
     for (const m of Object.keys(LABELS)) {
       const platform = PLATFORM_MONEY.has(m);
       out[m] = {
-        width: MONEY.includes(m) || RATE.includes(m) ? 120 : 100,
+        width: MONEY.includes(m) || RATE.includes(m) ? 130 : 118,
         align: "right",
         ...(platform ? { label: labelOf(m, ccy) } : {}),
         render: (r: ReportRow) => {

@@ -19,7 +19,13 @@ const q = (query: Partial<ListQuery>) => compileQuery(def, query as ListQuery);
 
 test("every list field has SQL and every list has a definition", () => {
   for (const [name, d] of Object.entries(listDefs)) assert.deepEqual(checkDef(name, d), []);
-  assert.deepEqual(Object.keys(listDefs).sort(), Object.keys(listFields).sort());
+  // The Enterprise report's catalogue is answered from the EDR store (api/enterpriseReport.ts).
+  assert.deepEqual(
+    Object.keys(listDefs).sort(),
+    Object.keys(listFields)
+      .filter((l) => l !== "enterprise_report")
+      .sort(),
+  );
 });
 
 test("operators compile to case-insensitive, parameterised SQL", () => {
