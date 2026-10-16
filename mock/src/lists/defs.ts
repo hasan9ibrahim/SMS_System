@@ -648,7 +648,10 @@ export const changeList: ListDef<Change> = {
   mapRow: mapChange,
 };
 
-export const listDefs: Record<ListId, ListDef<unknown>> = {
+/** Lists answered from PostgreSQL; the Enterprise report runs on the EDR store (api/enterpriseReport.ts). */
+export type PgListId = Exclude<ListId, "enterprise_report">;
+
+export const listDefs: Record<PgListId, ListDef<unknown>> = {
   enterprises: enterpriseList as ListDef<unknown>,
   users: userList as ListDef<unknown>,
   changes: changeList as ListDef<unknown>,

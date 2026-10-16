@@ -4,6 +4,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { ReferenceData } from "@sms/contract";
 import { PLATFORM_CURRENCY } from "../currency.js";
+import { PLATFORM_TIMEZONE } from "../platform.js";
 import { withDb } from "../db.js";
 import { TIMEZONES } from "./records.js";
 
@@ -33,6 +34,7 @@ export function getReference(_request: FastifyRequest, reply: FastifyReply) {
       routeRuleGroups: groups.rows.map((r) => ({ id: r.id, name: r.name })),
       numberLists: lists.rows.map((r) => ({ id: r.id, name: r.name, listType: r.list_type })),
       platformCurrency: PLATFORM_CURRENCY,
+      platformTimezone: PLATFORM_TIMEZONE,
     };
   });
 }

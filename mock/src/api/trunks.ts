@@ -25,6 +25,7 @@ import {
   flatten,
   insertRow,
   isAdmin,
+  isTimezone,
   isUniqueViolation,
   iso,
   recordChange,
@@ -57,6 +58,7 @@ const COMMON: FieldSpec[] = [
   { api: "sslType", col: "ssl_type" },
   { api: "tps", col: "tps" },
   { api: "overflowBuffer", col: "overflow_buffer" },
+  { api: "billingTimezone", col: "billing_timezone" },
 ];
 
 const CUSTOMER_SPECS: FieldSpec[] = [
@@ -213,6 +215,8 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
     else if (!k.enterpriseTypes.includes(rows[0].type))
       errors.push({ path: "/enterpriseId", message: `a ${rows[0].type} can't have ${k.label.toLowerCase()}s` });
   }
+  if (input.billingTimezone != null && !isTimezone(input.billingTimezone))
+    errors.push({ path: "/billingTimezone", message: "unknown time zone" });
   if (input.categoryId != null) {
     const { rows } = await db.query("SELECT 1 FROM product_categories WHERE id = $1 AND deleted_at IS NULL", [
       input.categoryId,

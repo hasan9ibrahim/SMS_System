@@ -1424,6 +1424,48 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/reports/enterprise/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Enterprise report: the billing team's traffic report (§10, §13.31)
+     * @description Traffic per enterprise (customer or vendor side) for a period, cut into hours, days, weeks
+     *     or months in the chosen time zone: the partner's billing time zone (default; a trunk's
+     *     own when set), UTC or the platform time zone (§13.31). Rows group by the chosen keys
+     *     plus the partner currency; every metric of §10 is returned. Filters, sort and paging
+     *     follow the list grammar (§13.25) on the `enterprise_report` field catalogue; `totals`
+     *     covers every matching row.
+     */
+    post: operations["queryEnterpriseReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/enterprise/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Export the Enterprise report as CSV, with the time zone printed (§13.31) */
+    post: operations["exportEnterpriseReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -1657,6 +1699,8 @@ export type components = {
         id: components["schemas"]["Id"];
         displayName: string;
       }[];
+      /** @description The platform time zone (IANA name), one of the Enterprise report's time zone choices (§13.31). */
+      platformTimezone: string;
       /**
        * @description ISO code of the platform currency (decided 2026-10-16: EUR by default, configurable).
        *     Converted rates, margins, revenue conditions and every cross-company total are in it.
@@ -1946,6 +1990,8 @@ export type components = {
       expressMargin?: number | null;
       revenueLimit?: number | null;
       revenueLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
+      /** @description Billing time zone of the trunk (§13.31); null = the enterprise's. */
+      billingTimezone?: string | null;
     };
     /** @description Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26). */
     CustomerTrunkInput: WithRequired<
@@ -2032,6 +2078,8 @@ export type components = {
       bindAddrRange?: string | null;
       costLimit?: number | null;
       costLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
+      /** @description Billing time zone of the trunk (§13.31); null = the enterprise's. */
+      billingTimezone?: string | null;
     };
     /** @description Vendor trunk form (§5.5) with cost limit (§13.26). */
     VendorTrunkInput: WithRequired<
@@ -2731,7 +2779,8 @@ export type components = {
       | "rate_tables"
       | "rate_lines"
       | "destinations"
-      | "route_rules";
+      | "route_rules"
+      | "enterprise_report";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -3126,6 +3175,148 @@ export type components = {
       readOnly: boolean;
       query: components["schemas"]["RateLookupQuery"];
       updatedAt: components["schemas"]["Timestamp"];
+    };
+    /**
+     * @description partner: each partner's billing time zone (a trunk's own when set), the default (§13.31);
+     *     utc; platform: the platform time zone (`ReferenceData.platformTimezone`).
+     * @enum {string}
+     */
+    ReportTimezoneMode: "partner" | "utc" | "platform";
+    /** @enum {string} */
+    ReportBy: "none" | "hourly" | "daily" | "weekly" | "monthly";
+    /** @enum {string} */
+    ReportGroup: "enterprise" | "trunk" | "country" | "destination" | "account_manager";
+    EnterpriseReportParams: {
+      /**
+       * @description Enterprise type.
+       * @enum {string}
+       */
+      side: "customer" | "vendor";
+      /** @description Start, local time in the chosen time zone (inclusive), e.g. 2026-10-01T00:00. */
+      from: string;
+      /** @description End, local time in the chosen time zone (exclusive), e.g. 2026-11-01T00:00. */
+      to: string;
+      timezone?: components["schemas"]["ReportTimezoneMode"];
+      reportBy?: components["schemas"]["ReportBy"];
+      /** @description Row keys besides the period; the partner currency is always a key. Default enterprise and trunk. */
+      groupBy?: components["schemas"]["ReportGroup"][];
+      enterpriseIds?: components["schemas"]["Id"][];
+      trunkIds?: components["schemas"]["Id"][];
+      /** @description A 3-digit code is the whole country (§13.21). */
+      mccmncs?: string[];
+      /** @description Account manager at send time (§13.30). */
+      accountManagerIds?: components["schemas"]["Id"][];
+      /** @enum {string|null} */
+      msgType?: "MT" | "MO" | null;
+    };
+    EnterpriseReportQueryFields: {
+      report?: components["schemas"]["EnterpriseReportParams"];
+      filter?: components["schemas"]["FilterGroup"];
+      search?: string;
+      sort?: components["schemas"]["SortKey"][];
+      limit?: number;
+      cursor?: string | null;
+      withTotal?: boolean;
+    };
+    EnterpriseReportQuery: WithRequired<
+      components["schemas"]["EnterpriseReportQueryFields"],
+      "report"
+    >;
+    EnterpriseReportExport: components["schemas"]["EnterpriseReportQueryFields"] & {
+      /** @description Fields to export, in order (the visible grid columns); default all. */
+      columns?: string[];
+    };
+    /** @description The §10 metric columns. Ratios are null where the base is zero. */
+    ReportMetrics: {
+      /** @description Attempts */
+      attempts: number;
+      /** @description Successful: accepted by the vendor (submit_sm_resp OK) */
+      successful: number;
+      /** @description Billable (Customer) */
+      billableCustomer: number;
+      /** @description Billable (Vendor) */
+      billableVendor: number;
+      /** @description Submitted to a vendor */
+      submitted: number;
+      /** @description ASR %: successful ÷ attempts */
+      asr: number | null;
+      /** @description DLR (Customer) = DLR(s) %: delivered as reported to the customer ÷ successful */
+      dlrCustomer: number | null;
+      /** @description DLR (Vendor) = DLR(t) %: delivered as reported by the vendor ÷ successful */
+      dlrVendor: number | null;
+      /** @description Revenue in the partner currency (`currency`): the customer charge on the customer side, converted on the vendor side */
+      revenue: number | null;
+      /** @description Revenue (B) in the platform currency */
+      revenuePlatform: number | null;
+      /** @description Cost in the partner currency (`currency`): the vendor charge on the vendor side, converted on the customer side */
+      cost: number | null;
+      /** @description Cost (B) in the platform currency */
+      costPlatform: number | null;
+      /** @description Margin: revenue (B) − cost (B) */
+      margin: number | null;
+      /** @description Margin % of revenue (B) */
+      marginPct: number | null;
+      /** @description Avg rate (Customer): revenue ÷ billable (customer), partner currency */
+      avgRateCustomer: number | null;
+      /** @description Avg rate (Vendor): cost ÷ billable (vendor), partner currency */
+      avgRateVendor: number | null;
+      /** @description Cost (Avg): cost (B) ÷ billable (vendor) */
+      costAvg: number | null;
+      /** @description Reported (C): final status sent to the customer */
+      reportedCustomer: number;
+      /** @description Reported (V): receipts received from vendors */
+      reportedVendor: number;
+      /** @description Delivery delay, average seconds from submit to receipt */
+      deliveryDelayS: number | null;
+      /** @description HLR cached */
+      hlrCached: number;
+      /** @description HLR live */
+      hlrLive: number;
+      /** @description HLR total */
+      hlrTotal: number;
+      /** @description HLR accomplished */
+      hlrAccomplished: number;
+      /** @description HLR ported */
+      hlrPorted: number;
+      /** @description HLR cost in the partner currency */
+      hlrCost: number | null;
+      /** @description HLR cost (B) in the platform currency */
+      hlrCostPlatform: number | null;
+    };
+    EnterpriseReportRow: components["schemas"]["ReportMetrics"] & {
+      /** @description Position of the row in the sorted result (stable for one query). */
+      id: number;
+      /** @description Start of the hour, day, week or month in the row's time zone ("2026-10-16", "2026-10-16 13:00"); null when not by period. */
+      period: string | null;
+      enterpriseId: number | null;
+      enterpriseName: string | null;
+      trunkId: number | null;
+      trunkName: string | null;
+      country: string | null;
+      mccmnc: string | null;
+      network: string | null;
+      accountManagerId: number | null;
+      accountManagerName: string | null;
+      /** @description The partner currency of revenue (customer side) or cost (vendor side). */
+      currency: string;
+      /** @description Time zone the row's period and the date range were cut in. */
+      timezone: string;
+    };
+    EnterpriseReportPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["EnterpriseReportRow"][];
+      /**
+       * @description Every matching row added up. Partner-currency amounts (revenue, cost, HLR cost, average
+       *     rates) are null when the rows are in more than one currency.
+       */
+      totals: components["schemas"]["ReportMetrics"];
+      /** @description Time zones used, with how many enterprises were cut in each (printed on exports, §13.31). */
+      timezones: {
+        timezone: string;
+        enterprises: number;
+      }[];
+      platformCurrency: string;
+      /** @description False when the EDR store does not answer (rows are then empty). */
+      available: boolean;
     };
   };
   responses: {
@@ -5432,6 +5623,60 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryEnterpriseReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnterpriseReportQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of report rows, with totals and the time zones used */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseReportPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportEnterpriseReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnterpriseReportExport"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8. The first lines name the period and the time zone(s) used. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };
   };

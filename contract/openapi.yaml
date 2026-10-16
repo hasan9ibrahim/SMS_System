@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.7.0
+  version: 0.8.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -49,6 +49,8 @@ tags:
     description: Change history and per-user undo (§13.10)
   - name: search
     description: Jump-to search across records (Ctrl K, §15.1)
+  - name: reports
+    description: Traffic reports from the EDR store (§10, §13.31)
 
 security:
   - sessionCookie: []
@@ -2262,6 +2264,63 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /reports/enterprise/query:
+    post:
+      tags: [reports]
+      operationId: queryEnterpriseReport
+      summary: "Enterprise report: the billing team's traffic report (§10, §13.31)"
+      description: |
+        Traffic per enterprise (customer or vendor side) for a period, cut into hours, days, weeks
+        or months in the chosen time zone: the partner's billing time zone (default; a trunk's
+        own when set), UTC or the platform time zone (§13.31). Rows group by the chosen keys
+        plus the partner currency; every metric of §10 is returned. Filters, sort and paging
+        follow the list grammar (§13.25) on the `enterprise_report` field catalogue; `totals`
+        covers every matching row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterpriseReportQuery"
+      responses:
+        "200":
+          description: One page of report rows, with totals and the time zones used
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /reports/enterprise/export:
+    post:
+      tags: [reports]
+      operationId: exportEnterpriseReport
+      summary: "Export the Enterprise report as CSV, with the time zone printed (§13.31)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterpriseReportExport"
+      responses:
+        "200":
+          description: CSV file, UTF-8. The first lines name the period and the time zone(s) used.
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
 
 components:
   securitySchemes:
@@ -2748,7 +2807,7 @@ components:
     # ------------------------------------------------------------- reference data
     ReferenceData:
       type: object
-      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers, routeRuleGroups, numberLists, platformCurrency]
+      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers, routeRuleGroups, numberLists, platformCurrency, platformTimezone]
       properties:
         businessCompanies:
           type: array
@@ -2823,6 +2882,9 @@ components:
                 $ref: "#/components/schemas/Id"
               displayName:
                 type: string
+        platformTimezone:
+          type: string
+          description: The platform time zone (IANA name), one of the Enterprise report's time zone choices (§13.31).
         platformCurrency:
           type: string
           description: |
@@ -3487,6 +3549,10 @@ components:
           oneOf:
             - $ref: "#/components/schemas/LimitPeriod"
             - type: "null"
+        billingTimezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: Billing time zone of the trunk (§13.31); null = the enterprise's.
 
 
     CustomerTrunkInput:
@@ -3663,6 +3729,10 @@ components:
           oneOf:
             - $ref: "#/components/schemas/LimitPeriod"
             - type: "null"
+        billingTimezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: Billing time zone of the trunk (§13.31); null = the enterprise's.
 
 
     VendorTrunkInput:
@@ -5013,7 +5083,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report]
 
     FilterOperator:
       type: string
@@ -5772,3 +5842,273 @@ components:
           $ref: "#/components/schemas/RateLookupQuery"
         updatedAt:
           $ref: "#/components/schemas/Timestamp"
+
+
+    # ------------------------------------------------------------- Enterprise report (§10, §13.31)
+    ReportTimezoneMode:
+      type: string
+      enum: [partner, utc, platform]
+      description: |
+        partner: each partner's billing time zone (a trunk's own when set), the default (§13.31);
+        utc; platform: the platform time zone (`ReferenceData.platformTimezone`).
+
+    ReportBy:
+      type: string
+      enum: [none, hourly, daily, weekly, monthly]
+
+    ReportGroup:
+      type: string
+      enum: [enterprise, trunk, country, destination, account_manager]
+
+    EnterpriseReportParams:
+      type: object
+      additionalProperties: false
+      required: [side, from, to]
+      properties:
+        side:
+          type: string
+          enum: [customer, vendor]
+          description: Enterprise type.
+        from:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+          description: Start, local time in the chosen time zone (inclusive), e.g. 2026-10-01T00:00.
+        to:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+          description: End, local time in the chosen time zone (exclusive), e.g. 2026-11-01T00:00.
+        timezone:
+          $ref: "#/components/schemas/ReportTimezoneMode"
+        reportBy:
+          $ref: "#/components/schemas/ReportBy"
+        groupBy:
+          type: array
+          maxItems: 5
+          description: Row keys besides the period; the partner currency is always a key. Default enterprise and trunk.
+          items:
+            $ref: "#/components/schemas/ReportGroup"
+        enterpriseIds:
+          type: array
+          maxItems: 2000
+          items:
+            $ref: "#/components/schemas/Id"
+        trunkIds:
+          type: array
+          maxItems: 2000
+          items:
+            $ref: "#/components/schemas/Id"
+        mccmncs:
+          type: array
+          maxItems: 2000
+          description: A 3-digit code is the whole country (§13.21).
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
+        accountManagerIds:
+          type: array
+          description: Account manager at send time (§13.30).
+          items:
+            $ref: "#/components/schemas/Id"
+        msgType:
+          type: [string, "null"]
+          enum: [MT, MO, null]
+
+    EnterpriseReportQueryFields:
+      type: object
+      properties:
+        report:
+          $ref: "#/components/schemas/EnterpriseReportParams"
+        filter:
+          $ref: "#/components/schemas/FilterGroup"
+        search:
+          type: string
+          maxLength: 200
+        sort:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/SortKey"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 4000
+        cursor:
+          type: [string, "null"]
+        withTotal:
+          type: boolean
+
+    EnterpriseReportQuery:
+      allOf:
+        - $ref: "#/components/schemas/EnterpriseReportQueryFields"
+      required: [report]
+      unevaluatedProperties: false
+
+    EnterpriseReportExport:
+      allOf:
+        - $ref: "#/components/schemas/EnterpriseReportQueryFields"
+        - type: object
+          required: [report]
+          properties:
+            columns:
+              type: array
+              description: Fields to export, in order (the visible grid columns); default all.
+              items:
+                type: string
+      unevaluatedProperties: false
+
+    ReportMetrics:
+      type: object
+      description: The §10 metric columns. Ratios are null where the base is zero.
+      required: [attempts, successful, billableCustomer, billableVendor, submitted, asr, dlrCustomer, dlrVendor, revenue, revenuePlatform, cost, costPlatform, margin, marginPct, avgRateCustomer, avgRateVendor, costAvg, reportedCustomer, reportedVendor, deliveryDelayS, hlrCached, hlrLive, hlrTotal, hlrAccomplished, hlrPorted, hlrCost, hlrCostPlatform]
+      properties:
+        attempts:
+          type: integer
+          description: "Attempts"
+        successful:
+          type: integer
+          description: "Successful: accepted by the vendor (submit_sm_resp OK)"
+        billableCustomer:
+          type: integer
+          description: "Billable (Customer)"
+        billableVendor:
+          type: integer
+          description: "Billable (Vendor)"
+        submitted:
+          type: integer
+          description: "Submitted to a vendor"
+        asr:
+          type: [number, "null"]
+          description: "ASR %: successful ÷ attempts"
+        dlrCustomer:
+          type: [number, "null"]
+          description: "DLR (Customer) = DLR(s) %: delivered as reported to the customer ÷ successful"
+        dlrVendor:
+          type: [number, "null"]
+          description: "DLR (Vendor) = DLR(t) %: delivered as reported by the vendor ÷ successful"
+        revenue:
+          type: [number, "null"]
+          description: "Revenue in the partner currency (`currency`): the customer charge on the customer side, converted on the vendor side"
+        revenuePlatform:
+          type: [number, "null"]
+          description: "Revenue (B) in the platform currency"
+        cost:
+          type: [number, "null"]
+          description: "Cost in the partner currency (`currency`): the vendor charge on the vendor side, converted on the customer side"
+        costPlatform:
+          type: [number, "null"]
+          description: "Cost (B) in the platform currency"
+        margin:
+          type: [number, "null"]
+          description: "Margin: revenue (B) − cost (B)"
+        marginPct:
+          type: [number, "null"]
+          description: "Margin % of revenue (B)"
+        avgRateCustomer:
+          type: [number, "null"]
+          description: "Avg rate (Customer): revenue ÷ billable (customer), partner currency"
+        avgRateVendor:
+          type: [number, "null"]
+          description: "Avg rate (Vendor): cost ÷ billable (vendor), partner currency"
+        costAvg:
+          type: [number, "null"]
+          description: "Cost (Avg): cost (B) ÷ billable (vendor)"
+        reportedCustomer:
+          type: integer
+          description: "Reported (C): final status sent to the customer"
+        reportedVendor:
+          type: integer
+          description: "Reported (V): receipts received from vendors"
+        deliveryDelayS:
+          type: [number, "null"]
+          description: "Delivery delay, average seconds from submit to receipt"
+        hlrCached:
+          type: integer
+          description: "HLR cached"
+        hlrLive:
+          type: integer
+          description: "HLR live"
+        hlrTotal:
+          type: integer
+          description: "HLR total"
+        hlrAccomplished:
+          type: integer
+          description: "HLR accomplished"
+        hlrPorted:
+          type: integer
+          description: "HLR ported"
+        hlrCost:
+          type: [number, "null"]
+          description: "HLR cost in the partner currency"
+        hlrCostPlatform:
+          type: [number, "null"]
+          description: "HLR cost (B) in the platform currency"
+
+    EnterpriseReportRow:
+      allOf:
+        - $ref: "#/components/schemas/ReportMetrics"
+        - type: object
+          required: [id, period, enterpriseId, enterpriseName, trunkId, trunkName, country, mccmnc, network, accountManagerId, accountManagerName, currency, timezone]
+          properties:
+            id:
+              type: integer
+              description: Position of the row in the sorted result (stable for one query).
+            period:
+              type: [string, "null"]
+              description: Start of the hour, day, week or month in the row's time zone ("2026-10-16", "2026-10-16 13:00"); null when not by period.
+            enterpriseId:
+              type: [integer, "null"]
+            enterpriseName:
+              type: [string, "null"]
+            trunkId:
+              type: [integer, "null"]
+            trunkName:
+              type: [string, "null"]
+            country:
+              type: [string, "null"]
+            mccmnc:
+              type: [string, "null"]
+            network:
+              type: [string, "null"]
+            accountManagerId:
+              type: [integer, "null"]
+            accountManagerName:
+              type: [string, "null"]
+            currency:
+              type: string
+              description: The partner currency of revenue (customer side) or cost (vendor side).
+            timezone:
+              type: string
+              description: Time zone the row's period and the date range were cut in.
+
+    EnterpriseReportPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows, totals, timezones, platformCurrency, available]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/EnterpriseReportRow"
+            totals:
+              description: |
+                Every matching row added up. Partner-currency amounts (revenue, cost, HLR cost, average
+                rates) are null when the rows are in more than one currency.
+              allOf:
+                - $ref: "#/components/schemas/ReportMetrics"
+            timezones:
+              type: array
+              description: Time zones used, with how many enterprises were cut in each (printed on exports, §13.31).
+              items:
+                type: object
+                required: [timezone, enterprises]
+                properties:
+                  timezone:
+                    type: string
+                  enterprises:
+                    type: integer
+            platformCurrency:
+              type: string
+            available:
+              type: boolean
+              description: False when the EDR store does not answer (rows are then empty).

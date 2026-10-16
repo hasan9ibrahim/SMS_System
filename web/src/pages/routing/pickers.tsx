@@ -111,3 +111,48 @@ export function DestinationPick({ value, onChange }: { value: string[]; onChange
     />
   );
 }
+
+/** A multi-select over a short list already loaded (reference data), with a local search box. */
+export function RefMulti<T extends string | number>({
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: { value: T; label: string }[];
+  value: T[];
+  onChange: (v: T[]) => void;
+  placeholder: string;
+}) {
+  const [q, setQ] = useState("");
+  const shown = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 200);
+  return (
+    <div className="multi-pick">
+      <div className="chips">
+        {value.map((v) => (
+          <span key={v} className="chip">
+            {options.find((o) => o.value === v)?.label ?? v}
+            <button type="button" aria-label="Remove" onClick={() => onChange(value.filter((x) => x !== v))}>
+              <Icon name="x" size={11} />
+            </button>
+          </span>
+        ))}
+      </div>
+      {options.length > 8 && (
+        <input placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} aria-label={placeholder} />
+      )}
+      <div className="pick-list short">
+        {shown.map((o) => (
+          <label key={o.value} className="choice-row">
+            <input
+              type="checkbox"
+              checked={value.includes(o.value)}
+              onChange={(e) => onChange(e.target.checked ? [...value, o.value] : value.filter((x) => x !== o.value))}
+            />
+            <span>{o.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}

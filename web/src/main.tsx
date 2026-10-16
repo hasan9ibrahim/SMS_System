@@ -10,6 +10,7 @@ import "./styles/record.css";
 import "./styles/rates.css";
 import "./styles/routing.css";
 import "./styles/lookup.css";
+import "./styles/reports.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 15_000 } },

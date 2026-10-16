@@ -12,8 +12,8 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation } from "react-router";
-import type { ListId } from "@sms/contract";
-import { useListFields } from "../api/hooks";
+import type { ListId, ListQuery } from "@sms/contract";
+import { useListFields, type ListPage } from "../api/hooks";
 import { DataGrid, type ColumnOverride, type GridMeta } from "../grid/DataGrid";
 import { FilterBuilder } from "../grid/FilterBuilder";
 import { SaveViewButton, ViewsMenu } from "../grid/ViewsMenu";
@@ -72,6 +72,14 @@ export interface ListScreenProps<Row extends { id: number }> {
   selectId?: number | null;
   /** Controlled detail section, when the page opens a section itself. */
   section?: [string | null, (key: string) => void];
+  /** Shown between the header and the filter row (e.g. report settings and totals). */
+  above?: ReactNode;
+  /** Passed to the grid: custom fetch, extra query key, and whether to query yet. */
+  fetchPage?: (body: ListQuery) => Promise<ListPage<Row>>;
+  queryScope?: unknown;
+  enabled?: boolean;
+  /** Hides selection and Bulk edit (e.g. reports). */
+  noSelection?: boolean;
 }
 
 /** Grid state in the tab URL: ?g=<encoded>. Filter changes replace, not push. */
@@ -220,6 +228,11 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     onKey,
     rowClass,
     selectId = null,
+    above,
+    fetchPage,
+    queryScope,
+    enabled,
+    noSelection,
   } = props;
   const { active } = useTab();
   const fields = useListFields(list);
@@ -344,6 +357,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
           </>
         }
       />
+      {above}
       <div className="filter-row">
         <span className="muted">Filters:</span>
         {Object.values(state.columns)
@@ -419,7 +433,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             </button>
           </>
         )}
-        {selection?.bulk ? (
+        {noSelection ? null : selection?.bulk ? (
           <>
             <button
               ref={bulkRef}
@@ -466,6 +480,9 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             {...(onOpen ? { onOpen } : {})}
             {...(onKey ? { onKeyAction: onKey } : {})}
             {...(rowClass ? { rowClass } : {})}
+            {...(fetchPage ? { fetchPage } : {})}
+            {...(queryScope !== undefined ? { queryScope } : {})}
+            {...(enabled !== undefined ? { enabled } : {})}
             onRows={setRows}
             onMeta={onMeta}
           />

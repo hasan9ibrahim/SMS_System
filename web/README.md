@@ -85,6 +85,21 @@ cheapest N) and highlight filters. The matrix pages on the server and scrolls vi
 (`VirtualTable.tsx`, sticky header and first columns). Results export to CSV, and lookups can be
 saved and shared. The mode, destination and lookup live in the tab URL.
 
+## Enterprise report (build step 4.5)
+
+`/reports/enterprise` (`src/pages/reports/`, §10, §13.31). The settings bar takes:
+
+- customers or vendors;
+- a period, with quick choices (today, yesterday, last 7 days, this month, last month);
+- the time zone: partner's billing time zone (default), UTC or platform;
+- report by: whole period, hour, day, week or month;
+- rows by: enterprise, trunk, country, destination and/or account manager;
+- filters: enterprises, trunks, destinations, account managers at send time, MT/MO.
+
+Run report applies the settings, which go into the tab URL. The result is the standard grid
+(`ListScreen` with `fetchPage`): a filter under every column, server-side sort and paging, Columns to
+pick among the 27 metrics, totals above the grid, and Export (CSV with the time zone printed).
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag

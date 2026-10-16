@@ -1,0 +1,49 @@
+/* Reports (§10, §13.31). Tokens only (§15.2). */
+.rp-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.rp-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.rp-quick {
+  display: flex;
+  gap: 2px;
+}
+.rp-filters {
+  display: grid;
+  grid-template-columns: repeat(2, 300px);
+  gap: 4px 18px;
+}
+.rp-totals {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 2px 4px;
+}
+.rp-total-label {
+  font-weight: 600;
+  align-self: center;
+}
+.rp-total {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.rp-hint {
+  margin: 4px 2px;
+}
+@media (max-width: 900px) {
+  .rp-filters {
+    grid-template-columns: 1fr;
+  }
+}

@@ -74,6 +74,7 @@ import {
   updateSavedLookup,
 } from "./api/rateLookup.js";
 import { setDestinationDlrTarget } from "./api/destinations.js";
+import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
 import { undoChange } from "./api/changes.js";
@@ -81,7 +82,7 @@ import { undoChange } from "./api/changes.js";
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -171,6 +172,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   testRouteRule,
   simulateRoute,
   setDestinationDlrTarget,
+  queryEnterpriseReport,
+  exportEnterpriseReport,
   resolveLookupDestinations,
   lookupRates,
   rateLookupMatrix,

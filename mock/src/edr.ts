@@ -8,13 +8,13 @@ const CH_URL = `http://${env.CLICKHOUSE_HOST ?? "localhost"}:${env.CLICKHOUSE_HT
 const CH_DB = env.CLICKHOUSE_DB ?? "sms_edr";
 const AUTH = `Basic ${Buffer.from(`${env.CLICKHOUSE_USER ?? "sms_dev"}:${env.CLICKHOUSE_PASSWORD ?? "sms_dev_password"}`).toString("base64")}`;
 
-export async function chRows<T>(sql: string): Promise<T[] | null> {
+export async function chRows<T>(sql: string, timeoutMs = 1500): Promise<T[] | null> {
   try {
     const res = await fetch(`${CH_URL}/?database=${CH_DB}&default_format=JSON`, {
       method: "POST",
       headers: { authorization: AUTH },
       body: sql,
-      signal: AbortSignal.timeout(1500),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;
     return ((await res.json()) as { data: T[] }).data;

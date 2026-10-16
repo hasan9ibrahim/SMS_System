@@ -86,6 +86,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     sslType: "none" as const,
     tps: kind === "customer" ? 50 : 100,
     overflowBuffer: 0,
+    billingTimezone: null,
   };
   if (kind === "customer")
     return {
@@ -230,6 +231,14 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         label="Bind type"
         required
         options={["TX", "RX", "TR", ...(kind === "customer" ? ["AUTO"] : [])].map((v) => ({ value: v, label: v }))}
+      />
+      <SelectField
+        form={form}
+        path="billingTimezone"
+        label="Billing time zone"
+        placeholder="The enterprise's"
+        options={(ref.data?.timezones ?? ["UTC"]).map((z) => ({ value: z, label: z }))}
+        hint="Day and month totals in the Enterprise report are cut at midnight here (§13.31)"
       />
     </>
   );

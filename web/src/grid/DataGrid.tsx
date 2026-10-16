@@ -15,8 +15,8 @@ import {
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useReactTable, getCoreRowModel, type ColumnDef, type ColumnSizingState } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { FieldDescriptor, ListFields, ListId } from "@sms/contract";
-import { fetchListPage } from "../api/hooks";
+import type { FieldDescriptor, ListFields, ListId, ListQuery } from "@sms/contract";
+import { fetchListPage, type ListPage } from "../api/hooks";
 import { ApiError } from "../api/client";
 import { Icon } from "../ui/Icon";
 import { StatusDot } from "../ui/primitives";
@@ -61,6 +61,12 @@ export interface DataGridProps<Row extends { id: number }> {
   onRows?: (rows: Row[]) => void;
   /** Keys the grid does not handle itself (page shortcuts); return true when handled. */
   onKeyAction?: (key: string, row: Row | null) => boolean;
+  /** Fetches a page instead of POST /{list}/query (e.g. a report with its settings). */
+  fetchPage?: (body: ListQuery) => Promise<ListPage<Row>>;
+  /** Extra query key parts, so other settings re-run the query. */
+  queryScope?: unknown;
+  /** False holds the query (e.g. until a report is run). */
+  enabled?: boolean;
 }
 
 /** Default cell text by field type. */
@@ -236,15 +242,24 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     rowClass,
     onRows,
     onKeyAction,
+    fetchPage,
+    queryScope = null,
+    enabled = true,
   } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastChecked = useRef<number | null>(null);
   const query = useMemo(() => toListQuery(state), [state]);
 
   const result = useInfiniteQuery({
-    queryKey: ["list", list, query],
+    queryKey: ["list", list, query, queryScope],
     queryFn: ({ pageParam }) =>
-      fetchListPage<Row>(list, { ...query, limit: PAGE_SIZE, cursor: pageParam, withTotal: true }),
+      (fetchPage ?? ((b: ListQuery) => fetchListPage<Row>(list, b)))({
+        ...query,
+        limit: PAGE_SIZE,
+        cursor: pageParam,
+        withTotal: true,
+      } as ListQuery),
+    enabled,
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     placeholderData: keepPreviousData,
