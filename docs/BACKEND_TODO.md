@@ -19,6 +19,7 @@ backend team knows exactly what to build. Newest first.
 - 2026-10-16, re-routed messages: the customer is billed once, on the final attempt; the vendor is billed for every attempt it accepted (per its billing type). Decided by: Hasan Ibrahim.
 - 2026-10-16, billing data retention (§13.29): EDRs, invoices, SOAs, payments, credit notes, balance history, disputes, rate history and audit records are kept for 7 years and cannot be purged before that (anonymising a closed client's contact details stays allowed, as §13.29 says). Decided by: Hasan Ibrahim.
 - 2026-10-16, excluded payments (§13.33): a payment with "Include in SOA" unticked is left off the partner's SOA (and shown in the SOA preview's collapsed "excluded" section) but still counts in the partner's balance and in finance reports. Decided by: Hasan Ibrahim.
+- 2026-10-16, trunk delete (§13.29): a trunk delete is blocked only by live binds. Balance, unpaid or draft invoices and open disputes belong to the enterprise and block only the enterprise delete; an open enterprise balance does not block deleting one of its trunks. Decided by: Hasan Ibrahim.
 - 2026-10-16, saved filter views (§13.25): a saved view is private to the user who saved it. The owner can share it with named colleagues (chosen users), who see it read-only in their view list. No department-wide or company-wide sharing. In the contract since v0.2.0 (`/views`). Decided by: Hasan Ibrahim.
 
 ## Schema notes (build step 2, fake data generator)
@@ -62,4 +63,4 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- §13.29 says a trunk with a non-zero balance can't be deleted, but balances and invoices belong to the enterprise, not the trunk. The mock blocks a trunk delete only on live binds and blocks the enterprise delete on balance, invoices and disputes. Should a trunk delete also be blocked while its enterprise has an open balance?
+- None open.
