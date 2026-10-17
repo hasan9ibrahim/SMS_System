@@ -16,6 +16,7 @@ import { Button, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
 import { parseEmails } from "../switch/tools/toolsModel";
+import { ListLookup } from "../../records/parts";
 
 const page = pageForPath("/reports/scheduled")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -42,6 +43,8 @@ const blank = (businessCompanyId: number): ScheduledReportInput => ({
   templateKind: "preset",
   presetKey: "sales",
   viewId: null,
+  teamDepartmentId: null,
+  teamPeriod: null,
   status: "active",
   businessCompanyId,
   notificationEmails: [],
@@ -97,6 +100,8 @@ function ScheduleDialog({ row, done }: { row: ScheduledReportRow | null; done: (
           templateKind: row.templateKind,
           presetKey: row.presetKey,
           viewId: row.viewId,
+          teamDepartmentId: row.teamDepartmentId ?? null,
+          teamPeriod: row.teamPeriod ?? null,
           status: row.status,
           businessCompanyId: row.businessCompanyId,
           notificationEmails: row.notificationEmails,
@@ -149,9 +154,34 @@ function ScheduleDialog({ row, done }: { row: ScheduledReportRow | null; done: (
         options={[
           { value: "preset", label: "Ready-made report" },
           { value: "view", label: "Saved Master Report view" },
+          { value: "team", label: "Team report (§13.18)" },
         ]}
       />
-      {v.templateKind === "preset" ? (
+      {v.templateKind === "team" ? (
+        <>
+          <SelectField
+            form={form}
+            path="teamPeriod"
+            label="Each run covers"
+            required
+            options={[
+              { value: "yesterday", label: "Yesterday" },
+              { value: "last_7_days", label: "Last 7 days" },
+              { value: "last_week", label: "Last week (weekly summary)" },
+              { value: "last_month", label: "Last month" },
+            ]}
+          />
+          <FormField label="Department" error={form.error("teamDepartmentId")}>
+            <ListLookup<{ id: number; name: string }>
+              list="departments"
+              value={v.teamDepartmentId ?? null}
+              onChange={(x) => form.set("teamDepartmentId", x?.id ?? null)}
+              labelOf={(x) => x.name}
+              placeholder="Everyone"
+            />
+          </FormField>
+        </>
+      ) : v.templateKind === "preset" ? (
         <SelectField
           form={form}
           path="presetKey"

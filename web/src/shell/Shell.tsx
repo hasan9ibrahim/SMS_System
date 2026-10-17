@@ -13,6 +13,7 @@ import { TopMenu } from "./TopMenu";
 import { ViewAsBanner } from "./ViewAsBanner";
 import { listenForDocking, loadWorkspace, startWorkspaceSync, useTabs } from "./tabs";
 import { useThemeSync } from "./theme";
+import { recordPageView } from "../api/team";
 
 const currentUrl = () => `${location.pathname}${location.search}`;
 
@@ -64,6 +65,13 @@ function useUrlSync(ready: boolean) {
     if (currentUrl() !== path) history.replaceState(null, "", path);
     document.title = title && title !== "Home" ? `${title} · SMS Platform` : "SMS Platform";
   }, [path, title, ready]);
+  // Pages opened feed "pages most used" and the page shown in Online now (§13.18).
+  const page = path.split("?")[0]!;
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => recordPageView(page), 1500);
+    return () => clearTimeout(t);
+  }, [page, ready]);
 }
 
 /** Ctrl/Cmd+K opens jump-to anywhere (§15.1). */

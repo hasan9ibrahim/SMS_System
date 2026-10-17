@@ -2963,6 +2963,31 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "revokedAt", label: "Revoked", type: "datetime", defaultOperator: "between", hidden: true }),
     ],
   },
+  // Team report (§13.18): one user's timeline
+  team_timeline: {
+    list: "team_timeline",
+    defaultSort: [{ field: "at", dir: "desc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "userId", label: "User ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "at", label: "When", type: "datetime", defaultOperator: "between" }),
+      field({
+        field: "kind",
+        label: "Kind",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "change", label: "Change" },
+          { value: "action", label: "Action" },
+          { value: "login", label: "Sign-in" },
+        ],
+      }),
+      field({ field: "type", label: "Type", type: "text", defaultOperator: "like" }),
+      field({ field: "summary", label: "What", type: "text", defaultOperator: "like" }),
+      field({ field: "entityType", label: "Record Type", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "entityId", label: "Record ID", type: "integer", defaultOperator: "eq", hidden: true }),
+    ],
+  },
   // Admin (§11)
   departments: {
     list: "departments",

@@ -156,6 +156,9 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/visibility-assignments/query", { body })) as Promise<ListPage<Row>>;
     case "visibility_grants":
       return unwrap(api.POST("/visibility-grants/query", { body })) as Promise<ListPage<Row>>;
+    case "team_timeline":
+      // Needs a userId condition: the Team report's member panel adds it.
+      return unwrap(api.POST("/team-timeline/query", { body })) as Promise<ListPage<Row>>;
     case "market_moves":
       return unwrap(api.POST("/market-moves/query", { body })) as Promise<ListPage<Row>>;
     case "rate_notification_lines":

@@ -84,6 +84,7 @@ export const TABLE_ORDER = [
   "customer_portal_users",
   "password_history",
   "user_sessions",
+  "page_views",
   "audit_log",
   "alert_rules",
   "incidents",

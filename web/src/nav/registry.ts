@@ -525,7 +525,7 @@ export const PAGES: PageDef[] = [
     "Billed, invoiced, paid and disputed",
   ),
   p("reports", "noc-report", "NOC report", "/reports/noc", "chart", "§13.15", "5.10", "Where traffic has problems"),
-  p("reports", "team-report", "Team", "/reports/team", "users", "§13.18", "5", "Team members' results and activity"),
+  p("reports", "team-report", "Team", "/reports/team", "users", "§13.18", "5.18", "Team members' results and activity"),
   p(
     "reports",
     "scheduled",

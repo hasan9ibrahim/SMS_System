@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.28.0
+  version: 0.29.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -12355,6 +12355,220 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /reports/team:
+    post:
+      tags:
+      - reports
+      operationId: runTeamReport
+      summary: Team report (§13.18)
+      description: 'Each team member in the viewer''s scope with business results, rates and routing work, billing work, NOC work and
+
+        system activity for the period, with the previous period. Account manager visibility (§13.17) still applies.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamReportQuery'
+      responses:
+        '200':
+          description: The report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /reports/team/export:
+    post:
+      tags:
+      - reports
+      operationId: exportTeamReport
+      summary: Team report as CSV
+      description: Same rows as the report.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamReportQuery'
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /reports/team/users/{id}:
+    post:
+      tags:
+      - reports
+      operationId: getTeamMember
+      summary: One team member in the period (§13.18)
+      description: Daily results, activity by hour, login days, new and stopped clients, devices.
+      parameters:
+      - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamReportQuery'
+      responses:
+        '200':
+          description: The member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /team-timeline/query:
+    post:
+      tags:
+      - reports
+      operationId: queryTeamTimeline
+      summary: List a user's timeline (server-side filter, sort and paging)
+      description: 'Every action of one user (needs `userId eq`): change history, Audit Trail operations and sign-ins (§13.18).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of a user's timeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamTimelinePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /team-targets:
+    get:
+      tags:
+      - reports
+      operationId: getTeamTargets
+      summary: Monthly targets (§13.18)
+      description: Account managers in the viewer's scope for a month.
+      parameters:
+      - name: month
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+          description: YYYY-MM
+      responses:
+        '200':
+          description: The targets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamTarget'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - reports
+      operationId: updateTeamTargets
+      summary: Set monthly targets
+      description: Revenue and margin targets per user and month (platform currency).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamTargetsUpdate'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamTarget'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /online-users:
+    get:
+      tags:
+      - admin
+      operationId: getOnlineUsers
+      summary: Online now (§13.18)
+      description: 'Signed-in staff in the viewer''s scope (admins everyone, department managers their department), active in the last
+
+        5 minutes or idle, with the page they are on.'
+      responses:
+        '200':
+          description: Online users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnlineUsers'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /me/page-views:
+    post:
+      tags:
+      - system
+      operationId: recordPageView
+      summary: Record a page opened
+      description: Feeds pages most used and the current page (§13.18).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageViewInput'
+      responses:
+        '204':
+          description: Recorded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -22731,8 +22945,18 @@ components:
           maxLength: 500
         templateKind:
           type: string
-          enum: [preset, view]
-          description: Report Template - a ready-made report or a saved Master Report view.
+          enum: [preset, view, team]
+          description: Report Template - a ready-made report, a saved Master Report view, or the Team report (§13.18).
+        teamDepartmentId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: Team report only - one department (null = everyone).
+        teamPeriod:
+          oneOf:
+            - $ref: "#/components/schemas/ReportPeriod"
+            - type: "null"
+          description: Team report only - the period each run covers (e.g. last_week for a weekly summary).
         presetKey:
           type: [string, "null"]
           maxLength: 40
@@ -25927,6 +26151,585 @@ components:
         text:
           type: string
 
+    # ------------------------------------------------------------- Team report (§13.18)
+    TeamRole:
+      type: string
+      enum:
+      - account_manager
+      - team_lead
+      - department_manager
+      - admin
+    TeamReportQuery:
+      type: object
+      additionalProperties: false
+      required:
+      - period
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportPeriod'
+        from:
+          oneOf: &id001
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+          description: Custom period start.
+        to:
+          oneOf: *id001
+          description: Custom period end (exclusive).
+        compare:
+          type: boolean
+          description: Compare with the previous period of the same length.
+        departmentId: &id002
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        userId: *id002
+        role:
+          oneOf:
+          - $ref: '#/components/schemas/TeamRole'
+          - type: 'null'
+        search:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+    TeamPeriod:
+      type: object
+      required:
+      - from
+      - to
+      properties:
+        from: &id003
+          $ref: '#/components/schemas/Timestamp'
+        to: *id003
+    TeamBusiness:
+      type: object
+      description: Results of the clients the user was account manager of when the traffic was sent (§13.30). Platform currency.
+      required:
+      - activeClients
+      - newClients
+      - stoppedClients
+      - messages
+      - revenue
+      - margin
+      - marginPct
+      - growthPct
+      - prevMessages
+      - prevRevenue
+      - prevMargin
+      - revenueTarget
+      - marginTarget
+      - achievedPct
+      properties:
+        activeClients:
+          type: integer
+          description: Clients with traffic in the period.
+        newClients:
+          type: integer
+          description: Clients whose first traffic falls in the period.
+        stoppedClients:
+          type: integer
+          description: Clients with traffic in the previous period and none in this one.
+        messages: &id006
+          type: integer
+        revenue: &id004
+          type: &id005
+          - number
+          - 'null'
+        margin: *id004
+        marginPct: *id004
+        growthPct:
+          type: *id005
+          description: Revenue against the previous period.
+        prevMessages: *id006
+        prevRevenue: *id004
+        prevMargin: *id004
+        revenueTarget:
+          type: *id005
+          description: Monthly targets prorated to the period.
+        marginTarget: *id004
+        achievedPct:
+          type: *id005
+          description: Revenue against the revenue target.
+    TeamRates:
+      type: object
+      required:
+      - rateTablesChanged
+      - rateLineChanges
+      - rnAccepted
+      - rnRejected
+      - marketMovesHandled
+      - avgMoveHandleHours
+      - routeRulesChanged
+      - bulkJobs
+      - undoneByOthers
+      properties:
+        rateTablesChanged: *id006
+        rateLineChanges: *id006
+        rnAccepted: *id006
+        rnRejected: *id006
+        marketMovesHandled: *id006
+        avgMoveHandleHours: *id004
+        routeRulesChanged: *id006
+        bulkJobs: *id006
+        undoneByOthers:
+          type: integer
+          description: The user's changes undone by someone else in the period.
+    TeamBilling:
+      type: object
+      required:
+      - invoicesGenerated
+      - invoicesSent
+      - soasGenerated
+      - soasSent
+      - paymentsRecorded
+      - disputesOpened
+      - disputesClosed
+      - avgVendorSoaConfirmHours
+      properties:
+        invoicesGenerated: *id006
+        invoicesSent: *id006
+        soasGenerated: *id006
+        soasSent: *id006
+        paymentsRecorded: *id006
+        disputesOpened: *id006
+        disputesClosed: *id006
+        avgVendorSoaConfirmHours:
+          type: *id005
+          description: Null until vendor SOA confirmations are recorded.
+    TeamNoc:
+      type: object
+      required:
+      - alertsAcknowledged
+      - avgAckMinutes
+      - avgResolveMinutes
+      - incidentsHandled
+      - ticketsRaised
+      - bindActions
+      properties:
+        alertsAcknowledged: *id006
+        avgAckMinutes: *id004
+        avgResolveMinutes: *id004
+        incidentsHandled: *id006
+        ticketsRaised: *id006
+        bindActions:
+          type: integer
+          description: Binds started or stopped.
+    TeamPageCount:
+      type: object
+      required:
+      - path
+      - views
+      properties:
+        path:
+          type: string
+        views: *id006
+    TeamActivity:
+      type: object
+      required:
+      - daysActive
+      - hoursOnline
+      - lastLoginAt
+      - saves
+      - topPages
+      - newDevices
+      properties:
+        daysActive: *id006
+        hoursOnline: &id007
+          type: number
+        lastLoginAt:
+          oneOf: *id001
+        saves:
+          type: integer
+          description: Changes saved (Audit Trail writes).
+        topPages:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamPageCount'
+        newDevices:
+          type: integer
+          description: Sign-ins from a device or IP not seen before for the user.
+    TeamMemberRow:
+      type: object
+      required:
+      - id
+      - name
+      - username
+      - initials
+      - department
+      - departmentId
+      - roles
+      - online
+      - business
+      - rates
+      - billing
+      - noc
+      - activity
+      properties:
+        id: &id008
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        username:
+          type: string
+        initials:
+          type: string
+        department: &id009
+          type: &id011
+          - string
+          - 'null'
+        departmentId: *id002
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamRole'
+        online:
+          type: boolean
+        business:
+          oneOf:
+          - $ref: '#/components/schemas/TeamBusiness'
+          - type: 'null'
+        rates:
+          $ref: '#/components/schemas/TeamRates'
+        billing:
+          $ref: '#/components/schemas/TeamBilling'
+        noc:
+          $ref: '#/components/schemas/TeamNoc'
+        activity:
+          $ref: '#/components/schemas/TeamActivity'
+    TeamTotals:
+      type: object
+      required:
+      - members
+      - activeMembers
+      - messages
+      - revenue
+      - margin
+      - marginPct
+      - saves
+      - hoursOnline
+      - alertsAcknowledged
+      properties:
+        members: *id006
+        activeMembers: *id006
+        messages: *id006
+        revenue: *id004
+        margin: *id004
+        marginPct: *id004
+        saves: *id006
+        hoursOnline: *id007
+        alertsAcknowledged: *id006
+    TeamReport:
+      type: object
+      required:
+      - period
+      - previous
+      - scope
+      - scopeLabel
+      - currency
+      - rows
+      - totals
+      - hourly
+      - masked
+      properties:
+        period:
+          $ref: '#/components/schemas/TeamPeriod'
+        previous:
+          oneOf:
+          - $ref: '#/components/schemas/TeamPeriod'
+          - type: 'null'
+        scope:
+          type: string
+          enum:
+          - all
+          - department
+          - team
+          - self
+          description: 'What the viewer may see: admins everyone, a department manager their department, a team lead their team, others themselves.'
+        scopeLabel:
+          type: string
+        currency:
+          type: string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMemberRow'
+          description: One per team member in scope (bounded by the staff count).
+        totals:
+          $ref: '#/components/schemas/TeamTotals'
+        hourly:
+          type: array
+          items: *id006
+          minItems: 24
+          maxItems: 24
+          description: Saves by hour of day (UTC) across the rows.
+        masked:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaskedCell'
+          description: Money withheld by the viewer's visibility policy (§13.17); id = user.
+    TeamTrendPoint:
+      type: object
+      required:
+      - date
+      - messages
+      - revenue
+      - margin
+      properties:
+        date:
+          type: string
+        messages: *id006
+        revenue: *id004
+        margin: *id004
+    TeamLoginDay:
+      type: object
+      required:
+      - date
+      - firstLogin
+      - lastSeen
+      - hours
+      - saves
+      properties:
+        date:
+          type: string
+        firstLogin: *id003
+        lastSeen: *id003
+        hours: *id007
+        saves: *id006
+    TeamClient:
+      type: object
+      required:
+      - enterpriseId
+      - enterpriseName
+      - at
+      properties:
+        enterpriseId: *id008
+        enterpriseName:
+          type: string
+        at: *id003
+    TeamDevice:
+      type: object
+      required:
+      - device
+      - os
+      - browser
+      - ip
+      - location
+      - firstSeen
+      - sessions
+      - isNew
+      properties:
+        device: *id009
+        os: *id009
+        browser: *id009
+        ip: *id009
+        location: *id009
+        firstSeen: *id003
+        sessions: *id006
+        isNew:
+          type: boolean
+          description: First seen in the period.
+    TeamMemberDetail:
+      type: object
+      required:
+      - row
+      - period
+      - trend
+      - hourly
+      - days
+      - newClients
+      - stoppedClients
+      - devices
+      - masked
+      properties:
+        row:
+          $ref: '#/components/schemas/TeamMemberRow'
+        period:
+          $ref: '#/components/schemas/TeamPeriod'
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamTrendPoint'
+          description: 'Per day: their clients'' results.'
+        hourly:
+          type: array
+          items: *id006
+          minItems: 24
+          maxItems: 24
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamLoginDay'
+        newClients:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamClient'
+        stoppedClients:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamClient'
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamDevice'
+        masked:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaskedCell'
+    TeamTimelineRow:
+      type: object
+      required:
+      - id
+      - userId
+      - at
+      - kind
+      - type
+      - summary
+      - entityType
+      - entityId
+      properties:
+        id: *id008
+        userId: *id008
+        at: *id003
+        kind:
+          type: string
+          enum:
+          - change
+          - action
+          - login
+        type:
+          type: string
+          description: 'Change: entity / change type; action: module / operation; login: sign-in.'
+        summary:
+          type: string
+        entityType: *id009
+        entityId: *id002
+    TeamTimelinePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/TeamTimelineRow'
+    TeamTarget:
+      type: object
+      required:
+      - userId
+      - userName
+      - department
+      - month
+      - revenueTarget
+      - marginTarget
+      properties:
+        userId: *id008
+        userName:
+          type: string
+        department: *id009
+        month: &id010
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+          description: YYYY-MM
+        revenueTarget:
+          type: *id005
+          minimum: 0
+        marginTarget:
+          type: *id005
+          minimum: 0
+    TeamTargetsUpdate:
+      type: object
+      additionalProperties: false
+      required:
+      - month
+      - items
+      properties:
+        month: *id010
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - userId
+            - revenueTarget
+            - marginTarget
+            properties:
+              userId: *id008
+              revenueTarget:
+                type: *id005
+                minimum: 0
+              marginTarget:
+                type: *id005
+                minimum: 0
+          maxItems: 500
+    OnlineUser:
+      type: object
+      required:
+      - userId
+      - name
+      - initials
+      - department
+      - active
+      - page
+      - since
+      - lastSeenAt
+      - device
+      - browser
+      - os
+      - location
+      properties:
+        userId: *id008
+        name:
+          type: string
+        initials:
+          type: string
+        department: *id009
+        active:
+          type: boolean
+          description: Active in the last 5 minutes (green); else idle (grey).
+        page:
+          type: *id011
+          description: Path of the page they are on.
+        since: *id003
+        lastSeenAt: *id003
+        device: *id009
+        browser: *id009
+        os: *id009
+        location: *id009
+    OnlineUsers:
+      type: object
+      required:
+      - users
+      - total
+      - active
+      - scope
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnlineUser'
+        total: *id006
+        active: *id006
+        scope:
+          type: string
+          enum:
+          - all
+          - department
+          - team
+          - self
+    PageViewInput:
+      type: object
+      additionalProperties: false
+      required:
+      - path
+      properties:
+        path:
+          type: string
+          minLength: 1
+          maxLength: 300
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -26642,7 +27445,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline]
 
     FilterOperator:
       type: string

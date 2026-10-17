@@ -379,3 +379,36 @@ button.dash-cols:hover {
     transition: none !important;
   }
 }
+
+/* Online now (§13.18) */
+.dash-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dash-avatars {
+  display: inline-flex;
+}
+.dash-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--color-text-secondary);
+  background: var(--color-panel);
+  color: var(--color-text-secondary);
+  font-size: 9.5px;
+  font-weight: 650;
+}
+.dash-avatar:first-child {
+  margin-left: 0;
+}
+.dash-avatar.active {
+  border-color: var(--color-good);
+  color: var(--color-text);
+}
+.dash-avatar.more {
+  border-style: dashed;
+}

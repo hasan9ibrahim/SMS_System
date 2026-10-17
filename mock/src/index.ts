@@ -14,6 +14,7 @@ import { startLive } from "./live/socket.js";
 import { checkPendingRns } from "./api/rn.js";
 import { startMarketMoves } from "./api/marketMoves.js";
 import { startLcrChecks } from "./api/lcr.js";
+import { ensureTeamTargets, startTeamPresence } from "./api/team.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -35,3 +36,6 @@ startLive();
 void checkPendingRns();
 startMarketMoves();
 startLcrChecks();
+// Team report (§13.18): fake monthly targets once, and presence for the fake team.
+void ensureTeamTargets().catch(() => undefined);
+startTeamPresence();

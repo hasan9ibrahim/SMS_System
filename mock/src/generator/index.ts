@@ -23,6 +23,7 @@ import { generateReportExtras } from "./reportExtras.js";
 import { generateAdminExtras } from "./adminExtras.js";
 import { generateAlertExtras } from "./alertExtras.js";
 import { generateRnExtras } from "./rnExtras.js";
+import { generateTeamExtras } from "./teamExtras.js";
 
 export function emptyWorld(anchor: number, profile: Profile): World {
   return {
@@ -87,6 +88,7 @@ export async function generateWorld(opts: {
   await step("admin extras", (rng) => generateAdminExtras(world, rng, opts.sink, opts.profile));
   await step("alert extras", (rng) => generateAlertExtras(world, rng, opts.sink, opts.profile));
   await step("rate notifications", (rng) => generateRnExtras(world, rng, opts.sink, opts.profile));
+  await step("team activity", (rng) => generateTeamExtras(world, rng, opts.sink, opts.profile));
   return world;
 }
 

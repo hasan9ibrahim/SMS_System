@@ -8477,6 +8477,152 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/reports/team": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Team report (§13.18)
+     * @description Each team member in the viewer's scope with business results, rates and routing work, billing work, NOC work and
+     *     system activity for the period, with the previous period. Account manager visibility (§13.17) still applies.
+     */
+    post: operations["runTeamReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/team/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Team report as CSV
+     * @description Same rows as the report.
+     */
+    post: operations["exportTeamReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/team/users/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * One team member in the period (§13.18)
+     * @description Daily results, activity by hour, login days, new and stopped clients, devices.
+     */
+    post: operations["getTeamMember"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/team-timeline/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List a user's timeline (server-side filter, sort and paging)
+     * @description Every action of one user (needs `userId eq`): change history, Audit Trail operations and sign-ins (§13.18).
+     */
+    post: operations["queryTeamTimeline"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/team-targets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Monthly targets (§13.18)
+     * @description Account managers in the viewer's scope for a month.
+     */
+    get: operations["getTeamTargets"];
+    /**
+     * Set monthly targets
+     * @description Revenue and margin targets per user and month (platform currency).
+     */
+    put: operations["updateTeamTargets"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/online-users": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Online now (§13.18)
+     * @description Signed-in staff in the viewer's scope (admins everyone, department managers their department), active in the last
+     *     5 minutes or idle, with the page they are on.
+     */
+    get: operations["getOnlineUsers"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/me/page-views": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record a page opened
+     * @description Feeds pages most used and the current page (§13.18).
+     */
+    post: operations["recordPageView"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -13564,10 +13710,14 @@ export type components = {
       name: string;
       description: string | null;
       /**
-       * @description Report Template - a ready-made report or a saved Master Report view.
+       * @description Report Template - a ready-made report, a saved Master Report view, or the Team report (§13.18).
        * @enum {string}
        */
-      templateKind: "preset" | "view";
+      templateKind: "preset" | "view" | "team";
+      /** @description Team report only - one department (null = everyone). */
+      teamDepartmentId?: components["schemas"]["Id"] | null;
+      /** @description Team report only - the period each run covers (e.g. last_week for a weekly summary). */
+      teamPeriod?: components["schemas"]["ReportPeriod"] | null;
       presetKey: string | null;
       viewId: components["schemas"]["Id"] | null;
       /** @enum {string} */
@@ -14702,6 +14852,238 @@ export type components = {
       field: string;
       text: string;
     };
+    /** @enum {string} */
+    TeamRole: "account_manager" | "team_lead" | "department_manager" | "admin";
+    TeamReportQuery: {
+      period: components["schemas"]["ReportPeriod"];
+      /** @description Custom period start. */
+      from?: components["schemas"]["Timestamp"] | null;
+      /** @description Custom period end (exclusive). */
+      to?: components["schemas"]["Timestamp"] | null;
+      /** @description Compare with the previous period of the same length. */
+      compare?: boolean;
+      departmentId?: components["schemas"]["Id"] | null;
+      userId?: components["schemas"]["Id"] | null;
+      role?: components["schemas"]["TeamRole"] | null;
+      search?: string | null;
+    };
+    TeamPeriod: {
+      from: components["schemas"]["Timestamp"];
+      to: components["schemas"]["Timestamp"];
+    };
+    /** @description Results of the clients the user was account manager of when the traffic was sent (§13.30). Platform currency. */
+    TeamBusiness: {
+      /** @description Clients with traffic in the period. */
+      activeClients: number;
+      /** @description Clients whose first traffic falls in the period. */
+      newClients: number;
+      /** @description Clients with traffic in the previous period and none in this one. */
+      stoppedClients: number;
+      messages: number;
+      revenue: number | null;
+      margin: number | null;
+      marginPct: number | null;
+      /** @description Revenue against the previous period. */
+      growthPct: number | null;
+      prevMessages: number;
+      prevRevenue: number | null;
+      prevMargin: number | null;
+      /** @description Monthly targets prorated to the period. */
+      revenueTarget: number | null;
+      marginTarget: number | null;
+      /** @description Revenue against the revenue target. */
+      achievedPct: number | null;
+    };
+    TeamRates: {
+      rateTablesChanged: number;
+      rateLineChanges: number;
+      rnAccepted: number;
+      rnRejected: number;
+      marketMovesHandled: number;
+      avgMoveHandleHours: number | null;
+      routeRulesChanged: number;
+      bulkJobs: number;
+      /** @description The user's changes undone by someone else in the period. */
+      undoneByOthers: number;
+    };
+    TeamBilling: {
+      invoicesGenerated: number;
+      invoicesSent: number;
+      soasGenerated: number;
+      soasSent: number;
+      paymentsRecorded: number;
+      disputesOpened: number;
+      disputesClosed: number;
+      /** @description Null until vendor SOA confirmations are recorded. */
+      avgVendorSoaConfirmHours: number | null;
+    };
+    TeamNoc: {
+      alertsAcknowledged: number;
+      avgAckMinutes: number | null;
+      avgResolveMinutes: number | null;
+      incidentsHandled: number;
+      ticketsRaised: number;
+      /** @description Binds started or stopped. */
+      bindActions: number;
+    };
+    TeamPageCount: {
+      path: string;
+      views: number;
+    };
+    TeamActivity: {
+      daysActive: number;
+      hoursOnline: number;
+      lastLoginAt: components["schemas"]["Timestamp"] | null;
+      /** @description Changes saved (Audit Trail writes). */
+      saves: number;
+      topPages: components["schemas"]["TeamPageCount"][];
+      /** @description Sign-ins from a device or IP not seen before for the user. */
+      newDevices: number;
+    };
+    TeamMemberRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      username: string;
+      initials: string;
+      department: string | null;
+      departmentId: components["schemas"]["Id"] | null;
+      roles: components["schemas"]["TeamRole"][];
+      online: boolean;
+      business: components["schemas"]["TeamBusiness"] | null;
+      rates: components["schemas"]["TeamRates"];
+      billing: components["schemas"]["TeamBilling"];
+      noc: components["schemas"]["TeamNoc"];
+      activity: components["schemas"]["TeamActivity"];
+    };
+    TeamTotals: {
+      members: number;
+      activeMembers: number;
+      messages: number;
+      revenue: number | null;
+      margin: number | null;
+      marginPct: number | null;
+      saves: number;
+      hoursOnline: number;
+      alertsAcknowledged: number;
+    };
+    TeamReport: {
+      period: components["schemas"]["TeamPeriod"];
+      previous: components["schemas"]["TeamPeriod"] | null;
+      /**
+       * @description What the viewer may see: admins everyone, a department manager their department, a team lead their team, others themselves.
+       * @enum {string}
+       */
+      scope: "all" | "department" | "team" | "self";
+      scopeLabel: string;
+      currency: string;
+      /** @description One per team member in scope (bounded by the staff count). */
+      rows: components["schemas"]["TeamMemberRow"][];
+      totals: components["schemas"]["TeamTotals"];
+      /** @description Saves by hour of day (UTC) across the rows. */
+      hourly: number[];
+      /** @description Money withheld by the viewer's visibility policy (§13.17); id = user. */
+      masked: components["schemas"]["MaskedCell"][];
+    };
+    TeamTrendPoint: {
+      date: string;
+      messages: number;
+      revenue: number | null;
+      margin: number | null;
+    };
+    TeamLoginDay: {
+      date: string;
+      firstLogin: components["schemas"]["Timestamp"];
+      lastSeen: components["schemas"]["Timestamp"];
+      hours: number;
+      saves: number;
+    };
+    TeamClient: {
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      at: components["schemas"]["Timestamp"];
+    };
+    TeamDevice: {
+      device: string | null;
+      os: string | null;
+      browser: string | null;
+      ip: string | null;
+      location: string | null;
+      firstSeen: components["schemas"]["Timestamp"];
+      sessions: number;
+      /** @description First seen in the period. */
+      isNew: boolean;
+    };
+    TeamMemberDetail: {
+      row: components["schemas"]["TeamMemberRow"];
+      period: components["schemas"]["TeamPeriod"];
+      /** @description Per day: their clients' results. */
+      trend: components["schemas"]["TeamTrendPoint"][];
+      hourly: number[];
+      days: components["schemas"]["TeamLoginDay"][];
+      newClients: components["schemas"]["TeamClient"][];
+      stoppedClients: components["schemas"]["TeamClient"][];
+      devices: components["schemas"]["TeamDevice"][];
+      masked: components["schemas"]["MaskedCell"][];
+    };
+    TeamTimelineRow: {
+      id: components["schemas"]["Id"];
+      userId: components["schemas"]["Id"];
+      at: components["schemas"]["Timestamp"];
+      /** @enum {string} */
+      kind: "change" | "action" | "login";
+      /** @description Change: entity / change type; action: module / operation; login: sign-in. */
+      type: string;
+      summary: string;
+      entityType: string | null;
+      entityId: components["schemas"]["Id"] | null;
+    };
+    TeamTimelinePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["TeamTimelineRow"][];
+    };
+    TeamTarget: {
+      userId: components["schemas"]["Id"];
+      userName: string;
+      department: string | null;
+      /** @description YYYY-MM */
+      month: string;
+      revenueTarget: number | null;
+      marginTarget: number | null;
+    };
+    TeamTargetsUpdate: {
+      /** @description YYYY-MM */
+      month: string;
+      items: {
+        userId: components["schemas"]["Id"];
+        revenueTarget: number | null;
+        marginTarget: number | null;
+      }[];
+    };
+    OnlineUser: {
+      userId: components["schemas"]["Id"];
+      name: string;
+      initials: string;
+      department: string | null;
+      /** @description Active in the last 5 minutes (green); else idle (grey). */
+      active: boolean;
+      /** @description Path of the page they are on. */
+      page: string | null;
+      since: components["schemas"]["Timestamp"];
+      lastSeenAt: components["schemas"]["Timestamp"];
+      device: string | null;
+      browser: string | null;
+      os: string | null;
+      location: string | null;
+    };
+    OnlineUsers: {
+      users: components["schemas"]["OnlineUser"][];
+      total: number;
+      active: number;
+      /** @enum {string} */
+      scope: "all" | "department" | "team" | "self";
+    };
+    PageViewInput: {
+      path: string;
+    };
     /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
@@ -15161,7 +15543,8 @@ export type components = {
       | "lcr_changes"
       | "visibility_policies"
       | "visibility_assignments"
-      | "visibility_grants";
+      | "visibility_grants"
+      | "team_timeline";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -28130,6 +28513,218 @@ export interface operations {
           "application/json": components["schemas"]["EffectiveVisibility"];
         };
       };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  runTeamReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamReportQuery"];
+      };
+    };
+    responses: {
+      /** @description The report */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamReport"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportTeamReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamReportQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getTeamMember: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamReportQuery"];
+      };
+    };
+    responses: {
+      /** @description The member */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamMemberDetail"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryTeamTimeline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of a user's timeline */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamTimelinePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getTeamTargets: {
+    parameters: {
+      query: {
+        month: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The targets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamTarget"][];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateTeamTargets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamTargetsUpdate"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamTarget"][];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getOnlineUsers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Online users */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OnlineUsers"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  recordPageView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PageViewInput"];
+      };
+    };
+    responses: {
+      /** @description Recorded */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };

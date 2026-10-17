@@ -6,7 +6,8 @@ import type { ContractOperation } from "../contract.js";
 import { db } from "../db.js";
 import { CURRENT_USER_ID } from "./session.js";
 
-const READS = /^(query|preview|check|lookup|evaluate|simulate|test|diagnose|salesInsights|nocInsights|runMasterReport)/;
+const READS =
+  /^(query|preview|check|lookup|evaluate|simulate|test|diagnose|salesInsights|nocInsights|runMasterReport|runTeamReport|getTeamMember|exportTeamReport|recordPageView)/;
 
 /** Table a path writes to: its first segment (rate-tables -> rate_tables), with a few renames. */
 const TABLE_RENAMES: Record<string, string> = {

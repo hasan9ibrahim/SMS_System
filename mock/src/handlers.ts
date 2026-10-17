@@ -189,6 +189,16 @@ import {
   updateVisibilityPolicy,
 } from "./api/visibility.js";
 import {
+  exportTeamReport,
+  getOnlineUsers,
+  getTeamMember,
+  getTeamTargets,
+  queryTeamTimeline,
+  recordPageView,
+  runTeamReport,
+  updateTeamTargets,
+} from "./api/team.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -476,7 +486,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.28.0";
+const VERSION = "0.29.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -612,6 +622,16 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   revokeVisibilityGrant,
   getUserVisibility,
   getMyVisibility,
+
+  // Team report (§13.18)
+  runTeamReport,
+  exportTeamReport,
+  getTeamMember,
+  queryTeamTimeline,
+  getTeamTargets,
+  updateTeamTargets,
+  getOnlineUsers,
+  recordPageView,
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
   queryRouteRules,

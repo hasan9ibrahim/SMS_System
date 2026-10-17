@@ -73,6 +73,13 @@ or sets a vendor's cost and shows the routes and 7-day margin that change. The c
 account manager's sell rates with LCR 1–3. Profiles are edited in a dialog; Least cost route rules pick one in their
 Vendors section, and Route Rules' Bulk edit can apply one to many rules. Changes lists top-vendor changes and cost moves.
 
+**Team report** (`/reports/team`, `src/pages/reports/team/`, §13.18): period (with custom dates), compare,
+department, role and member filters; sections in the URL (`?section=business|rates|billing|noc|activity`) switch the
+columns; totals cards; activity-by-hour and ranking charts (any metric). A member (`?member=ID`) opens their detail
+(daily results, hours, sign-in days, new and stopped clients, devices) and timeline (`team_timeline`). Targets dialog
+per month; CSV export; a weekly summary is a scheduled report of kind Team. The dashboard shows an Online now card,
+and the shell records each page opened (`POST /me/page-views`).
+
 **Visibility policies** (`/admin/visibility`, `src/pages/admin/visibility/`, §13.17): views in the URL
 (`?view=policies|assignments|grants`). Policies are edited in a dialog (mask others, team scope, shown / hidden / band per
 item for others and own, thresholds; new ones start from a preset). Assignments go to all account managers, a department

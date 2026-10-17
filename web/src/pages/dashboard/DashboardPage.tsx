@@ -36,6 +36,7 @@ import {
   newKeys,
   type ChartBuffer,
 } from "./dashboardModel";
+import { useOnlineUsers } from "../../api/team";
 
 const page = pageForPath("/dashboard")!;
 
@@ -316,6 +317,50 @@ function Counter({
   );
 }
 
+/**
+ * Online now (§13.18): initials of signed-in staff, green when active in the last 5 minutes, grey when
+ * idle; hover shows department, page, since and device. For admins and department managers (their
+ * department only); opens Logged In Users.
+ */
+function OnlineNowCard() {
+  const q = useOnlineUsers();
+  const navigate = useTabNavigate();
+  const o = q.data;
+  if (!o || (o.scope !== "all" && o.scope !== "department")) return null;
+  const shown = o.users.slice(0, 8);
+  return (
+    <button
+      type="button"
+      className="btn btn-sm btn-ghost dash-online"
+      title={`${o.active} active · ${o.total - o.active} idle — open Logged In Users`}
+      onClick={() => navigate("/admin/logged-in")}
+    >
+      Online now <strong className="num">{o.total}</strong>
+      <span className="dash-avatars">
+        {shown.map((u) => (
+          <span
+            key={u.userId}
+            className={`dash-avatar${u.active ? " active" : ""}`}
+            title={[
+              u.name,
+              u.department,
+              u.page ? `on ${pageForPath(u.page)?.label ?? u.page}` : null,
+              `signed in ${u.since.slice(0, 16).replace("T", " ")} UTC`,
+              [u.device, u.browser, u.os].filter(Boolean).join(" · "),
+              u.active ? "active" : "idle",
+            ]
+              .filter(Boolean)
+              .join("\n")}
+          >
+            {u.initials}
+          </span>
+        ))}
+        {o.total > shown.length && <span className="dash-avatar more">+{o.total - shown.length}</span>}
+      </span>
+    </button>
+  );
+}
+
 /** Compact card of open market moves (§13.14); opens Rates › Market moves. */
 function MarketMovesChip() {
   const q = useMarketSummary();
@@ -355,6 +400,7 @@ function SummaryBar({
       className="dash-summary"
       extra={
         <>
+          <OnlineNowCard />
           <MarketMovesChip />
           <span className="muted small">
             {tz} day · {cur}

@@ -13,6 +13,7 @@ import type {
   SalesInsightsInput,
   SalesMover,
   ScheduledReportInput,
+  ScheduledReportRow,
 } from "@sms/contract";
 import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
 import { db, withDb } from "../db.js";
@@ -52,6 +53,7 @@ import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { archiver, badInput, contactEmails, fill } from "./switchTools.js";
 import { inTransaction } from "./views.js";
+import { buildTeamReport } from "./team.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -466,6 +468,8 @@ const SR_FIELDS: [keyof ScheduledReportInput, string][] = [
   ["templateKind", "template_kind"],
   ["presetKey", "preset_key"],
   ["viewId", "view_id"],
+  ["teamDepartmentId", "team_department_id"],
+  ["teamPeriod", "team_period"],
   ["status", "status"],
   ["businessCompanyId", "business_company_id"],
   ["notificationEmails", "notification_emails"],
@@ -485,6 +489,17 @@ async function checkScheduled(c: Db, b: ScheduledReportInput, id: number | null)
   }
   if (b.templateKind === "preset" && !PRESETS.some((p) => p.key === b.presetKey))
     errors.push({ path: "/presetKey", message: "choose a report" });
+  // The Team report (§13.18): a relative period, optionally one department.
+  if (b.templateKind === "team") {
+    if (!b.teamPeriod || b.teamPeriod === "custom")
+      errors.push({ path: "/teamPeriod", message: "choose the period each run covers" });
+    if (b.teamDepartmentId != null) {
+      const { rows } = await c.query("SELECT 1 FROM departments WHERE id = $1 AND deleted_at IS NULL", [
+        b.teamDepartmentId,
+      ]);
+      if (!rows[0]) errors.push({ path: "/teamDepartmentId", message: "unknown department" });
+    }
+  }
   if (b.templateKind === "view") {
     const { rows } = await c.query("SELECT 1 FROM saved_views WHERE id = $1 AND list = 'master_report'", [b.viewId]);
     if (!rows[0]) errors.push({ path: "/viewId", message: "choose a saved Master Report view" });
@@ -505,6 +520,8 @@ const srValues = (b: ScheduledReportInput) => ({
   name: b.name.trim(),
   presetKey: b.templateKind === "preset" ? b.presetKey : null,
   viewId: b.templateKind === "view" ? b.viewId : null,
+  teamDepartmentId: b.templateKind === "team" ? (b.teamDepartmentId ?? null) : null,
+  teamPeriod: b.templateKind === "team" ? (b.teamPeriod ?? null) : null,
 });
 
 export function createScheduledReport(request: FastifyRequest, reply: FastifyReply) {
@@ -595,6 +612,7 @@ export async function runScheduled(pool: pg.Pool, id: number, userId: number | n
   let status: "sent" | "failed" = "failed";
   let error: string | null = null;
   try {
+    if (r.templateKind === "team") return await runScheduledTeam(pool, r, userId);
     const settings = await settingsOf(pool, r);
     if (!settings) throw new Error("The report template no longer exists");
     const w = windowOf(settings, await reportNow());
@@ -630,6 +648,45 @@ export async function runScheduled(pool: pg.Pool, id: number, userId: number | n
     [id, status, error, nextRuns(r.cronExpression, new Date())[0] ?? null],
   );
   return loadScheduled(pool, id);
+}
+
+/** The Team report as a scheduled e-mail (§13.18), e.g. a weekly summary to a department manager. */
+async function runScheduledTeam(pool: pg.Pool, r: ScheduledReportRow, userId: number | null) {
+  let status: "sent" | "failed" = "failed";
+  let error: string | null = null;
+  try {
+    const report = await buildTeamReport(
+      pool,
+      { period: r.teamPeriod ?? "last_week", compare: true, departmentId: r.teamDepartmentId ?? null },
+      null,
+    );
+    if (typeof report === "string") throw new Error(report);
+    const from = report.period.from.slice(0, 16).replace("T", " ");
+    const to = report.period.to.slice(0, 16).replace("T", " ");
+    status = await logEmail(pool, {
+      type: "schedule_report_alert",
+      to: r.notificationEmails,
+      sender: null,
+      subject: `${r.name}: ${from} to ${to} UTC`,
+      body: fill(r.emailBody.replace(/<[^>]+>/g, ""), {
+        report: r.template,
+        from,
+        to,
+        rows: String(report.rows.length),
+        company: r.businessCompany,
+      }),
+      file: `${r.name.replace(/[^\w-]+/g, "_")}_${report.period.from.slice(0, 10)}.csv`,
+      userId,
+    });
+  } catch (e) {
+    error = String((e as Error).message ?? e).slice(0, 300);
+  }
+  await pool.query(
+    `UPDATE scheduled_reports SET last_run_at = now(), last_status = $2, last_error = $3,
+            next_run_at = CASE WHEN status = 'active' THEN $4::timestamptz END WHERE id = $1`,
+    [r.id, status, error, nextRuns(r.cronExpression, new Date())[0] ?? null],
+  );
+  return loadScheduled(pool, r.id);
 }
 
 export function runScheduledReport(request: FastifyRequest, reply: FastifyReply) {

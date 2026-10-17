@@ -355,7 +355,8 @@ export function ChildGrid<Row extends { id: number }>({
       <div className="filter-row">
         {toolbar}
         <span className="fb-spacer" />
-        <ShowDeleted state={state} onChange={setState} />
+        {/* Only lists with deleted (archived) records offer it (§13.29). */}
+        {fields.data.fields.some((f) => f.field === "archived") && <ShowDeleted state={state} onChange={setState} />}
       </div>
       <DataGrid<Row>
         list={list}

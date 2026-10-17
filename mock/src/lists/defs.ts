@@ -16,6 +16,7 @@ import { rnLineList, rnList } from "./rnDefs.js";
 import { marketMoveList } from "../api/marketMoves.js";
 import { lcrChangeList, lcrProfileList } from "../api/lcr.js";
 import { visibilityAssignmentList, visibilityGrantList, visibilityPolicyList } from "../api/visibility.js";
+import { teamTimelineList } from "../api/team.js";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   Change,
@@ -2331,7 +2332,8 @@ const presetSql = `CASE s.preset_key ${PRESETS.map((p) => `WHEN '${p.key}' THEN 
 export const SCHEDULED_REPORT_FROM = `scheduled_reports s JOIN business_companies bc ON bc.id = s.business_company_id
     LEFT JOIN saved_views v ON v.id = s.view_id LEFT JOIN users u ON u.id = s.updated_by_id`;
 export const SCHEDULED_REPORT_SELECT = `s.*, bc.name AS business_company, u.username AS updated_by,
-    CASE WHEN s.template_kind = 'view' THEN coalesce(v.name, '(deleted view)') ELSE ${presetSql} END AS template`;
+    CASE WHEN s.template_kind = 'view' THEN coalesce(v.name, '(deleted view)')
+      WHEN s.template_kind = 'team' THEN 'Team report' || coalesce(' · ' || (SELECT d.name FROM departments d WHERE d.id = s.team_department_id), '') ELSE ${presetSql} END AS template`;
 export const scheduledReportList: ListDef<ScheduledReportRow> = {
   fields: listFields.scheduled_reports,
   from: SCHEDULED_REPORT_FROM,
@@ -2340,7 +2342,9 @@ export const scheduledReportList: ListDef<ScheduledReportRow> = {
   columns: {
     id: { sql: "s.id" },
     name: { sql: "s.name" },
-    template: { sql: `CASE WHEN s.template_kind = 'view' THEN coalesce(v.name, '') ELSE ${presetSql} END` },
+    template: {
+      sql: `CASE WHEN s.template_kind = 'view' THEN coalesce(v.name, '') WHEN s.template_kind = 'team' THEN 'Team report' || coalesce(' · ' || (SELECT d.name FROM departments d WHERE d.id = s.team_department_id), '') ELSE ${presetSql} END`,
+    },
     status: { sql: "s.status" },
     cronExpression: { sql: "s.cron_expression" },
     nextRunAt: { sql: "s.next_run_at" },
@@ -2363,6 +2367,8 @@ export function mapScheduledReport(r: Record<string, unknown>): ScheduledReportR
     templateKind: r.template_kind as ScheduledReportRow["templateKind"],
     presetKey: (r.preset_key as string | null) ?? null,
     viewId: r.view_id == null ? null : Number(r.view_id),
+    teamDepartmentId: r.team_department_id == null ? null : Number(r.team_department_id),
+    teamPeriod: (r.team_period as ScheduledReportRow["teamPeriod"]) ?? null,
     template: r.template as string,
     status: r.status as ScheduledReportRow["status"],
     businessCompanyId: Number(r.business_company_id),
@@ -2916,6 +2922,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   visibility_policies: visibilityPolicyList as ListDef<unknown>,
   visibility_assignments: visibilityAssignmentList as ListDef<unknown>,
   visibility_grants: visibilityGrantList as ListDef<unknown>,
+  team_timeline: teamTimelineList as ListDef<unknown>,
 };
 
 export { emailTemplateList, userList };
