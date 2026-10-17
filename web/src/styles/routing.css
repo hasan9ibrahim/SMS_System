@@ -482,3 +482,86 @@
 .qbr-compare {
   max-width: 640px;
 }
+
+/* ---------- Switch: translation rules and number lists (§6.4, §13.2) ---------- */
+.tr-form .fsection + .fsection {
+  margin-top: 4px;
+}
+.cond-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+}
+.cond-field .negate {
+  margin-bottom: 6px;
+}
+.pick-with-new {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pick-with-new > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.targets {
+  display: grid;
+  gap: 8px;
+}
+.targets-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dlr-map {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.dlr-map input {
+  width: 110px;
+}
+.mini-table tr.off td {
+  color: var(--color-text-secondary);
+}
+.tr-detail .detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.tt-result {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.tt-values {
+  margin-bottom: 10px;
+}
+.tt-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+.tt-step-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tt-steps li.skipped .tt-step-head {
+  color: var(--color-text-secondary);
+}
+.tt-steps li.fired .tt-step-head svg {
+  color: var(--color-good);
+}
+.tt-steps li.blocked .tt-step-head svg {
+  color: var(--color-error);
+}
+.tt-steps .checks {
+  margin: 4px 0 0 19px;
+}

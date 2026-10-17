@@ -657,7 +657,8 @@ async function reachingRules(db: Db, k: KindDef, which: "translation" | "hlr", t
   const { rows } =
     which === "translation"
       ? await db.query(
-          `SELECT r.id, r.name, r.status, tg.target_type, tg.insert_at, s.position, s.enabled, s.continue_after,
+          `SELECT r.id, r.name, r.status, tg.target_type, tg.insert_at, s.position, s.enabled,
+                  COALESCE(s.continue_after, r.continue_after) AS continue_after,
                   concat_ws(' · ', r.action,
                     CASE WHEN r.sender_pattern IS NOT NULL THEN 'sender ' || CASE WHEN r.sender_pattern_negate THEN 'not ' ELSE '' END || r.sender_pattern END,
                     CASE WHEN r.receiver_pattern IS NOT NULL THEN 'receiver ' || CASE WHEN r.receiver_pattern_negate THEN 'not ' ELSE '' END || r.receiver_pattern END,
@@ -730,6 +731,13 @@ async function reachingRules(db: Db, k: KindDef, which: "translation" | "hlr", t
   });
 }
 
+/** The rules that run on a trunk, in order (null when the trunk does not exist), for the Test (§13.2). */
+export async function trunkRuleOrder(db: Db, kind: TrunkKind, which: "translation" | "hlr", trunkId: number) {
+  const k = KINDS[kind];
+  if (!(await trunkRef(db, k, trunkId))) return null;
+  return (await reachingRules(db, k, which, trunkId)).map((x) => x.rule);
+}
+
 async function loadRules(db: Db, k: KindDef, id: number): Promise<TrunkRules> {
   return {
     translation: (await reachingRules(db, k, "translation", id)).map((x) => x.rule),
@@ -756,8 +764,10 @@ async function applyRuleState(
   state: RuleState[],
 ) {
   for (const s of state) {
-    const isDefault = s.position === null && s.enabled && s.continueAfter;
     if (which === "translation") {
+      // Continue / Stop follows the rule's own Is Continue unless this trunk overrides it.
+      const { rows: def } = await c.query("SELECT continue_after FROM translation_rules WHERE id = $1", [s.ruleId]);
+      const isDefault = s.position === null && s.enabled && s.continueAfter === (def[0]?.continue_after ?? true);
       if (s.direct)
         await c.query(
           `INSERT INTO translation_rule_targets (translation_rule_id, target_type, trunk_kind, target_id)

@@ -456,8 +456,10 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
   test("rules tab: reorder, switch off, detach a direct rule, undo (§13.2)", async () => {
     const { rows } = await db().query(
       `SELECT t.id FROM customer_trunks t WHERE t.deleted_at IS NULL
-          AND EXISTS (SELECT 1 FROM translation_rule_targets g WHERE g.trunk_kind = 'customer' AND g.target_type = 'trunk' AND g.target_id = t.id)
-          AND (SELECT count(*) FROM translation_rule_targets g WHERE g.trunk_kind = 'customer'
+          AND EXISTS (SELECT 1 FROM translation_rule_targets g JOIN translation_rules r ON r.id = g.translation_rule_id
+                       WHERE r.deleted_at IS NULL AND g.trunk_kind = 'customer' AND g.target_type = 'trunk' AND g.target_id = t.id)
+          AND (SELECT count(*) FROM translation_rule_targets g JOIN translation_rules r ON r.id = g.translation_rule_id
+                WHERE r.deleted_at IS NULL AND g.trunk_kind = 'customer'
                 AND (g.target_type = 'all' OR (g.target_type = 'trunk' AND g.target_id = t.id)
                      OR (g.target_type = 'enterprise' AND g.target_id = t.enterprise_id))) >= 3
         ORDER BY t.id LIMIT 1`,

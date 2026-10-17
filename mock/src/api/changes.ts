@@ -12,6 +12,7 @@ import { applyEnterpriseField } from "./enterprises.js";
 import { applyTrunkField } from "./trunks.js";
 import { applyRateTableEntries } from "./rates.js";
 import { applyRouteRuleField } from "./routeRules.js";
+import { applyTranslationRuleField } from "./translationRules.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -25,7 +26,11 @@ interface DiffEntry {
  * map yet. Other fields (e.g. a vendor share inside a route) are history-only until then.
  */
 const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, string> }> = {
-  translation_rule: { table: "translation_rules", columns: { status: "status", name: "name" } },
+  // Translation rules write every field through applyTranslationRuleField (§6.4).
+  translation_rule: { table: "translation_rules", columns: {} },
+  // Number lists and their entries (§6.4)
+  number_list: { table: "number_lists", columns: { name: "name", listType: "list_type" } },
+  number_list_entry: { table: "number_list_entries", columns: {} },
   hlr_rule: { table: "hlr_rules", columns: { status: "status", name: "name" } },
   enterprise_doc: { table: "enterprise_docs", columns: {} },
   // MCCMNC master (§6.1); DLR targets live here too (decided 2026-10-16).
@@ -113,6 +118,10 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
     }
     if (entityType === "route_rule") {
       await applyRouteRuleField(c, e.entity_id, e.field, e.before, userId);
+      continue;
+    }
+    if (entityType === "translation_rule") {
+      await applyTranslationRuleField(c, e.entity_id, e.field, e.before, userId);
       continue;
     }
     if (entityType === "customer_trunk" || entityType === "vendor_trunk") {

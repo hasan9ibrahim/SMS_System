@@ -2017,6 +2017,442 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/number-lists/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List number lists (server-side filter, sort and paging)
+     * @description Number List (§6.4): Random, Tag and Sender ID Template lists used by translation and route rules,
+     *     with their entry count and how many rules use them. Hidden `archived` field = deleted lists.
+     */
+    post: operations["queryNumberLists"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a number list (§6.4)
+     * @description Also used by "+ New list" inside rule forms (§13.2). One undoable change.
+     */
+    post: operations["createNumberList"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Rename a number list or change its type
+     * @description The type cannot change while entries do not fit it (400). One undoable change.
+     */
+    put: operations["updateNumberList"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses a number list (safe delete, §13.29)
+     * @description Translation rules (match lists and sender conversion) and route rules (sender / receiver lists,
+     *     number whitelists) using the list; all blocking.
+     */
+    get: operations["getNumberListDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a number list (§13.29)
+     * @description Blocked while rules use it (409) unless an administrator overrides with a reason. One undoable change.
+     */
+    post: operations["archiveNumberList"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived number list (§13.29)
+     * @description Administrators; one undoable change.
+     */
+    post: operations["restoreNumberList"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-list-entries/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List the entries of a number list (server-side filter, sort and paging)
+     * @description The `numberListId` filter (eq) is required (§12.4 Number List entries: Number, Created By, Created Time).
+     */
+    post: operations["queryNumberListEntries"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}/entries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add entries to a number list
+     * @description Values are checked against the list type; values already in the list are skipped and counted.
+     *     One undoable change.
+     */
+    post: operations["addNumberListEntries"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}/entries/delete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete entries of a number list
+     * @description Archives the entries as one undoable change.
+     */
+    post: operations["deleteNumberListEntries"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import entries from a file (dry run first)
+     * @description "Import List" (§6.4): one value per line, or a CSV with a `value` (or `number`) column. In
+     *     `replace` mode entries missing from the file are removed. All or nothing; one undoable change.
+     */
+    post: operations["importNumberListEntries"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/number-lists/{id}/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export a number list's entries as CSV
+     * @description Column `value`; the file can be imported again.
+     */
+    get: operations["exportNumberListEntries"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List translation rules (server-side filter, sort and paging)
+     * @description Translation Rule grid (§6.4) with what each rule applies to and how many trunks it touches (§13.2).
+     */
+    post: operations["queryTranslationRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a translation rule (§6.4, §13.2)
+     * @description Saved with its Applies To targets, so it runs on those trunks at once: no group, no second trip
+     *     to the trunk. One undoable change.
+     */
+    post: operations["createTranslationRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One translation rule
+     * @description Every field of the form, its targets with labels, and how many trunks it touches.
+     */
+    get: operations["getTranslationRule"];
+    /**
+     * Change a translation rule
+     * @description Saves the whole rule; the change lists the fields that differ (targets as one field). Editing a
+     *     shared rule updates every trunk it touches (the GUI confirms with the count first).
+     */
+    put: operations["updateTranslationRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules/{id}/used-by": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Trunks a translation rule touches (Used by, §13.2)
+     * @description Every customer and vendor trunk the rule reaches through its targets, with how (trunk, enterprise,
+     *     category, all) and whether it is switched off on that trunk.
+     */
+    get: operations["getTranslationRuleUsedBy"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules/{id}/clone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Duplicate a translation rule (Clone, Duplicate to trunk)
+     * @description An independent copy, inactive unless `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
+     *     rule for one trunk only so a partner can have a variant. One undoable change.
+     */
+    post: operations["cloneTranslationRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a translation rule (§13.29)
+     * @description The rule stops running on every trunk it touched; Delete History (archived filter) shows it. One
+     *     undoable change.
+     */
+    post: operations["archiveTranslationRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived translation rule (§13.29)
+     * @description It runs again on its targets. One undoable change.
+     */
+    post: operations["restoreTranslationRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/translation-rules/{id}/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Test one translation rule on a sample message (§13.2 Test)
+     * @description Runs the rule on the message as saved (or on `rule`, the unsaved form) and shows before and after
+     *     values, the checks and whether it blocks.
+     */
+    post: operations["testTranslationRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/{id}/rules/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a sample message through a customer trunk's rules (§13.2 Test)
+     * @description Every translation rule on the trunk in execution order (switched-off ones skipped), with before and
+     *     after values and which rules fired, and which HLR rule and provider the number would use.
+     */
+    post: operations["testCustomerTrunkRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}/rules/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a sample message through a vendor trunk's rules (§13.2 Test)
+     * @description Every translation rule on the trunk in execution order (switched-off ones skipped), with before and
+     *     after values and which rules fired.
+     */
+    post: operations["testVendorTrunkRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -3822,6 +4258,373 @@ export type components = {
       rows: components["schemas"]["QbrStat"][];
     };
     /**
+     * @description random: numbers a sender conversion picks from; tag: numbers or sender IDs rules match; sender_id_template: sender IDs with {n} placeholders.
+     * @enum {string}
+     */
+    NumberListType: "random" | "tag" | "sender_id_template";
+    NumberList: {
+      id: components["schemas"]["Id"];
+      name: string;
+      listType: components["schemas"]["NumberListType"];
+      entries: number;
+      /** @description Live translation and route rules using the list. */
+      usedBy: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    NumberListInput: {
+      name: string;
+      listType: components["schemas"]["NumberListType"];
+    };
+    NumberListSaved: {
+      record: components["schemas"]["NumberList"];
+      change: components["schemas"]["Change"] | null;
+    };
+    NumberListPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["NumberList"][];
+    };
+    NumberListEntry: {
+      id: components["schemas"]["Id"];
+      numberListId: components["schemas"]["Id"];
+      value: string;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+    };
+    NumberListEntryPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["NumberListEntry"][];
+    };
+    NumberListEntriesInput: {
+      values: string[];
+    };
+    NumberListEntriesResult: {
+      added: number;
+      /** @description Already in the list (or repeated in the input). */
+      skipped: number;
+      /** @description Values that do not fit the list type; nothing is saved when there are any. */
+      errors: components["schemas"]["ImportIssue"][];
+      change: components["schemas"]["Change"] | null;
+    };
+    /** @description What a rule applies to (§13.2); customer side = ingress, vendor side = egress. */
+    TranslationTargetInput: {
+      /** @enum {string} */
+      type: "trunk" | "enterprise" | "category" | "all";
+      /** @enum {string} */
+      trunkKind: "customer" | "vendor";
+      /** @description Trunk, enterprise or product category ID; null for all. */
+      id: components["schemas"]["Id"] | null;
+    };
+    TranslationTarget: {
+      /** @enum {string} */
+      type: "trunk" | "enterprise" | "category" | "all";
+      /** @enum {string} */
+      trunkKind: "customer" | "vendor";
+      id: components["schemas"]["Id"] | null;
+      label: string;
+    };
+    /** @description DLR Status & Error Code Convert (§6.4) - the vendor's stat (and error) as the customer gets it. */
+    DlrMapEntry: {
+      fromStatus: string;
+      /** @description Null = any error code. */
+      fromError: string | null;
+      toStatus: string;
+      /** @description Null = keep the error code. */
+      toError: string | null;
+    };
+    TranslationRuleFields: {
+      name?: string;
+      /**
+       * @description Override; null = implied by the trunk (customer = ingress, vendor = egress, §13.2).
+       * @enum {string|null}
+       */
+      direction?: "ingress" | "egress" | null;
+      /** @enum {string} */
+      action?: "allow" | "block";
+      status?: components["schemas"]["RecordStatus"];
+      /** @description Is Continue - apply further rules after this one (a trunk can override). */
+      continueAfter?: boolean;
+      /** @description Regular expression on the sender ID. */
+      senderPattern?: string | null;
+      senderPatternNegate?: boolean;
+      receiverPattern?: string | null;
+      receiverPatternNegate?: boolean;
+      mccmncs?: string[];
+      mccmncNegate?: boolean;
+      /** @description Regular expression on the message body. */
+      contentPattern?: string | null;
+      contentPatternNegate?: boolean;
+      senderListId?: components["schemas"]["Id"] | null;
+      senderListNegate?: boolean;
+      receiverListId?: components["schemas"]["Id"] | null;
+      receiverListNegate?: boolean;
+      /** @enum {string|null} */
+      senderConversion?:
+        | "left_strip"
+        | "right_strip"
+        | "prepend"
+        | "append"
+        | "translation"
+        | "random_number"
+        | "sender_id_template"
+        | null;
+      /** @description Digits to strip, text to add, or for translation "from=to". */
+      senderConversionValue?: string | null;
+      /** @description Number list (Random or Sender ID Template) for random_number and sender_id_template. */
+      senderConversionListId?: components["schemas"]["Id"] | null;
+      /** @enum {string|null} */
+      receiverConversion?:
+        "left_strip" | "right_strip" | "prepend" | "append" | "translation" | null;
+      receiverConversionValue?: string | null;
+      senderTon?: number | null;
+      senderNpi?: number | null;
+      destTon?: number | null;
+      destNpi?: number | null;
+      /** @enum {string|null} */
+      billingType?: "attempt" | "submit" | "reported" | "delivery" | null;
+      registeredDelivery?: number | null;
+      dlrMap?: components["schemas"]["DlrMapEntry"][];
+      /** @description Content rewrite - the part of the text to replace. */
+      contentRegex?: string | null;
+      contentRegexIndex?: number | null;
+      /** @description Message Text that replaces the matched group (Regex Index) or the whole match. */
+      contentReplacement?: string | null;
+      /** @description MSG Template - replaces the whole text; {text} inserts the original. */
+      msgTemplate?: string | null;
+      senderMinLength?: number;
+      senderMaxLength?: number;
+      receiverMinLength?: number;
+      receiverMaxLength?: number;
+      /** Format: date-time */
+      startsAt?: string | null;
+      /** Format: date-time */
+      stopsAt?: string | null;
+      /**
+       * @description Where the rule runs on trunks that have no position for it.
+       * @enum {string}
+       */
+      insertAt?: "top" | "bottom";
+    };
+    TranslationRuleInput: WithRequired<
+      components["schemas"]["TranslationRuleFields"],
+      | "name"
+      | "direction"
+      | "action"
+      | "status"
+      | "continueAfter"
+      | "senderPattern"
+      | "senderPatternNegate"
+      | "receiverPattern"
+      | "receiverPatternNegate"
+      | "mccmncs"
+      | "mccmncNegate"
+      | "contentPattern"
+      | "contentPatternNegate"
+      | "senderListId"
+      | "senderListNegate"
+      | "receiverListId"
+      | "receiverListNegate"
+      | "senderConversion"
+      | "senderConversionValue"
+      | "senderConversionListId"
+      | "receiverConversion"
+      | "receiverConversionValue"
+      | "senderTon"
+      | "senderNpi"
+      | "destTon"
+      | "destNpi"
+      | "billingType"
+      | "registeredDelivery"
+      | "dlrMap"
+      | "contentRegex"
+      | "contentRegexIndex"
+      | "contentReplacement"
+      | "msgTemplate"
+      | "senderMinLength"
+      | "senderMaxLength"
+      | "receiverMinLength"
+      | "receiverMaxLength"
+      | "startsAt"
+      | "stopsAt"
+      | "insertAt"
+    > & {
+      targets: components["schemas"]["TranslationTargetInput"][];
+    };
+    TranslationRuleDetail: WithRequired<
+      components["schemas"]["TranslationRuleFields"],
+      | "name"
+      | "direction"
+      | "action"
+      | "status"
+      | "continueAfter"
+      | "senderPattern"
+      | "senderPatternNegate"
+      | "receiverPattern"
+      | "receiverPatternNegate"
+      | "mccmncs"
+      | "mccmncNegate"
+      | "contentPattern"
+      | "contentPatternNegate"
+      | "senderListId"
+      | "senderListNegate"
+      | "receiverListId"
+      | "receiverListNegate"
+      | "senderConversion"
+      | "senderConversionValue"
+      | "senderConversionListId"
+      | "receiverConversion"
+      | "receiverConversionValue"
+      | "senderTon"
+      | "senderNpi"
+      | "destTon"
+      | "destNpi"
+      | "billingType"
+      | "registeredDelivery"
+      | "dlrMap"
+      | "contentRegex"
+      | "contentRegexIndex"
+      | "contentReplacement"
+      | "msgTemplate"
+      | "senderMinLength"
+      | "senderMaxLength"
+      | "receiverMinLength"
+      | "receiverMaxLength"
+      | "startsAt"
+      | "stopsAt"
+      | "insertAt"
+    > & {
+      id: components["schemas"]["Id"];
+      targets: components["schemas"]["TranslationTarget"][];
+      /** @description Trunks the rule touches. */
+      usedBy: number;
+      createdBy: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    TranslationRuleSaved: {
+      record: components["schemas"]["TranslationRuleDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    TranslationRuleRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @enum {string|null} */
+      direction: "ingress" | "egress" | null;
+      /** @enum {string} */
+      action: "allow" | "block";
+      continueAfter: boolean;
+      senderPattern: string | null;
+      receiverPattern: string | null;
+      mccmncs: string[];
+      contentPattern: string | null;
+      senderConversion: string | null;
+      /** @description The value, or the number list's name for random_number / sender_id_template. */
+      senderConversionValue: string | null;
+      status: components["schemas"]["RecordStatus"];
+      /** @description Summary of the targets, e.g. "3 customer trunks, 1 enterprise". */
+      appliesTo: string;
+      usedBy: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    TranslationRulePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["TranslationRuleRow"][];
+    };
+    RuleUsedBy: {
+      trunks: {
+        /** @enum {string} */
+        kind: "customer" | "vendor";
+        id: components["schemas"]["Id"];
+        name: string;
+        enterpriseName: string;
+        /** @enum {string} */
+        via: "trunk" | "enterprise" | "category" | "all";
+        /** @description False when the rule is switched off on this trunk. */
+        enabled: boolean;
+      }[];
+    };
+    TranslationCloneInput: {
+      name?: string;
+      /** @description Duplicate to trunk - the copy targets only this trunk and is active. */
+      targetTrunk?: {
+        /** @enum {string} */
+        kind: "customer" | "vendor";
+        id: components["schemas"]["Id"];
+      };
+    };
+    TestMessage: {
+      sender: string;
+      receiver: string;
+      text: string;
+      senderTon?: number | null;
+      senderNpi?: number | null;
+      /** @description A vendor DLR stat to run through the DLR conversion. */
+      dlrStatus?: string | null;
+      dlrError?: string | null;
+    };
+    TranslationTestInput: {
+      message: components["schemas"]["TestMessage"];
+      /** @description The unsaved form, to test before saving; the saved rule when omitted. */
+      rule?: components["schemas"]["TranslationRuleInput"];
+    };
+    MessageState: {
+      sender: string;
+      receiver: string;
+      text: string;
+      senderTon: number | null;
+      senderNpi: number | null;
+      destTon: number | null;
+      destNpi: number | null;
+      billingType: string | null;
+      registeredDelivery: number | null;
+      dlrStatus: string | null;
+      dlrError: string | null;
+      /** @description Network of the receiver by dial-code prefix ("All" profile). */
+      mccmnc: string | null;
+    };
+    TranslationStep: {
+      ruleId: components["schemas"]["Id"];
+      name: string;
+      matched: boolean;
+      /** @description Matched and changed or blocked the message. */
+      fired: boolean;
+      blocked: boolean;
+      checks: {
+        condition: string;
+        ok: boolean;
+        detail: string;
+      }[];
+      /** @description Field, before, after. */
+      changes: {
+        field: string;
+        before: string | null;
+        after: string | null;
+      }[];
+      continueAfter: boolean;
+    };
+    TranslationTestResult: {
+      before: components["schemas"]["MessageState"];
+      after: components["schemas"]["MessageState"];
+      blocked: boolean;
+      steps: components["schemas"]["TranslationStep"][];
+    };
+    TrunkRulesTestInput: {
+      message: components["schemas"]["TestMessage"];
+    };
+    TrunkRulesTestResult: components["schemas"]["TranslationTestResult"] & {
+      /** @description Customer trunks - the first HLR rule whose DNID pattern matches the (translated) receiver. */
+      hlr: {
+        ruleId: components["schemas"]["Id"];
+        ruleName: string;
+        providerId: components["schemas"]["Id"];
+        providerName: string;
+      } | null;
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -4216,7 +5019,10 @@ export type components = {
       | "mo_numbers"
       | "route_map"
       | "rerating_requests"
-      | "qbr_stats";
+      | "qbr_stats"
+      | "number_lists"
+      | "number_list_entries"
+      | "translation_rules";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -7827,6 +8633,632 @@ export interface operations {
           "application/json": components["schemas"]["QbrStatSaved"];
         };
       };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryNumberLists: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of number lists */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NumberListPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createNumberList: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NumberListInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NumberListSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateNumberList: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NumberListInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NumberListSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getNumberListDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveNumberList: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NumberListSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreNumberList: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NumberListSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryNumberListEntries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of entries */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NumberListEntryPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  addNumberListEntries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NumberListEntriesInput"];
+      };
+    };
+    responses: {
+      /** @description What was added, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NumberListEntriesResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  deleteNumberListEntries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IdList"];
+      };
+    };
+    responses: {
+      /** @description The change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChangeResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  importNumberListEntries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportRequest"];
+      };
+    };
+    responses: {
+      /** @description What the import adds and removes; `applied` says whether it was saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportNumberListEntries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryTranslationRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of translation rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationRulePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createTranslationRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TranslationRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getTranslationRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationRuleDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateTranslationRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TranslationRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getTranslationRuleUsedBy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The trunks */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RuleUsedBy"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cloneTranslationRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TranslationCloneInput"];
+      };
+    };
+    responses: {
+      /** @description The copy, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveTranslationRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreTranslationRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  testTranslationRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TranslationTestInput"];
+      };
+    };
+    responses: {
+      /** @description The result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranslationTestResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  testCustomerTrunkRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TrunkRulesTestInput"];
+      };
+    };
+    responses: {
+      /** @description The result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkRulesTestResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  testVendorTrunkRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TrunkRulesTestInput"];
+      };
+    };
+    responses: {
+      /** @description The result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkRulesTestResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];

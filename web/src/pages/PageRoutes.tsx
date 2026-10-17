@@ -14,7 +14,9 @@ import { MoBookPage } from "./reference/MoBookPage";
 import { ProductCategoriesPage } from "./reference/ProductCategoriesPage";
 import { RouteMapPage } from "./routing/RouteMapPage";
 import { ReratingPage } from "./routing/ReratingPage";
+import { NumberListsPage } from "./switch/NumberListsPage";
 import { QbrStatsPage } from "./switch/QbrStatsPage";
+import { TranslationRulesPage } from "./switch/TranslationRulesPage";
 import { RateManagerPage } from "./rates/RateManagerPage";
 import { EnterpriseReportPage } from "./reports/EnterpriseReportPage";
 import { TrunkPage } from "./trunk/TrunkPage";
@@ -39,6 +41,8 @@ const BUILT = new Set([
   "/routing/map",
   "/routing/re-rating",
   "/switch/qbr-stats",
+  "/switch/number-lists",
+  "/switch/translation-rules",
   "/reports/enterprise",
   "/routing/rules",
   "/routing/rate-lookup",
@@ -73,6 +77,8 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/routing/map" element={<RouteMapPage />} />
       <Route path="/routing/re-rating" element={<ReratingPage />} />
       <Route path="/switch/qbr-stats" element={<QbrStatsPage />} />
+      <Route path="/switch/number-lists" element={<NumberListsPage />} />
+      <Route path="/switch/translation-rules" element={<TranslationRulesPage />} />
       <Route path="/reports/enterprise" element={<EnterpriseReportPage />} />
       <Route
         path="/routing/rate-lookup"

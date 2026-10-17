@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.12.0
+  version: 0.13.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -51,6 +51,8 @@ tags:
     description: Jump-to search across records (Ctrl K, §15.1)
   - name: reports
     description: Traffic reports from the EDR store (§10, §13.31)
+  - name: switch
+    description: Switch rules - translation rules, number lists (§6.4, §13.2)
   - name: reference
     description: Product reference data - categories, countries, MCCMNC codes, Master Table, MO reference book (§6.1)
 
@@ -3080,6 +3082,640 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QbrStatSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/query:
+    post:
+      tags: [switch]
+      operationId: queryNumberLists
+      summary: "List number lists (server-side filter, sort and paging)"
+      description: |
+        Number List (§6.4): Random, Tag and Sender ID Template lists used by translation and route rules,
+        with their entry count and how many rules use them. Hidden `archived` field = deleted lists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of number lists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumberListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists:
+    post:
+      tags: [switch]
+      operationId: createNumberList
+      summary: "Add a number list (§6.4)"
+      description: |
+        Also used by "+ New list" inside rule forms (§13.2). One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NumberListInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumberListSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}:
+    put:
+      tags: [switch]
+      operationId: updateNumberList
+      summary: "Rename a number list or change its type"
+      description: |
+        The type cannot change while entries do not fit it (400). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NumberListInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumberListSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}/dependencies:
+    get:
+      tags: [switch]
+      operationId: getNumberListDependencies
+      summary: "What uses a number list (safe delete, §13.29)"
+      description: |
+        Translation rules (match lists and sender conversion) and route rules (sender / receiver lists,
+        number whitelists) using the list; all blocking.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveNumberList
+      summary: "Archive (delete) a number list (§13.29)"
+      description: |
+        Blocked while rules use it (409) unless an administrator overrides with a reason. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumberListSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreNumberList
+      summary: "Restore an archived number list (§13.29)"
+      description: |
+        Administrators; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumberListSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-list-entries/query:
+    post:
+      tags: [switch]
+      operationId: queryNumberListEntries
+      summary: "List the entries of a number list (server-side filter, sort and paging)"
+      description: |
+        The `numberListId` filter (eq) is required (§12.4 Number List entries: Number, Created By, Created Time).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumberListEntryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}/entries:
+    post:
+      tags: [switch]
+      operationId: addNumberListEntries
+      summary: "Add entries to a number list"
+      description: |
+        Values are checked against the list type; values already in the list are skipped and counted.
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NumberListEntriesInput"
+      responses:
+        "200":
+          description: What was added, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumberListEntriesResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}/entries/delete:
+    post:
+      tags: [switch]
+      operationId: deleteNumberListEntries
+      summary: "Delete entries of a number list"
+      description: |
+        Archives the entries as one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdList"
+      responses:
+        "200":
+          description: The change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}/import:
+    post:
+      tags: [switch]
+      operationId: importNumberListEntries
+      summary: "Import entries from a file (dry run first)"
+      description: |
+        "Import List" (§6.4): one value per line, or a CSV with a `value` (or `number`) column. In
+        `replace` mode entries missing from the file are removed. All or nothing; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRequest"
+      responses:
+        "200":
+          description: What the import adds and removes; `applied` says whether it was saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /number-lists/{id}/export:
+    get:
+      tags: [switch]
+      operationId: exportNumberListEntries
+      summary: "Export a number list's entries as CSV"
+      description: |
+        Column `value`; the file can be imported again.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules/query:
+    post:
+      tags: [switch]
+      operationId: queryTranslationRules
+      summary: "List translation rules (server-side filter, sort and paging)"
+      description: |
+        Translation Rule grid (§6.4) with what each rule applies to and how many trunks it touches (§13.2).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of translation rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationRulePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules:
+    post:
+      tags: [switch]
+      operationId: createTranslationRule
+      summary: "Add a translation rule (§6.4, §13.2)"
+      description: |
+        Saved with its Applies To targets, so it runs on those trunks at once: no group, no second trip
+        to the trunk. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslationRuleInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules/{id}:
+    get:
+      tags: [switch]
+      operationId: getTranslationRule
+      summary: "One translation rule"
+      description: |
+        Every field of the form, its targets with labels, and how many trunks it touches.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationRuleDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [switch]
+      operationId: updateTranslationRule
+      summary: "Change a translation rule"
+      description: |
+        Saves the whole rule; the change lists the fields that differ (targets as one field). Editing a
+        shared rule updates every trunk it touches (the GUI confirms with the count first).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslationRuleInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules/{id}/used-by:
+    get:
+      tags: [switch]
+      operationId: getTranslationRuleUsedBy
+      summary: "Trunks a translation rule touches (Used by, §13.2)"
+      description: |
+        Every customer and vendor trunk the rule reaches through its targets, with how (trunk, enterprise,
+        category, all) and whether it is switched off on that trunk.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The trunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleUsedBy"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules/{id}/clone:
+    post:
+      tags: [switch]
+      operationId: cloneTranslationRule
+      summary: "Duplicate a translation rule (Clone, Duplicate to trunk)"
+      description: |
+        An independent copy, inactive unless `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
+        rule for one trunk only so a partner can have a variant. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslationCloneInput"
+      responses:
+        "201":
+          description: The copy, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveTranslationRule
+      summary: "Archive (delete) a translation rule (§13.29)"
+      description: |
+        The rule stops running on every trunk it touched; Delete History (archived filter) shows it. One
+        undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationRuleSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreTranslationRule
+      summary: "Restore an archived translation rule (§13.29)"
+      description: |
+        It runs again on its targets. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /translation-rules/{id}/test:
+    post:
+      tags: [switch]
+      operationId: testTranslationRule
+      summary: "Test one translation rule on a sample message (§13.2 Test)"
+      description: |
+        Runs the rule on the message as saved (or on `rule`, the unsaved form) and shows before and after
+        values, the checks and whether it blocks.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslationTestInput"
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/{id}/rules/test:
+    post:
+      tags: [trunks]
+      operationId: testCustomerTrunkRules
+      summary: "Run a sample message through a customer trunk's rules (§13.2 Test)"
+      description: |
+        Every translation rule on the trunk in execution order (switched-off ones skipped), with before and
+        after values and which rules fired, and which HLR rule and provider the number would use.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrunkRulesTestInput"
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkRulesTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}/rules/test:
+    post:
+      tags: [trunks]
+      operationId: testVendorTrunkRules
+      summary: "Run a sample message through a vendor trunk's rules (§13.2 Test)"
+      description: |
+        Every translation rule on the trunk in execution order (switched-off ones skipped), with before and
+        after values and which rules fired.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrunkRulesTestInput"
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkRulesTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
         "401":
@@ -6728,6 +7364,643 @@ components:
               items:
                 $ref: "#/components/schemas/QbrStat"
 
+    # ------------------------------------------------------------- Number lists, translation rules (§6.4, §13.2)
+    NumberListType:
+      type: string
+      enum: [random, tag, sender_id_template]
+      description: "random: numbers a sender conversion picks from; tag: numbers or sender IDs rules match; sender_id_template: sender IDs with {n} placeholders."
+
+    NumberList:
+      type: object
+      required: [id, name, listType, entries, usedBy, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        listType:
+          $ref: "#/components/schemas/NumberListType"
+        entries:
+          type: integer
+        usedBy:
+          type: integer
+          description: Live translation and route rules using the list.
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    NumberListInput:
+      type: object
+      additionalProperties: false
+      required: [name, listType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        listType:
+          $ref: "#/components/schemas/NumberListType"
+
+    NumberListSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/NumberList"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    NumberListPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/NumberList"
+
+    NumberListEntry:
+      type: object
+      required: [id, numberListId, value, createdBy, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        numberListId:
+          $ref: "#/components/schemas/Id"
+        value:
+          type: string
+        createdBy:
+          type: [string, "null"]
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    NumberListEntryPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/NumberListEntry"
+
+    NumberListEntriesInput:
+      type: object
+      additionalProperties: false
+      required: [values]
+      properties:
+        values:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+
+    NumberListEntriesResult:
+      type: object
+      required: [added, skipped, errors, change]
+      properties:
+        added:
+          type: integer
+        skipped:
+          type: integer
+          description: Already in the list (or repeated in the input).
+        errors:
+          type: array
+          description: Values that do not fit the list type; nothing is saved when there are any.
+          items:
+            $ref: "#/components/schemas/ImportIssue"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    TranslationTargetInput:
+      type: object
+      additionalProperties: false
+      required: [type, trunkKind, id]
+      description: What a rule applies to (§13.2); customer side = ingress, vendor side = egress.
+      properties:
+        type:
+          type: string
+          enum: [trunk, enterprise, category, all]
+        trunkKind:
+          type: string
+          enum: [customer, vendor]
+        id:
+          description: Trunk, enterprise or product category ID; null for all.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+
+    TranslationTarget:
+      type: object
+      required: [type, trunkKind, id, label]
+      properties:
+        type:
+          type: string
+          enum: [trunk, enterprise, category, all]
+        trunkKind:
+          type: string
+          enum: [customer, vendor]
+        id:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        label:
+          type: string
+
+    DlrMapEntry:
+      type: object
+      additionalProperties: false
+      required: [fromStatus, fromError, toStatus, toError]
+      description: DLR Status & Error Code Convert (§6.4) - the vendor's stat (and error) as the customer gets it.
+      properties:
+        fromStatus:
+          type: string
+          minLength: 1
+          maxLength: 10
+        fromError:
+          type: [string, "null"]
+          maxLength: 10
+          description: Null = any error code.
+        toStatus:
+          type: string
+          minLength: 1
+          maxLength: 10
+        toError:
+          type: [string, "null"]
+          maxLength: 10
+          description: Null = keep the error code.
+
+    TranslationRuleFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        direction:
+          type: [string, "null"]
+          enum: [ingress, egress, null]
+          description: Override; null = implied by the trunk (customer = ingress, vendor = egress, §13.2).
+        action:
+          type: string
+          enum: [allow, block]
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        continueAfter:
+          type: boolean
+          description: Is Continue - apply further rules after this one (a trunk can override).
+        senderPattern:
+          type: [string, "null"]
+          maxLength: 200
+          description: Regular expression on the sender ID.
+        senderPatternNegate:
+          type: boolean
+        receiverPattern:
+          type: [string, "null"]
+          maxLength: 200
+        receiverPatternNegate:
+          type: boolean
+        mccmncs:
+          type: array
+          maxItems: 2000
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
+        mccmncNegate:
+          type: boolean
+        contentPattern:
+          type: [string, "null"]
+          maxLength: 500
+          description: Regular expression on the message body.
+        contentPatternNegate:
+          type: boolean
+        senderListId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        senderListNegate:
+          type: boolean
+        receiverListId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        receiverListNegate:
+          type: boolean
+        senderConversion:
+          type: [string, "null"]
+          enum: [left_strip, right_strip, prepend, append, translation, random_number, sender_id_template, null]
+        senderConversionValue:
+          type: [string, "null"]
+          maxLength: 100
+          description: "Digits to strip, text to add, or for translation \"from=to\"."
+        senderConversionListId:
+          description: Number list (Random or Sender ID Template) for random_number and sender_id_template.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        receiverConversion:
+          type: [string, "null"]
+          enum: [left_strip, right_strip, prepend, append, translation, null]
+        receiverConversionValue:
+          type: [string, "null"]
+          maxLength: 100
+        senderTon:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 6
+        senderNpi:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 18
+        destTon:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 6
+        destNpi:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 18
+        billingType:
+          type: [string, "null"]
+          enum: [attempt, submit, reported, delivery, null]
+        registeredDelivery:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 1
+        dlrMap:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/DlrMapEntry"
+        contentRegex:
+          type: [string, "null"]
+          maxLength: 500
+          description: Content rewrite - the part of the text to replace.
+        contentRegexIndex:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 5
+        contentReplacement:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Message Text that replaces the matched group (Regex Index) or the whole match.
+        msgTemplate:
+          type: [string, "null"]
+          maxLength: 1000
+          description: MSG Template - replaces the whole text; {text} inserts the original.
+        senderMinLength:
+          type: integer
+          minimum: 0
+          maximum: 20
+        senderMaxLength:
+          type: integer
+          minimum: 1
+          maximum: 20
+        receiverMinLength:
+          type: integer
+          minimum: 0
+          maximum: 20
+        receiverMaxLength:
+          type: integer
+          minimum: 1
+          maximum: 20
+        startsAt:
+          type: [string, "null"]
+          format: date-time
+        stopsAt:
+          type: [string, "null"]
+          format: date-time
+        insertAt:
+          type: string
+          enum: [top, bottom]
+          description: Where the rule runs on trunks that have no position for it.
+
+    TranslationRuleInput:
+      allOf:
+        - $ref: "#/components/schemas/TranslationRuleFields"
+        - type: object
+          properties:
+            targets:
+              type: array
+              maxItems: 1000
+              items:
+                $ref: "#/components/schemas/TranslationTargetInput"
+      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionListId, receiverConversion, receiverConversionValue, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt, targets]
+      unevaluatedProperties: false
+
+    TranslationRuleDetail:
+      allOf:
+        - $ref: "#/components/schemas/TranslationRuleFields"
+        - type: object
+          required: [id, targets, usedBy, createdBy, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            targets:
+              type: array
+              items:
+                $ref: "#/components/schemas/TranslationTarget"
+            usedBy:
+              type: integer
+              description: Trunks the rule touches.
+            createdBy:
+              type: [string, "null"]
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionListId, receiverConversion, receiverConversionValue, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
+
+    TranslationRuleSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/TranslationRuleDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    TranslationRuleRow:
+      type: object
+      required: [id, name, direction, action, continueAfter, senderPattern, receiverPattern, mccmncs, contentPattern, senderConversion, senderConversionValue, status, appliesTo, usedBy, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        direction:
+          type: [string, "null"]
+          enum: [ingress, egress, null]
+        action:
+          type: string
+          enum: [allow, block]
+        continueAfter:
+          type: boolean
+        senderPattern:
+          type: [string, "null"]
+        receiverPattern:
+          type: [string, "null"]
+        mccmncs:
+          type: array
+          items:
+            type: string
+        contentPattern:
+          type: [string, "null"]
+        senderConversion:
+          type: [string, "null"]
+        senderConversionValue:
+          type: [string, "null"]
+          description: The value, or the number list's name for random_number / sender_id_template.
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        appliesTo:
+          type: string
+          description: Summary of the targets, e.g. "3 customer trunks, 1 enterprise".
+        usedBy:
+          type: integer
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    TranslationRulePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/TranslationRuleRow"
+
+    RuleUsedBy:
+      type: object
+      required: [trunks]
+      properties:
+        trunks:
+          type: array
+          items:
+            type: object
+            required: [kind, id, name, enterpriseName, via, enabled]
+            properties:
+              kind:
+                type: string
+                enum: [customer, vendor]
+              id:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+              enterpriseName:
+                type: string
+              via:
+                type: string
+                enum: [trunk, enterprise, category, all]
+              enabled:
+                type: boolean
+                description: False when the rule is switched off on this trunk.
+
+    TranslationCloneInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        targetTrunk:
+          type: object
+          additionalProperties: false
+          required: [kind, id]
+          description: Duplicate to trunk - the copy targets only this trunk and is active.
+          properties:
+            kind:
+              type: string
+              enum: [customer, vendor]
+            id:
+              $ref: "#/components/schemas/Id"
+
+    TestMessage:
+      type: object
+      additionalProperties: false
+      required: [sender, receiver, text]
+      properties:
+        sender:
+          type: string
+          maxLength: 32
+        receiver:
+          type: string
+          maxLength: 32
+        text:
+          type: string
+          maxLength: 2000
+        senderTon:
+          oneOf:
+            - type: integer
+            - type: "null"
+        senderNpi:
+          oneOf:
+            - type: integer
+            - type: "null"
+        dlrStatus:
+          type: [string, "null"]
+          maxLength: 10
+          description: A vendor DLR stat to run through the DLR conversion.
+        dlrError:
+          type: [string, "null"]
+          maxLength: 10
+
+    TranslationTestInput:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          $ref: "#/components/schemas/TestMessage"
+        rule:
+          $ref: "#/components/schemas/TranslationRuleInput"
+          description: The unsaved form, to test before saving; the saved rule when omitted.
+
+    MessageState:
+      type: object
+      required: [sender, receiver, text, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrStatus, dlrError, mccmnc]
+      properties:
+        sender:
+          type: string
+        receiver:
+          type: string
+        text:
+          type: string
+        senderTon:
+          type: [integer, "null"]
+        senderNpi:
+          type: [integer, "null"]
+        destTon:
+          type: [integer, "null"]
+        destNpi:
+          type: [integer, "null"]
+        billingType:
+          type: [string, "null"]
+        registeredDelivery:
+          type: [integer, "null"]
+        dlrStatus:
+          type: [string, "null"]
+        dlrError:
+          type: [string, "null"]
+        mccmnc:
+          type: [string, "null"]
+          description: Network of the receiver by dial-code prefix ("All" profile).
+
+    TranslationStep:
+      type: object
+      required: [ruleId, name, matched, fired, blocked, checks, changes, continueAfter]
+      properties:
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        matched:
+          type: boolean
+        fired:
+          type: boolean
+          description: Matched and changed or blocked the message.
+        blocked:
+          type: boolean
+        checks:
+          type: array
+          items:
+            type: object
+            required: [condition, ok, detail]
+            properties:
+              condition:
+                type: string
+              ok:
+                type: boolean
+              detail:
+                type: string
+        changes:
+          type: array
+          description: Field, before, after.
+          items:
+            type: object
+            required: [field, before, after]
+            properties:
+              field:
+                type: string
+              before:
+                type: [string, "null"]
+              after:
+                type: [string, "null"]
+        continueAfter:
+          type: boolean
+
+    TranslationTestResult:
+      type: object
+      required: [before, after, blocked, steps]
+      properties:
+        before:
+          $ref: "#/components/schemas/MessageState"
+        after:
+          $ref: "#/components/schemas/MessageState"
+        blocked:
+          type: boolean
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/TranslationStep"
+
+    TrunkRulesTestInput:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          $ref: "#/components/schemas/TestMessage"
+
+    TrunkRulesTestResult:
+      allOf:
+        - $ref: "#/components/schemas/TranslationTestResult"
+        - type: object
+          required: [hlr]
+          properties:
+            hlr:
+              description: Customer trunks - the first HLR rule whose DNID pattern matches the (translated) receiver.
+              oneOf:
+                - type: object
+                  required: [ruleId, ruleName, providerId, providerName]
+                  properties:
+                    ruleId:
+                      $ref: "#/components/schemas/Id"
+                    ruleName:
+                      type: string
+                    providerId:
+                      $ref: "#/components/schemas/Id"
+                    providerName:
+                      type: string
+                - type: "null"
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -7433,7 +8706,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules]
 
     FilterOperator:
       type: string

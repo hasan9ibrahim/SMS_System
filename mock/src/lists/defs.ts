@@ -8,7 +8,10 @@ import type {
   DialCode,
   DialCodeProfile,
   MoNumber,
+  NumberList,
+  NumberListEntry,
   ProductCategory,
+  TranslationRuleRow,
   QbrStat,
   ReratingRequest,
   RouteMapRow,
@@ -1107,6 +1110,147 @@ export const changeList: ListDef<Change> = {
   mapRow: mapChange,
 };
 
+// ---------------------------------------------------------------- Number lists, Translation rules (§6.4, §13.2)
+
+/** Live rules using number list `nl` (translation match and conversion lists, route rule lists and whitelists). */
+export const numberListUsedBySql = (alias: string) => `(
+  (SELECT count(*) FROM translation_rules x WHERE x.deleted_at IS NULL
+      AND ${alias}.id IN (x.sender_list_id, x.receiver_list_id, x.sender_conversion_list_id))
+  + (SELECT count(*) FROM route_rules x WHERE x.deleted_at IS NULL
+      AND (${alias}.id IN (x.sender_list_id, x.receiver_list_id)
+           OR EXISTS (SELECT 1 FROM route_rule_whitelists w WHERE w.route_rule_id = x.id AND w.number_list_id = ${alias}.id))))::int`;
+const numberListEntries =
+  "(SELECT count(*) FROM number_list_entries x WHERE x.number_list_id = nl.id AND x.deleted_at IS NULL)::int";
+
+export const numberListList: ListDef<NumberList> = {
+  fields: listFields.number_lists,
+  from: "number_lists nl LEFT JOIN users ub ON ub.id = nl.updated_by_id",
+  baseWhere: "nl.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "nl.id" },
+    name: { sql: "nl.name" },
+    listType: { sql: "nl.list_type" },
+    entries: { sql: numberListEntries },
+    usedBy: { sql: numberListUsedBySql("nl") },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "nl.updated_at" },
+    archived: { sql: "(nl.deleted_at IS NOT NULL)" },
+  },
+  search: ["name"],
+  idSql: "nl.id",
+  select: `nl.id, nl.name, nl.list_type, ${numberListEntries} AS entries, ${numberListUsedBySql("nl")} AS used_by,
+    ub.username AS updated_by, nl.updated_at, nl.deleted_at`,
+  mapRow: (r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    listType: r.list_type as NumberList["listType"],
+    entries: Number(r.entries),
+    usedBy: Number(r.used_by),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+export const numberListEntryList: ListDef<NumberListEntry> = {
+  fields: listFields.number_list_entries,
+  from: "number_list_entries ne LEFT JOIN users cb ON cb.id = ne.created_by_id",
+  baseWhere: "ne.deleted_at IS NULL",
+  columns: {
+    id: { sql: "ne.id" },
+    numberListId: { sql: "ne.number_list_id" },
+    value: { sql: "ne.value" },
+    createdBy: { sql: "cb.username" },
+    createdAt: { sql: "ne.inserted_at" },
+  },
+  search: ["value"],
+  idSql: "ne.id",
+  select: "ne.id, ne.number_list_id, ne.value, cb.username AS created_by, ne.inserted_at",
+  mapRow: (r) => ({
+    id: r.id as number,
+    numberListId: r.number_list_id as number,
+    value: r.value as string,
+    createdBy: (r.created_by as string | null) ?? null,
+    createdAt: iso(r.inserted_at)!,
+  }),
+};
+
+/** Trunks a translation rule reaches through its targets (§13.2 Used by). */
+export const translationUsedBySql = (alias: string) => `(SELECT count(*)::int FROM (
+    SELECT 'c' AS k, t.id FROM translation_rule_targets tg JOIN customer_trunks t ON t.deleted_at IS NULL
+       AND (tg.target_type = 'all' OR (tg.target_type = 'trunk' AND tg.target_id = t.id)
+            OR (tg.target_type = 'enterprise' AND tg.target_id = t.enterprise_id)
+            OR (tg.target_type = 'category' AND tg.target_id = t.product_category_id))
+     WHERE tg.translation_rule_id = ${alias}.id AND tg.trunk_kind = 'customer'
+    UNION
+    SELECT 'v', t.id FROM translation_rule_targets tg JOIN vendor_trunks t ON t.deleted_at IS NULL
+       AND (tg.target_type = 'all' OR (tg.target_type = 'trunk' AND tg.target_id = t.id)
+            OR (tg.target_type = 'enterprise' AND tg.target_id = t.enterprise_id)
+            OR (tg.target_type = 'category' AND tg.target_id = t.product_category_id))
+     WHERE tg.translation_rule_id = ${alias}.id AND tg.trunk_kind = 'vendor') u)`;
+/** "3 customer trunks, 1 vendor enterprise", or "Not assigned". */
+const appliesToSql = `COALESCE((SELECT string_agg(CASE WHEN g.target_type = 'all' THEN 'All ' || g.trunk_kind || ' trunks'
+      ELSE g.n || ' ' || g.trunk_kind || ' ' || CASE WHEN g.n = 1 THEN g.target_type
+        WHEN g.target_type = 'category' THEN 'categories' ELSE g.target_type || 's' END END, ', '
+      ORDER BY g.trunk_kind, array_position(ARRAY['all','category','enterprise','trunk'], g.target_type))
+    FROM (SELECT target_type, trunk_kind, count(*) AS n FROM translation_rule_targets
+           WHERE translation_rule_id = tr.id GROUP BY target_type, trunk_kind) g), 'Not assigned')`;
+const trConversionValue = `CASE WHEN tr.sender_conversion IN ('random_number','sender_id_template') THEN cl.name
+    ELSE tr.sender_conversion_value END`;
+
+export const translationRuleList: ListDef<TranslationRuleRow> = {
+  fields: listFields.translation_rules,
+  from: `translation_rules tr LEFT JOIN number_lists cl ON cl.id = tr.sender_conversion_list_id
+    LEFT JOIN users ub ON ub.id = tr.updated_by_id`,
+  baseWhere: "tr.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "tr.id" },
+    name: { sql: "tr.name" },
+    direction: { sql: "tr.direction" },
+    action: { sql: "tr.action" },
+    continueAfter: { sql: "tr.continue_after" },
+    senderPattern: { sql: "tr.sender_pattern" },
+    receiverPattern: { sql: "tr.receiver_pattern" },
+    mccmncs: { sql: "array_to_string(tr.mccmncs, ',')" },
+    contentPattern: { sql: "tr.content_pattern" },
+    senderConversion: { sql: "tr.sender_conversion" },
+    senderConversionValue: { sql: trConversionValue },
+    status: { sql: "tr.status" },
+    appliesTo: { sql: appliesToSql },
+    usedBy: { sql: translationUsedBySql("tr") },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "tr.updated_at" },
+    archived: { sql: "(tr.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "senderPattern", "receiverPattern", "contentPattern"],
+  idSql: "tr.id",
+  select: `tr.id, tr.name, tr.direction, tr.action, tr.continue_after, tr.sender_pattern, tr.receiver_pattern, tr.mccmncs,
+    tr.content_pattern, tr.sender_conversion, ${trConversionValue} AS sender_conversion_value, tr.status,
+    ${appliesToSql} AS applies_to, ${translationUsedBySql("tr")} AS used_by, ub.username AS updated_by, tr.updated_at,
+    tr.deleted_at`,
+  mapRow: (r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    direction: (r.direction as TranslationRuleRow["direction"]) ?? null,
+    action: r.action as TranslationRuleRow["action"],
+    continueAfter: r.continue_after as boolean,
+    senderPattern: (r.sender_pattern as string | null) ?? null,
+    receiverPattern: (r.receiver_pattern as string | null) ?? null,
+    mccmncs: (r.mccmncs as string[]) ?? [],
+    contentPattern: (r.content_pattern as string | null) ?? null,
+    senderConversion: (r.sender_conversion as string | null) ?? null,
+    senderConversionValue: (r.sender_conversion_value as string | null) ?? null,
+    status: r.status as TranslationRuleRow["status"],
+    appliesTo: r.applies_to as string,
+    usedBy: Number(r.used_by),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
 /** Lists answered from PostgreSQL; the Enterprise report runs on the EDR store (api/enterpriseReport.ts). */
 export type PgListId = Exclude<ListId, "enterprise_report">;
 
@@ -1128,4 +1272,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   route_map: routeMapList as ListDef<unknown>,
   rerating_requests: reratingList as ListDef<unknown>,
   qbr_stats: qbrStatList as ListDef<unknown>,
+  number_lists: numberListList as ListDef<unknown>,
+  number_list_entries: numberListEntryList as ListDef<unknown>,
+  translation_rules: translationRuleList as ListDef<unknown>,
 };

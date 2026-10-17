@@ -118,6 +118,29 @@ import {
   updateMoNumber,
   updateProductCategory,
 } from "./api/masterData.js";
+import {
+  addNumberListEntries,
+  archiveNumberList,
+  createNumberList,
+  deleteNumberListEntries,
+  exportNumberListEntries,
+  getNumberListDependencies,
+  importNumberListEntries,
+  queryNumberListEntries,
+  restoreNumberList,
+  updateNumberList,
+} from "./api/numberLists.js";
+import {
+  archiveTranslationRule,
+  cloneTranslationRule,
+  createTranslationRule,
+  getTranslationRule,
+  getTranslationRuleUsedBy,
+  restoreTranslationRule,
+  testTranslationRule,
+  testTrunkRules,
+  updateTranslationRule,
+} from "./api/translationRules.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -143,7 +166,7 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.12.0";
+const VERSION = "0.13.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -294,6 +317,30 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   restoreMoNumber,
   importMoNumbers,
   exportMoNumbers,
+
+  // Number lists and Translation rules (§6.4, §13.2)
+  queryNumberLists: queryList("number_lists"),
+  createNumberList,
+  updateNumberList,
+  getNumberListDependencies,
+  archiveNumberList,
+  restoreNumberList,
+  queryNumberListEntries,
+  addNumberListEntries,
+  deleteNumberListEntries,
+  importNumberListEntries,
+  exportNumberListEntries,
+  queryTranslationRules: queryList("translation_rules"),
+  createTranslationRule,
+  getTranslationRule,
+  updateTranslationRule,
+  getTranslationRuleUsedBy,
+  cloneTranslationRule,
+  archiveTranslationRule,
+  restoreTranslationRule,
+  testTranslationRule,
+  testCustomerTrunkRules: testTrunkRules("customer"),
+  testVendorTrunkRules: testTrunkRules("vendor"),
 
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),

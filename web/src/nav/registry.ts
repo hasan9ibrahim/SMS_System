@@ -306,7 +306,7 @@ export const PAGES: PageDef[] = [
     "/switch/translation-rules",
     "shuffle",
     "§6.4, §13.2",
-    "5",
+    "5.3",
     "Rewrite or block messages, applied straight to trunks",
   ),
   p("switch", "hlr", "HLR", "/switch/hlr", "radar", "§6.5, §13.24", "5", "HLR providers and rules"),
@@ -317,7 +317,7 @@ export const PAGES: PageDef[] = [
     "/switch/number-lists",
     "list",
     "§6.4",
-    "5",
+    "5.3",
     "Lists used by rules and whitelists",
   ),
   p(

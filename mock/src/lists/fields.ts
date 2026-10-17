@@ -603,6 +603,108 @@ export const listFields: Record<ListId, ListFields> = {
     ],
   },
 
+  // Number lists (§6.4) and their entries (§12.4); numberListId (eq) is required for entries.
+  number_lists: {
+    list: "number_lists",
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "Info ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
+      field({
+        field: "listType",
+        label: "Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "random", label: "Random" },
+          { value: "tag", label: "Tag" },
+          { value: "sender_id_template", label: "Sender ID Template" },
+        ],
+      }),
+      field({ field: "entries", label: "Entries", type: "integer", defaultOperator: "gte" }),
+      field({ field: "usedBy", label: "Used by", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between" }),
+      ARCHIVED,
+    ],
+  },
+
+  number_list_entries: {
+    list: "number_list_entries",
+    defaultSort: [{ field: "value", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "Info ID", type: "integer", defaultOperator: "eq" }),
+      field({
+        field: "numberListId",
+        label: "Number list ID",
+        type: "integer",
+        defaultOperator: "eq",
+        operators: ["eq"],
+        hidden: true,
+      }),
+      field({ field: "value", label: "Number", type: "text", defaultOperator: "like" }),
+      field({ field: "createdBy", label: "Created By", type: "text", defaultOperator: "like" }),
+      field({ field: "createdAt", label: "Created Time", type: "datetime", defaultOperator: "between" }),
+    ],
+  },
+
+  // Translation Rule grid (§6.4) plus Applies To / Used by (§13.2).
+  translation_rules: {
+    list: "translation_rules",
+    defaultSort: [{ field: "id", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
+      field({
+        field: "direction",
+        label: "Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "ingress", label: "Ingress" },
+          { value: "egress", label: "Egress" },
+        ],
+      }),
+      field({
+        field: "action",
+        label: "Action",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "allow", label: "Allow" },
+          { value: "block", label: "Block" },
+        ],
+      }),
+      field({ field: "continueAfter", label: "Continues", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "senderPattern", label: "Sender ID", type: "text", defaultOperator: "like" }),
+      field({ field: "receiverPattern", label: "DNID", type: "text", defaultOperator: "like" }),
+      field({ field: "mccmncs", label: "MCCMNC", type: "text", defaultOperator: "like" }),
+      field({ field: "contentPattern", label: "Message Text", type: "text", defaultOperator: "like" }),
+      field({
+        field: "senderConversion",
+        label: "Sender ID Conversion Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "left_strip", label: "Left Strip" },
+          { value: "right_strip", label: "Right Strip" },
+          { value: "prepend", label: "Prepend" },
+          { value: "append", label: "Append" },
+          { value: "translation", label: "Translation" },
+          { value: "random_number", label: "Random Number" },
+          { value: "sender_id_template", label: "Sender ID Template" },
+        ],
+      }),
+      field({ field: "senderConversionValue", label: "Sender ID Conversion", type: "text", defaultOperator: "like" }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
+      field({ field: "appliesTo", label: "Applies To", type: "text", defaultOperator: "like" }),
+      field({ field: "usedBy", label: "Used by", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  },
+
   // Route rules grid (§15.4): the columns of the screenshot, a filter under each header.
   // Traffic columns follow the `window` field (§13.27); the category list comes from the
   // database when the catalogue is served.
@@ -769,6 +871,8 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "mo_number", label: "MO number" },
           { value: "rerating_request", label: "Re-rating request" },
           { value: "qbr_stat", label: "QBR stat" },
+          { value: "number_list", label: "Number list" },
+          { value: "number_list_entry", label: "Number list entry" },
         ],
       }),
       field({

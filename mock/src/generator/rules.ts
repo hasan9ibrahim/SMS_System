@@ -66,8 +66,15 @@ async function generateNumberLists(world: World, rng: Rng, sink: TableSink, prof
       updated_at: new Date(world.anchor - rng.int(0, 10) * DAY),
       deleted_at: null,
     });
-    for (const value of entries) {
-      await sink.insert("number_list_entries", { id: entryId++, number_list_id: id, value, created_by_id: user });
+    // Values are unique per list (migration 012); a repeated draw is skipped, not redrawn.
+    for (const value of new Set(entries)) {
+      await sink.insert("number_list_entries", {
+        id: entryId++,
+        number_list_id: id,
+        value,
+        created_by_id: user,
+        deleted_at: null,
+      });
     }
   }
 }
@@ -498,7 +505,11 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
     },
     { name: "Random numeric sender", direction: "egress", row: { sender_conversion: "random_number" } },
     { name: "Prepend country code", direction: "egress", row: { receiver_conversion: "prepend" } },
-    { name: "Map UNKNOWN DLR to UNDELIV", direction: "ingress", row: { dlr_status_map: json({ UNKNOWN: "UNDELIV" }) } },
+    {
+      name: "Map UNKNOWN DLR to UNDELIV",
+      direction: "ingress",
+      row: { dlr_status_map: json([{ fromStatus: "UNKNOWN", fromError: null, toStatus: "UNDELIV", toError: null }]) },
+    },
     { name: "Sender ID template", direction: "egress", row: { sender_conversion: "sender_id_template" } },
   ];
   let targetId = 1;
@@ -522,6 +533,7 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
       receiver_list_id: null,
       sender_conversion: null,
       sender_conversion_value: null,
+      sender_conversion_list_id: null,
       receiver_conversion: null,
       receiver_conversion_value: null,
       sender_ton: null,
@@ -530,7 +542,7 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
       dest_npi: null,
       billing_type: null,
       registered_delivery: null,
-      dlr_status_map: null,
+      dlr_status_map: json([]),
       sender_min_len: 0,
       sender_max_len: 20,
       receiver_min_len: 0,
@@ -550,18 +562,24 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
       const lists = world.numberLists.filter(
         (l) => l.type === (row.sender_conversion === "random_number" ? "random" : "sender_id_template"),
       );
-      if (lists.length) row.sender_list_id = rng.pick(lists).id;
+      if (lists.length) row.sender_conversion_list_id = rng.pick(lists).id;
     }
+    // Targets (§13.2, option A): mostly specific trunks, some whole enterprises,
+    // categories or all trunks of one side; ~15% stay unassigned (§13.19).
+    const kind = tpl.direction === "ingress" ? "customer" : "vendor";
+    const targets: RuleTarget[] = rng.chance(0.15)
+      ? []
+      : pickTargets(world, rng, kind, [75, 13, 8, 4]).map((t) => ({
+          ruleId: id,
+          ...t,
+          insertAt: rng.chance(0.1) ? "top" : "bottom",
+        }));
+    row.insert_at = targets.some((t) => t.insertAt === "top") ? "top" : "bottom";
     await sink.insert("translation_rules", row);
 
     if (row.status === "active") world.translationRules.activeRuleIds.add(id);
 
-    // Targets (§13.2, option A): mostly specific trunks, some whole enterprises,
-    // categories or all trunks of one side; ~15% stay unassigned (§13.19).
-    if (rng.chance(0.15)) continue;
-    const kind = tpl.direction === "ingress" ? "customer" : "vendor";
-    for (const t of pickTargets(world, rng, kind, [75, 13, 8, 4])) {
-      const target: RuleTarget = { ruleId: id, ...t, insertAt: rng.chance(0.1) ? "top" : "bottom" };
+    for (const target of targets) {
       world.translationRules.targets.push(target);
       await sink.insert("translation_rule_targets", {
         id: targetId++,

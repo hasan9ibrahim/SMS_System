@@ -90,11 +90,16 @@ export function useDeleteDialCodes() {
 
 /** What an import dialog loads into. */
 export type ImportTarget =
-  { kind: "destinations" } | { kind: "dial_codes"; profileId: number; profile: string } | { kind: "mo_numbers" };
+  | { kind: "destinations" }
+  | { kind: "dial_codes"; profileId: number; profile: string }
+  | { kind: "mo_numbers" }
+  | { kind: "number_list"; listId: number };
 
 export function runImport(target: ImportTarget, body: ImportRequest): Promise<ImportResult> {
   if (target.kind === "destinations") return unwrap(api.POST("/destinations/import", { body }));
   if (target.kind === "mo_numbers") return unwrap(api.POST("/mo-numbers/import", { body }));
+  if (target.kind === "number_list")
+    return unwrap(api.POST("/number-lists/{id}/import", { params: { path: { id: target.listId } }, body }));
   return unwrap(api.POST("/dial-code-profiles/{id}/import", { params: { path: { id: target.profileId } }, body }));
 }
 

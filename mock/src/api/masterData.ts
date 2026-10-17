@@ -51,17 +51,18 @@ type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
 
 /** One record by id through its list definition, archived ones included. */
-async function load<Row>(db: Db, def: ListDef<Row>, id: number): Promise<Row | null> {
+export async function load<Row>(db: Db, def: ListDef<Row>, id: number): Promise<Row | null> {
   const from = typeof def.from === "function" ? def.from({} as ListQuery) : def.from;
   const { rows } = await db.query(`SELECT ${def.select} FROM ${from} WHERE ${def.idSql} = $1`, [id]);
   return rows[0] ? def.mapRow(rows[0]) : null;
 }
 
-const notFound = (reply: FastifyReply, what: string, id: number) => sendProblem(reply, 404, `${what} ${id} not found`);
-const conflict = (reply: FastifyReply, detail: string) => sendProblem(reply, 409, detail);
+export const notFound = (reply: FastifyReply, what: string, id: number) =>
+  sendProblem(reply, 404, `${what} ${id} not found`);
+export const conflict = (reply: FastifyReply, detail: string) => sendProblem(reply, 409, detail);
 
 /** Field-level diff over the given keys (undo restores each, §13.10). */
-function diffFields(id: number, before: object, after: object, keys: string[]): DiffEntry[] {
+export function diffFields(id: number, before: object, after: object, keys: string[]): DiffEntry[] {
   const b = before as Record<string, unknown>;
   const a = after as Record<string, unknown>;
   return keys
@@ -70,7 +71,7 @@ function diffFields(id: number, before: object, after: object, keys: string[]): 
 }
 
 /** Archive or restore one record as one change. Restore is for administrators (§13.29). */
-async function setArchived(
+export async function setArchived(
   request: FastifyRequest,
   reply: FastifyReply,
   pool: pg.Pool,
@@ -109,7 +110,7 @@ async function setArchived(
 
 // ---------------------------------------------------------------- CSV
 
-const csvCell = (v: unknown) => {
+export const csvCell = (v: unknown) => {
   if (v == null) return "";
   const s = String(v);
   return /[",;\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
@@ -194,7 +195,7 @@ async function exportList<Row>(
 const MAX_ISSUES = 200;
 
 /** Collects an import's counts and issues; `apply` runs only when it is not a dry run and nothing failed. */
-class ImportRun {
+export class ImportRun {
   readonly errors: ImportIssue[] = [];
   readonly warnings: ImportIssue[] = [];
   readonly kept: ImportIssue[] = [];

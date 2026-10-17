@@ -40,7 +40,9 @@ export type RecordKind =
   | "product_category"
   | "destination"
   | "dial_code_profile"
-  | "mo_number";
+  | "mo_number"
+  | "number_list"
+  | "translation_rule";
 
 export interface Saved<T> {
   record: T;
@@ -237,6 +239,9 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   if (kind === "destination") return unwrap(api.GET("/destinations/{id}/dependencies", params));
   // Nothing depends on a dial-code profile or an MO entry (§6.1).
   if (kind === "dial_code_profile" || kind === "mo_number") return Promise.resolve({ blocked: false, items: [] });
+  if (kind === "number_list") return unwrap(api.GET("/number-lists/{id}/dependencies", params));
+  // A translation rule just stops running on its trunks (§13.2); nothing blocks it.
+  if (kind === "translation_rule") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -253,6 +258,8 @@ export function useArchive(kind: RecordKind) {
       if (kind === "destination") return unwrap(api.POST("/destinations/{id}/archive", req));
       if (kind === "dial_code_profile") return unwrap(api.POST("/dial-code-profiles/{id}/archive", req));
       if (kind === "mo_number") return unwrap(api.POST("/mo-numbers/{id}/archive", req));
+      if (kind === "number_list") return unwrap(api.POST("/number-lists/{id}/archive", req));
+      if (kind === "translation_rule") return unwrap(api.POST("/translation-rules/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -272,6 +279,8 @@ export function useRestore(kind: RecordKind) {
       if (kind === "destination") return unwrap(api.POST("/destinations/{id}/restore", req));
       if (kind === "dial_code_profile") return unwrap(api.POST("/dial-code-profiles/{id}/restore", req));
       if (kind === "mo_number") return unwrap(api.POST("/mo-numbers/{id}/restore", req));
+      if (kind === "number_list") return unwrap(api.POST("/number-lists/{id}/restore", req));
+      if (kind === "translation_rule") return unwrap(api.POST("/translation-rules/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

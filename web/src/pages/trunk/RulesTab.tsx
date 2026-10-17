@@ -5,11 +5,13 @@
 import { useEffect, useState } from "react";
 import type { TrunkRule, TrunkRulesInput } from "@sms/contract";
 import { useSaveTrunkRules, useTrunkRules, type TrunkKind } from "../../api/records";
+import { testTrunkRules } from "../../api/switchRules";
 import { useNotifySaved } from "../../history/undo";
 import { HeaderAction, type SectionProps } from "../../records/parts";
 import { toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
+import { TranslationTest } from "../switch/TranslationTest";
 
 interface Row extends TrunkRule {
   detach: boolean;
@@ -218,6 +220,18 @@ export function RulesTab({
       {kind === "customer" && (
         <RuleTable title="HLR rules" rows={hlr} onChange={setHlr} withContinue={false} disabled={archived} />
       )}
+      <section className="fsection">
+        <header>
+          <h2>Test</h2>
+          <span className="muted small">
+            A sample message through this trunk&apos;s rules{kind === "customer" ? " and HLR rules" : ""} (§13.2)
+          </span>
+        </header>
+        <TranslationTest
+          run={(m) => testTrunkRules(kind, id, m)}
+          note={dirty ? "Runs the saved order: save the rules first to test your changes." : undefined}
+        />
+      </section>
     </>
   );
 }

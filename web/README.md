@@ -150,6 +150,21 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Number lists and Translation rules (build step 5.3)
+
+- **Number lists** (`/switch/number-lists`, `src/pages/switch/NumberListsPage.tsx`, §6.4, §12.4): Tag, Random and
+  Sender ID Template lists with entry count and Used by. Open a list (`?list=`) for its entries: Add (paste one per
+  line), bulk Delete, Import List (dry run, add or replace) and Export. Delete is blocked while rules use a list.
+- **Translation rules** (`/switch/translation-rules`, `TranslationRulesPage.tsx`, §6.4, §13.2): the §6.4 grid plus
+  Applies To and Used by. The form holds every §6.4 field with Match / Not Match per condition, "+ New list" inside
+  the list pickers, and the Applies To block (trunks, enterprises, categories or all trunks per side), so saving
+  applies the rule at once. Saving a rule shared by several trunks asks first; Clone makes an inactive copy;
+  Duplicate to trunk makes the variant for one trunk and switches the original off there. Detail: Rule, Used by,
+  Test, History.
+- **Test** (`TranslationTest.tsx`, §13.2): a sample message (sender, receiver, text, TON/NPI, vendor DLR) through
+  one rule (saved, or the unsaved form from the editor) or a trunk's whole list (trunk Rules tab, with the HLR
+  rule and provider on customer trunks): before → after values and every check per rule.
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag
