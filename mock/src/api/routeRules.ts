@@ -205,14 +205,16 @@ async function labels(db: Db, rule: RuleCore): Promise<RouteRuleDetail["labels"]
     ids.length
       ? db.query(sql, [ids]).then((r) => r.rows.map((x) => ({ id: Number(x.id), name: x.name as string })))
       : [];
-  const [customerTrunks, categories, vendorTrunks, numberLists, groups] = await Promise.all([
+  const policyIds = rule.hlrAction ? [rule.hlrAction.policyId] : [];
+  const [customerTrunks, categories, vendorTrunks, numberLists, groups, hlrPolicies] = await Promise.all([
     q("SELECT id, name FROM customer_trunks WHERE id = ANY($1)", trunkIds),
     q("SELECT id, name FROM product_categories WHERE id = ANY($1)", [...rule.categoryIds, ...rule.vendorCategoryIds]),
     q("SELECT id, name FROM vendor_trunks WHERE id = ANY($1)", vendorIds),
     q("SELECT id, name FROM number_lists WHERE id = ANY($1)", listIds),
     q("SELECT id, name FROM route_rule_groups WHERE id = ANY($1)", groupIds),
+    q("SELECT id, name FROM hlr_policies WHERE id = ANY($1)", policyIds),
   ]);
-  return { customerTrunks, categories, vendorTrunks, numberLists, groups };
+  return { customerTrunks, categories, vendorTrunks, numberLists, groups, hlrPolicies };
 }
 
 export async function loadRule(db: Db, id: number): Promise<RouteRuleDetail | null> {
@@ -363,6 +365,14 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
       "group",
     ),
   ]);
+  // HLR action (§13.24): a live policy, and trunks that are among the rule's customer trunks.
+  if (r.hlrAction) {
+    const { rows } = await db.query("SELECT status FROM hlr_policies WHERE id = $1 AND deleted_at IS NULL", [
+      r.hlrAction.policyId,
+    ]);
+    if (!rows[0]) errors.push({ path: "/hlrAction/policyId", message: "unknown or deleted HLR policy" });
+    await exists("customer_trunks", r.hlrAction.customerTrunkIds, "/hlrAction/customerTrunkIds", "customer trunk");
+  }
   if (r.mccmncs.length) {
     const { rows } = await db.query("SELECT mccmnc FROM mccmnc WHERE mccmnc = ANY($1) AND deleted_at IS NULL", [
       r.mccmncs,

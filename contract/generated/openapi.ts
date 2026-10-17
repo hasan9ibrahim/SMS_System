@@ -2453,6 +2453,508 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/hlr-providers/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List HLR providers (server-side filter, sort and paging)
+     * @description HLR Provider grid (§6.5) with live status and the last 24 hours of lookups, success rate, response
+     *     time and cost (§13.24). Hidden `archived` field = deleted providers.
+     */
+    post: operations["queryHlrProviders"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an HLR provider
+     * @description One undoable change.
+     */
+    post: operations["createHlrProvider"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One HLR provider
+     * @description Every field of the form.
+     */
+    get: operations["getHlrProvider"];
+    /**
+     * Change an HLR provider
+     * @description Saves the whole record; the change lists the fields that differ. One undoable change.
+     */
+    put: operations["updateHlrProvider"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses an HLR provider (safe delete, §13.29)
+     * @description HLR rules and HLR policies using the provider; both block archiving.
+     */
+    get: operations["getHlrProviderDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) an HLR provider (§13.29)
+     * @description Blocked while HLR rules or policies use it (409) unless an administrator overrides with a reason.
+     */
+    post: operations["archiveHlrProvider"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived HLR provider (§13.29)
+     * @description One undoable change.
+     */
+    post: operations["restoreHlrProvider"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-provider-rates/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List a provider's per-destination lookup prices
+     * @description HLR Rate Information (§6.5): the `providerId` filter (eq) is required. A destination without a price
+     *     uses the provider's default rate.
+     */
+    post: operations["queryHlrProviderRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}/rates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set one destination's lookup price
+     * @description Adds or changes the price for one MCCMNC code (a country's "all networks" code prices the whole
+     *     country). One undoable change.
+     */
+    put: operations["setHlrProviderRate"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}/rates/delete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Remove destination prices
+     * @description Archives the prices; those destinations fall back to the default rate. One undoable change.
+     */
+    post: operations["deleteHlrProviderRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}/rates/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import Rate (dry run first)
+     * @description CSV with `mccmnc` and `rate` columns (§6.5 Import Rate). In `replace` mode prices missing from
+     *     the file are removed. All or nothing; one undoable change.
+     */
+    post: operations["importHlrProviderRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-providers/{id}/rates/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export Rate as CSV
+     * @description Columns mccmnc, country, network, rate, currency; the file can be imported again.
+     */
+    get: operations["exportHlrProviderRates"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-rules/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List HLR rules (server-side filter, sort and paging)
+     * @description HLR Rule grid (§6.5) with what each rule applies to and how many customer trunks it touches
+     *     (§13.2, §13.24).
+     */
+    post: operations["queryHlrRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an HLR rule
+     * @description One undoable change.
+     */
+    post: operations["createHlrRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-rules/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One HLR rule
+     * @description Every field of the form.
+     */
+    get: operations["getHlrRule"];
+    /**
+     * Change an HLR rule
+     * @description Saves the whole record; the change lists the fields that differ. One undoable change.
+     */
+    put: operations["updateHlrRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) an HLR rule (§13.29)
+     * @description The rule stops running on every trunk it touched. One undoable change.
+     */
+    post: operations["archiveHlrRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-rules/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived HLR rule (§13.29)
+     * @description One undoable change.
+     */
+    post: operations["restoreHlrRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-rules/{id}/used-by": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Customer trunks an HLR rule touches (Used by, §13.2)
+     * @description Every customer trunk the rule reaches through its targets, with how and whether it is switched off
+     *     on that trunk.
+     */
+    get: operations["getHlrRuleUsedBy"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-policies/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List HLR policys (server-side filter, sort and paging)
+     * @description HLR policies (§13.24): per destination, an ordered list of providers (or "auto") and cache times.
+     *     Route rules use a policy in their HLR action.
+     */
+    post: operations["queryHlrPolicies"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-policies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an HLR policy
+     * @description One undoable change.
+     */
+    post: operations["createHlrPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-policies/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One HLR policy
+     * @description Every field of the form.
+     */
+    get: operations["getHlrPolicy"];
+    /**
+     * Change an HLR policy
+     * @description Saves the whole record; the change lists the fields that differ. One undoable change.
+     */
+    put: operations["updateHlrPolicy"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-policies/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses an HLR policy (safe delete, §13.29)
+     * @description Route rules whose HLR action uses the policy; they block archiving.
+     */
+    get: operations["getHlrPolicyDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-policies/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) an HLR policy (§13.29)
+     * @description Blocked while route rules use it (409) unless an administrator overrides with a reason.
+     */
+    post: operations["archiveHlrPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-policies/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived HLR policy (§13.29)
+     * @description One undoable change.
+     */
+    post: operations["restoreHlrPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-policies/{id}/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Which provider a number would be looked up with (§13.24)
+     * @description Resolves the number's network ("All" dial-code profile), picks the policy entry (the network's
+     *     code, else its country, else the catch-all) and lists the providers in the order they would be
+     *     tried, with price, success rate and status; for "auto", the cheapest provider meeting the minimum
+     *     success rate goes first.
+     */
+    post: operations["testHlrPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -4643,6 +5145,312 @@ export type components = {
       } | null;
     };
     /**
+     * @description hlr: live HLR lookup; mnp: number portability (MNP / NPQ); number_check: validity check.
+     * @enum {string}
+     */
+    HlrProviderType: "hlr" | "mnp" | "number_check";
+    /**
+     * @description From the last 24 hours: down = success under 50 % (or no answer), slow = average response over 80 % of the timeout, inactive = switched off.
+     * @enum {string}
+     */
+    HlrLiveStatus: "up" | "slow" | "down" | "inactive";
+    /** @description Where each value is found in the provider's response (§6.5 response-mapping captions); a JSON path or a field name. Null = not provided. */
+    HlrResponseMapping: {
+      mcc: string;
+      mnc: string;
+      mccmnc: string;
+      oldMcc: string | null;
+      oldMnc: string | null;
+      oldMccmnc: string | null;
+      ported: string | null;
+      errorCode: string | null;
+      errorString: string | null;
+      /** @description Comma-separated codes that mean a successful lookup, e.g. "0,1". */
+      successCodes: string | null;
+      numberCheck: string | null;
+      dnidScore: string | null;
+    };
+    HlrProviderFields: {
+      name?: string;
+      providerType?: components["schemas"]["HlrProviderType"];
+      /** @description Request template; {DNID} is replaced by the number. */
+      url?: string;
+      username?: string | null;
+      /** @description One "Name: value" per line. */
+      extraHeaders?: string | null;
+      /** @description POST body template ({DNID} is replaced); null = GET. */
+      postData?: string | null;
+      currency?: string;
+      /** @description Price per live lookup for destinations without their own price. */
+      defaultRate?: number;
+      /** @description Enable Caching (0-7 days); a policy can set its own cache times. */
+      cacheDays?: number;
+      timeoutMs?: number;
+      /** @description Spend per day after which the provider is skipped (null = no limit). */
+      dailyBudget?: number | null;
+      status?: components["schemas"]["RecordStatus"];
+      responseMapping?: components["schemas"]["HlrResponseMapping"];
+    };
+    HlrProviderInput: WithRequired<
+      components["schemas"]["HlrProviderFields"],
+      | "name"
+      | "providerType"
+      | "url"
+      | "username"
+      | "extraHeaders"
+      | "postData"
+      | "currency"
+      | "defaultRate"
+      | "cacheDays"
+      | "timeoutMs"
+      | "dailyBudget"
+      | "status"
+      | "responseMapping"
+    > & {
+      /** @description Write-only. Null keeps the stored password; an empty string clears it. */
+      password: string | null;
+    };
+    /** @description Last 24 hours of EDRs (ending at the newest EDR). */
+    HlrProviderStats: {
+      liveStatus: components["schemas"]["HlrLiveStatus"];
+      lookups: number;
+      liveLookups: number;
+      cachedLookups: number;
+      successPct: number | null;
+      avgResponseMs: number | null;
+      /** @description Platform currency. */
+      cost: number;
+      ported: number;
+    };
+    HlrProviderDetail: WithRequired<
+      components["schemas"]["HlrProviderFields"],
+      | "name"
+      | "providerType"
+      | "url"
+      | "username"
+      | "extraHeaders"
+      | "postData"
+      | "currency"
+      | "defaultRate"
+      | "cacheDays"
+      | "timeoutMs"
+      | "dailyBudget"
+      | "status"
+      | "responseMapping"
+    > & {
+      id: components["schemas"]["Id"];
+      /** @description The password is never returned (§13.22). */
+      passwordSet: boolean;
+      stats: components["schemas"]["HlrProviderStats"];
+      rules: number;
+      policies: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    HlrProviderSaved: {
+      record: components["schemas"]["HlrProviderDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    HlrProviderRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      providerType: components["schemas"]["HlrProviderType"];
+      currency: string;
+      defaultRate: number;
+      cacheDays: number;
+      timeoutMs: number;
+      dailyBudget: number | null;
+      status: components["schemas"]["RecordStatus"];
+      liveStatus: components["schemas"]["HlrLiveStatus"];
+      lookups: number;
+      successPct: number | null;
+      avgResponseMs: number | null;
+      cost: number;
+      /** @description Destinations with their own price. */
+      rates: number;
+      rules: number;
+      policies: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    HlrProviderPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["HlrProviderRow"][];
+    };
+    HlrProviderRate: {
+      id: components["schemas"]["Id"];
+      providerId: components["schemas"]["Id"];
+      destinationId: components["schemas"]["Id"];
+      mccmnc: string;
+      country: string;
+      network: string;
+      rate: number;
+      currency: string;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    HlrProviderRatePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["HlrProviderRate"][];
+    };
+    HlrProviderRateInput: {
+      destinationId: components["schemas"]["Id"];
+      rate: number;
+    };
+    HlrProviderRateSaved: {
+      record: components["schemas"]["HlrProviderRate"];
+      change: components["schemas"]["Change"] | null;
+    };
+    /** @description What an HLR rule applies to (customer trunks only, §13.24). */
+    HlrTargetInput: {
+      /** @enum {string} */
+      type: "trunk" | "enterprise" | "category" | "all";
+      /** @description Customer trunk, enterprise or product category ID; null for all. */
+      id: components["schemas"]["Id"] | null;
+    };
+    HlrTarget: {
+      /** @enum {string} */
+      type: "trunk" | "enterprise" | "category" | "all";
+      id: components["schemas"]["Id"] | null;
+      label: string;
+    };
+    HlrRuleFields: {
+      name?: string;
+      providerId?: components["schemas"]["Id"];
+      /** @description Regular expression on the receiver (after translation), e.g. ^44. */
+      dnidPattern?: string;
+      status?: components["schemas"]["RecordStatus"];
+      /**
+       * @description Where the rule runs on trunks that have no position for it.
+       * @enum {string}
+       */
+      insertAt?: "top" | "bottom";
+    };
+    HlrRuleInput: WithRequired<
+      components["schemas"]["HlrRuleFields"],
+      "name" | "providerId" | "dnidPattern" | "status" | "insertAt"
+    > & {
+      targets: components["schemas"]["HlrTargetInput"][];
+    };
+    HlrRuleDetail: WithRequired<
+      components["schemas"]["HlrRuleFields"],
+      "name" | "providerId" | "dnidPattern" | "status" | "insertAt"
+    > & {
+      id: components["schemas"]["Id"];
+      providerName: string;
+      targets: components["schemas"]["HlrTarget"][];
+      usedBy: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    HlrRuleSaved: {
+      record: components["schemas"]["HlrRuleDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    HlrRuleRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      providerId: components["schemas"]["Id"];
+      provider: string;
+      providerType: components["schemas"]["HlrProviderType"];
+      dnidPattern: string;
+      status: components["schemas"]["RecordStatus"];
+      appliesTo: string;
+      usedBy: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    HlrRulePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["HlrRuleRow"][];
+    };
+    /** @description One destination of a policy (§13.24). */
+    HlrPolicyEntry: {
+      /** @description MCCMNC code, or a 3-digit MCC for the whole country; null = every other destination. */
+      code: string | null;
+      /**
+       * @description ordered: try the providers in order, the next on error or timeout; auto: the cheapest provider meeting minSuccessPct first, then the others by price.
+       * @enum {string}
+       */
+      mode: "ordered" | "auto";
+      providerIds: components["schemas"]["Id"][];
+      /** @description auto only. */
+      minSuccessPct: number | null;
+      /** @description How long a "ported" answer is reused (cached lookups are free and instant). */
+      cacheHoursPorted: number;
+      cacheHoursNotPorted: number;
+    };
+    HlrPolicyFields: {
+      name?: string;
+      status?: components["schemas"]["RecordStatus"];
+      entries?: components["schemas"]["HlrPolicyEntry"][];
+    };
+    HlrPolicyInput: WithRequired<
+      components["schemas"]["HlrPolicyFields"],
+      "name" | "status" | "entries"
+    >;
+    HlrPolicyDetail: WithRequired<
+      components["schemas"]["HlrPolicyFields"],
+      "name" | "status" | "entries"
+    > & {
+      id: components["schemas"]["Id"];
+      /** @description Names of the providers the entries use. */
+      providers: components["schemas"]["Named"][];
+      /** @description Live route rules whose HLR action uses the policy. */
+      usedBy: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    HlrPolicySaved: {
+      record: components["schemas"]["HlrPolicyDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    HlrPolicyRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      status: components["schemas"]["RecordStatus"];
+      /** @description Entries with a code. */
+      destinations: number;
+      hasCatchAll: boolean;
+      providerNames: string;
+      usedBy: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    HlrPolicyPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["HlrPolicyRow"][];
+    };
+    HlrPolicyTestInput: {
+      receiver: string;
+    };
+    HlrPolicyTestResult: {
+      mccmnc: string | null;
+      destination: string | null;
+      /** @description The entry that applies; null = the policy has none for this number (no HLR). */
+      entry: components["schemas"]["HlrPolicyEntry"] | null;
+      /** @description In the order they would be tried. */
+      providers: {
+        providerId: components["schemas"]["Id"];
+        name: string;
+        /** @description Price per live lookup for this destination. */
+        rate: number;
+        currency: string;
+        successPct: number | null;
+        liveStatus: components["schemas"]["HlrLiveStatus"];
+        /** @description Why the provider would be skipped (inactive, down, under the minimum success rate), else null. */
+        skipped: string | null;
+      }[];
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -4693,9 +5501,9 @@ export type components = {
       /** @enum {string} */
       minMarginUnit?: "amount" | "percent";
     };
-    /** @description Do HLR with a policy for the chosen customer trunks of the rule (§13.24); empty list = all of them. */
+    /** @description Do HLR with a policy for the chosen customer trunks of the rule (§13.24); empty list = all of them. Wins over the trunk's HLR rules for that traffic. */
     HlrAction: {
-      policy: string;
+      policyId: components["schemas"]["Id"];
       customerTrunkIds: components["schemas"]["Id"][];
     };
     /** @description One vendor on a route level (§6.3) with an optional warm-up threshold (§13.27). */
@@ -4854,6 +5662,7 @@ export type components = {
         vendorTrunks: components["schemas"]["Named"][];
         numberLists: components["schemas"]["Named"][];
         groups: components["schemas"]["Named"][];
+        hlrPolicies: components["schemas"]["Named"][];
       };
       archived: components["schemas"]["Archived"];
     } & components["schemas"]["Audit"];
@@ -5040,7 +5849,11 @@ export type components = {
       | "qbr_stats"
       | "number_lists"
       | "number_list_entries"
-      | "translation_rules";
+      | "translation_rules"
+      | "hlr_providers"
+      | "hlr_provider_rates"
+      | "hlr_rules"
+      | "hlr_policies";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -9274,6 +10087,778 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TrunkRulesTestResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryHlrProviders: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of HLR providers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createHlrProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrProviderInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getHlrProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The HLR provider */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateHlrProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrProviderInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getHlrProviderDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveHlrProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreHlrProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryHlrProviderRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of prices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderRatePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setHlrProviderRate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrProviderRateInput"];
+      };
+    };
+    responses: {
+      /** @description The price, with the change (null when unchanged) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrProviderRateSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  deleteHlrProviderRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IdList"];
+      };
+    };
+    responses: {
+      /** @description The change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChangeResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  importHlrProviderRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportRequest"];
+      };
+    };
+    responses: {
+      /** @description What the import adds, changes and removes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportHlrProviderRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryHlrRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of HLR rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrRulePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createHlrRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getHlrRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The HLR rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrRuleDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateHlrRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveHlrRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreHlrRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getHlrRuleUsedBy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The trunks */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RuleUsedBy"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryHlrPolicies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of HLR policys */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrPolicyPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createHlrPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrPolicyInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrPolicySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getHlrPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The HLR policy */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrPolicyDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateHlrPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrPolicyInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrPolicySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getHlrPolicyDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveHlrPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrPolicySaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreHlrPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrPolicySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  testHlrPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HlrPolicyTestInput"];
+      };
+    };
+    responses: {
+      /** @description The result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HlrPolicyTestResult"];
         };
       };
       400: components["responses"]["BadRequest"];

@@ -150,6 +150,18 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## HLR (build step 5.4)
+
+- **HLR** (`/switch/hlr`, `src/pages/switch/hlr/`, §6.5, §13.24): one page with three views (`?view=`).
+  - **Providers**: live status (up, slow, down) and the last 24 hours of lookups, success, response time and cost;
+    the §6.5 form with request template, credentials (password write-only), headers, POST data and the response
+    mapping. **Prices** (`?provider=`): per-destination price per lookup, Set price, Import Rate, Export Rate.
+  - **Rules**: provider + DNID pattern (with a "try a number" check) + Applies To customer trunks, enterprises,
+    categories or all; Used by; the trunk Rules tab orders them per trunk.
+  - **Policies**: per destination (network, country or catch-all) the providers in order or "auto" with a minimum
+    success rate, and cache hours for ported and not-ported answers. Test shows which provider a number gets.
+- Route Rules' **HLR action** now picks a policy from the list (§13.24).
+
 ## Number lists and Translation rules (build step 5.3)
 
 - **Number lists** (`/switch/number-lists`, `src/pages/switch/NumberListsPage.tsx`, §6.4, §12.4): Tag, Random and

@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import type {
   CompareOp,
   HlrAction,
+  HlrPolicyRow,
   MatchMode,
   RevenueCondition,
   RouteRuleDetail,
@@ -12,6 +13,7 @@ import type {
   TpsCondition,
 } from "@sms/contract";
 import { useReference } from "../../api/records";
+import { ListLookup } from "../../records/parts";
 import { Button, Modal } from "../../ui/primitives";
 import { CONDITION_LABELS, type ConditionKey } from "./ruleModel";
 import { DestinationPick, TrunkPick, type Picked } from "./pickers";
@@ -185,7 +187,8 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   const [startsAt, setStartsAt] = useState(toLocal(rule.startsAt));
   const [stopsAt, setStopsAt] = useState(toLocal(rule.stopsAt));
   const [ported, setPorted] = useState<boolean>(rule.hlrPorted ?? true);
-  const [hlr, setHlr] = useState<HlrAction>(rule.hlrAction ?? { policy: "default", customerTrunkIds: [] });
+  // policyId 0 = not chosen yet
+  const [hlr, setHlr] = useState<HlrAction>(rule.hlrAction ?? { policyId: 0, customerTrunkIds: [] });
 
   const between = (op: CompareOp) => op === "between";
   switch (key) {
@@ -482,10 +485,18 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
       return {
         form: (
           <>
-            <label className="field">
+            <div className="field">
               <span>HLR policy</span>
-              <input value={hlr.policy} maxLength={100} onChange={(e) => setHlr({ ...hlr, policy: e.target.value })} />
-            </label>
+              <ListLookup<HlrPolicyRow>
+                list="hlr_policies"
+                value={hlr.policyId || null}
+                onChange={(p) => setHlr({ ...hlr, policyId: p?.id ?? 0 })}
+                labelOf={(p) => p.name}
+                detailOf={(p) => `${p.destinations} destinations${p.hasCatchAll ? " + catch-all" : ""} · ${p.status}`}
+                placeholder="Choose a policy…"
+              />
+              <small className="muted">Which providers are asked per destination: Switch › HLR › Policies.</small>
+            </div>
             <div className="field">
               <span>For the rule's customer trunks</span>
               {own.length === 0 ? (
@@ -515,7 +526,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
             </div>
           </>
         ),
-        patch: () => (hlr.policy.trim() ? { hlrAction: { ...hlr, policy: hlr.policy.trim() } } : "Enter the policy."),
+        patch: () => (hlr.policyId ? { hlrAction: hlr } : "Choose the HLR policy."),
       };
     }
     case "multipart":

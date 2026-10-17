@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.14.0
+  version: 0.15.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -52,7 +52,7 @@ tags:
   - name: reports
     description: Traffic reports from the EDR store (§10, §13.31)
   - name: switch
-    description: Switch rules - translation rules, number lists (§6.4, §13.2)
+    description: Switch rules - translation rules, number lists, HLR providers, rules and policies (§6.4, §6.5, §13.2, §13.24)
   - name: reference
     description: Product reference data - categories, countries, MCCMNC codes, Master Table, MO reference book (§6.1)
 
@@ -3714,6 +3714,781 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TrunkRulesTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/query:
+    post:
+      tags: [switch]
+      operationId: queryHlrProviders
+      summary: "List HLR providers (server-side filter, sort and paging)"
+      description: |
+        HLR Provider grid (§6.5) with live status and the last 24 hours of lookups, success rate, response
+        time and cost (§13.24). Hidden `archived` field = deleted providers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of HLR providers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers:
+    post:
+      tags: [switch]
+      operationId: createHlrProvider
+      summary: "Add an HLR provider"
+      description: |
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrProviderInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}:
+    get:
+      tags: [switch]
+      operationId: getHlrProvider
+      summary: "One HLR provider"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The HLR provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [switch]
+      operationId: updateHlrProvider
+      summary: "Change an HLR provider"
+      description: |
+        Saves the whole record; the change lists the fields that differ. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrProviderInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}/dependencies:
+    get:
+      tags: [switch]
+      operationId: getHlrProviderDependencies
+      summary: "What uses an HLR provider (safe delete, §13.29)"
+      description: |
+        HLR rules and HLR policies using the provider; both block archiving.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveHlrProvider
+      summary: "Archive (delete) an HLR provider (§13.29)"
+      description: |
+        Blocked while HLR rules or policies use it (409) unless an administrator overrides with a reason.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreHlrProvider
+      summary: "Restore an archived HLR provider (§13.29)"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-provider-rates/query:
+    post:
+      tags: [switch]
+      operationId: queryHlrProviderRates
+      summary: "List a provider's per-destination lookup prices"
+      description: |
+        HLR Rate Information (§6.5): the `providerId` filter (eq) is required. A destination without a price
+        uses the provider's default rate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of prices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderRatePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}/rates:
+    put:
+      tags: [switch]
+      operationId: setHlrProviderRate
+      summary: "Set one destination's lookup price"
+      description: |
+        Adds or changes the price for one MCCMNC code (a country's "all networks" code prices the whole
+        country). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrProviderRateInput"
+      responses:
+        "200":
+          description: The price, with the change (null when unchanged)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrProviderRateSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}/rates/delete:
+    post:
+      tags: [switch]
+      operationId: deleteHlrProviderRates
+      summary: "Remove destination prices"
+      description: |
+        Archives the prices; those destinations fall back to the default rate. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdList"
+      responses:
+        "200":
+          description: The change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}/rates/import:
+    post:
+      tags: [switch]
+      operationId: importHlrProviderRates
+      summary: "Import Rate (dry run first)"
+      description: |
+        CSV with `mccmnc` and `rate` columns (§6.5 Import Rate). In `replace` mode prices missing from
+        the file are removed. All or nothing; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRequest"
+      responses:
+        "200":
+          description: What the import adds, changes and removes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-providers/{id}/rates/export:
+    get:
+      tags: [switch]
+      operationId: exportHlrProviderRates
+      summary: "Export Rate as CSV"
+      description: |
+        Columns mccmnc, country, network, rate, currency; the file can be imported again.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-rules/query:
+    post:
+      tags: [switch]
+      operationId: queryHlrRules
+      summary: "List HLR rules (server-side filter, sort and paging)"
+      description: |
+        HLR Rule grid (§6.5) with what each rule applies to and how many customer trunks it touches
+        (§13.2, §13.24).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of HLR rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrRulePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-rules:
+    post:
+      tags: [switch]
+      operationId: createHlrRule
+      summary: "Add an HLR rule"
+      description: |
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrRuleInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-rules/{id}:
+    get:
+      tags: [switch]
+      operationId: getHlrRule
+      summary: "One HLR rule"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The HLR rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrRuleDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [switch]
+      operationId: updateHlrRule
+      summary: "Change an HLR rule"
+      description: |
+        Saves the whole record; the change lists the fields that differ. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrRuleInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-rules/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveHlrRule
+      summary: "Archive (delete) an HLR rule (§13.29)"
+      description: |
+        The rule stops running on every trunk it touched. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrRuleSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-rules/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreHlrRule
+      summary: "Restore an archived HLR rule (§13.29)"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-rules/{id}/used-by:
+    get:
+      tags: [switch]
+      operationId: getHlrRuleUsedBy
+      summary: "Customer trunks an HLR rule touches (Used by, §13.2)"
+      description: |
+        Every customer trunk the rule reaches through its targets, with how and whether it is switched off
+        on that trunk.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The trunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleUsedBy"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-policies/query:
+    post:
+      tags: [switch]
+      operationId: queryHlrPolicies
+      summary: "List HLR policys (server-side filter, sort and paging)"
+      description: |
+        HLR policies (§13.24): per destination, an ordered list of providers (or "auto") and cache times.
+        Route rules use a policy in their HLR action.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of HLR policys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrPolicyPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-policies:
+    post:
+      tags: [switch]
+      operationId: createHlrPolicy
+      summary: "Add an HLR policy"
+      description: |
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrPolicyInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrPolicySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-policies/{id}:
+    get:
+      tags: [switch]
+      operationId: getHlrPolicy
+      summary: "One HLR policy"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The HLR policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrPolicyDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [switch]
+      operationId: updateHlrPolicy
+      summary: "Change an HLR policy"
+      description: |
+        Saves the whole record; the change lists the fields that differ. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrPolicyInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrPolicySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-policies/{id}/dependencies:
+    get:
+      tags: [switch]
+      operationId: getHlrPolicyDependencies
+      summary: "What uses an HLR policy (safe delete, §13.29)"
+      description: |
+        Route rules whose HLR action uses the policy; they block archiving.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-policies/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveHlrPolicy
+      summary: "Archive (delete) an HLR policy (§13.29)"
+      description: |
+        Blocked while route rules use it (409) unless an administrator overrides with a reason.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrPolicySaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-policies/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreHlrPolicy
+      summary: "Restore an archived HLR policy (§13.29)"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrPolicySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-policies/{id}/test:
+    post:
+      tags: [switch]
+      operationId: testHlrPolicy
+      summary: "Which provider a number would be looked up with (§13.24)"
+      description: |
+        Resolves the number's network ("All" dial-code profile), picks the policy entry (the network's
+        code, else its country, else the catch-all) and lists the providers in the order they would be
+        tried, with price, success rate and status; for "auto", the cheapest provider meeting the minimum
+        success rate goes first.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HlrPolicyTestInput"
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HlrPolicyTestResult"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -8010,6 +8785,620 @@ components:
                       type: string
                 - type: "null"
 
+    # ------------------------------------------------------------- HLR (§6.5, §13.24)
+    HlrProviderType:
+      type: string
+      enum: [hlr, mnp, number_check]
+      description: "hlr: live HLR lookup; mnp: number portability (MNP / NPQ); number_check: validity check."
+
+    HlrLiveStatus:
+      type: string
+      enum: [up, slow, down, inactive]
+      description: "From the last 24 hours: down = success under 50 % (or no answer), slow = average response over 80 % of the timeout, inactive = switched off."
+
+    HlrResponseMapping:
+      type: object
+      additionalProperties: false
+      description: Where each value is found in the provider's response (§6.5 response-mapping captions); a JSON path or a field name. Null = not provided.
+      required: [mcc, mnc, mccmnc, oldMcc, oldMnc, oldMccmnc, ported, errorCode, errorString, successCodes, numberCheck, dnidScore]
+      properties:
+        mcc:
+          type: string
+          minLength: 1
+          maxLength: 100
+        mnc:
+          type: string
+          minLength: 1
+          maxLength: 100
+        mccmnc:
+          type: string
+          minLength: 1
+          maxLength: 100
+        oldMcc:
+          type: [string, "null"]
+          maxLength: 100
+        oldMnc:
+          type: [string, "null"]
+          maxLength: 100
+        oldMccmnc:
+          type: [string, "null"]
+          maxLength: 100
+        ported:
+          type: [string, "null"]
+          maxLength: 100
+        errorCode:
+          type: [string, "null"]
+          maxLength: 100
+        errorString:
+          type: [string, "null"]
+          maxLength: 100
+        successCodes:
+          type: [string, "null"]
+          maxLength: 200
+          description: Comma-separated codes that mean a successful lookup, e.g. "0,1".
+        numberCheck:
+          type: [string, "null"]
+          maxLength: 100
+        dnidScore:
+          type: [string, "null"]
+          maxLength: 100
+
+    HlrProviderFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        providerType:
+          $ref: "#/components/schemas/HlrProviderType"
+        url:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Request template; {DNID} is replaced by the number.
+        username:
+          type: [string, "null"]
+          maxLength: 100
+        extraHeaders:
+          type: [string, "null"]
+          maxLength: 2000
+          description: 'One "Name: value" per line.'
+        postData:
+          type: [string, "null"]
+          maxLength: 4000
+          description: POST body template ({DNID} is replaced); null = GET.
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        defaultRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Price per live lookup for destinations without their own price.
+        cacheDays:
+          type: integer
+          minimum: 0
+          maximum: 7
+          description: Enable Caching (0-7 days); a policy can set its own cache times.
+        timeoutMs:
+          type: integer
+          minimum: 100
+          maximum: 30000
+        dailyBudget:
+          type: [number, "null"]
+          minimum: 0
+          description: Spend per day after which the provider is skipped (null = no limit).
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        responseMapping:
+          $ref: "#/components/schemas/HlrResponseMapping"
+
+    HlrProviderInput:
+      allOf:
+        - $ref: "#/components/schemas/HlrProviderFields"
+        - type: object
+          properties:
+            password:
+              type: [string, "null"]
+              maxLength: 200
+              description: "Write-only. Null keeps the stored password; an empty string clears it."
+      required: [name, providerType, url, username, extraHeaders, postData, currency, defaultRate, cacheDays, timeoutMs, dailyBudget, status, responseMapping, password]
+      unevaluatedProperties: false
+
+    HlrProviderStats:
+      type: object
+      description: Last 24 hours of EDRs (ending at the newest EDR).
+      required: [liveStatus, lookups, liveLookups, cachedLookups, successPct, avgResponseMs, cost, ported]
+      properties:
+        liveStatus:
+          $ref: "#/components/schemas/HlrLiveStatus"
+        lookups:
+          type: integer
+        liveLookups:
+          type: integer
+        cachedLookups:
+          type: integer
+        successPct:
+          type: [number, "null"]
+        avgResponseMs:
+          type: [integer, "null"]
+        cost:
+          type: number
+          description: Platform currency.
+        ported:
+          type: integer
+
+    HlrProviderDetail:
+      allOf:
+        - $ref: "#/components/schemas/HlrProviderFields"
+        - type: object
+          required: [id, passwordSet, stats, rules, policies, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            passwordSet:
+              type: boolean
+              description: The password is never returned (§13.22).
+            stats:
+              $ref: "#/components/schemas/HlrProviderStats"
+            rules:
+              type: integer
+            policies:
+              type: integer
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+      required: [name, providerType, url, username, extraHeaders, postData, currency, defaultRate, cacheDays, timeoutMs, dailyBudget, status, responseMapping]
+
+    HlrProviderSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/HlrProviderDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    HlrProviderRow:
+      type: object
+      required: [id, name, providerType, currency, defaultRate, cacheDays, timeoutMs, dailyBudget, status, liveStatus, lookups, successPct, avgResponseMs, cost, rates, rules, policies, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        providerType:
+          $ref: "#/components/schemas/HlrProviderType"
+        currency:
+          type: string
+        defaultRate:
+          type: number
+        cacheDays:
+          type: integer
+        timeoutMs:
+          type: integer
+        dailyBudget:
+          type: [number, "null"]
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        liveStatus:
+          $ref: "#/components/schemas/HlrLiveStatus"
+        lookups:
+          type: integer
+        successPct:
+          type: [number, "null"]
+        avgResponseMs:
+          type: [integer, "null"]
+        cost:
+          type: number
+        rates:
+          type: integer
+          description: Destinations with their own price.
+        rules:
+          type: integer
+        policies:
+          type: integer
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    HlrProviderPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/HlrProviderRow"
+
+    HlrProviderRate:
+      type: object
+      required: [id, providerId, destinationId, mccmnc, country, network, rate, currency, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        providerId:
+          $ref: "#/components/schemas/Id"
+        destinationId:
+          $ref: "#/components/schemas/Id"
+        mccmnc:
+          type: string
+        country:
+          type: string
+        network:
+          type: string
+        rate:
+          type: number
+        currency:
+          type: string
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    HlrProviderRatePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/HlrProviderRate"
+
+    HlrProviderRateInput:
+      type: object
+      additionalProperties: false
+      required: [destinationId, rate]
+      properties:
+        destinationId:
+          $ref: "#/components/schemas/Id"
+        rate:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    HlrProviderRateSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/HlrProviderRate"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    HlrTargetInput:
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      description: What an HLR rule applies to (customer trunks only, §13.24).
+      properties:
+        type:
+          type: string
+          enum: [trunk, enterprise, category, all]
+        id:
+          description: Customer trunk, enterprise or product category ID; null for all.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+
+    HlrTarget:
+      type: object
+      required: [type, id, label]
+      properties:
+        type:
+          type: string
+          enum: [trunk, enterprise, category, all]
+        id:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        label:
+          type: string
+
+    HlrRuleFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        providerId:
+          $ref: "#/components/schemas/Id"
+        dnidPattern:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Regular expression on the receiver (after translation), e.g. ^44.
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        insertAt:
+          type: string
+          enum: [top, bottom]
+          description: Where the rule runs on trunks that have no position for it.
+
+    HlrRuleInput:
+      allOf:
+        - $ref: "#/components/schemas/HlrRuleFields"
+        - type: object
+          properties:
+            targets:
+              type: array
+              maxItems: 1000
+              items:
+                $ref: "#/components/schemas/HlrTargetInput"
+      required: [name, providerId, dnidPattern, status, insertAt, targets]
+      unevaluatedProperties: false
+
+    HlrRuleDetail:
+      allOf:
+        - $ref: "#/components/schemas/HlrRuleFields"
+        - type: object
+          required: [id, providerName, targets, usedBy, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            providerName:
+              type: string
+            targets:
+              type: array
+              items:
+                $ref: "#/components/schemas/HlrTarget"
+            usedBy:
+              type: integer
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+      required: [name, providerId, dnidPattern, status, insertAt]
+
+    HlrRuleSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/HlrRuleDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    HlrRuleRow:
+      type: object
+      required: [id, name, providerId, provider, providerType, dnidPattern, status, appliesTo, usedBy, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        providerId:
+          $ref: "#/components/schemas/Id"
+        provider:
+          type: string
+        providerType:
+          $ref: "#/components/schemas/HlrProviderType"
+        dnidPattern:
+          type: string
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        appliesTo:
+          type: string
+        usedBy:
+          type: integer
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    HlrRulePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/HlrRuleRow"
+
+    HlrPolicyEntry:
+      type: object
+      additionalProperties: false
+      required: [code, mode, providerIds, minSuccessPct, cacheHoursPorted, cacheHoursNotPorted]
+      description: One destination of a policy (§13.24).
+      properties:
+        code:
+          type: [string, "null"]
+          pattern: "^[0-9]{3,6}$"
+          description: MCCMNC code, or a 3-digit MCC for the whole country; null = every other destination.
+        mode:
+          type: string
+          enum: [ordered, auto]
+          description: "ordered: try the providers in order, the next on error or timeout; auto: the cheapest provider meeting minSuccessPct first, then the others by price."
+        providerIds:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/Id"
+        minSuccessPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: auto only.
+        cacheHoursPorted:
+          type: integer
+          minimum: 0
+          maximum: 720
+          description: How long a "ported" answer is reused (cached lookups are free and instant).
+        cacheHoursNotPorted:
+          type: integer
+          minimum: 0
+          maximum: 720
+
+    HlrPolicyFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        entries:
+          type: array
+          maxItems: 2000
+          items:
+            $ref: "#/components/schemas/HlrPolicyEntry"
+
+    HlrPolicyInput:
+      allOf:
+        - $ref: "#/components/schemas/HlrPolicyFields"
+      required: [name, status, entries]
+      unevaluatedProperties: false
+
+    HlrPolicyDetail:
+      allOf:
+        - $ref: "#/components/schemas/HlrPolicyFields"
+        - type: object
+          required: [id, providers, usedBy, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            providers:
+              type: array
+              description: Names of the providers the entries use.
+              items:
+                $ref: "#/components/schemas/Named"
+            usedBy:
+              type: integer
+              description: Live route rules whose HLR action uses the policy.
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+      required: [name, status, entries]
+
+    HlrPolicySaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/HlrPolicyDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    HlrPolicyRow:
+      type: object
+      required: [id, name, status, destinations, hasCatchAll, providerNames, usedBy, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+        destinations:
+          type: integer
+          description: Entries with a code.
+        hasCatchAll:
+          type: boolean
+        providerNames:
+          type: string
+        usedBy:
+          type: integer
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    HlrPolicyPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/HlrPolicyRow"
+
+    HlrPolicyTestInput:
+      type: object
+      additionalProperties: false
+      required: [receiver]
+      properties:
+        receiver:
+          type: string
+          pattern: "^\\+?[0-9]{5,15}$"
+
+    HlrPolicyTestResult:
+      type: object
+      required: [mccmnc, destination, entry, providers]
+      properties:
+        mccmnc:
+          type: [string, "null"]
+        destination:
+          type: [string, "null"]
+        entry:
+          description: The entry that applies; null = the policy has none for this number (no HLR).
+          oneOf:
+            - $ref: "#/components/schemas/HlrPolicyEntry"
+            - type: "null"
+        providers:
+          type: array
+          description: In the order they would be tried.
+          items:
+            type: object
+            required: [providerId, name, rate, currency, successPct, liveStatus, skipped]
+            properties:
+              providerId:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+              rate:
+                type: number
+                description: Price per live lookup for this destination.
+              currency:
+                type: string
+              successPct:
+                type: [number, "null"]
+              liveStatus:
+                $ref: "#/components/schemas/HlrLiveStatus"
+              skipped:
+                type: [string, "null"]
+                description: Why the provider would be skipped (inactive, down, under the minimum success rate), else null.
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -8094,14 +9483,12 @@ components:
 
     HlrAction:
       type: object
-      description: Do HLR with a policy for the chosen customer trunks of the rule (§13.24); empty list = all of them.
-      required: [policy, customerTrunkIds]
+      description: Do HLR with a policy for the chosen customer trunks of the rule (§13.24); empty list = all of them. Wins over the trunk's HLR rules for that traffic.
+      required: [policyId, customerTrunkIds]
       additionalProperties: false
       properties:
-        policy:
-          type: string
-          minLength: 1
-          maxLength: 100
+        policyId:
+          $ref: "#/components/schemas/Id"
         customerTrunkIds:
           type: array
           items:
@@ -8344,7 +9731,7 @@ components:
             labels:
               type: object
               description: Names for the ids in the rule, for chips and tables.
-              required: [customerTrunks, categories, vendorTrunks, numberLists, groups]
+              required: [customerTrunks, categories, vendorTrunks, numberLists, groups, hlrPolicies]
               properties:
                 customerTrunks:
                   type: array
@@ -8363,6 +9750,10 @@ components:
                   items:
                     $ref: "#/components/schemas/Named"
                 groups:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Named"
+                hlrPolicies:
                   type: array
                   items:
                     $ref: "#/components/schemas/Named"
@@ -8715,7 +10106,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies]
 
     FilterOperator:
       type: string

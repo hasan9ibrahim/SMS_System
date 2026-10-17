@@ -226,7 +226,7 @@ export function conditionChips(rule: RouteRuleDetail, now = Date.now()): Chip[] 
       key: "hlrAction",
       field: "HLR action",
       op: "",
-      value: `${rule.hlrAction.policy} · ${
+      value: `${l.hlrPolicies.find((p) => p.id === rule.hlrAction!.policyId)?.name ?? `policy #${rule.hlrAction.policyId}`} · ${
         rule.hlrAction.customerTrunkIds.length ? names(l.customerTrunks, rule.hlrAction.customerTrunkIds) : "all trunks"
       }`,
     });

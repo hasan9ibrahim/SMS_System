@@ -309,7 +309,7 @@ export const PAGES: PageDef[] = [
     "5.3",
     "Rewrite or block messages, applied straight to trunks",
   ),
-  p("switch", "hlr", "HLR", "/switch/hlr", "radar", "§6.5, §13.24", "5", "HLR providers and rules"),
+  p("switch", "hlr", "HLR", "/switch/hlr", "radar", "§6.5, §13.24", "5.4", "HLR providers, rules and policies"),
   p(
     "switch",
     "number-lists",

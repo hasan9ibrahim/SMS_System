@@ -141,6 +141,32 @@ import {
   testTrunkRules,
   updateTranslationRule,
 } from "./api/translationRules.js";
+import {
+  archiveHlrPolicy,
+  archiveHlrProvider,
+  archiveHlrRule,
+  createHlrPolicy,
+  createHlrProvider,
+  createHlrRule,
+  deleteHlrProviderRates,
+  exportHlrProviderRates,
+  getHlrPolicy,
+  getHlrPolicyDependencies,
+  getHlrProvider,
+  getHlrProviderDependencies,
+  getHlrRule,
+  getHlrRuleUsedBy,
+  importHlrProviderRates,
+  queryHlrProviderRates,
+  restoreHlrPolicy,
+  restoreHlrProvider,
+  restoreHlrRule,
+  setHlrProviderRate,
+  testHlrPolicy,
+  updateHlrPolicy,
+  updateHlrProvider,
+  updateHlrRule,
+} from "./api/hlr.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -166,7 +192,7 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.14.0";
+const VERSION = "0.15.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -341,6 +367,35 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   testTranslationRule,
   testCustomerTrunkRules: testTrunkRules("customer"),
   testVendorTrunkRules: testTrunkRules("vendor"),
+
+  // HLR providers, rules and policies (§6.5, §13.24)
+  queryHlrProviders: queryList("hlr_providers"),
+  createHlrProvider,
+  getHlrProvider,
+  updateHlrProvider,
+  getHlrProviderDependencies,
+  archiveHlrProvider,
+  restoreHlrProvider,
+  queryHlrProviderRates,
+  setHlrProviderRate,
+  deleteHlrProviderRates,
+  importHlrProviderRates,
+  exportHlrProviderRates,
+  queryHlrRules: queryList("hlr_rules"),
+  createHlrRule,
+  getHlrRule,
+  updateHlrRule,
+  getHlrRuleUsedBy,
+  archiveHlrRule,
+  restoreHlrRule,
+  queryHlrPolicies: queryList("hlr_policies"),
+  createHlrPolicy,
+  getHlrPolicy,
+  updateHlrPolicy,
+  getHlrPolicyDependencies,
+  archiveHlrPolicy,
+  restoreHlrPolicy,
+  testHlrPolicy,
 
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),

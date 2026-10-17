@@ -13,6 +13,7 @@ import { applyTrunkField } from "./trunks.js";
 import { applyRateTableEntries } from "./rates.js";
 import { applyRouteRuleField } from "./routeRules.js";
 import { applyTranslationRuleField } from "./translationRules.js";
+import { applyHlrField } from "./hlr.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -31,7 +32,11 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
   // Number lists and their entries (§6.4)
   number_list: { table: "number_lists", columns: { name: "name", listType: "list_type" } },
   number_list_entry: { table: "number_list_entries", columns: {} },
-  hlr_rule: { table: "hlr_rules", columns: { status: "status", name: "name" } },
+  // HLR (§6.5, §13.24): rules, providers and policies write their fields through applyHlrField.
+  hlr_rule: { table: "hlr_rules", columns: {} },
+  hlr_provider: { table: "hlr_providers", columns: {} },
+  hlr_policy: { table: "hlr_policies", columns: {} },
+  hlr_provider_rate: { table: "hlr_provider_rates", columns: { rate: "rate" } },
   enterprise_doc: { table: "enterprise_docs", columns: {} },
   // MCCMNC master (§6.1); DLR targets live here too (decided 2026-10-16).
   destination: {
@@ -118,6 +123,10 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
     }
     if (entityType === "route_rule") {
       await applyRouteRuleField(c, e.entity_id, e.field, e.before, userId);
+      continue;
+    }
+    if (entityType === "hlr_provider" || entityType === "hlr_rule" || entityType === "hlr_policy") {
+      await applyHlrField(c, entityType, e.entity_id, e.field, e.before, userId);
       continue;
     }
     if (entityType === "translation_rule") {

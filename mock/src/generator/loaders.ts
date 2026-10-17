@@ -53,6 +53,8 @@ export const TABLE_ORDER = [
   "hlr_rules",
   "hlr_rule_targets",
   "hlr_rule_trunk_settings",
+  "hlr_provider_rates",
+  "hlr_policies",
   "invoices",
   "transactions",
   "vendor_invoices",

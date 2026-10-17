@@ -237,7 +237,7 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       margin: r.margin,
       qbr_formula: r.routeType === "qbr" ? "ASR*0.4 + DLR*0.5 - ADD*0.1" : null,
       skip_vendor_at_tps_pct: rng.chance(0.1) ? rng.pick([80, 90, 100]) : null,
-      hlr_action: r.hlrPolicy ? json({ policy: "default", customer_trunk_ids: r.customerTrunkIds.slice(0, 2) }) : null,
+      hlr_action: r.hlrPolicy ? json({ policy_id: 1, customer_trunk_ids: r.customerTrunkIds.slice(0, 2) }) : null,
       hlr_ported: r.hlrPolicy ? rng.chance(0.5) : null,
       deny_multipart: rng.chance(0.03),
       threshold: extra.threshold ?? null,

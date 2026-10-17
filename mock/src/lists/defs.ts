@@ -8,6 +8,10 @@ import type {
   DialCode,
   DialCodeProfile,
   MoNumber,
+  HlrPolicyRow,
+  HlrProviderRate,
+  HlrProviderRow,
+  HlrRuleRow,
   NumberList,
   NumberListEntry,
   ProductCategory,
@@ -1251,6 +1255,213 @@ export const translationRuleList: ListDef<TranslationRuleRow> = {
   }),
 };
 
+// ---------------------------------------------------------------- HLR (§6.5, §13.24)
+
+/** up / slow / down from the last 24 hours (hlr_provider_stats), inactive when switched off. */
+export const hlrLiveStatusSql = `CASE WHEN hp.status = 'inactive' THEN 'inactive'
+    WHEN hs.success_pct IS NOT NULL AND hs.success_pct < 50 THEN 'down'
+    WHEN hs.avg_response_ms IS NOT NULL AND hs.avg_response_ms > hp.timeout_ms * 0.8 THEN 'slow' ELSE 'up' END`;
+/** Live HLR rules and policies using provider hp. */
+export const hlrProviderRulesSql =
+  "(SELECT count(*)::int FROM hlr_rules x WHERE x.hlr_provider_id = hp.id AND x.deleted_at IS NULL)";
+export const hlrProviderPoliciesSql = `(SELECT count(*)::int FROM hlr_policies x WHERE x.deleted_at IS NULL
+    AND EXISTS (SELECT 1 FROM jsonb_array_elements(x.entries) e, jsonb_array_elements_text(e -> 'providerIds') pid
+                 WHERE pid::bigint = hp.id))`;
+const hlrProviderRatesSql =
+  "(SELECT count(*)::int FROM hlr_provider_rates x WHERE x.hlr_provider_id = hp.id AND x.deleted_at IS NULL)";
+
+export const hlrProviderList: ListDef<HlrProviderRow> = {
+  fields: listFields.hlr_providers,
+  from: `hlr_providers hp LEFT JOIN hlr_provider_stats hs ON hs.hlr_provider_id = hp.id
+    LEFT JOIN users ub ON ub.id = hp.updated_by_id`,
+  baseWhere: "hp.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "hp.id" },
+    name: { sql: "hp.name" },
+    providerType: { sql: "hp.provider_type" },
+    currency: { sql: "hp.currency" },
+    defaultRate: { sql: "hp.default_rate" },
+    cacheDays: { sql: "hp.cache_days" },
+    timeoutMs: { sql: "hp.timeout_ms" },
+    dailyBudget: { sql: "hp.daily_budget" },
+    status: { sql: "hp.status" },
+    liveStatus: { sql: hlrLiveStatusSql },
+    lookups: { sql: "COALESCE(hs.lookups, 0)" },
+    successPct: { sql: "hs.success_pct" },
+    avgResponseMs: { sql: "hs.avg_response_ms" },
+    cost: { sql: "COALESCE(hs.cost_sys, 0)" },
+    rates: { sql: hlrProviderRatesSql },
+    rules: { sql: hlrProviderRulesSql },
+    policies: { sql: hlrProviderPoliciesSql },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "hp.updated_at" },
+    archived: { sql: "(hp.deleted_at IS NOT NULL)" },
+  },
+  search: ["name"],
+  idSql: "hp.id",
+  select: `hp.id, hp.name, hp.provider_type, hp.currency, hp.default_rate, hp.cache_days, hp.timeout_ms, hp.daily_budget,
+    hp.status, ${hlrLiveStatusSql} AS live_status, COALESCE(hs.lookups, 0) AS lookups, hs.success_pct, hs.avg_response_ms,
+    COALESCE(hs.cost_sys, 0) AS cost, ${hlrProviderRatesSql} AS rates, ${hlrProviderRulesSql} AS rules,
+    ${hlrProviderPoliciesSql} AS policies, ub.username AS updated_by, hp.updated_at, hp.deleted_at`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    name: r.name as string,
+    providerType: r.provider_type as HlrProviderRow["providerType"],
+    currency: String(r.currency).trim(),
+    defaultRate: Number(r.default_rate),
+    cacheDays: Number(r.cache_days),
+    timeoutMs: Number(r.timeout_ms),
+    dailyBudget: r.daily_budget === null ? null : Number(r.daily_budget),
+    status: r.status as HlrProviderRow["status"],
+    liveStatus: r.live_status as HlrProviderRow["liveStatus"],
+    lookups: Number(r.lookups),
+    successPct: r.success_pct === null ? null : Number(r.success_pct),
+    avgResponseMs: r.avg_response_ms === null ? null : Number(r.avg_response_ms),
+    cost: Number(r.cost),
+    rates: Number(r.rates),
+    rules: Number(r.rules),
+    policies: Number(r.policies),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+export const hlrProviderRateList: ListDef<HlrProviderRate> = {
+  fields: listFields.hlr_provider_rates,
+  from: `hlr_provider_rates hr JOIN hlr_providers hp ON hp.id = hr.hlr_provider_id JOIN mccmnc m ON m.id = hr.mccmnc_id
+    JOIN countries co ON co.id = m.country_id LEFT JOIN users ub ON ub.id = hr.updated_by_id`,
+  baseWhere: "hr.deleted_at IS NULL",
+  columns: {
+    id: { sql: "hr.id" },
+    providerId: { sql: "hr.hlr_provider_id" },
+    mccmnc: { sql: "m.mccmnc" },
+    country: { sql: "co.name" },
+    network: { sql: "CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END" },
+    rate: { sql: "hr.rate" },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "hr.updated_at" },
+  },
+  search: ["mccmnc", "country", "network"],
+  idSql: "hr.id",
+  select: `hr.id, hr.hlr_provider_id, m.id AS mccmnc_id, m.mccmnc, co.name AS country,
+    CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END AS network, hr.rate, hp.currency,
+    ub.username AS updated_by, hr.updated_at`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    providerId: Number(r.hlr_provider_id),
+    destinationId: Number(r.mccmnc_id),
+    mccmnc: r.mccmnc as string,
+    country: r.country as string,
+    network: r.network as string,
+    rate: Number(r.rate),
+    currency: String(r.currency).trim(),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+  }),
+};
+
+/** Customer trunks an HLR rule reaches through its targets (§13.2 Used by). */
+export const hlrUsedBySql = (alias: string) => `(SELECT count(DISTINCT t.id)::int FROM hlr_rule_targets tg
+    JOIN customer_trunks t ON t.deleted_at IS NULL
+     AND (tg.target_type = 'all' OR (tg.target_type = 'trunk' AND tg.target_id = t.id)
+          OR (tg.target_type = 'enterprise' AND tg.target_id = t.enterprise_id)
+          OR (tg.target_type = 'category' AND tg.target_id = t.product_category_id))
+   WHERE tg.hlr_rule_id = ${alias}.id)`;
+const hlrAppliesToSql = `COALESCE((SELECT string_agg(CASE WHEN g.target_type = 'all' THEN 'All customer trunks'
+      ELSE g.n || ' ' || CASE WHEN g.n = 1 THEN g.target_type
+        WHEN g.target_type = 'category' THEN 'categories' ELSE g.target_type || 's' END END, ', '
+      ORDER BY array_position(ARRAY['all','category','enterprise','trunk'], g.target_type))
+    FROM (SELECT target_type, count(*) AS n FROM hlr_rule_targets WHERE hlr_rule_id = hr.id GROUP BY target_type) g),
+  'Not assigned')`;
+
+export const hlrRuleList: ListDef<HlrRuleRow> = {
+  fields: listFields.hlr_rules,
+  from: `hlr_rules hr JOIN hlr_providers hp ON hp.id = hr.hlr_provider_id LEFT JOIN users ub ON ub.id = hr.updated_by_id`,
+  baseWhere: "hr.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "hr.id" },
+    name: { sql: "hr.name" },
+    providerId: { sql: "hr.hlr_provider_id" },
+    provider: { sql: "hp.name" },
+    providerType: { sql: "hp.provider_type" },
+    dnidPattern: { sql: "hr.dnid_pattern" },
+    status: { sql: "hr.status" },
+    appliesTo: { sql: hlrAppliesToSql },
+    usedBy: { sql: hlrUsedBySql("hr") },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "hr.updated_at" },
+    archived: { sql: "(hr.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "provider", "dnidPattern"],
+  idSql: "hr.id",
+  select: `hr.id, hr.name, hr.hlr_provider_id, hp.name AS provider, hp.provider_type, hr.dnid_pattern, hr.status,
+    ${hlrAppliesToSql} AS applies_to, ${hlrUsedBySql("hr")} AS used_by, ub.username AS updated_by, hr.updated_at,
+    hr.deleted_at`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    name: r.name as string,
+    providerId: Number(r.hlr_provider_id),
+    provider: r.provider as string,
+    providerType: r.provider_type as HlrRuleRow["providerType"],
+    dnidPattern: r.dnid_pattern as string,
+    status: r.status as HlrRuleRow["status"],
+    appliesTo: r.applies_to as string,
+    usedBy: Number(r.used_by),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+/** Live route rules whose HLR action uses policy hpo. */
+export const hlrPolicyUsedBySql = `(SELECT count(*)::int FROM route_rules x WHERE x.deleted_at IS NULL
+    AND (x.hlr_action ->> 'policy_id')::bigint = hpo.id)`;
+const policyDestinationsSql =
+  "(SELECT count(*)::int FROM jsonb_array_elements(hpo.entries) e WHERE e ->> 'code' IS NOT NULL)";
+const policyCatchAllSql = "EXISTS (SELECT 1 FROM jsonb_array_elements(hpo.entries) e WHERE e ->> 'code' IS NULL)";
+const policyProvidersSql = `COALESCE((SELECT string_agg(p.name, ', ' ORDER BY p.name) FROM hlr_providers p
+    WHERE p.id IN (SELECT pid::bigint FROM jsonb_array_elements(hpo.entries) e,
+                   jsonb_array_elements_text(e -> 'providerIds') pid)), '')`;
+
+export const hlrPolicyList: ListDef<HlrPolicyRow> = {
+  fields: listFields.hlr_policies,
+  from: "hlr_policies hpo LEFT JOIN users ub ON ub.id = hpo.updated_by_id",
+  baseWhere: "hpo.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "hpo.id" },
+    name: { sql: "hpo.name" },
+    status: { sql: "hpo.status" },
+    destinations: { sql: policyDestinationsSql },
+    hasCatchAll: { sql: policyCatchAllSql },
+    providerNames: { sql: policyProvidersSql },
+    usedBy: { sql: hlrPolicyUsedBySql },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "hpo.updated_at" },
+    archived: { sql: "(hpo.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "providerNames"],
+  idSql: "hpo.id",
+  select: `hpo.id, hpo.name, hpo.status, ${policyDestinationsSql} AS destinations, ${policyCatchAllSql} AS has_catch_all,
+    ${policyProvidersSql} AS provider_names, ${hlrPolicyUsedBySql} AS used_by, ub.username AS updated_by,
+    hpo.updated_at, hpo.deleted_at`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    name: r.name as string,
+    status: r.status as HlrPolicyRow["status"],
+    destinations: Number(r.destinations),
+    hasCatchAll: r.has_catch_all as boolean,
+    providerNames: r.provider_names as string,
+    usedBy: Number(r.used_by),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
 /** Lists answered from PostgreSQL; the Enterprise report runs on the EDR store (api/enterpriseReport.ts). */
 export type PgListId = Exclude<ListId, "enterprise_report">;
 
@@ -1275,4 +1486,8 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   number_lists: numberListList as ListDef<unknown>,
   number_list_entries: numberListEntryList as ListDef<unknown>,
   translation_rules: translationRuleList as ListDef<unknown>,
+  hlr_providers: hlrProviderList as ListDef<unknown>,
+  hlr_provider_rates: hlrProviderRateList as ListDef<unknown>,
+  hlr_rules: hlrRuleList as ListDef<unknown>,
+  hlr_policies: hlrPolicyList as ListDef<unknown>,
 };

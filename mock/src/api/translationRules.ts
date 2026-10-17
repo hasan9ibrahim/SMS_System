@@ -560,7 +560,7 @@ export function restoreTranslationRule(request: FastifyRequest, reply: FastifyRe
 let prefixCache: { at: number; map: Map<string, string>; longest: number } | null = null;
 
 /** Receiver → MCCMNC by the longest "All" profile dial code, cached a minute. */
-async function mccmncLookup(db: Db): Promise<(receiver: string) => string | null> {
+export async function mccmncLookup(db: Db): Promise<(receiver: string) => string | null> {
   if (!prefixCache || Date.now() - prefixCache.at > 60_000) {
     const { rows } = await db.query(
       `SELECT d.prefix, m.mccmnc FROM dial_codes d JOIN mccmnc m ON m.id = d.mccmnc_id

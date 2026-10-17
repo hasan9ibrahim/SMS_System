@@ -71,6 +71,7 @@ const rule = (over: Partial<RouteRuleDetail> = {}): RouteRuleDetail => ({
     vendorTrunks: [],
     numberLists: [],
     groups: [],
+    hlrPolicies: [{ id: 1, name: "Default" }],
   },
   updatedBy: "Test User",
   updatedAt: "2026-10-16T10:00:00Z",
@@ -95,7 +96,7 @@ test("whole countries, exclusive lists, accumulated revenue and HLR action", () 
       customerTrunkMode: "exclusive",
       mccmncs: ["505"],
       revenue: { type: "accumulated", op: "between", value: 10, value2: 20, period: "today", scope: "rule" },
-      hlrAction: { policy: "default", customerTrunkIds: [] },
+      hlrAction: { policyId: 1, customerTrunkIds: [] },
       tps: null,
     }),
     NOW,
@@ -104,7 +105,7 @@ test("whole countries, exclusive lists, accumulated revenue and HLR action", () 
   assert.ok(text.includes("Trunk|not in|Lumen_OTP, Lumen_OTP2"));
   assert.ok(text.includes("Destination|in|505 · all"));
   assert.ok(text.includes("Revenue today|between|10.000 – 20.000 per rule"));
-  assert.ok(text.includes("HLR action||default · all trunks"));
+  assert.ok(text.includes("HLR action||Default · all trunks"), "the policy is shown by name");
 });
 
 test("time reads always, from, until or a range", () => {

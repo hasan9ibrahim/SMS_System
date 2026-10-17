@@ -2,13 +2,14 @@
 // MCCMNC code shown for a destination (an empty MNC is the country's "All networks" code).
 import type { ImportResult } from "@sms/contract";
 
-export type ImportKind = "destinations" | "dial_codes" | "mo_numbers" | "number_list";
+export type ImportKind = "destinations" | "dial_codes" | "mo_numbers" | "number_list" | "hlr_rates";
 
 /** Header row and one example line per import (§6.1 import modals). */
 export const TEMPLATES: Record<ImportKind, string> = {
   destinations: "mcc,mnc,original_mnc,country,network\n262,01,,Germany,Example Network\n262,,,Germany,\n",
   dial_codes: "prefix,mccmnc\n4915,26201\n",
   number_list: "value\n447700900001\n",
+  hlr_rates: "mccmnc,rate\n23415,0.0015\n",
   mo_numbers:
     "customer_trunk,number,keyword,rate,vendor_rate,mccmnc,setup_charge,fix_charge\nEXAMPLE_TRUNK,491701234567,INFO,0.02,0.01,26201,0,10\n",
 };

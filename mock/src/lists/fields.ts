@@ -45,6 +45,12 @@ const ARCHIVED = field({
   hidden: true,
 });
 
+const HLR_TYPES = [
+  { value: "hlr", label: "HLR" },
+  { value: "mnp", label: "MNP / NPQ" },
+  { value: "number_check", label: "Number check" },
+];
+
 const STATUS_VALUES = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
@@ -706,6 +712,107 @@ export const listFields: Record<ListId, ListFields> = {
     ],
   },
 
+  // HLR (§6.5, §13.24): providers with live status and 24-hour stats, their prices
+  // (providerId eq required), rules (provider + DNID pattern + Applies To) and policies.
+  hlr_providers: {
+    list: "hlr_providers",
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Provider Name", type: "text", defaultOperator: "like" }),
+      field({ field: "providerType", label: "Type", type: "enum", defaultOperator: "in", enumValues: HLR_TYPES }),
+      field({
+        field: "liveStatus",
+        label: "Live",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "up", label: "Up" },
+          { value: "slow", label: "Slow" },
+          { value: "down", label: "Down" },
+          { value: "inactive", label: "Inactive" },
+        ],
+      }),
+      field({ field: "lookups", label: "Lookups 24 h", type: "integer", defaultOperator: "gte" }),
+      field({ field: "successPct", label: "Success", type: "percent", defaultOperator: "lt" }),
+      field({ field: "avgResponseMs", label: "Avg ms", type: "integer", defaultOperator: "gt" }),
+      field({ field: "cost", label: "Cost 24 h", type: "money", defaultOperator: "gte" }),
+      field({ field: "defaultRate", label: "Default Rate", type: "decimal", defaultOperator: "between" }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq" }),
+      field({ field: "rates", label: "Prices", type: "integer", defaultOperator: "gte" }),
+      field({ field: "cacheDays", label: "Cache (days)", type: "integer", defaultOperator: "eq" }),
+      field({ field: "timeoutMs", label: "Timeout ms", type: "integer", defaultOperator: "gte", hidden: true }),
+      field({ field: "dailyBudget", label: "Daily Budget", type: "decimal", defaultOperator: "gte", hidden: true }),
+      field({ field: "rules", label: "Rules", type: "integer", defaultOperator: "gte" }),
+      field({ field: "policies", label: "Policies", type: "integer", defaultOperator: "gte" }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  },
+
+  hlr_provider_rates: {
+    list: "hlr_provider_rates",
+    defaultSort: [
+      { field: "country", dir: "asc" },
+      { field: "network", dir: "asc" },
+    ],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({
+        field: "providerId",
+        label: "Provider ID",
+        type: "integer",
+        defaultOperator: "eq",
+        operators: ["eq"],
+        hidden: true,
+      }),
+      field({ field: "country", label: "Country", type: "text", defaultOperator: "like" }),
+      field({ field: "network", label: "Network", type: "text", defaultOperator: "like" }),
+      field({ field: "mccmnc", label: "MCCMNC", type: "mccmnc", defaultOperator: "like" }),
+      field({ field: "rate", label: "Rate", type: "decimal", defaultOperator: "between" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between" }),
+    ],
+  },
+
+  hlr_rules: {
+    list: "hlr_rules",
+    defaultSort: [{ field: "id", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Rule Name", type: "text", defaultOperator: "like" }),
+      field({ field: "provider", label: "Provider Name", type: "text", defaultOperator: "like" }),
+      field({ field: "providerId", label: "Provider ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "providerType", label: "Type", type: "enum", defaultOperator: "in", enumValues: HLR_TYPES }),
+      field({ field: "dnidPattern", label: "DNID Pattern", type: "text", defaultOperator: "like" }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
+      field({ field: "appliesTo", label: "Applies To", type: "text", defaultOperator: "like" }),
+      field({ field: "usedBy", label: "Used by", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  },
+
+  hlr_policies: {
+    list: "hlr_policies",
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Policy", type: "text", defaultOperator: "like" }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
+      field({ field: "destinations", label: "Destinations", type: "integer", defaultOperator: "gte" }),
+      field({ field: "hasCatchAll", label: "Catch-all", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "providerNames", label: "Providers", type: "text", defaultOperator: "like" }),
+      field({ field: "usedBy", label: "Route rules", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between" }),
+      ARCHIVED,
+    ],
+  },
+
   // Route rules grid (§15.4): the columns of the screenshot, a filter under each header.
   // Traffic columns follow the `window` field (§13.27); the category list comes from the
   // database when the catalogue is served.
@@ -874,6 +981,9 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "qbr_stat", label: "QBR stat" },
           { value: "number_list", label: "Number list" },
           { value: "number_list_entry", label: "Number list entry" },
+          { value: "hlr_provider", label: "HLR provider" },
+          { value: "hlr_provider_rate", label: "HLR provider price" },
+          { value: "hlr_policy", label: "HLR policy" },
         ],
       }),
       field({
