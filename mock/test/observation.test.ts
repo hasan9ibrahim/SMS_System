@@ -325,7 +325,8 @@ describe("§9 downloads", { skip }, () => {
       }),
       201,
     );
-    assert.equal(d.status, "pending");
+    // The job starts at once; under load it may already be running when the answer is built.
+    assert.ok(["pending", "inprogress"].includes(d.status), d.status);
     let row = d;
     for (let i = 0; i < 60 && !["success", "failed"].includes(row.status); i++) {
       await new Promise((r) => setTimeout(r, 500));

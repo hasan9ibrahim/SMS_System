@@ -567,6 +567,7 @@ export function ReportScreen({
       queryScope={scope}
       fetchPage={fetchPage}
       enabled={groupBy.length > 0 && metrics.length > 0}
+      idleMessage="Pick at least one grouping and one metric to see the report."
       onExport={(s) => void doExport(s)}
       actions={
         <>

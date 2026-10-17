@@ -67,6 +67,8 @@ export interface DataGridProps<Row extends { id: number }> {
   queryScope?: unknown;
   /** False holds the query (e.g. until a report is run). */
   enabled?: boolean;
+  /** Shown instead of "Loading…" while the query is held (what to choose or press first). */
+  idleMessage?: ReactNode;
 }
 
 /** Default cell text by field type. */
@@ -263,6 +265,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     fetchPage,
     queryScope = null,
     enabled = true,
+    idleMessage = "Choose the settings above to see rows.",
   } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastChecked = useRef<number | null>(null);
@@ -518,7 +521,10 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
           {!error && result.isSuccess && rows.length === 0 && (
             <div className="grid-message muted">No rows match these filters.</div>
           )}
-          {!error && result.isPending && <div className="grid-message muted">Loading…</div>}
+          {!error && result.isPending && (
+            // A held query never loads by itself: say what starts it instead of "Loading…".
+            <div className="grid-message muted">{enabled ? "Loading…" : idleMessage}</div>
+          )}
           {items.map((item) => {
             const row = rows[item.index];
             if (!row) {

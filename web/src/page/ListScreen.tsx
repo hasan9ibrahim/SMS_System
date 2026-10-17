@@ -78,6 +78,8 @@ export interface ListScreenProps<Row extends { id: number }> {
   fetchPage?: (body: ListQuery) => Promise<ListPage<Row>>;
   queryScope?: unknown;
   enabled?: boolean;
+  /** What to choose or press first, shown while `enabled` is false. */
+  idleMessage?: ReactNode;
   /** Hides selection and Bulk edit (e.g. reports). */
   noSelection?: boolean;
 }
@@ -232,6 +234,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     fetchPage,
     queryScope,
     enabled,
+    idleMessage,
     noSelection,
   } = props;
   const { active } = useTab();
@@ -483,6 +486,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             {...(fetchPage ? { fetchPage } : {})}
             {...(queryScope !== undefined ? { queryScope } : {})}
             {...(enabled !== undefined ? { enabled } : {})}
+            {...(idleMessage !== undefined ? { idleMessage } : {})}
             onRows={setRows}
             onMeta={onMeta}
           />

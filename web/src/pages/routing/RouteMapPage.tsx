@@ -62,6 +62,7 @@ export function RouteMapPage() {
       page={page}
       noSelection
       enabled={trunk !== null}
+      idleMessage="Choose a customer trunk above to see its route for every destination."
       queryScope={trunk}
       fetchPage={(body) => fetchListPage<RouteMapRow>("route_map", withTrunk(body))}
       above={

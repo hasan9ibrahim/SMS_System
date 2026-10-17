@@ -55,6 +55,7 @@ export function BillingReportPage() {
       historyScope={null}
       queryScope={params}
       enabled={ready}
+      idleMessage="Choose the From and To dates of the custom period."
       fetchPage={(body) => fetchBillingReport(params, body)}
       above={
         <div className="rp-settings rp-master-settings">

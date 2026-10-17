@@ -397,6 +397,7 @@ export function EnterpriseReportPage() {
       title="Enterprise report"
       noSelection
       enabled={applied !== null}
+      idleMessage="Choose customers or vendors, the period and the rows, then press Run report."
       queryScope={params.get("r")}
       fetchPage={applied ? fetchPage : undefined}
       initialState={{ visible }}
