@@ -124,8 +124,11 @@ export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext
 
 const pick = <T>(xs: T[], ctx: EngineContext) => xs[Math.floor(ctx.rand() * xs.length)]!;
 
-/** Applies a Left/Right Strip, Prepend, Append or Translation ("from=to" prefix swap). */
-export function convert(kind: string, value: string | null, input: string): string {
+/**
+ * Applies a Left/Right Strip, Prepend, Append, Translation ("from=to" prefix swap) or Regex
+ * Replace (`value` = pattern, `replacement` = what each match becomes, $1..$9 = groups).
+ */
+export function convert(kind: string, value: string | null, input: string, replacement: string | null = null): string {
   const v = value ?? "";
   switch (kind) {
     case "left_strip":
@@ -141,6 +144,10 @@ export function convert(kind: string, value: string | null, input: string): stri
       if (at < 0) return input;
       const from = v.slice(0, at);
       return input.startsWith(from) ? v.slice(at + 1) + input.slice(from.length) : input;
+    }
+    case "regex_replace": {
+      const re = compile(v, "g");
+      return re ? input.replace(re, replacement ?? "") : input;
     }
     default:
       return input;
@@ -220,9 +227,12 @@ export function runRule(
         sc === "random_number" ? picked : picked.replace(/\{n\}/g, () => String(Math.floor(ctx.rand() * 10))),
       );
     }
-  } else if (sc) set("sender", convert(sc, rule.senderConversionValue, next.sender));
+  } else if (sc) set("sender", convert(sc, rule.senderConversionValue, next.sender, rule.senderConversionReplacement));
   if (rule.receiverConversion) {
-    set("receiver", convert(rule.receiverConversion, rule.receiverConversionValue, next.receiver));
+    set(
+      "receiver",
+      convert(rule.receiverConversion, rule.receiverConversionValue, next.receiver, rule.receiverConversionReplacement),
+    );
     set("mccmnc", ctx.mccmncOf(next.receiver));
   }
   if (rule.senderTon !== null) set("senderTon", rule.senderTon);

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.13.0
+  version: 0.14.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -7602,11 +7602,16 @@ components:
           type: boolean
         senderConversion:
           type: [string, "null"]
-          enum: [left_strip, right_strip, prepend, append, translation, random_number, sender_id_template, null]
+          enum: [left_strip, right_strip, prepend, append, translation, regex_replace, random_number, sender_id_template, null]
+          description: "translation = prefix swap written \"from=to\"; regex_replace = senderConversionValue is a regular expression and senderConversionReplacement replaces each match ($1..$9 = groups)."
         senderConversionValue:
           type: [string, "null"]
+          maxLength: 200
+          description: "Digits to strip, text to add, \"from=to\" for translation, or the pattern for regex_replace."
+        senderConversionReplacement:
+          type: [string, "null"]
           maxLength: 100
-          description: "Digits to strip, text to add, or for translation \"from=to\"."
+          description: regex_replace only - the text each match becomes ($1..$9 insert groups); empty removes the match.
         senderConversionListId:
           description: Number list (Random or Sender ID Template) for random_number and sender_id_template.
           oneOf:
@@ -7614,10 +7619,14 @@ components:
             - type: "null"
         receiverConversion:
           type: [string, "null"]
-          enum: [left_strip, right_strip, prepend, append, translation, null]
+          enum: [left_strip, right_strip, prepend, append, translation, regex_replace, null]
         receiverConversionValue:
           type: [string, "null"]
+          maxLength: 200
+        receiverConversionReplacement:
+          type: [string, "null"]
           maxLength: 100
+          description: regex_replace only - the text each match becomes ($1..$9 insert groups).
         senderTon:
           type: [integer, "null"]
           minimum: 0
@@ -7699,7 +7708,7 @@ components:
               maxItems: 1000
               items:
                 $ref: "#/components/schemas/TranslationTargetInput"
-      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionListId, receiverConversion, receiverConversionValue, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt, targets]
+      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt, targets]
       unevaluatedProperties: false
 
     TranslationRuleDetail:
@@ -7726,7 +7735,7 @@ components:
             archivedAt:
               type: [string, "null"]
               format: date-time
-      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionListId, receiverConversion, receiverConversionValue, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
+      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
 
     TranslationRuleSaved:
       type: object

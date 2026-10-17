@@ -34,10 +34,11 @@ export const SENDER_CONVERSIONS = [
   { value: "prepend", label: "Prepend" },
   { value: "append", label: "Append" },
   { value: "translation", label: "Translation" },
+  { value: "regex_replace", label: "Regex Replace" },
   { value: "random_number", label: "Random Number" },
   { value: "sender_id_template", label: "Sender ID Template" },
 ];
-export const RECEIVER_CONVERSIONS = SENDER_CONVERSIONS.slice(0, 5);
+export const RECEIVER_CONVERSIONS = SENDER_CONVERSIONS.slice(0, 6);
 export const conversionLabel = (v: string | null) => SENDER_CONVERSIONS.find((c) => c.value === v)?.label ?? "—";
 
 /** Hint under a conversion value, and whether the conversion takes a list instead. */
@@ -47,8 +48,16 @@ export function conversionHint(kind: string | null): string | undefined {
   if (kind === "prepend") return "Text added in front";
   if (kind === "append") return "Text added at the end";
   if (kind === "translation") return 'Prefix swap written "from=to", e.g. 00=+';
+  if (kind === "regex_replace") return "Regular expression, e.g. ^0(\\d+)";
   return undefined;
 }
+/** "left strip 2", "translation 00=+", "regex replace ^0(\d+) → 44$1". */
+export function conversionText(kind: string, value: string | null, replacement: string | null): string {
+  const label = conversionLabel(kind).toLowerCase();
+  if (kind === "regex_replace") return `${label} ${value ?? ""} → ${replacement ? replacement : "(removed)"}`;
+  return value ? `${label} ${value}` : label;
+}
+
 export const usesList = (kind: string | null) => kind === "random_number" || kind === "sender_id_template";
 
 export const TON_OPTIONS = [
@@ -100,9 +109,11 @@ export function blankRule(): TranslationRuleInput {
     receiverListNegate: false,
     senderConversion: null,
     senderConversionValue: null,
+    senderConversionReplacement: null,
     senderConversionListId: null,
     receiverConversion: null,
     receiverConversionValue: null,
+    receiverConversionReplacement: null,
     senderTon: null,
     senderNpi: null,
     destTon: null,
@@ -144,6 +155,9 @@ export function toSave(v: TranslationRuleInput): TranslationRuleInput {
     senderConversionValue: v.senderConversion && !usesList(v.senderConversion) ? v.senderConversionValue : null,
     senderConversionListId: usesList(v.senderConversion) ? v.senderConversionListId : null,
     receiverConversionValue: v.receiverConversion ? v.receiverConversionValue : null,
+    senderConversionReplacement: v.senderConversion === "regex_replace" ? (v.senderConversionReplacement ?? "") : null,
+    receiverConversionReplacement:
+      v.receiverConversion === "regex_replace" ? (v.receiverConversionReplacement ?? "") : null,
     contentRegexIndex: v.contentRegex ? v.contentRegexIndex : null,
     contentReplacement: v.contentRegex ? (v.contentReplacement ?? "") : null,
   };
@@ -177,9 +191,9 @@ export function ruleSummary(v: TranslationRuleInput): string {
       ? ["block"]
       : [
           v.senderConversion &&
-            `sender ${conversionLabel(v.senderConversion).toLowerCase()}${v.senderConversionValue ? ` ${v.senderConversionValue}` : ""}`,
+            `sender ${conversionText(v.senderConversion, v.senderConversionValue, v.senderConversionReplacement)}`,
           v.receiverConversion &&
-            `receiver ${conversionLabel(v.receiverConversion).toLowerCase()}${v.receiverConversionValue ? ` ${v.receiverConversionValue}` : ""}`,
+            `receiver ${conversionText(v.receiverConversion, v.receiverConversionValue, v.receiverConversionReplacement)}`,
           (v.senderTon !== null || v.senderNpi !== null) &&
             `sender TON/NPI ${v.senderTon ?? "-"}/${v.senderNpi ?? "-"}`,
           (v.destTon !== null || v.destNpi !== null) && `dest TON/NPI ${v.destTon ?? "-"}/${v.destNpi ?? "-"}`,

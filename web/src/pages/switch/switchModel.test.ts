@@ -34,6 +34,7 @@ describe("switch model (§6.4, §13.2)", () => {
     assert.equal(v.senderConversionListId, 7);
     assert.equal(v.receiverConversionValue, null);
     assert.equal(v.contentRegexIndex, null);
+    assert.equal(v.senderConversionReplacement, null, "only Regex Replace keeps a replacement");
     assert.equal(
       toSave({ ...blankRule(), senderConversion: "prepend", senderConversionListId: 3 }).senderConversionListId,
       null,
@@ -67,6 +68,15 @@ describe("switch model (§6.4, §13.2)", () => {
         continueAfter: false,
       }),
       "When receiver ~ ^00: receiver left strip 2, then stop",
+    );
+    assert.equal(
+      ruleSummary({
+        ...blankRule(),
+        receiverConversion: "regex_replace",
+        receiverConversionValue: "^0(\\d+)",
+        receiverConversionReplacement: "44$1",
+      }),
+      "Every message: receiver regex replace ^0(\\d+) → 44$1",
     );
     assert.equal(
       ruleSummary({ ...blankRule(), action: "block", senderPattern: "^TEST", senderPatternNegate: true }),

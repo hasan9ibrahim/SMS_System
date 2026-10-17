@@ -691,6 +691,7 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "prepend", label: "Prepend" },
           { value: "append", label: "Append" },
           { value: "translation", label: "Translation" },
+          { value: "regex_replace", label: "Regex Replace" },
           { value: "random_number", label: "Random Number" },
           { value: "sender_id_template", label: "Sender ID Template" },
         ],

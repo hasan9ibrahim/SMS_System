@@ -564,7 +564,11 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
 
         {!blocks && (
           <>
-            <Section title="Sender and receiver conversion" columns={4}>
+            <Section
+              title="Sender and receiver conversion"
+              columns={3}
+              note="Translation swaps a prefix; Regex Replace rewrites any part"
+            >
               <SelectField
                 form={form}
                 path="senderConversion"
@@ -583,11 +587,22 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                 <TextField
                   form={form}
                   path="senderConversionValue"
-                  label="Value"
-                  maxLength={100}
+                  label={v.senderConversion === "regex_replace" ? "Pattern" : "Value"}
+                  maxLength={200}
                   disabled={!v.senderConversion}
                   hint={conversionHint(v.senderConversion)}
                 />
+              )}
+              {v.senderConversion === "regex_replace" ? (
+                <TextField
+                  form={form}
+                  path="senderConversionReplacement"
+                  label="Replace with"
+                  maxLength={100}
+                  hint="$1..$9 insert the pattern's groups; empty removes the match"
+                />
+              ) : (
+                <div />
               )}
               <SelectField
                 form={form}
@@ -599,11 +614,23 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               <TextField
                 form={form}
                 path="receiverConversionValue"
-                label="Value"
-                maxLength={100}
+                label={v.receiverConversion === "regex_replace" ? "Pattern" : "Value"}
+                maxLength={200}
                 disabled={!v.receiverConversion}
                 hint={conversionHint(v.receiverConversion)}
               />
+              {v.receiverConversion === "regex_replace" ? (
+                <TextField
+                  form={form}
+                  path="receiverConversionReplacement"
+                  label="Replace with"
+                  maxLength={100}
+                  placeholder="44$1"
+                  hint="$1..$9 insert the pattern's groups; empty removes the match"
+                />
+              ) : (
+                <div />
+              )}
             </Section>
             <Section title="SMPP field overrides" columns={3} note="Empty = keep what the message has">
               <SelectField form={form} path="senderTon" label="Sender TON" placeholder="Keep" options={TON_OPTIONS} />
@@ -811,7 +838,9 @@ function RuleDetail({ row, select }: { row: TranslationRuleRow; select: (id: num
   if (!d) return <p className="muted">{q.isError ? problemText(q.error) : "Loading…"}</p>;
   const input = inputFromDetail(d);
   const conv = d.senderConversion
-    ? `${conversionLabel(d.senderConversion)} ${row.senderConversionValue ?? ""}`.trim()
+    ? d.senderConversion === "regex_replace"
+      ? `Regex Replace ${d.senderConversionValue ?? ""} → ${d.senderConversionReplacement || "(removed)"}`
+      : `${conversionLabel(d.senderConversion)} ${row.senderConversionValue ?? ""}`.trim()
     : null;
   return (
     <div className="tr-detail">

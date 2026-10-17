@@ -4358,24 +4358,38 @@ export type components = {
       senderListNegate?: boolean;
       receiverListId?: components["schemas"]["Id"] | null;
       receiverListNegate?: boolean;
-      /** @enum {string|null} */
+      /**
+       * @description translation = prefix swap written "from=to"; regex_replace = senderConversionValue is a regular expression and senderConversionReplacement replaces each match ($1..$9 = groups).
+       * @enum {string|null}
+       */
       senderConversion?:
         | "left_strip"
         | "right_strip"
         | "prepend"
         | "append"
         | "translation"
+        | "regex_replace"
         | "random_number"
         | "sender_id_template"
         | null;
-      /** @description Digits to strip, text to add, or for translation "from=to". */
+      /** @description Digits to strip, text to add, "from=to" for translation, or the pattern for regex_replace. */
       senderConversionValue?: string | null;
+      /** @description regex_replace only - the text each match becomes ($1..$9 insert groups); empty removes the match. */
+      senderConversionReplacement?: string | null;
       /** @description Number list (Random or Sender ID Template) for random_number and sender_id_template. */
       senderConversionListId?: components["schemas"]["Id"] | null;
       /** @enum {string|null} */
       receiverConversion?:
-        "left_strip" | "right_strip" | "prepend" | "append" | "translation" | null;
+        | "left_strip"
+        | "right_strip"
+        | "prepend"
+        | "append"
+        | "translation"
+        | "regex_replace"
+        | null;
       receiverConversionValue?: string | null;
+      /** @description regex_replace only - the text each match becomes ($1..$9 insert groups). */
+      receiverConversionReplacement?: string | null;
       senderTon?: number | null;
       senderNpi?: number | null;
       destTon?: number | null;
@@ -4426,9 +4440,11 @@ export type components = {
       | "receiverListNegate"
       | "senderConversion"
       | "senderConversionValue"
+      | "senderConversionReplacement"
       | "senderConversionListId"
       | "receiverConversion"
       | "receiverConversionValue"
+      | "receiverConversionReplacement"
       | "senderTon"
       | "senderNpi"
       | "destTon"
@@ -4471,9 +4487,11 @@ export type components = {
       | "receiverListNegate"
       | "senderConversion"
       | "senderConversionValue"
+      | "senderConversionReplacement"
       | "senderConversionListId"
       | "receiverConversion"
       | "receiverConversionValue"
+      | "receiverConversionReplacement"
       | "senderTon"
       | "senderNpi"
       | "destTon"

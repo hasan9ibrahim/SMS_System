@@ -54,9 +54,11 @@ const COLUMNS: [keyof Fields, string][] = [
   ["receiverListNegate", "receiver_list_negate"],
   ["senderConversion", "sender_conversion"],
   ["senderConversionValue", "sender_conversion_value"],
+  ["senderConversionReplacement", "sender_conversion_replacement"],
   ["senderConversionListId", "sender_conversion_list_id"],
   ["receiverConversion", "receiver_conversion"],
   ["receiverConversionValue", "receiver_conversion_value"],
+  ["receiverConversionReplacement", "receiver_conversion_replacement"],
   ["senderTon", "sender_ton"],
   ["senderNpi", "sender_npi"],
   ["destTon", "dest_ton"],
@@ -177,6 +179,9 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
     if (!input.senderConversionValue) err("/senderConversionValue", "the text to add");
   } else if (sc === "translation") {
     if (!/^[^=]+=.*$/.test(input.senderConversionValue ?? "")) err("/senderConversionValue", 'write it as "from=to"');
+  } else if (sc === "regex_replace") {
+    if (!input.senderConversionValue) err("/senderConversionValue", "the pattern to replace");
+    else if (!compile(input.senderConversionValue)) err("/senderConversionValue", "not a valid regular expression");
   } else if (sc === "random_number" || sc === "sender_id_template") {
     if (input.senderConversionListId === null) err("/senderConversionListId", "pick a number list");
   }
@@ -189,6 +194,9 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
   } else if (rc === "translation") {
     if (!/^[^=]+=.*$/.test(input.receiverConversionValue ?? ""))
       err("/receiverConversionValue", 'write it as "from=to"');
+  } else if (rc === "regex_replace") {
+    if (!input.receiverConversionValue) err("/receiverConversionValue", "the pattern to replace");
+    else if (!compile(input.receiverConversionValue)) err("/receiverConversionValue", "not a valid regular expression");
   }
   if (input.senderMinLength > input.senderMaxLength) err("/senderMinLength", "must not exceed the maximum");
   if (input.receiverMinLength > input.receiverMaxLength) err("/receiverMinLength", "must not exceed the maximum");
@@ -335,6 +343,10 @@ const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
   ...input,
   name: input.name.trim(),
   mccmncs: [...new Set(input.mccmncs)].sort(),
+  // The replacement belongs to Regex Replace only.
+  senderConversionReplacement: input.senderConversion === "regex_replace" ? input.senderConversionReplacement : null,
+  receiverConversionReplacement:
+    input.receiverConversion === "regex_replace" ? input.receiverConversionReplacement : null,
   targets: plainTargets(input.targets),
 });
 

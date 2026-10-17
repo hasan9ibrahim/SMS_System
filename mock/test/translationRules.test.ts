@@ -68,9 +68,11 @@ const BLANK: Omit<TranslationRuleInput, "name" | "targets"> = {
   receiverListNegate: false,
   senderConversion: null,
   senderConversionValue: null,
+  senderConversionReplacement: null,
   senderConversionListId: null,
   receiverConversion: null,
   receiverConversionValue: null,
+  receiverConversionReplacement: null,
   senderTon: null,
   senderNpi: null,
   destTon: null,
@@ -103,13 +105,17 @@ const ctx: EngineContext = {
 const msg = { sender: "4479001", receiver: "0044712345678", text: "Your code is 1234" };
 
 describe("translation engine (§6.4)", () => {
-  test("conversions: strip, prepend, append, translation", () => {
+  test("conversions: strip, prepend, append, translation, regex replace", () => {
     assert.equal(convert("left_strip", "2", "0044"), "44");
     assert.equal(convert("right_strip", "1", "12345"), "1234");
     assert.equal(convert("prepend", "+", "44"), "+44");
     assert.equal(convert("append", "X", "AB"), "ABX");
     assert.equal(convert("translation", "00=+", "0044"), "+44");
     assert.equal(convert("translation", "00=+", "44"), "44", "no prefix, no change");
+    // Regex Replace next to the prefix swap (decided 2026-10-17)
+    assert.equal(convert("regex_replace", "^0(\\d+)", "07123456", "44$1"), "447123456");
+    assert.equal(convert("regex_replace", "^(\\d{3})\\d{4}", "4471234567", "$1XXXX"), "447XXXX567");
+    assert.equal(convert("regex_replace", "[^0-9]", "+44 7123", ""), "447123", "empty replacement removes");
   });
 
   test("content rewrite: regex group, whole match, template", () => {
@@ -313,6 +319,25 @@ describe("translation rules API", { skip }, () => {
     assert.deepEqual(edited.change.diff.map((d: { field: string }) => d.field).sort(), ["continueAfter", "targets"]);
     assert.equal(edited.record.usedBy, 2);
 
+    const regex = await ok(
+      "testTranslationRule",
+      call("POST", `/translation-rules/${id}/test`, {
+        message: { sender: "ACME", receiver: "07123456", text: "hi" },
+        rule: {
+          ...input,
+          receiverPattern: null,
+          receiverConversion: "regex_replace",
+          receiverConversionValue: "^0(\\d+)",
+          receiverConversionReplacement: "44$1",
+        },
+      }),
+    );
+    assert.equal(regex.after.receiver, "447123456");
+    const badRegex = await call("POST", `/translation-rules/${id}/test`, {
+      message: { sender: "A", receiver: "1", text: "" },
+      rule: { ...input, receiverConversion: "regex_replace", receiverConversionValue: "([" },
+    });
+    assert.equal(badRegex.statusCode, 400);
     const tested = await ok(
       "testTranslationRule",
       call("POST", `/translation-rules/${id}/test`, {
