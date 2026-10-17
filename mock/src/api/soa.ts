@@ -29,6 +29,7 @@ import { notFound, setArchived } from "./masterData.js";
 import { recordChange, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { companyMailbox, logEmail } from "./emailLog.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -710,6 +711,14 @@ export async function runSoaReport(id: number): Promise<void> {
     let emailTo: string[] = [];
     if (r.purpose === "email") {
       emailTo = st.recipients;
+      await logSoaEmail(
+        pool,
+        st,
+        r.template_id === null ? null : Number(r.template_id),
+        emailTo,
+        r.created_by_id,
+        r.file_type,
+      );
       if (!emailTo.length) {
         await pool.query(
           `UPDATE soa_reports SET status = 'failed', error = $2, snapshot = $3, closing_balance = $4, currency = $5,
@@ -732,6 +741,29 @@ export async function runSoaReport(id: number): Promise<void> {
       ])
       .catch(() => undefined);
   }
+}
+
+/** Email Logs (§8) entry for a sent SOA. */
+async function logSoaEmail(
+  c: Db,
+  st: SoaStatement,
+  templateId: number | null,
+  to: string[],
+  userId: unknown,
+  fileType: string,
+) {
+  const mail = templateId === null ? null : await emailFor(c, st, templateId);
+  await logEmail(c, {
+    type: "send_soa",
+    enterpriseId: st.enterpriseId,
+    to,
+    sender: await companyMailbox(c, st.enterpriseId, "billing"),
+    subject: mail?.subject ?? `Statement of account ${st.from} to ${st.to}`,
+    body: mail?.body ?? "",
+    file: `SOA_${st.from}_${st.to}.${fileType === "excel" ? "xls" : "pdf"}`,
+    error: to.length ? null : "No billing contact",
+    userId: userId === null || userId === undefined ? null : Number(userId),
+  });
 }
 
 /** After a restart: run the reports users queued that never finished. */
@@ -901,6 +933,12 @@ export function sendSoaReport(request: FastifyRequest, reply: FastifyReply) {
       to,
       b.templateId,
     ]);
+    const { rows: snap } = await pool.query("SELECT snapshot, created_by_id FROM soa_reports WHERE id = $1", [id]);
+    const st =
+      (snap[0]?.snapshot as SoaStatement | null) ??
+      (await buildStatement(pool, before.enterpriseId, before.invoiceType, before.from, before.to));
+    const me = await getCurrentUser();
+    if (st) await logSoaEmail(pool, st, b.templateId, to, me.id, before.fileType);
     return loadReport(pool, id);
   });
 }

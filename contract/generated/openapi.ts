@@ -4455,6 +4455,671 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/email-logs/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List e-mail logs (server-side filter, sort and paging)
+     * @description Email Logs (§8): Info ID, Enterprise, Customer Trunk, Vendor Trunk, Email Type, Status, Rate Date, File, Error,
+     *     To / CC Address, Updated By / Time. Every e-mail the platform sends writes one row.
+     */
+    post: operations["queryEmailLogs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-logs/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export e-mail logs as CSV
+     * @description Same filter and sort as the list; up to 100,000 rows.
+     */
+    post: operations["exportEmailLogs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-logs/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One e-mail with its subject and body
+     * @description What was sent, to whom, and why it failed.
+     */
+    get: operations["getEmailLog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/notifications/send-rate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send Rate: e-mail rate sheets to customer trunks (§8)
+     * @description Modal Customer Send Rate Information: File Type (Excel / CSV) and Send Email. One e-mail per trunk with its
+     *     current rate sheet attached, to the enterprise's Rates contact (Commercial when empty), logged in Email Logs.
+     *     Trunks without a rate table or contact are listed as failed.
+     */
+    post: operations["sendRateNotifications"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/notifications/send-tech-info": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send Tech Info: e-mail connection details (§8)
+     * @description Host and port of the business company's SMPP listener (§11), system ID, bind type, allowed IPs, TPS and
+     *     connections, to the Technical contact. The password is never sent by e-mail; it is shared separately.
+     */
+    post: operations["sendTechInfoNotifications"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/notifications/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview a Send Rate or Send Tech Info e-mail
+     * @description Recipients, subject and body for one trunk.
+     */
+    post: operations["previewNotification"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-trunks/{id}/rate-sheet": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * View Rate: the trunk's current rate sheet as a file
+     * @description Current lines of the trunk's first rate table: country, network, MCCMNC, rate, currency, effective date, plus
+     *     scheduled changes.
+     */
+    get: operations["downloadRateSheet"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall-rules/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List firewall IPs (server-side filter, sort and paging)
+     * @description Firewall Banned IP and Trusted IP tabs (§8): IP address or range, filter (listener), source, reason, hits and
+     *     last hit. Filter `list` eq banned or trusted.
+     */
+    post: operations["queryFirewallRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ban or trust an IP (inline add bar)
+     * @description IPv4 / IPv6 address or CIDR range. The same address cannot be banned and trusted for one filter (409). One
+     *     undoable change.
+     */
+    post: operations["createFirewallRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Remove a banned or trusted IP (Action)
+     * @description One undoable change.
+     */
+    post: operations["archiveFirewallRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall-rules/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a removed IP
+     * @description One undoable change.
+     */
+    post: operations["restoreFirewallRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall-filters/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List firewall filters (server-side filter, sort and paging)
+     * @description Filter tab (§8): Name, Status, which listener it guards, and the brute-force threshold for automatic bans.
+     */
+    post: operations["queryFirewallFilters"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall-filters": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a firewall filter
+     * @description One undoable change.
+     */
+    post: operations["createFirewallFilter"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall-filters/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change a firewall filter
+     * @description One undoable change.
+     */
+    put: operations["updateFirewallFilter"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/firewall/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Which firewall rule an IP meets
+     * @description Trusted beats banned; a banned range or address blocks the listeners its filter guards.
+     */
+    post: operations["checkFirewallIp"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/traffic-alerts/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List traffic alerts (server-side filter, sort and paging)
+     * @description Traffic Alert grid (§8): Info ID, Name, Customer Trunk, Vendor Trunk, Notification Email, Status, plus the last
+     *     check and whether it is firing.
+     */
+    post: operations["queryTrafficAlerts"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/traffic-alerts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a traffic alert
+     * @description Name, sample count and interval, ASR / DLR / margin thresholds (alert when at or below), customer trunk, optional
+     *     vendor trunk, sender ID, MCCMNC, average delivery delay (alert when at or above), notification e-mails,
+     *     enterprise contact e-mail, template and status.
+     *     One undoable change.
+     */
+    post: operations["createTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/traffic-alerts/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a traffic alert
+     * @description Every field of the form.
+     */
+    get: operations["getTrafficAlert"];
+    /**
+     * Change a traffic alert
+     * @description Saves the whole form.
+     *     One undoable change.
+     */
+    put: operations["updateTrafficAlert"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/traffic-alerts/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a traffic alert (§13.29)
+     * @description It is never removed. One undoable change.
+     */
+    post: operations["archiveTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/traffic-alerts/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a traffic alert
+     * @description Administrators; one undoable change.
+     */
+    post: operations["restoreTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/traffic-alerts/{id}/clone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Clone a traffic alert
+     * @description An inactive copy named "… (copy)". One undoable change.
+     */
+    post: operations["cloneTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/traffic-alerts/{id}/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Check a traffic alert now
+     * @description Measures the last sample interval in the EDR store against the thresholds and records the result; an alert that
+     *     starts firing sends its e-mail (logged in Email Logs). The mock checks every active alert every 5 minutes.
+     */
+    post: operations["checkTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List SMS to voice rules (server-side filter, sort and paging)
+     * @description SMS To Voice (§8): SmsVoiceID, Sender ID, Receiver ID, Prefix, Repeat, Destination, Updated By.
+     */
+    post: operations["querySmsVoiceRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an SMS to voice rule
+     * @description Sender ID and Receiver ID patterns (% and _ wildcards, empty = any), receiver prefix, how often the voice call
+     *     repeats the text, destination (MCCMNC) and status.
+     *     One undoable change.
+     */
+    post: operations["createSmsVoiceRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One an SMS to voice rule
+     * @description Every field of the form.
+     */
+    get: operations["getSmsVoiceRule"];
+    /**
+     * Change an SMS to voice rule
+     * @description Saves the whole form.
+     *     One undoable change.
+     */
+    put: operations["updateSmsVoiceRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) an SMS to voice rule (§13.29)
+     * @description It is never removed. One undoable change.
+     */
+    post: operations["archiveSmsVoiceRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an SMS to voice rule
+     * @description Administrators; one undoable change.
+     */
+    post: operations["restoreSmsVoiceRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Which SMS to voice rule a message meets
+     * @description First active rule whose sender, receiver, prefix and destination match, with the text the call reads out.
+     */
+    post: operations["testSmsVoiceRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/broadcasts/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Who a broadcast reaches
+     * @description Enterprises and addresses for the chosen contact types and enterprise types of a business company.
+     */
+    post: operations["previewBroadcast"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/broadcasts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Broadcast: e-mail all partners (§8)
+     * @description One e-mail per enterprise to the chosen contacts, from the business company's mailbox; each is logged in Email
+     *     Logs (type Broadcast).
+     */
+    post: operations["sendBroadcast"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/broadcasts/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List broadcasts (server-side filter, sort and paging)
+     * @description Broadcasts sent: subject, business company, sender, audience, counts, who and when.
+     */
+    post: operations["queryBroadcasts"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/{id}/mailboxes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Business Company Contact: the sender mailboxes
+     * @description One per department mailbox of the business company (§11 sender blocks).
+     */
+    get: operations["listCompanyMailboxes"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -7992,6 +8657,334 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
+     * @description The §8 list plus payment_confirmation (§13.33) and invoice_acceptance / invoice_rejection (§13.31).
+     * @enum {string}
+     */
+    EmailType:
+      | "send_rate"
+      | "send_tech_info"
+      | "invoice"
+      | "check_smtp"
+      | "bind_down_alert"
+      | "otp"
+      | "forgot_password"
+      | "auto_upload_rate"
+      | "credit_alert"
+      | "balance_alert"
+      | "schedule_report_alert"
+      | "traffic_alert"
+      | "auto_upload_rejected"
+      | "daily_report"
+      | "broadcast"
+      | "trouble_ticket"
+      | "send_soa"
+      | "payment_confirmation"
+      | "invoice_acceptance"
+      | "invoice_rejection";
+    EmailLogRow: {
+      id: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"] | null;
+      enterprise: string | null;
+      customerTrunk: string | null;
+      vendorTrunk: string | null;
+      emailType: components["schemas"]["EmailType"];
+      /** @enum {string} */
+      status: "sent" | "failed";
+      /** Format: date */
+      rateDate: string | null;
+      /** @description Attachment file name. */
+      file: string | null;
+      error: string | null;
+      to: string[];
+      cc: string[];
+      subject: string;
+      /** @description Null = the platform. */
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    EmailLogPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["EmailLogRow"][];
+    };
+    EmailLogDetail: components["schemas"]["EmailLogRow"] & {
+      body: string;
+      sender: string | null;
+    };
+    NotificationTrunksInput: {
+      trunkIds: components["schemas"]["Id"][];
+    };
+    SendRateInput: {
+      trunkIds: components["schemas"]["Id"][];
+      /** @enum {string} */
+      fileType: "excel" | "csv";
+      /** @description False = nothing is e-mailed; the page downloads the sheets instead (View Rate). */
+      sendEmail: boolean;
+    };
+    NotificationResult: {
+      sent: number;
+      failed: {
+        trunkId: components["schemas"]["Id"];
+        trunk: string;
+        reason: string;
+      }[];
+    };
+    NotificationPreviewInput: {
+      trunkId: components["schemas"]["Id"];
+      /** @enum {string} */
+      kind: "send_rate" | "send_tech_info";
+    };
+    FirewallRuleInput: {
+      /** @enum {string} */
+      list: "banned" | "trusted";
+      /** @description IPv4 / IPv6 address or CIDR range. */
+      ip: string;
+      filterId: components["schemas"]["Id"];
+      reason: string | null;
+    };
+    FirewallRuleRow: {
+      id: components["schemas"]["Id"];
+      /** @enum {string} */
+      list: "banned" | "trusted";
+      ip: string;
+      filterId: components["schemas"]["Id"];
+      filter: string;
+      /**
+       * @description auto = banned by the brute-force protection.
+       * @enum {string}
+       */
+      source: "manual" | "auto";
+      reason: string | null;
+      /** @description Connections refused (banned) or allowed through (trusted) in the last 24 hours. */
+      hits: number;
+      /** Format: date-time */
+      lastHitAt: string | null;
+      /**
+       * Format: date-time
+       * @description Automatic bans lift by themselves.
+       */
+      expiresAt: string | null;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    FirewallRulePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["FirewallRuleRow"][];
+    };
+    FirewallRuleSaved: {
+      record: components["schemas"]["FirewallRuleRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    FirewallFilterInput: components["schemas"]["FirewallFilterFields"];
+    FirewallFilterFields: {
+      name: string;
+      /** @enum {string} */
+      listener: "smpp" | "http" | "portal" | "all";
+      /** @enum {string} */
+      status: "active" | "inactive";
+      /** @description Failed binds or logins that trigger an automatic ban. */
+      failedAttempts: number;
+      windowSeconds: number;
+      banMinutes: number;
+    };
+    FirewallFilterRow: components["schemas"]["FirewallFilterFields"] & {
+      id: components["schemas"]["Id"];
+      banned: number;
+      trusted: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    FirewallFilterPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["FirewallFilterRow"][];
+    };
+    FirewallFilterSaved: {
+      record: components["schemas"]["FirewallFilterRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    FirewallCheckInput: {
+      ip: string;
+    };
+    FirewallCheckResult: {
+      ip: string;
+      /**
+       * @description allowed = no rule; normal checks (trunk IP lists, brute-force protection) apply.
+       * @enum {string}
+       */
+      decision: "trusted" | "banned" | "allowed";
+      rules: components["schemas"]["FirewallRuleRow"][];
+    };
+    TrafficAlertInput: components["schemas"]["TrafficAlertFields"];
+    TrafficAlertFields: {
+      name: string;
+      /** @description Sample Count (≥) - at least this many messages in the interval before the alert judges. */
+      sampleCount: number;
+      /** @description Sample Interval (minutes). */
+      sampleMinutes: number;
+      /** @description ASR Threshold (≤), percent. */
+      asrThreshold: number;
+      /** @description DLR Threshold (≤), percent. */
+      dlrThreshold: number;
+      /** @description MRG Threshold (≤), margin percent. */
+      marginThreshold: number;
+      customerTrunkId: components["schemas"]["Id"];
+      vendorTrunkId: components["schemas"]["Id"] | null;
+      senderId: string | null;
+      mccmnc: string | null;
+      /** @description Average Delivery Delay (s ≥); null = not checked. */
+      delayThreshold: number | null;
+      notificationEmails: string[];
+      /**
+       * @description Enterprise Contact Email - also e-mail this contact of the customer.
+       * @enum {string}
+       */
+      contactEmail: "none" | "commercial" | "technical" | "rates" | "finance";
+      templateId: components["schemas"]["Id"];
+      /** @enum {string} */
+      status: "active" | "inactive";
+    };
+    TrafficAlertRow: components["schemas"]["TrafficAlertFields"] & {
+      id: components["schemas"]["Id"];
+      customerTrunk: string;
+      enterprise: string;
+      vendorTrunk: string | null;
+      template: string | null;
+      /**
+       * @description Result of the last check; too_few = fewer messages than the sample count.
+       * @enum {string}
+       */
+      state: "ok" | "firing" | "too_few" | "unknown";
+      /** Format: date-time */
+      lastCheckedAt: string | null;
+      /** Format: date-time */
+      lastTriggeredAt: string | null;
+      lastValues: components["schemas"]["TrafficAlertValues"] | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    TrafficAlertValues: {
+      messages: number;
+      asr: number | null;
+      dlr: number | null;
+      marginPct: number | null;
+      delaySeconds: number | null;
+    };
+    TrafficAlertPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["TrafficAlertRow"][];
+    };
+    TrafficAlertSaved: {
+      record: components["schemas"]["TrafficAlertRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    TrafficAlertCheck: {
+      /** @enum {string} */
+      state: "ok" | "firing" | "too_few" | "unknown";
+      from: components["schemas"]["Timestamp"];
+      to: components["schemas"]["Timestamp"];
+      values: components["schemas"]["TrafficAlertValues"];
+      /** @description One line per threshold crossed. */
+      breaches: string[];
+      /** @description Addresses e-mailed by this check (only when it started firing). */
+      emailed: string[];
+    };
+    SmsVoiceRuleInput: components["schemas"]["SmsVoiceRuleFields"];
+    SmsVoiceRuleFields: {
+      /** @description Pattern; % any characters, _ one; null = any sender. */
+      senderId: string | null;
+      receiverId: string | null;
+      /** @description Receiver number prefix, e.g. a landline range. */
+      prefix: string | null;
+      /** @description How many times the call reads the text. */
+      repeat: number;
+      /** @description Destination; null = any. */
+      mccmnc: string | null;
+      /** @enum {string} */
+      status: "active" | "inactive";
+    };
+    SmsVoiceRuleRow: components["schemas"]["SmsVoiceRuleFields"] & {
+      id: components["schemas"]["Id"];
+      /** @description Country and network of the MCCMNC. */
+      destination: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    SmsVoiceRulePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["SmsVoiceRuleRow"][];
+    };
+    SmsVoiceRuleSaved: {
+      record: components["schemas"]["SmsVoiceRuleRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    SmsVoiceTestInput: {
+      senderId: string;
+      receiver: string;
+      text: string;
+    };
+    SmsVoiceTestResult: {
+      matched: boolean;
+      rule: components["schemas"]["SmsVoiceRuleRow"] | null;
+      /** @description The receiver's destination by dial code. */
+      mccmnc: string | null;
+      /** @description What the call reads out (digits spaced, repeated). */
+      spoken: string | null;
+      reason: string;
+    };
+    BroadcastAudienceInput: {
+      businessCompanyId: components["schemas"]["Id"];
+      contactTypes: ("commercial" | "technical" | "rates" | "finance")[];
+      enterpriseTypes: ("customer" | "vendor" | "reciprocal")[];
+    };
+    BroadcastAudience: {
+      enterprises: number;
+      addresses: number;
+      /** @description The first few enterprises reached. */
+      sample: string[];
+    };
+    BroadcastInput: {
+      businessCompanyId: components["schemas"]["Id"];
+      /**
+       * Format: email
+       * @description One of the business company's mailboxes.
+       */
+      sender: string;
+      subject: string;
+      contactTypes: ("commercial" | "technical" | "rates" | "finance")[];
+      enterpriseTypes: ("customer" | "vendor" | "reciprocal")[];
+      /** @description Rich text (HTML); scripts and event handlers are removed before sending. */
+      bodyHtml: string;
+      attachment: {
+        name: string;
+        /** @description At most 5 MB once decoded. */
+        contentBase64: string;
+      } | null;
+    };
+    BroadcastRow: {
+      id: components["schemas"]["Id"];
+      businessCompany: string;
+      sender: string;
+      subject: string;
+      contactTypes: string[];
+      enterpriseTypes: string[];
+      enterprises: number;
+      addresses: number;
+      /** @description Enterprises without an address for the chosen contacts. */
+      failed: number;
+      attachment: string | null;
+      sentBy: string | null;
+      sentAt: components["schemas"]["Timestamp"];
+    };
+    BroadcastPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["BroadcastRow"][];
+    };
+    CompanyMailboxList: {
+      mailboxes: {
+        email: string;
+        department: string;
+      }[];
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -8406,7 +9399,13 @@ export type components = {
       | "vendor_invoices"
       | "recon_rules"
       | "soa_reports"
-      | "email_templates";
+      | "email_templates"
+      | "email_logs"
+      | "firewall_rules"
+      | "firewall_filters"
+      | "traffic_alerts"
+      | "sms_voice_rules"
+      | "broadcasts";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -15505,6 +16504,938 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryEmailLogs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of e-mail logs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailLogPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportEmailLogs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getEmailLog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The e-mail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailLogDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendRateNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SendRateInput"];
+      };
+    };
+    responses: {
+      /** @description What was sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendTechInfoNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NotificationTrunksInput"];
+      };
+    };
+    responses: {
+      /** @description What was sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NotificationPreviewInput"];
+      };
+    };
+    responses: {
+      /** @description The e-mail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadRateSheet: {
+    parameters: {
+      query?: {
+        fileType?: "excel" | "csv";
+      };
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rate sheet (Excel 2003 XML .xls, or CSV) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/vnd.ms-excel": string;
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryFirewallRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of firewall IPs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallRulePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createFirewallRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FirewallRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveFirewallRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Removed, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreFirewallRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryFirewallFilters: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of firewall filters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallFilterPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createFirewallFilter: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FirewallFilterInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallFilterSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateFirewallFilter: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FirewallFilterInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallFilterSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  checkFirewallIp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FirewallCheckInput"];
+      };
+    };
+    responses: {
+      /** @description The decision */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FirewallCheckResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryTrafficAlerts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of traffic alerts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TrafficAlertInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a traffic alert */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TrafficAlertInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cloneTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The copy, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  checkTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The measurement */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrafficAlertCheck"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  querySmsVoiceRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of SMS to voice rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmsVoiceRulePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createSmsVoiceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SmsVoiceRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmsVoiceRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getSmsVoiceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The an SMS to voice rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmsVoiceRuleRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateSmsVoiceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SmsVoiceRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmsVoiceRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveSmsVoiceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmsVoiceRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreSmsVoiceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmsVoiceRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  testSmsVoiceRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SmsVoiceTestInput"];
+      };
+    };
+    responses: {
+      /** @description The decision */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmsVoiceTestResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewBroadcast: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BroadcastAudienceInput"];
+      };
+    };
+    responses: {
+      /** @description The audience */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BroadcastAudience"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendBroadcast: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BroadcastInput"];
+      };
+    };
+    responses: {
+      /** @description The broadcast */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BroadcastRow"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryBroadcasts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of broadcasts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BroadcastPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listCompanyMailboxes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The mailboxes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CompanyMailboxList"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

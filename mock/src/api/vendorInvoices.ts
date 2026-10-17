@@ -50,6 +50,7 @@ import { exportList, ImportRun, notFound, parseCsv, setArchived } from "./master
 import { dependencies, isTimezone, recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { companyMailbox, logEmail } from "./emailLog.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -577,6 +578,18 @@ export async function runCheck(c: pg.PoolClient, id: number, userId: number | nu
     note: reasons.join("\n"),
     userId,
   });
+  if (emailStatus !== v.email_status && (emailStatus === "sent" || emailStatus === "failed")) {
+    const mail = emailText("acceptance", { ...v, our_amount: ourAmount, our_volume: ourVolume }, null);
+    await logEmail(c, {
+      type: "invoice_acceptance",
+      enterpriseId: Number(v.enterprise_id),
+      to: emailTo,
+      sender: await companyMailbox(c, Number(v.enterprise_id), "billing"),
+      subject: mail.subject,
+      body: mail.body,
+      error: emailStatus === "failed" ? "No billing contact" : null,
+    });
+  }
   if (emailStatus !== v.email_status && emailStatus === "sent")
     await addEvent(c, id, "email", { note: "Acceptance sent automatically", emailTo, userId: null });
   if (emailStatus !== v.email_status && emailStatus === "failed")
@@ -1007,6 +1020,15 @@ export function decideVendorInvoice(request: FastifyRequest, reply: FastifyReply
       if (emailKind) {
         const mail = emailText(emailKind, v, note);
         await addEvent(c, id, "email", { note: `${mail.subject}`, emailTo: to, userId: me.id });
+        await logEmail(c, {
+          type: emailKind === "acceptance" ? "invoice_acceptance" : "invoice_rejection",
+          enterpriseId: Number(v.enterprise_id),
+          to,
+          sender: await companyMailbox(c, Number(v.enterprise_id), "billing"),
+          subject: mail.subject,
+          body: mail.body,
+          userId: me.id,
+        });
       }
       if (!diff.length) return null;
       const label = {

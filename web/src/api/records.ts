@@ -50,7 +50,10 @@ export type RecordKind =
   | "billing_cycle"
   | "invoice"
   | "vendor_invoice"
-  | "recon_rule";
+  | "recon_rule"
+  | "firewall_rule"
+  | "traffic_alert"
+  | "sms_voice_rule";
 
 export interface Saved<T> {
   record: T;
@@ -258,6 +261,9 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   if (kind === "vendor_invoice") return unwrap(api.GET("/vendor-invoices/{id}/dependencies", params));
   // Removing a partner's own rule only brings the default rule back (§13.31).
   if (kind === "recon_rule") return Promise.resolve({ blocked: false, items: [] });
+  // Nothing depends on a firewall IP, a traffic alert or an SMS to voice rule (§8).
+  if (kind === "firewall_rule" || kind === "traffic_alert" || kind === "sms_voice_rule")
+    return Promise.resolve({ blocked: false, items: [] });
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -284,6 +290,9 @@ export function useArchive(kind: RecordKind) {
       if (kind === "invoice") return unwrap(api.POST("/invoices/{id}/archive", req));
       if (kind === "vendor_invoice") return unwrap(api.POST("/vendor-invoices/{id}/archive", req));
       if (kind === "recon_rule") return unwrap(api.POST("/recon-rules/{id}/archive", req));
+      if (kind === "firewall_rule") return unwrap(api.POST("/firewall-rules/{id}/archive", req));
+      if (kind === "traffic_alert") return unwrap(api.POST("/traffic-alerts/{id}/archive", req));
+      if (kind === "sms_voice_rule") return unwrap(api.POST("/sms-voice-rules/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -313,6 +322,9 @@ export function useRestore(kind: RecordKind) {
       if (kind === "invoice") return unwrap(api.POST("/invoices/{id}/restore", req));
       if (kind === "vendor_invoice") return unwrap(api.POST("/vendor-invoices/{id}/restore", req));
       if (kind === "recon_rule") return unwrap(api.POST("/recon-rules/{id}/restore", req));
+      if (kind === "firewall_rule") return unwrap(api.POST("/firewall-rules/{id}/restore", req));
+      if (kind === "traffic_alert") return unwrap(api.POST("/traffic-alerts/{id}/restore", req));
+      if (kind === "sms_voice_rule") return unwrap(api.POST("/sms-voice-rules/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

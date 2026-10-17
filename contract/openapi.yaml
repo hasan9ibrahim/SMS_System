@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.18.1
+  version: 0.19.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -6629,6 +6629,957 @@ paths:
                 $ref: "#/components/schemas/EmailTemplatePage"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /email-logs/query:
+    post:
+      tags: [switch]
+      operationId: queryEmailLogs
+      summary: "List e-mail logs (server-side filter, sort and paging)"
+      description: |
+        Email Logs (§8): Info ID, Enterprise, Customer Trunk, Vendor Trunk, Email Type, Status, Rate Date, File, Error,
+        To / CC Address, Updated By / Time. Every e-mail the platform sends writes one row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of e-mail logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailLogPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /email-logs/export:
+    post:
+      tags: [switch]
+      operationId: exportEmailLogs
+      summary: "Export e-mail logs as CSV"
+      description: |
+        Same filter and sort as the list; up to 100,000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /email-logs/{id}:
+    get:
+      tags: [switch]
+      operationId: getEmailLog
+      summary: "One e-mail with its subject and body"
+      description: |
+        What was sent, to whom, and why it failed.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The e-mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailLogDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /notifications/send-rate:
+    post:
+      tags: [switch]
+      operationId: sendRateNotifications
+      summary: "Send Rate: e-mail rate sheets to customer trunks (§8)"
+      description: |
+        Modal Customer Send Rate Information: File Type (Excel / CSV) and Send Email. One e-mail per trunk with its
+        current rate sheet attached, to the enterprise's Rates contact (Commercial when empty), logged in Email Logs.
+        Trunks without a rate table or contact are listed as failed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendRateInput"
+      responses:
+        "200":
+          description: What was sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /notifications/send-tech-info:
+    post:
+      tags: [switch]
+      operationId: sendTechInfoNotifications
+      summary: "Send Tech Info: e-mail connection details (§8)"
+      description: |
+        Host and port of the business company's SMPP listener (§11), system ID, bind type, allowed IPs, TPS and
+        connections, to the Technical contact. The password is never sent by e-mail; it is shared separately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationTrunksInput"
+      responses:
+        "200":
+          description: What was sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /notifications/preview:
+    post:
+      tags: [switch]
+      operationId: previewNotification
+      summary: "Preview a Send Rate or Send Tech Info e-mail"
+      description: |
+        Recipients, subject and body for one trunk.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPreviewInput"
+      responses:
+        "200":
+          description: The e-mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /customer-trunks/{id}/rate-sheet:
+    get:
+      tags: [switch]
+      operationId: downloadRateSheet
+      summary: "View Rate: the trunk's current rate sheet as a file"
+      description: |
+        Current lines of the trunk's first rate table: country, network, MCCMNC, rate, currency, effective date, plus
+        scheduled changes.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: fileType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [excel, csv]
+      responses:
+        "200":
+          description: The rate sheet (Excel 2003 XML .xls, or CSV)
+          content:
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall-rules/query:
+    post:
+      tags: [switch]
+      operationId: queryFirewallRules
+      summary: "List firewall IPs (server-side filter, sort and paging)"
+      description: |
+        Firewall Banned IP and Trusted IP tabs (§8): IP address or range, filter (listener), source, reason, hits and
+        last hit. Filter `list` eq banned or trusted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of firewall IPs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallRulePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall-rules:
+    post:
+      tags: [switch]
+      operationId: createFirewallRule
+      summary: "Ban or trust an IP (inline add bar)"
+      description: |
+        IPv4 / IPv6 address or CIDR range. The same address cannot be banned and trusted for one filter (409). One
+        undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirewallRuleInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall-rules/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveFirewallRule
+      summary: "Remove a banned or trusted IP (Action)"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Removed, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallRuleSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall-rules/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreFirewallRule
+      summary: "Restore a removed IP"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallRuleSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall-filters/query:
+    post:
+      tags: [switch]
+      operationId: queryFirewallFilters
+      summary: "List firewall filters (server-side filter, sort and paging)"
+      description: |
+        Filter tab (§8): Name, Status, which listener it guards, and the brute-force threshold for automatic bans.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of firewall filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallFilterPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall-filters:
+    post:
+      tags: [switch]
+      operationId: createFirewallFilter
+      summary: "Add a firewall filter"
+      description: |
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirewallFilterInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallFilterSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall-filters/{id}:
+    put:
+      tags: [switch]
+      operationId: updateFirewallFilter
+      summary: "Change a firewall filter"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirewallFilterInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallFilterSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /firewall/check:
+    post:
+      tags: [switch]
+      operationId: checkFirewallIp
+      summary: "Which firewall rule an IP meets"
+      description: |
+        Trusted beats banned; a banned range or address blocks the listeners its filter guards.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirewallCheckInput"
+      responses:
+        "200":
+          description: The decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirewallCheckResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /traffic-alerts/query:
+    post:
+      tags: [switch]
+      operationId: queryTrafficAlerts
+      summary: "List traffic alerts (server-side filter, sort and paging)"
+      description: |
+        Traffic Alert grid (§8): Info ID, Name, Customer Trunk, Vendor Trunk, Notification Email, Status, plus the last
+        check and whether it is firing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of traffic alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /traffic-alerts:
+    post:
+      tags: [switch]
+      operationId: createTrafficAlert
+      summary: "Add a traffic alert"
+      description: |
+        Name, sample count and interval, ASR / DLR / margin thresholds (alert when at or below), customer trunk, optional
+        vendor trunk, sender ID, MCCMNC, average delivery delay (alert when at or above), notification e-mails,
+        enterprise contact e-mail, template and status.
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficAlertInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /traffic-alerts/{id}:
+    get:
+      tags: [switch]
+      operationId: getTrafficAlert
+      summary: "One a traffic alert"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The a traffic alert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [switch]
+      operationId: updateTrafficAlert
+      summary: "Change a traffic alert"
+      description: |
+        Saves the whole form.
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficAlertInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /traffic-alerts/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveTrafficAlert
+      summary: "Delete (archive) a traffic alert (§13.29)"
+      description: |
+        It is never removed. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /traffic-alerts/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreTrafficAlert
+      summary: "Restore a traffic alert"
+      description: |
+        Administrators; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /traffic-alerts/{id}/clone:
+    post:
+      tags: [switch]
+      operationId: cloneTrafficAlert
+      summary: "Clone a traffic alert"
+      description: |
+        An inactive copy named "… (copy)". One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "201":
+          description: The copy, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /traffic-alerts/{id}/check:
+    post:
+      tags: [switch]
+      operationId: checkTrafficAlert
+      summary: "Check a traffic alert now"
+      description: |
+        Measures the last sample interval in the EDR store against the thresholds and records the result; an alert that
+        starts firing sends its e-mail (logged in Email Logs). The mock checks every active alert every 5 minutes.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The measurement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficAlertCheck"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sms-voice-rules/query:
+    post:
+      tags: [switch]
+      operationId: querySmsVoiceRules
+      summary: "List SMS to voice rules (server-side filter, sort and paging)"
+      description: |
+        SMS To Voice (§8): SmsVoiceID, Sender ID, Receiver ID, Prefix, Repeat, Destination, Updated By.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of SMS to voice rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsVoiceRulePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /sms-voice-rules:
+    post:
+      tags: [switch]
+      operationId: createSmsVoiceRule
+      summary: "Add an SMS to voice rule"
+      description: |
+        Sender ID and Receiver ID patterns (% and _ wildcards, empty = any), receiver prefix, how often the voice call
+        repeats the text, destination (MCCMNC) and status.
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsVoiceRuleInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsVoiceRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /sms-voice-rules/{id}:
+    get:
+      tags: [switch]
+      operationId: getSmsVoiceRule
+      summary: "One an SMS to voice rule"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The an SMS to voice rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsVoiceRuleRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [switch]
+      operationId: updateSmsVoiceRule
+      summary: "Change an SMS to voice rule"
+      description: |
+        Saves the whole form.
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsVoiceRuleInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsVoiceRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /sms-voice-rules/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveSmsVoiceRule
+      summary: "Delete (archive) an SMS to voice rule (§13.29)"
+      description: |
+        It is never removed. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsVoiceRuleSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /sms-voice-rules/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreSmsVoiceRule
+      summary: "Restore an SMS to voice rule"
+      description: |
+        Administrators; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsVoiceRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /sms-voice-rules/test:
+    post:
+      tags: [switch]
+      operationId: testSmsVoiceRules
+      summary: "Which SMS to voice rule a message meets"
+      description: |
+        First active rule whose sender, receiver, prefix and destination match, with the text the call reads out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsVoiceTestInput"
+      responses:
+        "200":
+          description: The decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsVoiceTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /broadcasts/preview:
+    post:
+      tags: [switch]
+      operationId: previewBroadcast
+      summary: "Who a broadcast reaches"
+      description: |
+        Enterprises and addresses for the chosen contact types and enterprise types of a business company.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastAudienceInput"
+      responses:
+        "200":
+          description: The audience
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastAudience"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /broadcasts:
+    post:
+      tags: [switch]
+      operationId: sendBroadcast
+      summary: "Broadcast: e-mail all partners (§8)"
+      description: |
+        One e-mail per enterprise to the chosen contacts, from the business company's mailbox; each is logged in Email
+        Logs (type Broadcast).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastInput"
+      responses:
+        "201":
+          description: The broadcast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastRow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /broadcasts/query:
+    post:
+      tags: [switch]
+      operationId: queryBroadcasts
+      summary: "List broadcasts (server-side filter, sort and paging)"
+      description: |
+        Broadcasts sent: subject, business company, sender, audience, counts, who and when.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of broadcasts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /business-companies/{id}/mailboxes:
+    get:
+      tags: [switch]
+      operationId: listCompanyMailboxes
+      summary: "Business Company Contact: the sender mailboxes"
+      description: |
+        One per department mailbox of the business company (§11 sender blocks).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The mailboxes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyMailboxList"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -13574,6 +14525,731 @@ components:
               items:
                 $ref: "#/components/schemas/EmailTemplateRow"
 
+    # ------------------------------------------------------------- Switch utilities (§8)
+    EmailType:
+      type: string
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection]
+      description: The §8 list plus payment_confirmation (§13.33) and invoice_acceptance / invoice_rejection (§13.31).
+
+    EmailLogRow:
+      type: object
+      required: [id, enterpriseId, enterprise, customerTrunk, vendorTrunk, emailType, status, rateDate, file, error, to, cc, subject, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        enterpriseId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        enterprise:
+          type: [string, "null"]
+        customerTrunk:
+          type: [string, "null"]
+        vendorTrunk:
+          type: [string, "null"]
+        emailType:
+          $ref: "#/components/schemas/EmailType"
+        status:
+          type: string
+          enum: [sent, failed]
+        rateDate:
+          type: [string, "null"]
+          format: date
+        file:
+          type: [string, "null"]
+          description: Attachment file name.
+        error:
+          type: [string, "null"]
+        to:
+          type: array
+          items:
+            type: string
+        cc:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        updatedBy:
+          type: [string, "null"]
+          description: Null = the platform.
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    EmailLogPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/EmailLogRow"
+
+    EmailLogDetail:
+      allOf:
+        - $ref: "#/components/schemas/EmailLogRow"
+        - type: object
+          required: [body, sender]
+          properties:
+            body:
+              type: string
+            sender:
+              type: [string, "null"]
+
+    NotificationTrunksInput:
+      type: object
+      additionalProperties: false
+      required: [trunkIds]
+      properties:
+        trunkIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+
+    SendRateInput:
+      type: object
+      additionalProperties: false
+      required: [trunkIds, fileType, sendEmail]
+      properties:
+        trunkIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+        fileType:
+          type: string
+          enum: [excel, csv]
+        sendEmail:
+          type: boolean
+          description: False = nothing is e-mailed; the page downloads the sheets instead (View Rate).
+
+    NotificationResult:
+      type: object
+      required: [sent, failed]
+      properties:
+        sent:
+          type: integer
+        failed:
+          type: array
+          items:
+            type: object
+            required: [trunkId, trunk, reason]
+            properties:
+              trunkId:
+                $ref: "#/components/schemas/Id"
+              trunk:
+                type: string
+              reason:
+                type: string
+
+    NotificationPreviewInput:
+      type: object
+      additionalProperties: false
+      required: [trunkId, kind]
+      properties:
+        trunkId:
+          $ref: "#/components/schemas/Id"
+        kind:
+          type: string
+          enum: [send_rate, send_tech_info]
+
+    FirewallRuleInput:
+      type: object
+      additionalProperties: false
+      required: [list, ip, filterId, reason]
+      properties:
+        list:
+          type: string
+          enum: [banned, trusted]
+        ip:
+          type: string
+          maxLength: 64
+          description: IPv4 / IPv6 address or CIDR range.
+        filterId:
+          $ref: "#/components/schemas/Id"
+        reason:
+          type: [string, "null"]
+          maxLength: 300
+
+    FirewallRuleRow:
+      type: object
+      required: [id, list, ip, filterId, filter, source, reason, hits, lastHitAt, expiresAt, createdBy, createdAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        list:
+          type: string
+          enum: [banned, trusted]
+        ip:
+          type: string
+        filterId:
+          $ref: "#/components/schemas/Id"
+        filter:
+          type: string
+        source:
+          type: string
+          enum: [manual, auto]
+          description: auto = banned by the brute-force protection.
+        reason:
+          type: [string, "null"]
+        hits:
+          type: integer
+          description: Connections refused (banned) or allowed through (trusted) in the last 24 hours.
+        lastHitAt:
+          type: [string, "null"]
+          format: date-time
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: Automatic bans lift by themselves.
+        createdBy:
+          type: [string, "null"]
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    FirewallRulePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/FirewallRuleRow"
+
+    FirewallRuleSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/FirewallRuleRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    FirewallFilterInput:
+      allOf:
+        - $ref: "#/components/schemas/FirewallFilterFields"
+      unevaluatedProperties: false
+
+    FirewallFilterFields:
+      type: object
+      required: [name, listener, status, failedAttempts, windowSeconds, banMinutes]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        listener:
+          type: string
+          enum: [smpp, http, portal, all]
+        status:
+          type: string
+          enum: [active, inactive]
+        failedAttempts:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Failed binds or logins that trigger an automatic ban.
+        windowSeconds:
+          type: integer
+          minimum: 10
+          maximum: 86400
+        banMinutes:
+          type: integer
+          minimum: 1
+          maximum: 525600
+
+    FirewallFilterRow:
+      allOf:
+        - $ref: "#/components/schemas/FirewallFilterFields"
+        - type: object
+          required: [id, banned, trusted, updatedBy, updatedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            banned:
+              type: integer
+            trusted:
+              type: integer
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+
+    FirewallFilterPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/FirewallFilterRow"
+
+    FirewallFilterSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/FirewallFilterRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    FirewallCheckInput:
+      type: object
+      additionalProperties: false
+      required: [ip]
+      properties:
+        ip:
+          type: string
+          maxLength: 64
+
+    FirewallCheckResult:
+      type: object
+      required: [ip, decision, rules]
+      properties:
+        ip:
+          type: string
+        decision:
+          type: string
+          enum: [trusted, banned, allowed]
+          description: allowed = no rule; normal checks (trunk IP lists, brute-force protection) apply.
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/FirewallRuleRow"
+
+    TrafficAlertInput:
+      allOf:
+        - $ref: "#/components/schemas/TrafficAlertFields"
+      unevaluatedProperties: false
+
+    TrafficAlertFields:
+      type: object
+      required: [name, sampleCount, sampleMinutes, asrThreshold, dlrThreshold, marginThreshold, customerTrunkId, vendorTrunkId, senderId, mccmnc, delayThreshold, notificationEmails, contactEmail, templateId, status]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        sampleCount:
+          type: integer
+          minimum: 1
+          description: Sample Count (≥) - at least this many messages in the interval before the alert judges.
+        sampleMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+          description: Sample Interval (minutes).
+        asrThreshold:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: ASR Threshold (≤), percent.
+        dlrThreshold:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: DLR Threshold (≤), percent.
+        marginThreshold:
+          type: number
+          minimum: -100
+          maximum: 100
+          description: MRG Threshold (≤), margin percent.
+        customerTrunkId:
+          $ref: "#/components/schemas/Id"
+        vendorTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        senderId:
+          type: [string, "null"]
+          maxLength: 32
+        mccmnc:
+          type: [string, "null"]
+          pattern: "^[0-9]{5,6}$"
+        delayThreshold:
+          type: [number, "null"]
+          minimum: 0
+          description: Average Delivery Delay (s ≥); null = not checked.
+        notificationEmails:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            format: email
+        contactEmail:
+          type: string
+          enum: [none, commercial, technical, rates, finance]
+          description: Enterprise Contact Email - also e-mail this contact of the customer.
+        templateId:
+          $ref: "#/components/schemas/Id"
+        status:
+          type: string
+          enum: [active, inactive]
+
+    TrafficAlertRow:
+      allOf:
+        - $ref: "#/components/schemas/TrafficAlertFields"
+        - type: object
+          required: [id, customerTrunk, enterprise, vendorTrunk, template, state, lastCheckedAt, lastTriggeredAt, lastValues, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            customerTrunk:
+              type: string
+            enterprise:
+              type: string
+            vendorTrunk:
+              type: [string, "null"]
+            template:
+              type: [string, "null"]
+            state:
+              type: string
+              enum: [ok, firing, too_few, unknown]
+              description: Result of the last check; too_few = fewer messages than the sample count.
+            lastCheckedAt:
+              type: [string, "null"]
+              format: date-time
+            lastTriggeredAt:
+              type: [string, "null"]
+              format: date-time
+            lastValues:
+              oneOf:
+                - $ref: "#/components/schemas/TrafficAlertValues"
+                - type: "null"
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+
+    TrafficAlertValues:
+      type: object
+      required: [messages, asr, dlr, marginPct, delaySeconds]
+      properties:
+        messages:
+          type: integer
+        asr:
+          type: [number, "null"]
+        dlr:
+          type: [number, "null"]
+        marginPct:
+          type: [number, "null"]
+        delaySeconds:
+          type: [number, "null"]
+
+    TrafficAlertPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrafficAlertRow"
+
+    TrafficAlertSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/TrafficAlertRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    TrafficAlertCheck:
+      type: object
+      required: [state, from, to, values, breaches, emailed]
+      properties:
+        state:
+          type: string
+          enum: [ok, firing, too_few, unknown]
+        from:
+          $ref: "#/components/schemas/Timestamp"
+        to:
+          $ref: "#/components/schemas/Timestamp"
+        values:
+          $ref: "#/components/schemas/TrafficAlertValues"
+        breaches:
+          type: array
+          items:
+            type: string
+          description: One line per threshold crossed.
+        emailed:
+          type: array
+          items:
+            type: string
+          description: Addresses e-mailed by this check (only when it started firing).
+
+    SmsVoiceRuleInput:
+      allOf:
+        - $ref: "#/components/schemas/SmsVoiceRuleFields"
+      unevaluatedProperties: false
+
+    SmsVoiceRuleFields:
+      type: object
+      required: [senderId, receiverId, prefix, repeat, mccmnc, status]
+      properties:
+        senderId:
+          type: [string, "null"]
+          maxLength: 32
+          description: Pattern; % any characters, _ one; null = any sender.
+        receiverId:
+          type: [string, "null"]
+          maxLength: 32
+        prefix:
+          type: [string, "null"]
+          pattern: "^[0-9]{1,15}$"
+          description: Receiver number prefix, e.g. a landline range.
+        repeat:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: How many times the call reads the text.
+        mccmnc:
+          type: [string, "null"]
+          pattern: "^[0-9]{5,6}$"
+          description: Destination; null = any.
+        status:
+          type: string
+          enum: [active, inactive]
+
+    SmsVoiceRuleRow:
+      allOf:
+        - $ref: "#/components/schemas/SmsVoiceRuleFields"
+        - type: object
+          required: [id, destination, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            destination:
+              type: [string, "null"]
+              description: Country and network of the MCCMNC.
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+
+    SmsVoiceRulePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/SmsVoiceRuleRow"
+
+    SmsVoiceRuleSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/SmsVoiceRuleRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    SmsVoiceTestInput:
+      type: object
+      additionalProperties: false
+      required: [senderId, receiver, text]
+      properties:
+        senderId:
+          type: string
+          maxLength: 32
+        receiver:
+          type: string
+          pattern: "^\\+?[0-9]{5,15}$"
+        text:
+          type: string
+          maxLength: 1600
+
+    SmsVoiceTestResult:
+      type: object
+      required: [matched, rule, mccmnc, spoken, reason]
+      properties:
+        matched:
+          type: boolean
+        rule:
+          oneOf:
+            - $ref: "#/components/schemas/SmsVoiceRuleRow"
+            - type: "null"
+        mccmnc:
+          type: [string, "null"]
+          description: The receiver's destination by dial code.
+        spoken:
+          type: [string, "null"]
+          description: What the call reads out (digits spaced, repeated).
+        reason:
+          type: string
+
+    BroadcastAudienceInput:
+      type: object
+      additionalProperties: false
+      required: [businessCompanyId, contactTypes, enterpriseTypes]
+      properties:
+        businessCompanyId:
+          $ref: "#/components/schemas/Id"
+        contactTypes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [commercial, technical, rates, finance]
+        enterpriseTypes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [customer, vendor, reciprocal]
+
+    BroadcastAudience:
+      type: object
+      required: [enterprises, addresses, sample]
+      properties:
+        enterprises:
+          type: integer
+        addresses:
+          type: integer
+        sample:
+          type: array
+          items:
+            type: string
+          description: The first few enterprises reached.
+
+    BroadcastInput:
+      type: object
+      additionalProperties: false
+      required: [businessCompanyId, sender, subject, contactTypes, enterpriseTypes, bodyHtml, attachment]
+      properties:
+        businessCompanyId:
+          $ref: "#/components/schemas/Id"
+        sender:
+          type: string
+          format: email
+          description: One of the business company's mailboxes.
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 200
+        contactTypes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [commercial, technical, rates, finance]
+        enterpriseTypes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [customer, vendor, reciprocal]
+        bodyHtml:
+          type: string
+          minLength: 1
+          maxLength: 200000
+          description: Rich text (HTML); scripts and event handlers are removed before sending.
+        attachment:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [name, contentBase64]
+              properties:
+                name:
+                  type: string
+                  maxLength: 200
+                contentBase64:
+                  type: string
+                  maxLength: 7000000
+                  description: At most 5 MB once decoded.
+            - type: "null"
+
+    BroadcastRow:
+      type: object
+      required: [id, businessCompany, sender, subject, contactTypes, enterpriseTypes, enterprises, addresses, failed, attachment, sentBy, sentAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        businessCompany:
+          type: string
+        sender:
+          type: string
+        subject:
+          type: string
+        contactTypes:
+          type: array
+          items:
+            type: string
+        enterpriseTypes:
+          type: array
+          items:
+            type: string
+        enterprises:
+          type: integer
+        addresses:
+          type: integer
+        failed:
+          type: integer
+          description: Enterprises without an address for the chosen contacts.
+        attachment:
+          type: [string, "null"]
+        sentBy:
+          type: [string, "null"]
+        sentAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    BroadcastPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/BroadcastRow"
+
+    CompanyMailboxList:
+      type: object
+      required: [mailboxes]
+      properties:
+        mailboxes:
+          type: array
+          items:
+            type: object
+            required: [email, department]
+            properties:
+              email:
+                type: string
+              department:
+                type: string
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -14281,7 +15957,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts]
 
     FilterOperator:
       type: string

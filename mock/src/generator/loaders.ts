@@ -67,6 +67,12 @@ export const TABLE_ORDER = [
   "rerating_requests",
   "rerating_results",
   "qbr_stats",
+  "firewall_filters",
+  "firewall_rules",
+  "email_logs",
+  "traffic_alerts",
+  "sms_voice_rules",
+  "broadcasts",
   "changes",
 ];
 

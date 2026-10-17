@@ -35,6 +35,7 @@ import { dependencies, recordChange, same, type DiffEntry, type FieldError } fro
 import { sendProblem } from "../problem.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { companyMailbox, logEmail } from "./emailLog.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -245,6 +246,7 @@ export function createTransaction(request: FastifyRequest, reply: FastifyReply) 
         ],
       );
       const id = Number(rows[0].id);
+      if (t.sendConfirmation) await logConfirmation(c, id, t.enterpriseId, recipients, me.id);
       const change = await recordChange(c, {
         entityType: "transaction",
         entityIds: [id],
@@ -397,9 +399,28 @@ async function sendConfirmations(c: pg.PoolClient, ids: number[], userId: number
               confirmation_recipients = $3, updated_by_id = $4, updated_at = now() WHERE id = $1`,
       [r.id, status, recipients, userId],
     );
+    await logConfirmation(c, Number(r.id), Number(r.enterprise_id), recipients, userId);
     diff.push({ entity_id: Number(r.id), field: "confirmationStatus", before: r.confirmation_status, after: status });
   }
   return diff;
+}
+
+/** Email Logs (§8) entry for a payment confirmation (§13.33). */
+async function logConfirmation(c: Db, txId: number, enterpriseId: number, to: string[], userId: number) {
+  const { rows } = await c.query("SELECT amount, currency, payment_date FROM transactions WHERE id = $1", [txId]);
+  const t = rows[0];
+  await logEmail(c, {
+    type: "payment_confirmation",
+    enterpriseId,
+    to,
+    sender: await companyMailbox(c, enterpriseId, "billing"),
+    subject: `Payment confirmation TX-${txId}: ${Number(t.amount).toFixed(2)} ${String(t.currency).trim()}`,
+    body: `We confirm your payment of ${Number(t.amount).toFixed(2)} ${String(t.currency).trim()} dated ${
+      t.payment_date instanceof Date ? t.payment_date.toISOString().slice(0, 10) : t.payment_date
+    }.`,
+    error: to.length ? null : "No billing contact",
+    userId,
+  });
 }
 
 export function sendTransactionConfirmation(request: FastifyRequest, reply: FastifyReply) {

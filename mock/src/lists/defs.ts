@@ -17,6 +17,12 @@ import type {
   InvoiceRow,
   InvoiceRequestRow,
   EmailTemplateRow,
+  EmailLogRow,
+  FirewallRuleRow,
+  FirewallFilterRow,
+  TrafficAlertRow,
+  SmsVoiceRuleRow,
+  BroadcastRow,
   SoaReportRow,
   ReconRuleRow,
   VendorInvoiceRow,
@@ -1769,6 +1775,313 @@ export function mapVendorInvoice(r: Record<string, unknown>): VendorInvoiceRow {
   };
 }
 
+/** Email Logs (§8). */
+export const EMAIL_LOG_FROM = `email_logs l
+    LEFT JOIN enterprises e ON e.id = l.enterprise_id
+    LEFT JOIN customer_trunks ct ON ct.id = l.customer_trunk_id
+    LEFT JOIN vendor_trunks vt ON vt.id = l.vendor_trunk_id
+    LEFT JOIN users u ON u.id = l.user_id`;
+export const EMAIL_LOG_SELECT = `l.id, l.enterprise_id, l.email_type, l.status, l.rate_date, l.file_name, l.error, l.to_addresses,
+    l.cc_addresses, l.subject, l.inserted_at, e.name AS enterprise, ct.name AS customer_trunk, vt.name AS vendor_trunk,
+    u.username AS updated_by`;
+export const emailLogList: ListDef<EmailLogRow> = {
+  fields: listFields.email_logs,
+  from: EMAIL_LOG_FROM,
+  columns: {
+    id: { sql: "l.id" },
+    enterprise: { sql: "e.name" },
+    enterpriseId: { sql: "l.enterprise_id" },
+    customerTrunk: { sql: "ct.name" },
+    vendorTrunk: { sql: "vt.name" },
+    emailType: { sql: "l.email_type" },
+    status: { sql: "l.status" },
+    rateDate: { sql: "l.rate_date" },
+    file: { sql: "l.file_name" },
+    error: { sql: "l.error" },
+    to: { sql: "array_to_string(l.to_addresses, ', ')" },
+    cc: { sql: "array_to_string(l.cc_addresses, ', ')" },
+    subject: { sql: "l.subject" },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "l.inserted_at" },
+  },
+  search: ["enterprise", "to", "subject"],
+  idSql: "l.id",
+  select: EMAIL_LOG_SELECT,
+  mapRow: (r) => mapEmailLog(r),
+};
+
+export function mapEmailLog(r: Record<string, unknown>): EmailLogRow {
+  return {
+    id: Number(r.id),
+    enterpriseId: r.enterprise_id === null ? null : Number(r.enterprise_id),
+    enterprise: (r.enterprise as string | null) ?? null,
+    customerTrunk: (r.customer_trunk as string | null) ?? null,
+    vendorTrunk: (r.vendor_trunk as string | null) ?? null,
+    emailType: r.email_type as EmailLogRow["emailType"],
+    status: r.status as EmailLogRow["status"],
+    rateDate: r.rate_date === null ? null : ymd(r.rate_date),
+    file: (r.file_name as string | null) ?? null,
+    error: (r.error as string | null) ?? null,
+    to: (r.to_addresses as string[]) ?? [],
+    cc: (r.cc_addresses as string[]) ?? [],
+    subject: r.subject as string,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.inserted_at)!,
+  };
+}
+
+/** Firewall banned / trusted IPs (§8). */
+export const FIREWALL_RULE_FROM = `firewall_rules fr JOIN firewall_filters ff ON ff.id = fr.filter_id
+    LEFT JOIN users u ON u.id = fr.created_by_id`;
+/** A single address without its /32 or /128; a range in full CIDR form. */
+const fwIpSql =
+  "(CASE WHEN masklen(fr.ip) = (CASE family(fr.ip) WHEN 4 THEN 32 ELSE 128 END) THEN host(fr.ip) ELSE text(fr.ip) END)";
+export const FIREWALL_RULE_SELECT = `fr.*, ${fwIpSql} AS ip_text, ff.name AS filter_name, u.username AS created_by`;
+export const firewallRuleList: ListDef<FirewallRuleRow> = {
+  fields: listFields.firewall_rules,
+  from: FIREWALL_RULE_FROM,
+  baseWhere: "fr.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "fr.id" },
+    list: { sql: "fr.list" },
+    ip: { sql: fwIpSql },
+    filter: { sql: "ff.name" },
+    filterId: { sql: "fr.filter_id" },
+    source: { sql: "fr.source" },
+    reason: { sql: "fr.reason" },
+    hits: { sql: "fr.hits" },
+    lastHitAt: { sql: "fr.last_hit_at" },
+    expiresAt: { sql: "fr.expires_at" },
+    createdBy: { sql: "u.username" },
+    createdAt: { sql: "fr.inserted_at" },
+    archived: { sql: "(fr.deleted_at IS NOT NULL)" },
+  },
+  search: ["ip", "reason"],
+  idSql: "fr.id",
+  select: FIREWALL_RULE_SELECT,
+  mapRow: (r) => mapFirewallRule(r),
+};
+
+export function mapFirewallRule(r: Record<string, unknown>): FirewallRuleRow {
+  return {
+    id: Number(r.id),
+    list: r.list as FirewallRuleRow["list"],
+    ip: r.ip_text as string,
+    filterId: Number(r.filter_id),
+    filter: r.filter_name as string,
+    source: r.source as FirewallRuleRow["source"],
+    reason: (r.reason as string | null) ?? null,
+    hits: Number(r.hits),
+    lastHitAt: iso(r.last_hit_at),
+    expiresAt: iso(r.expires_at),
+    createdBy: (r.created_by as string | null) ?? null,
+    createdAt: iso(r.inserted_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
+const ffCount = (list: string) =>
+  `(SELECT count(*)::int FROM firewall_rules x WHERE x.filter_id = ff.id AND x.list = '${list}' AND x.deleted_at IS NULL)`;
+export const FIREWALL_FILTER_FROM = "firewall_filters ff LEFT JOIN users u ON u.id = ff.updated_by_id";
+export const FIREWALL_FILTER_SELECT = `ff.*, u.username AS updated_by, ${ffCount("banned")} AS banned, ${ffCount("trusted")} AS trusted`;
+export const firewallFilterList: ListDef<FirewallFilterRow> = {
+  fields: listFields.firewall_filters,
+  from: FIREWALL_FILTER_FROM,
+  baseWhere: "ff.deleted_at IS NULL",
+  columns: {
+    id: { sql: "ff.id" },
+    name: { sql: "ff.name" },
+    listener: { sql: "ff.listener" },
+    status: { sql: "ff.status" },
+    failedAttempts: { sql: "ff.failed_attempts" },
+    windowSeconds: { sql: "ff.window_seconds" },
+    banMinutes: { sql: "ff.ban_minutes" },
+    banned: { sql: ffCount("banned") },
+    trusted: { sql: ffCount("trusted") },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "ff.updated_at" },
+  },
+  search: ["name"],
+  idSql: "ff.id",
+  select: FIREWALL_FILTER_SELECT,
+  mapRow: (r) => mapFirewallFilter(r),
+};
+
+export function mapFirewallFilter(r: Record<string, unknown>): FirewallFilterRow {
+  return {
+    id: Number(r.id),
+    name: r.name as string,
+    listener: r.listener as FirewallFilterRow["listener"],
+    status: r.status as FirewallFilterRow["status"],
+    failedAttempts: Number(r.failed_attempts),
+    windowSeconds: Number(r.window_seconds),
+    banMinutes: Number(r.ban_minutes),
+    banned: Number(r.banned ?? 0),
+    trusted: Number(r.trusted ?? 0),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+  };
+}
+
+/** Traffic Alert (§8). */
+export const TRAFFIC_ALERT_FROM = `traffic_alerts ta
+    JOIN customer_trunks ct ON ct.id = ta.customer_trunk_id
+    JOIN enterprises e ON e.id = ct.enterprise_id
+    LEFT JOIN vendor_trunks vt ON vt.id = ta.vendor_trunk_id
+    LEFT JOIN email_templates tp ON tp.id = ta.template_id
+    LEFT JOIN users u ON u.id = ta.updated_by_id`;
+export const TRAFFIC_ALERT_SELECT = `ta.*, ct.name AS customer_trunk, e.name AS enterprise, vt.name AS vendor_trunk, tp.name AS template,
+    u.username AS updated_by`;
+export const trafficAlertList: ListDef<TrafficAlertRow> = {
+  fields: listFields.traffic_alerts,
+  from: TRAFFIC_ALERT_FROM,
+  baseWhere: "ta.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "ta.id" },
+    name: { sql: "ta.name" },
+    customerTrunk: { sql: "ct.name" },
+    customerTrunkId: { sql: "ta.customer_trunk_id" },
+    enterprise: { sql: "e.name" },
+    vendorTrunk: { sql: "vt.name" },
+    notificationEmails: { sql: "array_to_string(ta.notification_emails, ', ')" },
+    status: { sql: "ta.status" },
+    state: { sql: "ta.state" },
+    lastCheckedAt: { sql: "ta.last_checked_at" },
+    lastTriggeredAt: { sql: "ta.last_triggered_at" },
+    asrThreshold: { sql: "ta.asr_threshold" },
+    dlrThreshold: { sql: "ta.dlr_threshold" },
+    marginThreshold: { sql: "ta.margin_threshold" },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "ta.updated_at" },
+    archived: { sql: "(ta.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "customerTrunk", "enterprise"],
+  idSql: "ta.id",
+  select: TRAFFIC_ALERT_SELECT,
+  mapRow: (r) => mapTrafficAlert(r),
+};
+
+export function mapTrafficAlert(r: Record<string, unknown>): TrafficAlertRow {
+  const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return {
+    id: Number(r.id),
+    name: r.name as string,
+    sampleCount: Number(r.sample_count),
+    sampleMinutes: Number(r.sample_minutes),
+    asrThreshold: Number(r.asr_threshold),
+    dlrThreshold: Number(r.dlr_threshold),
+    marginThreshold: Number(r.margin_threshold),
+    customerTrunkId: Number(r.customer_trunk_id),
+    vendorTrunkId: num(r.vendor_trunk_id),
+    senderId: (r.sender_id as string | null) ?? null,
+    mccmnc: (r.mccmnc as string | null) ?? null,
+    delayThreshold: num(r.delay_threshold),
+    notificationEmails: (r.notification_emails as string[]) ?? [],
+    contactEmail: r.contact_email as TrafficAlertRow["contactEmail"],
+    templateId: Number(r.template_id),
+    status: r.status as TrafficAlertRow["status"],
+    customerTrunk: r.customer_trunk as string,
+    enterprise: r.enterprise as string,
+    vendorTrunk: (r.vendor_trunk as string | null) ?? null,
+    template: (r.template as string | null) ?? null,
+    state: r.state as TrafficAlertRow["state"],
+    lastCheckedAt: iso(r.last_checked_at),
+    lastTriggeredAt: iso(r.last_triggered_at),
+    lastValues: (r.last_values as TrafficAlertRow["lastValues"]) ?? null,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
+/** SMS To Voice (§8). */
+const voiceDestSql = `(SELECT co.name || COALESCE(' · ' || m.network, '') FROM mccmnc m LEFT JOIN countries co ON co.id = m.country_id
+    WHERE m.mccmnc = sv.mccmnc AND m.deleted_at IS NULL LIMIT 1)`;
+export const SMS_VOICE_FROM = "sms_voice_rules sv LEFT JOIN users u ON u.id = sv.updated_by_id";
+export const SMS_VOICE_SELECT = `sv.*, ${voiceDestSql} AS destination, u.username AS updated_by`;
+export const smsVoiceRuleList: ListDef<SmsVoiceRuleRow> = {
+  fields: listFields.sms_voice_rules,
+  from: SMS_VOICE_FROM,
+  baseWhere: "sv.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "sv.id" },
+    senderId: { sql: "sv.sender_id" },
+    receiverId: { sql: "sv.receiver_id" },
+    prefix: { sql: "sv.prefix" },
+    repeat: { sql: "sv.repeat_count" },
+    destination: { sql: voiceDestSql },
+    status: { sql: "sv.status" },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "sv.updated_at" },
+    archived: { sql: "(sv.deleted_at IS NOT NULL)" },
+  },
+  search: ["senderId", "receiverId", "prefix"],
+  idSql: "sv.id",
+  select: SMS_VOICE_SELECT,
+  mapRow: (r) => mapSmsVoiceRule(r),
+};
+
+export function mapSmsVoiceRule(r: Record<string, unknown>): SmsVoiceRuleRow {
+  return {
+    id: Number(r.id),
+    senderId: (r.sender_id as string | null) ?? null,
+    receiverId: (r.receiver_id as string | null) ?? null,
+    prefix: (r.prefix as string | null) ?? null,
+    repeat: Number(r.repeat_count),
+    mccmnc: (r.mccmnc as string | null) ?? null,
+    status: r.status as SmsVoiceRuleRow["status"],
+    destination: (r.destination as string | null) ?? null,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
+/** Broadcasts (§8). */
+export const BROADCAST_FROM = `broadcasts b JOIN business_companies bc ON bc.id = b.business_company_id
+    LEFT JOIN users u ON u.id = b.sent_by_id`;
+export const BROADCAST_SELECT = "b.*, bc.name AS business_company, u.username AS sent_by";
+export const broadcastList: ListDef<BroadcastRow> = {
+  fields: listFields.broadcasts,
+  from: BROADCAST_FROM,
+  columns: {
+    id: { sql: "b.id" },
+    subject: { sql: "b.subject" },
+    businessCompany: { sql: "bc.name" },
+    sender: { sql: "b.sender" },
+    enterprises: { sql: "b.enterprises" },
+    addresses: { sql: "b.addresses" },
+    failed: { sql: "b.failed" },
+    attachment: { sql: "b.attachment_name" },
+    sentBy: { sql: "u.username" },
+    sentAt: { sql: "b.inserted_at" },
+  },
+  search: ["subject", "sender"],
+  idSql: "b.id",
+  select: BROADCAST_SELECT,
+  mapRow: (r) => mapBroadcast(r),
+};
+
+export function mapBroadcast(r: Record<string, unknown>): BroadcastRow {
+  return {
+    id: Number(r.id),
+    businessCompany: r.business_company as string,
+    sender: r.sender as string,
+    subject: r.subject as string,
+    contactTypes: (r.contact_types as string[]) ?? [],
+    enterpriseTypes: (r.enterprise_types as string[]) ?? [],
+    enterprises: Number(r.enterprises),
+    addresses: Number(r.addresses),
+    failed: Number(r.failed),
+    attachment: (r.attachment_name as string | null) ?? null,
+    sentBy: (r.sent_by as string | null) ?? null,
+    sentAt: iso(r.inserted_at)!,
+  };
+}
+
 /** SOA Report (§7): exports and sends with the statement kept as it was. */
 export const SOA_REPORT_FROM = `soa_reports s
     JOIN enterprises e ON e.id = s.enterprise_id
@@ -2159,6 +2472,12 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   recon_rules: reconRuleList as ListDef<unknown>,
   soa_reports: soaReportList as ListDef<unknown>,
   email_templates: emailTemplateList as ListDef<unknown>,
+  email_logs: emailLogList as ListDef<unknown>,
+  firewall_rules: firewallRuleList as ListDef<unknown>,
+  firewall_filters: firewallFilterList as ListDef<unknown>,
+  traffic_alerts: trafficAlertList as ListDef<unknown>,
+  sms_voice_rules: smsVoiceRuleList as ListDef<unknown>,
+  broadcasts: broadcastList as ListDef<unknown>,
   currencies: currencyList as ListDef<unknown>,
   currency_rates: currencyRateList as ListDef<unknown>,
   currency_rate_history: currencyRateHistoryList as ListDef<unknown>,

@@ -82,6 +82,18 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/invoice-requests/query", { body })) as Promise<ListPage<Row>>;
     case "vendor_invoices":
       return unwrap(api.POST("/vendor-invoices/query", { body })) as Promise<ListPage<Row>>;
+    case "email_logs":
+      return unwrap(api.POST("/email-logs/query", { body })) as Promise<ListPage<Row>>;
+    case "firewall_rules":
+      return unwrap(api.POST("/firewall-rules/query", { body })) as Promise<ListPage<Row>>;
+    case "firewall_filters":
+      return unwrap(api.POST("/firewall-filters/query", { body })) as Promise<ListPage<Row>>;
+    case "traffic_alerts":
+      return unwrap(api.POST("/traffic-alerts/query", { body })) as Promise<ListPage<Row>>;
+    case "sms_voice_rules":
+      return unwrap(api.POST("/sms-voice-rules/query", { body })) as Promise<ListPage<Row>>;
+    case "broadcasts":
+      return unwrap(api.POST("/broadcasts/query", { body })) as Promise<ListPage<Row>>;
     case "soa_reports":
       return unwrap(api.POST("/soa-reports/query", { body })) as Promise<ListPage<Row>>;
     case "email_templates":

@@ -24,6 +24,7 @@ import { billingContacts } from "./finance.js";
 import { exportList, load, notFound, setArchived } from "./masterData.js";
 import { dependencies, isTimezone, recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
+import { companyMailbox, logEmail } from "./emailLog.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -291,7 +292,7 @@ export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
       [ids],
     );
     const skipped: { id: number; invoiceNumber: string; reason: string }[] = [];
-    const send: { id: number; to: string[]; before: string }[] = [];
+    const send: { id: number; to: string[]; before: string; enterpriseId?: number; number?: string }[] = [];
     for (const id of ids) {
       const r = rows.find((x) => Number(x.id) === id);
       if (!r) {
@@ -303,13 +304,40 @@ export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
         skipped.push({ id, invoiceNumber: r.invoice_number, reason: `status ${r.status}` });
       else {
         const to = await billingContacts(pool, Number(r.enterprise_id));
-        if (!to.length) skipped.push({ id, invoiceNumber: r.invoice_number, reason: "no billing contact" });
-        else send.push({ id, to, before: r.email_status });
+        if (!to.length) {
+          skipped.push({ id, invoiceNumber: r.invoice_number, reason: "no billing contact" });
+          await logEmail(pool, {
+            type: "invoice",
+            enterpriseId: Number(r.enterprise_id),
+            to: [],
+            subject: `Invoice ${r.invoice_number}`,
+            file: `${r.invoice_number}.pdf`,
+            error: "No billing contact",
+          });
+        } else
+          send.push({
+            id,
+            to,
+            before: r.email_status,
+            enterpriseId: Number(r.enterprise_id),
+            number: r.invoice_number,
+          });
       }
     }
     if (!send.length) return { sent: 0, skipped, change: null };
     const me = await getCurrentUser();
     const change = await inTransaction(pool, async (c) => {
+      for (const s of send)
+        await logEmail(c, {
+          type: "invoice",
+          enterpriseId: s.enterpriseId,
+          to: s.to,
+          sender: await companyMailbox(c, s.enterpriseId!, "billing"),
+          subject: `Invoice ${s.number}`,
+          body: `Please find attached invoice ${s.number}.`,
+          file: `${s.number}.pdf`,
+          userId: me.id,
+        });
       for (const s of send)
         await c.query(
           `UPDATE invoices SET email_status = 'sent', email_sent_at = now(), email_recipients = $2,

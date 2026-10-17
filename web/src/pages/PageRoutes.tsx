@@ -27,6 +27,12 @@ import { HlrPage } from "./switch/hlr/HlrPage";
 import { NumberListsPage } from "./switch/NumberListsPage";
 import { QbrStatsPage } from "./switch/QbrStatsPage";
 import { TranslationRulesPage } from "./switch/TranslationRulesPage";
+import { BroadcastPage } from "./switch/tools/BroadcastPage";
+import { EmailLogsPage } from "./switch/tools/EmailLogsPage";
+import { FirewallPage } from "./switch/tools/FirewallPage";
+import { NotificationsPage } from "./switch/tools/NotificationsPage";
+import { SmsToVoicePage } from "./switch/tools/SmsToVoicePage";
+import { TrafficAlertsPage } from "./switch/tools/TrafficAlertsPage";
 import { RateManagerPage } from "./rates/RateManagerPage";
 import { EnterpriseReportPage } from "./reports/EnterpriseReportPage";
 import { TrunkPage } from "./trunk/TrunkPage";
@@ -54,6 +60,12 @@ const BUILT = new Set([
   "/switch/number-lists",
   "/switch/translation-rules",
   "/switch/hlr",
+  "/switch/notifications",
+  "/switch/email-logs",
+  "/switch/firewall",
+  "/switch/traffic-alerts",
+  "/switch/sms-to-voice",
+  "/switch/broadcast",
   "/finance/transactions",
   "/finance/invoices",
   "/finance/vendor-invoices",
@@ -100,6 +112,12 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/switch/number-lists" element={<NumberListsPage />} />
       <Route path="/switch/translation-rules" element={<TranslationRulesPage />} />
       <Route path="/switch/hlr" element={<HlrPage />} />
+      <Route path="/switch/notifications" element={<NotificationsPage />} />
+      <Route path="/switch/email-logs" element={<EmailLogsPage />} />
+      <Route path="/switch/firewall" element={<FirewallPage />} />
+      <Route path="/switch/traffic-alerts" element={<TrafficAlertsPage />} />
+      <Route path="/switch/sms-to-voice" element={<SmsToVoicePage />} />
+      <Route path="/switch/broadcast" element={<BroadcastPage />} />
       <Route path="/finance/transactions" element={<TransactionsPage />} />
       <Route path="/finance/invoices" element={<InvoicesPage />} />
       <Route path="/finance/vendor-invoices" element={<VendorInvoicesPage />} />

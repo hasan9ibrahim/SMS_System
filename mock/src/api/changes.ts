@@ -81,6 +81,50 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
   },
   // Manual SOA adds, removes and entries (§13.31): undoing the add takes it back.
   soa_adjustment: { table: "soa_adjustments", columns: {} },
+  // Switch utilities (§8)
+  firewall_rule: { table: "firewall_rules", columns: {} },
+  firewall_filter: {
+    table: "firewall_filters",
+    columns: {
+      name: "name",
+      listener: "listener",
+      status: "status",
+      failedAttempts: "failed_attempts",
+      windowSeconds: "window_seconds",
+      banMinutes: "ban_minutes",
+    },
+  },
+  traffic_alert: {
+    table: "traffic_alerts",
+    columns: {
+      name: "name",
+      sampleCount: "sample_count",
+      sampleMinutes: "sample_minutes",
+      asrThreshold: "asr_threshold",
+      dlrThreshold: "dlr_threshold",
+      marginThreshold: "margin_threshold",
+      customerTrunkId: "customer_trunk_id",
+      vendorTrunkId: "vendor_trunk_id",
+      senderId: "sender_id",
+      mccmnc: "mccmnc",
+      delayThreshold: "delay_threshold",
+      notificationEmails: "notification_emails",
+      contactEmail: "contact_email",
+      templateId: "template_id",
+      status: "status",
+    },
+  },
+  sms_voice_rule: {
+    table: "sms_voice_rules",
+    columns: {
+      senderId: "sender_id",
+      receiverId: "receiver_id",
+      prefix: "prefix",
+      repeat: "repeat_count",
+      mccmnc: "mccmnc",
+      status: "status",
+    },
+  },
   recon_rule: {
     table: "recon_rules",
     columns: {

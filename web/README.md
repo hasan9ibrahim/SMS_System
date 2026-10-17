@@ -150,6 +150,22 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Switch utilities (build step 5.8)
+
+Pages in `src/pages/switch/tools/` (§8), hooks in `src/api/switchTools.ts`, pure helpers in `toolsModel.ts`:
+
+- **Notifications** (`/switch/notifications`): customer trunks; per row or as bulk edit Send Rate (Excel / CSV, Send
+  Email with a preview of the e-mail) and Send Tech Info; View Rate downloads the sheet; the detail lists the trunk's
+  recent e-mails.
+- **Email logs** (`/switch/email-logs`): every e-mail sent, with filters, export and the e-mail itself in the detail.
+- **Firewall** (`/switch/firewall`, `?view=banned|trusted|filters`): add an IP or range to a filter, remove (Undo),
+  check which rule an IP meets; filters with their listeners.
+- **Traffic alerts** (`/switch/traffic-alerts`): alert rules with sample size and thresholds, conditions, recipients;
+  clone, Check now, last state.
+- **SMS to voice** (`/switch/sms-to-voice`): rules with the test box above the grid.
+- **Broadcast** (`/switch/broadcast`): past broadcasts; New broadcast composes (mailbox, contact and enterprise types,
+  rich text, one attachment), shows the audience count, and sends after a confirm.
+
 ## SOA (build step 5.7)
 
 - **SOA** (`/finance/soa`, `src/pages/finance/SoaPage.tsx`, §7, §13.31, §13.33): Enterprise (multi), Invoice Type,

@@ -238,6 +238,36 @@ import {
   sendSoa,
   sendSoaReport,
 } from "./api/soa.js";
+import {
+  archiveFirewallRule,
+  archiveSmsVoiceRule,
+  archiveTrafficAlert,
+  checkFirewallIp,
+  checkTrafficAlert,
+  cloneTrafficAlert,
+  createFirewallFilter,
+  createFirewallRule,
+  createSmsVoiceRule,
+  createTrafficAlert,
+  downloadRateSheet,
+  exportEmailLogs,
+  getEmailLog,
+  getSmsVoiceRule,
+  getTrafficAlert,
+  listCompanyMailboxes,
+  previewBroadcast,
+  previewNotification,
+  restoreFirewallRule,
+  restoreSmsVoiceRule,
+  restoreTrafficAlert,
+  sendBroadcast,
+  sendRateNotifications,
+  sendTechInfoNotifications,
+  testSmsVoiceRules,
+  updateFirewallFilter,
+  updateSmsVoiceRule,
+  updateTrafficAlert,
+} from "./api/switchTools.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -263,7 +293,7 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.18.1";
+const VERSION = "0.19.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -526,6 +556,41 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   downloadSoaReport,
   sendSoaReport,
   queryEmailTemplates: queryList("email_templates"),
+  // Switch utilities (§8)
+  queryEmailLogs: queryList("email_logs"),
+  exportEmailLogs,
+  getEmailLog,
+  sendRateNotifications,
+  sendTechInfoNotifications,
+  previewNotification,
+  downloadRateSheet,
+  queryFirewallRules: queryList("firewall_rules"),
+  createFirewallRule,
+  archiveFirewallRule,
+  restoreFirewallRule,
+  queryFirewallFilters: queryList("firewall_filters"),
+  createFirewallFilter,
+  updateFirewallFilter,
+  checkFirewallIp,
+  queryTrafficAlerts: queryList("traffic_alerts"),
+  createTrafficAlert,
+  getTrafficAlert,
+  updateTrafficAlert,
+  archiveTrafficAlert,
+  restoreTrafficAlert,
+  cloneTrafficAlert,
+  checkTrafficAlert,
+  querySmsVoiceRules: queryList("sms_voice_rules"),
+  createSmsVoiceRule,
+  getSmsVoiceRule,
+  updateSmsVoiceRule,
+  archiveSmsVoiceRule,
+  restoreSmsVoiceRule,
+  testSmsVoiceRules,
+  previewBroadcast,
+  sendBroadcast,
+  queryBroadcasts: queryList("broadcasts"),
+  listCompanyMailboxes,
   createReconRule,
   updateReconRule,
   archiveReconRule,
