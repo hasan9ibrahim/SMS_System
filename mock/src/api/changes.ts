@@ -55,7 +55,6 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
       keyword: "keyword",
       rate: "rate",
       vendorRate: "vendor_rate",
-      currency: "currency",
       destinationId: "mccmnc_id",
       setupCharge: "setup_charge",
       fixCharge: "fix_charge",

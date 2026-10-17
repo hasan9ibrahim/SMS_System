@@ -1746,7 +1746,8 @@ export type paths = {
     /**
      * Import MO reference book entries from CSV (dry run first)
      * @description "MO Reference Book Import" (§6.1). Columns: `customer_trunk` (name), `number`, `keyword`, `rate`,
-     *     `vendor_rate`, `currency` (empty = the platform currency), `mccmnc`, `setup_charge`, `fix_charge`.
+     *     `vendor_rate`, `mccmnc`, `setup_charge`, `fix_charge`. Amounts are in the customer trunk's currency; an
+     *     optional `currency` column must match it.
      *     Rows are matched by number + keyword. `replace` archives entries missing from the file. All or
      *     nothing; one undoable change.
      */
@@ -2683,6 +2684,11 @@ export type components = {
       username: string;
       categoryId: components["schemas"]["Id"] | null;
       category: string | null;
+      /**
+       * @description The trunk's currency: its first rate table's (a vendor trunk's buy table), else the enterprise's
+       *     billing currency for that side, else the platform currency. MO reference book amounts are in it.
+       */
+      currency: string;
       protocol: components["schemas"]["TrunkProtocol"];
       tps: number;
       status: components["schemas"]["RecordStatus"];
@@ -3339,6 +3345,7 @@ export type components = {
       rate: number;
       /** @description Paid to the vendor per MO message; null when no vendor is involved. */
       vendorRate: number | null;
+      /** @description The customer trunk's currency (decided 2026-10-17); every amount of the entry is in it. */
       currency: string;
       destinationId: components["schemas"]["Id"] | null;
       mccmnc: string | null;
@@ -3365,7 +3372,6 @@ export type components = {
       keyword: string | null;
       rate: number;
       vendorRate: number | null;
-      currency: string;
       destinationId: components["schemas"]["Id"] | null;
       setupCharge: number;
       fixCharge: number;

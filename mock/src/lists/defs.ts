@@ -1,6 +1,6 @@
 // SQL side of each list: FROM clause, an expression per catalogue field, and the
 // mapping from database row to the contract's row schema.
-import { toPlatformSql } from "../currency.js";
+import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   Change,
   Country,
@@ -89,6 +89,22 @@ const rulesCountSql = (kind: "customer" | "vendor") => `(SELECT count(DISTINCT r
      AND NOT EXISTS (SELECT 1 FROM translation_rule_trunk_settings s
                       WHERE s.translation_rule_id = r.id AND s.trunk_kind = '${kind}' AND s.trunk_id = t.id AND NOT s.enabled))`;
 
+/**
+ * A trunk's currency (decided 2026-10-17 for the MO reference book): its first rate table's (a
+ * vendor trunk's buy table), else the enterprise's billing currency for that side, else the
+ * platform currency.
+ */
+export function trunkCurrencySql(kind: "customer" | "vendor", alias: string): string {
+  const table =
+    kind === "customer"
+      ? `(SELECT rt.currency FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
+          WHERE x.customer_trunk_id = ${alias}.id AND rt.deleted_at IS NULL ORDER BY x.position LIMIT 1)`
+      : `(SELECT rt.currency FROM rate_tables rt WHERE rt.vendor_trunk_id = ${alias}.id)`;
+  return `COALESCE(${table},
+    (SELECT eb.currency FROM enterprise_billing eb WHERE eb.enterprise_id = ${alias}.enterprise_id AND eb.side = '${kind}'),
+    '${PLATFORM_CURRENCY}')`;
+}
+
 function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
   const table = kind === "customer" ? "customer_trunks" : "vendor_trunks";
   return {
@@ -107,6 +123,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
       username: { sql: "t.username" },
       category: { sql: "pc.name" },
       categoryId: { sql: "t.product_category_id" },
+      currency: { sql: trunkCurrencySql(kind, "t") },
       protocol: { sql: "t.protocol" },
       tps: { sql: "t.tps" },
       status: { sql: "t.status" },
@@ -120,7 +137,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
     search: ["name", "username", "enterpriseName"],
     idSql: "t.id",
     select: `t.id, t.enterprise_id, e.name AS enterprise_name, t.name, t.username, t.product_category_id, pc.name AS category,
-      t.protocol, t.tps, t.status, t.bind_type, ${rulesCountSql(kind)} AS rules_count, ub.username AS updated_by,
+      ${trunkCurrencySql(kind, "t")} AS currency, t.protocol, t.tps, t.status, t.bind_type, ${rulesCountSql(kind)} AS rules_count, ub.username AS updated_by,
       t.updated_at, t.deleted_at`,
     mapRow: (r) => ({
       id: r.id as number,
@@ -130,6 +147,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
       username: r.username as string,
       categoryId: (r.product_category_id as number | null) ?? null,
       category: (r.category as string | null) ?? null,
+      currency: String(r.currency),
       protocol: r.protocol as TrunkListRow["protocol"],
       tps: r.tps as number,
       status: r.status as TrunkListRow["status"],
@@ -564,7 +582,7 @@ export const moNumberList: ListDef<MoNumber> = {
     keyword: { sql: "mo.keyword" },
     rate: { sql: "mo.rate" },
     vendorRate: { sql: "mo.vendor_rate" },
-    currency: { sql: "mo.currency" },
+    currency: { sql: trunkCurrencySql("customer", "ct") },
     mccmnc: { sql: "m.mccmnc" },
     destination: { sql: moDestination },
     setupCharge: { sql: "mo.setup_charge" },
@@ -578,7 +596,7 @@ export const moNumberList: ListDef<MoNumber> = {
   search: ["number", "keyword", "customerTrunk", "enterprise", "mccmnc", "destination"],
   idSql: "mo.id",
   select: `mo.id, mo.customer_trunk_id, ct.name AS customer_trunk, ct.enterprise_id, e.name AS enterprise, mo.number,
-    mo.keyword, mo.rate, mo.vendor_rate, mo.currency, mo.mccmnc_id, m.mccmnc, ${moDestination} AS destination,
+    mo.keyword, mo.rate, mo.vendor_rate, ${trunkCurrencySql("customer", "ct")} AS currency, mo.mccmnc_id, m.mccmnc, ${moDestination} AS destination,
     mo.setup_charge, mo.fix_charge, mo.inserted_at, cb.username AS created_by, ub.username AS updated_by, mo.updated_at,
     mo.deleted_at`,
   mapRow: (r) => ({

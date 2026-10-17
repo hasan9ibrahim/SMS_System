@@ -128,7 +128,8 @@ with a filter under every column:
   Country, Country Code, network) plus the DLR target cell; add, edit, delete, import, export.
 - **Master table** (`/rates/master-table`): profiles; a profile opens its dial codes in the same tab
   (`?profile=<id>`), with add, edit, bulk delete (select rows), import and export.
-- **MO reference book** (`/rates/mo-book`): add, edit, delete, import, export.
+- **MO reference book** (`/rates/mo-book`): add, edit, delete, import, export. Amounts are in the
+  customer trunk's currency (shown read-only in the dialog once a trunk is picked).
 
 Imports share one dialog (`shared.tsx` `openImport`): choose a CSV, the server checks it (dry run),
 the dialog shows the counts, errors by line, rows kept because they are in use, and remarks; Import

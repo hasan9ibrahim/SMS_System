@@ -64,6 +64,7 @@ function trunkFields(list: "customer_trunks" | "vendor_trunks"): ListFields {
       field({ field: "username", label: "UserName", type: "text", defaultOperator: "like" }),
       field({ field: "category", label: "Product Category", type: "text", defaultOperator: "like" }),
       field({ field: "categoryId", label: "Category ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq", hidden: true }),
       field({
         field: "protocol",
         label: "Protocol",

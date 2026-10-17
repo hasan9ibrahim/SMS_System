@@ -38,7 +38,6 @@ export async function generateMasterData(world: World, rng: Rng, sink: TableSink
   const staff = world.users.filter((u) => !u.isAccountManager);
   for (let i = 1; i <= profile.moNumbers && trunks.length; i++) {
     const trunk = rng.pick(trunks);
-    const ent = world.enterpriseById.get(trunk.enterpriseId)!;
     const countryId = trunk.focusCountryIds.length ? rng.pick(trunk.focusCountryIds) : rng.pick(world.countries).id;
     const country = world.countryById.get(countryId)!;
     const short = rng.chance(0.3);
@@ -55,7 +54,6 @@ export async function generateMasterData(world: World, rng: Rng, sink: TableSink
       : nets.length && rng.chance(0.7)
         ? rng.pick(nets)
         : country.allNetworksId || null;
-    const bc = world.businessCompanies.find((b) => b.id === ent.businessCompanyId);
     const created = world.anchor - rng.int(1, profile.historyMonths * 30) * 86_400_000;
     const by = rng.pick(staff).id;
     await sink.insert("mo_numbers", {
@@ -65,7 +63,6 @@ export async function generateMasterData(world: World, rng: Rng, sink: TableSink
       keyword,
       rate: Math.round(rng.float(0.004, 0.06) * 10_000) / 10_000,
       vendor_rate: rng.chance(0.6) ? Math.round(rng.float(0.002, 0.03) * 10_000) / 10_000 : null,
-      currency: bc?.baseCurrency ?? "EUR",
       mccmnc_id: mccmncId,
       setup_charge: rng.pick([0, 0, 0, 50, 100, 250]),
       fix_charge: rng.pick([0, 0, 10, 25, 50, 100]),

@@ -1,12 +1,12 @@
 // MO reference book (§6.1): two-way and MO billing numbers. Each entry is a long number or
 // short code (plus an optional keyword) a customer trunk receives MO traffic on, with the
 // rate charged to the customer, the vendor rate, the destination, and the setup and fixed
-// charges. Add, edit, delete (archive), restore, import with a dry run, export.
+// charges, all in the customer trunk's currency (decided 2026-10-17). Add, edit, delete
+// (archive), restore, import with a dry run, export.
 import { useState } from "react";
 import type { Destination, MoNumber, MoNumberInput, TrunkListRow } from "@sms/contract";
 import { downloadCsv, useSaveMoNumber } from "../../api/masterData";
-import { usePlatformCurrency, useReference } from "../../api/records";
-import { FormField, NumberField, SelectField, TextField, useForm } from "../../form/form";
+import { FormField, NumberField, ReadOnly, TextField, useForm } from "../../form/form";
 import { toListQuery } from "../../grid/filterModel";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
@@ -24,15 +24,13 @@ const money = (v: number, currency: string) => (v === 0 ? "—" : `${v.toFixed(2
 const label = (r: { number: string; keyword: string | null }) => (r.keyword ? `${r.number} ${r.keyword}` : r.number);
 
 function MoDialog({ row, done }: { row: MoNumber | null; done: () => void }) {
-  const ref = useReference();
-  const platform = usePlatformCurrency();
+  const [currency, setCurrency] = useState<string | null>(row?.currency ?? null);
   const form = useForm<MoNumberInput>({
     customerTrunkId: row?.customerTrunkId ?? (0 as number),
     number: row?.number ?? "",
     keyword: row?.keyword ?? null,
     rate: row?.rate ?? (null as unknown as number),
     vendorRate: row?.vendorRate ?? null,
-    currency: row?.currency ?? platform,
     destinationId: row?.destinationId ?? null,
     setupCharge: row?.setupCharge ?? 0,
     fixCharge: row?.fixCharge ?? 0,
@@ -77,7 +75,10 @@ function MoDialog({ row, done }: { row: MoNumber | null; done: () => void }) {
         <ListLookup<TrunkListRow>
           list="customer_trunks"
           value={v.customerTrunkId || null}
-          onChange={(t) => form.set("customerTrunkId", t?.id ?? 0)}
+          onChange={(t) => {
+            form.set("customerTrunkId", t?.id ?? 0);
+            setCurrency(t?.currency ?? null);
+          }}
           labelOf={(t) => t.name}
           detailOf={(t) => t.enterpriseName}
           placeholder="Search customer trunks…"
@@ -97,13 +98,9 @@ function MoDialog({ row, done }: { row: MoNumber | null; done: () => void }) {
       <TextField form={form} path="keyword" label="Keyword" maxLength={40} hint="Empty = any message to the number" />
       <NumberField form={form} path="rate" label="Rate" required min={0} step={0.0001} hint="Charged to the customer" />
       <NumberField form={form} path="vendorRate" label="Vendor Rate" min={0} step={0.0001} hint="Paid to the vendor" />
-      <SelectField
-        form={form}
-        path="currency"
-        label="Currency"
-        required
-        options={(ref.data?.currencies ?? []).map((c) => ({ value: c.iso, label: `${c.iso} – ${c.name}` }))}
-      />
+      <ReadOnly label="Currency" hint="The customer trunk's; every amount is in it">
+        {currency ?? <span className="muted">Choose the trunk</span>}
+      </ReadOnly>
       <FormField label="MCCMNC" error={form.error("destinationId")}>
         <ListLookup<Destination>
           list="destinations"
@@ -128,8 +125,9 @@ const importBook = () =>
     help: (
       <p>
         Columns <code>customer_trunk</code> (name), <code>number</code>, <code>keyword</code>, <code>rate</code>,{" "}
-        <code>vendor_rate</code>, <code>currency</code> (empty = platform currency), <code>mccmnc</code>,{" "}
-        <code>setup_charge</code>, <code>fix_charge</code>. Rows are matched by number + keyword.
+        <code>vendor_rate</code>, <code>mccmnc</code>, <code>setup_charge</code>, <code>fix_charge</code>, all in the
+        customer trunk&apos;s currency (an optional <code>currency</code> column must match it). Rows are matched by
+        number + keyword.
       </p>
     ),
     replaceHint: "Entries missing from the file are archived (billed MO traffic keeps its charges).",

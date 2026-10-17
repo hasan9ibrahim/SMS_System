@@ -36,11 +36,11 @@ import {
   dialCodeProfileList,
   moNumberList,
   productCategoryList,
+  trunkCurrencySql,
 } from "../lists/defs.js";
 import { compileQuery, runList, type ListDef } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { listFields } from "../lists/fields.js";
-import { PLATFORM_CURRENCY } from "../currency.js";
 import { sendProblem } from "../problem.js";
 import { archiveGate } from "./enterprises.js";
 import { dependencies, isAdmin, isUniqueViolation, recordChange, type DiffEntry } from "./records.js";
@@ -1218,7 +1218,6 @@ const MO_FIELDS = [
   "keyword",
   "rate",
   "vendorRate",
-  "currency",
   "destinationId",
   "setupCharge",
   "fixCharge",
@@ -1231,7 +1230,6 @@ function moValues(input: MoNumberInput) {
     keyword: input.keyword?.trim() || null,
     rate: input.rate,
     vendorRate: input.vendorRate,
-    currency: input.currency,
     destinationId: input.destinationId,
     setupCharge: input.setupCharge,
     fixCharge: input.fixCharge,
@@ -1248,30 +1246,27 @@ async function moTaken(db: Db, number: string, keyword: string | null, exceptId:
   return rows.length > 0;
 }
 
-/** Field errors for an MO entry: live trunk, known currency, live destination. */
+/** Field errors for an MO entry: live trunk and live destination (amounts are in the trunk's currency). */
 async function checkMo(db: Db, v: MoValues) {
   const errors: { path: string; message: string }[] = [];
-  const [t, cur, d] = await Promise.all([
+  const [t, d] = await Promise.all([
     db.query("SELECT 1 FROM customer_trunks WHERE id = $1 AND deleted_at IS NULL", [v.customerTrunkId]),
-    db.query("SELECT 1 FROM currencies WHERE iso = $1", [v.currency]),
     v.destinationId === null
       ? null
       : db.query("SELECT 1 FROM mccmnc WHERE id = $1 AND deleted_at IS NULL", [v.destinationId]),
   ]);
   if (!t.rows.length) errors.push({ path: "/customerTrunkId", message: "unknown or deleted customer trunk" });
-  if (!cur.rows.length) errors.push({ path: "/currency", message: "unknown currency" });
   if (d && !d.rows.length) errors.push({ path: "/destinationId", message: "unknown MCCMNC code" });
   return errors;
 }
 
-const MO_COLUMNS = `customer_trunk_id, number, keyword, rate, vendor_rate, currency, mccmnc_id, setup_charge, fix_charge`;
+const MO_COLUMNS = `customer_trunk_id, number, keyword, rate, vendor_rate, mccmnc_id, setup_charge, fix_charge`;
 const moParams = (v: MoValues) => [
   v.customerTrunkId,
   v.number,
   v.keyword,
   v.rate,
   v.vendorRate,
-  v.currency,
   v.destinationId,
   v.setupCharge,
   v.fixCharge,
@@ -1288,7 +1283,7 @@ export function createMoNumber(request: FastifyRequest, reply: FastifyReply) {
     const { id, change } = await inTransaction(pool, async (c) => {
       const { rows } = await c.query(
         `INSERT INTO mo_numbers (${MO_COLUMNS}, created_by_id, updated_by_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10) RETURNING id`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9) RETURNING id`,
         [...moParams(v), me.id],
       );
       const id = rows[0].id as number;
@@ -1321,7 +1316,7 @@ export function updateMoNumber(request: FastifyRequest, reply: FastifyReply) {
     const me = await getCurrentUser();
     const change = await inTransaction(pool, async (c) => {
       await c.query(
-        `UPDATE mo_numbers SET (${MO_COLUMNS}) = ($2, $3, $4, $5, $6, $7, $8, $9, $10), updated_by_id = $11,
+        `UPDATE mo_numbers SET (${MO_COLUMNS}) = ($2, $3, $4, $5, $6, $7, $8, $9), updated_by_id = $10,
                 updated_at = now() WHERE id = $1`,
         [id, ...moParams(v), me.id],
       );
@@ -1381,9 +1376,10 @@ export function importMoNumbers(request: FastifyRequest, reply: FastifyReply) {
   if (missingCols) return missingCols;
   return withDb(reply, async (pool) => {
     const run = new ImportRun(rows.length);
-    const [{ rows: trunks }, { rows: curs }, { rows: codes }, { rows: live }] = await Promise.all([
-      pool.query("SELECT id, name FROM customer_trunks WHERE deleted_at IS NULL"),
-      pool.query("SELECT iso FROM currencies"),
+    const [{ rows: trunks }, { rows: codes }, { rows: live }] = await Promise.all([
+      pool.query(
+        `SELECT t.id, t.name, ${trunkCurrencySql("customer", "t")} AS currency FROM customer_trunks t WHERE t.deleted_at IS NULL`,
+      ),
       pool.query("SELECT id, mccmnc FROM mccmnc WHERE deleted_at IS NULL"),
       pool.query(`SELECT id, ${MO_COLUMNS} FROM mo_numbers WHERE deleted_at IS NULL`),
     ]);
@@ -1392,7 +1388,7 @@ export function importMoNumbers(request: FastifyRequest, reply: FastifyReply) {
       const k = String(t.name).toLowerCase();
       trunkIds.set(k, [...(trunkIds.get(k) ?? []), t.id as number]);
     }
-    const currencies = new Set(curs.map((c) => String(c.iso)));
+    const trunkCurrency = new Map(trunks.map((t) => [t.id as number, String(t.currency)]));
     const codeId = new Map(codes.map((c) => [c.mccmnc as string, c.id as number]));
     const keyOf = (n: string, k: string | null) => `${n}|${(k ?? "").toLowerCase()}`;
     const existing = new Map(live.map((r) => [keyOf(r.number, r.keyword), r]));
@@ -1424,9 +1420,10 @@ export function importMoNumbers(request: FastifyRequest, reply: FastifyReply) {
         );
         continue;
       }
-      const currency = (values.currency || PLATFORM_CURRENCY).toUpperCase();
-      if (!currencies.has(currency)) {
-        run.error(line, label, `Unknown currency ${currency}`);
+      // Amounts are in the trunk's currency (decided 2026-10-17); a currency column must agree.
+      const currency = trunkCurrency.get(ids[0]!)!;
+      if (values.currency && values.currency.toUpperCase() !== currency) {
+        run.error(line, label, `${values.customer_trunk} bills in ${currency}, not ${values.currency.toUpperCase()}`);
         continue;
       }
       let destinationId: number | null = null;
@@ -1454,7 +1451,6 @@ export function importMoNumbers(request: FastifyRequest, reply: FastifyReply) {
         keyword,
         rate: amounts.rate!,
         vendorRate: amounts.vendorRate,
-        currency,
         destinationId,
         setupCharge: amounts.setupCharge,
         fixCharge: amounts.fixCharge,
@@ -1471,7 +1467,6 @@ export function importMoNumbers(request: FastifyRequest, reply: FastifyReply) {
         keyword: old.keyword,
         rate: Number(old.rate),
         vendorRate: old.vendor_rate == null ? null : Number(old.vendor_rate),
-        currency: String(old.currency),
         destinationId: old.mccmnc_id == null ? null : Number(old.mccmnc_id),
         setupCharge: Number(old.setup_charge),
         fixCharge: Number(old.fix_charge),
@@ -1494,7 +1489,7 @@ export function importMoNumbers(request: FastifyRequest, reply: FastifyReply) {
       for (const v of inserts) {
         const { rows: ins } = await c.query(
           `INSERT INTO mo_numbers (${MO_COLUMNS}, created_by_id, updated_by_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10) RETURNING id`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9) RETURNING id`,
           [...moParams(v), me.id],
         );
         ids.push(ins[0].id);
@@ -1502,7 +1497,7 @@ export function importMoNumbers(request: FastifyRequest, reply: FastifyReply) {
       }
       for (const u of updates) {
         await c.query(
-          `UPDATE mo_numbers SET (${MO_COLUMNS}) = ($2, $3, $4, $5, $6, $7, $8, $9, $10), updated_by_id = $11,
+          `UPDATE mo_numbers SET (${MO_COLUMNS}) = ($2, $3, $4, $5, $6, $7, $8, $9), updated_by_id = $10,
                   updated_at = now() WHERE id = $1`,
           [u.id, ...moParams(u.v), me.id],
         );

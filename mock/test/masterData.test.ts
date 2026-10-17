@@ -329,27 +329,35 @@ describe("Master Table", { skip }, () => {
 
 describe("MO reference book", { skip }, () => {
   test("add, duplicate number + keyword, change, import with errors, delete and undo", async () => {
+    // A trunk with a rate table: its currency is the table's (decided 2026-10-17).
     const trunk = (
-      await db().query("SELECT id, name FROM customer_trunks WHERE deleted_at IS NULL ORDER BY id LIMIT 1")
+      await db().query(
+        `SELECT t.id, t.name, rt.currency FROM customer_trunks t
+           JOIN customer_trunk_rate_tables x ON x.customer_trunk_id = t.id AND x.position = (
+             SELECT min(position) FROM customer_trunk_rate_tables WHERE customer_trunk_id = t.id)
+           JOIN rate_tables rt ON rt.id = x.rate_table_id AND rt.deleted_at IS NULL
+          WHERE t.deleted_at IS NULL ORDER BY t.id LIMIT 1`,
+      )
     ).rows[0];
+    const other = trunk.currency === "EUR" ? "USD" : "EUR";
     const input = {
       customerTrunkId: trunk.id,
       number: `4420${run.replace(/\D/g, "7").padEnd(7, "7")}`.slice(0, 13),
       keyword: "TEST",
       rate: 0.02,
       vendorRate: 0.01,
-      currency: "EUR",
       destinationId: null,
       setupCharge: 50,
       fixCharge: 10,
     };
     const created = await ok("createMoNumber", call("POST", "/mo-numbers", input), 201);
     assert.equal(created.record.customerTrunk, trunk.name);
+    assert.equal(created.record.currency, trunk.currency, "the trunk's currency");
     const dup = await call("POST", "/mo-numbers", { ...input, keyword: "test" });
     assert.equal(dup.statusCode, 409, "number + keyword is unique, keyword case-insensitive");
-    const other = await call("POST", "/mo-numbers", { ...input, currency: "XXX", keyword: "OTHER" });
-    assert.equal(other.statusCode, 400);
-    check("createMoNumber", other);
+    const noTrunk = await call("POST", "/mo-numbers", { ...input, customerTrunkId: 999_999_999, keyword: "OTHER" });
+    assert.equal(noTrunk.statusCode, 400);
+    check("createMoNumber", noTrunk);
     const changed = await ok(
       "updateMoNumber",
       call("PUT", `/mo-numbers/${created.record.id}`, { ...input, rate: 0.03 }),
@@ -361,12 +369,14 @@ describe("MO reference book", { skip }, () => {
 
     const csv = [
       "customer_trunk,number,keyword,rate,vendor_rate,currency,mccmnc,setup_charge,fix_charge",
-      `${trunk.name},${input.number},TEST,0.04,,EUR,,0,0`,
+      `${trunk.name},${input.number},TEST,0.04,,${trunk.currency},,0,0`,
       `${trunk.name},${input.number}1,,0.01,0.005,,26201,0,5`,
       `No such trunk,123456,,0.01,,,,0,0`,
+      `${trunk.name},${input.number}2,,0.01,,${other},,0,0`,
     ].join("\n");
     const bad: ImportResult = await ok("importMoNumbers", call("POST", "/mo-numbers/import", { csv, dryRun: true }));
-    assert.equal(bad.errors.length, 1);
+    assert.equal(bad.errors.length, 2);
+    assert.match(bad.errors[1]!.message, new RegExp(`bills in ${trunk.currency}`), "a currency column must match");
     assert.equal(bad.updated, 1);
     assert.equal(bad.added, 1);
     const good: ImportResult = await ok(
@@ -376,10 +386,9 @@ describe("MO reference book", { skip }, () => {
     assert.equal(good.applied, true);
     const listed = await ok("queryMoNumbers", call("POST", "/mo-numbers/query", { limit: 10, search: input.number }));
     assert.equal(listed.total, 2);
-    assert.equal(
-      listed.rows.find((r: { keyword: string | null }) => r.keyword === null).currency,
-      "EUR",
-      "empty currency = the platform currency",
+    assert.ok(
+      listed.rows.every((r: { currency: string }) => r.currency === trunk.currency),
+      "entries without a currency column take the trunk's",
     );
     const gone = await ok("archiveMoNumber", call("POST", `/mo-numbers/${created.record.id}/archive`, {}));
     for (const c of [gone.change, good.change, changed.change, created.change]) await undo(c);

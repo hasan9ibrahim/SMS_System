@@ -9,7 +9,7 @@ export const TEMPLATES: Record<ImportKind, string> = {
   destinations: "mcc,mnc,original_mnc,country,network\n262,01,,Germany,Example Network\n262,,,Germany,\n",
   dial_codes: "prefix,mccmnc\n4915,26201\n",
   mo_numbers:
-    "customer_trunk,number,keyword,rate,vendor_rate,currency,mccmnc,setup_charge,fix_charge\nEXAMPLE_TRUNK,491701234567,INFO,0.02,0.01,EUR,26201,0,10\n",
+    "customer_trunk,number,keyword,rate,vendor_rate,mccmnc,setup_charge,fix_charge\nEXAMPLE_TRUNK,491701234567,INFO,0.02,0.01,26201,0,10\n",
 };
 
 /** One line for the toast and the dialog: what the import does or did. */
