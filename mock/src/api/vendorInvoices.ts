@@ -254,13 +254,27 @@ export async function loadVendorInvoice(c: Db, id: number): Promise<VendorInvoic
     at: (x.inserted_at as Date).toISOString(),
   }));
   const rule = await effectiveRule(c, row.enterpriseId);
+  const { rows: adj } = await c.query(
+    "SELECT action FROM soa_adjustments WHERE vendor_invoice_id = $1 AND deleted_at IS NULL",
+    [id],
+  );
+  const manual = adj[0]?.action as string | undefined;
   return {
     ...row,
     reasons: (r.check_reasons as string[]) ?? [],
     rule: (r.rule_snapshot as ReconRuleValues | null) ?? null,
     // §13.31: accepted invoices are on the SOA; the others are left off or shown as disputed.
+    // Manual SOA adds and removes (§13.31) win over the automatic rule.
     inSoa:
-      row.status === "accepted" ? "included" : rule.disputedInSoa === "separate_block" ? "disputed_block" : "excluded",
+      manual === "include_vendor_invoice"
+        ? "included"
+        : manual === "exclude_vendor_invoice"
+          ? "excluded"
+          : row.status === "accepted"
+            ? "included"
+            : rule.disputedInSoa === "separate_block"
+              ? "disputed_block"
+              : "excluded",
     events,
   };
 }

@@ -16,6 +16,8 @@ import type {
   HlrPolicyRow,
   InvoiceRow,
   InvoiceRequestRow,
+  EmailTemplateRow,
+  SoaReportRow,
   ReconRuleRow,
   VendorInvoiceRow,
   TransactionRow,
@@ -1767,6 +1769,91 @@ export function mapVendorInvoice(r: Record<string, unknown>): VendorInvoiceRow {
   };
 }
 
+/** SOA Report (§7): exports and sends with the statement kept as it was. */
+export const SOA_REPORT_FROM = `soa_reports s
+    JOIN enterprises e ON e.id = s.enterprise_id
+    LEFT JOIN email_templates t ON t.id = s.template_id
+    LEFT JOIN users u ON u.id = s.created_by_id`;
+export const SOA_REPORT_SELECT = `s.id, s.enterprise_id, s.period_from, s.period_to, s.invoice_type, s.file_type, s.purpose, s.status,
+    s.error, s.emailed_at, s.email_to, s.closing_balance, s.currency, s.inserted_at, s.finished_at,
+    e.name AS enterprise, t.name AS template, u.username AS created_by`;
+export const soaReportList: ListDef<SoaReportRow> = {
+  fields: listFields.soa_reports,
+  from: SOA_REPORT_FROM,
+  columns: {
+    id: { sql: "s.id" },
+    enterprise: { sql: "e.name" },
+    enterpriseId: { sql: "s.enterprise_id" },
+    from: { sql: "s.period_from" },
+    to: { sql: "s.period_to" },
+    invoiceType: { sql: "s.invoice_type" },
+    fileType: { sql: "s.file_type" },
+    purpose: { sql: "s.purpose" },
+    status: { sql: "s.status" },
+    error: { sql: "s.error" },
+    emailedAt: { sql: "s.emailed_at" },
+    template: { sql: "t.name" },
+    closingBalance: { sql: "s.closing_balance" },
+    createdBy: { sql: "u.username" },
+    createdAt: { sql: "s.inserted_at" },
+  },
+  search: ["enterprise"],
+  idSql: "s.id",
+  select: SOA_REPORT_SELECT,
+  mapRow: (r) => mapSoaReport(r),
+};
+
+export function mapSoaReport(r: Record<string, unknown>): SoaReportRow {
+  return {
+    id: Number(r.id),
+    enterpriseId: Number(r.enterprise_id),
+    enterprise: r.enterprise as string,
+    from: ymd(r.period_from),
+    to: ymd(r.period_to),
+    invoiceType: r.invoice_type as SoaReportRow["invoiceType"],
+    fileType: r.file_type as SoaReportRow["fileType"],
+    purpose: r.purpose as SoaReportRow["purpose"],
+    status: r.status as SoaReportRow["status"],
+    error: (r.error as string | null) ?? null,
+    emailedAt: iso(r.emailed_at),
+    emailTo: (r.email_to as string[]) ?? [],
+    template: (r.template as string | null) ?? null,
+    closingBalance: r.closing_balance === null ? null : Number(r.closing_balance),
+    currency: r.currency ? String(r.currency).trim() : null,
+    createdBy: (r.created_by as string | null) ?? null,
+    createdAt: iso(r.inserted_at)!,
+    finishedAt: iso(r.finished_at),
+  };
+}
+
+export const emailTemplateList: ListDef<EmailTemplateRow> = {
+  fields: listFields.email_templates,
+  from: `email_templates t LEFT JOIN business_companies bc ON bc.id = t.business_company_id
+    LEFT JOIN users u ON u.id = t.updated_by_id`,
+  baseWhere: "t.deleted_at IS NULL",
+  columns: {
+    id: { sql: "t.id" },
+    name: { sql: "t.name" },
+    emailType: { sql: "t.email_type" },
+    subject: { sql: "t.subject" },
+    businessCompany: { sql: "bc.name" },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "t.updated_at" },
+  },
+  search: ["name", "subject"],
+  idSql: "t.id",
+  select: "t.id, t.name, t.email_type, t.subject, bc.name AS business_company, u.username AS updated_by, t.updated_at",
+  mapRow: (r) => ({
+    id: Number(r.id),
+    name: r.name as string,
+    emailType: r.email_type as EmailTemplateRow["emailType"],
+    subject: r.subject as string,
+    businessCompany: (r.business_company as string | null) ?? null,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+  }),
+};
+
 /** Reconciliation rules (§13.31): the default rule (no enterprise) first, then partners. */
 const rrInvoicesSql = `(CASE WHEN rr.enterprise_id IS NULL
     THEN (SELECT count(*)::int FROM vendor_invoices vi WHERE vi.deleted_at IS NULL AND NOT EXISTS
@@ -2070,6 +2157,8 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   invoice_requests: invoiceRequestList as ListDef<unknown>,
   vendor_invoices: vendorInvoiceList as ListDef<unknown>,
   recon_rules: reconRuleList as ListDef<unknown>,
+  soa_reports: soaReportList as ListDef<unknown>,
+  email_templates: emailTemplateList as ListDef<unknown>,
   currencies: currencyList as ListDef<unknown>,
   currency_rates: currencyRateList as ListDef<unknown>,
   currency_rate_history: currencyRateHistoryList as ListDef<unknown>,

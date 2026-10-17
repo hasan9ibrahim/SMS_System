@@ -79,6 +79,8 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
       emailStatus: "email_status",
     },
   },
+  // Manual SOA adds, removes and entries (§13.31): undoing the add takes it back.
+  soa_adjustment: { table: "soa_adjustments", columns: {} },
   recon_rule: {
     table: "recon_rules",
     columns: {

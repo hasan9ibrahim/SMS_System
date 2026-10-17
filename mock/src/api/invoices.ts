@@ -17,6 +17,7 @@ import type {
 import { db, withDb } from "../db.js";
 import { INVOICE_REQUEST_FROM, INVOICE_REQUEST_SELECT, invoiceList, mapInvoiceRequest } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
+import { simplePdf } from "../billing/files.js";
 import { coverageOf, destinationNames, edrCoverage, fmtDay, sumLines, usageLines } from "../billing/edrFigures.js";
 import { archiveGate } from "./enterprises.js";
 import { billingContacts } from "./finance.js";
@@ -218,38 +219,6 @@ export function getInvoiceCharges(request: FastifyRequest, reply: FastifyReply) 
     if (!inv) return notFound(reply, "Invoice", id);
     return chargeLines(pool, inv);
   });
-}
-
-/** A one-page PDF (Helvetica, text only): enough for the mock; production uses the XLSX format file. */
-export function simplePdf(lines: { text: string; size?: number; bold?: boolean; gap?: number }[]): Buffer {
-  const esc = (s: string) => s.replace(/[\\()]/g, (c) => `\\${c}`).replace(/[^\x20-\x7e]/g, "?");
-  let y = 800;
-  const ops: string[] = [];
-  for (const l of lines) {
-    y -= l.gap ?? (l.size ?? 10) + 5;
-    if (y < 40) break;
-    ops.push(`BT /${l.bold ? "F2" : "F1"} ${l.size ?? 10} Tf 50 ${y} Td (${esc(l.text)}) Tj ET`);
-  }
-  const stream = ops.join("\n");
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>",
-    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
-  ];
-  let out = "%PDF-1.4\n";
-  const offsets: number[] = [];
-  objects.forEach((o, i) => {
-    offsets.push(Buffer.byteLength(out));
-    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
-  });
-  const xref = Buffer.byteLength(out);
-  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const o of offsets) out += `${String(o).padStart(10, "0")} 00000 n \n`;
-  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return Buffer.from(out, "latin1");
 }
 
 const amt = (v: number, ccy: string) =>

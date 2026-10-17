@@ -2,7 +2,7 @@
 // sign, e-mail and job status) with Send Invoice, Mark, Generate Request and per-row Regenerate,
 // and the Invoice Request list (?view=requests). Requests run in the background; the page polls
 // them and refreshes when they finish. Delete archives and is blocked while payments are linked
-// (§13.29); edits, sends and marks are undoable (§13.10). Send SOA comes with the SOA screen (5.7).
+// (§13.29); edits, sends and marks are undoable (§13.10). Send SOA opens the SOA screen (§7).
 import { useState } from "react";
 import { useLocation } from "react-router";
 import type { Enterprise, InvoiceDetail, InvoiceRequestInput, InvoiceRequestRow, InvoiceRow } from "@sms/contract";
@@ -33,6 +33,7 @@ import { fmtWhen, RecordActions } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
 import { balanceWords, money } from "./financeModel";
 import { blankRequest, JOB_STATUS, PAYMENT_STATUS, requestInput } from "./invoiceModel";
+import { soaLink } from "./soaModel";
 
 const page = pageForPath("/finance/invoices")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -498,6 +499,7 @@ function InvoiceDetailView({ row, onRegenerate }: { row: InvoiceRow; onRegenerat
   const q = useInvoice(row.id);
   const send = useSendInvoices();
   const notifySaved = useNotifySaved();
+  const navigate = useTabNavigate();
   const d = q.data;
   if (!d) return <p className="muted">{q.isError ? problemText(q.error) : "Loading…"}</p>;
   const busy = d.status === "pending" || d.status === "inprogress";
@@ -545,6 +547,14 @@ function InvoiceDetailView({ row, onRegenerate }: { row: InvoiceRow; onRegenerat
             </Button>
           </>
         )}
+        <Button
+          small
+          icon="mail"
+          onClick={() => navigate(soaLink([d.enterpriseId]))}
+          title="Open the SOA screen for this enterprise"
+        >
+          Send SOA
+        </Button>
         <RecordActions kind="invoice" id={d.id} name={`invoice ${d.invoiceNumber}`} archived={!!d.archivedAt} />
       </div>
       <dl className="kv">

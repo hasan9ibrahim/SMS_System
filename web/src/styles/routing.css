@@ -707,3 +707,109 @@ textarea.mono {
 .recon-figures .num {
   text-align: left;
 }
+
+/* ---------- SOA (§7, §13.31, §13.33) ---------- */
+.soa-form {
+  display: grid;
+  grid-template-columns: minmax(280px, 3fr) auto repeat(2, minmax(130px, 1fr)) minmax(220px, 2fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 12px 0;
+}
+.soa-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.soa-results {
+  max-height: 34vh;
+}
+.soa-results tbody tr {
+  cursor: pointer;
+}
+.soa-results tbody tr.selected td {
+  background: var(--hover);
+}
+.soa-statement {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+.soa-statement-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.soa-statement-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.soa-side {
+  margin-top: 14px;
+}
+.soa-side header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.soa-side h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.soa-lines {
+  width: 100%;
+}
+.soa-lines tr.soa-total td {
+  font-weight: 600;
+  background: var(--hover);
+}
+.soa-lines tr.soa-manual td:first-child {
+  box-shadow: inset 3px 0 0 var(--color-warning);
+}
+.chip-tag {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: var(--border-width) solid var(--color-border);
+}
+.chip-tag.manual {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+.soa-section {
+  margin-top: 10px;
+}
+.soa-section summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.soa-net {
+  margin: 14px 0 0;
+}
+.soa-hint {
+  margin-top: 24px;
+}
+.form-grid.cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+.soa-page {
+  overflow: auto;
+}
+.soa-page > * {
+  flex-shrink: 0;
+}
+.soa-enterprises .pick-list {
+  max-height: 132px;
+}

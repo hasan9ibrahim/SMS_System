@@ -1,7 +1,7 @@
 // Enterprise Balance (§7): customer, vendor and net balance (customer − vendor) per enterprise,
 // positive = the partner's credit, negative = owed (decided 2026-10-17), with account manager,
 // customer credit and use, billing cycle and currency. Server-side filters and sort; CSV export.
-// Send SOA comes with the SOA screen (build step 5.6).
+// Send SOA opens the SOA screen for the enterprise (§7, build step 5.7).
 import type { EnterpriseBalanceRow } from "@sms/contract";
 import { downloadCsv } from "../../api/masterData";
 import { toListQuery } from "../../grid/filterModel";
@@ -12,6 +12,7 @@ import { toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { balanceWords, money, netWords } from "./financeModel";
+import { soaLink } from "./soaModel";
 
 const page = pageForPath("/finance/balances")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -126,6 +127,9 @@ export function BalancesPage() {
             label: "Balance",
             actions: (
               <>
+                <Button small icon="mail" onClick={() => navigate(soaLink([r.id]))}>
+                  Send SOA
+                </Button>
                 <Button small icon="file" onClick={() => navigate(`/enterprises/${r.id}?tab=billing`)}>
                   Billing settings
                 </Button>

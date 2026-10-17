@@ -11,7 +11,7 @@ import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { evaluateRecon, flaggedDestinations, withinTolerance } from "../src/billing/recon.js";
 import { coverageOf, edrCoverage, zonedMidnight } from "../src/billing/edrFigures.js";
-import { simplePdf } from "../src/api/invoices.js";
+import { simplePdf, spreadsheetXml } from "../src/billing/files.js";
 import { dayWindow } from "../src/billing/zone.js";
 
 process.env.INVOICE_JOB_STEP_MS = "0";

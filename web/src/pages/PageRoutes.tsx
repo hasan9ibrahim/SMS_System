@@ -19,6 +19,8 @@ import { BillingCyclesPage } from "./finance/BillingCyclesPage";
 import { ChargesPage } from "./finance/ChargesPage";
 import { CurrenciesPage } from "./finance/CurrenciesPage";
 import { InvoicesPage } from "./finance/InvoicesPage";
+import { SoaPage } from "./finance/SoaPage";
+import { SoaReportPage } from "./finance/SoaReportPage";
 import { VendorInvoicesPage } from "./finance/VendorInvoicesPage";
 import { TransactionsPage } from "./finance/TransactionsPage";
 import { HlrPage } from "./switch/hlr/HlrPage";
@@ -55,6 +57,8 @@ const BUILT = new Set([
   "/finance/transactions",
   "/finance/invoices",
   "/finance/vendor-invoices",
+  "/finance/soa",
+  "/finance/soa-report",
   "/finance/currencies",
   "/finance/billing-cycles",
   "/finance/balances",
@@ -99,6 +103,8 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/finance/transactions" element={<TransactionsPage />} />
       <Route path="/finance/invoices" element={<InvoicesPage />} />
       <Route path="/finance/vendor-invoices" element={<VendorInvoicesPage />} />
+      <Route path="/finance/soa" element={<SoaPage />} />
+      <Route path="/finance/soa-report" element={<SoaReportPage />} />
       <Route path="/finance/currencies" element={<CurrenciesPage />} />
       <Route path="/finance/billing-cycles" element={<BillingCyclesPage />} />
       <Route path="/finance/balances" element={<BalancesPage />} />

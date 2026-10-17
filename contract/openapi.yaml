@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.17.1
+  version: 0.18.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -6282,6 +6282,353 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa/search:
+    post:
+      tags: [finance]
+      operationId: searchSoa
+      summary: "SOA Search: one summary per enterprise (§7)"
+      description: |
+        For each enterprise and side: opening and closing balance of the statement, the system balance, how many lines,
+        payments left off and disputed vendor invoices, billing contacts and the last SOA sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SoaQuery"
+      responses:
+        "200":
+          description: One row per enterprise
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaSearchResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa/statement:
+    post:
+      tags: [finance]
+      operationId: getSoaStatement
+      summary: "SOA preview of one enterprise (§13.31, §13.33)"
+      description: |
+        Every line with its source (Auto / Manual) and status and a running balance (positive = the partner's credit),
+        per side; the disputed block (vendor invoices not accepted, when the partner's rule shows them), payments left
+        off the SOA, lines removed by hand, and how the statement's closing balance differs from the system balance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SoaStatementQuery"
+      responses:
+        "200":
+          description: The statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaStatement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa/adjustments:
+    post:
+      tags: [finance]
+      operationId: createSoaAdjustment
+      summary: "Add or remove an SOA line by hand (§13.31 Manual SOA option)"
+      description: |
+        include_vendor_invoice: put a vendor invoice on the SOA whatever its status. exclude_invoice /
+        exclude_vendor_invoice: take an automatic line off (a reason is required). entry: a manual line without an invoice
+        file (payment, credit note, adjustment, opening balance), shown on the SOA only. Logged with user, time and
+        reason; one undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SoaAdjustmentInput"
+      responses:
+        "201":
+          description: Saved, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaAdjustmentSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa/adjustments/{id}/archive:
+    post:
+      tags: [finance]
+      operationId: archiveSoaAdjustment
+      summary: "Take back a manual SOA add, remove or entry"
+      description: |
+        The line goes back to what the automatic rules say. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaAdjustmentSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa/email-preview:
+    post:
+      tags: [finance]
+      operationId: previewSoaEmail
+      summary: "Preview the Send SOA e-mail (§13.31 confirm-to-send)"
+      description: |
+        Recipients (the partner's billing contacts), subject and body from the template with the placeholders filled in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SoaEmailPreviewInput"
+      responses:
+        "200":
+          description: The e-mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa/send:
+    post:
+      tags: [finance]
+      operationId: sendSoa
+      summary: "Send Email: e-mail the SOA to the checked enterprises"
+      description: |
+        One SOA report per enterprise (PDF attached), run in the background; the report keeps the sent copy with date
+        and recipients. An enterprise without a billing contact fails with that error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SoaSendInput"
+      responses:
+        "202":
+          description: The reports, pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaReportsCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa/export:
+    post:
+      tags: [finance]
+      operationId: exportSoa
+      summary: "Queue SOA Export (Excel or PDF)"
+      description: |
+        One SOA report per enterprise, run in the background; download it from the SOA Report list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SoaExportInput"
+      responses:
+        "202":
+          description: The reports, pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaReportsCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa-reports/query:
+    post:
+      tags: [finance]
+      operationId: querySoaReports
+      summary: "List SOA reports (server-side filter, sort and paging)"
+      description: |
+        SOA Report (§7): ID, Enterprise, From / To Date, Invoice Type, File Type, Status, Error, Download, Created Time,
+        plus whether and to whom it was e-mailed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of SOA reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa-reports/{id}:
+    get:
+      tags: [finance]
+      operationId: getSoaReport
+      summary: "One SOA report (poll for its status)"
+      description: |
+        Status, error and e-mail details.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaReportRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa-reports/{id}/file:
+    get:
+      tags: [finance]
+      operationId: downloadSoaReport
+      summary: "Download an SOA report"
+      description: |
+        The statement as kept when the report ran (a sent copy never changes). 409 while it is not done.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The file (PDF, or Excel 2003 XML spreadsheet .xls)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /soa-reports/{id}/send:
+    post:
+      tags: [finance]
+      operationId: sendSoaReport
+      summary: "Send Email from the SOA Report list (modal Send SOA Email Notification)"
+      description: |
+        E-mails this report's file with the chosen template to the enterprise's billing contacts.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SoaReportSendInput"
+      responses:
+        "200":
+          description: The report with the e-mail details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoaReportRow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /email-templates/query:
+    post:
+      tags: [reference]
+      operationId: queryEmailTemplates
+      summary: "List e-mail templates (read-only until the Email Template screen)"
+      description: |
+        Email Template grid (§11): Info ID, Name, Email Type, Subject. Used by the SOA template picker.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of e-mail templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTemplatePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -12708,6 +13055,512 @@ components:
             - $ref: "#/components/schemas/Change"
             - type: "null"
 
+    # ------------------------------------------------------------- SOA (§7, §13.31, §13.33)
+    SoaInvoiceType:
+      type: string
+      enum: [all, auto, manual]
+      description: Invoice Type filter of the SOA form; applies to customer invoices.
+
+    SoaQuery:
+      type: object
+      additionalProperties: false
+      required: [enterpriseIds, invoiceType, from, to]
+      properties:
+        enterpriseIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+        invoiceType:
+          $ref: "#/components/schemas/SoaInvoiceType"
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+          description: Inclusive; at most 3 years after `from`.
+
+    SoaStatementQuery:
+      type: object
+      additionalProperties: false
+      required: [enterpriseId, invoiceType, from, to]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        invoiceType:
+          $ref: "#/components/schemas/SoaInvoiceType"
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+
+    SoaSideSummary:
+      type: object
+      required: [side, currency, openingBalance, closingBalance, systemBalance, lines, excludedPayments, disputed]
+      properties:
+        side:
+          type: string
+          enum: [customer, vendor]
+        currency:
+          type: string
+        openingBalance:
+          type: number
+        closingBalance:
+          type: number
+          description: Opening + the statement's lines.
+        systemBalance:
+          type: number
+          description: The balance the system holds at the end of the period (§7 sign).
+        lines:
+          type: integer
+        excludedPayments:
+          type: integer
+        disputed:
+          type: integer
+
+    SoaSearchRow:
+      type: object
+      required: [enterpriseId, enterprise, enterpriseType, recipients, sides, lastSentAt]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        enterpriseType:
+          type: string
+        recipients:
+          type: array
+          items:
+            type: string
+          description: Billing contacts; empty = Send Email fails for this enterprise.
+        sides:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaSideSummary"
+        lastSentAt:
+          type: [string, "null"]
+          format: date-time
+
+    SoaSearchResult:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaSearchRow"
+
+    SoaLine:
+      type: object
+      required: [key, date, kind, reference, description, amount, balance, source, status, note, refType, refId, adjustmentId]
+      properties:
+        key:
+          type: string
+          description: Stable key, e.g. invoice:12, vendor_invoice:7, transaction:91, entry:3.
+        date:
+          type: string
+          format: date
+        kind:
+          type: string
+          enum: [opening, invoice, vendor_invoice, receipt, adjustment, dispute, credit_note, bank_charges, bill_payment, reprocess, manual_payment, manual_credit_note, manual_adjustment, manual_opening]
+        reference:
+          type: [string, "null"]
+          description: Invoice number or transaction reference.
+        description:
+          type: string
+        amount:
+          type: number
+          description: Signed like the balance - positive raises it (payments in, credits), negative lowers it (invoices).
+        balance:
+          type: [number, "null"]
+          description: Running balance after the line; main lines only.
+        source:
+          type: string
+          enum: [auto, manual]
+        status:
+          type: [string, "null"]
+          description: Vendor invoice status (pending, accepted, disputed, rejected) or invoice payment status.
+        note:
+          type: [string, "null"]
+          description: Reason of a manual add or remove, or why a payment is left off.
+        refType:
+          type: string
+          enum: [invoice, vendor_invoice, transaction, entry, opening]
+        refId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        adjustmentId:
+          description: The manual add, remove or entry behind the line; null for automatic lines.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+
+    SoaSide:
+      type: object
+      required: [side, currency, openingBalance, lines, closingBalance, systemBalance, difference, disputedBlock, disputed, excludedPayments, removed]
+      properties:
+        side:
+          type: string
+          enum: [customer, vendor]
+        currency:
+          type: string
+        openingBalance:
+          type: number
+          description: System balance at the start of the period (§7 sign).
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaLine"
+        closingBalance:
+          type: number
+        systemBalance:
+          type: number
+        difference:
+          type: number
+          description: closingBalance − systemBalance; explained by lines left off, removed or added by hand.
+        disputedBlock:
+          type: boolean
+          description: The partner's rule shows non-accepted vendor invoices in a separate block (§13.31).
+        disputed:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaLine"
+        excludedPayments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaLine"
+        removed:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaLine"
+
+    SoaStatement:
+      type: object
+      required: [enterpriseId, enterprise, businessCompany, timezone, from, to, invoiceType, recipients, sides, net]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        businessCompany:
+          type: string
+        timezone:
+          type: string
+          description: The partner's billing time zone, printed on the SOA.
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        invoiceType:
+          $ref: "#/components/schemas/SoaInvoiceType"
+        recipients:
+          type: array
+          items:
+            type: string
+        sides:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaSide"
+        net:
+          description: Customer − vendor closing balance for reciprocal partners, in the customer currency.
+          oneOf:
+            - type: object
+              required: [amount, currency]
+              properties:
+                amount:
+                  type: number
+                currency:
+                  type: string
+            - type: "null"
+
+    SoaAdjustmentInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseId, action, note]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        action:
+          type: string
+          enum: [include_vendor_invoice, exclude_invoice, exclude_vendor_invoice, entry]
+        invoiceId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        vendorInvoiceId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        entry:
+          description: For action entry.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [side, kind, date, amount, description]
+              properties:
+                side:
+                  type: string
+                  enum: [customer, vendor]
+                kind:
+                  type: string
+                  enum: [payment, credit_note, adjustment, opening_balance]
+                date:
+                  type: string
+                  format: date
+                amount:
+                  type: number
+                  description: Signed like the balance (positive raises it).
+                currency:
+                  type: [string, "null"]
+                  pattern: "^[A-Z]{3}$"
+                  description: Must be the side's billing currency; null = that currency.
+                description:
+                  type: string
+                  minLength: 1
+                  maxLength: 300
+            - type: "null"
+        note:
+          type: [string, "null"]
+          maxLength: 500
+          description: Required to remove an automatic line.
+
+    SoaAdjustment:
+      type: object
+      required: [id, enterpriseId, action, invoiceId, vendorInvoiceId, side, kind, date, amount, currency, description, note, createdBy, createdAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        action:
+          type: string
+          enum: [include_vendor_invoice, exclude_invoice, exclude_vendor_invoice, entry]
+        invoiceId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        vendorInvoiceId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        side:
+          type: [string, "null"]
+          enum: [customer, vendor, null]
+        kind:
+          type: [string, "null"]
+        date:
+          type: [string, "null"]
+          format: date
+        amount:
+          type: [number, "null"]
+        currency:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+        note:
+          type: [string, "null"]
+        createdBy:
+          type: [string, "null"]
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    SoaAdjustmentSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/SoaAdjustment"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    SoaEmailPreviewInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseId, invoiceType, from, to, templateId]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        invoiceType:
+          $ref: "#/components/schemas/SoaInvoiceType"
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        templateId:
+          $ref: "#/components/schemas/Id"
+
+    SoaSendInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseIds, invoiceType, from, to, templateId]
+      properties:
+        enterpriseIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+        invoiceType:
+          $ref: "#/components/schemas/SoaInvoiceType"
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        templateId:
+          $ref: "#/components/schemas/Id"
+          description: A Send SOA / SOA Statement template.
+
+    SoaExportInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseIds, invoiceType, from, to, fileType]
+      properties:
+        enterpriseIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+        invoiceType:
+          $ref: "#/components/schemas/SoaInvoiceType"
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        fileType:
+          type: string
+          enum: [excel, pdf]
+
+    SoaReportRow:
+      type: object
+      required: [id, enterpriseId, enterprise, from, to, invoiceType, fileType, purpose, status, error, emailedAt, emailTo, template, closingBalance, currency, createdBy, createdAt, finishedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        invoiceType:
+          $ref: "#/components/schemas/SoaInvoiceType"
+        fileType:
+          type: string
+          enum: [excel, pdf]
+        purpose:
+          type: string
+          enum: [export, email]
+        status:
+          type: string
+          enum: [pending, inprogress, success, failed]
+        error:
+          type: [string, "null"]
+        emailedAt:
+          type: [string, "null"]
+          format: date-time
+        emailTo:
+          type: array
+          items:
+            type: string
+        template:
+          type: [string, "null"]
+        closingBalance:
+          type: [number, "null"]
+          description: The customer side's closing balance on the statement (else the vendor side's).
+        currency:
+          type: [string, "null"]
+        createdBy:
+          type: [string, "null"]
+          description: Null = scheduled.
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+
+    SoaReportPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/SoaReportRow"
+
+    SoaReportsCreated:
+      type: object
+      required: [reports]
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/SoaReportRow"
+
+    SoaReportSendInput:
+      type: object
+      additionalProperties: false
+      required: [templateId]
+      properties:
+        templateId:
+          $ref: "#/components/schemas/Id"
+
+    EmailTemplateRow:
+      type: object
+      required: [id, name, emailType, subject, businessCompany, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        emailType:
+          type: string
+          enum: [customer_rate, invoice, low_balance, bind_down, customer_tech_info, trunk_change_info, soa_statement, rate_upload_notification, traffic_alert, auto_upload_rejected, trouble_ticket, send_soa]
+        subject:
+          type: string
+        businessCompany:
+          type: [string, "null"]
+          description: Null = shared by every business company.
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    EmailTemplatePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/EmailTemplateRow"
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -13415,7 +14268,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates]
 
     FilterOperator:
       type: string

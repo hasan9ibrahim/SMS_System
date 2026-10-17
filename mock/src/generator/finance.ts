@@ -44,6 +44,7 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
   let txId = 1;
   let viId = 1;
   let eventId = 1;
+  let soaId = 1;
   let ruleId = 2; // 1 = the default rule from migration 017
   const firstMonth = monthStart(world.anchor, -profile.historyMonths);
   const currentMonth = monthStart(world.anchor);
@@ -148,6 +149,32 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
           inserted_at: new Date(m.getTime() + 60_000),
         });
         balance = -closing;
+        // SOA sent after the invoice for a third of the clients (§7 SOA Report); templates 1–2 come
+        // from migration 019.
+        const soaAt = new Date(m.getTime() + 2 * DAY + rng.int(8, 17) * 3600_000);
+        if (e.id % 3 === 0 && ageMonths < 4 && soaAt.getTime() <= world.anchor && status === "completed") {
+          const failedSend = rng.chance(0.05);
+          await sink.insert("soa_reports", {
+            id: soaId++,
+            enterprise_id: e.id,
+            period_from: ymd(usageStart),
+            period_to: ymd(usageEnd),
+            invoice_type: "all",
+            file_type: "pdf",
+            purpose: "email",
+            status: failedSend ? "failed" : "success",
+            error: failedSend ? "SMTP connection timed out" : null,
+            template_id: rng.pick([1, 2]),
+            emailed_at: failedSend ? null : new Date(soaAt.getTime() + 60_000),
+            email_to: failedSend ? [] : [`billing@${e.domain}`],
+            snapshot: null,
+            closing_balance: closing,
+            currency: ccy,
+            created_by_id: rng.pick(billing).id,
+            inserted_at: soaAt,
+            finished_at: new Date(soaAt.getTime() + 60_000),
+          });
+        }
         if (paid || partial) {
           const amount = money(paid ? usage : usage * rng.float(0.3, 0.8));
           const payDate = new Date(m.getTime() + rng.int(Math.max(0, net - 5), net + 10) * DAY);

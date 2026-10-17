@@ -82,6 +82,10 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/invoice-requests/query", { body })) as Promise<ListPage<Row>>;
     case "vendor_invoices":
       return unwrap(api.POST("/vendor-invoices/query", { body })) as Promise<ListPage<Row>>;
+    case "soa_reports":
+      return unwrap(api.POST("/soa-reports/query", { body })) as Promise<ListPage<Row>>;
+    case "email_templates":
+      return unwrap(api.POST("/email-templates/query", { body })) as Promise<ListPage<Row>>;
     case "recon_rules":
       return unwrap(api.POST("/recon-rules/query", { body })) as Promise<ListPage<Row>>;
     case "currencies":

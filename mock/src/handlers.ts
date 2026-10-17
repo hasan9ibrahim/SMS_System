@@ -226,6 +226,18 @@ import {
   updateReconRule,
   updateVendorInvoice,
 } from "./api/vendorInvoices.js";
+import {
+  archiveSoaAdjustment,
+  createSoaAdjustment,
+  downloadSoaReport,
+  exportSoa,
+  getSoaReport,
+  getSoaStatement,
+  previewSoaEmail,
+  searchSoa,
+  sendSoa,
+  sendSoaReport,
+} from "./api/soa.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -251,7 +263,7 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.17.1";
+const VERSION = "0.18.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -501,6 +513,19 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   restoreVendorInvoice,
   summariseVendorInvoices,
   queryReconRules: queryList("recon_rules"),
+  // SOA and SOA report (§7, §13.31, §13.33)
+  searchSoa,
+  getSoaStatement,
+  createSoaAdjustment,
+  archiveSoaAdjustment,
+  previewSoaEmail,
+  sendSoa,
+  exportSoa,
+  querySoaReports: queryList("soa_reports"),
+  getSoaReport,
+  downloadSoaReport,
+  sendSoaReport,
+  queryEmailTemplates: queryList("email_templates"),
   createReconRule,
   updateReconRule,
   archiveReconRule,

@@ -4207,6 +4207,254 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/soa/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * SOA Search: one summary per enterprise (§7)
+     * @description For each enterprise and side: opening and closing balance of the statement, the system balance, how many lines,
+     *     payments left off and disputed vendor invoices, billing contacts and the last SOA sent.
+     */
+    post: operations["searchSoa"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa/statement": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * SOA preview of one enterprise (§13.31, §13.33)
+     * @description Every line with its source (Auto / Manual) and status and a running balance (positive = the partner's credit),
+     *     per side; the disputed block (vendor invoices not accepted, when the partner's rule shows them), payments left
+     *     off the SOA, lines removed by hand, and how the statement's closing balance differs from the system balance.
+     */
+    post: operations["getSoaStatement"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa/adjustments": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add or remove an SOA line by hand (§13.31 Manual SOA option)
+     * @description include_vendor_invoice: put a vendor invoice on the SOA whatever its status. exclude_invoice /
+     *     exclude_vendor_invoice: take an automatic line off (a reason is required). entry: a manual line without an invoice
+     *     file (payment, credit note, adjustment, opening balance), shown on the SOA only. Logged with user, time and
+     *     reason; one undoable change.
+     */
+    post: operations["createSoaAdjustment"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa/adjustments/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take back a manual SOA add, remove or entry
+     * @description The line goes back to what the automatic rules say. One undoable change.
+     */
+    post: operations["archiveSoaAdjustment"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa/email-preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview the Send SOA e-mail (§13.31 confirm-to-send)
+     * @description Recipients (the partner's billing contacts), subject and body from the template with the placeholders filled in.
+     */
+    post: operations["previewSoaEmail"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa/send": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send Email: e-mail the SOA to the checked enterprises
+     * @description One SOA report per enterprise (PDF attached), run in the background; the report keeps the sent copy with date
+     *     and recipients. An enterprise without a billing contact fails with that error.
+     */
+    post: operations["sendSoa"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Queue SOA Export (Excel or PDF)
+     * @description One SOA report per enterprise, run in the background; download it from the SOA Report list.
+     */
+    post: operations["exportSoa"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa-reports/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List SOA reports (server-side filter, sort and paging)
+     * @description SOA Report (§7): ID, Enterprise, From / To Date, Invoice Type, File Type, Status, Error, Download, Created Time,
+     *     plus whether and to whom it was e-mailed.
+     */
+    post: operations["querySoaReports"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa-reports/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One SOA report (poll for its status)
+     * @description Status, error and e-mail details.
+     */
+    get: operations["getSoaReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa-reports/{id}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download an SOA report
+     * @description The statement as kept when the report ran (a sent copy never changes). 409 while it is not done.
+     */
+    get: operations["downloadSoaReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/soa-reports/{id}/send": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send Email from the SOA Report list (modal Send SOA Email Notification)
+     * @description E-mails this report's file with the chosen template to the enterprise's billing contacts.
+     */
+    post: operations["sendSoaReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List e-mail templates (read-only until the Email Template screen)
+     * @description Email Template grid (§11): Info ID, Name, Email Type, Subject. Used by the SOA template picker.
+     */
+    post: operations["queryEmailTemplates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -7468,6 +7716,273 @@ export type components = {
       change: components["schemas"]["Change"] | null;
     };
     /**
+     * @description Invoice Type filter of the SOA form; applies to customer invoices.
+     * @enum {string}
+     */
+    SoaInvoiceType: "all" | "auto" | "manual";
+    SoaQuery: {
+      enterpriseIds: components["schemas"]["Id"][];
+      invoiceType: components["schemas"]["SoaInvoiceType"];
+      /** Format: date */
+      from: string;
+      /**
+       * Format: date
+       * @description Inclusive; at most 3 years after `from`.
+       */
+      to: string;
+    };
+    SoaStatementQuery: {
+      enterpriseId: components["schemas"]["Id"];
+      invoiceType: components["schemas"]["SoaInvoiceType"];
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+    };
+    SoaSideSummary: {
+      /** @enum {string} */
+      side: "customer" | "vendor";
+      currency: string;
+      openingBalance: number;
+      /** @description Opening + the statement's lines. */
+      closingBalance: number;
+      /** @description The balance the system holds at the end of the period (§7 sign). */
+      systemBalance: number;
+      lines: number;
+      excludedPayments: number;
+      disputed: number;
+    };
+    SoaSearchRow: {
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      enterpriseType: string;
+      /** @description Billing contacts; empty = Send Email fails for this enterprise. */
+      recipients: string[];
+      sides: components["schemas"]["SoaSideSummary"][];
+      /** Format: date-time */
+      lastSentAt: string | null;
+    };
+    SoaSearchResult: {
+      rows: components["schemas"]["SoaSearchRow"][];
+    };
+    SoaLine: {
+      /** @description Stable key, e.g. invoice:12, vendor_invoice:7, transaction:91, entry:3. */
+      key: string;
+      /** Format: date */
+      date: string;
+      /** @enum {string} */
+      kind:
+        | "opening"
+        | "invoice"
+        | "vendor_invoice"
+        | "receipt"
+        | "adjustment"
+        | "dispute"
+        | "credit_note"
+        | "bank_charges"
+        | "bill_payment"
+        | "reprocess"
+        | "manual_payment"
+        | "manual_credit_note"
+        | "manual_adjustment"
+        | "manual_opening";
+      /** @description Invoice number or transaction reference. */
+      reference: string | null;
+      description: string;
+      /** @description Signed like the balance - positive raises it (payments in, credits), negative lowers it (invoices). */
+      amount: number;
+      /** @description Running balance after the line; main lines only. */
+      balance: number | null;
+      /** @enum {string} */
+      source: "auto" | "manual";
+      /** @description Vendor invoice status (pending, accepted, disputed, rejected) or invoice payment status. */
+      status: string | null;
+      /** @description Reason of a manual add or remove, or why a payment is left off. */
+      note: string | null;
+      /** @enum {string} */
+      refType: "invoice" | "vendor_invoice" | "transaction" | "entry" | "opening";
+      refId: components["schemas"]["Id"] | null;
+      /** @description The manual add, remove or entry behind the line; null for automatic lines. */
+      adjustmentId: components["schemas"]["Id"] | null;
+    };
+    SoaSide: {
+      /** @enum {string} */
+      side: "customer" | "vendor";
+      currency: string;
+      /** @description System balance at the start of the period (§7 sign). */
+      openingBalance: number;
+      lines: components["schemas"]["SoaLine"][];
+      closingBalance: number;
+      systemBalance: number;
+      /** @description closingBalance − systemBalance; explained by lines left off, removed or added by hand. */
+      difference: number;
+      /** @description The partner's rule shows non-accepted vendor invoices in a separate block (§13.31). */
+      disputedBlock: boolean;
+      disputed: components["schemas"]["SoaLine"][];
+      excludedPayments: components["schemas"]["SoaLine"][];
+      removed: components["schemas"]["SoaLine"][];
+    };
+    SoaStatement: {
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      businessCompany: string;
+      /** @description The partner's billing time zone, printed on the SOA. */
+      timezone: string;
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      invoiceType: components["schemas"]["SoaInvoiceType"];
+      recipients: string[];
+      sides: components["schemas"]["SoaSide"][];
+      /** @description Customer − vendor closing balance for reciprocal partners, in the customer currency. */
+      net: {
+        amount: number;
+        currency: string;
+      } | null;
+    };
+    SoaAdjustmentInput: {
+      enterpriseId: components["schemas"]["Id"];
+      /** @enum {string} */
+      action: "include_vendor_invoice" | "exclude_invoice" | "exclude_vendor_invoice" | "entry";
+      invoiceId?: components["schemas"]["Id"] | null;
+      vendorInvoiceId?: components["schemas"]["Id"] | null;
+      /** @description For action entry. */
+      entry?: {
+        /** @enum {string} */
+        side: "customer" | "vendor";
+        /** @enum {string} */
+        kind: "payment" | "credit_note" | "adjustment" | "opening_balance";
+        /** Format: date */
+        date: string;
+        /** @description Signed like the balance (positive raises it). */
+        amount: number;
+        /** @description Must be the side's billing currency; null = that currency. */
+        currency?: string | null;
+        description: string;
+      } | null;
+      /** @description Required to remove an automatic line. */
+      note: string | null;
+    };
+    SoaAdjustment: {
+      id: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"];
+      /** @enum {string} */
+      action: "include_vendor_invoice" | "exclude_invoice" | "exclude_vendor_invoice" | "entry";
+      invoiceId: components["schemas"]["Id"] | null;
+      vendorInvoiceId: components["schemas"]["Id"] | null;
+      /** @enum {string|null} */
+      side: "customer" | "vendor" | null;
+      kind: string | null;
+      /** Format: date */
+      date: string | null;
+      amount: number | null;
+      currency: string | null;
+      description: string | null;
+      note: string | null;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    SoaAdjustmentSaved: {
+      record: components["schemas"]["SoaAdjustment"];
+      change: components["schemas"]["Change"] | null;
+    };
+    SoaEmailPreviewInput: {
+      enterpriseId: components["schemas"]["Id"];
+      invoiceType: components["schemas"]["SoaInvoiceType"];
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      templateId: components["schemas"]["Id"];
+    };
+    SoaSendInput: {
+      enterpriseIds: components["schemas"]["Id"][];
+      invoiceType: components["schemas"]["SoaInvoiceType"];
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      /** @description A Send SOA / SOA Statement template. */
+      templateId: components["schemas"]["Id"];
+    };
+    SoaExportInput: {
+      enterpriseIds: components["schemas"]["Id"][];
+      invoiceType: components["schemas"]["SoaInvoiceType"];
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      /** @enum {string} */
+      fileType: "excel" | "pdf";
+    };
+    SoaReportRow: {
+      id: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      invoiceType: components["schemas"]["SoaInvoiceType"];
+      /** @enum {string} */
+      fileType: "excel" | "pdf";
+      /** @enum {string} */
+      purpose: "export" | "email";
+      /** @enum {string} */
+      status: "pending" | "inprogress" | "success" | "failed";
+      error: string | null;
+      /** Format: date-time */
+      emailedAt: string | null;
+      emailTo: string[];
+      template: string | null;
+      /** @description The customer side's closing balance on the statement (else the vendor side's). */
+      closingBalance: number | null;
+      currency: string | null;
+      /** @description Null = scheduled. */
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      finishedAt: string | null;
+    };
+    SoaReportPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["SoaReportRow"][];
+    };
+    SoaReportsCreated: {
+      reports: components["schemas"]["SoaReportRow"][];
+    };
+    SoaReportSendInput: {
+      templateId: components["schemas"]["Id"];
+    };
+    EmailTemplateRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @enum {string} */
+      emailType:
+        | "customer_rate"
+        | "invoice"
+        | "low_balance"
+        | "bind_down"
+        | "customer_tech_info"
+        | "trunk_change_info"
+        | "soa_statement"
+        | "rate_upload_notification"
+        | "traffic_alert"
+        | "auto_upload_rejected"
+        | "trouble_ticket"
+        | "send_soa";
+      subject: string;
+      /** @description Null = shared by every business company. */
+      businessCompany: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    EmailTemplatePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["EmailTemplateRow"][];
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -7880,7 +8395,9 @@ export type components = {
       | "enterprise_balances"
       | "invoice_requests"
       | "vendor_invoices"
-      | "recon_rules";
+      | "recon_rules"
+      | "soa_reports"
+      | "email_templates";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -14647,6 +15164,338 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  searchSoa: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SoaQuery"];
+      };
+    };
+    responses: {
+      /** @description One row per enterprise */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaSearchResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getSoaStatement: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SoaStatementQuery"];
+      };
+    };
+    responses: {
+      /** @description The statement */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaStatement"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createSoaAdjustment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SoaAdjustmentInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaAdjustmentSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveSoaAdjustment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaAdjustmentSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewSoaEmail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SoaEmailPreviewInput"];
+      };
+    };
+    responses: {
+      /** @description The e-mail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendSoa: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SoaSendInput"];
+      };
+    };
+    responses: {
+      /** @description The reports, pending */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaReportsCreated"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportSoa: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SoaExportInput"];
+      };
+    };
+    responses: {
+      /** @description The reports, pending */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaReportsCreated"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  querySoaReports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of SOA reports */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaReportPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getSoaReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The report */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaReportRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadSoaReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file (PDF, or Excel 2003 XML spreadsheet .xls) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/pdf": string;
+          "application/vnd.ms-excel": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendSoaReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SoaReportSendInput"];
+      };
+    };
+    responses: {
+      /** @description The report with the e-mail details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SoaReportRow"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryEmailTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of e-mail templates */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplatePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };
   };

@@ -5,6 +5,7 @@ import { startQbrRefresh } from "./api/qbr.js";
 import { startHlrRefresh } from "./api/hlr.js";
 import { resumeInvoiceRequests } from "./api/invoices.js";
 import { startReconIntake } from "./api/vendorInvoices.js";
+import { resumeSoaReports } from "./api/soa.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -17,3 +18,4 @@ startQbrRefresh();
 startHlrRefresh();
 void resumeInvoiceRequests();
 startReconIntake();
+void resumeSoaReports();

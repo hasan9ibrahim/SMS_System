@@ -58,6 +58,7 @@ export const TABLE_ORDER = [
   "invoices",
   "transactions",
   "invoice_requests",
+  "soa_reports",
   "vendor_invoices",
   "vendor_invoice_events",
   "vendor_invoice_lines",

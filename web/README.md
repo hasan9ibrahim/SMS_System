@@ -150,6 +150,19 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## SOA (build step 5.7)
+
+- **SOA** (`/finance/soa`, `src/pages/finance/SoaPage.tsx`, §7, §13.31, §13.33): Enterprise (multi), Invoice Type,
+  From / To Date and the Send SOA e-mail template; Search lists one row per enterprise with opening and closing
+  balances, lines, payments left off, disputed invoices, billing contact and the last SOA sent; Check All / Uncheck
+  All, Send Email (preview per enterprise, confirm to send) and Queue SOA Export (Excel or PDF). Click a row for the
+  statement: per side every line with source (Auto / Manual), status, amount and running balance; Remove or Take
+  back by hand (reason logged, Undo); the disputed block with Add to SOA; payments left off with Include; removed
+  lines with Put back; Manual entry; the difference from the system balance; the net balance. Opened from Send SOA
+  on the Enterprise balance and Invoice pages (`?enterprises=`).
+- **SOA report** (`/finance/soa-report`, `SoaReportPage.tsx`): exports and sent SOAs with status, error, download and
+  per-row Send Email (template picker).
+
 ## Invoices and vendor invoices (build step 5.6)
 
 - **Invoices** (`/finance/invoices`, `src/pages/finance/InvoicesPage.tsx`, §7, §12.3): the invoice grid with PDF and
