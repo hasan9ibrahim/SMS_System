@@ -57,7 +57,7 @@ import { inTransaction } from "./views.js";
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
 
-const badInput = (reply: FastifyReply, errors: FieldError[]) =>
+export const badInput = (reply: FastifyReply, errors: FieldError[]) =>
   sendProblem(reply, 400, "Check the highlighted fields", { errors });
 const ymd = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -82,9 +82,10 @@ async function templateOf(c: Db, type: string) {
   );
   return rows[0] as { id: number; subject: string; body: string } | undefined;
 }
-const fill = (s: string, vars: Record<string, string>) => s.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+export const fill = (s: string, vars: Record<string, string>) =>
+  s.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
 
-async function contactEmails(c: Db, enterpriseId: number, types: string[]): Promise<string[]> {
+export async function contactEmails(c: Db, enterpriseId: number, types: string[]): Promise<string[]> {
   const { rows } = await c.query(
     `SELECT emails FROM enterprise_contacts WHERE enterprise_id = $1 AND contact_type = ANY($2)
       ORDER BY array_position($2::text[], contact_type)`,
@@ -823,7 +824,7 @@ export function startTrafficAlertChecks() {
 
 // ---------------------------------------------------------------- shared archive / restore
 
-function archiver(
+export function archiver(
   table: string,
   entityType: string,
   label: string,

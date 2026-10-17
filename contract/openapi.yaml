@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.19.0
+  version: 0.20.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -57,6 +57,8 @@ tags:
     description: Switch rules - translation rules, number lists, HLR providers, rules and policies (§6.4, §6.5, §13.2, §13.24)
   - name: reference
     description: Product reference data - categories, countries, MCCMNC codes, Master Table, MO reference book (§6.1)
+  - name: observation
+    description: Observation Deck (§9) - EDR search, downloads, repush, network status, signaling, simulator, diagnosis.
 
 security:
   - sessionCookie: []
@@ -7580,6 +7582,779 @@ paths:
                 $ref: "#/components/schemas/CompanyMailboxList"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edrs/query:
+    post:
+      tags: [observation]
+      operationId: queryEdrs
+      summary: "List EDRs (server-side filter, sort and paging)"
+      description: |
+        EDR Search (§9.1): one row per message attempt with both legs, from the EDR store (ClickHouse). Every column
+        filters with the §13.25 grammar; the page's From / To Date and Final are filters on `startTime` and
+        `isFinalAttempt`. Enterprise and trunk name filters match names (wildcards) and are applied as IDs. Message ID
+        filters take comma-separated lists (`in`). Totals over very large windows may be estimates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of EDRs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edrs/trouble-ticket/preview:
+    post:
+      tags: [observation]
+      operationId: previewTroubleTicket
+      summary: "Preview a Trouble Ticket e-mail"
+      description: |
+        Recipients (Technical contacts of the vendor trunk's enterprise, or of the customer enterprise of the selected
+        EDRs), subject and body with the chosen EDR columns as a table.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TroubleTicketPreviewInput"
+      responses:
+        "200":
+          description: The e-mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edrs/trouble-ticket:
+    post:
+      tags: [observation]
+      operationId: sendTroubleTicket
+      summary: "Trouble Ticket: e-mail selected EDRs to a partner (§9.1)"
+      description: |
+        Ticket Send To (Customer / Vendor), Vendor Trunk (vendor tickets), Trouble Ticket Template, Email Subject,
+        Attachment, Email Columns. The EDRs go in the body and as a CSV attachment; logged in Email Logs (type
+        trouble_ticket).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TroubleTicketInput"
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TroubleTicketResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edrs/repush:
+    post:
+      tags: [observation]
+      operationId: repushEdrs
+      summary: "EDR Repush: re-send selected EDRs to another vendor trunk (§9.1)"
+      description: |
+        Creates a Repush Request. Each message is sent again on the chosen vendor trunk as a new attempt that carries
+        the request ID (`repushRequestId`), so the new attempts show in EDR Search. Only final attempts of messages that
+        were not delivered can be repushed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepushInput"
+      responses:
+        "201":
+          description: The repush request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepushRequestRow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /repush-requests/query:
+    post:
+      tags: [observation]
+      operationId: queryRepushRequests
+      summary: "List repush requests (server-side filter, sort and paging)"
+      description: |
+        Repush Request (§9.2): Info ID, Total EDR Count, vendor trunk, outcome, Created By, Created Time.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of repush requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepushRequestPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-templates/query:
+    post:
+      tags: [observation]
+      operationId: queryEdrTemplates
+      summary: "List EDR templates (server-side filter, sort and paging)"
+      description: |
+        EDR Template (§9.2): Info ID, Name, columns, Updated By / Time. A template is a saved EDR column set used by EDR
+        Search, EDR Download and Trouble Ticket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of EDR templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrTemplatePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-templates:
+    post:
+      tags: [observation]
+      operationId: createEdrTemplate
+      summary: "Add an EDR template"
+      description: |
+        Name and Column Selection (any EDR column). One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EdrTemplateInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrTemplateSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-templates/{id}:
+    get:
+      tags: [observation]
+      operationId: getEdrTemplate
+      summary: "One EDR template"
+      description: |
+        Name and columns.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrTemplateRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [observation]
+      operationId: updateEdrTemplate
+      summary: "Change an EDR template"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EdrTemplateInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrTemplateSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-templates/{id}/archive:
+    post:
+      tags: [observation]
+      operationId: archiveEdrTemplate
+      summary: "Delete (archive) an EDR template (§13.29)"
+      description: |
+        Downloads already requested keep their columns. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrTemplateSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-templates/{id}/restore:
+    post:
+      tags: [observation]
+      operationId: restoreEdrTemplate
+      summary: "Restore an EDR template"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrTemplateSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-downloads:
+    post:
+      tags: [observation]
+      operationId: requestEdrDownload
+      summary: "EDR Request / Failed EDR Request: queue a background export (§9.2, §12.4)"
+      description: |
+        The EDR Search (or Failed EDR Search) filters, Download FileType (csv / xlsx) and the EDR Template or an explicit
+        column list. Runs in the background: pending, inprogress (with progress), success, failed or cancelled. At most
+        1,000,000 rows (xlsx: 1,048,575).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EdrDownloadInput"
+      responses:
+        "201":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrDownloadRow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-downloads/query:
+    post:
+      tags: [observation]
+      operationId: queryEdrDownloads
+      summary: "List EDR downloads (server-side filter, sort and paging)"
+      description: |
+        EDR Download and Failed EDR Download (§9.2): EDR No, Status, File, File Type, Progress, Request Start / End Time,
+        Error, Requested By. Filter `kind` eq edr or failed_edr.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of EDR downloads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrDownloadPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-downloads/{id}/cancel:
+    post:
+      tags: [observation]
+      operationId: cancelEdrDownload
+      summary: "Cancel a pending or running download"
+      description: |
+        Finished downloads cannot be cancelled (409).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdrDownloadRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /edr-downloads/{id}/file:
+    get:
+      tags: [observation]
+      operationId: downloadEdrFile
+      summary: "The exported file"
+      description: |
+        CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /failed-edrs/query:
+    post:
+      tags: [observation]
+      operationId: queryFailedEdrs
+      summary: "List failed EDRs (server-side filter, sort and paging)"
+      description: |
+        Failed EDR Search (§9.2): messages rejected before routing (no vendor leg): time, customer enterprise and trunk,
+        Customer IP, Customer Msg ID, sender, DNID, destination, Error Code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of failed EDRs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailedEdrPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /network-binds/query:
+    post:
+      tags: [observation]
+      operationId: queryNetworkBinds
+      summary: "List trunk bind status (server-side filter, sort and paging)"
+      description: |
+        Network Status (§9.2, §12.4): Customer / Vendor tabs (filter `side`): Enterprise ID, trunk ID, Enterprise Name,
+        Trunk Name, IP Address, Number of Connections, Status (online / offline / stopped), and for vendors the Queue
+        (messages waiting).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of trunk bind status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkBindPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /network-binds/export:
+    post:
+      tags: [observation]
+      operationId: exportNetworkBinds
+      summary: "Network Status CSV / Excel"
+      description: |
+        Same filter and sort as the list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetworkExportInput"
+      responses:
+        "200":
+          description: The file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /network-binds/{side}/{id}/sessions:
+    get:
+      tags: [observation]
+      operationId: listBindSessions
+      summary: "SMPP sessions of a trunk (§13.1)"
+      description: |
+        Each bound session: session ID, remote IP and port, bind type, bound since, messages submitted and receipts
+        waiting for that session (receipts go back on the session and IP the message came from).
+      parameters:
+        - name: side
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [customer, vendor]
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BindSessionList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /network-binds/{side}/{id}/start:
+    post:
+      tags: [observation]
+      operationId: startTrunkBind
+      summary: "Start: bind a vendor trunk, or let a customer bind again"
+      description: |
+        Vendor: the switch opens its connections. Customer: binds are accepted again (the customer reconnects).
+      parameters:
+        - name: side
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [customer, vendor]
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkBindRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /network-binds/{side}/{id}/stop:
+    post:
+      tags: [observation]
+      operationId: stopTrunkBind
+      summary: "Stop: unbind a vendor trunk, or kick a customer's sessions"
+      description: |
+        Stopped trunks stay stopped until Start. Messages waiting in a vendor queue are re-routed.
+      parameters:
+        - name: side
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [customer, vendor]
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkBindRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /signaling-captures/query:
+    post:
+      tags: [observation]
+      operationId: querySignalingCaptures
+      summary: "List signaling captures (server-side filter, sort and paging)"
+      description: |
+        Signaling Deck and PCAP Trace (§9.2): captured SMPP trace files with Sr. No., File Name, File Size, status and
+        Update Time (UTC).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of signaling captures
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalingCapturePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /signaling-captures:
+    post:
+      tags: [observation]
+      operationId: startSignalingCapture
+      summary: "Start a capture (Signaling Deck)"
+      description: |
+        Filter (IP address or range), Max Duration (s), Max File Size (bytes). The capture stops at whichever limit comes
+        first, or on Stop. At most 3 captures run at a time (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignalingCaptureInput"
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalingCaptureRow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /signaling-captures/{id}/stop:
+    post:
+      tags: [observation]
+      operationId: stopSignalingCapture
+      summary: "Stop a running capture"
+      description: |
+        The file keeps what was captured.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalingCaptureRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /signaling-captures/{id}/file:
+    get:
+      tags: [observation]
+      operationId: downloadSignalingCapture
+      summary: "Download the trace (pcap)"
+      description: |
+        libpcap file with the SMPP packets (opens in Wireshark).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The pcap file
+          content:
+            application/vnd.tcpdump.pcap:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-simulator:
+    post:
+      tags: [observation]
+      operationId: runRouteSimulator
+      summary: "Route Simulator (§9.2)"
+      description: |
+        Runs a message through the customer trunk as the switch would: translation rules, HLR rule, destination,
+        customer rate, route rules in order, chosen vendor, cost and margin. Test SMS also sends it (the mock answers with
+        a message ID and a simulated outcome; no EDR is written).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteSimulatorInput"
+      responses:
+        "200":
+          description: What would happen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteSimulatorResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /network-diagnosis:
+    post:
+      tags: [observation]
+      operationId: runNetworkDiagnosis
+      summary: "Network Diagnosis: ping, trace route, MTR, telnet from the switch host (§9.2)"
+      description: |
+        Count, Destination, Source, Port (telnet). Output as the tool prints it. The mock answers with simulated output
+        and never sends packets.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetworkDiagnosisInput"
+      responses:
+        "200":
+          description: The tool's output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkDiagnosisResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -15250,6 +16025,912 @@ components:
               department:
                 type: string
 
+    # ------------------------------------------------------------- Observation Deck (§9)
+    EdrRow:
+      type: object
+      description: "One message attempt with both legs (§9.1 EDR schema)."
+      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, senderId, dnid, routedDnid, messageText, customerMccmnc, mcc, mnc, country, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeRuleGroupId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, networkError, registeredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrCostSys]
+      properties:
+        id:
+          type: string
+          description: "EDR UUID."
+        startTime:
+          $ref: "#/components/schemas/Timestamp"
+        submitTime:
+          $ref: "#/components/schemas/Timestamp"
+        submitRespTime:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        deliveryTime:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        type:
+          type: string
+          description: "MT or MO."
+        businessCompanyId:
+          type: integer
+        productCategoryId:
+          type: integer
+        productCategory:
+          type: [string, "null"]
+        customerEnterpriseId:
+          type: integer
+        customerEnterprise:
+          type: [string, "null"]
+        customerTrunkId:
+          type: integer
+        customerTrunk:
+          type: [string, "null"]
+        customerIp:
+          type: string
+        customerPort:
+          type: integer
+        customerSessionId:
+          type: string
+          description: "SMPP session that submitted (§13.1)."
+        customerBindType:
+          type: string
+          description: "TX, RX or TR."
+        protocol:
+          type: string
+        customerMsgId:
+          type: string
+        srcTon:
+          type: integer
+        srcNpi:
+          type: integer
+        dstTon:
+          type: integer
+        dstNpi:
+          type: integer
+        coding:
+          type: integer
+          description: "data_coding (0 GSM 7-bit … 8 UCS-2)."
+        senderId:
+          type: string
+          description: "SRC Addr."
+        dnid:
+          type: string
+          description: "Dest Addr."
+        routedDnid:
+          type: string
+          description: "Routed Dest Addr (after translation)."
+        messageText:
+          type: string
+        customerMccmnc:
+          type: string
+        mcc:
+          type: string
+        mnc:
+          type: string
+        country:
+          type: string
+          description: "ISO code."
+        customerBillingType:
+          type: string
+        customerRateTableId:
+          type: integer
+        customerRate:
+          type: number
+        customerCurrency:
+          type: string
+        customerSysRate:
+          type: number
+          description: "Rate in the base currency."
+        translationRuleIds:
+          type: array
+          items:
+            type: integer
+          description: "Customer translation rules applied."
+        customerMsgStatus:
+          type: string
+          description: "Status reported to the customer."
+        vendorEnterpriseId:
+          type: integer
+          description: "0 = not routed."
+        vendorEnterprise:
+          type: [string, "null"]
+        vendorTrunkId:
+          type: integer
+          description: "0 = not routed."
+        vendorTrunk:
+          type: [string, "null"]
+        vendorIp:
+          type: string
+        vendorPort:
+          type: integer
+        vendorMsgId:
+          type: string
+        vendorMccmnc:
+          type: string
+        vendorBillingType:
+          type: string
+        vendorRateTableId:
+          type: integer
+        vendorRate:
+          type: number
+        vendorCurrency:
+          type: string
+        vendorSysRate:
+          type: number
+        vendorExRate:
+          type: number
+        vendorTranslationRuleIds:
+          type: array
+          items:
+            type: integer
+        routeRuleId:
+          type: integer
+        routeRuleGroupId:
+          type: integer
+        routeDecidedBy:
+          type: string
+          description: "whitelist, warmup, split … (§13.27)."
+        dlrReroute:
+          type: boolean
+        repushRequestId:
+          type: integer
+          description: "0 = not a repush."
+        attemptNo:
+          type: integer
+        isFinalAttempt:
+          type: boolean
+        isSubmitSuccess:
+          type: boolean
+        causeCode:
+          type: integer
+          description: "SMPP command_status (§2); 0 = OK."
+        causeText:
+          type: string
+          description: "Name of the cause code, e.g. ESME_RINVDSTADR."
+        msgStatus:
+          type: string
+          description: "Delivery receipt stat (DELIVRD, UNDELIV …); empty while none."
+        deliveryError:
+          type: string
+        networkError:
+          type: integer
+        registeredDelivery:
+          type: integer
+        msgCount:
+          type: integer
+          description: "Segments."
+        udh:
+          type: string
+        deliveryDelaySeconds:
+          type: number
+        isBuffered:
+          type: boolean
+        isCustomerBillable:
+          type: boolean
+        isVendorBillable:
+          type: boolean
+        revenue:
+          type: number
+          description: "Customer currency."
+        cost:
+          type: number
+          description: "Vendor currency."
+        revenueSys:
+          type: number
+          description: "Base currency."
+        costSys:
+          type: number
+          description: "Base currency."
+        hlrProviderId:
+          type: integer
+        hlrProvider:
+          type: [string, "null"]
+        hlrFetchType:
+          type: string
+          description: "none, cached or live."
+        hlrIsPorted:
+          type: boolean
+        hlrIsAccomplished:
+          type: boolean
+        hlrErrorCode:
+          type: integer
+        hlrCostSys:
+          type: number
+
+    EdrPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/EdrRow"
+
+    FailedEdrRow:
+      type: object
+      description: "A message rejected before routing."
+      required: [id, startTime, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerMsgId, senderId, dnid, customerMccmnc, country, causeCode, causeText, messageText]
+      properties:
+        id:
+          type: string
+        startTime:
+          $ref: "#/components/schemas/Timestamp"
+        customerEnterpriseId:
+          type: integer
+        customerEnterprise:
+          type: [string, "null"]
+        customerTrunkId:
+          type: integer
+        customerTrunk:
+          type: [string, "null"]
+        customerIp:
+          type: string
+        customerPort:
+          type: integer
+        customerMsgId:
+          type: string
+        senderId:
+          type: string
+        dnid:
+          type: string
+        customerMccmnc:
+          type: string
+        country:
+          type: string
+        causeCode:
+          type: integer
+        causeText:
+          type: string
+        messageText:
+          type: string
+
+    FailedEdrPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/FailedEdrRow"
+
+    EdrTemplateFields:
+      type: object
+      required: [name, columns]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        columns:
+          type: array
+          minItems: 1
+          maxItems: 120
+          items:
+            type: string
+          description: EDR field names (see /meta/lists/edrs/fields), in display order.
+
+    EdrTemplateInput:
+      allOf:
+        - $ref: "#/components/schemas/EdrTemplateFields"
+      unevaluatedProperties: false
+
+    EdrTemplateRow:
+      allOf:
+        - $ref: "#/components/schemas/EdrTemplateFields"
+        - type: object
+          required: [id, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+
+    EdrTemplatePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/EdrTemplateRow"
+
+    EdrTemplateSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/EdrTemplateRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    EdrExportQuery:
+      type: object
+      additionalProperties: false
+      description: The list's filter, quick search and sort (no paging).
+      properties:
+        filter:
+          $ref: "#/components/schemas/FilterGroup"
+        search:
+          type: string
+          maxLength: 200
+        sort:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/SortKey"
+
+    EdrDownloadInput:
+      type: object
+      additionalProperties: false
+      required: [kind, query, fileType, templateId, columns]
+      properties:
+        kind:
+          type: string
+          enum: [edr, failed_edr]
+        query:
+          $ref: "#/components/schemas/EdrExportQuery"
+        fileType:
+          type: string
+          enum: [csv, xlsx]
+        templateId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: EDR Template; null = use `columns`.
+        columns:
+          oneOf:
+            - type: array
+              minItems: 1
+              maxItems: 120
+              items:
+                type: string
+            - type: "null"
+          description: Used when no template is given; null with no template = the list's default columns.
+
+    EdrDownloadRow:
+      type: object
+      required: [id, kind, status, fileName, fileType, progress, rows, sizeBytes, filterSummary, template, requestedAt, finishedAt, error, requestedBy]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+          description: "EDR No."
+        kind:
+          type: string
+          description: "edr or failed_edr."
+        status:
+          type: string
+          description: "pending, inprogress, success, failed or cancelled."
+        fileName:
+          type: [string, "null"]
+        fileType:
+          type: string
+          description: "csv or xlsx."
+        progress:
+          type: integer
+          description: "0–100."
+        rows:
+          type: [integer, "null"]
+          description: "Rows written."
+        sizeBytes:
+          type: [integer, "null"]
+        filterSummary:
+          type: string
+          description: "The filters in words."
+        template:
+          type: [string, "null"]
+        requestedAt:
+          $ref: "#/components/schemas/Timestamp"
+          description: "Request Start Time."
+        finishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: "Request End Time."
+        error:
+          type: [string, "null"]
+        requestedBy:
+          type: [string, "null"]
+
+    EdrDownloadPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/EdrDownloadRow"
+
+    TroubleTicketFields:
+      type: object
+      required: [sendTo, vendorTrunkId, templateId, subject, columns, edrIds]
+      properties:
+        sendTo:
+          type: string
+          enum: [customer, vendor]
+        vendorTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: Required for vendor tickets.
+        templateId:
+          $ref: "#/components/schemas/Id"
+        subject:
+          type: string
+          maxLength: 200
+          description: Empty = the template's subject.
+        columns:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            type: string
+          description: EDR field names (see /meta/lists/edrs/fields), in display order.
+        edrIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: string
+            format: uuid
+
+    TroubleTicketPreviewInput:
+      allOf:
+        - $ref: "#/components/schemas/TroubleTicketFields"
+      unevaluatedProperties: false
+
+    TroubleTicketInput:
+      allOf:
+        - $ref: "#/components/schemas/TroubleTicketFields"
+        - type: object
+          required: [attachment]
+          properties:
+            attachment:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [name, contentBase64]
+                  properties:
+                    name:
+                      type: string
+                      maxLength: 200
+                    contentBase64:
+                      type: string
+                      maxLength: 7000000
+                      description: At most 5 MB once decoded.
+                - type: "null"
+      unevaluatedProperties: false
+
+    TroubleTicketResult:
+      type: object
+      required: [emailLogId, enterprise, recipients, rows]
+      properties:
+        emailLogId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        recipients:
+          type: array
+          items:
+            type: string
+        rows:
+          type: integer
+          description: "EDRs in the ticket."
+
+    RepushInput:
+      type: object
+      additionalProperties: false
+      required: [edrIds, vendorTrunkId]
+      properties:
+        edrIds:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            type: string
+            format: uuid
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+
+    RepushRequestRow:
+      type: object
+      required: [id, edrCount, skipped, vendorTrunkId, vendorTrunk, status, delivered, failed, createdBy, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+          description: "Info ID."
+        edrCount:
+          type: integer
+          description: "Total EDR Count."
+        skipped:
+          type: integer
+          description: "Selected EDRs that could not be repushed (delivered, or not a final attempt)."
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        vendorTrunk:
+          type: string
+        status:
+          type: string
+          description: "pending or done."
+        delivered:
+          type: integer
+        failed:
+          type: integer
+        createdBy:
+          type: [string, "null"]
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    RepushRequestPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/RepushRequestRow"
+
+    NetworkBindRow:
+      type: object
+      required: [id, side, trunkId, enterpriseId, enterpriseName, trunkName, ipAddresses, connections, maxConnections, status, queue, tps, since, changedBy]
+      properties:
+        id:
+          type: string
+          description: "side-trunkId, e.g. customer-12."
+        side:
+          type: string
+          description: "customer or vendor."
+        trunkId:
+          $ref: "#/components/schemas/Id"
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterpriseName:
+          type: string
+        trunkName:
+          type: string
+        ipAddresses:
+          type: array
+          items:
+            type: string
+          description: "Remote IPs of the bound sessions (customer) or the vendor's host IPs."
+        connections:
+          type: integer
+          description: "Bound sessions now."
+        maxConnections:
+          type: integer
+        status:
+          type: string
+          description: "online, offline or stopped (by a user)."
+        queue:
+          type: [integer, "null"]
+          description: "Vendor tab: messages waiting; null for customers."
+        tps:
+          type: number
+          description: "Messages per second now."
+        since:
+          $ref: "#/components/schemas/Timestamp"
+          description: "When the status last changed."
+        changedBy:
+          type: [string, "null"]
+          description: "Who pressed Start / Stop last."
+
+    NetworkBindPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/NetworkBindRow"
+
+    NetworkExportInput:
+      type: object
+      additionalProperties: false
+      required: [query, fileType]
+      properties:
+        query:
+          $ref: "#/components/schemas/EdrExportQuery"
+        fileType:
+          type: string
+          enum: [csv, excel]
+
+    BindSessionList:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            type: object
+            required: [sessionId, ip, port, bindType, since, submitted, receiptsPending]
+            properties:
+              sessionId:
+                type: string
+              ip:
+                type: string
+              port:
+                type: integer
+              bindType:
+                type: string
+                description: "TX, RX or TR."
+              since:
+                $ref: "#/components/schemas/Timestamp"
+              submitted:
+                type: integer
+                description: "Messages submitted on this session today."
+              receiptsPending:
+                type: integer
+                description: "Delivery receipts waiting for this session (§13.1)."
+
+    SignalingCaptureInput:
+      type: object
+      additionalProperties: false
+      required: [ipFilter, maxDurationSeconds, maxFileSizeBytes]
+      properties:
+        ipFilter:
+          type: [string, "null"]
+          maxLength: 64
+          description: IPv4 / IPv6 address or CIDR range; null = all SMPP traffic.
+        maxDurationSeconds:
+          type: integer
+          minimum: 1
+          maximum: 3600
+        maxFileSizeBytes:
+          type: integer
+          minimum: 1024
+          maximum: 104857600
+
+    SignalingCaptureRow:
+      type: object
+      required: [id, fileName, ipFilter, status, sizeBytes, packets, maxDurationSeconds, maxFileSizeBytes, startedAt, updatedAt, startedBy]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+          description: "Sr. No."
+        fileName:
+          type: string
+        ipFilter:
+          type: [string, "null"]
+        status:
+          type: string
+          description: "running, done, failed or stopped."
+        sizeBytes:
+          type: integer
+        packets:
+          type: integer
+        maxDurationSeconds:
+          type: integer
+        maxFileSizeBytes:
+          type: integer
+        startedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+          description: "Update Time."
+        startedBy:
+          type: [string, "null"]
+
+    SignalingCapturePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/SignalingCaptureRow"
+
+    RouteSimulatorInput:
+      type: object
+      additionalProperties: false
+      required: [customerTrunkId, receiver, sourceTon, sourceNpi, destTon, destNpi, dataCoding]
+      properties:
+        customerTrunkId:
+          $ref: "#/components/schemas/Id"
+        senderId:
+          type: string
+          maxLength: 20
+        receiver:
+          type: string
+          pattern: "^[0-9]{5,15}$"
+        mccmnc:
+          type: [string, "null"]
+          pattern: "^[0-9]{5,6}$"
+          description: Overrides the destination found from the number.
+        sourceTon:
+          type: integer
+          minimum: 0
+          maximum: 6
+        sourceNpi:
+          type: integer
+          minimum: 0
+          maximum: 18
+        destTon:
+          type: integer
+          minimum: 0
+          maximum: 6
+        destNpi:
+          type: integer
+          minimum: 0
+          maximum: 18
+        serviceType:
+          type: [string, "null"]
+          maxLength: 6
+          description: Service Type Routing.
+        text:
+          type: string
+          maxLength: 1600
+        dataCoding:
+          type: integer
+          minimum: 0
+          maximum: 8
+        testSms:
+          type: boolean
+          default: false
+          description: Also send it (Test SMS).
+
+    MessageEncoding:
+      type: object
+      required: [dataCoding, label, chars, bitsPerChar, segments, bytes]
+      properties:
+        dataCoding:
+          type: integer
+        label:
+          type: string
+          description: "e.g. GSM 7-bit, UCS-2."
+        chars:
+          type: integer
+          description: "Characters (GSM extension characters count twice)."
+        bitsPerChar:
+          type: integer
+        segments:
+          type: integer
+          description: "SMS per message."
+        bytes:
+          type: integer
+          description: "Message size in bytes."
+
+    RouteSimulatorResult:
+      type: object
+      required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms]
+      properties:
+        trunk:
+          type: object
+          required: [id, name, enterprise]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            name:
+              type: string
+            enterprise:
+              type: string
+        translation:
+          $ref: "#/components/schemas/TrunkRulesTestResult"
+        sender:
+          type: string
+          description: After translation.
+        receiver:
+          type: string
+          description: After translation.
+        mccmnc:
+          type: [string, "null"]
+        destination:
+          type: [string, "null"]
+        encoding:
+          $ref: "#/components/schemas/MessageEncoding"
+        customerRate:
+          oneOf:
+            - type: object
+              required: [rate, currency, platformRate, rateTableId, rateTable]
+              properties:
+                rate:
+                  type: number
+                currency:
+                  type: string
+                platformRate:
+                  type: number
+                  description: The rate in the platform currency.
+                rateTableId:
+                  $ref: "#/components/schemas/Id"
+                rateTable:
+                  type: string
+            - type: "null"
+        route:
+          $ref: "#/components/schemas/RouteSimulation"
+        vendorCost:
+          oneOf:
+            - type: object
+              required: [rate, currency]
+              properties:
+                rate:
+                  type: number
+                currency:
+                  type: string
+                  description: The platform currency.
+            - type: "null"
+          description: Buy rate of the chosen vendor for the destination.
+        marginPct:
+          type: [number, "null"]
+          description: (sell − cost) / sell per message, both in the platform currency.
+        blocked:
+          type: [string, "null"]
+          description: Why the message would be rejected, if it would.
+        testSms:
+          oneOf:
+            - type: object
+              required: [messageId, status, detail]
+              properties:
+                messageId:
+                  type: string
+                status:
+                  type: string
+                  enum: [DELIVRD, UNDELIV, REJECTD, EXPIRED]
+                detail:
+                  type: string
+            - type: "null"
+
+    NetworkDiagnosisInput:
+      type: object
+      additionalProperties: false
+      required: [tool, destination]
+      properties:
+        tool:
+          type: string
+          enum: [ping, traceroute, mtr, telnet]
+        destination:
+          type: string
+          minLength: 1
+          maxLength: 253
+          description: Host name or IP address.
+        source:
+          type: [string, "null"]
+          maxLength: 64
+          description: Source IP of the switch host.
+        port:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 65535
+          description: Required for telnet.
+        count:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 4
+
+    NetworkDiagnosisResult:
+      type: object
+      required: [command, lines, exitCode, durationMs]
+      properties:
+        command:
+          type: string
+          description: "The command line run."
+        lines:
+          type: array
+          items:
+            type: string
+        exitCode:
+          type: integer
+        durationMs:
+          type: integer
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -15957,7 +17638,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures]
 
     FilterOperator:
       type: string

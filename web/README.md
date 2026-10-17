@@ -150,6 +150,26 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Observation Deck (build step 5.9)
+
+Pages in `src/pages/monitoring/` (§9), hooks in `src/api/observation.ts`, pure helpers in `monitorModel.ts`, shared
+pieces (view tabs, auto refresh, download list and request dialog) in `parts.tsx`:
+
+- **EDR search** (`/monitoring/edr`): every attempt with both legs from the EDR store; From / To (UTC), Final and
+  message ID lists in the filter row; EDR Template sets the columns; Bulk edit Trouble Ticket (preview, columns,
+  attachment) and EDR Repush; Export queues an EDR Request. The detail shows the customer leg, vendor leg, outcome,
+  money and HLR, and every attempt of the message. EDR rows are keyed by UUID, so the grid uses `uuidKey()`.
+- **EDR download** (`/monitoring/edr-download`) and **Failed EDRs** (`/monitoring/failed-edr`, tabs Search and
+  Download, `?view=downloads`): background exports with progress, file and cancel; refreshes every 3 s.
+- **EDR templates** (`/monitoring/edr-templates`): saved column sets with order; undoable.
+- **Network status** (`/monitoring/network-status`, `?side=vendor`): bind status, connections, queue, TPS, per-row
+  Start / Stop, CSV / Excel, SMPP sessions in the detail (§13.1); refreshes every 10 s.
+- **Signaling deck** (`/monitoring/signaling`): start a capture (filter, max duration, max size), stop, download pcap.
+- **Route simulator** (`/routing/simulator`): the full path of a message through a customer trunk, with the live
+  message size counter; Test SMS.
+- **Network diagnosis** (`/monitoring/diagnosis`): ping, trace route, MTR, telnet; the last ten runs stay on the page.
+- **Repush requests** (`/monitoring/repush`): links to the new attempts in EDR search.
+
 ## Switch utilities (build step 5.8)
 
 Pages in `src/pages/switch/tools/` (§8), hooks in `src/api/switchTools.ts`, pure helpers in `toolsModel.ts`:

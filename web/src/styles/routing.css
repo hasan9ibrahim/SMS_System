@@ -898,3 +898,240 @@ textarea.mono {
     grid-template-columns: 1fr;
   }
 }
+
+/* Observation Deck (§9) */
+.deck-above {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.edr-toolbar,
+.deck-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.edr-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.edr-toolbar input[type="datetime-local"] {
+  width: 175px;
+}
+.edr-ids {
+  width: 190px;
+}
+.column-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 2px 10px;
+  max-height: 220px;
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.tt-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  margin-bottom: 10px;
+}
+.tt-wide {
+  grid-column: 1 / -1;
+}
+.mono-pre,
+.mail-preview pre.mono-pre,
+.terminal {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre;
+  overflow: auto;
+}
+.kv-dense {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 4px 18px;
+}
+.kv-pair {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+.kv-pair dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.kv-text {
+  white-space: pre-wrap;
+}
+.row-current td {
+  font-weight: 600;
+}
+.job-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.progress {
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+.template-cols {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 12px;
+}
+.template-order,
+.template-view {
+  margin: 0;
+  padding-left: 22px;
+}
+.template-order {
+  max-height: 220px;
+  overflow: auto;
+}
+.template-order li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.template-order li span {
+  flex: 1;
+}
+.capture-form label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.capture-form input {
+  width: 150px;
+}
+.capture-form input:first-child,
+.capture-form label:first-child input {
+  width: 260px;
+}
+.rs-page,
+.diag-page {
+  overflow: auto;
+}
+.rs-page > *,
+.diag-page > * {
+  flex-shrink: 0;
+}
+.rs-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+}
+.rs-trunk,
+.rs-text {
+  grid-column: span 2;
+}
+.rs-text textarea {
+  width: 100%;
+  resize: vertical;
+}
+.rs-counter {
+  color: var(--color-text-secondary);
+}
+.rs-actions {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+.rs-result {
+  display: grid;
+  gap: 10px;
+}
+.rs-verdict {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 10px 14px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+.rs-verdict.tone-bad {
+  border-color: var(--color-error);
+}
+.rs-verdict.tone-ok {
+  border-color: var(--color-good);
+}
+.rs-test {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.rs-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rs-cards h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.rs-wide {
+  grid-column: 1 / -1;
+}
+.rs-tried {
+  margin: 6px 0 0;
+  padding-left: 22px;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 12px;
+}
+.diag-form {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.diag-dest input {
+  width: 280px;
+}
+.diag-runs {
+  display: grid;
+  gap: 10px;
+}
+.diag-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.terminal {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-menu-bar);
+  color: #dfe4ec;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .rs-form {
+    grid-template-columns: 1fr 1fr;
+  }
+  .rs-cards,
+  .tt-form,
+  .template-cols {
+    grid-template-columns: 1fr;
+  }
+}

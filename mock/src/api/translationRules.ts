@@ -621,54 +621,66 @@ export function testTranslationRule(request: FastifyRequest, reply: FastifyReply
   });
 }
 
-/** Runs a sample message through every translation rule on a trunk, and finds the HLR rule. */
+/**
+ * Runs a sample message through every translation rule on a trunk, and finds the HLR rule. Null when
+ * the trunk does not exist. Also used by the Route Simulator (§9.2).
+ */
+export async function runTrunkRules(
+  pool: pg.Pool,
+  kind: TrunkKind,
+  id: number,
+  message: TrunkRulesTestInput["message"],
+): Promise<TrunkRulesTestResult | null> {
+  const order = await trunkRuleOrder(pool, kind, "translation", id);
+  if (!order) return null;
+  const running = order.filter((r) => r.enabled && r.ruleActive);
+  const rules = await engineRules(
+    pool,
+    running.map((r) => r.ruleId),
+  );
+  const list = running.map((r) => ({ rule: rules.get(r.ruleId)!, continueAfter: r.continueAfter }));
+  const result = runRules(
+    list,
+    message,
+    await engineContext(
+      pool,
+      list.map((x) => x.rule),
+    ),
+  );
+  let hlr: TrunkRulesTestResult["hlr"] = null;
+  if (kind === "customer" && !result.blocked) {
+    const hlrOrder = ((await trunkRuleOrder(pool, kind, "hlr", id)) ?? []).filter((r) => r.enabled && r.ruleActive);
+    if (hlrOrder.length) {
+      const { rows } = await pool.query(
+        `SELECT r.id, r.name, r.dnid_pattern, p.id AS provider_id, p.name AS provider_name
+           FROM hlr_rules r JOIN hlr_providers p ON p.id = r.hlr_provider_id WHERE r.id = ANY($1)`,
+        [hlrOrder.map((r) => r.ruleId)],
+      );
+      const byId = new Map(rows.map((r) => [Number(r.id), r]));
+      for (const h of hlrOrder) {
+        const r = byId.get(h.ruleId);
+        if (r && compile(r.dnid_pattern)?.test(result.after.receiver)) {
+          hlr = {
+            ruleId: Number(r.id),
+            ruleName: r.name,
+            providerId: Number(r.provider_id),
+            providerName: r.provider_name,
+          };
+          break;
+        }
+      }
+    }
+  }
+  return { ...result, hlr };
+}
+
 export function testTrunkRules(kind: TrunkKind) {
   return (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as Params;
     const { message } = request.body as TrunkRulesTestInput;
     return withDb(reply, async (pool): Promise<TrunkRulesTestResult | FastifyReply> => {
-      const order = await trunkRuleOrder(pool, kind, "translation", id);
-      if (!order)
-        return sendProblem(reply, 404, `${kind === "customer" ? "Customer" : "Vendor"} trunk ${id} not found`);
-      const running = order.filter((r) => r.enabled && r.ruleActive);
-      const rules = await engineRules(
-        pool,
-        running.map((r) => r.ruleId),
-      );
-      const list = running.map((r) => ({ rule: rules.get(r.ruleId)!, continueAfter: r.continueAfter }));
-      const result = runRules(
-        list,
-        message,
-        await engineContext(
-          pool,
-          list.map((x) => x.rule),
-        ),
-      );
-      let hlr: TrunkRulesTestResult["hlr"] = null;
-      if (kind === "customer" && !result.blocked) {
-        const hlrOrder = ((await trunkRuleOrder(pool, kind, "hlr", id)) ?? []).filter((r) => r.enabled && r.ruleActive);
-        if (hlrOrder.length) {
-          const { rows } = await pool.query(
-            `SELECT r.id, r.name, r.dnid_pattern, p.id AS provider_id, p.name AS provider_name
-               FROM hlr_rules r JOIN hlr_providers p ON p.id = r.hlr_provider_id WHERE r.id = ANY($1)`,
-            [hlrOrder.map((r) => r.ruleId)],
-          );
-          const byId = new Map(rows.map((r) => [Number(r.id), r]));
-          for (const h of hlrOrder) {
-            const r = byId.get(h.ruleId);
-            if (r && compile(r.dnid_pattern)?.test(result.after.receiver)) {
-              hlr = {
-                ruleId: Number(r.id),
-                ruleName: r.name,
-                providerId: Number(r.provider_id),
-                providerName: r.provider_name,
-              };
-              break;
-            }
-          }
-        }
-      }
-      return { ...result, hlr };
+      const result = await runTrunkRules(pool, kind, id, message);
+      return result ?? sendProblem(reply, 404, `${kind === "customer" ? "Customer" : "Vendor"} trunk ${id} not found`);
     });
   };
 }

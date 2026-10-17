@@ -23,6 +23,11 @@ import type {
   TrafficAlertRow,
   SmsVoiceRuleRow,
   BroadcastRow,
+  EdrTemplateRow,
+  EdrDownloadRow,
+  RepushRequestRow,
+  NetworkBindRow,
+  SignalingCaptureRow,
   SoaReportRow,
   ReconRuleRow,
   VendorInvoiceRow,
@@ -2082,6 +2087,221 @@ export function mapBroadcast(r: Record<string, unknown>): BroadcastRow {
   };
 }
 
+// ---------------------------------------------------------------- Observation Deck (§9)
+
+export const EDR_TEMPLATE_FROM = "edr_templates t LEFT JOIN users u ON u.id = t.updated_by_id";
+export const EDR_TEMPLATE_SELECT = "t.*, u.username AS updated_by";
+export const edrTemplateList: ListDef<EdrTemplateRow> = {
+  fields: listFields.edr_templates,
+  from: EDR_TEMPLATE_FROM,
+  baseWhere: "t.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "t.id" },
+    name: { sql: "t.name" },
+    columnCount: { sql: "cardinality(t.columns)" },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "t.updated_at" },
+    archived: { sql: "(t.deleted_at IS NOT NULL)" },
+  },
+  search: ["name"],
+  idSql: "t.id",
+  select: EDR_TEMPLATE_SELECT,
+  mapRow: (r) => mapEdrTemplate(r),
+};
+export function mapEdrTemplate(r: Record<string, unknown>): EdrTemplateRow {
+  return {
+    id: Number(r.id),
+    name: r.name as string,
+    columns: (r.columns as string[]) ?? [],
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
+export const EDR_DOWNLOAD_FROM = "edr_downloads d LEFT JOIN users u ON u.id = d.requested_by_id";
+export const EDR_DOWNLOAD_SELECT = "d.*, u.username AS requested_by";
+export const edrDownloadList: ListDef<EdrDownloadRow> = {
+  fields: listFields.edr_downloads,
+  from: EDR_DOWNLOAD_FROM,
+  columns: {
+    id: { sql: "d.id" },
+    kind: { sql: "d.kind" },
+    status: { sql: "d.status" },
+    fileName: { sql: "d.file_name" },
+    fileType: { sql: "d.file_type" },
+    progress: { sql: "d.progress" },
+    rows: { sql: "d.row_count" },
+    filterSummary: { sql: "d.filter_summary" },
+    template: { sql: "d.template_name" },
+    requestedAt: { sql: "d.requested_at" },
+    finishedAt: { sql: "d.finished_at" },
+    error: { sql: "d.error" },
+    requestedBy: { sql: "u.username" },
+  },
+  search: ["fileName", "filterSummary", "requestedBy"],
+  idSql: "d.id",
+  select: EDR_DOWNLOAD_SELECT,
+  mapRow: (r) => mapEdrDownload(r),
+};
+export function mapEdrDownload(r: Record<string, unknown>): EdrDownloadRow {
+  return {
+    id: Number(r.id),
+    kind: r.kind as string,
+    status: r.status as string,
+    fileName: (r.file_name as string | null) ?? null,
+    fileType: r.file_type as string,
+    progress: Number(r.progress),
+    rows: r.row_count == null ? null : Number(r.row_count),
+    sizeBytes: r.size_bytes == null ? null : Number(r.size_bytes),
+    filterSummary: (r.filter_summary as string) ?? "",
+    template: (r.template_name as string | null) ?? null,
+    requestedAt: iso(r.requested_at)!,
+    finishedAt: iso(r.finished_at),
+    error: (r.error as string | null) ?? null,
+    requestedBy: (r.requested_by as string | null) ?? null,
+  };
+}
+
+export const REPUSH_FROM = `repush_requests r JOIN vendor_trunks vt ON vt.id = r.vendor_trunk_id
+    LEFT JOIN users u ON u.id = r.created_by_id`;
+export const REPUSH_SELECT = "r.*, vt.name AS vendor_trunk, u.username AS created_by";
+export const repushList: ListDef<RepushRequestRow> = {
+  fields: listFields.repush_requests,
+  from: REPUSH_FROM,
+  columns: {
+    id: { sql: "r.id" },
+    edrCount: { sql: "r.edr_count" },
+    vendorTrunk: { sql: "vt.name" },
+    vendorTrunkId: { sql: "r.vendor_trunk_id" },
+    status: { sql: "r.status" },
+    delivered: { sql: "r.delivered" },
+    failed: { sql: "r.failed" },
+    skipped: { sql: "r.skipped" },
+    createdBy: { sql: "u.username" },
+    createdAt: { sql: "r.inserted_at" },
+  },
+  search: ["vendorTrunk", "createdBy"],
+  idSql: "r.id",
+  select: REPUSH_SELECT,
+  mapRow: (r) => mapRepush(r),
+};
+export function mapRepush(r: Record<string, unknown>): RepushRequestRow {
+  return {
+    id: Number(r.id),
+    edrCount: Number(r.edr_count),
+    skipped: Number(r.skipped),
+    vendorTrunkId: Number(r.vendor_trunk_id),
+    vendorTrunk: r.vendor_trunk as string,
+    status: r.status as string,
+    delivered: Number(r.delivered),
+    failed: Number(r.failed),
+    createdBy: (r.created_by as string | null) ?? null,
+    createdAt: iso(r.inserted_at)!,
+  };
+}
+
+/** Network Status (§9.2): every live trunk with its bind status, customer and vendor side. */
+export const NETWORK_FROM = `(
+    SELECT 'customer' AS side, t.id AS trunk_id, t.enterprise_id, e.name AS enterprise_name, t.name AS trunk_name,
+           t.max_connections, tb.status, tb.connections, tb.queue, tb.tps, tb.since, u.username AS changed_by,
+           coalesce((SELECT array_agg(DISTINCT host(s.ip) ORDER BY host(s.ip)) FROM bind_sessions s
+                      WHERE s.side = 'customer' AND s.trunk_id = t.id), '{}') AS ips
+      FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
+      JOIN trunk_binds tb ON tb.side = 'customer' AND tb.trunk_id = t.id
+      LEFT JOIN users u ON u.id = tb.changed_by_id
+     WHERE t.deleted_at IS NULL
+    UNION ALL
+    SELECT 'vendor', t.id, t.enterprise_id, e.name, t.name, t.max_connections, tb.status, tb.connections, tb.queue,
+           tb.tps, tb.since, u.username, ARRAY[t.host]
+      FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
+      JOIN trunk_binds tb ON tb.side = 'vendor' AND tb.trunk_id = t.id
+      LEFT JOIN users u ON u.id = tb.changed_by_id
+     WHERE t.deleted_at IS NULL
+  ) nb`;
+export const networkBindList: ListDef<NetworkBindRow> = {
+  fields: listFields.network_binds,
+  from: NETWORK_FROM,
+  columns: {
+    side: { sql: "nb.side" },
+    enterpriseId: { sql: "nb.enterprise_id" },
+    trunkId: { sql: "nb.trunk_id" },
+    enterpriseName: { sql: "nb.enterprise_name" },
+    trunkName: { sql: "nb.trunk_name" },
+    ipAddresses: { sql: "array_to_string(nb.ips, ', ')" },
+    connections: { sql: "nb.connections" },
+    maxConnections: { sql: "nb.max_connections" },
+    queue: { sql: "nb.queue" },
+    tps: { sql: "nb.tps" },
+    status: { sql: "nb.status" },
+    since: { sql: "nb.since" },
+    changedBy: { sql: "nb.changed_by" },
+  },
+  search: ["enterpriseName", "trunkName", "ipAddresses"],
+  idSql: "(nb.side || '-' || nb.trunk_id)",
+  select: "nb.*",
+  mapRow: (r) => mapNetworkBind(r),
+};
+export function mapNetworkBind(r: Record<string, unknown>): NetworkBindRow {
+  return {
+    id: `${r.side}-${r.trunk_id}`,
+    side: r.side as string,
+    trunkId: Number(r.trunk_id),
+    enterpriseId: Number(r.enterprise_id),
+    enterpriseName: r.enterprise_name as string,
+    trunkName: r.trunk_name as string,
+    ipAddresses: (r.ips as string[]) ?? [],
+    connections: Number(r.connections),
+    maxConnections: Number(r.max_connections),
+    status: r.status as string,
+    queue: r.side === "vendor" ? Number(r.queue ?? 0) : null,
+    tps: Math.round(Number(r.tps) * 10) / 10,
+    since: iso(r.since)!,
+    changedBy: (r.changed_by as string | null) ?? null,
+  };
+}
+
+const ipText = (col: string) => `CASE WHEN masklen(${col}) IN (32, 128) THEN host(${col}) ELSE text(${col}) END`;
+export const CAPTURE_FROM = "signaling_captures c LEFT JOIN users u ON u.id = c.started_by_id";
+export const CAPTURE_SELECT = `c.*, ${ipText("c.ip_filter")} AS ip_text, u.username AS started_by`;
+export const captureList: ListDef<SignalingCaptureRow> = {
+  fields: listFields.signaling_captures,
+  from: CAPTURE_FROM,
+  columns: {
+    id: { sql: "c.id" },
+    fileName: { sql: "c.file_name" },
+    ipFilter: { sql: ipText("c.ip_filter") },
+    status: { sql: "c.status" },
+    sizeBytes: { sql: "c.size_bytes" },
+    packets: { sql: "c.packets" },
+    maxDurationSeconds: { sql: "c.max_duration_seconds" },
+    maxFileSizeBytes: { sql: "c.max_file_size_bytes" },
+    startedAt: { sql: "c.started_at" },
+    updatedAt: { sql: "c.updated_at" },
+    startedBy: { sql: "u.username" },
+  },
+  search: ["fileName", "ipFilter"],
+  idSql: "c.id",
+  select: CAPTURE_SELECT,
+  mapRow: (r) => mapCapture(r),
+};
+export function mapCapture(r: Record<string, unknown>): SignalingCaptureRow {
+  return {
+    id: Number(r.id),
+    fileName: r.file_name as string,
+    ipFilter: (r.ip_text as string | null) ?? null,
+    status: r.status as string,
+    sizeBytes: Number(r.size_bytes),
+    packets: Number(r.packets),
+    maxDurationSeconds: Number(r.max_duration_seconds),
+    maxFileSizeBytes: Number(r.max_file_size_bytes),
+    startedAt: iso(r.started_at)!,
+    updatedAt: iso(r.updated_at)!,
+    startedBy: (r.started_by as string | null) ?? null,
+  };
+}
+
 /** SOA Report (§7): exports and sends with the statement kept as it was. */
 export const SOA_REPORT_FROM = `soa_reports s
     JOIN enterprises e ON e.id = s.enterprise_id
@@ -2437,8 +2657,8 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
   }),
 };
 
-/** Lists answered from PostgreSQL; the Enterprise report runs on the EDR store (api/enterpriseReport.ts). */
-export type PgListId = Exclude<ListId, "enterprise_report">;
+/** Lists answered from PostgreSQL; the Enterprise report and EDR lists run on the EDR store (enterpriseReport.ts, edrDefs.ts). */
+export type PgListId = Exclude<ListId, "enterprise_report" | "edrs" | "failed_edrs">;
 
 export const listDefs: Record<PgListId, ListDef<unknown>> = {
   enterprises: enterpriseList as ListDef<unknown>,
@@ -2478,6 +2698,11 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   traffic_alerts: trafficAlertList as ListDef<unknown>,
   sms_voice_rules: smsVoiceRuleList as ListDef<unknown>,
   broadcasts: broadcastList as ListDef<unknown>,
+  edr_templates: edrTemplateList as ListDef<unknown>,
+  edr_downloads: edrDownloadList as ListDef<unknown>,
+  repush_requests: repushList as ListDef<unknown>,
+  network_binds: networkBindList as ListDef<unknown>,
+  signaling_captures: captureList as ListDef<unknown>,
   currencies: currencyList as ListDef<unknown>,
   currency_rates: currencyRateList as ListDef<unknown>,
   currency_rate_history: currencyRateHistoryList as ListDef<unknown>,

@@ -829,7 +829,7 @@ export async function vendorQuality(): Promise<Map<number, number>> {
   return qualityCache.dlr;
 }
 
-async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]): Promise<MessageContext> {
+export async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]): Promise<MessageContext> {
   const prefixes = Array.from({ length: input.receiver.length }, (_, i) => input.receiver.slice(0, i + 1));
   const dest = input.mccmnc
     ? await db.query(
@@ -929,7 +929,7 @@ export async function vendorOptions(
   );
 }
 
-const listIdsOf = (rules: RuleCore[]) => [
+export const listIdsOf = (rules: RuleCore[]) => [
   ...new Set(
     rules.flatMap((r) =>
       [r.senderListId, r.receiverListId, ...r.whitelists.map((w) => w.numberListId)].filter((x): x is number => !!x),

@@ -293,7 +293,32 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.19.0";
+import {
+  archiveEdrTemplate,
+  createEdrTemplate,
+  getEdrTemplate,
+  previewTroubleTicket,
+  queryEdrs,
+  queryFailedEdrs,
+  repushEdrs,
+  restoreEdrTemplate,
+  sendTroubleTicket,
+  updateEdrTemplate,
+} from "./api/observation.js";
+import { cancelEdrDownload, downloadEdrFile, requestEdrDownload } from "./api/edrDownloads.js";
+import {
+  downloadSignalingCapture,
+  exportNetworkBinds,
+  listBindSessions,
+  runNetworkDiagnosis,
+  startSignalingCapture,
+  startTrunkBind,
+  stopSignalingCapture,
+  stopTrunkBind,
+} from "./api/network.js";
+import { runRouteSimulator } from "./api/routeSimulator.js";
+
+const VERSION = "0.20.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -590,6 +615,34 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   previewBroadcast,
   sendBroadcast,
   queryBroadcasts: queryList("broadcasts"),
+  // Observation Deck (§9)
+  queryEdrs,
+  queryFailedEdrs,
+  previewTroubleTicket,
+  sendTroubleTicket,
+  repushEdrs,
+  queryRepushRequests: queryList("repush_requests"),
+  queryEdrTemplates: queryList("edr_templates"),
+  createEdrTemplate,
+  getEdrTemplate,
+  updateEdrTemplate,
+  archiveEdrTemplate,
+  restoreEdrTemplate,
+  requestEdrDownload,
+  queryEdrDownloads: queryList("edr_downloads"),
+  cancelEdrDownload,
+  downloadEdrFile,
+  queryNetworkBinds: queryList("network_binds"),
+  exportNetworkBinds,
+  listBindSessions,
+  startTrunkBind,
+  stopTrunkBind,
+  querySignalingCaptures: queryList("signaling_captures"),
+  startSignalingCapture,
+  stopSignalingCapture,
+  downloadSignalingCapture,
+  runRouteSimulator,
+  runNetworkDiagnosis,
   listCompanyMailboxes,
   createReconRule,
   updateReconRule,

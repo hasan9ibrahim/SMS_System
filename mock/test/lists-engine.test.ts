@@ -12,6 +12,8 @@ import {
   type ListDef,
 } from "../src/lists/engine.js";
 import { listDefs } from "../src/lists/defs.js";
+import { checkChDef, type ChListDef } from "../src/lists/chEngine.js";
+import { edrList, failedEdrList } from "../src/lists/edrDefs.js";
 import { listFields } from "../src/lists/fields.js";
 
 const def = listDefs.enterprises as ListDef<unknown>;
@@ -19,11 +21,13 @@ const q = (query: Partial<ListQuery>) => compileQuery(def, query as ListQuery);
 
 test("every list field has SQL and every list has a definition", () => {
   for (const [name, d] of Object.entries(listDefs)) assert.deepEqual(checkDef(name, d), []);
-  // The Enterprise report's catalogue is answered from the EDR store (api/enterpriseReport.ts).
+  // The Enterprise report and the EDR lists are answered from the EDR store (enterpriseReport.ts, edrDefs.ts).
+  assert.deepEqual(checkChDef("edrs", edrList as ChListDef<unknown>), []);
+  assert.deepEqual(checkChDef("failed_edrs", failedEdrList as ChListDef<unknown>), []);
   assert.deepEqual(
     Object.keys(listDefs).sort(),
     Object.keys(listFields)
-      .filter((l) => l !== "enterprise_report")
+      .filter((l) => !["enterprise_report", "edrs", "failed_edrs"].includes(l))
       .sort(),
   );
 });

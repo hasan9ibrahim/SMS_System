@@ -92,6 +92,20 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/traffic-alerts/query", { body })) as Promise<ListPage<Row>>;
     case "sms_voice_rules":
       return unwrap(api.POST("/sms-voice-rules/query", { body })) as Promise<ListPage<Row>>;
+    case "edrs":
+      return unwrap(api.POST("/edrs/query", { body })) as Promise<ListPage<Row>>;
+    case "failed_edrs":
+      return unwrap(api.POST("/failed-edrs/query", { body })) as Promise<ListPage<Row>>;
+    case "edr_templates":
+      return unwrap(api.POST("/edr-templates/query", { body })) as Promise<ListPage<Row>>;
+    case "edr_downloads":
+      return unwrap(api.POST("/edr-downloads/query", { body })) as Promise<ListPage<Row>>;
+    case "repush_requests":
+      return unwrap(api.POST("/repush-requests/query", { body })) as Promise<ListPage<Row>>;
+    case "network_binds":
+      return unwrap(api.POST("/network-binds/query", { body })) as Promise<ListPage<Row>>;
+    case "signaling_captures":
+      return unwrap(api.POST("/signaling-captures/query", { body })) as Promise<ListPage<Row>>;
     case "broadcasts":
       return unwrap(api.POST("/broadcasts/query", { body })) as Promise<ListPage<Row>>;
     case "soa_reports":

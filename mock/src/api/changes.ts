@@ -114,6 +114,7 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
       status: "status",
     },
   },
+  edr_template: { table: "edr_templates", columns: { name: "name", columns: "columns" } },
   sms_voice_rule: {
     table: "sms_voice_rules",
     columns: {

@@ -33,6 +33,15 @@ import { FirewallPage } from "./switch/tools/FirewallPage";
 import { NotificationsPage } from "./switch/tools/NotificationsPage";
 import { SmsToVoicePage } from "./switch/tools/SmsToVoicePage";
 import { TrafficAlertsPage } from "./switch/tools/TrafficAlertsPage";
+import { EdrDownloadPage } from "./monitoring/EdrDownloadPage";
+import { EdrSearchPage } from "./monitoring/EdrSearchPage";
+import { EdrTemplatesPage } from "./monitoring/EdrTemplatesPage";
+import { FailedEdrPage } from "./monitoring/FailedEdrPage";
+import { NetworkDiagnosisPage } from "./monitoring/NetworkDiagnosisPage";
+import { NetworkStatusPage } from "./monitoring/NetworkStatusPage";
+import { RepushRequestsPage } from "./monitoring/RepushRequestsPage";
+import { RouteSimulatorPage } from "./monitoring/RouteSimulatorPage";
+import { SignalingPage } from "./monitoring/SignalingPage";
 import { RateManagerPage } from "./rates/RateManagerPage";
 import { EnterpriseReportPage } from "./reports/EnterpriseReportPage";
 import { TrunkPage } from "./trunk/TrunkPage";
@@ -66,6 +75,15 @@ const BUILT = new Set([
   "/switch/traffic-alerts",
   "/switch/sms-to-voice",
   "/switch/broadcast",
+  "/monitoring/edr",
+  "/monitoring/edr-download",
+  "/monitoring/edr-templates",
+  "/monitoring/failed-edr",
+  "/monitoring/network-status",
+  "/monitoring/signaling",
+  "/monitoring/diagnosis",
+  "/monitoring/repush",
+  "/routing/simulator",
   "/finance/transactions",
   "/finance/invoices",
   "/finance/vendor-invoices",
@@ -118,6 +136,15 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/switch/traffic-alerts" element={<TrafficAlertsPage />} />
       <Route path="/switch/sms-to-voice" element={<SmsToVoicePage />} />
       <Route path="/switch/broadcast" element={<BroadcastPage />} />
+      <Route path="/monitoring/edr" element={<EdrSearchPage />} />
+      <Route path="/monitoring/edr-download" element={<EdrDownloadPage />} />
+      <Route path="/monitoring/edr-templates" element={<EdrTemplatesPage />} />
+      <Route path="/monitoring/failed-edr" element={<FailedEdrPage />} />
+      <Route path="/monitoring/network-status" element={<NetworkStatusPage />} />
+      <Route path="/monitoring/signaling" element={<SignalingPage />} />
+      <Route path="/monitoring/diagnosis" element={<NetworkDiagnosisPage />} />
+      <Route path="/monitoring/repush" element={<RepushRequestsPage />} />
+      <Route path="/routing/simulator" element={<RouteSimulatorPage />} />
       <Route path="/finance/transactions" element={<TransactionsPage />} />
       <Route path="/finance/invoices" element={<InvoicesPage />} />
       <Route path="/finance/vendor-invoices" element={<VendorInvoicesPage />} />

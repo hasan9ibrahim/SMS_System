@@ -73,6 +73,10 @@ export const TABLE_ORDER = [
   "traffic_alerts",
   "sms_voice_rules",
   "broadcasts",
+  "edr_templates",
+  "edr_downloads",
+  "repush_requests",
+  "signaling_captures",
   "changes",
 ];
 

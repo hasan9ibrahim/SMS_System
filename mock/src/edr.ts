@@ -24,6 +24,40 @@ export async function chRows<T>(sql: string, timeoutMs = 1500): Promise<T[] | nu
   }
 }
 
+/** Like chRows, but throws (with ClickHouse's message) instead of answering null; for screens that list EDRs. */
+export async function chQuery<T>(sql: string, timeoutMs = 30_000): Promise<T[]> {
+  let res: Response;
+  try {
+    res = await fetch(`${CH_URL}/?database=${CH_DB}&default_format=JSON`, {
+      method: "POST",
+      headers: { authorization: AUTH },
+      body: sql,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    throw new ChUnavailable(String((err as Error).message ?? err));
+  }
+  if (!res.ok) throw new ChError(await res.text());
+  // INSERT and ALTER answer with an empty body.
+  const text = await res.text();
+  return text ? (JSON.parse(text) as { data: T[] }).data : [];
+}
+
+/** Streams a query's output (e.g. FORMAT CSVWithNames) for exports. */
+export async function chStream(sql: string, timeoutMs = 600_000): Promise<ReadableStream<Uint8Array>> {
+  const res = await fetch(`${CH_URL}/?database=${CH_DB}`, {
+    method: "POST",
+    headers: { authorization: AUTH },
+    body: sql,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok || !res.body) throw new ChError(await res.text());
+  return res.body;
+}
+
+export class ChUnavailable extends Error {}
+export class ChError extends Error {}
+
 /** Revenue and cost are in the platform currency (converted per business company). */
 export interface TrafficToday {
   messages: number;

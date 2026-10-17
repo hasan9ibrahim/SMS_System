@@ -5120,6 +5120,551 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/edrs/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List EDRs (server-side filter, sort and paging)
+     * @description EDR Search (§9.1): one row per message attempt with both legs, from the EDR store (ClickHouse). Every column
+     *     filters with the §13.25 grammar; the page's From / To Date and Final are filters on `startTime` and
+     *     `isFinalAttempt`. Enterprise and trunk name filters match names (wildcards) and are applied as IDs. Message ID
+     *     filters take comma-separated lists (`in`). Totals over very large windows may be estimates.
+     */
+    post: operations["queryEdrs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edrs/trouble-ticket/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview a Trouble Ticket e-mail
+     * @description Recipients (Technical contacts of the vendor trunk's enterprise, or of the customer enterprise of the selected
+     *     EDRs), subject and body with the chosen EDR columns as a table.
+     */
+    post: operations["previewTroubleTicket"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edrs/trouble-ticket": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Trouble Ticket: e-mail selected EDRs to a partner (§9.1)
+     * @description Ticket Send To (Customer / Vendor), Vendor Trunk (vendor tickets), Trouble Ticket Template, Email Subject,
+     *     Attachment, Email Columns. The EDRs go in the body and as a CSV attachment; logged in Email Logs (type
+     *     trouble_ticket).
+     */
+    post: operations["sendTroubleTicket"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edrs/repush": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * EDR Repush: re-send selected EDRs to another vendor trunk (§9.1)
+     * @description Creates a Repush Request. Each message is sent again on the chosen vendor trunk as a new attempt that carries
+     *     the request ID (`repushRequestId`), so the new attempts show in EDR Search. Only final attempts of messages that
+     *     were not delivered can be repushed.
+     */
+    post: operations["repushEdrs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/repush-requests/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List repush requests (server-side filter, sort and paging)
+     * @description Repush Request (§9.2): Info ID, Total EDR Count, vendor trunk, outcome, Created By, Created Time.
+     */
+    post: operations["queryRepushRequests"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-templates/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List EDR templates (server-side filter, sort and paging)
+     * @description EDR Template (§9.2): Info ID, Name, columns, Updated By / Time. A template is a saved EDR column set used by EDR
+     *     Search, EDR Download and Trouble Ticket.
+     */
+    post: operations["queryEdrTemplates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-templates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an EDR template
+     * @description Name and Column Selection (any EDR column). One undoable change.
+     */
+    post: operations["createEdrTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-templates/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One EDR template
+     * @description Name and columns.
+     */
+    get: operations["getEdrTemplate"];
+    /**
+     * Change an EDR template
+     * @description One undoable change.
+     */
+    put: operations["updateEdrTemplate"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-templates/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) an EDR template (§13.29)
+     * @description Downloads already requested keep their columns. One undoable change.
+     */
+    post: operations["archiveEdrTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-templates/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an EDR template
+     * @description One undoable change.
+     */
+    post: operations["restoreEdrTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-downloads": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * EDR Request / Failed EDR Request: queue a background export (§9.2, §12.4)
+     * @description The EDR Search (or Failed EDR Search) filters, Download FileType (csv / xlsx) and the EDR Template or an explicit
+     *     column list. Runs in the background: pending, inprogress (with progress), success, failed or cancelled. At most
+     *     1,000,000 rows (xlsx: 1,048,575).
+     */
+    post: operations["requestEdrDownload"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-downloads/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List EDR downloads (server-side filter, sort and paging)
+     * @description EDR Download and Failed EDR Download (§9.2): EDR No, Status, File, File Type, Progress, Request Start / End Time,
+     *     Error, Requested By. Filter `kind` eq edr or failed_edr.
+     */
+    post: operations["queryEdrDownloads"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-downloads/{id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancel a pending or running download
+     * @description Finished downloads cannot be cancelled (409).
+     */
+    post: operations["cancelEdrDownload"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/edr-downloads/{id}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The exported file
+     * @description CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls).
+     */
+    get: operations["downloadEdrFile"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/failed-edrs/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List failed EDRs (server-side filter, sort and paging)
+     * @description Failed EDR Search (§9.2): messages rejected before routing (no vendor leg): time, customer enterprise and trunk,
+     *     Customer IP, Customer Msg ID, sender, DNID, destination, Error Code.
+     */
+    post: operations["queryFailedEdrs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/network-binds/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List trunk bind status (server-side filter, sort and paging)
+     * @description Network Status (§9.2, §12.4): Customer / Vendor tabs (filter `side`): Enterprise ID, trunk ID, Enterprise Name,
+     *     Trunk Name, IP Address, Number of Connections, Status (online / offline / stopped), and for vendors the Queue
+     *     (messages waiting).
+     */
+    post: operations["queryNetworkBinds"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/network-binds/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Network Status CSV / Excel
+     * @description Same filter and sort as the list.
+     */
+    post: operations["exportNetworkBinds"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/network-binds/{side}/{id}/sessions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * SMPP sessions of a trunk (§13.1)
+     * @description Each bound session: session ID, remote IP and port, bind type, bound since, messages submitted and receipts
+     *     waiting for that session (receipts go back on the session and IP the message came from).
+     */
+    get: operations["listBindSessions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/network-binds/{side}/{id}/start": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start: bind a vendor trunk, or let a customer bind again
+     * @description Vendor: the switch opens its connections. Customer: binds are accepted again (the customer reconnects).
+     */
+    post: operations["startTrunkBind"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/network-binds/{side}/{id}/stop": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop: unbind a vendor trunk, or kick a customer's sessions
+     * @description Stopped trunks stay stopped until Start. Messages waiting in a vendor queue are re-routed.
+     */
+    post: operations["stopTrunkBind"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/signaling-captures/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List signaling captures (server-side filter, sort and paging)
+     * @description Signaling Deck and PCAP Trace (§9.2): captured SMPP trace files with Sr. No., File Name, File Size, status and
+     *     Update Time (UTC).
+     */
+    post: operations["querySignalingCaptures"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/signaling-captures": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start a capture (Signaling Deck)
+     * @description Filter (IP address or range), Max Duration (s), Max File Size (bytes). The capture stops at whichever limit comes
+     *     first, or on Stop. At most 3 captures run at a time (409).
+     */
+    post: operations["startSignalingCapture"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/signaling-captures/{id}/stop": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop a running capture
+     * @description The file keeps what was captured.
+     */
+    post: operations["stopSignalingCapture"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/signaling-captures/{id}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download the trace (pcap)
+     * @description libpcap file with the SMPP packets (opens in Wireshark).
+     */
+    get: operations["downloadSignalingCapture"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-simulator": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Route Simulator (§9.2)
+     * @description Runs a message through the customer trunk as the switch would: translation rules, HLR rule, destination,
+     *     customer rate, route rules in order, chosen vendor, cost and margin. Test SMS also sends it (the mock answers with
+     *     a message ID and a simulated outcome; no EDR is written).
+     */
+    post: operations["runRouteSimulator"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/network-diagnosis": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Network Diagnosis: ping, trace route, MTR, telnet from the switch host (§9.2)
+     * @description Count, Destination, Source, Port (telnet). Output as the tool prints it. The mock answers with simulated output
+     *     and never sends packets.
+     */
+    post: operations["runNetworkDiagnosis"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -8984,6 +9529,421 @@ export type components = {
         department: string;
       }[];
     };
+    /** @description One message attempt with both legs (§9.1 EDR schema). */
+    EdrRow: {
+      /** @description EDR UUID. */
+      id: string;
+      startTime: components["schemas"]["Timestamp"];
+      submitTime: components["schemas"]["Timestamp"];
+      submitRespTime: components["schemas"]["Timestamp"] | null;
+      deliveryTime: components["schemas"]["Timestamp"] | null;
+      /** @description MT or MO. */
+      type: string;
+      businessCompanyId: number;
+      productCategoryId: number;
+      productCategory: string | null;
+      customerEnterpriseId: number;
+      customerEnterprise: string | null;
+      customerTrunkId: number;
+      customerTrunk: string | null;
+      customerIp: string;
+      customerPort: number;
+      /** @description SMPP session that submitted (§13.1). */
+      customerSessionId: string;
+      /** @description TX, RX or TR. */
+      customerBindType: string;
+      protocol: string;
+      customerMsgId: string;
+      srcTon: number;
+      srcNpi: number;
+      dstTon: number;
+      dstNpi: number;
+      /** @description data_coding (0 GSM 7-bit … 8 UCS-2). */
+      coding: number;
+      /** @description SRC Addr. */
+      senderId: string;
+      /** @description Dest Addr. */
+      dnid: string;
+      /** @description Routed Dest Addr (after translation). */
+      routedDnid: string;
+      messageText: string;
+      customerMccmnc: string;
+      mcc: string;
+      mnc: string;
+      /** @description ISO code. */
+      country: string;
+      customerBillingType: string;
+      customerRateTableId: number;
+      customerRate: number;
+      customerCurrency: string;
+      /** @description Rate in the base currency. */
+      customerSysRate: number;
+      /** @description Customer translation rules applied. */
+      translationRuleIds: number[];
+      /** @description Status reported to the customer. */
+      customerMsgStatus: string;
+      /** @description 0 = not routed. */
+      vendorEnterpriseId: number;
+      vendorEnterprise: string | null;
+      /** @description 0 = not routed. */
+      vendorTrunkId: number;
+      vendorTrunk: string | null;
+      vendorIp: string;
+      vendorPort: number;
+      vendorMsgId: string;
+      vendorMccmnc: string;
+      vendorBillingType: string;
+      vendorRateTableId: number;
+      vendorRate: number;
+      vendorCurrency: string;
+      vendorSysRate: number;
+      vendorExRate: number;
+      vendorTranslationRuleIds: number[];
+      routeRuleId: number;
+      routeRuleGroupId: number;
+      /** @description whitelist, warmup, split … (§13.27). */
+      routeDecidedBy: string;
+      dlrReroute: boolean;
+      /** @description 0 = not a repush. */
+      repushRequestId: number;
+      attemptNo: number;
+      isFinalAttempt: boolean;
+      isSubmitSuccess: boolean;
+      /** @description SMPP command_status (§2); 0 = OK. */
+      causeCode: number;
+      /** @description Name of the cause code, e.g. ESME_RINVDSTADR. */
+      causeText: string;
+      /** @description Delivery receipt stat (DELIVRD, UNDELIV …); empty while none. */
+      msgStatus: string;
+      deliveryError: string;
+      networkError: number;
+      registeredDelivery: number;
+      /** @description Segments. */
+      msgCount: number;
+      udh: string;
+      deliveryDelaySeconds: number;
+      isBuffered: boolean;
+      isCustomerBillable: boolean;
+      isVendorBillable: boolean;
+      /** @description Customer currency. */
+      revenue: number;
+      /** @description Vendor currency. */
+      cost: number;
+      /** @description Base currency. */
+      revenueSys: number;
+      /** @description Base currency. */
+      costSys: number;
+      hlrProviderId: number;
+      hlrProvider: string | null;
+      /** @description none, cached or live. */
+      hlrFetchType: string;
+      hlrIsPorted: boolean;
+      hlrIsAccomplished: boolean;
+      hlrErrorCode: number;
+      hlrCostSys: number;
+    };
+    EdrPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["EdrRow"][];
+    };
+    /** @description A message rejected before routing. */
+    FailedEdrRow: {
+      id: string;
+      startTime: components["schemas"]["Timestamp"];
+      customerEnterpriseId: number;
+      customerEnterprise: string | null;
+      customerTrunkId: number;
+      customerTrunk: string | null;
+      customerIp: string;
+      customerPort: number;
+      customerMsgId: string;
+      senderId: string;
+      dnid: string;
+      customerMccmnc: string;
+      country: string;
+      causeCode: number;
+      causeText: string;
+      messageText: string;
+    };
+    FailedEdrPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["FailedEdrRow"][];
+    };
+    EdrTemplateFields: {
+      name: string;
+      /** @description EDR field names (see /meta/lists/edrs/fields), in display order. */
+      columns: string[];
+    };
+    EdrTemplateInput: components["schemas"]["EdrTemplateFields"];
+    EdrTemplateRow: components["schemas"]["EdrTemplateFields"] & {
+      id: components["schemas"]["Id"];
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    EdrTemplatePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["EdrTemplateRow"][];
+    };
+    EdrTemplateSaved: {
+      record: components["schemas"]["EdrTemplateRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    /** @description The list's filter, quick search and sort (no paging). */
+    EdrExportQuery: {
+      filter?: components["schemas"]["FilterGroup"];
+      search?: string;
+      sort?: components["schemas"]["SortKey"][];
+    };
+    EdrDownloadInput: {
+      /** @enum {string} */
+      kind: "edr" | "failed_edr";
+      query: components["schemas"]["EdrExportQuery"];
+      /** @enum {string} */
+      fileType: "csv" | "xlsx";
+      /** @description EDR Template; null = use `columns`. */
+      templateId: components["schemas"]["Id"] | null;
+      /** @description Used when no template is given; null with no template = the list's default columns. */
+      columns: string[] | null;
+    };
+    EdrDownloadRow: {
+      /** @description EDR No. */
+      id: components["schemas"]["Id"];
+      /** @description edr or failed_edr. */
+      kind: string;
+      /** @description pending, inprogress, success, failed or cancelled. */
+      status: string;
+      fileName: string | null;
+      /** @description csv or xlsx. */
+      fileType: string;
+      /** @description 0–100. */
+      progress: number;
+      /** @description Rows written. */
+      rows: number | null;
+      sizeBytes: number | null;
+      /** @description The filters in words. */
+      filterSummary: string;
+      template: string | null;
+      /** @description Request Start Time. */
+      requestedAt: components["schemas"]["Timestamp"];
+      /** @description Request End Time. */
+      finishedAt: components["schemas"]["Timestamp"] | null;
+      error: string | null;
+      requestedBy: string | null;
+    };
+    EdrDownloadPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["EdrDownloadRow"][];
+    };
+    TroubleTicketFields: {
+      /** @enum {string} */
+      sendTo: "customer" | "vendor";
+      /** @description Required for vendor tickets. */
+      vendorTrunkId: components["schemas"]["Id"] | null;
+      templateId: components["schemas"]["Id"];
+      /** @description Empty = the template's subject. */
+      subject: string;
+      /** @description EDR field names (see /meta/lists/edrs/fields), in display order. */
+      columns: string[];
+      edrIds: string[];
+    };
+    TroubleTicketPreviewInput: components["schemas"]["TroubleTicketFields"];
+    TroubleTicketInput: components["schemas"]["TroubleTicketFields"] & {
+      attachment: {
+        name: string;
+        /** @description At most 5 MB once decoded. */
+        contentBase64: string;
+      } | null;
+    };
+    TroubleTicketResult: {
+      emailLogId: components["schemas"]["Id"];
+      enterprise: string;
+      recipients: string[];
+      /** @description EDRs in the ticket. */
+      rows: number;
+    };
+    RepushInput: {
+      edrIds: string[];
+      vendorTrunkId: components["schemas"]["Id"];
+    };
+    RepushRequestRow: {
+      /** @description Info ID. */
+      id: components["schemas"]["Id"];
+      /** @description Total EDR Count. */
+      edrCount: number;
+      /** @description Selected EDRs that could not be repushed (delivered, or not a final attempt). */
+      skipped: number;
+      vendorTrunkId: components["schemas"]["Id"];
+      vendorTrunk: string;
+      /** @description pending or done. */
+      status: string;
+      delivered: number;
+      failed: number;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+    };
+    RepushRequestPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RepushRequestRow"][];
+    };
+    NetworkBindRow: {
+      /** @description side-trunkId, e.g. customer-12. */
+      id: string;
+      /** @description customer or vendor. */
+      side: string;
+      trunkId: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      trunkName: string;
+      /** @description Remote IPs of the bound sessions (customer) or the vendor's host IPs. */
+      ipAddresses: string[];
+      /** @description Bound sessions now. */
+      connections: number;
+      maxConnections: number;
+      /** @description online, offline or stopped (by a user). */
+      status: string;
+      /** @description Vendor tab: messages waiting; null for customers. */
+      queue: number | null;
+      /** @description Messages per second now. */
+      tps: number;
+      /** @description When the status last changed. */
+      since: components["schemas"]["Timestamp"];
+      /** @description Who pressed Start / Stop last. */
+      changedBy: string | null;
+    };
+    NetworkBindPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["NetworkBindRow"][];
+    };
+    NetworkExportInput: {
+      query: components["schemas"]["EdrExportQuery"];
+      /** @enum {string} */
+      fileType: "csv" | "excel";
+    };
+    BindSessionList: {
+      sessions: {
+        sessionId: string;
+        ip: string;
+        port: number;
+        /** @description TX, RX or TR. */
+        bindType: string;
+        since: components["schemas"]["Timestamp"];
+        /** @description Messages submitted on this session today. */
+        submitted: number;
+        /** @description Delivery receipts waiting for this session (§13.1). */
+        receiptsPending: number;
+      }[];
+    };
+    SignalingCaptureInput: {
+      /** @description IPv4 / IPv6 address or CIDR range; null = all SMPP traffic. */
+      ipFilter: string | null;
+      maxDurationSeconds: number;
+      maxFileSizeBytes: number;
+    };
+    SignalingCaptureRow: {
+      /** @description Sr. No. */
+      id: components["schemas"]["Id"];
+      fileName: string;
+      ipFilter: string | null;
+      /** @description running, done, failed or stopped. */
+      status: string;
+      sizeBytes: number;
+      packets: number;
+      maxDurationSeconds: number;
+      maxFileSizeBytes: number;
+      startedAt: components["schemas"]["Timestamp"];
+      /** @description Update Time. */
+      updatedAt: components["schemas"]["Timestamp"];
+      startedBy: string | null;
+    };
+    SignalingCapturePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["SignalingCaptureRow"][];
+    };
+    RouteSimulatorInput: {
+      customerTrunkId: components["schemas"]["Id"];
+      senderId?: string;
+      receiver: string;
+      /** @description Overrides the destination found from the number. */
+      mccmnc?: string | null;
+      sourceTon: number;
+      sourceNpi: number;
+      destTon: number;
+      destNpi: number;
+      /** @description Service Type Routing. */
+      serviceType?: string | null;
+      text?: string;
+      dataCoding: number;
+      /**
+       * @description Also send it (Test SMS).
+       * @default false
+       */
+      testSms: boolean;
+    };
+    MessageEncoding: {
+      dataCoding: number;
+      /** @description e.g. GSM 7-bit, UCS-2. */
+      label: string;
+      /** @description Characters (GSM extension characters count twice). */
+      chars: number;
+      bitsPerChar: number;
+      /** @description SMS per message. */
+      segments: number;
+      /** @description Message size in bytes. */
+      bytes: number;
+    };
+    RouteSimulatorResult: {
+      trunk: {
+        id: components["schemas"]["Id"];
+        name: string;
+        enterprise: string;
+      };
+      translation: components["schemas"]["TrunkRulesTestResult"];
+      /** @description After translation. */
+      sender: string;
+      /** @description After translation. */
+      receiver: string;
+      mccmnc: string | null;
+      destination: string | null;
+      encoding: components["schemas"]["MessageEncoding"];
+      customerRate: {
+        rate: number;
+        currency: string;
+        /** @description The rate in the platform currency. */
+        platformRate: number;
+        rateTableId: components["schemas"]["Id"];
+        rateTable: string;
+      } | null;
+      route: components["schemas"]["RouteSimulation"];
+      /** @description Buy rate of the chosen vendor for the destination. */
+      vendorCost: {
+        rate: number;
+        /** @description The platform currency. */
+        currency: string;
+      } | null;
+      /** @description (sell − cost) / sell per message, both in the platform currency. */
+      marginPct: number | null;
+      /** @description Why the message would be rejected, if it would. */
+      blocked: string | null;
+      testSms: {
+        messageId: string;
+        /** @enum {string} */
+        status: "DELIVRD" | "UNDELIV" | "REJECTD" | "EXPIRED";
+        detail: string;
+      } | null;
+    };
+    NetworkDiagnosisInput: {
+      /** @enum {string} */
+      tool: "ping" | "traceroute" | "mtr" | "telnet";
+      /** @description Host name or IP address. */
+      destination: string;
+      /** @description Source IP of the switch host. */
+      source?: string | null;
+      /** @description Required for telnet. */
+      port?: number | null;
+      /** @default 4 */
+      count: number;
+    };
+    NetworkDiagnosisResult: {
+      /** @description The command line run. */
+      command: string;
+      lines: string[];
+      exitCode: number;
+      durationMs: number;
+    };
     /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
@@ -9405,7 +10365,14 @@ export type components = {
       | "firewall_filters"
       | "traffic_alerts"
       | "sms_voice_rules"
-      | "broadcasts";
+      | "broadcasts"
+      | "edrs"
+      | "failed_edrs"
+      | "edr_templates"
+      | "edr_downloads"
+      | "repush_requests"
+      | "network_binds"
+      | "signaling_captures";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -17436,6 +18403,740 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryEdrs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of EDRs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewTroubleTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TroubleTicketPreviewInput"];
+      };
+    };
+    responses: {
+      /** @description The e-mail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendTroubleTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TroubleTicketInput"];
+      };
+    };
+    responses: {
+      /** @description Sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TroubleTicketResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  repushEdrs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RepushInput"];
+      };
+    };
+    responses: {
+      /** @description The repush request */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RepushRequestRow"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRepushRequests: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of repush requests */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RepushRequestPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryEdrTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of EDR templates */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrTemplatePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createEdrTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EdrTemplateInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrTemplateSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getEdrTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The template */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrTemplateRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateEdrTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EdrTemplateInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrTemplateSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveEdrTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrTemplateSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreEdrTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrTemplateSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  requestEdrDownload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EdrDownloadInput"];
+      };
+    };
+    responses: {
+      /** @description Queued */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrDownloadRow"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryEdrDownloads: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of EDR downloads */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrDownloadPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cancelEdrDownload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Cancelled */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EdrDownloadRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadEdrFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+          "application/vnd.ms-excel": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryFailedEdrs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of failed EDRs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FailedEdrPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryNetworkBinds: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of trunk bind status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NetworkBindPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportNetworkBinds: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NetworkExportInput"];
+      };
+    };
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+          "application/vnd.ms-excel": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listBindSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        side: "customer" | "vendor";
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The sessions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BindSessionList"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  startTrunkBind: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        side: "customer" | "vendor";
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The new status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NetworkBindRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  stopTrunkBind: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        side: "customer" | "vendor";
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The new status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NetworkBindRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  querySignalingCaptures: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of signaling captures */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignalingCapturePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  startSignalingCapture: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SignalingCaptureInput"];
+      };
+    };
+    responses: {
+      /** @description Started */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignalingCaptureRow"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  stopSignalingCapture: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stopped */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignalingCaptureRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadSignalingCapture: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The pcap file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/vnd.tcpdump.pcap": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  runRouteSimulator: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RouteSimulatorInput"];
+      };
+    };
+    responses: {
+      /** @description What would happen */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteSimulatorResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  runNetworkDiagnosis: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NetworkDiagnosisInput"];
+      };
+    };
+    responses: {
+      /** @description The tool's output */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NetworkDiagnosisResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };
   };
