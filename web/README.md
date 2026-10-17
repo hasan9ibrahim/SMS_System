@@ -73,6 +73,13 @@ or sets a vendor's cost and shows the routes and 7-day margin that change. The c
 account manager's sell rates with LCR 1–3. Profiles are edited in a dialog; Least cost route rules pick one in their
 Vendors section, and Route Rules' Bulk edit can apply one to many rules. Changes lists top-vendor changes and cost moves.
 
+**Security settings** (`/admin/security`, `src/pages/admin/security/`, §13.28): the password policy (lifetime,
+reminder days as chips, temporary password hours, minimum length, history; the always-on rules shown locked) with one
+Save that can be undone, staff and portal users by password state (staff counts open the Users list filtered on it),
+staff without 2FA, failed changes, reminders with Send due reminders now, and the latest security events. In the shell
+(`src/shell/PasswordGate.tsx`), a top-bar banner shows days left from the first reminder day; an expired, temporary or
+must-change password, or any answer with code `password_change_required`, leaves only the Change Password screen.
+
 **Migration center** (`/admin/migration`, `src/pages/admin/migration/`, §13.22): three views in the tab URL. Imports
 lists every import with its result; one opens with the dry-run report per entity, problems by row, Fix and re-run, Apply,
 Go live (per partner or all) and Roll back (undo of its change). New import takes one CSV per entity with a column

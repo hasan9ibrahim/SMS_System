@@ -608,7 +608,7 @@ export const PAGES: PageDef[] = [
     "/admin/security",
     "lock",
     "§13.28",
-    "5",
+    "5.21",
     "Password lifetime and 2FA rules",
   ),
   p(

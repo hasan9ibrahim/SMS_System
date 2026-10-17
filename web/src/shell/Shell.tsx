@@ -11,6 +11,7 @@ import { TabPane } from "./TabPane";
 import { TabStrip } from "./TabStrip";
 import { TopMenu } from "./TopMenu";
 import { ViewAsBanner } from "./ViewAsBanner";
+import { ChangePasswordScreen, PasswordBanner, usePasswordBlocked } from "./PasswordGate";
 import { listenForDocking, loadWorkspace, startWorkspaceSync, useTabs } from "./tabs";
 import { useThemeSync } from "./theme";
 import { recordPageView } from "../api/team";
@@ -100,10 +101,20 @@ export function Shell() {
   const activeId = useTabs((s) => s.activeId);
   const splitId = useTabs((s) => s.splitId);
   const split = splitId && splitId !== activeId && tabs.some((t) => t.id === splitId) ? splitId : null;
+  const blocked = usePasswordBlocked();
+  // §13.28: an expired, temporary or must-change password leaves only the Change Password screen.
+  if (blocked)
+    return (
+      <div className="shell">
+        <ChangePasswordScreen />
+        <FeedbackLayer />
+      </div>
+    );
   return (
     <div className="shell">
       <TopMenu />
       <TabStrip />
+      <PasswordBanner />
       <ViewAsBanner />
       <main className={`panes${split ? " split" : ""}`}>
         {ready ? (

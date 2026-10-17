@@ -31,6 +31,17 @@ interface DiffEntry {
  * map yet. Other fields (e.g. a vendor share inside a route) are history-only until then.
  */
 const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, string> }> = {
+  // Security settings (§13.28): one row.
+  security_settings: {
+    table: "security_settings",
+    columns: {
+      passwordLifetimeDays: "password_lifetime_days",
+      reminderDays: "reminder_days",
+      tempPasswordHours: "temp_password_hours",
+      minPasswordLength: "min_password_length",
+      passwordHistory: "password_history",
+    },
+  },
   // Admin (§11). Business companies write nested fields through applyBusinessCompanyField.
   user: {
     table: "users",

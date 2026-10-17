@@ -2,6 +2,7 @@
 // (Change Others Passwd, users and portal logins), the signed-in user's own password change and the
 // status cell.
 import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { PasswordCheckInput } from "@sms/contract";
 import { useChangeMyPassword, usePasswordCheck } from "../../api/admin";
 import { ApiError } from "../../api/client";
@@ -173,8 +174,21 @@ export const openTempPassword = (
 ) => ask<void>((d) => <TempPasswordDialog who={who} checkInput={checkInput} save={save} done={() => d()} />);
 
 /** §13.28: my own change - current password, the 2FA code, the rules; other sessions sign out. */
-function MyPasswordDialog({ userId, done }: { userId: number; done: () => void }) {
+/**
+ * The Change Password form (§13.28): current password, new password with each rule as it is met, and
+ * the 2FA code. `wrap` places it in a dialog or on the blocking Change Password screen.
+ */
+export function PasswordChangeForm({
+  userId,
+  onChanged,
+  wrap,
+}: {
+  userId: number;
+  onChanged: () => void;
+  wrap: (body: ReactNode, submit: ReactNode) => ReactNode;
+}) {
   const change = useChangeMyPassword();
+  const qc = useQueryClient();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -189,7 +203,9 @@ function MyPasswordDialog({ userId, done }: { userId: number; done: () => void }
             tone: "good",
             message: `Password changed. ${r.signedOutSessions ? `${r.signedOutSessions} other session(s) signed out. ` : ""}Next change by ${r.expiresAt.slice(0, 10)}.`,
           });
-          done();
+          // The top-bar reminder and the Change Password screen follow the new expiry (§13.28).
+          void qc.invalidateQueries({ queryKey: ["password-status"] });
+          onChanged();
         },
         onError: (e) => {
           setErrors(fieldErrors(e));
@@ -197,56 +213,69 @@ function MyPasswordDialog({ userId, done }: { userId: number; done: () => void }
         },
       },
     );
-  return (
-    <Modal
-      title="Change my password"
-      width={480}
-      onClose={done}
-      footer={
-        <>
-          <Button onClick={done}>Cancel</Button>
-          <Button
-            variant="primary"
-            icon="lock"
-            disabled={change.isPending || !current || !next || next !== confirm}
-            onClick={submit}
-          >
-            Change password
-          </Button>
-        </>
-      }
+  return wrap(
+    <div className="fgrid cols-1">
+      <PasswordInput
+        label="Current password *"
+        value={current}
+        onChange={setCurrent}
+        error={errors["/currentPassword"]}
+        autoComplete="current-password"
+        autoFocus
+      />
+      <PasswordInput label="New password *" value={next} onChange={setNext} error={errors["/newPassword"]} />
+      <PasswordInput
+        label="Confirm new password *"
+        value={confirm}
+        onChange={setConfirm}
+        error={confirm && confirm !== next ? "the passwords do not match" : undefined}
+      />
+      <PasswordRules input={{ password: next, userId }} />
+      <label className={`field${errors["/totpCode"] ? " invalid" : ""}`}>
+        <span>2FA code (from your authenticator app)</span>
+        <input
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+        />
+        {errors["/totpCode"] && <span className="ff-error">{errors["/totpCode"]}</span>}
+      </label>
+      <p className="muted small">Changing the password signs you out of every other session and device.</p>
+    </div>,
+    <Button
+      variant="primary"
+      icon="lock"
+      disabled={change.isPending || !current || !next || next !== confirm}
+      onClick={submit}
     >
-      <div className="fgrid cols-1">
-        <PasswordInput
-          label="Current password *"
-          value={current}
-          onChange={setCurrent}
-          error={errors["/currentPassword"]}
-          autoComplete="current-password"
-          autoFocus
-        />
-        <PasswordInput label="New password *" value={next} onChange={setNext} error={errors["/newPassword"]} />
-        <PasswordInput
-          label="Confirm new password *"
-          value={confirm}
-          onChange={setConfirm}
-          error={confirm && confirm !== next ? "the passwords do not match" : undefined}
-        />
-        <PasswordRules input={{ password: next, userId }} />
-        <label className={`field${errors["/totpCode"] ? " invalid" : ""}`}>
-          <span>2FA code (from your authenticator app)</span>
-          <input
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-          />
-          {errors["/totpCode"] && <span className="ff-error">{errors["/totpCode"]}</span>}
-        </label>
-        <p className="muted small">Changing the password signs you out of every other session and device.</p>
-      </div>
-    </Modal>
+      Change password
+    </Button>,
+  );
+}
+
+function MyPasswordDialog({ userId, done }: { userId: number; done: () => void }) {
+  return (
+    <PasswordChangeForm
+      userId={userId}
+      onChanged={done}
+      wrap={(body, submit) => (
+        <Modal
+          title="Change my password"
+          width={480}
+          onClose={done}
+          footer={
+            <>
+              <Button onClick={done}>Cancel</Button>
+              {submit}
+            </>
+          }
+        >
+          {body}
+        </Modal>
+      )}
+    />
   );
 }
 

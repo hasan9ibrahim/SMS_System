@@ -9089,6 +9089,90 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/security/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Security settings (§13.28)
+     * @description Password lifetime, reminder days, temporary password validity, minimum length and history.
+     */
+    get: operations["getSecuritySettings"];
+    /**
+     * Change the security settings
+     * @description Administrators only. One undoable change. Expiry dates, reminders and the Users list follow at once.
+     */
+    put: operations["updateSecuritySettings"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/security/overview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Password and 2FA overview (§13.28)
+     * @description Staff and portal users by password state, users without 2FA, failed attempts, reminders and the latest security events.
+     */
+    get: operations["getSecurityOverview"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/security/reminders/run": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send due password reminders now
+     * @description Normally hourly. An e-mail at each reminder day (never with a password or a sign-in link), once per day mark and password.
+     */
+    post: operations["runPasswordReminders"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/me/password-status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * My password status (§13.28)
+     * @description Days left, the top-bar banner, and whether only the Change Password screen works.
+     */
+    get: operations["getMyPasswordStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -9539,6 +9623,8 @@ export type components = {
         path: string;
         message: string;
       }[];
+      /** @description Machine-readable reason. password_change_required (§13.28): the signed-in user's password expired or must be changed; every call except the session, health and password ones answers 403 with this code until it is. */
+      code?: string;
     };
     Health: {
       /** @enum {string} */
@@ -13156,7 +13242,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19) and credential_transfer (§13.22, to the other administrators).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators) and password_reminder (§13.28).
      * @enum {string}
      */
     EmailType:
@@ -13182,7 +13268,8 @@ export type components = {
       | "invoice_rejection"
       | "monitoring_alert"
       | "cleanup_summary"
-      | "credential_transfer";
+      | "credential_transfer"
+      | "password_reminder";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -15903,6 +15990,101 @@ export type components = {
     MigrationActivateResult: {
       activated: number;
       change: components["schemas"]["Change"] | null;
+    };
+    SecuritySettings: {
+      /** @description Days a password is valid. Can be changed, never turned off (§13.28). */
+      passwordLifetimeDays: number;
+      /** @description Days before expiry when the banner shows and an e-mail goes out (default 7, 3, 1). */
+      reminderDays: number[];
+      /** @description Hours an admin-set temporary password is valid (default 24). */
+      tempPasswordHours: number;
+      /** @description Never below 12 (§13.28). */
+      minPasswordLength: number;
+      /** @description A new password may not be one of the last N (never below 12). */
+      passwordHistory: number;
+      /** @description Always true: 2FA is asked at every login and on every password change. */
+      twoFactorRequired: boolean;
+      /** @description Entries in the known-leaked password list checked on every new password. */
+      leakedListSize: number;
+      /** @description The Users list's "expiring" filter: this many days or less left. */
+      expiringDays: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    SecuritySettingsInput: {
+      /** @description Days a password is valid. Can be changed, never turned off (§13.28). */
+      passwordLifetimeDays: number;
+      /** @description Days before expiry when the banner shows and an e-mail goes out (default 7, 3, 1). */
+      reminderDays: number[];
+      /** @description Hours an admin-set temporary password is valid (default 24). */
+      tempPasswordHours: number;
+      /** @description Never below 12 (§13.28). */
+      minPasswordLength: number;
+      /** @description A new password may not be one of the last N (never below 12). */
+      passwordHistory: number;
+    };
+    SecuritySettingsSaved: {
+      record: components["schemas"]["SecuritySettings"];
+      change: components["schemas"]["Change"] | null;
+    };
+    PasswordStateCounts: {
+      total: number;
+      ok: number;
+      expiring: number;
+      expired: number;
+      temporary: number;
+      mustChange: number;
+      /** @description Staff only: users who have not set up 2FA yet. */
+      without2fa: number;
+    };
+    /** @enum {string} */
+    SecurityEventKind: "changed" | "failed" | "forced" | "temporary" | "reminder" | "settings";
+    SecurityEvent: {
+      id: string;
+      at: components["schemas"]["Timestamp"];
+      kind: components["schemas"]["SecurityEventKind"];
+      userId: components["schemas"]["Id"] | null;
+      userName: string | null;
+      /** @description A customer portal user. */
+      portal: boolean;
+      ip: string | null;
+      summary: string;
+    };
+    SecurityOverview: {
+      settings: components["schemas"]["SecuritySettings"];
+      staff: components["schemas"]["PasswordStateCounts"];
+      portal: components["schemas"]["PasswordStateCounts"];
+      failedAttempts24h: number;
+      remindersSent7d: number;
+      lastReminderRunAt: components["schemas"]["Timestamp"] | null;
+      events: components["schemas"]["SecurityEvent"][];
+    };
+    PasswordReminderRun: {
+      checked: number;
+      sent: number;
+      /** @description Due, but that reminder already went out for this password. */
+      skipped: number;
+      recipients: {
+        userId: components["schemas"]["Id"];
+        userName: string;
+        portal: boolean;
+        daysLeft: number;
+      }[];
+    };
+    /** @enum {string} */
+    PasswordState: "ok" | "expiring" | "expired" | "temporary" | "must_change";
+    PasswordStatus: {
+      state: components["schemas"]["PasswordState"];
+      changedAt: components["schemas"]["Timestamp"];
+      expiresAt: components["schemas"]["Timestamp"];
+      /** @description Negative when expired. */
+      daysLeft: number;
+      reminderDays: number[];
+      /** @description Show the top-bar reminder (days left is one of the reminder days or fewer). */
+      banner: boolean;
+      /** @description Only the Change Password screen works until the password is changed; every other call answers 403 with code password_change_required. */
+      blocked: boolean;
+      totpEnabled: boolean;
     };
     /**
      * @description Time frame for traffic figures (§13.27).
@@ -30258,6 +30440,123 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getSecuritySettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SecuritySettings"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateSecuritySettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SecuritySettingsInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SecuritySettingsSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getSecurityOverview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The overview */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SecurityOverview"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  runPasswordReminders: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What was sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordReminderRun"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMyPasswordStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordStatus"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };
   };

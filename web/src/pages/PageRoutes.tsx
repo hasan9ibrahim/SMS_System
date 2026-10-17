@@ -18,6 +18,7 @@ import { VisibilityPage } from "./admin/visibility/VisibilityPage";
 import { TeamReportPage } from "./reports/team/TeamReportPage";
 import { CleanupPage } from "./admin/cleanup/CleanupPage";
 import { MigrationPage } from "./admin/migration/MigrationPage";
+import { SecurityPage } from "./admin/security/SecurityPage";
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
@@ -93,6 +94,7 @@ const BUILT = new Set([
   "/reports/team",
   "/admin/cleanup",
   "/admin/migration",
+  "/admin/security",
   "/rates/mccmnc",
   "/rates/categories",
   "/rates/countries",
@@ -268,6 +270,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/reports/team" element={<TeamReportPage />} />
       <Route path="/admin/cleanup" element={<CleanupPage />} />
       <Route path="/admin/migration" element={<MigrationPage />} />
+      <Route path="/admin/security" element={<SecurityPage />} />
       <Route path="/monitoring/alert-rules" element={<AlertRulesPage />} />
       <Route path="/monitoring/incidents" element={<IncidentsPage />} />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (

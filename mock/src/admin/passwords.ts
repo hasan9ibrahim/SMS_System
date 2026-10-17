@@ -11,12 +11,47 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-/** §13.28: 30 days by default (Admin › Security settings arrives in a later step). */
-export const PASSWORD_LIFETIME_DAYS = Number(process.env.PASSWORD_LIFETIME_DAYS ?? 30);
-/** §13.28: an admin-set temporary password is valid 24 hours. */
-export const TEMP_PASSWORD_HOURS = 24;
-export const PASSWORD_HISTORY = 12;
+/** §13.28 floors: the settings can raise these, never lower them (and the lifetime can't be turned off). */
 export const MIN_PASSWORD_LENGTH = 12;
+export const PASSWORD_HISTORY = 12;
+
+/** Admin › Security settings (§13.28), cached for a few seconds; loadPolicy refreshes it from the database. */
+export interface PasswordPolicy {
+  passwordLifetimeDays: number;
+  reminderDays: number[];
+  tempPasswordHours: number;
+  minPasswordLength: number;
+  passwordHistory: number;
+}
+export const DEFAULT_POLICY: PasswordPolicy = {
+  passwordLifetimeDays: Number(process.env.PASSWORD_LIFETIME_DAYS ?? 30),
+  reminderDays: [7, 3, 1],
+  tempPasswordHours: 24,
+  minPasswordLength: MIN_PASSWORD_LENGTH,
+  passwordHistory: PASSWORD_HISTORY,
+};
+let cached: { policy: PasswordPolicy; at: number } = { policy: DEFAULT_POLICY, at: 0 };
+export const policy = () => cached.policy;
+export const mapPolicy = (r: Record<string, unknown>): PasswordPolicy => ({
+  passwordLifetimeDays: Number(r.password_lifetime_days),
+  reminderDays: (r.reminder_days as number[]).map(Number).sort((a, b) => b - a),
+  tempPasswordHours: Number(r.temp_password_hours),
+  minPasswordLength: Number(r.min_password_length),
+  passwordHistory: Number(r.password_history),
+});
+export async function loadPolicy(
+  c: { query: (sql: string) => Promise<{ rows: Record<string, unknown>[] }> },
+  force = false,
+): Promise<PasswordPolicy> {
+  if (!force && Date.now() - cached.at < 5000) return cached.policy;
+  const { rows } = await c.query("SELECT * FROM security_settings WHERE id = 1");
+  cached = { policy: rows[0] ? mapPolicy(rows[0]) : DEFAULT_POLICY, at: Date.now() };
+  return cached.policy;
+}
+/** The lifetime as SQL, so lists and the gate follow the settings at once. */
+export const LIFETIME_SQL =
+  "make_interval(days => (SELECT password_lifetime_days FROM security_settings WHERE id = 1))";
+
 const DAY = 86_400_000;
 
 // scrypt N=4096 keeps the generator fast; the backend picks its own cost (BACKEND_TODO).
@@ -74,6 +109,7 @@ export function passwordRules(
   password: string,
   who: { username?: string | null; firstName?: string | null; lastName?: string | null },
   recentHashes: string[],
+  pol: PasswordPolicy = policy(),
 ): RuleResult[] {
   const p = password.toLowerCase();
   const names = [who.username, who.firstName, who.lastName]
@@ -82,8 +118,8 @@ export function passwordRules(
   return [
     {
       key: "length",
-      label: `At least ${MIN_PASSWORD_LENGTH} characters`,
-      met: [...password].length >= MIN_PASSWORD_LENGTH,
+      label: `At least ${pol.minPasswordLength} characters`,
+      met: [...password].length >= pol.minPasswordLength,
     },
     {
       key: "not_name",
@@ -92,14 +128,17 @@ export function passwordRules(
     },
     {
       key: "not_recent",
-      label: `Not one of your last ${PASSWORD_HISTORY} passwords`,
+      label: `Not one of your last ${pol.passwordHistory} passwords`,
       met: password.length > 0 && !recentHashes.some((h) => verifyPassword(password, h)),
     },
     { key: "not_leaked", label: "Not on a known-leaked password list", met: password.length > 0 && !LEAKED.has(p) },
   ];
 }
 
-export const passwordExpiry = (changedAt: Date) => new Date(changedAt.getTime() + PASSWORD_LIFETIME_DAYS * DAY);
+export const passwordExpiry = (changedAt: Date, pol: PasswordPolicy = policy()) =>
+  new Date(changedAt.getTime() + pol.passwordLifetimeDays * DAY);
+/** Known-leaked list size, for the settings page. */
+export const leakedListSize = () => LEAKED.size;
 export const daysLeft = (expiresAt: Date, now = Date.now()) => Math.floor((expiresAt.getTime() - now) / DAY);
 
 // ---------------------------------------------------------------- TOTP (RFC 6238)

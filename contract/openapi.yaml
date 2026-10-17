@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.31.0
+  version: 0.32.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -13249,6 +13249,108 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /security/settings:
+    get:
+      tags:
+      - admin
+      operationId: getSecuritySettings
+      summary: Security settings (§13.28)
+      description: Password lifetime, reminder days, temporary password validity, minimum length and history.
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritySettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateSecuritySettings
+      summary: Change the security settings
+      description: Administrators only. One undoable change. Expiry dates, reminders and the Users list follow at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecuritySettingsInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritySettingsSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /security/overview:
+    get:
+      tags:
+      - admin
+      operationId: getSecurityOverview
+      summary: Password and 2FA overview (§13.28)
+      description: Staff and portal users by password state, users without 2FA, failed attempts, reminders and the latest security events.
+      responses:
+        '200':
+          description: The overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityOverview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /security/reminders/run:
+    post:
+      tags:
+      - admin
+      operationId: runPasswordReminders
+      summary: Send due password reminders now
+      description: Normally hourly. An e-mail at each reminder day (never with a password or a sign-in link), once per day mark and password.
+      responses:
+        '200':
+          description: What was sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordReminderRun'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /me/password-status:
+    get:
+      tags:
+      - session
+      operationId: getMyPasswordStatus
+      summary: My password status (§13.28)
+      description: Days left, the top-bar banner, and whether only the Change Password screen works.
+      responses:
+        '200':
+          description: The status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -14029,6 +14131,9 @@ components:
                 description: JSON pointer into the request, e.g. `/filter/conditions/0/field`.
               message:
                 type: string
+        code:
+          type: string
+          description: "Machine-readable reason. password_change_required (§13.28): the signed-in user's password expired or must be changed; every call except the session, health and password ones answers 403 with this code until it is."
 
     # ------------------------------------------------------------------ system
     Health:
@@ -21523,8 +21628,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer]
-      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19) and credential_transfer (§13.22, to the other administrators).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators) and password_reminder (§13.28).
 
     EmailLogRow:
       type: object
@@ -28320,6 +28425,247 @@ components:
           oneOf:
           - $ref: '#/components/schemas/Change'
           - type: 'null'
+
+    # ------------------------------------------------------------- Security settings (§13.28)
+    SecuritySettings:
+      type: object
+      required:
+      - passwordLifetimeDays
+      - reminderDays
+      - tempPasswordHours
+      - minPasswordLength
+      - passwordHistory
+      - twoFactorRequired
+      - leakedListSize
+      - expiringDays
+      - updatedBy
+      - updatedAt
+      properties:
+        passwordLifetimeDays: &id001
+          type: integer
+          minimum: 7
+          maximum: 365
+          description: Days a password is valid. Can be changed, never turned off (§13.28).
+        reminderDays: &id002
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 30
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          description: Days before expiry when the banner shows and an e-mail goes out (default 7, 3, 1).
+        tempPasswordHours: &id003
+          type: integer
+          minimum: 1
+          maximum: 72
+          description: Hours an admin-set temporary password is valid (default 24).
+        minPasswordLength: &id004
+          type: integer
+          minimum: 12
+          maximum: 64
+          description: Never below 12 (§13.28).
+        passwordHistory: &id005
+          type: integer
+          minimum: 12
+          maximum: 24
+          description: A new password may not be one of the last N (never below 12).
+        twoFactorRequired:
+          type: boolean
+          description: 'Always true: 2FA is asked at every login and on every password change.'
+        leakedListSize:
+          type: integer
+          description: Entries in the known-leaked password list checked on every new password.
+        expiringDays:
+          type: integer
+          description: 'The Users list''s "expiring" filter: this many days or less left.'
+        updatedBy: &id008
+          type:
+          - string
+          - 'null'
+        updatedAt: &id007
+          $ref: '#/components/schemas/Timestamp'
+    SecuritySettingsInput:
+      type: object
+      additionalProperties: false
+      required:
+      - passwordLifetimeDays
+      - reminderDays
+      - tempPasswordHours
+      - minPasswordLength
+      - passwordHistory
+      properties:
+        passwordLifetimeDays: *id001
+        reminderDays: *id002
+        tempPasswordHours: *id003
+        minPasswordLength: *id004
+        passwordHistory: *id005
+    SecuritySettingsSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/SecuritySettings'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    PasswordStateCounts:
+      type: object
+      required:
+      - total
+      - ok
+      - expiring
+      - expired
+      - temporary
+      - mustChange
+      - without2fa
+      properties:
+        total: &id006
+          type: integer
+        ok: *id006
+        expiring: *id006
+        expired: *id006
+        temporary: *id006
+        mustChange: *id006
+        without2fa:
+          type: integer
+          description: 'Staff only: users who have not set up 2FA yet.'
+    SecurityEventKind:
+      type: string
+      enum:
+      - changed
+      - failed
+      - forced
+      - temporary
+      - reminder
+      - settings
+    SecurityEvent:
+      type: object
+      required:
+      - id
+      - at
+      - kind
+      - userId
+      - userName
+      - portal
+      - ip
+      - summary
+      properties:
+        id:
+          type: string
+        at: *id007
+        kind:
+          $ref: '#/components/schemas/SecurityEventKind'
+        userId:
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        userName: *id008
+        portal:
+          type: boolean
+          description: A customer portal user.
+        ip: *id008
+        summary:
+          type: string
+    SecurityOverview:
+      type: object
+      required:
+      - settings
+      - staff
+      - portal
+      - failedAttempts24h
+      - remindersSent7d
+      - lastReminderRunAt
+      - events
+      properties:
+        settings:
+          $ref: '#/components/schemas/SecuritySettings'
+        staff:
+          $ref: '#/components/schemas/PasswordStateCounts'
+        portal:
+          $ref: '#/components/schemas/PasswordStateCounts'
+        failedAttempts24h: *id006
+        remindersSent7d: *id006
+        lastReminderRunAt:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityEvent'
+          maxItems: 100
+    PasswordReminderRun:
+      type: object
+      required:
+      - checked
+      - sent
+      - skipped
+      - recipients
+      properties:
+        checked: *id006
+        sent: *id006
+        skipped:
+          type: integer
+          description: Due, but that reminder already went out for this password.
+        recipients:
+          type: array
+          items:
+            type: object
+            required:
+            - userId
+            - userName
+            - portal
+            - daysLeft
+            properties:
+              userId:
+                $ref: '#/components/schemas/Id'
+              userName:
+                type: string
+              portal: &id009
+                type: boolean
+              daysLeft: *id006
+    PasswordState:
+      type: string
+      enum:
+      - ok
+      - expiring
+      - expired
+      - temporary
+      - must_change
+    PasswordStatus:
+      type: object
+      required:
+      - state
+      - changedAt
+      - expiresAt
+      - daysLeft
+      - reminderDays
+      - banner
+      - blocked
+      - totpEnabled
+      properties:
+        state:
+          $ref: '#/components/schemas/PasswordState'
+        changedAt: *id007
+        expiresAt: *id007
+        daysLeft:
+          type: integer
+          description: Negative when expired.
+        reminderDays:
+          type: array
+          items: *id006
+        banner:
+          type: boolean
+          description: Show the top-bar reminder (days left is one of the reminder days or fewer).
+        blocked:
+          type: boolean
+          description: Only the Change Password screen works until the password is changed; every other call answers 403 with code password_change_required.
+        totpEnabled: *id009
 
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:

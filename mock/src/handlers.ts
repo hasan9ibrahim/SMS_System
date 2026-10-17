@@ -231,6 +231,14 @@ import {
   saveMigrationMapping,
 } from "./api/migration.js";
 import {
+  getMyPasswordStatus,
+  getSecurityOverview,
+  getSecuritySettings,
+  runPasswordReminders,
+  updateSecuritySettings,
+} from "./api/security.js";
+import { invalidateGate } from "./admin/gate.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -518,7 +526,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.31.0";
+const VERSION = "0.32.0";
 MIGRATION_VERSION.value = VERSION;
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
@@ -680,6 +688,13 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   updateCleanupSettings,
   checkDuplicate,
 
+  // Security settings (§13.28)
+  getSecuritySettings,
+  updateSecuritySettings,
+  getSecurityOverview,
+  runPasswordReminders,
+  getMyPasswordStatus,
+
   // Migration Center (§13.22)
   getMigrationEntities,
   getMigrationTemplate,
@@ -694,7 +709,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   createMigrationImport,
   getMigrationImport,
   revalidateMigrationImport,
-  applyMigrationImport: (request, reply) => Promise.resolve(applyMigrationImport(request, reply)).finally(clearRouteCaches),
+  applyMigrationImport: (request, reply) =>
+    Promise.resolve(applyMigrationImport(request, reply)).finally(clearRouteCaches),
   activateMigrationTrunks,
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
@@ -1018,7 +1034,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveEmailTemplate,
   archivePortalUser,
   archiveUser,
-  changeMyPassword,
+  changeMyPassword: (request, reply) => Promise.resolve(changeMyPassword(request, reply)).finally(invalidateGate),
   checkPassword,
   cloneAccessGroup,
   cloneEmailTemplate,
@@ -1030,7 +1046,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   createUser,
   disableUserTotp,
   endUserSession,
-  forcePasswordChange,
+  forcePasswordChange: (request, reply) => Promise.resolve(forcePasswordChange(request, reply)).finally(invalidateGate),
   getAccessCatalog,
   getAccessGroup,
   getDepartment,
@@ -1045,7 +1061,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   restorePortalUser,
   restoreUser,
   setPortalUserPassword,
-  setUserPassword,
+  setUserPassword: (request, reply) => Promise.resolve(setUserPassword(request, reply)).finally(invalidateGate),
   setupUserTotp,
   updateAccessGroup,
   updateDepartment,
@@ -1074,7 +1090,11 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryBusinessCompanies: queryList("business_companies"),
   queryPortalUsers: queryList("customer_portal_users"),
   queryChanges: queryList("changes"),
-  undoChange: (request, reply) => Promise.resolve(undoChange(request, reply)).finally(clearRouteCaches),
+  undoChange: (request, reply) =>
+    Promise.resolve(undoChange(request, reply)).finally(() => {
+      clearRouteCaches();
+      invalidateGate();
+    }),
 
   listViews,
   createView,

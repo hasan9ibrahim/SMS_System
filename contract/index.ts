@@ -255,6 +255,16 @@ export type MigrationReport = Schemas["MigrationReport"];
 export type MigrationImport = Schemas["MigrationImport"];
 export type MigrationActivate = Schemas["MigrationActivate"];
 export type MigrationActivateResult = Schemas["MigrationActivateResult"];
+export type SecuritySettings = Schemas["SecuritySettings"];
+export type SecuritySettingsInput = Schemas["SecuritySettingsInput"];
+export type SecuritySettingsSaved = Schemas["SecuritySettingsSaved"];
+export type PasswordStateCounts = Schemas["PasswordStateCounts"];
+export type SecurityEventKind = Schemas["SecurityEventKind"];
+export type SecurityEvent = Schemas["SecurityEvent"];
+export type SecurityOverview = Schemas["SecurityOverview"];
+export type PasswordReminderRun = Schemas["PasswordReminderRun"];
+export type PasswordState = Schemas["PasswordState"];
+export type PasswordStatus = Schemas["PasswordStatus"];
 export type Destination = Schemas["Destination"];
 export type DestinationPage = Schemas["DestinationPage"];
 

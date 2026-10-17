@@ -11,7 +11,7 @@ import type {
   UserRow,
   UserSessionRow,
 } from "@sms/contract";
-import { PASSWORD_LIFETIME_DAYS } from "../admin/passwords.js";
+import { LIFETIME_SQL } from "../admin/passwords.js";
 import type { ListDef } from "./engine.js";
 import { listFields } from "./fields.js";
 
@@ -19,7 +19,7 @@ const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? n
 const str = (v: unknown) => (v as string | null) ?? null;
 const num = (v: unknown) => (v == null ? null : Number(v));
 const fullName = (a: string) => `(${a}.first_name || ' ' || ${a}.last_name)`;
-const LIFETIME = `interval '${PASSWORD_LIFETIME_DAYS} days'`;
+const LIFETIME = LIFETIME_SQL;
 
 // ---------------------------------------------------------------- users (§11, §13.28)
 

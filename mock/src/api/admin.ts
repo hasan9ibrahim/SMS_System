@@ -26,10 +26,10 @@ import {
   hashPassword,
   newTotpSecret,
   otpauthUri,
-  PASSWORD_HISTORY,
+  loadPolicy,
   passwordExpiry,
   passwordRules,
-  TEMP_PASSWORD_HOURS,
+  policy,
   verifyPassword,
   verifyTotp,
 } from "../admin/passwords.js";
@@ -246,7 +246,7 @@ const ruleErrors = (rules: ReturnType<typeof passwordRules>, path: string): Fiel
 
 async function recentHashes(c: Db, column: "user_id" | "portal_user_id", id: number): Promise<string[]> {
   const { rows } = await c.query(
-    `SELECT password_hash FROM password_history WHERE ${column} = $1 ORDER BY changed_at DESC LIMIT ${PASSWORD_HISTORY - 1}`,
+    `SELECT password_hash FROM password_history WHERE ${column} = $1 ORDER BY changed_at DESC LIMIT ${(await loadPolicy(c)).passwordHistory - 1}`,
     [id],
   );
   const table = column === "user_id" ? "users" : "customer_portal_users";
@@ -381,7 +381,7 @@ export function createUser(request: FastifyRequest, reply: FastifyReply) {
         password_hash: hash,
         password_changed_at: new Date(),
         must_change_password: true,
-        temp_password_expires_at: new Date(Date.now() + TEMP_PASSWORD_HOURS * 3600_000),
+        temp_password_expires_at: new Date(Date.now() + (await loadPolicy(pool)).tempPasswordHours * 3600_000),
         is_admin: false,
       });
       await c.query("INSERT INTO password_history (user_id, password_hash, changed_at) VALUES ($1, $2, now())", [
@@ -430,7 +430,7 @@ export function setUserPassword(request: FastifyRequest, reply: FastifyReply) {
     const change = await inTransaction(pool, async (c) => {
       await c.query(
         `UPDATE users SET password_hash = $2, password_changed_at = now(), must_change_password = true,
-                temp_password_expires_at = now() + interval '${TEMP_PASSWORD_HOURS} hours', updated_at = now() WHERE id = $1`,
+                temp_password_expires_at = now() + make_interval(hours => ${(await loadPolicy(pool)).tempPasswordHours}), updated_at = now() WHERE id = $1`,
         [id, hash],
       );
       await c.query("INSERT INTO password_history (user_id, password_hash, changed_at) VALUES ($1, $2, now())", [
@@ -443,7 +443,7 @@ export function setUserPassword(request: FastifyRequest, reply: FastifyReply) {
         c,
         "user_password",
         id,
-        `Temporary password set for ${u.username} (valid ${TEMP_PASSWORD_HOURS} h)`,
+        `Temporary password set for ${u.username} (valid ${policy().tempPasswordHours} h)`,
       );
     });
     return { record: await loadUser(pool, id), change };
@@ -1089,7 +1089,7 @@ export function createPortalUser(request: FastifyRequest, reply: FastifyReply) {
           password_hash: hash,
           password_changed_at: new Date(),
           must_change_password: true,
-          temp_password_expires_at: new Date(Date.now() + TEMP_PASSWORD_HOURS * 3600_000),
+          temp_password_expires_at: new Date(Date.now() + (await loadPolicy(pool)).tempPasswordHours * 3600_000),
         },
       );
       await c.query("INSERT INTO password_history (portal_user_id, password_hash, changed_at) VALUES ($1, $2, now())", [
@@ -1120,7 +1120,7 @@ export function setPortalUserPassword(request: FastifyRequest, reply: FastifyRep
     const change = await inTransaction(pool, async (c) => {
       await c.query(
         `UPDATE customer_portal_users SET password_hash = $2, password_changed_at = now(), must_change_password = true,
-                temp_password_expires_at = now() + interval '${TEMP_PASSWORD_HOURS} hours', updated_at = now() WHERE id = $1`,
+                temp_password_expires_at = now() + make_interval(hours => ${(await loadPolicy(pool)).tempPasswordHours}), updated_at = now() WHERE id = $1`,
         [id, hash],
       );
       await c.query("INSERT INTO password_history (portal_user_id, password_hash, changed_at) VALUES ($1, $2, now())", [

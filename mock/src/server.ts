@@ -5,6 +5,7 @@ import { handlers as defaultHandlers, type Handler } from "./handlers.js";
 import { ajvErrors, sendProblem } from "./problem.js";
 import { registerSocket } from "./live/socket.js";
 import { auditCall } from "./api/audit.js";
+import { GATE_OPEN, isBlocked } from "./admin/gate.js";
 import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } from "./visibility/context.js";
 import { restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
@@ -82,6 +83,12 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
                 `${op.operationId} is in the contract but not implemented by the mock yet`,
               );
             }
+            // An expired, temporary or must-change password opens only the Change Password screen (§13.28).
+            if (!GATE_OPEN.has(op.operationId) && (await isBlocked()))
+              return sendProblem(reply, 403, "Change your password to continue", {
+                detail: "Your password expired or must be changed. Only the Change Password screen works until then.",
+                code: "password_change_required",
+              });
             // The viewer and their visibility policy follow the request (§13.17).
             const ctx = contextOf(request);
             (request as unknown as { vis?: VisibilityContext }).vis = ctx;

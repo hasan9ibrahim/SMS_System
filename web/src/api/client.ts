@@ -23,10 +23,25 @@ export function setViewAs(id: number | null) {
     // Not kept across reloads then.
   }
 }
+/** Fired when the server answers 403 password_change_required (§13.28): the shell then shows only Change Password. */
+export const PASSWORD_REQUIRED_EVENT = "password-change-required";
+async function watchPasswordGate(response: Response) {
+  if (response.status !== 403) return;
+  try {
+    const body = (await response.clone().json()) as { code?: string };
+    if (body.code === "password_change_required") window.dispatchEvent(new Event(PASSWORD_REQUIRED_EVENT));
+  } catch {
+    // Not a problem document.
+  }
+}
 api.use({
   onRequest({ request }) {
     if (viewAsId) request.headers.set("X-View-As", String(viewAsId));
     return request;
+  },
+  async onResponse({ response }) {
+    await watchPasswordGate(response);
+    return response;
   },
 });
 
@@ -63,5 +78,8 @@ export async function unwrap<T>(call: Promise<{ data?: T; error?: unknown; respo
 export function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (viewAsId) headers.set("X-View-As", String(viewAsId));
-  return fetch(input, { ...init, headers });
+  return fetch(input, { ...init, headers }).then(async (res) => {
+    await watchPasswordGate(res);
+    return res;
+  });
 }
