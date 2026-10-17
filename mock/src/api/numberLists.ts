@@ -199,10 +199,17 @@ export function queryNumberListEntries(request: FastifyRequest, reply: FastifyRe
 }
 
 /** A live list, or a 404 / 400 reply. */
-async function liveList(db: Db, reply: FastifyReply, id: number): Promise<NumberList | FastifyReply> {
+/** The list when it can be edited; otherwise sends the problem and returns null (a reply is thenable). */
+async function liveList(db: Db, reply: FastifyReply, id: number): Promise<NumberList | null> {
   const list = await loadList(db, id);
-  if (!list) return notFound(reply, "Number list", id);
-  if (list.archivedAt) return sendProblem(reply, 400, "This number list is deleted; restore it before editing");
+  if (!list) {
+    notFound(reply, "Number list", id);
+    return null;
+  }
+  if (list.archivedAt) {
+    sendProblem(reply, 400, "This number list is deleted; restore it before editing");
+    return null;
+  }
   return list;
 }
 
@@ -257,7 +264,7 @@ export function addNumberListEntries(request: FastifyRequest, reply: FastifyRepl
   const { values } = request.body as NumberListEntriesInput;
   return withDb(reply, async (pool) => {
     const list = await liveList(pool, reply, id);
-    if (!("listType" in list)) return list;
+    if (!list) return reply;
     const existing = await liveValues(pool, id);
     const errors = [];
     const add = new Set<string>();
@@ -292,7 +299,7 @@ export function deleteNumberListEntries(request: FastifyRequest, reply: FastifyR
   const { ids } = request.body as IdList;
   return withDb(reply, async (pool) => {
     const list = await liveList(pool, reply, id);
-    if (!("listType" in list)) return list;
+    if (!list) return reply;
     const { rows } = await pool.query(
       "SELECT id, value FROM number_list_entries WHERE id = ANY($1) AND number_list_id = $2 AND deleted_at IS NULL",
       [ids, id],
@@ -328,7 +335,7 @@ export function importNumberListEntries(request: FastifyRequest, reply: FastifyR
         .filter((r) => r.value !== "");
   return withDb(reply, async (pool) => {
     const list = await liveList(pool, reply, id);
-    if (!("listType" in list)) return list;
+    if (!list) return reply;
     const run = new ImportRun(rows.length);
     const existing = await liveValues(pool, id);
     const seen = new Map<string, number>();

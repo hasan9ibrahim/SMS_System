@@ -381,8 +381,7 @@ export function updateTrunk(kind: TrunkKind) {
       const me = await getCurrentUser();
       const before = await loadTrunk(pool, k, id);
       if (!before) return notFound(reply, k, id);
-      const refused = await refuseMasked(reply, before.enterpriseId);
-      if (refused) return refused;
+      if (await refuseMasked(reply, before.enterpriseId)) return reply;
       if (before.archived)
         return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
       const errors = await checkInput(pool, k, input, before);

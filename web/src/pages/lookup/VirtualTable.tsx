@@ -26,6 +26,7 @@ export function VirtualTable<Row>({
   empty,
   rowClass,
   label,
+  onRowClick,
 }: {
   rows: Row[];
   columns: VColumn<Row>[];
@@ -36,6 +37,8 @@ export function VirtualTable<Row>({
   empty?: ReactNode;
   rowClass?: (row: Row) => string | undefined;
   label: string;
+  /** Selects a row (e.g. to open it in a side panel). */
+  onRowClick?: (row: Row) => void;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -85,8 +88,9 @@ export function VirtualTable<Row>({
               <div
                 key={rowKey(row)}
                 role="row"
-                className={`vt-row${rowClass?.(row) ? ` ${rowClass(row)}` : ""}`}
+                className={`vt-row${rowClass?.(row) ? ` ${rowClass(row)}` : ""}${onRowClick ? " clickable" : ""}`}
                 style={{ transform: `translateY(${item.start}px)`, height: rowHeight }}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((c, i) => (
                   <div

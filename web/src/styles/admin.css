@@ -356,3 +356,63 @@
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-warning) 10%, var(--color-panel));
 }
+
+/* Migration center (§13.22) */
+.mig-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.mig-table th,
+.mig-table td {
+  padding: 5px 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+.mig-table th {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.mig-table .num {
+  text-align: right;
+}
+.mig-table input:not([type="file"]),
+.mig-table select {
+  width: 100%;
+}
+.mig-files input[type="file"] {
+  max-width: 200px;
+}
+.mig-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mig-issues {
+  flex: 1;
+  min-height: 260px;
+}
+.mig-issues .vt {
+  flex: 1;
+  min-height: 200px;
+}
+.mig-creds {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mig-foot {
+  margin-right: auto;
+}
+.mig-steps {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

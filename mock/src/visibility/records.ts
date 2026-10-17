@@ -15,12 +15,16 @@ export async function isMasked(enterpriseId: number): Promise<boolean> {
 }
 
 /** 403 for a save to a record the viewer sees masked; null when allowed. */
-export async function refuseMasked(reply: FastifyReply, enterpriseId: number): Promise<FastifyReply | null> {
-  return (await isMasked(enterpriseId))
-    ? sendProblem(reply, 403, "This record belongs to another account manager", {
-        detail: "Your visibility policy masks it (§13.17), so it cannot be changed here.",
-      })
-    : null;
+/**
+ * Sends 403 when the viewer's policy masks the enterprise and returns true. (A Fastify reply is
+ * thenable, so it must not come back through `await`: callers get a boolean and return `reply`.)
+ */
+export async function refuseMasked(reply: FastifyReply, enterpriseId: number): Promise<boolean> {
+  if (!(await isMasked(enterpriseId))) return false;
+  sendProblem(reply, 403, "This record belongs to another account manager", {
+    detail: "Your visibility policy masks it (§13.17), so it cannot be changed here.",
+  });
+  return true;
 }
 
 async function contactsHidden(enterpriseId: number): Promise<boolean> {

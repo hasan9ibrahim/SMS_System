@@ -381,3 +381,6 @@ button.chip.accent {
   color: var(--color-accent);
   text-decoration: underline;
 }
+.vt-row.clickable {
+  cursor: pointer;
+}

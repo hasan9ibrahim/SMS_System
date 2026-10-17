@@ -268,8 +268,7 @@ export function updateEnterprise(request: FastifyRequest, reply: FastifyReply) {
     const me = await getCurrentUser();
     const before = await loadEnterprise(pool, id);
     if (!before) return sendProblem(reply, 404, `Enterprise ${id} not found`);
-    const refused = await refuseMasked(reply, id);
-    if (refused) return refused;
+    if (await refuseMasked(reply, id)) return reply;
     if (before.archived) return sendProblem(reply, 400, "This enterprise is archived; restore it before editing");
     const errors = await checkInput(pool, input, id);
     if (input.type !== before.type) {

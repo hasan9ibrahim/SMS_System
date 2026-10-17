@@ -8851,6 +8851,244 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/migration/entities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What can be exported and imported (§13.22)
+     * @description Entities in import order with sensitivity, matching key and the import template's fields (description, allowed values).
+     */
+    get: operations["getMigrationEntities"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/templates/{entity}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Import template (CSV)
+     * @description Header row and one example row.
+     */
+    get: operations["getMigrationTemplate"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/mappings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Saved column mappings
+     * @description Per source system and entity, including the ready mapping for the reference platform.
+     */
+    get: operations["getMigrationMappings"];
+    put?: never;
+    /**
+     * Save a column mapping
+     * @description Replaces the mapping of the same source system, entity and name.
+     */
+    post: operations["saveMigrationMapping"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/exports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export packages
+     * @description The latest 50.
+     */
+    get: operations["getMigrationExports"];
+    put?: never;
+    /**
+     * Make a full export package (§13.22)
+     * @description One encrypted file with every entity as its own CSV and a manifest of record counts and links. With credentials:
+     *     administrators only, 2FA code required, written to the Audit Trail and the other administrators are notified.
+     */
+    post: operations["createMigrationExport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/exports/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One export package
+     * @description Status and manifest.
+     */
+    get: operations["getMigrationExport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/exports/{id}/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A download link
+     * @description Works once and expires after 15 minutes; a package with credentials needs a 2FA code.
+     */
+    post: operations["createMigrationLink"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/downloads/{token}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download a package
+     * @description Single use: a second request answers 410.
+     */
+    get: operations["downloadMigrationPackage"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/imports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Imports
+     * @description The latest 50.
+     */
+    get: operations["getMigrationImports"];
+    put?: never;
+    /**
+     * Upload and dry-run an import (§13.22)
+     * @description Files exported from the old platform (CSV per entity, with a column mapping) or a package from a Migration export.
+     *     Validates everything in order and reports what would be created, updated or skipped, with every error. Nothing is written.
+     */
+    post: operations["createMigrationImport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/imports/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One import
+     * @description Its dry-run or completion report.
+     */
+    get: operations["getMigrationImport"];
+    /**
+     * Fix and re-run the dry run
+     * @description Replaces the files and settings and validates again.
+     */
+    put: operations["revalidateMigrationImport"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/imports/{id}/apply": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Apply the import
+     * @description Writes exactly what the dry run shows as one change in History; undoing that change rolls the whole import back.
+     */
+    post: operations["applyMigrationImport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/migration/imports/{id}/activate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Go live: activate imported trunks
+     * @description Per partner or all at once; one undoable change.
+     */
+    post: operations["activateMigrationTrunks"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -12918,7 +13156,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7) and cleanup_summary (§13.19).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19) and credential_transfer (§13.22, to the other administrators).
      * @enum {string}
      */
     EmailType:
@@ -12943,7 +13181,8 @@ export type components = {
       | "invoice_acceptance"
       | "invoice_rejection"
       | "monitoring_alert"
-      | "cleanup_summary";
+      | "cleanup_summary"
+      | "credential_transfer";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -15465,6 +15704,205 @@ export type components = {
     };
     DuplicateCheckResult: {
       matches: components["schemas"]["DuplicateMatch"][];
+    };
+    /**
+     * @description General: any user of the page; business: "Export / import business data"; financial: finance roles and admins; credentials: admins only, with 2FA, encryption and notice to the other admins.
+     * @enum {string}
+     */
+    MigrationSensitivity: "general" | "business" | "financial" | "credentials";
+    /**
+     * @description Imported in this order, so every reference exists when it is needed.
+     * @enum {string}
+     */
+    MigrationImportEntity:
+      | "users"
+      | "enterprises"
+      | "customer_trunks"
+      | "vendor_trunks"
+      | "rate_tables"
+      | "rate_lines"
+      | "route_rules"
+      | "opening_balances";
+    MigrationField: {
+      field: string;
+      label: string;
+      required: boolean;
+      description: string;
+      allowed: string[];
+      /** @description Admins only, 2FA. */
+      credential: boolean;
+    };
+    MigrationEntityInfo: {
+      entity: string;
+      label: string;
+      sensitivity: components["schemas"]["MigrationSensitivity"];
+      importable: boolean;
+      order: number;
+      dependsOn: string[];
+      matchBy: string;
+      fields: components["schemas"]["MigrationField"][];
+    };
+    MigrationMapping: {
+      id: components["schemas"]["Id"];
+      sourceSystem: string;
+      entity: components["schemas"]["MigrationImportEntity"];
+      name: string;
+      /** @description Our field → the source file's column. */
+      columns: {
+        [key: string]: string;
+      };
+      builtIn: boolean;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    MigrationMappingInput: {
+      sourceSystem: string;
+      entity: components["schemas"]["MigrationImportEntity"];
+      name: string;
+      columns: {
+        [key: string]: string;
+      };
+    };
+    MigrationManifestEntity: {
+      entity: string;
+      rows: number;
+      sensitivity: components["schemas"]["MigrationSensitivity"];
+    };
+    MigrationManifestLink: {
+      from: string;
+      to: string;
+      via: string;
+      count: number;
+    };
+    MigrationManifest: {
+      createdAt: components["schemas"]["Timestamp"];
+      platformVersion: string;
+      entities: components["schemas"]["MigrationManifestEntity"][];
+      links: components["schemas"]["MigrationManifestLink"][];
+    };
+    MigrationExportInput: {
+      /** @description Trunk usernames, IPs, ports and connection settings. */
+      includeCredentials: boolean;
+      /** @description With credentials: passwords too (a full move) or left out (set separately). */
+      withPasswords: boolean;
+      /**
+       * @description Current lines only, the full history, or none.
+       * @enum {string}
+       */
+      rateLines: "current" | "all" | "none";
+      /** @description Encrypts the package (AES-256-GCM, key from scrypt). */
+      password: string;
+      /** @description 2FA code; required whenever credentials are included (§13.22). */
+      totpCode?: string | null;
+    };
+    MigrationExport: {
+      id: components["schemas"]["Id"];
+      /** @enum {string} */
+      status: "running" | "done" | "failed";
+      includesCredentials: boolean;
+      withPasswords: boolean;
+      rateLines: string;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      finishedAt: components["schemas"]["Timestamp"] | null;
+      sizeBytes: number | null;
+      error: string | null;
+      manifest: components["schemas"]["MigrationManifest"] | null;
+    };
+    MigrationLinkInput: {
+      /** @description 2FA code; required whenever credentials are included (§13.22). */
+      totpCode?: string | null;
+    };
+    MigrationLink: {
+      url: string;
+      expiresAt: components["schemas"]["Timestamp"];
+      note: string;
+    };
+    /**
+     * @description An existing record (matched by external ID from an earlier import, else by name / username): skip it, update it, or create a new one beside it.
+     * @enum {string}
+     */
+    MigrationConflict: "skip" | "update" | "create";
+    MigrationFileInput: {
+      entity: components["schemas"]["MigrationImportEntity"];
+      fileName: string;
+      /** @description CSV text (UTF-8). */
+      content: string;
+      mappingId?: components["schemas"]["Id"] | null;
+    };
+    MigrationImportInput: {
+      sourceSystem: string;
+      files: components["schemas"]["MigrationFileInput"][];
+      /** @description Import a package made by a Migration export (system-to-system). */
+      packageExportId?: components["schemas"]["Id"] | null;
+      packagePassword?: string | null;
+      /** @description Per entity; default skip. */
+      conflicts?: {
+        [key: string]: components["schemas"]["MigrationConflict"];
+      };
+      /** @description Staged go-live: imported trunks start inactive. */
+      trunksInactive: boolean;
+      /** @description 2FA code; required whenever credentials are included (§13.22). */
+      totpCode?: string | null;
+    };
+    MigrationEntityReport: {
+      entity: string;
+      rows: number;
+      create: number;
+      update: number;
+      skip: number;
+      errors: number;
+      /** @description Rows in the source files. */
+      source: number;
+      /** @description After apply: records now linked to the import. */
+      inSystem: number | null;
+    };
+    MigrationIssue: {
+      entity: string;
+      row: number;
+      field: string | null;
+      message: string;
+      /** @enum {string} */
+      severity: "error" | "warning";
+    };
+    MigrationReport: {
+      entities: components["schemas"]["MigrationEntityReport"][];
+      issues: components["schemas"]["MigrationIssue"][];
+      issueCount: number;
+      /** @description No errors: applying writes exactly what the dry run shows. */
+      canApply: boolean;
+    };
+    MigrationImport: {
+      id: components["schemas"]["Id"];
+      sourceSystem: string;
+      /** @enum {string} */
+      status: "validated" | "applied" | "rolled_back" | "failed";
+      files: {
+        entity: string;
+        fileName: string;
+        rows: number;
+        mapping: string | null;
+      }[];
+      conflicts: {
+        [key: string]: string;
+      };
+      trunksInactive: boolean;
+      includesCredentials: boolean;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      validatedAt: components["schemas"]["Timestamp"];
+      appliedAt: components["schemas"]["Timestamp"] | null;
+      changeId: components["schemas"]["Id"] | null;
+      /** @description Imported trunks still inactive (staged go-live). */
+      inactiveTrunks: number;
+      report: components["schemas"]["MigrationReport"];
+    };
+    MigrationActivate: {
+      /** @description Null = all partners of the import. */
+      enterpriseIds: components["schemas"]["Id"][] | null;
+    };
+    MigrationActivateResult: {
+      activated: number;
+      change: components["schemas"]["Change"] | null;
     };
     /**
      * @description Time frame for traffic figures (§13.27).
@@ -29419,6 +29857,407 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMigrationEntities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The entities */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationEntityInfo"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMigrationTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        entity: components["schemas"]["MigrationImportEntity"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMigrationMappings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The mappings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationMapping"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  saveMigrationMapping: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MigrationMappingInput"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationMapping"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMigrationExports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The exports */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationExport"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createMigrationExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MigrationExportInput"];
+      };
+    };
+    responses: {
+      /** @description Started */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationExport"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMigrationExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationExport"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createMigrationLink: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["MigrationLinkInput"];
+      };
+    };
+    responses: {
+      /** @description The link */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationLink"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadMigrationPackage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The encrypted package */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/octet-stream": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Used or expired */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMigrationImports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The imports */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationImport"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createMigrationImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MigrationImportInput"];
+      };
+    };
+    responses: {
+      /** @description Validated */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationImport"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMigrationImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The import */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationImport"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  revalidateMigrationImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MigrationImportInput"];
+      };
+    };
+    responses: {
+      /** @description Validated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationImport"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  applyMigrationImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Applied */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationImport"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  activateMigrationTrunks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MigrationActivate"];
+      };
+    };
+    responses: {
+      /** @description Activated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MigrationActivateResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
     };
   };

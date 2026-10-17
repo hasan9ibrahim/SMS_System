@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.30.0
+  version: 0.31.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -12863,6 +12863,392 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /migration/entities:
+    get:
+      tags:
+      - admin
+      operationId: getMigrationEntities
+      summary: What can be exported and imported (§13.22)
+      description: Entities in import order with sensitivity, matching key and the import template's fields (description, allowed values).
+      responses:
+        '200':
+          description: The entities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationEntityInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/templates/{entity}:
+    get:
+      tags:
+      - admin
+      operationId: getMigrationTemplate
+      summary: Import template (CSV)
+      description: Header row and one example row.
+      parameters:
+      - name: entity
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/MigrationImportEntity'
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/mappings:
+    get:
+      tags:
+      - admin
+      operationId: getMigrationMappings
+      summary: Saved column mappings
+      description: Per source system and entity, including the ready mapping for the reference platform.
+      responses:
+        '200':
+          description: The mappings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationMapping'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      operationId: saveMigrationMapping
+      summary: Save a column mapping
+      description: Replaces the mapping of the same source system, entity and name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationMappingInput'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationMapping'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/exports:
+    get:
+      tags:
+      - admin
+      operationId: getMigrationExports
+      summary: Export packages
+      description: The latest 50.
+      responses:
+        '200':
+          description: The exports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationExport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      operationId: createMigrationExport
+      summary: Make a full export package (§13.22)
+      description: 'One encrypted file with every entity as its own CSV and a manifest of record counts and links. With credentials:
+
+        administrators only, 2FA code required, written to the Audit Trail and the other administrators are notified.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationExportInput'
+      responses:
+        '201':
+          description: Started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationExport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/exports/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getMigrationExport
+      summary: One export package
+      description: Status and manifest.
+      parameters: &id001
+      - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationExport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/exports/{id}/link:
+    post:
+      tags:
+      - admin
+      operationId: createMigrationLink
+      summary: A download link
+      description: Works once and expires after 15 minutes; a package with credentials needs a 2FA code.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationLinkInput'
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationLink'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/downloads/{token}:
+    get:
+      tags:
+      - admin
+      operationId: downloadMigrationPackage
+      summary: Download a package
+      description: 'Single use: a second request answers 410.'
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{20,80}$
+      responses:
+        '200':
+          description: The encrypted package
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '410':
+          description: Used or expired
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/imports:
+    get:
+      tags:
+      - admin
+      operationId: getMigrationImports
+      summary: Imports
+      description: The latest 50.
+      responses:
+        '200':
+          description: The imports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationImport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      operationId: createMigrationImport
+      summary: Upload and dry-run an import (§13.22)
+      description: 'Files exported from the old platform (CSV per entity, with a column mapping) or a package from a Migration export.
+
+        Validates everything in order and reports what would be created, updated or skipped, with every error. Nothing is written.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationImportInput'
+      responses:
+        '201':
+          description: Validated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationImport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/imports/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getMigrationImport
+      summary: One import
+      description: Its dry-run or completion report.
+      parameters: *id001
+      responses:
+        '200':
+          description: The import
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationImport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: revalidateMigrationImport
+      summary: Fix and re-run the dry run
+      description: Replaces the files and settings and validates again.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationImportInput'
+      responses:
+        '200':
+          description: Validated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationImport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/imports/{id}/apply:
+    post:
+      tags:
+      - admin
+      operationId: applyMigrationImport
+      summary: Apply the import
+      description: Writes exactly what the dry run shows as one change in History; undoing that change rolls the whole import back.
+      parameters: *id001
+      responses:
+        '200':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationImport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /migration/imports/{id}/activate:
+    post:
+      tags:
+      - admin
+      operationId: activateMigrationTrunks
+      summary: 'Go live: activate imported trunks'
+      description: Per partner or all at once; one undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationActivate'
+      responses:
+        '200':
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationActivateResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -21137,8 +21523,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary]
-      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7) and cleanup_summary (§13.19).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19) and credential_transfer (§13.22, to the other administrators).
 
     EmailLogRow:
       type: object
@@ -27445,6 +27831,495 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DuplicateMatch'
+
+    # ------------------------------------------------------------- Migration Center (§13.22)
+    MigrationSensitivity:
+      type: string
+      enum:
+      - general
+      - business
+      - financial
+      - credentials
+      description: 'General: any user of the page; business: "Export / import business data"; financial: finance roles and admins; credentials: admins only, with 2FA, encryption and notice to the other admins.'
+    MigrationImportEntity:
+      type: string
+      enum:
+      - users
+      - enterprises
+      - customer_trunks
+      - vendor_trunks
+      - rate_tables
+      - rate_lines
+      - route_rules
+      - opening_balances
+      description: Imported in this order, so every reference exists when it is needed.
+    MigrationField:
+      type: object
+      required:
+      - field
+      - label
+      - required
+      - description
+      - allowed
+      - credential
+      properties:
+        field:
+          type: string
+        label:
+          type: string
+        required: &id001
+          type: boolean
+        description:
+          type: string
+        allowed:
+          type: array
+          items:
+            type: string
+        credential:
+          type: boolean
+          description: Admins only, 2FA.
+    MigrationEntityInfo:
+      type: object
+      required:
+      - entity
+      - label
+      - sensitivity
+      - importable
+      - order
+      - dependsOn
+      - matchBy
+      - fields
+      properties:
+        entity:
+          type: string
+        label:
+          type: string
+        sensitivity:
+          $ref: '#/components/schemas/MigrationSensitivity'
+        importable: *id001
+        order: &id002
+          type: integer
+        dependsOn:
+          type: array
+          items:
+            type: string
+        matchBy:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationField'
+    MigrationMapping:
+      type: object
+      required:
+      - id
+      - sourceSystem
+      - entity
+      - name
+      - columns
+      - builtIn
+      - updatedAt
+      properties:
+        id: &id004
+          $ref: '#/components/schemas/Id'
+        sourceSystem:
+          type: string
+          minLength: 1
+          maxLength: 80
+        entity:
+          $ref: '#/components/schemas/MigrationImportEntity'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        columns:
+          type: object
+          additionalProperties:
+            type: string
+          description: Our field → the source file's column.
+        builtIn: *id001
+        updatedAt: &id003
+          $ref: '#/components/schemas/Timestamp'
+    MigrationMappingInput:
+      type: object
+      additionalProperties: false
+      required:
+      - sourceSystem
+      - entity
+      - name
+      - columns
+      properties:
+        sourceSystem:
+          type: string
+          minLength: 1
+          maxLength: 80
+        entity:
+          $ref: '#/components/schemas/MigrationImportEntity'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        columns:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 120
+    MigrationManifestEntity:
+      type: object
+      required:
+      - entity
+      - rows
+      - sensitivity
+      properties:
+        entity:
+          type: string
+        rows: *id002
+        sensitivity:
+          $ref: '#/components/schemas/MigrationSensitivity'
+    MigrationManifestLink:
+      type: object
+      required:
+      - from
+      - to
+      - via
+      - count
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        via:
+          type: string
+        count: *id002
+    MigrationManifest:
+      type: object
+      required:
+      - createdAt
+      - platformVersion
+      - entities
+      - links
+      properties:
+        createdAt: *id003
+        platformVersion:
+          type: string
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationManifestEntity'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationManifestLink'
+    MigrationExportInput:
+      type: object
+      additionalProperties: false
+      required:
+      - includeCredentials
+      - withPasswords
+      - rateLines
+      - password
+      properties:
+        includeCredentials:
+          type: boolean
+          description: Trunk usernames, IPs, ports and connection settings.
+        withPasswords:
+          type: boolean
+          description: 'With credentials: passwords too (a full move) or left out (set separately).'
+        rateLines:
+          type: string
+          enum:
+          - current
+          - all
+          - none
+          description: Current lines only, the full history, or none.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 200
+          description: Encrypts the package (AES-256-GCM, key from scrypt).
+        totpCode: &id006
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{6}$
+          description: 2FA code; required whenever credentials are included (§13.22).
+    MigrationExport:
+      type: object
+      required:
+      - id
+      - status
+      - includesCredentials
+      - withPasswords
+      - rateLines
+      - createdBy
+      - createdAt
+      - finishedAt
+      - sizeBytes
+      - error
+      - manifest
+      properties:
+        id: *id004
+        status:
+          type: string
+          enum:
+          - running
+          - done
+          - failed
+        includesCredentials: *id001
+        withPasswords: *id001
+        rateLines:
+          type: string
+        createdBy: &id005
+          type:
+          - string
+          - 'null'
+        createdAt: *id003
+        finishedAt: &id009
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        sizeBytes:
+          type: &id008
+          - integer
+          - 'null'
+        error: *id005
+        manifest:
+          oneOf:
+          - $ref: '#/components/schemas/MigrationManifest'
+          - type: 'null'
+    MigrationLinkInput:
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        totpCode: *id006
+    MigrationLink:
+      type: object
+      required:
+      - url
+      - expiresAt
+      - note
+      properties:
+        url:
+          type: string
+        expiresAt: *id003
+        note:
+          type: string
+    MigrationConflict:
+      type: string
+      enum:
+      - skip
+      - update
+      - create
+      description: 'An existing record (matched by external ID from an earlier import, else by name / username): skip it, update it, or create a new one beside it.'
+    MigrationFileInput:
+      type: object
+      additionalProperties: false
+      required:
+      - entity
+      - fileName
+      - content
+      properties:
+        entity:
+          $ref: '#/components/schemas/MigrationImportEntity'
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content:
+          type: string
+          maxLength: 12000000
+          description: CSV text (UTF-8).
+        mappingId: &id010
+          oneOf: &id007
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+    MigrationImportInput:
+      type: object
+      additionalProperties: false
+      required:
+      - sourceSystem
+      - files
+      - trunksInactive
+      properties:
+        sourceSystem:
+          type: string
+          minLength: 1
+          maxLength: 80
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationFileInput'
+          maxItems: 20
+        packageExportId:
+          oneOf: *id007
+          description: Import a package made by a Migration export (system-to-system).
+        packagePassword:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        conflicts:
+          type: object
+          propertyNames:
+            $ref: '#/components/schemas/MigrationImportEntity'
+          additionalProperties:
+            $ref: '#/components/schemas/MigrationConflict'
+          description: Per entity; default skip.
+        trunksInactive:
+          type: boolean
+          description: 'Staged go-live: imported trunks start inactive.'
+        totpCode: *id006
+    MigrationEntityReport:
+      type: object
+      required:
+      - entity
+      - rows
+      - create
+      - update
+      - skip
+      - errors
+      - source
+      - inSystem
+      properties:
+        entity:
+          type: string
+        rows: *id002
+        create: *id002
+        update: *id002
+        skip: *id002
+        errors: *id002
+        source:
+          type: integer
+          description: Rows in the source files.
+        inSystem:
+          type: *id008
+          description: 'After apply: records now linked to the import.'
+    MigrationIssue:
+      type: object
+      required:
+      - entity
+      - row
+      - field
+      - message
+      - severity
+      properties:
+        entity:
+          type: string
+        row: *id002
+        field: *id005
+        message:
+          type: string
+        severity:
+          type: string
+          enum:
+          - error
+          - warning
+    MigrationReport:
+      type: object
+      required:
+      - entities
+      - issues
+      - issueCount
+      - canApply
+      properties:
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationEntityReport'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationIssue'
+          maxItems: 500
+        issueCount: *id002
+        canApply:
+          type: boolean
+          description: 'No errors: applying writes exactly what the dry run shows.'
+    MigrationImport:
+      type: object
+      required:
+      - id
+      - sourceSystem
+      - status
+      - files
+      - conflicts
+      - trunksInactive
+      - includesCredentials
+      - createdBy
+      - createdAt
+      - validatedAt
+      - appliedAt
+      - changeId
+      - inactiveTrunks
+      - report
+      properties:
+        id: *id004
+        sourceSystem:
+          type: string
+        status:
+          type: string
+          enum:
+          - validated
+          - applied
+          - rolled_back
+          - failed
+        files:
+          type: array
+          items:
+            type: object
+            required:
+            - entity
+            - fileName
+            - rows
+            - mapping
+            properties:
+              entity:
+                type: string
+              fileName:
+                type: string
+              rows: *id002
+              mapping: *id005
+        conflicts:
+          type: object
+          additionalProperties:
+            type: string
+        trunksInactive: *id001
+        includesCredentials: *id001
+        createdBy: *id005
+        createdAt: *id003
+        validatedAt: *id003
+        appliedAt: *id009
+        changeId: *id010
+        inactiveTrunks:
+          type: integer
+          description: Imported trunks still inactive (staged go-live).
+        report:
+          $ref: '#/components/schemas/MigrationReport'
+    MigrationActivate:
+      type: object
+      additionalProperties: false
+      required:
+      - enterpriseIds
+      properties:
+        enterpriseIds:
+          oneOf:
+          - type: array
+            items: *id004
+            maxItems: 1000
+          - type: 'null'
+          description: Null = all partners of the import.
+    MigrationActivateResult:
+      type: object
+      required:
+      - activated
+      - change
+      properties:
+        activated: *id002
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
 
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:

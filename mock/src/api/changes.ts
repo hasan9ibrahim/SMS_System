@@ -17,6 +17,7 @@ import { applyRouteRuleField } from "./routeRules.js";
 import { applyTranslationRuleField } from "./translationRules.js";
 import { applyHlrField } from "./hlr.js";
 import { applyCurrencyRate, applyTransactionEntries } from "./finance.js";
+import { MIGRATION_TABLES } from "../migration/importer.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -338,6 +339,28 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
   // A Cleanup Center change (§13.19) spans record types: each entry names its own.
   if (entityType === "cleanup") {
     for (const e of entries) await applyFields(c, (e as DiffEntry & { entityType: string }).entityType, [e], userId);
+    return;
+  }
+  // A Migration Center import or go-live (§13.22): each entry names its table. "*" = a record the import
+  // created (undo archives it, redo restores it); "row" = columns it changed (undo writes `before` back).
+  if (entityType === "migration") {
+    for (const e of entries as (DiffEntry & { table: string })[]) {
+      if (!MIGRATION_TABLES.has(e.table)) continue;
+      if (e.field === "*") {
+        await c.query(
+          `UPDATE ${e.table} SET deleted_at = ${e.before == null ? "now()" : "NULL"}, updated_at = now() WHERE id = $1`,
+          [e.entity_id],
+        );
+        continue;
+      }
+      const cols = Object.keys((e.before ?? {}) as object).filter((k) => /^[a-z_0-9]+$/.test(k));
+      if (!cols.length) continue;
+      const values = e.before as Record<string, unknown>;
+      await c.query(
+        `UPDATE ${e.table} SET ${cols.map((k, i) => `${k} = $${i + 2}`).join(", ")}, updated_at = now() WHERE id = $1`,
+        [e.entity_id, ...cols.map((k) => values[k])],
+      );
+    }
     return;
   }
   if (entityType === "rate_table") {

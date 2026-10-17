@@ -213,6 +213,24 @@ import {
   updateCleanupSettings,
 } from "./api/cleanup.js";
 import {
+  MIGRATION_VERSION,
+  activateMigrationTrunks,
+  applyMigrationImport,
+  createMigrationExport,
+  createMigrationImport,
+  createMigrationLink,
+  downloadMigrationPackage,
+  getMigrationEntities,
+  getMigrationExport,
+  getMigrationExports,
+  getMigrationImport,
+  getMigrationImports,
+  getMigrationMappings,
+  getMigrationTemplate,
+  revalidateMigrationImport,
+  saveMigrationMapping,
+} from "./api/migration.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -500,7 +518,8 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.30.0";
+const VERSION = "0.31.0";
+MIGRATION_VERSION.value = VERSION;
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -660,6 +679,23 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   getCleanupSettings,
   updateCleanupSettings,
   checkDuplicate,
+
+  // Migration Center (§13.22)
+  getMigrationEntities,
+  getMigrationTemplate,
+  getMigrationMappings,
+  saveMigrationMapping,
+  getMigrationExports,
+  createMigrationExport,
+  getMigrationExport,
+  createMigrationLink,
+  downloadMigrationPackage,
+  getMigrationImports,
+  createMigrationImport,
+  getMigrationImport,
+  revalidateMigrationImport,
+  applyMigrationImport: (request, reply) => Promise.resolve(applyMigrationImport(request, reply)).finally(clearRouteCaches),
+  activateMigrationTrunks,
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
   queryRouteRules,

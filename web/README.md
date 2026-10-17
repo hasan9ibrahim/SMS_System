@@ -73,6 +73,14 @@ or sets a vendor's cost and shows the routes and 7-day margin that change. The c
 account manager's sell rates with LCR 1–3. Profiles are edited in a dialog; Least cost route rules pick one in their
 Vendors section, and Route Rules' Bulk edit can apply one to many rules. Changes lists top-vendor changes and cost moves.
 
+**Migration center** (`/admin/migration`, `src/pages/admin/migration/`, §13.22): three views in the tab URL. Imports
+lists every import with its result; one opens with the dry-run report per entity, problems by row, Fix and re-run, Apply,
+Go live (per partner or all) and Roll back (undo of its change). New import takes one CSV per entity with a column
+mapping and a conflict rule, or an export package with its password; a 2FA code is asked when the files hold trunk
+credentials. Exports lists packages with their manifest; New export sets rate lines, the package password and the
+credential level (admins, 2FA), and Download makes and uses a single-use link. Column mappings lists the ready mappings
+and saved ones, with a dialog per entity.
+
 **Cleanup center** (`/admin/cleanup`, `src/pages/admin/cleanup/`, §13.19, §13.20): area cards (click to filter),
 findings grid (open and awaiting approval by default), Scan now and Settings; a finding opens its card (why, impact,
 action choice, records with links, what applying does, 24-hour replay for route rules) with Apply, Ignore and Approve;

@@ -628,7 +628,7 @@ export const PAGES: PageDef[] = [
     "/admin/migration",
     "upload",
     "§13.22",
-    "5",
+    "5.20",
     "Full import and export with dry run",
   ),
   p(
