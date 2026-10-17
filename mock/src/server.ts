@@ -5,6 +5,9 @@ import { handlers as defaultHandlers, type Handler } from "./handlers.js";
 import { ajvErrors, sendProblem } from "./problem.js";
 import { registerSocket } from "./live/socket.js";
 import { auditCall } from "./api/audit.js";
+import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } from "./visibility/context.js";
+import { restricts } from "./visibility/policy.js";
+import { maskPayload } from "./visibility/walk.js";
 
 export const API_PREFIX = "/api/v1";
 
@@ -79,13 +82,24 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
                 `${op.operationId} is in the contract but not implemented by the mock yet`,
               );
             }
-            return handler(request, reply);
+            // The viewer and their visibility policy follow the request (§13.17).
+            const ctx = contextOf(request);
+            (request as unknown as { vis?: VisibilityContext }).vis = ctx;
+            return runWithVisibility(ctx, () => handler(request, reply));
           },
         });
       }
     },
     { prefix: API_PREFIX },
   );
+
+  // Masked names in JSON answers outside the list engine (§13.17).
+  app.addHook("preSerialization", async (request, reply, payload) => {
+    const ctx = (request as unknown as { vis?: VisibilityContext }).vis;
+    if (!ctx || reply.statusCode >= 300 || payload === null || typeof payload !== "object") return payload;
+    const v = await currentViewer(ctx);
+    return restricts(v) && v.policy.maskOthers ? maskPayload(payload, v) : payload;
+  });
 
   // Audit Trail (§11): every call that changes something, after its answer is sent.
   app.addHook("onResponse", async (request, reply) => {

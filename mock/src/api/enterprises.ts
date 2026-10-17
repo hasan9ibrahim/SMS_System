@@ -43,6 +43,7 @@ import {
   type FieldError,
   type FieldSpec,
 } from "./records.js";
+import { maskEnterpriseDetail, refuseMasked } from "../visibility/records.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -221,7 +222,9 @@ export function getEnterprise(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   return withDb(reply, async (pool) => {
     // Archived enterprises stay readable (§13.29: history and billing keep their names).
-    return (await loadEnterprise(pool, id)) ?? sendProblem(reply, 404, `Enterprise ${id} not found`);
+    const e = await loadEnterprise(pool, id);
+    // Another AM's enterprise is masked for a viewer with a visibility policy (§13.17).
+    return e ? maskEnterpriseDetail(e) : sendProblem(reply, 404, `Enterprise ${id} not found`);
   });
 }
 
@@ -265,6 +268,8 @@ export function updateEnterprise(request: FastifyRequest, reply: FastifyReply) {
     const me = await getCurrentUser();
     const before = await loadEnterprise(pool, id);
     if (!before) return sendProblem(reply, 404, `Enterprise ${id} not found`);
+    const refused = await refuseMasked(reply, id);
+    if (refused) return refused;
     if (before.archived) return sendProblem(reply, 400, "This enterprise is archived; restore it before editing");
     const errors = await checkInput(pool, input, id);
     if (input.type !== before.type) {

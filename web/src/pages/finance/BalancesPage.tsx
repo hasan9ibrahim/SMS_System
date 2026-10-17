@@ -78,7 +78,7 @@ export function BalancesPage() {
           width: 160,
           align: "right",
           render: (r) => (
-            <strong className={`num${r.netBalance < 0 ? " tone-warning" : ""}`} title={netWords(r.netBalance)}>
+            <strong className={`num${(r.netBalance ?? 0) < 0 ? " tone-warning" : ""}`} title={netWords(r.netBalance)}>
               {money(r.netBalance, r.currency)}
             </strong>
           ),

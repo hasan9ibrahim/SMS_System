@@ -12,6 +12,8 @@ import { useToggleTheme } from "./theme";
 import { usePalette } from "./CommandPalette";
 import { openMyPassword } from "../pages/admin/parts";
 import { openAlertSounds } from "../pages/monitoring/alerts/parts";
+import { ask } from "../ui/feedback";
+import { ViewAsDialog } from "./ViewAsBanner";
 
 const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n < 100 ? 1 : 0 });
 
@@ -181,6 +183,16 @@ function Avatar() {
             },
             "separator",
             { label: "My changes", icon: "history", onSelect: () => open(`/admin/changes?mine=1`) },
+            // §13.17: administrators preview the system with another user's visibility policy.
+            ...(me?.permissions.includes("*")
+              ? [
+                  {
+                    label: "View as user…",
+                    icon: "eye" as const,
+                    onSelect: () => void ask<null>((done) => <ViewAsDialog done={done} />),
+                  },
+                ]
+              : []),
             // §13.28: current password, 2FA code and the new-password rules.
             { label: "Change password", icon: "lock", disabled: !me, onSelect: () => me && void openMyPassword(me.id) },
             // §13.6: mute and a sound per severity.

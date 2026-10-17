@@ -169,11 +169,11 @@ async function chargeLines(db: Db, inv: InvoiceDetail): Promise<InvoiceCharges> 
           network: "Proforma",
           rate: null,
           messages: inv.messageCount,
-          amount: inv.usageCharges,
+          amount: inv.usageCharges ?? 0,
         },
       ],
       totalMessages: inv.messageCount,
-      totalAmount: inv.usageCharges,
+      totalAmount: inv.usageCharges ?? 0,
     };
   const cov = await edrCoverage();
   const lines = cov
@@ -259,10 +259,10 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
       { text: p.vat_number ? `VAT ${p.vat_number}` : "" },
       { text: "Summary", bold: true, gap: 24 },
       { text: `Messages: ${inv.messageCount.toLocaleString("en-US")}` },
-      { text: `Opening Balance: ${amt(inv.openingBalance, inv.currency)}` },
-      { text: `Usage Charges: ${amt(inv.usageCharges, inv.currency)}` },
-      { text: `Closing Balance: ${amt(inv.closingBalance, inv.currency)}` },
-      { text: `Due Amount: ${amt(inv.dueAmount, inv.currency)}`, bold: true },
+      { text: `Opening Balance: ${amt(inv.openingBalance ?? 0, inv.currency)}` },
+      { text: `Usage Charges: ${amt(inv.usageCharges ?? 0, inv.currency)}` },
+      { text: `Closing Balance: ${amt(inv.closingBalance ?? 0, inv.currency)}` },
+      { text: `Due Amount: ${amt(inv.dueAmount ?? 0, inv.currency)}`, bold: true },
       { text: "Balances: positive = your credit with us, negative = amount owed.", size: 8 },
       ...(top.length
         ? [

@@ -38,6 +38,7 @@ import {
   type FieldError,
   type FieldSpec,
 } from "./records.js";
+import { maskTrunkDetail, refuseMasked } from "../visibility/records.js";
 
 type Db = pg.Pool | pg.PoolClient;
 export type TrunkKind = "customer" | "vendor";
@@ -319,7 +320,11 @@ export function getTrunk(kind: TrunkKind) {
   const k = KINDS[kind];
   return (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: number };
-    return withDb(reply, async (pool) => (await loadTrunk(pool, k, id)) ?? notFound(reply, k, id));
+    return withDb(reply, async (pool) => {
+      const t = await loadTrunk(pool, k, id);
+      // Masked and without credentials for a viewer who does not own it (§13.17).
+      return t ? maskTrunkDetail(t as unknown as Record<string, unknown>, kind) : notFound(reply, k, id);
+    });
   };
 }
 
@@ -376,6 +381,8 @@ export function updateTrunk(kind: TrunkKind) {
       const me = await getCurrentUser();
       const before = await loadTrunk(pool, k, id);
       if (!before) return notFound(reply, k, id);
+      const refused = await refuseMasked(reply, before.enterpriseId);
+      if (refused) return refused;
       if (before.archived)
         return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
       const errors = await checkInput(pool, k, input, before);

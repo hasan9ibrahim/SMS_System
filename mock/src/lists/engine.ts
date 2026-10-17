@@ -9,13 +9,23 @@ import type {
   FilterOperator,
   ListFields,
   ListQuery,
+  MaskedCell,
 } from "@sms/contract";
+import type { Viewer } from "../visibility/policy.js";
+import { currentViewer } from "../visibility/context.js";
+import { modeSql, resolveSql, valueSql, type VisRule } from "../visibility/sql.js";
 
 export interface ColumnSql {
   /** SQL expression, using the aliases of the list's FROM clause. */
   sql: string;
   /** Custom predicate (e.g. array membership); `p` adds a parameter and returns its placeholder. */
   where?: (op: FilterOperator, c: FilterCondition, p: (value: unknown) => string) => string;
+  /**
+   * Masked or hidden for viewers who do not own the row (§13.17). Filters, sorting and quick search use
+   * what the viewer sees; the row's field (`rowKey`, default the field name) is replaced in the answer.
+   */
+  vis?: VisRule;
+  rowKey?: string;
 }
 
 export interface ListDef<Row> {
@@ -45,6 +55,8 @@ export interface ListPage<Row> {
   total: number;
   totalIsEstimate: boolean;
   nextCursor: string | null;
+  /** Values withheld by the viewer's visibility policy (§13.17). */
+  masked?: MaskedCell[];
 }
 
 const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
@@ -156,8 +168,37 @@ function mentions(group: FilterGroup, field: string): boolean {
   return group.conditions.some((n) => ("logic" in n ? mentions(n, field) : (n as FilterCondition).field === field));
 }
 
+/** The definition as this viewer sees it (§13.17): column SQL with masking and hiding applied. */
+export function viewDef(def: ListDef<unknown>, viewer: Viewer | null): { def: ListDef<unknown>; extra: string[] } {
+  const extra: string[] = [];
+  const columns: Record<string, ColumnSql> = {};
+  for (const [field, col] of Object.entries(def.columns)) {
+    let sql = resolveSql(col.sql, viewer);
+    if (col.vis) {
+      const value = valueSql(col.vis, viewer);
+      if (value !== col.vis.sql) {
+        sql = resolveSql(value, viewer);
+        if (col.vis.kind === "mask") extra.push(`${sql} AS "__m_${field}"`);
+        else extra.push(`${resolveSql(modeSql(col.vis, viewer)!, viewer)} AS "__v_${field}"`);
+      }
+    }
+    columns[field] = { ...col, sql };
+  }
+  const from = def.from;
+  return {
+    def: {
+      ...def,
+      columns,
+      from: typeof from === "function" ? (q: ListQuery) => resolveSql(from(q), viewer) : resolveSql(from, viewer),
+      select: resolveSql(def.select, viewer),
+      ...(def.baseWhere ? { baseWhere: resolveSql(def.baseWhere, viewer) } : {}),
+    },
+    extra,
+  };
+}
+
 /** Builds the page and count statements. The query must have passed checkListQuery. */
-export function compileQuery(def: ListDef<unknown>, query: ListQuery) {
+export function compileQuery(def: ListDef<unknown>, query: ListQuery, extraSelect: string[] = []) {
   const byName = new Map(def.fields.fields.map((f) => [f.field, f]));
   const params = new Params();
   const where: string[] = [];
@@ -180,30 +221,82 @@ export function compileQuery(def: ListDef<unknown>, query: ListQuery) {
   const limitP = params.add(limit + 1);
   const offsetP = params.add(offset);
   const from = typeof def.from === "function" ? def.from(query) : def.from;
+  // Rule placeholders not resolved for a viewer (internal callers) read the plain values (§13.17).
+  const plain = (sql: string) => resolveSql(sql, null);
   return {
-    sql: `SELECT ${def.select} FROM ${from} ${whereSql} ORDER BY ${orderSql} LIMIT ${limitP} OFFSET ${offsetP}`,
+    sql: plain(
+      `SELECT ${[def.select, ...extraSelect].join(", ")} FROM ${from} ${whereSql} ORDER BY ${orderSql} LIMIT ${limitP} OFFSET ${offsetP}`,
+    ),
     values: params.values,
-    countSql: `SELECT count(*)::bigint AS n FROM ${from} ${whereSql}`,
+    countSql: plain(`SELECT count(*)::bigint AS n FROM ${from} ${whereSql}`),
     countValues,
     limit,
     offset,
   };
 }
 
-export async function runList<Row>(pool: pg.Pool, def: ListDef<Row>, query: ListQuery): Promise<ListPage<Row>> {
-  const q = compileQuery(def as ListDef<unknown>, query);
+export async function runList<Row>(
+  pool: pg.Pool,
+  def: ListDef<Row>,
+  query: ListQuery,
+  viewer?: Viewer | null,
+): Promise<ListPage<Row>> {
+  const view = viewDef(def as ListDef<unknown>, viewer === undefined ? await currentViewer() : viewer);
+  const q = compileQuery(view.def, query, view.extra);
   const [page, count] = await Promise.all([
     pool.query(q.sql, q.values),
     query.withTotal === false ? null : pool.query<{ n: number }>(q.countSql, q.countValues),
   ]);
   const more = page.rows.length > q.limit;
-  const rows = page.rows.slice(0, q.limit).map((r) => def.mapRow(r as Record<string, unknown>));
+  const masked: MaskedCell[] = [];
+  const rows = page.rows.slice(0, q.limit).map((raw) => {
+    const r = raw as Record<string, unknown>;
+    const row = def.mapRow(r) as Record<string, unknown>;
+    if (view.extra.length) applyVisibility(def, r, row, masked);
+    return row as Row;
+  });
   return {
     rows,
     total: count ? Number(count.rows[0]?.n ?? 0) : q.offset + rows.length + (more ? 1 : 0),
     totalIsEstimate: count === null,
     nextCursor: more ? encodeCursor(q.offset + q.limit) : null,
+    ...(masked.length ? { masked } : {}),
   };
+}
+
+/** Every matching row (up to the query's limit) as the current viewer sees it, for exports (§13.17). */
+export async function exportRows<Row>(pool: pg.Pool, def: ListDef<Row>, query: ListQuery): Promise<Row[]> {
+  const view = viewDef(def as ListDef<unknown>, await currentViewer());
+  const q = compileQuery(view.def, query, view.extra);
+  const { rows } = await pool.query(q.sql, q.values);
+  return rows.slice(0, q.limit).map((raw) => {
+    const r = raw as Record<string, unknown>;
+    const row = def.mapRow(r) as Record<string, unknown>;
+    if (view.extra.length) applyVisibility(def as ListDef<unknown>, r, row, []);
+    return row as Row;
+  });
+}
+
+/** Puts masked names into the row and withholds hidden values (§13.17). */
+function applyVisibility(
+  def: ListDef<unknown>,
+  r: Record<string, unknown>,
+  row: Record<string, unknown>,
+  masked: MaskedCell[],
+) {
+  for (const [field, col] of Object.entries(def.columns)) {
+    if (!col.vis) continue;
+    const key = col.rowKey ?? field;
+    if (`__m_${field}` in r) {
+      if (key in row && r[`__m_${field}`] != null) row[key] = r[`__m_${field}`];
+    } else if (`__v_${field}` in r) {
+      const mode = r[`__v_${field}`];
+      if (mode !== "show" && mode != null) {
+        if (key in row) row[key] = null;
+        masked.push({ id: Number(row.id), field, text: String(mode) });
+      }
+    }
+  }
 }
 
 /** Every catalogue field needs SQL, and every quick-search field must exist. */

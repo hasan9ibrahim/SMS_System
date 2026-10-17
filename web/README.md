@@ -73,6 +73,14 @@ or sets a vendor's cost and shows the routes and 7-day margin that change. The c
 account manager's sell rates with LCR 1–3. Profiles are edited in a dialog; Least cost route rules pick one in their
 Vendors section, and Route Rules' Bulk edit can apply one to many rules. Changes lists top-vendor changes and cost moves.
 
+**Visibility policies** (`/admin/visibility`, `src/pages/admin/visibility/`, §13.17): views in the URL
+(`?view=policies|assignments|grants`). Policies are edited in a dialog (mask others, team scope, shown / hidden / band per
+item for others and own, thresholds; new ones start from a preset). Assignments go to all account managers, a department
+or a user, with a check of any user's effective policy; users also show it on their profile. Shares and temporary access
+give one user sight of one enterprise. Administrators can "View as user…" from the user menu: every call then carries
+`X-View-As` (`src/api/client.ts`), a banner names the user and policy, and grids show withheld values as Hidden, Low /
+Normal / High or Above limit (`ListPageMeta.masked`).
+
 ## Route Rules (build step 4.3)
 
 `/routing/rules` (`src/pages/routing/`, §15.4) copies the reference screenshot's layout and form.

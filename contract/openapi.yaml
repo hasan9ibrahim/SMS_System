@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.27.0
+  version: 0.28.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -547,6 +547,8 @@ paths:
                 $ref: "#/components/schemas/EnterpriseSaved"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "401":
@@ -949,6 +951,8 @@ paths:
                 $ref: "#/components/schemas/CustomerTrunkSaved"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "401":
@@ -1199,6 +1203,8 @@ paths:
                 $ref: "#/components/schemas/VendorTrunkSaved"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "401":
@@ -11973,6 +11979,382 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /visibility-policies/query:
+    post:
+      tags:
+      - admin
+      operationId: queryVisibilityPolicies
+      summary: List visibility policies (server-side filter, sort and paging)
+      description: 'Visibility policies (§13.17): which items are masked or hidden, thresholds, scope of own.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of visibility policies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityPolicyPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-policies/presets:
+    get:
+      tags:
+      - admin
+      operationId: getVisibilityPresets
+      summary: Ready visibility presets (§13.17)
+      description: Strict AM, Standard AM and Team lead, as a starting point for a new policy.
+      responses:
+        '200':
+          description: The presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisibilityPreset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-policies:
+    post:
+      tags:
+      - admin
+      operationId: createVisibilityPolicy
+      summary: Add a visibility policy
+      description: 'A visibility policy (§13.17). Written to the Audit Trail.
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisibilityPolicyInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityPolicySaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-policies/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getVisibilityPolicy
+      summary: One a visibility policy
+      description: Every field of the form.
+      parameters: &id001
+      - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The a visibility policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityPolicyRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateVisibilityPolicy
+      summary: Change a visibility policy
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisibilityPolicyInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityPolicySaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-policies/{id}/archive:
+    post:
+      tags:
+      - admin
+      operationId: archiveVisibilityPolicy
+      summary: Delete (archive) a visibility policy (§13.29)
+      description: Blocked while it is assigned. It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityPolicySaved'
+        '409':
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ArchiveBlocked'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-policies/{id}/restore:
+    post:
+      tags:
+      - admin
+      operationId: restoreVisibilityPolicy
+      summary: Restore a visibility policy
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityPolicySaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-assignments/query:
+    post:
+      tags:
+      - admin
+      operationId: queryVisibilityAssignments
+      summary: List visibility assignments (server-side filter, sort and paging)
+      description: 'Who each policy is assigned to: all account managers, a department or a user (§13.17).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of visibility assignments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityAssignmentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-assignments:
+    post:
+      tags:
+      - admin
+      operationId: assignVisibilityPolicy
+      summary: Assign a visibility policy (§13.17)
+      description: To all account managers, a department or a user; replaces that target's earlier assignment. Written to the Audit Trail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisibilityAssignmentInput'
+      responses:
+        '201':
+          description: Assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-assignments/{id}:
+    delete:
+      tags:
+      - admin
+      operationId: removeVisibilityAssignment
+      summary: Remove a visibility assignment
+      description: The target falls back to the next assignment (user, department, all account managers). Written to the Audit Trail.
+      parameters: *id001
+      responses:
+        '204':
+          description: Removed
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-grants/query:
+    post:
+      tags:
+      - admin
+      operationId: queryVisibilityGrants
+      summary: List visibility grants (server-side filter, sort and paging)
+      description: Lasting shares and temporary access to an enterprise (§13.17); temporary ones expire by themselves.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of visibility grants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityGrantPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-grants:
+    post:
+      tags:
+      - admin
+      operationId: createVisibilityGrant
+      summary: Grant sight of an enterprise (§13.17)
+      description: 'E.g. covering a colleague on holiday: the user sees the enterprise as their own until it expires. Written to the Audit Trail.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisibilityGrantInput'
+      responses:
+        '201':
+          description: Granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityGrant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /visibility-grants/{id}/revoke:
+    post:
+      tags:
+      - admin
+      operationId: revokeVisibilityGrant
+      summary: Revoke a share or temporary access
+      description: Ends it now. Written to the Audit Trail.
+      parameters: *id001
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityGrant'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}/visibility:
+    get:
+      tags:
+      - admin
+      operationId: getUserVisibility
+      summary: A user's effective visibility policy (§13.17)
+      description: The policy that applies, where it comes from, and the scope of own. Shown on the user's profile.
+      parameters: *id001
+      responses:
+        '200':
+          description: The effective policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveVisibility'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /me/visibility:
+    get:
+      tags:
+      - system
+      operationId: getMyVisibility
+      summary: My effective visibility policy (§13.17)
+      description: For the signed-in user, or the user an administrator previews with the X-View-As header.
+      parameters:
+      - $ref: '#/components/parameters/ViewAs'
+      responses:
+        '200':
+          description: The effective policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveVisibility'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -12613,6 +12995,15 @@ components:
       description: Session cookie set at sign-in (login flow added in a later revision).
 
   parameters:
+    ViewAs:
+      name: X-View-As
+      in: header
+      required: false
+      description: |
+        Administrators only: answer as this user would see it, with their visibility policy (§13.17 preview).
+        Every operation honours it; ignored for other users.
+      schema:
+        $ref: "#/components/schemas/Id"
     TrafficWindow:
       name: window
       in: query
@@ -13694,7 +14085,7 @@ components:
         name:
           type: string
         username:
-          type: string
+          type: [string, "null"]
         categoryId:
           oneOf:
             - $ref: "#/components/schemas/Id"
@@ -14472,9 +14863,9 @@ components:
         senderId:
           type: [string, "null"]
         rate:
-          type: number
+          type: [number, "null"]
         sysRate:
-          type: number
+          type: [number, "null"]
           description: The rate in the platform currency (`ReferenceData.platformCurrency`, EUR by default).
         currency:
           type: string
@@ -18268,11 +18659,11 @@ components:
         transactionType:
           $ref: "#/components/schemas/TransactionType"
         amount:
-          type: number
+          type: [number, "null"]
         currency:
           type: string
         amountBase:
-          type: number
+          type: [number, "null"]
           description: Final Amount in the business company base currency at the payment date.
         baseCurrency:
           type: string
@@ -18692,7 +19083,7 @@ components:
         vendorCurrency:
           type: [string, "null"]
         netBalance:
-          type: number
+          type: [number, "null"]
           description: Customer − vendor, in `currency` (the vendor side converted at the latest rate); negative = the partner owes us after offsetting.
         accountManager:
           type: [string, "null"]
@@ -18831,15 +19222,15 @@ components:
           type: string
           format: date
         openingBalance:
-          type: number
+          type: [number, "null"]
           description: Customer balance before the usage, same sign as every balance (positive = the client's credit, negative = owed).
         usageCharges:
-          type: number
+          type: [number, "null"]
         closingBalance:
-          type: number
+          type: [number, "null"]
           description: Opening balance − usage charges.
         dueAmount:
-          type: number
+          type: [number, "null"]
           description: What the client must pay, never negative (the owed part of the closing balance).
         messageCount:
           type: integer
@@ -19263,7 +19654,7 @@ components:
         chargeVolume:
           type: [integer, "null"]
         chargeAmount:
-          type: number
+          type: [number, "null"]
         ourVolume:
           type: [integer, "null"]
           description: Our billable vendor messages for the period; null = not checked.
@@ -25142,6 +25533,400 @@ components:
           type: boolean
           description: Alert when the top LCR vendor changes.
 
+    # ------------------------------------------------------------- AM visibility (§13.17)
+    VisibilityMode:
+      type: string
+      enum:
+      - show
+      - hide
+      - band
+      description: show = the value; hide = nothing ("Hidden"); band = Low / Normal / High instead of the value (margin only).
+    VisibilityItemSetting:
+      type: object
+      description: What a user sees of others' clients and vendors, and of their own.
+      additionalProperties: false
+      required:
+      - others
+      - own
+      properties:
+        others:
+          $ref: '#/components/schemas/VisibilityMode'
+        own:
+          $ref: '#/components/schemas/VisibilityMode'
+    VisibilityItems:
+      type: object
+      description: The items that can be hidden (§13.17 table).
+      additionalProperties: false
+      required:
+      - margin
+      - revenue
+      - cost
+      - sellRates
+      - balances
+      - contacts
+      - traffic
+      properties:
+        margin:
+          $ref: '#/components/schemas/VisibilityItemSetting'
+          description: Margin and margin %.
+        revenue:
+          $ref: '#/components/schemas/VisibilityItemSetting'
+          description: Revenue / sell amounts of traffic.
+        cost:
+          $ref: '#/components/schemas/VisibilityItemSetting'
+          description: Cost and vendor buy rates.
+        sellRates:
+          $ref: '#/components/schemas/VisibilityItemSetting'
+          description: Customer sell rates.
+        balances:
+          $ref: '#/components/schemas/VisibilityItemSetting'
+          description: Balances, credit limits, invoices and payments.
+        contacts:
+          $ref: '#/components/schemas/VisibilityItemSetting'
+          description: Contact details, IPs, usernames and passwords.
+        traffic:
+          $ref: '#/components/schemas/VisibilityItemSetting'
+          description: Traffic volumes (attempts, TPS).
+    VisibilityThresholds:
+      type: object
+      additionalProperties: false
+      required:
+      - marginLowPct
+      - marginHighPct
+      - revenueHideAbove
+      - costTrafficDays
+      properties:
+        marginLowPct:
+          type: number
+          minimum: -100
+          maximum: 100
+          description: 'Band: below this margin % is Low.'
+        marginHighPct:
+          type: number
+          minimum: -100
+          maximum: 100
+          description: 'Band: above this margin % is High.'
+        revenueHideAbove:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          description: Revenue shown only up to this amount (platform currency); above it "Above limit". Null = no limit.
+        costTrafficDays:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 365
+          description: When set, others' vendors that carried the user's clients' traffic in the last N days count as own for cost and buy rates.
+    VisibilityPolicyFields:
+      type: object
+      required:
+      - name
+      - description
+      - status
+      - maskOthers
+      - includeTeam
+      - items
+      - thresholds
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+        maskOthers:
+          type: boolean
+          description: 'Others'' enterprises and trunks appear as IDs ("Customer #2481").'
+        includeTeam:
+          type: boolean
+          description: 'For team leads: the enterprises of their team members count as own.'
+        items:
+          $ref: '#/components/schemas/VisibilityItems'
+        thresholds:
+          $ref: '#/components/schemas/VisibilityThresholds'
+    VisibilityPolicyInput:
+      allOf:
+      - $ref: '#/components/schemas/VisibilityPolicyFields'
+      unevaluatedProperties: false
+    VisibilityPolicyRow:
+      allOf:
+      - $ref: '#/components/schemas/VisibilityPolicyFields'
+      - type: object
+        required:
+        - id
+        - assignments
+        - summary
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: &id001
+            $ref: '#/components/schemas/Id'
+          assignments:
+            type: integer
+            description: Assignments using it.
+          summary:
+            type: string
+            description: 'One line: what is masked and hidden.'
+          updatedBy:
+            type:
+            - string
+            - 'null'
+          updatedAt: &id003
+            $ref: '#/components/schemas/Timestamp'
+          archivedAt: &id005
+            oneOf: &id004
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+    VisibilityPolicySaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/VisibilityPolicyRow'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    VisibilityPolicyPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/VisibilityPolicyRow'
+    VisibilityPreset:
+      type: object
+      description: 'Ready presets: Strict AM (others masked, all money hidden), Standard AM (others masked, own money shown), Team lead (team shown, others masked).'
+      required:
+      - key
+      - fields
+      properties:
+        key:
+          type: string
+          enum:
+          - strict_am
+          - standard_am
+          - team_lead
+        fields:
+          $ref: '#/components/schemas/VisibilityPolicyFields'
+    VisibilityTargetType:
+      type: string
+      enum:
+      - all_ams
+      - department
+      - user
+      description: Who a policy is assigned to. A user's own assignment wins over their department's, which wins over the one for all account managers.
+    VisibilityAssignmentInput:
+      type: object
+      description: 'targetId: the department or user; null for all_ams. Replaces the target''s earlier assignment.'
+      additionalProperties: false
+      required:
+      - policyId
+      - targetType
+      - targetId
+      properties:
+        policyId: *id001
+        targetType:
+          $ref: '#/components/schemas/VisibilityTargetType'
+        targetId: &id002
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+    VisibilityAssignment:
+      type: object
+      required:
+      - id
+      - policyId
+      - policyName
+      - targetType
+      - targetId
+      - targetName
+      - users
+      - createdBy
+      - createdAt
+      properties:
+        id: *id001
+        policyId: *id001
+        policyName:
+          type: string
+        targetType:
+          $ref: '#/components/schemas/VisibilityTargetType'
+        targetId: *id002
+        targetName:
+          type: string
+        users:
+          type: integer
+          description: Users this assignment decides the policy of now.
+        createdBy: &id006
+          type:
+          - string
+          - 'null'
+        createdAt: *id003
+    VisibilityAssignmentPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/VisibilityAssignment'
+    VisibilityGrantInput:
+      type: object
+      additionalProperties: false
+      required:
+      - userId
+      - enterpriseId
+      - expiresAt
+      - reason
+      properties:
+        userId: *id001
+        enterpriseId: *id001
+        expiresAt:
+          oneOf: *id004
+          description: Temporary access ends then; null = a lasting share.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 300
+    VisibilityGrant:
+      type: object
+      required:
+      - id
+      - userId
+      - userName
+      - enterpriseId
+      - enterpriseName
+      - kind
+      - expiresAt
+      - reason
+      - state
+      - grantedBy
+      - createdAt
+      - revokedAt
+      properties:
+        id: *id001
+        userId: *id001
+        userName:
+          type: string
+        enterpriseId: *id001
+        enterpriseName:
+          type: string
+        kind:
+          type: string
+          enum:
+          - temporary
+          - share
+        expiresAt: *id005
+        reason:
+          type: string
+        state:
+          type: string
+          enum:
+          - active
+          - expired
+          - revoked
+        grantedBy: *id006
+        createdAt: *id003
+        revokedAt: *id005
+    VisibilityGrantPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/VisibilityGrant'
+    EffectiveVisibility:
+      type: object
+      required:
+      - userId
+      - userName
+      - exempt
+      - exemptReason
+      - policy
+      - source
+      - sourceName
+      - ownEnterprises
+      - teamEnterprises
+      - grantedEnterprises
+      - costVendors
+      - grants
+      - viewAs
+      properties:
+        userId: *id001
+        userName:
+          type: string
+        exempt:
+          type: boolean
+          description: No policy applies (administrators, users without an assignment).
+        exemptReason: *id006
+        policy:
+          oneOf:
+          - $ref: '#/components/schemas/VisibilityPolicyRow'
+          - type: 'null'
+        source:
+          type:
+          - string
+          - 'null'
+          enum:
+          - user
+          - department
+          - all_ams
+          - null
+        sourceName: *id006
+        ownEnterprises:
+          type: integer
+          description: Enterprises where the user is the account manager.
+        teamEnterprises:
+          type: integer
+          description: Added by the team scope.
+        grantedEnterprises:
+          type: integer
+          description: Added by active shares and temporary grants.
+        costVendors:
+          type: integer
+          description: Vendor enterprises counted as own for cost by the traffic threshold.
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisibilityGrant'
+        viewAs:
+          type: boolean
+          description: An administrator is previewing this user (X-View-As).
+    MaskedCell:
+      type: object
+      description: 'A value withheld by the visibility policy (§13.17): the row, the field, and what to show instead (Hidden, Low, Normal, High, Above limit).'
+      required:
+      - id
+      - field
+      - text
+      properties:
+        id: *id001
+        field:
+          type: string
+        text:
+          type: string
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -25857,7 +26642,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants]
 
     FilterOperator:
       type: string
@@ -25978,6 +26763,13 @@ components:
         nextCursor:
           type: [string, "null"]
           description: Pass as `cursor` to fetch the next page; null on the last page.
+        masked:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaskedCell"
+          description: |
+            Values the viewer's visibility policy withholds (§13.17); those fields are null in the rows.
+            Masked names arrive already replaced ("Customer #2481"). Absent when nothing is withheld.
 
     FieldType:
       type: string

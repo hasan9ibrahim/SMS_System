@@ -1,7 +1,7 @@
 // Report hooks (§10, §13.31). The Enterprise report pages on the server like any list; its
 // settings travel with every page request.
 import type { EnterpriseReportPage, EnterpriseReportParams, EnterpriseReportRow, ListQuery } from "@sms/contract";
-import { api, ApiError, unwrap } from "./client";
+import { api, ApiError, apiFetch, unwrap } from "./client";
 import { downloadBlob } from "./lookup";
 
 export const fetchEnterpriseReport = (
@@ -14,7 +14,7 @@ export type ReportRow = EnterpriseReportRow;
 /** Downloads the whole report as CSV (the time zone is printed at the top, §13.31). */
 export async function exportEnterpriseReport(report: EnterpriseReportParams, query: ListQuery, columns: string[]) {
   const { filter, search, sort } = query;
-  const res = await fetch("/api/v1/reports/enterprise/export", {
+  const res = await apiFetch("/api/v1/reports/enterprise/export", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

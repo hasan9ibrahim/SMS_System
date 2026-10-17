@@ -284,7 +284,7 @@ export function updateTransaction(request: FastifyRequest, reply: FastifyReply) 
       before.enterpriseId !== t.enterpriseId;
     const conv = moneyMoved
       ? (await convert(pool, t.enterpriseId, t.amount, t.currency, t.paymentDate))!
-      : { baseCurrency: before.baseCurrency, exRate: before.exRate, amountBase: before.amountBase };
+      : { baseCurrency: before.baseCurrency, exRate: before.exRate, amountBase: before.amountBase ?? 0 };
     const v: Record<string, unknown> = { ...txValues(t, conv), confirmationStatus: before.confirmationStatus };
     const b = before as unknown as Record<string, unknown>;
     const diff: DiffEntry[] = TX_COLUMNS.filter(([api]) => !same(b[api] ?? null, v[api] ?? null)).map(([api]) => ({
@@ -360,7 +360,7 @@ export function archiveTransaction(request: FastifyRequest, reply: FastifyReply)
       table: "transactions",
       entityType: "transaction",
       archive: true,
-      note: gate.note ?? `Deleted TX-${id} ${before.amount.toFixed(2)} ${before.currency} (${before.enterprise})`,
+      note: gate.note ?? `Deleted TX-${id} ${(before.amount ?? 0).toFixed(2)} ${before.currency} (${before.enterprise})`,
     });
     if ("reply" in r) return r.reply;
     return { record: await loadTransaction(pool, id), change: r.change };

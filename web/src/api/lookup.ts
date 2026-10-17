@@ -10,7 +10,7 @@ import type {
   SavedLookup,
   SavedLookupInput,
 } from "@sms/contract";
-import { api, ApiError, unwrap } from "./client";
+import { api, ApiError, apiFetch, unwrap } from "./client";
 
 export function useLookupResolve(q: string, live: boolean) {
   const text = q.trim();
@@ -40,7 +40,7 @@ export const fetchMatrixPage = (body: RateMatrixRequest): Promise<RateMatrix> =>
 
 /** Downloads the whole advanced lookup as CSV. */
 export async function exportMatrix(body: RateMatrixRequest) {
-  const res = await fetch("/api/v1/rate-lookup/matrix/export", {
+  const res = await apiFetch("/api/v1/rate-lookup/matrix/export", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

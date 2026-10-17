@@ -14,7 +14,7 @@ import type {
   RouteTraffic,
   TrafficWindow,
 } from "@sms/contract";
-import { api, ApiError, unwrap } from "./client";
+import { api, ApiError, apiFetch, unwrap } from "./client";
 import { useRefreshRecords } from "./records";
 
 export function useRouteRule(id: number | null) {
@@ -74,7 +74,7 @@ export const simulateRoute = (body: RouteTestRequest): Promise<RouteSimulation> 
 
 /** Downloads the rules matching the list query as CSV (POST /route-rules/export). */
 export async function exportRouteRules(query: Pick<ListQuery, "filter" | "search" | "sort">) {
-  const res = await fetch("/api/v1/route-rules/export", {
+  const res = await apiFetch("/api/v1/route-rules/export", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(query),

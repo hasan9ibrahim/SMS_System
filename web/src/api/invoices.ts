@@ -25,7 +25,7 @@ import type {
   VendorInvoiceSummary,
   VendorInvoiceSummaryInput,
 } from "@sms/contract";
-import { api, unwrap } from "./client";
+import { api, apiFetch, unwrap } from "./client";
 import { useRefreshRecords } from "./records";
 
 function useWrite<In, Out>(fn: (input: In) => Promise<Out>) {
@@ -89,7 +89,7 @@ export async function waitForRequests(ids: number[]): Promise<InvoiceRequestRow[
 
 /** Downloads the invoice PDF ({invoiceNumber}.pdf). */
 export async function downloadInvoicePdf(id: number) {
-  const res = await fetch(`/api/v1/invoices/${id}/pdf`);
+  const res = await apiFetch(`/api/v1/invoices/${id}/pdf`);
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { title?: string; detail?: string };
     throw new Error(problem.detail ?? problem.title ?? res.statusText);

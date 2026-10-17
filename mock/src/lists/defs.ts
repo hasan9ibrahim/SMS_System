@@ -15,6 +15,7 @@ import { alertRuleList, incidentList } from "./alertDefs.js";
 import { rnLineList, rnList } from "./rnDefs.js";
 import { marketMoveList } from "../api/marketMoves.js";
 import { lcrChangeList, lcrProfileList } from "../api/lcr.js";
+import { visibilityAssignmentList, visibilityGrantList, visibilityPolicyList } from "../api/visibility.js";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   Change,
@@ -73,6 +74,20 @@ import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
 import { PRESETS } from "../reports/presets.js";
 import type { ListDef } from "./engine.js";
+import { byEnterprise, enterpriseLabel, hide, lit, maskName, vis, visCol } from "../visibility/sql.js";
+
+// AM visibility (§13.17): names masked and values hidden for viewers who do not own the row.
+const enterpriseMask = (alias: string) =>
+  maskName(`${alias}.name`, `${alias}.id`, byEnterprise(`${alias}.id`), enterpriseLabel(`${alias}.type`));
+const trunkMask = (alias: string, label: string) =>
+  maskName(`${alias}.name`, `${alias}.id`, byEnterprise(`${alias}.enterprise_id`), lit(label));
+/** A customer rate table is own when an own client's trunk uses it; a buy table when its vendor is own. */
+const ownedTable = `(CASE WHEN rt.kind = 'vendor'
+    THEN (SELECT ovt.enterprise_id FROM vendor_trunks ovt WHERE ovt.id = rt.vendor_trunk_id) = ANY($OWN)
+    ELSE EXISTS (SELECT 1 FROM customer_trunk_rate_tables ox JOIN customer_trunks oct ON oct.id = ox.customer_trunk_id
+                  WHERE ox.rate_table_id = rt.id AND oct.enterprise_id = ANY($OWN)) END)`;
+const rateHide = (sql: string) =>
+  hide("sellRates", sql, ownedTable, { when: "rt.kind = 'customer'", else: hide("cost", sql, ownedTable) });
 
 const ymd = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
@@ -90,8 +105,8 @@ export const enterpriseList: ListDef<Enterprise> = {
   archivedField: "archived",
   columns: {
     id: { sql: "e.id" },
-    name: { sql: "e.name" },
-    alias: { sql: "e.alias" },
+    name: visCol(enterpriseMask("e")),
+    alias: visCol(maskName("e.alias", "e.id", byEnterprise("e.id"), enterpriseLabel("e.type"))),
     type: { sql: "e.type" },
     tier: { sql: "e.tier" },
     status: { sql: "e.status" },
@@ -170,10 +185,10 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
     archivedField: "archived",
     columns: {
       id: { sql: "t.id" },
-      name: { sql: "t.name" },
-      enterpriseName: { sql: "e.name" },
+      name: visCol(trunkMask("t", kind === "customer" ? "Customer trunk" : "Vendor trunk")),
+      enterpriseName: visCol(enterpriseMask("e")),
       enterpriseId: { sql: "t.enterprise_id" },
-      username: { sql: "t.username" },
+      username: visCol(hide("contacts", "t.username", byEnterprise("t.enterprise_id"))),
       category: { sql: "pc.name" },
       categoryId: { sql: "t.product_category_id" },
       currency: { sql: trunkCurrencySql(kind, "t") },
@@ -182,7 +197,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
       status: { sql: "t.status" },
       bindType: { sql: "t.bind_type" },
       rulesCount: { sql: rulesCountSql(kind) },
-      ...(kind === "vendor" ? { host: { sql: "t.host" } } : {}),
+      ...(kind === "vendor" ? { host: visCol(hide("contacts", "t.host", byEnterprise("t.enterprise_id"))) } : {}),
       updatedBy: { sql: "ub.username" },
       updatedAt: { sql: "t.updated_at" },
       archived: { sql: "(t.deleted_at IS NOT NULL)" },
@@ -236,6 +251,15 @@ const usersSql = (col: string, sep: string | null) => {
            WHERE x.rate_table_id = rt.id)
     ELSE (SELECT ${agg(col)} FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id WHERE t.id = rt.vendor_trunk_id) END)`;
 };
+const tableTrunkName = vis(
+  maskName(
+    "t.name",
+    "t.id",
+    byEnterprise("t.enterprise_id"),
+    "(CASE rt.kind WHEN 'customer' THEN 'Customer trunk' ELSE 'Vendor trunk' END)",
+  ),
+);
+const tableEnterpriseName = vis(enterpriseMask("e"));
 const amNamesSql = usersSql("(am.first_name || ' ' || am.last_name)", ", ").replaceAll(
   "JOIN enterprises e ON e.id = t.enterprise_id",
   "JOIN enterprises e ON e.id = t.enterprise_id JOIN users am ON am.id = e.account_manager_id",
@@ -253,10 +277,10 @@ export const rateTableList: ListDef<RateTableRow> = {
   archivedField: "archived",
   columns: {
     id: { sql: "rt.id" },
-    name: { sql: "rt.name" },
+    name: visCol(maskName("rt.name", "rt.id", ownedTable, lit("Rate table"))),
     kind: { sql: "rt.kind" },
-    enterpriseNames: { sql: usersSql("e.name", ", ") },
-    trunkNames: { sql: usersSql("t.name", ", ") },
+    enterpriseNames: { sql: usersSql(tableEnterpriseName, ", ") },
+    trunkNames: { sql: usersSql(tableTrunkName, ", ") },
     category: { sql: "pc.name" },
     categoryId: { sql: "rt.product_category_id" },
     currency: { sql: "rt.currency" },
@@ -281,7 +305,7 @@ export const rateTableList: ListDef<RateTableRow> = {
               OR EXISTS (SELECT 1 FROM enterprises e WHERE e.id = vt.enterprise_id AND e.account_manager_id = ANY(${p(ids)}::bigint[])))`;
       },
     },
-    vendorTrunkName: { sql: "vt.name" },
+    vendorTrunkName: visCol(trunkMask("vt", "Vendor trunk")),
     vendorTrunkId: { sql: "rt.vendor_trunk_id" },
     trunkCount: {
       sql: "(SELECT count(*)::int FROM customer_trunk_rate_tables x JOIN customer_trunks ct ON ct.id = x.customer_trunk_id WHERE x.rate_table_id = rt.id AND ct.deleted_at IS NULL)",
@@ -296,8 +320,8 @@ export const rateTableList: ListDef<RateTableRow> = {
     vt.name AS vendor_trunk_name, rt.description,
     (SELECT count(*)::int FROM customer_trunk_rate_tables x JOIN customer_trunks ct ON ct.id = x.customer_trunk_id WHERE x.rate_table_id = rt.id AND ct.deleted_at IS NULL) AS trunk_count,
     COALESCE(st.active_lines, 0) AS active_lines, ${scheduledSql} AS scheduled, ${nextChangeSql} AS next_change_at,
-    CASE WHEN rt.kind = 'customer' THEN COALESCE(st.negative_lines, 0) END AS negative_lines, ${usersSql("t.name", null)} AS trunk_names,
-    ${usersSql("e.name", null)} AS enterprise_names, ub.username AS updated_by, rt.updated_at,
+    CASE WHEN rt.kind = 'customer' THEN COALESCE(st.negative_lines, 0) END AS negative_lines, ${usersSql(tableTrunkName, null)} AS trunk_names,
+    ${usersSql(tableEnterpriseName, null)} AS enterprise_names, ub.username AS updated_by, rt.updated_at,
     (rt.deleted_at IS NOT NULL OR vt.deleted_at IS NOT NULL) AS archived`,
   mapRow: (r) => ({
     id: r.id as number,
@@ -369,21 +393,21 @@ export const rateLineList: ListDef<RateLineRow> = {
     network: { sql: "m.network" },
     mccmnc: { sql: "l.mccmnc" },
     senderId: { sql: "l.sender_id" },
-    rate: { sql: "l.rate" },
-    bestBuy: { sql: bestBuySql },
-    bestVendor: { sql: "bv.name" },
-    margin: { sql: marginSql },
-    marginPct: { sql: marginPctSql },
+    rate: visCol(rateHide("l.rate")),
+    bestBuy: visCol(hide("cost", bestBuySql, byEnterprise("bv.enterprise_id"))),
+    bestVendor: visCol(trunkMask("bv", "Vendor trunk")),
+    margin: visCol(hide("margin", marginSql, ownedTable, { pct: marginPctSql })),
+    marginPct: visCol(hide("margin", marginPctSql, ownedTable)),
     changeType: { sql: changeTypeSql },
     changePct: { sql: changePctSql },
     validFrom: { sql: "l.valid_from" },
     validTo: { sql: "l.valid_to" },
-    nextRate: { sql: "nxt.rate" },
+    nextRate: visCol(rateHide("nxt.rate")),
     nextFrom: { sql: "nxt.valid_from" },
     isBlocked: { sql: "l.is_blocked" },
     negativeMargin: { sql: `(COALESCE(l.rate < ${bestBuySql}, false))` },
     dialCode: { sql: "l.dial_code" },
-    sysRate: { sql: toPlatformSql("l.rate") },
+    sysRate: visCol(rateHide(toPlatformSql("l.rate"))),
     rateNote: { sql: "l.rate_note" },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "l.updated_at" },
@@ -848,8 +872,15 @@ export const qbrStatList: ListDef<QbrStat> = {
       where: (_op, c, p) => `q.side = ${p(String(c.value).toLowerCase())}`,
     },
     trunkId: { sql: "q.trunk_id" },
-    trunk: { sql: "tr.name" },
-    enterprise: { sql: "e.name" },
+    trunk: visCol(
+      maskName(
+        "tr.name",
+        "tr.id",
+        byEnterprise("tr.enterprise_id"),
+        "(CASE tr.side WHEN 'customer' THEN 'Customer trunk' ELSE 'Vendor trunk' END)",
+      ),
+    ),
+    enterprise: visCol(enterpriseMask("e")),
     mccmnc: { sql: "m.mccmnc" },
     country: { sql: "co.name" },
     network: { sql: "CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END" },
@@ -914,8 +945,13 @@ const dlrTargetSql = `CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r
     SELECT min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) FROM unnest(r.mccmncs) AS c(code)
       LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)) END) END`;
 
-const trunkNamesSql = `(SELECT string_agg(t.name, ', ') FROM customer_trunks t WHERE t.id = ANY(r.customer_trunk_ids))`;
-const vendorNamesSql = `(SELECT string_agg(vt.name, ', ') FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
+const ruleTrunkName = vis(trunkMask("t", "Customer trunk"));
+const ruleVendorName = vis(trunkMask("vt", "Vendor trunk"));
+/** A rule is own when it names only own clients' trunks. */
+const ownedRule = `(r.customer_trunk_mode = 'inclusive' AND NOT EXISTS (SELECT 1 FROM customer_trunks ot
+    WHERE ot.id = ANY(r.customer_trunk_ids) AND NOT ot.enterprise_id = ANY($OWN)))`;
+const trunkNamesSql = `(SELECT string_agg(${ruleTrunkName}, ', ') FROM customer_trunks t WHERE t.id = ANY(r.customer_trunk_ids))`;
+const vendorNamesSql = `(SELECT string_agg(${ruleVendorName}, ', ') FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
    WHERE v.route_rule_id = r.id)`;
 
 export const routeRuleList: ListDef<RouteRuleRow> = {
@@ -962,12 +998,12 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
       },
     },
     vendors: { sql: vendorNamesSql },
-    messages: { sql: "tr.messages" },
+    messages: visCol(hide("traffic", "tr.messages", ownedRule)),
     asr: { sql: "tr.asr" },
     dlr: { sql: "tr.dlr" },
     dlrTarget: { sql: dlrTargetSql },
     dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetSql})` },
-    margin: { sql: "tr.margin" },
+    margin: visCol(hide("margin", "tr.margin", ownedRule)),
     status: { sql: "r.status" },
     window: { sql: "NULL", where: () => "TRUE" },
     // Rules that apply to a trunk: all trunks, a list naming it, or an exclusion not naming it.
@@ -1000,9 +1036,9 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     r.mccmnc_mode, r.mccmncs, r.mccmnc_pattern, r.vendor_trunk_mode, cardinality(r.vendor_trunk_ids) AS scope_count,
     cardinality(r.customer_trunk_ids) AS trunk_count,
     (SELECT string_agg(pc.name, ', ' ORDER BY pc.name) FROM product_categories pc WHERE pc.id = ANY(r.category_ids)) AS categories,
-    ARRAY(SELECT t.name FROM unnest(r.customer_trunk_ids) WITH ORDINALITY u(id, o) JOIN customer_trunks t ON t.id = u.id
+    ARRAY(SELECT ${ruleTrunkName} FROM unnest(r.customer_trunk_ids) WITH ORDINALITY u(id, o) JOIN customer_trunks t ON t.id = u.id
            ORDER BY u.o LIMIT 30) AS trunk_names,
-    (SELECT json_agg(json_build_object('n', vt.name, 's', v.share_pct, 'l', v.level, 'b', v.is_backup)
+    (SELECT json_agg(json_build_object('n', ${ruleVendorName}, 's', v.share_pct, 'l', v.level, 'b', v.is_backup)
                      ORDER BY v.level, v.share_pct DESC NULLS LAST, v.id)
        FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id WHERE v.route_rule_id = r.id) AS vendors,
     tr.messages, tr.asr, tr.dlr, ${dlrTargetSql} AS dlr_target, r.dlr_target_pct, tr.margin, r.starts_at, r.stops_at, g.name AS group_name, ub.username AS updated_by,
@@ -1484,15 +1520,15 @@ export const transactionList: ListDef<TransactionRow> = {
     id: { sql: "tx.id" },
     side: { sql: "tx.side" },
     enterpriseId: { sql: "tx.enterprise_id" },
-    enterprise: { sql: "e.name" },
+    enterprise: visCol(enterpriseMask("e")),
     paymentDate: { sql: "tx.payment_date" },
     transactionTime: { sql: "tx.inserted_at" },
     paymentMode: { sql: "tx.payment_mode" },
     paymentType: { sql: "tx.payment_type" },
     transactionType: { sql: "tx.transaction_type" },
-    amount: { sql: "tx.amount" },
+    amount: visCol(hide("balances", "tx.amount", byEnterprise("tx.enterprise_id"))),
     currency: { sql: "tx.currency" },
-    amountBase: { sql: "tx.amount_base" },
+    amountBase: visCol(hide("balances", "tx.amount_base", byEnterprise("tx.enterprise_id"))),
     baseCurrency: { sql: "tx.base_currency" },
     invoiceNumber: { sql: "inv.invoice_number" },
     description: { sql: "tx.description" },
@@ -1544,7 +1580,7 @@ export const invoiceList: ListDef<InvoiceRow> = {
     id: { sql: "inv.id" },
     invoiceNumber: { sql: "inv.invoice_number" },
     enterpriseId: { sql: "inv.enterprise_id" },
-    enterprise: { sql: "e.name" },
+    enterprise: visCol(enterpriseMask("e")),
     enterpriseType: { sql: "e.type" },
     businessCompany: { sql: "bco.name" },
     kind: { sql: "inv.kind" },
@@ -1556,10 +1592,10 @@ export const invoiceList: ListDef<InvoiceRow> = {
     usageStart: { sql: "inv.usage_start" },
     usageEnd: { sql: "inv.usage_end" },
     dueDate: { sql: "inv.due_date" },
-    openingBalance: { sql: "inv.opening_balance" },
-    usageCharges: { sql: "inv.usage_charges" },
-    closingBalance: { sql: "inv.closing_balance" },
-    dueAmount: { sql: "inv.due_amount" },
+    openingBalance: visCol(hide("balances", "inv.opening_balance", byEnterprise("inv.enterprise_id"))),
+    usageCharges: visCol(hide("balances", "inv.usage_charges", byEnterprise("inv.enterprise_id"))),
+    closingBalance: visCol(hide("balances", "inv.closing_balance", byEnterprise("inv.enterprise_id"))),
+    dueAmount: visCol(hide("balances", "inv.due_amount", byEnterprise("inv.enterprise_id"))),
     messageCount: { sql: "inv.message_count" },
     status: { sql: "inv.status" },
     paymentStatus: { sql: "inv.payment_status" },
@@ -1626,7 +1662,7 @@ export const invoiceRequestList: ListDef<InvoiceRequestRow> = {
     invoiceType: { sql: "r.invoice_type" },
     kind: { sql: "r.kind" },
     regenerate: { sql: "r.regenerate" },
-    enterprise: { sql: "e.name" },
+    enterprise: visCol(enterpriseMask("e")),
     enterpriseId: { sql: "r.enterprise_id" },
     enterpriseType: { sql: "e.type" },
     billingType: { sql: "cb.billing_type" },
@@ -1690,18 +1726,18 @@ export const vendorInvoiceList: ListDef<VendorInvoiceRow> = {
   archivedField: "archived",
   columns: {
     id: { sql: "v.id" },
-    enterprise: { sql: "e.name" },
+    enterprise: visCol(enterpriseMask("e")),
     enterpriseId: { sql: "v.enterprise_id" },
     accountManager: { sql: fullName("am") },
     invoiceNumber: { sql: "v.invoice_number" },
     status: { sql: "v.recon_status" },
     comparison: { sql: "v.comparison" },
     currency: { sql: "v.currency" },
-    chargeVolume: { sql: "v.charge_volume" },
-    chargeAmount: { sql: "v.charge_amount" },
-    ourVolume: { sql: "v.our_volume" },
-    ourAmount: { sql: "v.our_amount" },
-    disputeAmount: { sql: viDisputeSql },
+    chargeVolume: visCol(hide("traffic", "v.charge_volume", byEnterprise("v.enterprise_id"))),
+    chargeAmount: visCol(hide("balances", "v.charge_amount", byEnterprise("v.enterprise_id"))),
+    ourVolume: visCol(hide("traffic", "v.our_volume", byEnterprise("v.enterprise_id"))),
+    ourAmount: visCol(hide("balances", "v.our_amount", byEnterprise("v.enterprise_id"))),
+    disputeAmount: visCol(hide("balances", viDisputeSql, byEnterprise("v.enterprise_id"))),
     differencePct: { sql: viPctSql },
     volumeDifference: { sql: "(v.charge_volume - v.our_volume)" },
     invoiceDate: { sql: "v.invoice_date" },
@@ -2404,7 +2440,7 @@ export const soaReportList: ListDef<SoaReportRow> = {
   from: SOA_REPORT_FROM,
   columns: {
     id: { sql: "s.id" },
-    enterprise: { sql: "e.name" },
+    enterprise: visCol(enterpriseMask("e")),
     enterpriseId: { sql: "s.enterprise_id" },
     from: { sql: "s.period_from" },
     to: { sql: "s.period_to" },
@@ -2415,7 +2451,7 @@ export const soaReportList: ListDef<SoaReportRow> = {
     error: { sql: "s.error" },
     emailedAt: { sql: "s.emailed_at" },
     template: { sql: "t.name" },
-    closingBalance: { sql: "s.closing_balance" },
+    closingBalance: visCol(hide("balances", "s.closing_balance", byEnterprise("s.enterprise_id"))),
     createdBy: { sql: "u.username" },
     createdAt: { sql: "s.inserted_at" },
   },
@@ -2680,17 +2716,17 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
   baseWhere: "e.deleted_at IS NULL AND (cb.id IS NOT NULL OR vb.id IS NOT NULL)",
   columns: {
     id: { sql: "e.id" },
-    enterprise: { sql: "e.name" },
+    enterprise: visCol(enterpriseMask("e")),
     enterpriseType: { sql: "e.type" },
-    customerBalance: { sql: "round(bal.customer, 2)" },
+    customerBalance: visCol(hide("balances", "round(bal.customer, 2)", byEnterprise("e.id"))),
     customerCurrency: { sql: "cb.currency" },
-    vendorBalance: { sql: "round(bal.vendor, 2)" },
+    vendorBalance: visCol(hide("balances", "round(bal.vendor, 2)", byEnterprise("e.id"))),
     vendorCurrency: { sql: "vb.currency" },
-    netBalance: { sql: netSql },
+    netBalance: visCol(hide("balances", netSql, byEnterprise("e.id"))),
     accountManager: { sql: fullName("am") },
     billingType: { sql: "cb.billing_type" },
-    creditLimit: { sql: "cb.credit_limit" },
-    creditUsedPct: { sql: creditUsedSql },
+    creditLimit: visCol(hide("balances", "cb.credit_limit", byEnterprise("e.id"))),
+    creditUsedPct: visCol(hide("balances", creditUsedSql, byEnterprise("e.id"))),
     billingCycle: { sql: "bcy.name" },
     currency: { sql: "COALESCE(cb.currency, vb.currency)" },
   },
@@ -2877,6 +2913,9 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   currency_rate_history: currencyRateHistoryList as ListDef<unknown>,
   billing_cycles: billingCycleList as ListDef<unknown>,
   enterprise_balances: enterpriseBalanceList as ListDef<unknown>,
+  visibility_policies: visibilityPolicyList as ListDef<unknown>,
+  visibility_assignments: visibilityAssignmentList as ListDef<unknown>,
+  visibility_grants: visibilityGrantList as ListDef<unknown>,
 };
 
 export { emailTemplateList, userList };

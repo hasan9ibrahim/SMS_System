@@ -172,6 +172,23 @@ import {
   updateLcrProfile,
 } from "./api/lcr.js";
 import {
+  archiveVisibilityPolicy,
+  assignVisibilityPolicy,
+  createVisibilityGrant,
+  createVisibilityPolicy,
+  getMyVisibility,
+  getUserVisibility,
+  getVisibilityPolicy,
+  getVisibilityPresets,
+  queryVisibilityAssignments,
+  queryVisibilityGrants,
+  queryVisibilityPolicies,
+  removeVisibilityAssignment,
+  restoreVisibilityPolicy,
+  revokeVisibilityGrant,
+  updateVisibilityPolicy,
+} from "./api/visibility.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -459,7 +476,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.27.0";
+const VERSION = "0.28.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -578,6 +595,23 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveLcrProfile,
   restoreLcrProfile,
   queryDestinations: queryList("destinations"),
+
+  // AM visibility (§13.17)
+  queryVisibilityPolicies,
+  getVisibilityPresets,
+  getVisibilityPolicy,
+  createVisibilityPolicy,
+  updateVisibilityPolicy,
+  archiveVisibilityPolicy,
+  restoreVisibilityPolicy,
+  queryVisibilityAssignments,
+  assignVisibilityPolicy,
+  removeVisibilityAssignment,
+  queryVisibilityGrants,
+  createVisibilityGrant,
+  revokeVisibilityGrant,
+  getUserVisibility,
+  getMyVisibility,
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
   queryRouteRules,

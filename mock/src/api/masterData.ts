@@ -38,7 +38,7 @@ import {
   productCategoryList,
   trunkCurrencySql,
 } from "../lists/defs.js";
-import { compileQuery, runList, type ListDef } from "../lists/engine.js";
+import { compileQuery, exportRows, runList, type ListDef } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { listFields } from "../lists/fields.js";
 import { sendProblem } from "../problem.js";
@@ -182,9 +182,9 @@ export async function exportList<Row>(
   const errors = checkListQuery(query, listFields[list]);
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
-    const q = compileQuery(def as ListDef<unknown>, query);
-    const { rows } = await pool.query(q.sql, q.values);
-    const lines = rows.slice(0, q.limit).map((r) => cols.map(([, f]) => csvCell(f(def.mapRow(r)))).join(","));
+    // As the viewer sees it: masked names and hidden values are replaced in exports too (§13.17).
+    const rows = await exportRows(pool, def, query);
+    const lines = rows.map((r) => cols.map(([, f]) => csvCell(f(r))).join(","));
     return reply
       .type("text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${file}"`)

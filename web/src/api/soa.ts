@@ -16,7 +16,7 @@ import type {
   SoaStatement,
   SoaStatementQuery,
 } from "@sms/contract";
-import { api, unwrap } from "./client";
+import { api, apiFetch, unwrap } from "./client";
 import { useRefreshRecords } from "./records";
 
 export function useSoaSearch(q: SoaQuery | null) {
@@ -79,7 +79,7 @@ export async function waitForReports(ids: number[]): Promise<SoaReportRow[]> {
 
 /** Downloads a finished report (SOA_<alias>_<from>_<to>.pdf or .xls). */
 export async function downloadSoaReport(id: number) {
-  const res = await fetch(`/api/v1/soa-reports/${id}/file`);
+  const res = await apiFetch(`/api/v1/soa-reports/${id}/file`);
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { title?: string; detail?: string };
     throw new Error(problem.detail ?? problem.title ?? res.statusText);

@@ -159,6 +159,8 @@ interface RowProps<Row> {
   onCheck: (row: Row, shift: boolean) => void;
   trailing?: DataGridProps<{ id: number }>["trailing"];
   extraClass?: string | undefined;
+  /** Values withheld by the viewer's visibility policy (§13.17): field → what to show. */
+  masked?: Map<string, string> | undefined;
 }
 
 /** Archived rows (shown with "Show deleted", §13.29) are greyed out. */
@@ -179,6 +181,7 @@ function GridRowInner<Row extends { id: number }>({
   onCheck,
   trailing,
   extraClass,
+  masked,
 }: RowProps<Row>) {
   return (
     <div
@@ -207,7 +210,13 @@ function GridRowInner<Row extends { id: number }>({
           style={{ width: c.width }}
           role="gridcell"
         >
-          {c.render ? c.render(row) : defaultCell(c.field, (row as Record<string, unknown>)[c.field.field])}
+          {masked?.has(c.field.field) ? (
+            <Withheld text={masked.get(c.field.field)!} />
+          ) : c.render ? (
+            c.render(row)
+          ) : (
+            defaultCell(c.field, (row as Record<string, unknown>)[c.field.field])
+          )}
         </div>
       ))}
       {trailing && (
@@ -224,6 +233,15 @@ function GridRowInner<Row extends { id: number }>({
   );
 }
 const GridRow = memo(GridRowInner) as typeof GridRowInner;
+
+/** A value the visibility policy withholds (§13.17): Hidden, a band (Low / Normal / High) or Above limit. */
+export function Withheld({ text }: { text: string }) {
+  return (
+    <span className="withheld" title="Withheld by your visibility policy (§13.17)">
+      {text}
+    </span>
+  );
+}
 
 export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) {
   const {
@@ -266,6 +284,15 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 1,
   });
   const rows = useMemo(() => result.data?.pages.flatMap((p) => p.rows) ?? [], [result.data]);
+  const masked = useMemo(() => {
+    const m = new Map<number, Map<string, string>>();
+    for (const p of result.data?.pages ?? [])
+      for (const x of p.masked ?? []) {
+        if (!m.has(x.id)) m.set(x.id, new Map());
+        m.get(x.id)!.set(x.field, x.text);
+      }
+    return m;
+  }, [result.data]);
   useEffect(() => onRows?.(rows), [rows, onRows]);
   const first = result.data?.pages[0];
   const error =
@@ -515,6 +542,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
                 onCheck={onCheck}
                 trailing={trailing as RowProps<Row>["trailing"]}
                 extraClass={rowClass?.(row)}
+                masked={masked.get(row.id)}
               />
             );
           })}

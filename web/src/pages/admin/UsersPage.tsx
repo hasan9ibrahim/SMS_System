@@ -26,6 +26,8 @@ import { problemText } from "../routing/dialogs";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
 import { countryOptions, PASSWORD_TONE, passwordLabel, USER_TYPE } from "./adminModel";
 import { Kv, openTempPassword, PasswordRules, statusCell } from "./parts";
+import { useUserVisibility } from "../../api/visibility";
+import { EffectiveCard } from "./visibility/VisibilityPage";
 
 const page = pageForPath("/admin/users")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -489,6 +491,11 @@ export function UsersPage() {
             ),
           },
           {
+            key: "visibility",
+            label: "Visibility",
+            content: <UserVisibility id={r.id} />,
+          },
+          {
             key: "history",
             label: "History",
             content: <HistoryList scope={{ entityTypes: ["user", "user_password", "user_totp"], entityId: r.id }} />,
@@ -498,4 +505,11 @@ export function UsersPage() {
       shortcuts="↑↓ move · Enter edits · Space selects · Ctrl+Z undo"
     />
   );
+}
+
+/** The user's effective visibility policy (§13.17: shown on their profile). */
+function UserVisibility({ id }: { id: number }) {
+  const v = useUserVisibility(id);
+  if (!v.data) return <span className="muted">Loading…</span>;
+  return <EffectiveCard v={v.data} />;
 }

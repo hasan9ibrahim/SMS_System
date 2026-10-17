@@ -239,3 +239,61 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* AM visibility (§13.17) */
+.withheld {
+  display: inline-block;
+  padding: 0 6px;
+  border: var(--border-width) dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.viewas-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 16px;
+  border-bottom: var(--border-width) solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-panel));
+  color: var(--color-text);
+}
+.viewas-banner .btn {
+  margin-left: auto;
+}
+.vis-card {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.vis-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+.vis-check > .field {
+  min-width: 280px;
+}
+.vis-items {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+}
+.vis-items th,
+.vis-items td {
+  padding: 6px 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+.vis-items th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+.vis-presets {
+  margin-bottom: 12px;
+}

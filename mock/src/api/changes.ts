@@ -89,6 +89,19 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
     },
   },
   business_company: { table: "business_companies", columns: {} },
+  // Visibility policies (§13.17)
+  visibility_policy: {
+    table: "visibility_policies",
+    columns: {
+      name: "name",
+      description: "description",
+      status: "status",
+      maskOthers: "mask_others",
+      includeTeam: "include_team",
+      items: "items",
+      thresholds: "thresholds",
+    },
+  },
   // LCR profiles (§13.23)
   lcr_profile: {
     table: "lcr_profiles",

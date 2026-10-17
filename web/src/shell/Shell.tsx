@@ -10,6 +10,7 @@ import { StatusBar } from "./StatusBar";
 import { TabPane } from "./TabPane";
 import { TabStrip } from "./TabStrip";
 import { TopMenu } from "./TopMenu";
+import { ViewAsBanner } from "./ViewAsBanner";
 import { listenForDocking, loadWorkspace, startWorkspaceSync, useTabs } from "./tabs";
 import { useThemeSync } from "./theme";
 
@@ -95,6 +96,7 @@ export function Shell() {
     <div className="shell">
       <TopMenu />
       <TabStrip />
+      <ViewAsBanner />
       <main className={`panes${split ? " split" : ""}`}>
         {ready ? (
           tabs.map((t) => (

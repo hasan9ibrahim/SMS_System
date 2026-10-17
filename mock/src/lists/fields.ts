@@ -2798,7 +2798,14 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "detectedAt", label: "Detected", type: "datetime", defaultOperator: "between" }),
       field({ field: "handledBy", label: "Handled By", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "autoApplied", label: "Auto-applied", type: "integer", defaultOperator: "gte", hidden: true }),
-      field({ field: "amUserId", label: "Account Manager", type: "integer", defaultOperator: "eq", hidden: true, sortable: false }),
+      field({
+        field: "amUserId",
+        label: "Account Manager",
+        type: "integer",
+        defaultOperator: "eq",
+        hidden: true,
+        sortable: false,
+      }),
     ],
   },
 
@@ -2868,6 +2875,94 @@ export const listFields: Record<ListId, ListFields> = {
     ],
   },
 
+  // AM visibility (§13.17)
+  visibility_policies: {
+    list: "visibility_policies",
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
+      field({
+        field: "status",
+        label: "Status",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "active", label: "Active" },
+          { value: "inactive", label: "Inactive" },
+        ],
+      }),
+      field({ field: "maskOthers", label: "Masks Others", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "includeTeam", label: "Team Counts as Own", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "assignments", label: "Assignments", type: "integer", defaultOperator: "gte" }),
+      field({ field: "description", label: "Description", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "updatedAt", label: "Updated", type: "datetime", defaultOperator: "between" }),
+      field({ field: "archived", label: "Deleted", type: "boolean", defaultOperator: "eq", hidden: true }),
+    ],
+  },
+  visibility_assignments: {
+    list: "visibility_assignments",
+    defaultSort: [{ field: "targetType", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({
+        field: "targetType",
+        label: "Assigned To",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "all_ams", label: "All account managers" },
+          { value: "department", label: "Department" },
+          { value: "user", label: "User" },
+        ],
+      }),
+      field({ field: "targetName", label: "Target", type: "text", defaultOperator: "like" }),
+      field({ field: "targetId", label: "Target ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "policyName", label: "Policy", type: "text", defaultOperator: "like" }),
+      field({ field: "policyId", label: "Policy ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "users", label: "Users", type: "integer", defaultOperator: "gte" }),
+      field({ field: "createdBy", label: "Assigned By", type: "text", defaultOperator: "like" }),
+      field({ field: "createdAt", label: "Assigned", type: "datetime", defaultOperator: "between" }),
+    ],
+  },
+  visibility_grants: {
+    list: "visibility_grants",
+    defaultSort: [{ field: "createdAt", dir: "desc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "userName", label: "User", type: "text", defaultOperator: "like" }),
+      field({ field: "userId", label: "User ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "enterpriseName", label: "Enterprise", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({
+        field: "kind",
+        label: "Kind",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "temporary", label: "Temporary" },
+          { value: "share", label: "Lasting share" },
+        ],
+      }),
+      field({
+        field: "state",
+        label: "State",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "active", label: "Active" },
+          { value: "expired", label: "Expired" },
+          { value: "revoked", label: "Revoked" },
+        ],
+      }),
+      field({ field: "expiresAt", label: "Expires", type: "datetime", defaultOperator: "between" }),
+      field({ field: "reason", label: "Reason", type: "text", defaultOperator: "like" }),
+      field({ field: "grantedBy", label: "Granted By", type: "text", defaultOperator: "like" }),
+      field({ field: "createdAt", label: "Granted", type: "datetime", defaultOperator: "between" }),
+      field({ field: "revokedAt", label: "Revoked", type: "datetime", defaultOperator: "between", hidden: true }),
+    ],
+  },
   // Admin (§11)
   departments: {
     list: "departments",

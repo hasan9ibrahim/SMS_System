@@ -8192,6 +8192,291 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/visibility-policies/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List visibility policies (server-side filter, sort and paging)
+     * @description Visibility policies (§13.17): which items are masked or hidden, thresholds, scope of own.
+     */
+    post: operations["queryVisibilityPolicies"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-policies/presets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Ready visibility presets (§13.17)
+     * @description Strict AM, Standard AM and Team lead, as a starting point for a new policy.
+     */
+    get: operations["getVisibilityPresets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-policies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a visibility policy
+     * @description A visibility policy (§13.17). Written to the Audit Trail.
+     *     One undoable change.
+     */
+    post: operations["createVisibilityPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-policies/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a visibility policy
+     * @description Every field of the form.
+     */
+    get: operations["getVisibilityPolicy"];
+    /**
+     * Change a visibility policy
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateVisibilityPolicy"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-policies/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a visibility policy (§13.29)
+     * @description Blocked while it is assigned. It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveVisibilityPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-policies/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a visibility policy
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreVisibilityPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-assignments/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List visibility assignments (server-side filter, sort and paging)
+     * @description Who each policy is assigned to: all account managers, a department or a user (§13.17).
+     */
+    post: operations["queryVisibilityAssignments"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-assignments": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Assign a visibility policy (§13.17)
+     * @description To all account managers, a department or a user; replaces that target's earlier assignment. Written to the Audit Trail.
+     */
+    post: operations["assignVisibilityPolicy"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-assignments/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Remove a visibility assignment
+     * @description The target falls back to the next assignment (user, department, all account managers). Written to the Audit Trail.
+     */
+    delete: operations["removeVisibilityAssignment"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-grants/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List visibility grants (server-side filter, sort and paging)
+     * @description Lasting shares and temporary access to an enterprise (§13.17); temporary ones expire by themselves.
+     */
+    post: operations["queryVisibilityGrants"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-grants": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Grant sight of an enterprise (§13.17)
+     * @description E.g. covering a colleague on holiday: the user sees the enterprise as their own until it expires. Written to the Audit Trail.
+     */
+    post: operations["createVisibilityGrant"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/visibility-grants/{id}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke a share or temporary access
+     * @description Ends it now. Written to the Audit Trail.
+     */
+    post: operations["revokeVisibilityGrant"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/visibility": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * A user's effective visibility policy (§13.17)
+     * @description The policy that applies, where it comes from, and the scope of own. Shown on the user's profile.
+     */
+    get: operations["getUserVisibility"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/me/visibility": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * My effective visibility policy (§13.17)
+     * @description For the signed-in user, or the user an administrator previews with the X-View-As header.
+     */
+    get: operations["getMyVisibility"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -9090,7 +9375,7 @@ export type components = {
       enterpriseId: components["schemas"]["Id"];
       enterpriseName: string;
       name: string;
-      username: string;
+      username: string | null;
       categoryId: components["schemas"]["Id"] | null;
       category: string | null;
       /**
@@ -9464,9 +9749,9 @@ export type components = {
       network: string;
       dialCode: string | null;
       senderId: string | null;
-      rate: number;
+      rate: number | null;
       /** @description The rate in the platform currency (`ReferenceData.platformCurrency`, EUR by default). */
-      sysRate: number;
+      sysRate: number | null;
       currency: string;
       /** @description Cheapest current vendor rate for the destination and product category, in the table currency. */
       bestBuy: number | null;
@@ -11269,10 +11554,10 @@ export type components = {
       /** @enum {string} */
       paymentType: "credit" | "debit";
       transactionType: components["schemas"]["TransactionType"];
-      amount: number;
+      amount: number | null;
       currency: string;
       /** @description Final Amount in the business company base currency at the payment date. */
-      amountBase: number;
+      amountBase: number | null;
       baseCurrency: string;
       /** Format: date */
       paymentDate: string;
@@ -11451,7 +11736,7 @@ export type components = {
       vendorBalance: number | null;
       vendorCurrency: string | null;
       /** @description Customer − vendor, in `currency` (the vendor side converted at the latest rate); negative = the partner owes us after offsetting. */
-      netBalance: number;
+      netBalance: number | null;
       accountManager: string | null;
       /** @enum {string|null} */
       billingType: "prepaid" | "postpaid" | null;
@@ -11531,12 +11816,12 @@ export type components = {
       /** Format: date */
       dueDate: string;
       /** @description Customer balance before the usage, same sign as every balance (positive = the client's credit, negative = owed). */
-      openingBalance: number;
-      usageCharges: number;
+      openingBalance: number | null;
+      usageCharges: number | null;
       /** @description Opening balance − usage charges. */
-      closingBalance: number;
+      closingBalance: number | null;
       /** @description What the client must pay, never negative (the owed part of the closing balance). */
-      dueAmount: number;
+      dueAmount: number | null;
       messageCount: number;
       /** @enum {string} */
       status: "pending" | "inprogress" | "completed" | "failed";
@@ -11752,7 +12037,7 @@ export type components = {
       invoiceNumber: string;
       currency: string;
       chargeVolume: number | null;
-      chargeAmount: number;
+      chargeAmount: number | null;
       /** @description Our billable vendor messages for the period; null = not checked. */
       ourVolume: number | null;
       /** @description Our vendor cost for the period in the invoice currency. */
@@ -14266,6 +14551,158 @@ export type components = {
       topChanged: boolean;
     };
     /**
+     * @description show = the value; hide = nothing ("Hidden"); band = Low / Normal / High instead of the value (margin only).
+     * @enum {string}
+     */
+    VisibilityMode: "show" | "hide" | "band";
+    /** @description What a user sees of others' clients and vendors, and of their own. */
+    VisibilityItemSetting: {
+      others: components["schemas"]["VisibilityMode"];
+      own: components["schemas"]["VisibilityMode"];
+    };
+    /** @description The items that can be hidden (§13.17 table). */
+    VisibilityItems: {
+      /** @description Margin and margin %. */
+      margin: components["schemas"]["VisibilityItemSetting"];
+      /** @description Revenue / sell amounts of traffic. */
+      revenue: components["schemas"]["VisibilityItemSetting"];
+      /** @description Cost and vendor buy rates. */
+      cost: components["schemas"]["VisibilityItemSetting"];
+      /** @description Customer sell rates. */
+      sellRates: components["schemas"]["VisibilityItemSetting"];
+      /** @description Balances, credit limits, invoices and payments. */
+      balances: components["schemas"]["VisibilityItemSetting"];
+      /** @description Contact details, IPs, usernames and passwords. */
+      contacts: components["schemas"]["VisibilityItemSetting"];
+      /** @description Traffic volumes (attempts, TPS). */
+      traffic: components["schemas"]["VisibilityItemSetting"];
+    };
+    VisibilityThresholds: {
+      /** @description Band: below this margin % is Low. */
+      marginLowPct: number;
+      /** @description Band: above this margin % is High. */
+      marginHighPct: number;
+      /** @description Revenue shown only up to this amount (platform currency); above it "Above limit". Null = no limit. */
+      revenueHideAbove: number | null;
+      /** @description When set, others' vendors that carried the user's clients' traffic in the last N days count as own for cost and buy rates. */
+      costTrafficDays: number | null;
+    };
+    VisibilityPolicyFields: {
+      name: string;
+      description: string | null;
+      status: components["schemas"]["RecordStatus"];
+      /** @description Others' enterprises and trunks appear as IDs ("Customer #2481"). */
+      maskOthers: boolean;
+      /** @description For team leads: the enterprises of their team members count as own. */
+      includeTeam: boolean;
+      items: components["schemas"]["VisibilityItems"];
+      thresholds: components["schemas"]["VisibilityThresholds"];
+    };
+    VisibilityPolicyInput: components["schemas"]["VisibilityPolicyFields"];
+    VisibilityPolicyRow: components["schemas"]["VisibilityPolicyFields"] & {
+      id: components["schemas"]["Id"];
+      /** @description Assignments using it. */
+      assignments: number;
+      /** @description One line: what is masked and hidden. */
+      summary: string;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    VisibilityPolicySaved: {
+      record: components["schemas"]["VisibilityPolicyRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    VisibilityPolicyPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["VisibilityPolicyRow"][];
+    };
+    /** @description Ready presets: Strict AM (others masked, all money hidden), Standard AM (others masked, own money shown), Team lead (team shown, others masked). */
+    VisibilityPreset: {
+      /** @enum {string} */
+      key: "strict_am" | "standard_am" | "team_lead";
+      fields: components["schemas"]["VisibilityPolicyFields"];
+    };
+    /**
+     * @description Who a policy is assigned to. A user's own assignment wins over their department's, which wins over the one for all account managers.
+     * @enum {string}
+     */
+    VisibilityTargetType: "all_ams" | "department" | "user";
+    /** @description targetId: the department or user; null for all_ams. Replaces the target's earlier assignment. */
+    VisibilityAssignmentInput: {
+      policyId: components["schemas"]["Id"];
+      targetType: components["schemas"]["VisibilityTargetType"];
+      targetId: components["schemas"]["Id"] | null;
+    };
+    VisibilityAssignment: {
+      id: components["schemas"]["Id"];
+      policyId: components["schemas"]["Id"];
+      policyName: string;
+      targetType: components["schemas"]["VisibilityTargetType"];
+      targetId: components["schemas"]["Id"] | null;
+      targetName: string;
+      /** @description Users this assignment decides the policy of now. */
+      users: number;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+    };
+    VisibilityAssignmentPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["VisibilityAssignment"][];
+    };
+    VisibilityGrantInput: {
+      userId: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"];
+      /** @description Temporary access ends then; null = a lasting share. */
+      expiresAt: components["schemas"]["Timestamp"] | null;
+      reason: string;
+    };
+    VisibilityGrant: {
+      id: components["schemas"]["Id"];
+      userId: components["schemas"]["Id"];
+      userName: string;
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      /** @enum {string} */
+      kind: "temporary" | "share";
+      expiresAt: components["schemas"]["Timestamp"] | null;
+      reason: string;
+      /** @enum {string} */
+      state: "active" | "expired" | "revoked";
+      grantedBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      revokedAt: components["schemas"]["Timestamp"] | null;
+    };
+    VisibilityGrantPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["VisibilityGrant"][];
+    };
+    EffectiveVisibility: {
+      userId: components["schemas"]["Id"];
+      userName: string;
+      /** @description No policy applies (administrators, users without an assignment). */
+      exempt: boolean;
+      exemptReason: string | null;
+      policy: components["schemas"]["VisibilityPolicyRow"] | null;
+      /** @enum {string|null} */
+      source: "user" | "department" | "all_ams" | null;
+      sourceName: string | null;
+      /** @description Enterprises where the user is the account manager. */
+      ownEnterprises: number;
+      /** @description Added by the team scope. */
+      teamEnterprises: number;
+      /** @description Added by active shares and temporary grants. */
+      grantedEnterprises: number;
+      /** @description Vendor enterprises counted as own for cost by the traffic threshold. */
+      costVendors: number;
+      grants: components["schemas"]["VisibilityGrant"][];
+      /** @description An administrator is previewing this user (X-View-As). */
+      viewAs: boolean;
+    };
+    /** @description A value withheld by the visibility policy (§13.17): the row, the field, and what to show instead (Hidden, Low, Normal, High, Above limit). */
+    MaskedCell: {
+      id: components["schemas"]["Id"];
+      field: string;
+      text: string;
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -14721,7 +15158,10 @@ export type components = {
       | "rate_notification_lines"
       | "market_moves"
       | "lcr_profiles"
-      | "lcr_changes";
+      | "lcr_changes"
+      | "visibility_policies"
+      | "visibility_assignments"
+      | "visibility_grants";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -14811,6 +15251,11 @@ export type components = {
       totalIsEstimate: boolean;
       /** @description Pass as `cursor` to fetch the next page; null on the last page. */
       nextCursor: string | null;
+      /**
+       * @description Values the viewer's visibility policy withholds (§13.17); those fields are null in the rows.
+       *     Masked names arrive already replaced ("Customer #2481"). Absent when nothing is withheld.
+       */
+      masked?: components["schemas"]["MaskedCell"][];
     };
     /**
      * @description Decides the column filter widget (§15.1) and the allowed operators.
@@ -15321,6 +15766,11 @@ export type components = {
     };
   };
   parameters: {
+    /**
+     * @description Administrators only: answer as this user would see it, with their visibility policy (§13.17 preview).
+     *     Every operation honours it; ignored for other users.
+     */
+    ViewAs: components["schemas"]["Id"];
     TrafficWindow: components["schemas"]["TrafficWindow"];
     /** @description Which lines (§13.12 view tabs). */
     RateView: "current" | "scheduled" | "closed";
@@ -15830,6 +16280,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
@@ -16245,6 +16696,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
@@ -16500,6 +16952,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
@@ -27268,6 +27721,416 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryVisibilityPolicies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of visibility policies */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityPolicyPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVisibilityPresets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The presets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityPreset"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createVisibilityPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VisibilityPolicyInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityPolicySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVisibilityPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a visibility policy */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityPolicyRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateVisibilityPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VisibilityPolicyInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityPolicySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveVisibilityPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityPolicySaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreVisibilityPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityPolicySaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryVisibilityAssignments: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of visibility assignments */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityAssignmentPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  assignVisibilityPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VisibilityAssignmentInput"];
+      };
+    };
+    responses: {
+      /** @description Assigned */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityAssignment"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  removeVisibilityAssignment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryVisibilityGrants: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of visibility grants */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityGrantPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createVisibilityGrant: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VisibilityGrantInput"];
+      };
+    };
+    responses: {
+      /** @description Granted */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityGrant"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  revokeVisibilityGrant: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VisibilityGrant"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getUserVisibility: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The effective policy */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EffectiveVisibility"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMyVisibility: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Administrators only: answer as this user would see it, with their visibility policy (§13.17 preview).
+         *     Every operation honours it; ignored for other users.
+         */
+        "X-View-As"?: components["parameters"]["ViewAs"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The effective policy */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EffectiveVisibility"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };
   };

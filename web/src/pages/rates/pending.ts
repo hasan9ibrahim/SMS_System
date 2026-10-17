@@ -19,11 +19,14 @@ export type ChangeMode = "percent" | "amount" | "margin";
  * best buy plus a margin amount. Null when it can't apply (no best buy) or goes below zero.
  */
 export function changeRate(row: Pick<RateLineRow, "rate" | "bestBuy">, mode: ChangeMode, value: number): number | null {
+  // A rate withheld by the visibility policy (§13.17) cannot be changed by a percentage or amount.
+  if (row.rate === null && mode !== "margin") return null;
+  const rate = row.rate ?? 0;
   const next =
     mode === "percent"
-      ? row.rate * (1 + value / 100)
+      ? rate * (1 + value / 100)
       : mode === "amount"
-        ? row.rate + value
+        ? rate + value
         : row.bestBuy === null
           ? null
           : row.bestBuy + value;

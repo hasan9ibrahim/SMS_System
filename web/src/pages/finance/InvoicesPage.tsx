@@ -84,7 +84,7 @@ const Status = ({ s }: { s: string }) => (
   </span>
 );
 
-const balance = (v: number, ccy: string) => (
+const balance = (v: number | null, ccy: string) => (
   <span className={`num ${balanceWords(v, "customer").tone}`} title={balanceWords(v, "customer").text}>
     {money(v, ccy)}
   </span>
@@ -592,7 +592,9 @@ function InvoiceDetailView({ row, onRegenerate }: { row: InvoiceRow; onRegenerat
         </dd>
         <dt>Due amount</dt>
         <dd>
-          <strong className={`num${d.dueAmount > 0 ? " tone-warning" : ""}`}>{money(d.dueAmount, d.currency)}</strong>
+          <strong className={`num${(d.dueAmount ?? 0) > 0 ? " tone-warning" : ""}`}>
+            {money(d.dueAmount, d.currency)}
+          </strong>
         </dd>
         <dt>Status</dt>
         <dd>
@@ -708,7 +710,9 @@ function InvoicesView({ onGenerate }: { onGenerate: () => void }) {
           width: 130,
           align: "right",
           render: (r) => (
-            <strong className={`num${r.dueAmount > 0 ? " tone-warning" : ""}`}>{money(r.dueAmount, r.currency)}</strong>
+            <strong className={`num${(r.dueAmount ?? 0) > 0 ? " tone-warning" : ""}`}>
+              {money(r.dueAmount, r.currency)}
+            </strong>
           ),
         },
         openingBalance: { width: 140, align: "right", render: (r) => balance(r.openingBalance, r.currency) },
@@ -766,7 +770,7 @@ function InvoicesView({ onGenerate }: { onGenerate: () => void }) {
       selection={{
         summary: (rows, ids) => {
           const picked = rows.filter((r) => ids.has(r.id));
-          const due = picked.reduce((t, r) => t + r.dueAmount, 0);
+          const due = picked.reduce((t, r) => t + (r.dueAmount ?? 0), 0);
           const ccys = new Set(picked.map((r) => r.currency));
           return `${ids.size} selected${picked.length && ccys.size === 1 ? ` · due ${money(due, [...ccys][0])}` : ""}`;
         },

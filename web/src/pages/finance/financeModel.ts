@@ -52,7 +52,7 @@ export function transactionInput(d: TransactionDetail): TransactionInput {
     transactionType: d.transactionType,
     paymentType: d.paymentType,
     paymentDate: d.paymentDate,
-    amount: d.amount,
+    amount: d.amount ?? 0,
     currency: d.currency,
     description: d.description,
     sendConfirmation: d.sendConfirmation,
@@ -72,17 +72,25 @@ export function balanceEffect(t: Pick<TransactionInput, "side" | "paymentType" |
 
 /** The balance in words next to the number, and its tone (owed = amber, credit = plain). */
 export function balanceWords(
-  balance: number,
+  balance: number | null,
   side: "customer" | "vendor",
 ): { text: string; tone: "" | "tone-warning" } {
+  // Withheld by the viewer's visibility policy (§13.17).
+  if (balance === null) return { text: "", tone: "" };
   if (Math.abs(balance) < 0.005) return { text: "settled", tone: "" };
   if (balance > 0) return { text: side === "customer" ? "in credit" : "vendor in credit", tone: "" };
   return { text: side === "customer" ? "owes us" : "we owe", tone: "tone-warning" };
 }
 
 /** Net balance (customer − vendor) in words: negative = the partner owes us after offsetting. */
-export const netWords = (net: number) =>
-  Math.abs(net) < 0.005 ? "settled" : net < 0 ? "partner owes us (net)" : "we owe the partner (net)";
+export const netWords = (net: number | null) =>
+  net === null
+    ? ""
+    : Math.abs(net) < 0.005
+      ? "settled"
+      : net < 0
+        ? "partner owes us (net)"
+        : "we owe the partner (net)";
 
 export const money = (v: number | null | undefined, currency?: string | null) =>
   v === null || v === undefined

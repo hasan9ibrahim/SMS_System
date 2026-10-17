@@ -141,7 +141,7 @@ export function vendorInvoiceInput(d: VendorInvoiceDetail): VendorInvoiceInput {
     enterpriseId: d.enterpriseId,
     invoiceNumber: d.invoiceNumber,
     chargeVolume: d.chargeVolume,
-    chargeAmount: d.chargeAmount,
+    chargeAmount: d.chargeAmount ?? 0,
     currency: d.currency,
     invoiceDate: d.invoiceDate,
     dueDate: d.dueDate,

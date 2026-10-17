@@ -19,7 +19,7 @@ import { withDb } from "../db.js";
 import { marginPct, trafficTodayByRateTable } from "../edr.js";
 import { listFields } from "../lists/fields.js";
 import { negativeMarginSql, rateLineList, rateTableList } from "../lists/defs.js";
-import { compileQuery, runList } from "../lists/engine.js";
+import { compileQuery, exportRows, runList } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 import { scheduleBestBuyRefresh } from "./bestbuy.js";
@@ -124,20 +124,17 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const { rows: t } = await pool.query("SELECT name FROM rate_tables WHERE id = $1", [id]);
     if (!t[0]) return notFound(reply, id);
-    const q = compileQuery(
-      rateLineList as never,
-      {
-        filter: {
-          logic: "and",
-          conditions: [
-            { field: "rateTableId", op: "eq", value: id },
-            { field: "view", op: "eq", value: view },
-          ],
-        },
-        limit: 100_000,
-      } as ListQuery,
-    );
-    const { rows } = await pool.query(q.sql, q.values);
+    // As the viewer sees it (§13.17).
+    const rows = await exportRows(pool, rateLineList, {
+      filter: {
+        logic: "and",
+        conditions: [
+          { field: "rateTableId", op: "eq", value: id },
+          { field: "view", op: "eq", value: view },
+        ],
+      },
+      limit: 100_000,
+    } as ListQuery);
     const cols: [string, string][] = [
       ["Country", "country"],
       ["Network", "network"],
@@ -157,8 +154,8 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
       ["Blocked", "isBlocked"],
       ["Rate Note", "rateNote"],
     ];
-    const lines = rows.slice(0, q.limit).map((r) => {
-      const row = rateLineList.mapRow(r) as unknown as Record<string, unknown>;
+    const lines = rows.map((r) => {
+      const row = r as unknown as Record<string, unknown>;
       return cols.map(([, k]) => csvCell(row[k])).join(",");
     });
     const file = `${String(t[0].name).replace(/[^\w.-]+/g, "_")}_${view}.csv`;

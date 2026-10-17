@@ -21,7 +21,7 @@ import type {
   ProductCategory,
   ProductCategoryInput,
 } from "@sms/contract";
-import { api, ApiError, unwrap } from "./client";
+import { api, ApiError, apiFetch, unwrap } from "./client";
 import { useRefreshRecords, type Saved } from "./records";
 
 /** A save hook: POST when id is null, else PUT; refreshes lists and history afterwards. */
@@ -110,7 +110,7 @@ export function runImport(target: ImportTarget, body: ImportRequest): Promise<Im
 
 /** Downloads a CSV export: POST with the list query, or GET for a profile's dial codes. */
 export async function downloadCsv(path: string, query?: Pick<ListQuery, "filter" | "search" | "sort">) {
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await apiFetch(`/api/v1${path}`, {
     method: query ? "POST" : "GET",
     ...(query ? { headers: { "content-type": "application/json" }, body: JSON.stringify(query) } : {}),
   });

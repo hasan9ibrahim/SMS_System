@@ -150,6 +150,12 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/lcr-profiles/query", { body })) as Promise<ListPage<Row>>;
     case "lcr_changes":
       return unwrap(api.POST("/lcr-changes/query", { body })) as Promise<ListPage<Row>>;
+    case "visibility_policies":
+      return unwrap(api.POST("/visibility-policies/query", { body })) as Promise<ListPage<Row>>;
+    case "visibility_assignments":
+      return unwrap(api.POST("/visibility-assignments/query", { body })) as Promise<ListPage<Row>>;
+    case "visibility_grants":
+      return unwrap(api.POST("/visibility-grants/query", { body })) as Promise<ListPage<Row>>;
     case "market_moves":
       return unwrap(api.POST("/market-moves/query", { body })) as Promise<ListPage<Row>>;
     case "rate_notification_lines":

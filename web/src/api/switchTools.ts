@@ -24,7 +24,7 @@ import type {
   TrafficAlertInput,
   TrafficAlertSaved,
 } from "@sms/contract";
-import { api, unwrap } from "./client";
+import { api, apiFetch, unwrap } from "./client";
 import { useRefreshRecords } from "./records";
 
 function useWrite<In, Out>(fn: (input: In) => Promise<Out>) {
@@ -63,7 +63,7 @@ export function useNotificationPreview(trunkId: number | null, kind: "send_rate"
 
 /** Downloads a trunk's rate sheet (View Rate). */
 export async function downloadRateSheet(trunkId: number, fileType: "excel" | "csv") {
-  const res = await fetch(`/api/v1/customer-trunks/${trunkId}/rate-sheet?fileType=${fileType}`);
+  const res = await apiFetch(`/api/v1/customer-trunks/${trunkId}/rate-sheet?fileType=${fileType}`);
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { title?: string; detail?: string };
     throw new Error(problem.detail ?? problem.title ?? res.statusText);

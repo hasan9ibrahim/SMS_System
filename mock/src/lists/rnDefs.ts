@@ -3,6 +3,7 @@
 import type { RnLineRow, RnRow } from "@sms/contract";
 import type { ListDef } from "./engine.js";
 import { listFields } from "./fields.js";
+import { byEnterprise, lit, maskName, visCol } from "../visibility/sql.js";
 
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
 const str = (v: unknown) => (v as string | null) ?? null;
@@ -63,8 +64,9 @@ export const rnList: ListDef<RnRow> = {
   columns: {
     id: { sql: "n.id" },
     reference: { sql: "n.reference" },
-    vendor: { sql: "ve.name" },
-    vendorTrunk: { sql: "vt.name" },
+    // AM visibility (§13.17): others' vendors appear as IDs.
+    vendor: visCol(maskName("ve.name", "ve.id", byEnterprise("ve.id"), lit("Vendor"))),
+    vendorTrunk: visCol(maskName("vt.name", "vt.id", byEnterprise("vt.enterprise_id"), lit("Vendor trunk"))),
     receivedAt: { sql: "n.received_at" },
     effectiveFrom: { sql: "n.effective_from" },
     lines: { sql: "n.lines" },

@@ -23,7 +23,7 @@ import type {
   TroubleTicketPreviewInput,
   TroubleTicketResult,
 } from "@sms/contract";
-import { api, ApiError, unwrap } from "./client";
+import { api, ApiError, apiFetch, unwrap } from "./client";
 import { fetchListPage } from "./hooks";
 import { downloadBlob } from "./lookup";
 import { useRefreshRecords } from "./records";
@@ -35,7 +35,7 @@ function useWrite<In, Out>(fn: (input: In) => Promise<Out>) {
 
 /** Fetches a file the API answers and hands it to the browser as a download. */
 export async function downloadFrom(path: string, init?: { body: unknown }, fallback = "download") {
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await apiFetch(`/api/v1${path}`, {
     method: init ? "POST" : "GET",
     ...(init ? { headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) } : {}),
   });

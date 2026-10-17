@@ -575,7 +575,7 @@ export const PAGES: PageDef[] = [
     "/admin/visibility",
     "eye",
     "§13.17",
-    "5",
+    "5.17",
     "Account manager masking and hiding",
   ),
   p("admin", "departments", "Departments", "/admin/departments", "folder", "§11", "5.11", "Departments and managers"),
