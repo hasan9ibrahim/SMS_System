@@ -1112,6 +1112,8 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "periodFrom", label: "Invoice From Date", type: "date", defaultOperator: "between" }),
       field({ field: "periodTo", label: "Invoice To Date", type: "date", defaultOperator: "between" }),
       field({ field: "timezone", label: "Timezone", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "inputFrom", label: "Input From Date", type: "datetime", defaultOperator: "between" }),
+      field({ field: "inputTo", label: "Input To Date", type: "datetime", defaultOperator: "between" }),
       field({
         field: "emailStatus",
         label: "Email",

@@ -159,7 +159,8 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   period, due date auto / manual) starts background requests; the page follows them and reports when they finish.
   Invoice requests list: `?view=requests`.
 - **Vendor invoices** (`/finance/vendor-invoices`, `VendorInvoicesPage.tsx`, §13.31), three views (`?view=`):
-  - **Invoices**: their and our figures, dispute amount and difference %, check result and status; Add (with
+  - **Invoices**: their and our figures, dispute amount and difference %, check result and status, Input From/To
+    (the UTC window our figures were counted for; hover for the partner's time zone); Add (with
     optional per-destination lines pasted as text), Import (CSV, dry run first), Export. The result screen shows the
     figures, why it matched or not, the rule used, the e-mail and SOA status, and every check, status change, note and
     e-mail; Accept / Reject / Keep pending / Send acceptance with an e-mail preview, Check again, Note, delete. The

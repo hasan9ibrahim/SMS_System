@@ -7275,6 +7275,18 @@ export type components = {
       remarks: string | null;
       /** Format: date-time */
       checkedAt: string | null;
+      /**
+       * Format: date-time
+       * @description Input From (§7, decided 2026-10-17): start of the window our figures were counted for, as a UTC instant =
+       *     midnight of the invoice From date in the invoice time zone. Null = not counted (not checked yet, or the
+       *     EDR store does not hold the whole period).
+       */
+      inputFrom: string | null;
+      /**
+       * Format: date-time
+       * @description Input To, exclusive end of that window (midnight after the invoice To date in the invoice time zone).
+       */
+      inputTo: string | null;
       createdBy: string | null;
       createdAt: components["schemas"]["Timestamp"];
       updatedAt: components["schemas"]["Timestamp"];

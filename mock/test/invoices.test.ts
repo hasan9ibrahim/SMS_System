@@ -12,6 +12,7 @@ import { closeDb, db, dbReady } from "../src/db.js";
 import { evaluateRecon, flaggedDestinations, withinTolerance } from "../src/billing/recon.js";
 import { coverageOf, edrCoverage, zonedMidnight } from "../src/billing/edrFigures.js";
 import { simplePdf } from "../src/api/invoices.js";
+import { dayWindow } from "../src/billing/zone.js";
 
 process.env.INVOICE_JOB_STEP_MS = "0";
 const app = await buildServer({ socket: false });
@@ -104,6 +105,11 @@ describe("billing days in the partner's time zone (§13.31)", () => {
   test("midnight in a zone and coverage of a period", () => {
     assert.equal(zonedMidnight("2026-10-01", "Asia/Kolkata").toISOString(), "2026-09-30T18:30:00.000Z");
     assert.equal(zonedMidnight("2026-10-01", "America/New_York").toISOString(), "2026-10-01T04:00:00.000Z");
+    const w = dayWindow("2026-09-21", "2026-09-27", "Asia/Dubai");
+    assert.deepEqual(
+      [w.from.toISOString(), w.to.toISOString()],
+      ["2026-09-20T20:00:00.000Z", "2026-09-27T20:00:00.000Z"],
+    );
     const cov = { from: new Date("2026-09-16T21:30:00Z"), to: new Date("2026-10-16T21:29:59Z") };
     assert.equal(coverageOf(cov, "2026-09-21", "2026-09-27", "UTC"), "full");
     assert.equal(coverageOf(cov, "2026-09-01", "2026-09-30", "UTC"), "partial");
@@ -351,6 +357,9 @@ describe("vendor invoices and reconciliation (§13.31)", { skip }, () => {
     assert.ok(["match", "mismatch"].includes(r.comparison), r.reasons.join(" / "));
     assert.notEqual(r.ourAmount, null);
     assert.ok(r.rule, "the rule used is kept");
+    // Input From/To (§7): the UTC window our figures were counted for, midnight to midnight in the invoice zone.
+    assert.equal(r.inputFrom, "2026-09-21T00:00:00.000Z");
+    assert.equal(r.inputTo, "2026-09-28T00:00:00.000Z");
     assert.deepEqual(
       r.events
         .map((e: { kind: string }) => e.kind)
@@ -445,6 +454,7 @@ describe("vendor invoices and reconciliation (§13.31)", { skip }, () => {
     );
     assert.equal(old.record.comparison, "no_data");
     assert.equal(old.record.status, "pending");
+    assert.equal(old.record.inputFrom, null, "not counted");
     assert.match(old.record.reasons[0], /not fully covered/);
 
     const csv = [

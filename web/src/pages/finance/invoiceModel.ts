@@ -183,6 +183,27 @@ export function lastMonths(n: number, today = new Date()): { from: string; to: s
   return { from: m(-(n - 1)), to: m(0) };
 }
 
+/** "2026-09-21 00:00" for an instant in a time zone (Input From/To shown in the partner's zone, §13.31). */
+export function zonedTime(iso: string, tz: string): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+      .formatToParts(new Date(iso))
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+
+/** Input From/To in UTC, as the grid shows it ("2026-09-20 20:00"). */
+export const utcTime = (iso: string) => zonedTime(iso, "UTC");
+
 /** Tone for a difference share: within 1 % neutral, up to 5 % amber, beyond red. */
 export const diffTone = (pct: number | null) =>
   pct === null ? "" : Math.abs(pct) <= 1 ? "" : Math.abs(pct) <= 5 ? "tone-warning" : "tone-error";

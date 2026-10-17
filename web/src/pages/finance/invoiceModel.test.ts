@@ -9,6 +9,8 @@ import {
   parseLines,
   requestInput,
   toleranceWords,
+  utcTime,
+  zonedTime,
 } from "./invoiceModel";
 
 describe("invoice model (§7, §12.3, §13.31)", () => {
@@ -65,5 +67,7 @@ describe("invoice model (§7, §12.3, §13.31)", () => {
       ["", "tone-warning", "tone-error", ""],
     );
     assert.deepEqual(lastMonths(12, new Date("2026-10-17T00:00:00Z")), { from: "2025-11", to: "2026-10" });
+    assert.equal(zonedTime("2026-09-20T20:00:00.000Z", "Asia/Dubai"), "2026-09-21 00:00");
+    assert.equal(utcTime("2026-09-20T20:00:00.000Z"), "2026-09-20 20:00");
   });
 });

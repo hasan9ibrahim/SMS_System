@@ -53,7 +53,9 @@ import {
   RECON_STATUS,
   SOA_LABEL,
   toleranceWords,
+  utcTime,
   vendorInvoiceInput,
+  zonedTime,
 } from "./invoiceModel";
 
 const page = pageForPath("/finance/vendor-invoices")!;
@@ -554,6 +556,22 @@ function ResultView({ row }: { row: VendorInvoiceRow }) {
         <dd>
           {d.periodFrom} → {d.periodTo} <span className="muted small">({d.timezone}, printed on every result)</span>
         </dd>
+        <dt>Input period</dt>
+        <dd>
+          {d.inputFrom && d.inputTo ? (
+            <>
+              <span className="num">
+                {utcTime(d.inputFrom)} → {utcTime(d.inputTo)} UTC
+              </span>{" "}
+              <span className="muted small">
+                = {zonedTime(d.inputFrom, d.timezone)} → {zonedTime(d.inputTo, d.timezone)} in {d.timezone}: the window
+                our figures were counted for
+              </span>
+            </>
+          ) : (
+            muted("not counted: see the check below")
+          )}
+        </dd>
         <dt>Dates</dt>
         <dd>
           invoiced {d.invoiceDate}
@@ -769,6 +787,28 @@ function InvoicesView() {
         dueDate: { width: 120, render: (r) => r.dueDate ?? muted("—") },
         periodFrom: { width: 120 },
         periodTo: { width: 120 },
+        inputFrom: {
+          width: 150,
+          render: (r) =>
+            r.inputFrom ? (
+              <span className="num" title={`${zonedTime(r.inputFrom, r.timezone)} in ${r.timezone}`}>
+                {utcTime(r.inputFrom)}
+              </span>
+            ) : (
+              muted("not counted")
+            ),
+        },
+        inputTo: {
+          width: 150,
+          render: (r) =>
+            r.inputTo ? (
+              <span className="num" title={`${zonedTime(r.inputTo, r.timezone)} in ${r.timezone}`}>
+                {utcTime(r.inputTo)}
+              </span>
+            ) : (
+              muted("—")
+            ),
+        },
         emailStatus: { width: 130, render: (r) => EMAIL_STATUS[r.emailStatus] },
         remarks: { width: 200, render: (r) => r.remarks ?? muted("—") },
       }}

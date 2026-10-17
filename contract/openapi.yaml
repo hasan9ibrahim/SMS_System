@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.17.0
+  version: 0.17.1
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -12249,7 +12249,7 @@ components:
 
     VendorInvoiceRow:
       type: object
-      required: [id, enterpriseId, enterprise, accountManager, invoiceNumber, currency, chargeVolume, chargeAmount, ourVolume, ourAmount, disputeAmount, differencePct, volumeDifference, invoiceDate, dueDate, periodFrom, periodTo, timezone, comparison, status, emailStatus, source, lineCount, remarks, checkedAt, createdBy, createdAt, updatedAt, archivedAt]
+      required: [id, enterpriseId, enterprise, accountManager, invoiceNumber, currency, chargeVolume, chargeAmount, ourVolume, ourAmount, disputeAmount, differencePct, volumeDifference, invoiceDate, dueDate, periodFrom, periodTo, timezone, comparison, status, emailStatus, source, lineCount, remarks, checkedAt, inputFrom, inputTo, createdBy, createdAt, updatedAt, archivedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -12313,6 +12313,17 @@ components:
         checkedAt:
           type: [string, "null"]
           format: date-time
+        inputFrom:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            Input From (§7, decided 2026-10-17): start of the window our figures were counted for, as a UTC instant =
+            midnight of the invoice From date in the invoice time zone. Null = not counted (not checked yet, or the
+            EDR store does not hold the whole period).
+        inputTo:
+          type: [string, "null"]
+          format: date-time
+          description: Input To, exclusive end of that window (midnight after the invoice To date in the invoice time zone).
         createdBy:
           type: [string, "null"]
         createdAt:

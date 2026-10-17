@@ -8,7 +8,9 @@ type Db = pg.Pool | pg.PoolClient;
 export type Side = "customer" | "vendor";
 
 const lit = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
-export const nextDay = (d: string) => new Date(Date.parse(d) + 86400_000).toISOString().slice(0, 10);
+import { nextDay, zonedMidnight } from "./zone.js";
+
+export { nextDay, zonedMidnight };
 
 let coverageCache: { at: number; from: Date | null; to: Date | null } | null = null;
 
@@ -28,23 +30,6 @@ export async function edrCoverage(): Promise<{ from: Date | null; to: Date | nul
     to: empty ? null : new Date(`${r.t.replace(" ", "T")}Z`),
   };
   return coverageCache;
-}
-
-/** Midnight of `day` in `tz` as a UTC instant. */
-export function zonedMidnight(day: string, tz: string): Date {
-  const guess = new Date(`${day}T00:00:00Z`);
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).formatToParts(guess);
-  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
-  return new Date(guess.getTime() - (asUtc - guess.getTime()));
 }
 
 /** Whether the store holds the whole period [from, to] (inclusive days in `tz`). */

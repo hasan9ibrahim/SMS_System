@@ -42,6 +42,7 @@ import {
   usageLines,
   type UsageLine,
 } from "../billing/edrFigures.js";
+import { dayWindow } from "../billing/zone.js";
 import { evaluateRecon, flaggedDestinations, type DestinationFigure } from "../billing/recon.js";
 import { archiveGate } from "./enterprises.js";
 import { billingContacts } from "./finance.js";
@@ -492,6 +493,8 @@ export async function runCheck(c: pg.PoolClient, id: number, userId: number | nu
   let reasons: string[];
   let ourVolume = v.our_volume === null ? null : Number(v.our_volume);
   let ourAmount = v.our_amount === null ? null : Number(v.our_amount);
+  // Input From/To (§7, decided 2026-10-17): the window our figures were counted for; null = not counted.
+  let input: { from: Date; to: Date } | null = null;
   if (!f || !f.lines) {
     comparison = "no_data";
     reasons = ["The EDR store did not answer; not compared"];
@@ -504,6 +507,7 @@ export async function runCheck(c: pg.PoolClient, id: number, userId: number | nu
     ];
   } else {
     const t = sumLines(f.lines);
+    input = dayWindow(ymd(v.period_from), ymd(v.period_to), v.timezone as string);
     ourVolume = t.messages;
     ourAmount = t.amount;
     const theirs = await theirLines(c, id);
@@ -536,11 +540,22 @@ export async function runCheck(c: pg.PoolClient, id: number, userId: number | nu
   }
   await c.query(
     `UPDATE vendor_invoices SET comparison = $2, our_volume = $3, our_amount = $4, check_reasons = $5, rule_snapshot = $6,
-            checked_at = now(), recon_status = $7, email_status = $8,
+            checked_at = now(), recon_status = $7, email_status = $8, input_from = $9, input_to = $10,
             email_sent_at = CASE WHEN $8 = 'sent' AND email_status <> 'sent' THEN now() ELSE email_sent_at END,
             updated_at = now()
       WHERE id = $1`,
-    [id, comparison, ourVolume, ourAmount, reasons, JSON.stringify(rule), next, emailStatus],
+    [
+      id,
+      comparison,
+      ourVolume,
+      ourAmount,
+      reasons,
+      JSON.stringify(rule),
+      next,
+      emailStatus,
+      input?.from ?? null,
+      input?.to ?? null,
+    ],
   );
   await addEvent(c, id, "checked", {
     statusFrom: next !== current ? current : null,

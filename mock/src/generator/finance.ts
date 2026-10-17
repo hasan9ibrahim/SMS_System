@@ -8,6 +8,7 @@
 import type { Rng } from "./rng.js";
 import type { TableSink } from "./sink.js";
 import { usersOf } from "./admin.js";
+import { dayWindow } from "../billing/zone.js";
 import { fxPerUsd, DAY, toBase, type World } from "./world.js";
 import type { Profile } from "./profiles.js";
 
@@ -311,6 +312,9 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
           source: fromEmail ? "email" : "manual",
           checked_at: checkedAt,
           check_reasons: [reason],
+          input_from: dayWindow(ymd(monthStart(m.getTime(), -1)), ymd(new Date(m.getTime() - DAY)), e.billingTimezone)
+            .from,
+          input_to: dayWindow(ymd(monthStart(m.getTime(), -1)), ymd(new Date(m.getTime() - DAY)), e.billingTimezone).to,
           rule_snapshot: null,
           updated_by_id: null,
         });
