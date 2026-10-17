@@ -1,0 +1,20 @@
+// Names of the Cleanup Center's findings (§13.19, §13.20), shared by the list fields and the scan.
+export const KIND_LABELS: Record<string, string> = {
+  route_rule_unused: "Unused route rule",
+  route_rule_expired: "Expired route rule",
+  route_rule_identical: "Identical route rules",
+  route_rule_near_duplicate: "Near-duplicate route rules",
+  route_rule_shadowed: "Shadowed route rule",
+  route_rule_conflict: "Conflicting route rules",
+  route_rule_broken: "Broken vendor reference",
+  translation_rule_unassigned: "Unassigned translation rule",
+  hlr_rule_unassigned: "Unassigned HLR rule",
+  rate_table_unattached: "Rate table on no trunk",
+  rate_table_identical: "Identical rate tables",
+  trunk_idle: "Trunk without traffic",
+  trunk_inactive: "Inactive trunk without traffic",
+  enterprise_dormant: "Dormant enterprise",
+  enterprise_duplicate: "Duplicate enterprise",
+  number_list_unused: "Unused number list",
+  user_idle: "User not signed in",
+};

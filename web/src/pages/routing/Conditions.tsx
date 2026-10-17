@@ -18,6 +18,7 @@ import {
   toInput,
   type ConditionKey,
 } from "./ruleModel";
+import { DuplicateWarning } from "../admin/cleanup/DuplicateWarning";
 
 /** Saves a patch of the rule as one change; resolves with an error text or null. */
 export function useRuleSaver(rule: RouteRuleDetail | undefined) {
@@ -119,6 +120,9 @@ export function ConditionsSection({ id }: { id: number }) {
   return (
     <>
       <ArchivedBanner kind="route_rule" id={r.id} archived={r.archived} what="rule" />
+      {!locked && (
+        <DuplicateWarning what="rule" check={{ kind: "route_rule", excludeId: r.id, routeRule: toInput(r) }} />
+      )}
       <div className="cond-grid">
         {chips.map((c) => (
           <div key={c.key} className="cond-chip">

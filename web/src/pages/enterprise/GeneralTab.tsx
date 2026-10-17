@@ -18,6 +18,7 @@ import { useNotifySaved } from "../../history/undo";
 import { useTabNavigate } from "../../shell/tabContext";
 import { Button } from "../../ui/primitives";
 import { HeaderAction, type SectionProps } from "../../records/parts";
+import { DuplicateWarning } from "../admin/cleanup/DuplicateWarning";
 
 const CONTACTS = [
   ["commercial", "Commercial"],
@@ -182,6 +183,22 @@ export function GeneralTab({
         )}
       </HeaderAction>
       <FormBanner message={banner} onClose={() => setBanner(null)} />
+      <DuplicateWarning
+        what="enterprise"
+        check={
+          isNew || form.dirty
+            ? {
+                kind: "enterprise",
+                excludeId: record?.id ?? null,
+                enterprise: {
+                  name: form.values.name || null,
+                  vatNumber: form.values.vatNumber ?? null,
+                  emails: Object.values(form.values.contacts ?? {}).flatMap((c) => c?.emails ?? []),
+                },
+              }
+            : null
+        }
+      />
       <fieldset disabled={readOnly} className="plain-fieldset">
         <Section title="General information">
           <TextField form={form} path="name" label="Name" required maxLength={200} nullable={false} />

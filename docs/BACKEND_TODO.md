@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-17 | Cleanup center (Admin), Route Rules, Translation rules, HLR rules, Enterprise form | Contract v0.30.0 (tag `admin`): `/cleanup-findings/query` (list id `cleanup_findings`), `GET /cleanup-findings/{id}` (`CleanupFindingDetail`: records and what applying does), `POST /cleanup-findings/{id}/ignore` (reason) and `/reopen`, `GET /cleanup/summary`, `POST /cleanup/scan`, `POST /cleanup/simulate` (`CleanupSimulation`: 24-hour replay), `POST /cleanup/apply` and `/cleanup/approve` (`CleanupSelection` → `CleanupApplyResult` with one change), `GET`/`PUT /cleanup/settings`, `POST /cleanup/check-duplicate` (`DuplicateCheck` → `DuplicateCheckResult`). `ChangeType` gains `cleanup` (change entity type `cleanup`, each diff entry carries its own `entityType`); e-mail log type `cleanup_summary`. Migration `031_cleanup.sql` (`cleanup_findings`, `cleanup_settings`, check constraints); fixture `db/postgres/fixtures/001_redundancy.sql` (loaded after the generated data) | §13.19, §13.20 | Build order 5.19 | Mock done |
 | 2026-10-17 | Team report (Reports), Dashboard, Scheduled reports | Contract v0.29.0 (tag `reports`): `POST /reports/team` (`TeamReportQuery`: period, custom from / to, compare, department, user, role, search; answers `TeamReport`: scope, period and previous period, one `TeamMemberRow` per member with `TeamBusiness` (null for non-AMs), `TeamRates`, `TeamBilling`, `TeamNoc`, `TeamActivity`, totals, saves by hour, `masked`), `POST /reports/team/export` (CSV), `POST /reports/team/users/{id}` (`TeamMemberDetail`: daily results, hours, sign-in days, new and stopped clients, devices; 403 outside the viewer's scope), `/team-timeline/query` (list id `team_timeline`, needs `userId eq`), `GET`/`PUT /team-targets` (`TeamTarget`, `TeamTargetsUpdate`; 403 for team leads and members), `GET /online-users` (`OnlineUsers`, tag `admin`), `POST /me/page-views` (`PageViewInput`, 204). Scheduled reports: `templateKind` gains `team`, with `teamDepartmentId` and `teamPeriod`. Migration `030_team.sql` (`user_targets`, `page_views`, scheduled report columns, indexes) | §13.18 | Build order 5.18 | Mock done |
 | 2026-10-17 | Visibility policies (Admin), every list, records, search | Contract v0.28.0 (tag `admin`): `/visibility-policies` query, CRUD, archive (blocked while assigned), restore, `GET /visibility-policies/presets` (Strict AM, Standard AM, Team lead); `/visibility-assignments/query`, `POST /visibility-assignments` (all account managers, a department or a user; replaces the target's earlier one), `DELETE /visibility-assignments/{id}`; `/visibility-grants/query`, `POST /visibility-grants` (lasting share or temporary access to one enterprise), `POST /visibility-grants/{id}/revoke`; `GET /users/{id}/visibility` and `GET /me/visibility` (`EffectiveVisibility`). Header parameter `X-View-As` (administrators preview another user; every operation honours it). `ListPageMeta.masked` (`MaskedCell`: row, field, text) on every list page; withheld fields come back null, so these became nullable: `TrunkListRow.username`, `RateLineRow.rate` and `sysRate`, `TransactionRow.amount` and `amountBase`, `InvoiceRow.openingBalance` / `usageCharges` / `closingBalance` / `dueAmount`, `VendorInvoiceRow.chargeAmount`, `EnterpriseBalanceRow.netBalance`. `updateEnterprise`, `updateCustomerTrunk`, `updateVendorTrunk` may answer 403 (record masked for the viewer). New list ids `visibility_policies`, `visibility_assignments`, `visibility_grants`; change-log entity type `visibility_policy`. Migration `029_visibility.sql` | §13.17 | Build order 5.17 | Mock done |
 | 2026-10-17 | LCR, Route Rules | Contract v0.27.0 (tag `routing`): `POST /lcr/table` (`LcrQuery`: destination, point in time, profile, quality-weighted score and weights, what-if remove / rates; answers `LcrTable` with `LcrRow`s and an `LcrImpact`), `POST /lcr/client-view` (`LcrClientQuery`, paged `LcrClientPage`), `GET`/`PUT /lcr/alert-settings`, `/lcr-changes/query`; `/lcr-profiles` query, CRUD, dependencies, archive (blocked while route rules use it), restore. Route rules: `RouteRuleFields.lcrProfileId` (Least cost rules only) and Bulk action `set_lcr_profile` with `lcrProfileId` ("Apply LCR"). New list ids `lcr_profiles`, `lcr_changes`; change-log entity type `lcr_profile`. Migration `028_lcr.sql` | §13.23 | Build order 5.16 | Mock done |
@@ -133,6 +134,45 @@ What the Phoenix backend must match so the screens need no change:
 - **Highlights**: below cost (a client's sell under the best cost), cheaper than routed (the best vendor is cheaper than a client's routed vendor), expiring soon (a rate ends within 14 days with no version after it; a line closed by a scheduled change is not expiring), single vendor. Filtering on highlights computes every destination of the lookup first, so it is limited to 1,000 destinations (the backend may precompute these flags).
 - **Matrix columns**: the 60 trunks covering most destinations of the lookup after filters (`columnsTruncated` when more exist); rows page 50 at a time. Timings at full volume (Australia + Germany, 59 destinations): 0.8–1.9 s per page depending on the view (routing makes vendor costs and margin the slowest); easy mode 0.08–0.6 s.
 - Not in this step: hiding money in lookups (§13.17: names are masked by the visibility backstop since step 5.17; the lookup already filters by account manager), "Change route" from the results (bulk routing stays on Route Rules; "Update rates" now opens Bulk rating), Excel export (CSV and clipboard copy for now).
+
+## Cleanup Center notes (build step 5.19, §13.19, §13.20)
+
+- **Scan** (`mock/src/api/cleanup.ts`): about 1 s, at start and then nightly, or with Scan now. Each finding has a fingerprint (kind + records), so a rescan updates the same finding.
+  - New findings are open. Ignored ones stay ignored.
+  - Open findings no longer found become resolved. Applied findings found again reopen.
+- **What it finds**:
+  - Route rules:
+    - Unused: 0 messages in the last N days (default 30), from the rule traffic cache.
+    - Expired: the stop time passed more than 7 days ago.
+    - Identical: same conditions and routing, whatever the name and priority.
+    - Near-duplicate: they differ only in their client trunks.
+    - Shadowed: an earlier rule with the same conditions and "stop" takes all its traffic.
+    - Conflicting: same priority and conditions, other vendors.
+    - Broken: a deleted or inactive vendor trunk in its list.
+  - Translation and HLR rules on no trunk; number lists no rule uses.
+  - Customer rate tables on no trunk, and rate tables with identical current lines.
+  - Trunks with no traffic in N days (inactive ones: archive; active ones: deactivate).
+  - Enterprises without an active trunk or traffic for N days (dormant), and the same company twice (name apart from punctuation and legal form, or the same VAT number).
+  - Users not signed in for N days.
+- **Actions**:
+  - Merge: identical rules keep the first and archive the rest; near-duplicates give the first all client trunks and archive the rest.
+  - Delete (archive, restorable).
+  - Deactivate.
+  - Reassign: remove the dead vendors when working ones remain.
+  - Reorder: the later of two conflicting rules moves one priority lower; the routing result is unchanged.
+  - Review: nothing automatic, e.g. duplicate enterprises or rate-table copies that are on trunks.
+  - Ignore needs a reason.
+- **Replay**: before applying route-rule cleanups, the 300 busiest client trunk and destination pairs of the last 24 hours go through today's rules and through the rules as they would be. Every pair whose vendor changes is listed. About 4 s.
+- **Apply**: one or many findings (or one action for all) are one change in History, entity type `cleanup`, with each entry naming its record type. Undo puts everything back and reopens the findings; undoing the undo applies them again.
+  - With "approval required", a non-administrator's cleanup waits until an administrator approves it.
+- **Weekly summary**: an e-mail (`cleanup_summary`, Email Logs) to the rules owners when findings are open, at most once a week.
+- **Badges**: Route Rules, Translation rules and HLR rules show "Cleanup n", which opens the Cleanup Center filtered on their kinds.
+- **Duplicate warning on save**: the enterprise form (same name, VAT number or e-mail domain) and a route rule's Conditions (same conditions and vendors, or same conditions with other vendors).
+- *The fixture adds redundancy so every kind shows up:*
+  - *6 identical rules plus 2 pairs, 3 near-duplicates, 2 conflicts and 2 shadowed rules;*
+  - *3 duplicate enterprises;*
+  - *an identical rate table.*
+- *Not in this step (§13.20 follow-ups): rate-line redundancy (duplicates, overlaps, lines equal to the country line); merging enterprises or rate tables that are on trunks; "apply settings template" for trunks; unused file / e-mail templates, saved views and scheduled reports; templates and naming patterns to prevent copies; the 90-day purge of archived records; old IDs pointing to the merged record.*
 
 ## Team report notes (build step 5.18, §13.18)
 

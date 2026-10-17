@@ -335,6 +335,11 @@ const TABLES: Record<string, string> = {
 
 /** Puts each entry's `before` value back (undo restores what the change replaced). */
 async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEntry[], userId: number) {
+  // A Cleanup Center change (§13.19) spans record types: each entry names its own.
+  if (entityType === "cleanup") {
+    for (const e of entries) await applyFields(c, (e as DiffEntry & { entityType: string }).entityType, [e], userId);
+    return;
+  }
   if (entityType === "rate_table") {
     // Rate lines need ordered writes (no overlapping versions at any step).
     const rest = entries.filter((e) => e.field === "*");
@@ -503,6 +508,14 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
 
     const newId = await inTransaction(pool, async (c) => {
       await applyFields(c, target.entity_type, revert, me.id);
+      // Undoing a Cleanup Center change opens its findings again (§13.19); undoing that undo applies them again.
+      if (target.entity_type === "cleanup")
+        await c.query(
+          target.undo_of_id
+            ? "UPDATE cleanup_findings SET state = 'applied' WHERE change_id = $1"
+            : "UPDATE cleanup_findings SET state = 'open' WHERE change_id = $1",
+          [target.undo_of_id ?? id],
+        );
       const { rows: ins } = await c.query(
         `INSERT INTO changes (entity_type, entity_ids, change_type, diff, note, undo_of_id, user_id, ip)
          VALUES ($1, $2, 'undo', $3, $4, $5, $6, $7) RETURNING id`,
@@ -511,11 +524,7 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
           // Same records as the change it undoes (rate edits list line ids in the diff only).
           target.entity_ids,
           // The inverse runs the entries backwards, so undoing this undo replays them in order.
-          JSON.stringify(
-            [...revert]
-              .reverse()
-              .map((d) => ({ entity_id: d.entity_id, field: d.field, before: d.after, after: d.before })),
-          ),
+          JSON.stringify([...revert].reverse().map((d) => ({ ...d, before: d.after, after: d.before }))),
           body.note ?? `Undo of #${id} by ${me.displayName}`,
           id,
           CURRENT_USER_ID,

@@ -73,6 +73,12 @@ or sets a vendor's cost and shows the routes and 7-day margin that change. The c
 account manager's sell rates with LCR 1–3. Profiles are edited in a dialog; Least cost route rules pick one in their
 Vendors section, and Route Rules' Bulk edit can apply one to many rules. Changes lists top-vendor changes and cost moves.
 
+**Cleanup center** (`/admin/cleanup`, `src/pages/admin/cleanup/`, §13.19, §13.20): area cards (click to filter),
+findings grid (open and awaiting approval by default), Scan now and Settings; a finding opens its card (why, impact,
+action choice, records with links, what applying does, 24-hour replay for route rules) with Apply, Ignore and Approve;
+bulk Apply / Archive / Deactivate / Ignore on the selection. Undo and History in the header. Route Rules, Translation
+rules and HLR rules show a Cleanup badge; the enterprise form and a route rule's Conditions show a duplicate warning.
+
 **Team report** (`/reports/team`, `src/pages/reports/team/`, §13.18): period (with custom dates), compare,
 department, role and member filters; sections in the URL (`?section=business|rates|billing|noc|activity`) switch the
 columns; totals cards; activity-by-hour and ranking charts (any metric). A member (`?member=ID`) opens their detail

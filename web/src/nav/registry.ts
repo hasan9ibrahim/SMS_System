@@ -618,7 +618,7 @@ export const PAGES: PageDef[] = [
     "/admin/cleanup",
     "sparkles",
     "§13.19, §13.20",
-    "5",
+    "5.19",
     "Unused, duplicate and broken records, reviewed before change",
   ),
   p(

@@ -21,6 +21,7 @@ import { compact, routeTypeOf } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
 import { TrafficAside, TrafficHover, TrafficSection, money, usePlatformCurrency } from "./Traffic";
 import { VendorsSection } from "./VendorsSection";
+import { CleanupBadge } from "../admin/cleanup/CleanupBadge";
 
 const page = pageForPath("/routing/rules")!;
 
@@ -293,22 +294,35 @@ export function RouteRulesPage() {
       historyScope={{ entityTypes: ["route_rule"] }}
       primary={{ label: "New rule", onClick: () => void newRule() }}
       actions={
-        <Button
-          icon="play"
-          onClick={() =>
-            void ask<null>((done) => (
-              <SimulateDialog
-                onClose={() => done(null)}
-                onOpenRule={(id) => {
-                  done(null);
-                  showRule(id);
-                }}
-              />
-            ))
-          }
-        >
-          Simulate
-        </Button>
+        <>
+          <CleanupBadge
+            kinds={[
+              "route_rule_unused",
+              "route_rule_expired",
+              "route_rule_identical",
+              "route_rule_near_duplicate",
+              "route_rule_shadowed",
+              "route_rule_conflict",
+              "route_rule_broken",
+            ]}
+          />
+          <Button
+            icon="play"
+            onClick={() =>
+              void ask<null>((done) => (
+                <SimulateDialog
+                  onClose={() => done(null)}
+                  onOpenRule={(id) => {
+                    done(null);
+                    showRule(id);
+                  }}
+                />
+              ))
+            }
+          >
+            Simulate
+          </Button>
+        </>
       }
       onExport={(s) =>
         void exportRouteRules(toListQuery(s)).catch((e) => toast({ tone: "error", message: problemText(e) }))

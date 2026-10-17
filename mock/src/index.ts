@@ -15,6 +15,7 @@ import { checkPendingRns } from "./api/rn.js";
 import { startMarketMoves } from "./api/marketMoves.js";
 import { startLcrChecks } from "./api/lcr.js";
 import { ensureTeamTargets, startTeamPresence } from "./api/team.js";
+import { startCleanupJobs } from "./api/cleanup.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -39,3 +40,5 @@ startLcrChecks();
 // Team report (§13.18): fake monthly targets once, and presence for the fake team.
 void ensureTeamTargets().catch(() => undefined);
 startTeamPresence();
+// Cleanup Center (§13.19): the scan shortly after start, then nightly, and the weekly summary.
+startCleanupJobs();

@@ -199,6 +199,20 @@ import {
   updateTeamTargets,
 } from "./api/team.js";
 import {
+  applyCleanup,
+  approveCleanup,
+  checkDuplicate,
+  getCleanupFinding,
+  getCleanupSettings,
+  getCleanupSummary,
+  ignoreCleanupFinding,
+  queryCleanupFindings,
+  reopenCleanupFinding,
+  scanCleanup,
+  simulateCleanup,
+  updateCleanupSettings,
+} from "./api/cleanup.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -486,7 +500,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.29.0";
+const VERSION = "0.30.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -632,6 +646,20 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   updateTeamTargets,
   getOnlineUsers,
   recordPageView,
+
+  // Cleanup Center (§13.19, §13.20)
+  queryCleanupFindings,
+  getCleanupFinding,
+  ignoreCleanupFinding,
+  reopenCleanupFinding,
+  getCleanupSummary,
+  scanCleanup,
+  simulateCleanup,
+  applyCleanup: (request, reply) => Promise.resolve(applyCleanup(request, reply)).finally(clearRouteCaches),
+  approveCleanup: (request, reply) => Promise.resolve(approveCleanup(request, reply)).finally(clearRouteCaches),
+  getCleanupSettings,
+  updateCleanupSettings,
+  checkDuplicate,
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
   queryRouteRules,

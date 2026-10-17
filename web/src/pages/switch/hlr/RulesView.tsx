@@ -26,6 +26,7 @@ import { problemText } from "../../routing/dialogs";
 import { MultiPick } from "../../routing/pickers";
 import { useHlrNav, ViewSwitch } from "./HlrPage";
 import { blankHlrRule, dnidPreview, hlrRuleInput, providerTypeLabel } from "./hlrModel";
+import { CleanupBadge } from "../../admin/cleanup/CleanupBadge";
 
 const page = pageForPath("/switch/hlr")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -352,6 +353,7 @@ export function RulesView() {
       title="HLR · Rules"
       selectId={selectId}
       historyScope={{ entityTypes: ["hlr_rule"] }}
+      actions={<CleanupBadge kinds={["hlr_rule_unassigned"]} />}
       primary={{
         label: "Add rule",
         icon: "plus",

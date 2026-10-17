@@ -61,6 +61,7 @@ import {
   usesList,
 } from "./switchModel";
 import { TranslationTest } from "./TranslationTest";
+import { CleanupBadge } from "../admin/cleanup/CleanupBadge";
 
 const page = pageForPath("/switch/translation-rules")!;
 const muted = (v: ReactNode) => <span className="muted">{v}</span>;
@@ -922,6 +923,7 @@ export function TranslationRulesPage() {
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["translation_rule"] }}
+      actions={<CleanupBadge kinds={["translation_rule_unassigned"]} />}
       primary={{
         label: "Add rule",
         icon: "plus",

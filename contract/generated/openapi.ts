@@ -8623,6 +8623,234 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/cleanup-findings/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List cleanup findings (server-side filter, sort and paging)
+     * @description Findings of the Cleanup Center (§13.19, §13.20): unassigned, unused, expired, identical, near-duplicate, shadowed,
+     *     conflicting and broken rules; unattached or identical rate tables and duplicate lines; idle trunks; dormant or
+     *     duplicate enterprises; unused lists; idle users.
+     */
+    post: operations["queryCleanupFindings"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup-findings/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One finding with its records and what applying does
+     * @description The card (§13.19).
+     */
+    get: operations["getCleanupFinding"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup-findings/{id}/ignore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ignore a finding
+     * @description With a reason, so the scan does not suggest it again.
+     */
+    post: operations["ignoreCleanupFinding"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup-findings/{id}/reopen": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reopen an ignored finding
+     * @description It is suggested again.
+     */
+    post: operations["reopenCleanupFinding"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup/summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Cleanup counts (§13.19)
+     * @description Open findings by area and kind, for the Cleanup Center and the badges on rules pages.
+     */
+    get: operations["getCleanupSummary"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup/scan": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Scan now
+     * @description Runs the nightly scan now: new findings open, findings no longer found are resolved, ignored ones stay ignored.
+     */
+    post: operations["scanCleanup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup/simulate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Replay traffic before applying (§13.19)
+     * @description Replays the busiest client trunk and destination pairs of the last 24 hours through today's route rules and through the
+     *     rules as they would be after the cleanup, and lists every pair whose vendor changes.
+     */
+    post: operations["simulateCleanup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup/apply": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Apply findings (§13.19, §13.20)
+     * @description Applies the chosen findings' suggestions (or one action for all) as one undoable change in History. With approval
+     *     required, a non-administrator's cleanup waits for an administrator.
+     */
+    post: operations["applyCleanup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup/approve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Approve waiting cleanups
+     * @description Administrators only. Applies them as one undoable change.
+     */
+    post: operations["approveCleanup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Cleanup settings
+     * @description Thresholds, approval and the weekly summary recipients.
+     */
+    get: operations["getCleanupSettings"];
+    /**
+     * Change cleanup settings
+     * @description Used by the next scan.
+     */
+    put: operations["updateCleanupSettings"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/cleanup/check-duplicate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Duplicate warning before saving (§13.20)
+     * @description An enterprise with the same name, VAT number or e-mail domain, or a route rule with the same conditions and vendors.
+     */
+    post: operations["checkDuplicate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -9213,7 +9441,8 @@ export type components = {
       | "disable"
       | "bulk"
       | "undo"
-      | "import";
+      | "import"
+      | "cleanup";
     /** @description One field of one record, before and after the save. */
     ChangeField: {
       entityId: components["schemas"]["Id"];
@@ -12689,7 +12918,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31) and monitoring_alert (§13.7).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7) and cleanup_summary (§13.19).
      * @enum {string}
      */
     EmailType:
@@ -12713,7 +12942,8 @@ export type components = {
       | "payment_confirmation"
       | "invoice_acceptance"
       | "invoice_rejection"
-      | "monitoring_alert";
+      | "monitoring_alert"
+      | "cleanup_summary";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -15084,6 +15314,158 @@ export type components = {
     PageViewInput: {
       path: string;
     };
+    /** @enum {string} */
+    CleanupArea: "rules" | "rates" | "trunks" | "enterprises" | "lists" | "users";
+    /**
+     * @description merge: combine into one (trunks and priorities moved, the rest archived); archive: delete to the archive (restorable); deactivate; reassign: replace a broken reference; reorder: fix shadowing or a conflict; review: open the records (no automatic fix).
+     * @enum {string}
+     */
+    CleanupAction: "merge" | "archive" | "deactivate" | "reassign" | "reorder" | "review";
+    /**
+     * @description resolved: no longer found by the scan.
+     * @enum {string}
+     */
+    CleanupState: "open" | "awaiting_approval" | "applied" | "ignored" | "resolved";
+    CleanupFinding: {
+      id: components["schemas"]["Id"];
+      area: components["schemas"]["CleanupArea"];
+      /** @description e.g. route_rule_unused, route_rule_identical, rate_table_unattached, enterprise_duplicate. */
+      kind: string;
+      kindLabel: string;
+      entityType: string;
+      entityIds: components["schemas"]["Id"][];
+      title: string;
+      why: string;
+      suggestion: components["schemas"]["CleanupAction"];
+      /** @description Actions this finding allows. */
+      actions: components["schemas"]["CleanupAction"][];
+      impact: string;
+      /** @description Traffic over the records in the last 30 days, when known. */
+      messages30d: number | null;
+      state: components["schemas"]["CleanupState"];
+      ignoreReason: string | null;
+      detectedAt: components["schemas"]["Timestamp"];
+      lastSeenAt: components["schemas"]["Timestamp"];
+      appliedAt: components["schemas"]["Timestamp"] | null;
+      appliedBy: string | null;
+      changeId: components["schemas"]["Id"] | null;
+    };
+    CleanupFindingPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["CleanupFinding"][];
+    };
+    CleanupEntity: {
+      id: components["schemas"]["Id"];
+      type: string;
+      name: string;
+      status: string | null;
+      info: string;
+      /** @description GUI page of the record. */
+      path: string | null;
+    };
+    CleanupFindingDetail: components["schemas"]["CleanupFinding"] & {
+      entities: components["schemas"]["CleanupEntity"][];
+      /** @description What applying the suggestion does, line by line (merge: the combined record). */
+      preview: string[];
+    };
+    CleanupSummaryCount: {
+      area: components["schemas"]["CleanupArea"];
+      kind: string;
+      kindLabel: string;
+      open: number;
+    };
+    CleanupSummary: {
+      open: number;
+      awaitingApproval: number;
+      applied30d: number;
+      ignored: number;
+      byArea: {
+        rules: number;
+        rates: number;
+        trunks: number;
+        enterprises: number;
+        lists: number;
+        users: number;
+      };
+      byKind: components["schemas"]["CleanupSummaryCount"][];
+      lastScanAt: components["schemas"]["Timestamp"] | null;
+      nextScanAt: components["schemas"]["Timestamp"] | null;
+    };
+    CleanupScanResult: {
+      created: number;
+      updated: number;
+      resolved: number;
+      open: number;
+      durationMs: number;
+    };
+    CleanupSelection: {
+      findingIds: components["schemas"]["Id"][];
+      /** @description Overrides each finding's suggestion when it allows it. */
+      action?: components["schemas"]["CleanupAction"] | null;
+      note?: string | null;
+    };
+    CleanupRouteChange: {
+      customerTrunk: string;
+      mccmnc: string;
+      before: string | null;
+      after: string | null;
+      messages24h: number;
+    };
+    CleanupSimulation: {
+      /** @description Client trunk and destination pairs replayed (the busiest of the last 24 hours). */
+      samples: number;
+      messages24h: number;
+      changedSamples: number;
+      changedMessages: number;
+      /** @description Routing results are the same for every pair. */
+      unchanged: boolean;
+      changes: components["schemas"]["CleanupRouteChange"][];
+      note: string;
+    };
+    CleanupApplyResult: {
+      applied: number;
+      awaitingApproval: number;
+      skipped: {
+        id: components["schemas"]["Id"];
+        reason: string;
+      }[];
+      change: components["schemas"]["Change"] | null;
+    };
+    CleanupIgnore: {
+      reason: string;
+    };
+    CleanupSettings: {
+      /** @description A rule or trunk with no traffic for this long is unused. */
+      unusedDays: number;
+      /** @description An enterprise without active trunks or traffic for this long is dormant. */
+      dormantDays: number;
+      userIdleDays: number;
+      /** @description Days after a rule's stop time before it counts as expired. */
+      expiredDays: number;
+      /** @description Cleanups by non-administrators wait for an administrator's approval. */
+      requireApproval: boolean;
+      /** @description Weekly summary recipients (rules owners). */
+      summaryEmails: string[];
+    };
+    DuplicateCheck: {
+      /** @enum {string} */
+      kind: "enterprise" | "route_rule";
+      excludeId?: components["schemas"]["Id"] | null;
+      enterprise?: {
+        name?: string | null;
+        vatNumber?: string | null;
+        emails?: string[];
+      } | null;
+      routeRule?: components["schemas"]["RouteRuleInput"] | null;
+    };
+    DuplicateMatch: {
+      id: components["schemas"]["Id"];
+      name: string;
+      reason: string;
+      path: string;
+    };
+    DuplicateCheckResult: {
+      matches: components["schemas"]["DuplicateMatch"][];
+    };
     /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
@@ -15544,7 +15926,8 @@ export type components = {
       | "visibility_policies"
       | "visibility_assignments"
       | "visibility_grants"
-      | "team_timeline";
+      | "team_timeline"
+      | "cleanup_findings";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -28723,6 +29106,316 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryCleanupFindings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of cleanup findings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupFindingPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getCleanupFinding: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The finding */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupFindingDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  ignoreCleanupFinding: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CleanupIgnore"];
+      };
+    };
+    responses: {
+      /** @description Ignored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupFinding"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  reopenCleanupFinding: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reopened */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupFinding"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getCleanupSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupSummary"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  scanCleanup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Scanned */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupScanResult"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  simulateCleanup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CleanupSelection"];
+      };
+    };
+    responses: {
+      /** @description The replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupSimulation"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  applyCleanup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CleanupSelection"];
+      };
+    };
+    responses: {
+      /** @description Applied */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupApplyResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  approveCleanup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CleanupSelection"];
+      };
+    };
+    responses: {
+      /** @description Applied */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupApplyResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getCleanupSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupSettings"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateCleanupSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CleanupSettings"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CleanupSettings"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  checkDuplicate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DuplicateCheck"];
+      };
+    };
+    responses: {
+      /** @description Matches */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DuplicateCheckResult"];
+        };
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];

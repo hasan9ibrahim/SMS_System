@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.29.0
+  version: 0.30.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -12569,6 +12569,300 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /cleanup-findings/query:
+    post:
+      tags:
+      - admin
+      operationId: queryCleanupFindings
+      summary: List cleanup findings (server-side filter, sort and paging)
+      description: 'Findings of the Cleanup Center (§13.19, §13.20): unassigned, unused, expired, identical, near-duplicate, shadowed,
+
+        conflicting and broken rules; unattached or identical rate tables and duplicate lines; idle trunks; dormant or
+
+        duplicate enterprises; unused lists; idle users.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of cleanup findings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupFindingPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup-findings/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getCleanupFinding
+      summary: One finding with its records and what applying does
+      description: The card (§13.19).
+      parameters: &id001
+      - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The finding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupFindingDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup-findings/{id}/ignore:
+    post:
+      tags:
+      - admin
+      operationId: ignoreCleanupFinding
+      summary: Ignore a finding
+      description: With a reason, so the scan does not suggest it again.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CleanupIgnore'
+      responses:
+        '200':
+          description: Ignored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupFinding'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup-findings/{id}/reopen:
+    post:
+      tags:
+      - admin
+      operationId: reopenCleanupFinding
+      summary: Reopen an ignored finding
+      description: It is suggested again.
+      parameters: *id001
+      responses:
+        '200':
+          description: Reopened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupFinding'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup/summary:
+    get:
+      tags:
+      - admin
+      operationId: getCleanupSummary
+      summary: Cleanup counts (§13.19)
+      description: Open findings by area and kind, for the Cleanup Center and the badges on rules pages.
+      responses:
+        '200':
+          description: The counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup/scan:
+    post:
+      tags:
+      - admin
+      operationId: scanCleanup
+      summary: Scan now
+      description: 'Runs the nightly scan now: new findings open, findings no longer found are resolved, ignored ones stay ignored.'
+      responses:
+        '200':
+          description: Scanned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupScanResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup/simulate:
+    post:
+      tags:
+      - admin
+      operationId: simulateCleanup
+      summary: Replay traffic before applying (§13.19)
+      description: 'Replays the busiest client trunk and destination pairs of the last 24 hours through today''s route rules and through the
+
+        rules as they would be after the cleanup, and lists every pair whose vendor changes.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CleanupSelection'
+      responses:
+        '200':
+          description: The replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupSimulation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup/apply:
+    post:
+      tags:
+      - admin
+      operationId: applyCleanup
+      summary: Apply findings (§13.19, §13.20)
+      description: 'Applies the chosen findings'' suggestions (or one action for all) as one undoable change in History. With approval
+
+        required, a non-administrator''s cleanup waits for an administrator.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CleanupSelection'
+      responses:
+        '200':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupApplyResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup/approve:
+    post:
+      tags:
+      - admin
+      operationId: approveCleanup
+      summary: Approve waiting cleanups
+      description: Administrators only. Applies them as one undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CleanupSelection'
+      responses:
+        '200':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupApplyResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup/settings:
+    get:
+      tags:
+      - admin
+      operationId: getCleanupSettings
+      summary: Cleanup settings
+      description: Thresholds, approval and the weekly summary recipients.
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateCleanupSettings
+      summary: Change cleanup settings
+      description: Used by the next scan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CleanupSettings'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /cleanup/check-duplicate:
+    post:
+      tags:
+      - admin
+      operationId: checkDuplicate
+      summary: Duplicate warning before saving (§13.20)
+      description: An enterprise with the same name, VAT number or e-mail domain, or a route rule with the same conditions and vendors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DuplicateCheck'
+      responses:
+        '200':
+          description: Matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateCheckResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -13610,7 +13904,7 @@ components:
     # ------------------------------------------------------------- history and undo (§13.10)
     ChangeType:
       type: string
-      enum: [create, edit, clone, delete, reorder, enable, disable, bulk, undo, import]
+      enum: [create, edit, clone, delete, reorder, enable, disable, bulk, undo, import, cleanup]
 
     ChangeField:
       type: object
@@ -20843,8 +21137,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert]
-      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31) and monitoring_alert (§13.7).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7) and cleanup_summary (§13.19).
 
     EmailLogRow:
       type: object
@@ -26730,6 +27024,428 @@ components:
           minLength: 1
           maxLength: 300
 
+    # ------------------------------------------------------------- Cleanup Center (§13.19, §13.20)
+    CleanupArea:
+      type: string
+      enum:
+      - rules
+      - rates
+      - trunks
+      - enterprises
+      - lists
+      - users
+    CleanupAction:
+      type: string
+      enum:
+      - merge
+      - archive
+      - deactivate
+      - reassign
+      - reorder
+      - review
+      description: 'merge: combine into one (trunks and priorities moved, the rest archived); archive: delete to the archive (restorable); deactivate; reassign: replace a broken reference; reorder: fix shadowing or a conflict; review: open the records (no automatic fix).'
+    CleanupState:
+      type: string
+      enum:
+      - open
+      - awaiting_approval
+      - applied
+      - ignored
+      - resolved
+      description: 'resolved: no longer found by the scan.'
+    CleanupFinding:
+      type: object
+      required:
+      - id
+      - area
+      - kind
+      - kindLabel
+      - entityType
+      - entityIds
+      - title
+      - why
+      - suggestion
+      - actions
+      - impact
+      - messages30d
+      - state
+      - ignoreReason
+      - detectedAt
+      - lastSeenAt
+      - appliedAt
+      - appliedBy
+      - changeId
+      properties:
+        id: &id001
+          $ref: '#/components/schemas/Id'
+        area:
+          $ref: '#/components/schemas/CleanupArea'
+        kind:
+          type: string
+          description: e.g. route_rule_unused, route_rule_identical, rate_table_unattached, enterprise_duplicate.
+        kindLabel:
+          type: string
+        entityType:
+          type: string
+        entityIds:
+          type: array
+          items: *id001
+        title:
+          type: string
+        why:
+          type: string
+        suggestion:
+          $ref: '#/components/schemas/CleanupAction'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CleanupAction'
+          description: Actions this finding allows.
+        impact:
+          type: string
+        messages30d:
+          type:
+          - integer
+          - 'null'
+          description: Traffic over the records in the last 30 days, when known.
+        state:
+          $ref: '#/components/schemas/CleanupState'
+        ignoreReason: &id003
+          type: &id004
+          - string
+          - 'null'
+        detectedAt: &id002
+          $ref: '#/components/schemas/Timestamp'
+        lastSeenAt: *id002
+        appliedAt: &id006
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        appliedBy: *id003
+        changeId: &id007
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+    CleanupFindingPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/CleanupFinding'
+    CleanupEntity:
+      type: object
+      required:
+      - id
+      - type
+      - name
+      - status
+      - info
+      - path
+      properties:
+        id: *id001
+        type:
+          type: string
+        name:
+          type: string
+        status: *id003
+        info:
+          type: string
+        path:
+          type: *id004
+          description: GUI page of the record.
+    CleanupFindingDetail:
+      allOf:
+      - $ref: '#/components/schemas/CleanupFinding'
+      - type: object
+        required:
+        - entities
+        - preview
+        properties:
+          entities:
+            type: array
+            items:
+              $ref: '#/components/schemas/CleanupEntity'
+          preview:
+            type: array
+            items:
+              type: string
+            description: 'What applying the suggestion does, line by line (merge: the combined record).'
+    CleanupSummaryCount:
+      type: object
+      required:
+      - area
+      - kind
+      - kindLabel
+      - open
+      properties:
+        area:
+          $ref: '#/components/schemas/CleanupArea'
+        kind:
+          type: string
+        kindLabel:
+          type: string
+        open: &id005
+          type: integer
+    CleanupSummary:
+      type: object
+      required:
+      - open
+      - awaitingApproval
+      - applied30d
+      - ignored
+      - byArea
+      - byKind
+      - lastScanAt
+      - nextScanAt
+      properties:
+        open: *id005
+        awaitingApproval: *id005
+        applied30d: *id005
+        ignored: *id005
+        byArea:
+          type: object
+          required:
+          - rules
+          - rates
+          - trunks
+          - enterprises
+          - lists
+          - users
+          properties:
+            rules: *id005
+            rates: *id005
+            trunks: *id005
+            enterprises: *id005
+            lists: *id005
+            users: *id005
+        byKind:
+          type: array
+          items:
+            $ref: '#/components/schemas/CleanupSummaryCount'
+        lastScanAt: *id006
+        nextScanAt: *id006
+    CleanupScanResult:
+      type: object
+      required:
+      - created
+      - updated
+      - resolved
+      - open
+      - durationMs
+      properties:
+        created: *id005
+        updated: *id005
+        resolved: *id005
+        open: *id005
+        durationMs: *id005
+    CleanupSelection:
+      type: object
+      additionalProperties: false
+      required:
+      - findingIds
+      properties:
+        findingIds:
+          type: array
+          items: *id001
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+        action:
+          oneOf:
+          - $ref: '#/components/schemas/CleanupAction'
+          - type: 'null'
+          description: Overrides each finding's suggestion when it allows it.
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+    CleanupRouteChange:
+      type: object
+      required:
+      - customerTrunk
+      - mccmnc
+      - before
+      - after
+      - messages24h
+      properties:
+        customerTrunk:
+          type: string
+        mccmnc:
+          type: string
+        before: *id003
+        after: *id003
+        messages24h: *id005
+    CleanupSimulation:
+      type: object
+      required:
+      - samples
+      - messages24h
+      - changedSamples
+      - changedMessages
+      - unchanged
+      - changes
+      - note
+      properties:
+        samples:
+          type: integer
+          description: Client trunk and destination pairs replayed (the busiest of the last 24 hours).
+        messages24h: *id005
+        changedSamples: *id005
+        changedMessages: *id005
+        unchanged:
+          type: boolean
+          description: Routing results are the same for every pair.
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CleanupRouteChange'
+          maxItems: 50
+        note:
+          type: string
+    CleanupApplyResult:
+      type: object
+      required:
+      - applied
+      - awaitingApproval
+      - skipped
+      - change
+      properties:
+        applied: *id005
+        awaitingApproval: *id005
+        skipped:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - reason
+            properties:
+              id: *id001
+              reason:
+                type: string
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    CleanupIgnore:
+      type: object
+      additionalProperties: false
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 300
+    CleanupSettings:
+      type: object
+      additionalProperties: false
+      required:
+      - unusedDays
+      - dormantDays
+      - userIdleDays
+      - expiredDays
+      - requireApproval
+      - summaryEmails
+      properties:
+        unusedDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: A rule or trunk with no traffic for this long is unused.
+        dormantDays:
+          type: integer
+          minimum: 7
+          maximum: 730
+          description: An enterprise without active trunks or traffic for this long is dormant.
+        userIdleDays:
+          type: integer
+          minimum: 7
+          maximum: 730
+        expiredDays:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: Days after a rule's stop time before it counts as expired.
+        requireApproval:
+          type: boolean
+          description: Cleanups by non-administrators wait for an administrator's approval.
+        summaryEmails:
+          type: array
+          items:
+            type: string
+            format: email
+          maxItems: 20
+          description: Weekly summary recipients (rules owners).
+    DuplicateCheck:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      properties:
+        kind:
+          type: string
+          enum:
+          - enterprise
+          - route_rule
+        excludeId: *id007
+        enterprise:
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required: []
+            properties:
+              name:
+                type:
+                - string
+                - 'null'
+                maxLength: 200
+              vatNumber:
+                type:
+                - string
+                - 'null'
+                maxLength: 50
+              emails:
+                type: array
+                items:
+                  type: string
+                maxItems: 50
+          - type: 'null'
+        routeRule:
+          oneOf:
+          - $ref: '#/components/schemas/RouteRuleInput'
+          - type: 'null'
+    DuplicateMatch:
+      type: object
+      required:
+      - id
+      - name
+      - reason
+      - path
+      properties:
+        id: *id001
+        name:
+          type: string
+        reason:
+          type: string
+        path:
+          type: string
+    DuplicateCheckResult:
+      type: object
+      required:
+      - matches
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/DuplicateMatch'
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -27445,7 +28161,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings]
 
     FilterOperator:
       type: string

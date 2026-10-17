@@ -151,6 +151,13 @@ export async function loadPostgres(dir: string, opts: { reset: boolean; log: (s:
     opts.log(
       `postgres: ${constraints.length} foreign key and exclusion constraints validated in ${((Date.now() - started) / 1000).toFixed(1)}s`,
     );
+    // Fixtures on top of the generated data, e.g. redundancy for the Cleanup Center (§13.19).
+    const fixtures = join(DB_DIR, "postgres", "fixtures");
+    if (existsSync(fixtures))
+      for (const f of readdirSync(fixtures)
+        .filter((x) => x.endsWith(".sql"))
+        .sort())
+        await client.query(readFileSync(join(fixtures, f), "utf8"));
     // Views and counts built on the loaded rates (migration 004, §13.12).
     await client.query("REFRESH MATERIALIZED VIEW best_buy_rates");
     await client.query("SELECT refresh_rate_table_stats()");

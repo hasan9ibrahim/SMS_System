@@ -3,6 +3,7 @@
 import { PLATFORM_CURRENCY } from "../currency.js";
 import type { FieldDescriptor, FilterOperator, ListFields, ListId } from "@sms/contract";
 import { CAUSE_CODES, MESSAGE_STATUSES } from "../smpp.js";
+import { KIND_LABELS } from "../api/cleanupLabels.js";
 
 const TEXT: FilterOperator[] = ["like", "not_like", "eq", "neq", "in", "not_in", "empty", "not_empty", "regex"];
 const NUMBER: FilterOperator[] = [
@@ -2986,6 +2987,72 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "summary", label: "What", type: "text", defaultOperator: "like" }),
       field({ field: "entityType", label: "Record Type", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "entityId", label: "Record ID", type: "integer", defaultOperator: "eq", hidden: true }),
+    ],
+  },
+  // Cleanup Center (§13.19, §13.20)
+  cleanup_findings: {
+    list: "cleanup_findings",
+    defaultSort: [{ field: "messages30d", dir: "desc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({
+        field: "area",
+        label: "Area",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "rules", label: "Rules" },
+          { value: "rates", label: "Rates" },
+          { value: "trunks", label: "Trunks" },
+          { value: "enterprises", label: "Enterprises" },
+          { value: "lists", label: "Lists" },
+          { value: "users", label: "Users" },
+        ],
+      }),
+      field({
+        field: "kind",
+        label: "Finding",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })),
+      }),
+      field({ field: "kindLabel", label: "Finding Name", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "title", label: "What", type: "text", defaultOperator: "like" }),
+      field({
+        field: "suggestion",
+        label: "Suggested",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "merge", label: "Merge" },
+          { value: "archive", label: "Delete (archive)" },
+          { value: "deactivate", label: "Deactivate" },
+          { value: "reassign", label: "Reassign" },
+          { value: "reorder", label: "Reorder" },
+          { value: "review", label: "Review" },
+        ],
+      }),
+      field({ field: "impact", label: "Impact", type: "text", defaultOperator: "like" }),
+      field({ field: "messages30d", label: "Msgs 30 Days", type: "integer", defaultOperator: "gte" }),
+      field({
+        field: "state",
+        label: "State",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "open", label: "Open" },
+          { value: "awaiting_approval", label: "Awaiting approval" },
+          { value: "applied", label: "Applied" },
+          { value: "ignored", label: "Ignored" },
+          { value: "resolved", label: "Resolved" },
+        ],
+      }),
+      field({ field: "entityType", label: "Record Type", type: "text", defaultOperator: "eq", hidden: true }),
+      field({ field: "entityId", label: "Record ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "detectedAt", label: "Found", type: "datetime", defaultOperator: "between" }),
+      field({ field: "appliedAt", label: "Applied", type: "datetime", defaultOperator: "between", hidden: true }),
+      field({ field: "appliedBy", label: "Applied By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "ignoreReason", label: "Ignore Reason", type: "text", defaultOperator: "like", hidden: true }),
     ],
   },
   // Admin (§11)

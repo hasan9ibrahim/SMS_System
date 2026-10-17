@@ -17,6 +17,7 @@ import { marketMoveList } from "../api/marketMoves.js";
 import { lcrChangeList, lcrProfileList } from "../api/lcr.js";
 import { visibilityAssignmentList, visibilityGrantList, visibilityPolicyList } from "../api/visibility.js";
 import { teamTimelineList } from "../api/team.js";
+import { cleanupFindingList } from "../api/cleanup.js";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   Change,
@@ -2923,6 +2924,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   visibility_assignments: visibilityAssignmentList as ListDef<unknown>,
   visibility_grants: visibilityGrantList as ListDef<unknown>,
   team_timeline: teamTimelineList as ListDef<unknown>,
+  cleanup_findings: cleanupFindingList as ListDef<unknown>,
 };
 
 export { emailTemplateList, userList };

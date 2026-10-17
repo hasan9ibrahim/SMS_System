@@ -297,3 +297,62 @@
 .vis-presets {
   margin-bottom: 12px;
 }
+
+/* Cleanup Center (§13.19, §13.20) */
+.cleanup-areas {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) minmax(220px, 1.3fr);
+  gap: 10px;
+  flex: none;
+}
+@media (max-width: 1300px) {
+  .cleanup-areas {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.cleanup-area {
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.cleanup-area:hover {
+  border-color: var(--color-accent);
+}
+.cleanup-scan {
+  align-self: center;
+  line-height: 1.6;
+}
+.cleanup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cleanup-card p {
+  margin: 0;
+}
+.cleanup-impact {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-page-bg);
+}
+.cleanup-preview {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.cleanup-sim {
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-left: 3px solid var(--color-good);
+  border-radius: var(--radius-sm);
+}
+.cleanup-sim.warn {
+  border-left-color: var(--color-warning);
+}
+.dup-warning {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: var(--border-width) solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-panel));
+}

@@ -16,6 +16,7 @@ import { MarketMovesPage } from "./rates/market/MarketMovesPage";
 import { LcrPage } from "./routing/lcr/LcrPage";
 import { VisibilityPage } from "./admin/visibility/VisibilityPage";
 import { TeamReportPage } from "./reports/team/TeamReportPage";
+import { CleanupPage } from "./admin/cleanup/CleanupPage";
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
@@ -89,6 +90,7 @@ const BUILT = new Set([
   "/routing/lcr",
   "/admin/visibility",
   "/reports/team",
+  "/admin/cleanup",
   "/rates/mccmnc",
   "/rates/categories",
   "/rates/countries",
@@ -262,6 +264,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/routing/lcr" element={<LcrPage />} />
       <Route path="/admin/visibility" element={<VisibilityPage />} />
       <Route path="/reports/team" element={<TeamReportPage />} />
+      <Route path="/admin/cleanup" element={<CleanupPage />} />
       <Route path="/monitoring/alert-rules" element={<AlertRulesPage />} />
       <Route path="/monitoring/incidents" element={<IncidentsPage />} />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (
