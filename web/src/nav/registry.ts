@@ -219,7 +219,7 @@ export const PAGES: PageDef[] = [
     "/rates/incoming",
     "inbox",
     "§13.13, §13.32",
-    "5",
+    "5.14",
     "Vendor rate notifications: live-traffic check, accept or reject",
   ),
   p(

@@ -355,3 +355,127 @@
   padding: 28px;
   text-align: center;
 }
+
+/* ---------- incoming RNs (§13.13 A, §13.32) ---------- */
+.page.rn-review {
+  gap: 12px;
+  overflow: hidden;
+}
+.rn-review .page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.rn-review .page-header h1 {
+  margin: 0;
+  font-size: var(--font-size-title);
+}
+.rn-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 12px;
+}
+@media (max-width: 1200px) {
+  .rn-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.rn-side {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.rn-active {
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.rn-flags {
+  display: inline-flex;
+  gap: 4px;
+  overflow: hidden;
+}
+.rn-flags .chip-mini {
+  margin-left: 0;
+  white-space: nowrap;
+}
+.chip-mini.tone-error {
+  border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
+  color: var(--color-error);
+}
+.chip-mini.tone-warning {
+  border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+  color: var(--color-warning);
+}
+.gr.warn .gc:first-child {
+  box-shadow: inset 3px 0 0 var(--color-warning);
+}
+.rn-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: var(--border-width) solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-panel));
+}
+.rn-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px 12px;
+  margin: 8px 0;
+}
+.rn-span {
+  grid-column: 1 / -1;
+}
+.rn-vendor {
+  margin-top: 10px;
+}
+.rn-paste {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.rn-replies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.rn-replies li {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.rn-reply-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.rn-reply-edit {
+  display: grid;
+  gap: 6px;
+}
+.rn-errors {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+.rn-summary {
+  display: grid;
+  gap: 10px;
+}

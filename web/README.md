@@ -51,6 +51,14 @@ impact cards follow. Apply is one change over all tables, undone as one. It open
 Rate Manager list (select tables › Bulk edit › Bulk rating), the table bulk bar and Rate Lookup's
 "Update rates".
 
+**Incoming RNs** (`/rates/incoming`, `src/pages/rates/incoming/`, §13.13 A, §13.32): the queue of vendor rate
+notifications (flags, notice breaches, back-dated lines, status; due-soon rows amber), Add RN (upload a CSV / TSV or
+simulate an e-mail), Settings (live window, reminder, auto-accept, reply modes; per vendor overrides, notice days and
+the remembered columns). Opening an RN (`?rn=ID`) shows the review: counts, the lines with flagged ones on top and column
+filters, Accept / Reject for all or selected lines, Accept + reroute (Route Rules on the trunk), Accept + update
+customers (Bulk rating on the affected tables), Re-check, Assign to trunk, and the replies (drafts can be edited and
+sent), log and file errors.
+
 ## Route Rules (build step 4.3)
 
 `/routing/rules` (`src/pages/routing/`, §15.4) copies the reference screenshot's layout and form.

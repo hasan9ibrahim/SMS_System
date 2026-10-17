@@ -11,6 +11,7 @@ import { AlertRulesPage } from "./monitoring/alerts/AlertRulesPage";
 import { IncidentsPage } from "./monitoring/alerts/IncidentsPage";
 import { LiveAnalyticsPage } from "./live/LiveAnalyticsPage";
 import { BulkRatingPage } from "./rates/BulkRatingPage";
+import { IncomingRnsPage } from "./rates/incoming/IncomingRnsPage";
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
@@ -79,6 +80,7 @@ const BUILT = new Set([
   "/enterprises/vendor-trunks",
   "/rates/manager",
   "/rates/bulk",
+  "/rates/incoming",
   "/rates/mccmnc",
   "/rates/categories",
   "/rates/countries",
@@ -247,6 +249,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/admin/customer-portal" element={<CustomerPortalPage />} />
       <Route path="/live/analytics" element={<LiveAnalyticsPage />} />
       <Route path="/rates/bulk" element={<BulkRatingPage />} />
+      <Route path="/rates/incoming" element={<IncomingRnsPage />} />
       <Route path="/monitoring/alert-rules" element={<AlertRulesPage />} />
       <Route path="/monitoring/incidents" element={<IncidentsPage />} />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (

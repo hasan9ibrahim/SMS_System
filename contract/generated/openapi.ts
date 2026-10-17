@@ -1031,6 +1031,259 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rate-notifications/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List incoming rate notifications (server-side filter, sort and paging)
+     * @description Incoming RNs (§13.32): Reference, Vendor, Trunk, Received, Effective, Lines, Flags, Notice, Back-dated, Status.
+     */
+    post: operations["queryRateNotifications"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notification-lines/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List the lines of one RN (server-side filter, sort and paging)
+     * @description Needs a top-level `rnId eq` condition. Default sort: flagged first, then notice breaches, back-dated, MCCMNC.
+     */
+    post: operations["queryRateNotificationLines"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/intake": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take in a vendor rate e-mail or upload (§13.13 A)
+     * @description Finds the vendor trunk (username / system_id or trunk name in the subject, body, file name or sheet; the sender's
+     *     address for the enterprise), reads the columns by their headers (remembered per vendor), splits a file with a username
+     *     column into one RN per trunk, compares every line with the current rate and runs the live-traffic check (§13.32).
+     *     RNs without a flagged line are accepted at once when the vendor's auto-accept is on.
+     */
+    post: operations["intakeRateNotification"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Incoming RN settings
+     * @description Live-traffic window, reminder, auto-accept and reply defaults.
+     */
+    get: operations["getRnSettings"];
+    /**
+     * Change incoming RN settings
+     * @description Rates team and admins.
+     */
+    put: operations["updateRnSettings"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One RN with its replies and log
+     * @description Header of the review screen.
+     */
+    get: operations["getRateNotification"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/{id}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The RN's original file
+     * @description As received.
+     */
+    get: operations["downloadRateNotificationFile"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/{id}/accept": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept an RN or some of its lines
+     * @description Loads the accepted lines into the vendor trunk's rate table from their applied date: the stated date, or now when
+     *     that is earlier (§13.32: never back-dated; EDRs keep their cost). Closed lines end on their date. One undoable
+     *     change (§13.10). Sends or drafts the Successful reply per the vendor's setting.
+     */
+    post: operations["acceptRateNotification"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/{id}/reject": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reject an RN or some of its lines
+     * @description Rates are not loaded; a reason is required and goes in the Rejected reply.
+     */
+    post: operations["rejectRateNotification"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/{id}/assign": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Assign an unmatched RN to a vendor trunk
+     * @description Reads the lines against that trunk's rate table and runs the check.
+     */
+    post: operations["assignRateNotification"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/{id}/recheck": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Re-run the live-traffic check
+     * @description Current rates and traffic now; pending lines only.
+     */
+    post: operations["recheckRateNotification"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-notifications/{id}/replies/{replyId}/send": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a draft reply to the vendor
+     * @description Optionally edited; logged in Email Logs and kept with the RN.
+     */
+    post: operations["sendRnReply"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprises/{id}/rn-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * A vendor's RN settings (§13.32)
+     * @description Auto-accept, reply modes, reply addresses, notice days and the remembered column mapping.
+     */
+    get: operations["getVendorRnSettings"];
+    /**
+     * Change a vendor's RN settings
+     * @description Saved at once.
+     */
+    put: operations["updateVendorRnSettings"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-lines/query": {
     parameters: {
       query?: never;
@@ -9012,6 +9265,225 @@ export type components = {
       /** @description Tables that changed. */
       tables: number;
     };
+    /**
+     * @description Pending review, Accepted, Partly accepted, Rejected, Failed (file unreadable) and Unmatched (no vendor trunk found; Assign to trunk, §13.13).
+     * @enum {string}
+     */
+    RnStatus: "pending" | "accepted" | "partly_accepted" | "rejected" | "failed" | "unmatched";
+    RnRow: {
+      id: components["schemas"]["Id"];
+      /** @description RN-YYYY-NNNNNN. */
+      reference: string;
+      vendorId: components["schemas"]["Id"] | null;
+      vendor: string | null;
+      vendorTrunkId: components["schemas"]["Id"] | null;
+      vendorTrunk: string | null;
+      rateTableId: components["schemas"]["Id"] | null;
+      rateTable: string | null;
+      currency: string | null;
+      /** @enum {string} */
+      source: "email" | "upload";
+      mailbox: string | null;
+      fromAddress: string | null;
+      subject: string | null;
+      fileName: string | null;
+      receivedAt: components["schemas"]["Timestamp"];
+      /** @description Earliest stated effective date of the lines. */
+      effectiveFrom: components["schemas"]["Timestamp"] | null;
+      lines: number;
+      newLines: number;
+      increases: number;
+      decreases: number;
+      unchanged: number;
+      closed: number;
+      errors: number;
+      /** @description Increases or closes on live traffic (§13.32). */
+      flagged: number;
+      noticeBreaches: number;
+      backdated: number;
+      turnsNegative: number;
+      status: components["schemas"]["RnStatus"];
+      autoAccepted: boolean;
+      /** @description Flagged, still pending, and its earliest date is within the reminder days. */
+      dueSoon: boolean;
+      decidedBy: string | null;
+      decidedAt: components["schemas"]["Timestamp"] | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    RnReply: {
+      id: components["schemas"]["Id"];
+      /** @enum {string} */
+      kind: "successful" | "failed" | "rejected";
+      to: string[];
+      subject: string;
+      body: string;
+      /** @enum {string} */
+      status: "draft" | "sent" | "failed";
+      createdAt: components["schemas"]["Timestamp"];
+      sentAt: components["schemas"]["Timestamp"] | null;
+      sentBy: string | null;
+    };
+    RnLogEntry: {
+      at: components["schemas"]["Timestamp"];
+      user: string | null;
+      text: string;
+    };
+    RnDetail: components["schemas"]["RnRow"] & {
+      matchReason: string | null;
+      noticeDaysRequired: number;
+      rejectReason: string | null;
+      changeId: components["schemas"]["Id"] | null;
+      /** @description Lines that could not be read (Failed reply lists them). */
+      fileErrors: {
+        line: number;
+        message: string;
+      }[];
+      /** @description How the file's columns were read (remembered per vendor). */
+      columns: {
+        header: string;
+        field: string | null;
+      }[];
+      replies: components["schemas"]["RnReply"][];
+      log: components["schemas"]["RnLogEntry"][];
+      /** @description Customer tables that sent traffic over this vendor trunk to the flagged destinations in the last 7 days (Accept and update customers). */
+      affectedRateTableIds: components["schemas"]["Id"][];
+      /** @description Flagged destinations (Accept and reroute). */
+      affectedMccmncs: string[];
+    };
+    RnLineRow: {
+      id: components["schemas"]["Id"];
+      rnId: components["schemas"]["Id"];
+      lineNo: number;
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      senderId: string | null;
+      currentRate: number | null;
+      newRate: number | null;
+      currency: string;
+      /** @enum {string} */
+      change: "new" | "increase" | "decrease" | "unchanged" | "closed";
+      changeAmount: number | null;
+      changePct: number | null;
+      statedFrom: components["schemas"]["Timestamp"];
+      /** @description Never before the RN was received or accepted (§13.32 no back-dating). */
+      appliedFrom: components["schemas"]["Timestamp"];
+      noticeDaysGiven: number;
+      liveTraffic: boolean;
+      flagged: boolean;
+      noticeBreach: boolean;
+      backdated: boolean;
+      traffic1h: number;
+      traffic24h: number;
+      traffic7d: number;
+      /** @description Back-dated: messages sent between the stated date and receipt, kept at the old rate. */
+      sentBetween: number;
+      /** @description Their cost at the old rate, RN currency. */
+      costBetween: number;
+      affectedCustomers: string | null;
+      marginNowPct: number | null;
+      marginNewPct: number | null;
+      turnsNegative: boolean;
+      /** @enum {string} */
+      decision: "pending" | "accepted" | "rejected";
+      rejectReason: string | null;
+    };
+    RnPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RnRow"][];
+    };
+    RnLinePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RnLineRow"][];
+    };
+    RnAttachment: {
+      fileName: string;
+      /** @description The sheet as text: CSV, semicolon or tab separated (Excel copy). Excel files wait for the backend. */
+      content: string;
+    };
+    /** @description One incoming e-mail (fake in this phase) or an upload. A file with a username column, or one tab per account, is split into one RN per trunk. */
+    RnIntake: {
+      /** @enum {string} */
+      source: "email" | "upload";
+      mailbox?: string | null;
+      fromAddress?: string | null;
+      subject?: string | null;
+      body?: string | null;
+      /** @description Upload for a chosen trunk; otherwise the trunk is found from the e-mail and file (username / system_id or trunk name). */
+      vendorTrunkId?: components["schemas"]["Id"] | null;
+      attachments: components["schemas"]["RnAttachment"][];
+    };
+    RnIntakeResult: {
+      created: components["schemas"]["RnRow"][];
+      autoAccepted: number;
+      unmatched: number;
+      failed: number;
+    };
+    RnDecision: {
+      /** @description Lines to decide; omitted or empty = every pending line. */
+      lineIds?: components["schemas"]["Id"][];
+      /** @description Required to reject; sent in the Rejected reply. */
+      reason?: string | null;
+      note?: string | null;
+    };
+    RnDecisionResult: {
+      record: components["schemas"]["RnDetail"];
+      change: components["schemas"]["Change"] | null;
+      applied: number;
+    };
+    RnAssign: {
+      vendorTrunkId: components["schemas"]["Id"];
+    };
+    /** @description Send a draft reply, optionally edited. */
+    RnReplySend: {
+      to?: string[];
+      subject?: string;
+      body?: string;
+    };
+    RnReplyModes: {
+      /**
+       * @description Send automatically, keep as a draft to confirm, or never.
+       * @enum {string}
+       */
+      successful: "auto" | "confirm" | "off";
+      /**
+       * @description Send automatically, keep as a draft to confirm, or never.
+       * @enum {string}
+       */
+      failed: "auto" | "confirm" | "off";
+      /**
+       * @description Send automatically, keep as a draft to confirm, or never.
+       * @enum {string}
+       */
+      rejected: "auto" | "confirm" | "off";
+    };
+    RnSettings: {
+      /**
+       * @description Traffic in this window makes a destination 'live' (§13.32).
+       * @enum {string}
+       */
+      liveWindow: "1h" | "24h" | "7d";
+      /** @description Messages in the window to count as live. */
+      minMessages: number;
+      /** @description Flagged pending RNs this close to their date are due soon. */
+      reminderDays: number;
+      /** @description Default for vendors without their own setting: accept RNs with no flagged line. */
+      autoAccept: boolean;
+      replyModes: components["schemas"]["RnReplyModes"];
+      readonly updatedBy?: string | null;
+      readonly updatedAt?: components["schemas"]["Timestamp"] | null;
+    };
+    VendorRnSettings: {
+      /** @description Null = the global default. */
+      autoAccept: boolean | null;
+      replyModes: components["schemas"]["RnReplyModes"] | null;
+      /** @description Extra reply addresses; the sender of the RN always gets the reply. */
+      replyTo: string[];
+      /** @description Agreed notice period for increases (the enterprise's rate notice days). */
+      noticeDays: number;
+      /** @description Remembered column mapping: file header (lower case) -> field. */
+      mapping: {
+        [key: string]: string;
+      } | null;
+    };
     Destination: {
       /** @description The MNC as the operator publishes it, when the code uses another form. */
       originalMnc: string | null;
@@ -13445,7 +13917,9 @@ export type components = {
       | "business_companies"
       | "customer_portal_users"
       | "alert_rules"
-      | "incidents";
+      | "incidents"
+      | "rate_notifications"
+      | "rate_notification_lines";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -15701,6 +16175,391 @@ export interface operations {
           "application/problem+json": components["schemas"]["NoticeBreach"];
         };
       };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRateNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of incoming rate notifications */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRateNotificationLines: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of lines */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnLinePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  intakeRateNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RnIntake"];
+      };
+    };
+    responses: {
+      /** @description The RNs created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnIntakeResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRnSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnSettings"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateRnSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RnSettings"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnSettings"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRateNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The RN */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadRateNotificationFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  acceptRateNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["RnDecision"];
+      };
+    };
+    responses: {
+      /** @description Decided */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnDecisionResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  rejectRateNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RnDecision"];
+      };
+    };
+    responses: {
+      /** @description Decided */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnDecisionResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  assignRateNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RnAssign"];
+      };
+    };
+    responses: {
+      /** @description The RN */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnDetail"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  recheckRateNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The RN */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendRnReply: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+        replyId: components["schemas"]["Id"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["RnReplySend"];
+      };
+    };
+    responses: {
+      /** @description The RN */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnDetail"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorRnSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorRnSettings"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateVendorRnSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorRnSettings"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorRnSettings"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

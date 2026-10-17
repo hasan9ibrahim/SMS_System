@@ -144,6 +144,11 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/alert-rules/query", { body })) as Promise<ListPage<Row>>;
     case "incidents":
       return unwrap(api.POST("/incidents/query", { body })) as Promise<ListPage<Row>>;
+    case "rate_notifications":
+      return unwrap(api.POST("/rate-notifications/query", { body })) as Promise<ListPage<Row>>;
+    case "rate_notification_lines":
+      // Needs an rnId condition: the review view adds it.
+      return unwrap(api.POST("/rate-notification-lines/query", { body })) as Promise<ListPage<Row>>;
     case "enterprise_report":
       // The report needs its settings with every query: the page passes its own fetchPage.
       return Promise.reject(new Error("The Enterprise report is fetched with its settings"));

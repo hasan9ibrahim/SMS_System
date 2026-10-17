@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.24.0
+  version: 0.25.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -40,7 +40,7 @@ tags:
   - name: routing
     description: Route rules, route simulator (§6.3, §13.8–13.11, §13.27)
   - name: rates
-    description: Rate tables and Rate Lookup (§6.2, §13.12, §13.16)
+    description: Rate tables, Rate Lookup, bulk rating and incoming vendor RNs (§6.2, §13.11, §13.12, §13.13, §13.16, §13.32)
   - name: users
     description: Staff users (§11), e.g. for sharing saved views
   - name: views
@@ -1680,6 +1680,382 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/NoticeBreach'
+
+  /rate-notifications/query:
+    post:
+      tags:
+      - rates
+      operationId: queryRateNotifications
+      summary: List incoming rate notifications (server-side filter, sort and paging)
+      description: 'Incoming RNs (§13.32): Reference, Vendor, Trunk, Received, Effective, Lines, Flags, Notice, Back-dated, Status.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of incoming rate notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notification-lines/query:
+    post:
+      tags:
+      - rates
+      operationId: queryRateNotificationLines
+      summary: List the lines of one RN (server-side filter, sort and paging)
+      description: 'Needs a top-level `rnId eq` condition. Default sort: flagged first, then notice breaches, back-dated, MCCMNC.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of lines
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnLinePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/intake:
+    post:
+      tags:
+      - rates
+      operationId: intakeRateNotification
+      summary: Take in a vendor rate e-mail or upload (§13.13 A)
+      description: 'Finds the vendor trunk (username / system_id or trunk name in the subject, body, file name or sheet; the sender''s
+
+        address for the enterprise), reads the columns by their headers (remembered per vendor), splits a file with a username
+
+        column into one RN per trunk, compares every line with the current rate and runs the live-traffic check (§13.32).
+
+        RNs without a flagged line are accepted at once when the vendor''s auto-accept is on.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RnIntake'
+      responses:
+        '201':
+          description: The RNs created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnIntakeResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/settings:
+    get:
+      tags:
+      - rates
+      operationId: getRnSettings
+      summary: Incoming RN settings
+      description: Live-traffic window, reminder, auto-accept and reply defaults.
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - rates
+      operationId: updateRnSettings
+      summary: Change incoming RN settings
+      description: Rates team and admins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RnSettings'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/{id}:
+    get:
+      tags:
+      - rates
+      operationId: getRateNotification
+      summary: One RN with its replies and log
+      description: Header of the review screen.
+      parameters: &id001
+      - &id002
+        $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The RN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/{id}/file:
+    get:
+      tags:
+      - rates
+      operationId: downloadRateNotificationFile
+      summary: The RN's original file
+      description: As received.
+      parameters: *id001
+      responses:
+        '200':
+          description: The file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/{id}/accept:
+    post:
+      tags:
+      - rates
+      operationId: acceptRateNotification
+      summary: Accept an RN or some of its lines
+      description: 'Loads the accepted lines into the vendor trunk''s rate table from their applied date: the stated date, or now when
+
+        that is earlier (§13.32: never back-dated; EDRs keep their cost). Closed lines end on their date. One undoable
+
+        change (§13.10). Sends or drafts the Successful reply per the vendor''s setting.'
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RnDecision'
+      responses:
+        '200':
+          description: Decided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnDecisionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/{id}/reject:
+    post:
+      tags:
+      - rates
+      operationId: rejectRateNotification
+      summary: Reject an RN or some of its lines
+      description: Rates are not loaded; a reason is required and goes in the Rejected reply.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RnDecision'
+      responses:
+        '200':
+          description: Decided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnDecisionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/{id}/assign:
+    post:
+      tags:
+      - rates
+      operationId: assignRateNotification
+      summary: Assign an unmatched RN to a vendor trunk
+      description: Reads the lines against that trunk's rate table and runs the check.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RnAssign'
+      responses:
+        '200':
+          description: The RN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/{id}/recheck:
+    post:
+      tags:
+      - rates
+      operationId: recheckRateNotification
+      summary: Re-run the live-traffic check
+      description: Current rates and traffic now; pending lines only.
+      parameters: *id001
+      responses:
+        '200':
+          description: The RN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-notifications/{id}/replies/{replyId}/send:
+    post:
+      tags:
+      - rates
+      operationId: sendRnReply
+      summary: Send a draft reply to the vendor
+      description: Optionally edited; logged in Email Logs and kept with the RN.
+      parameters:
+      - *id002
+      - name: replyId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RnReplySend'
+      responses:
+        '200':
+          description: The RN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RnDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /enterprises/{id}/rn-settings:
+    get:
+      tags:
+      - rates
+      operationId: getVendorRnSettings
+      summary: A vendor's RN settings (§13.32)
+      description: Auto-accept, reply modes, reply addresses, notice days and the remembered column mapping.
+      parameters: *id001
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorRnSettings'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - rates
+      operationId: updateVendorRnSettings
+      summary: Change a vendor's RN settings
+      description: Saved at once.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorRnSettings'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorRnSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
   /rate-lines/query:
     post:
@@ -14015,6 +14391,565 @@ components:
           type: integer
           description: Tables that changed.
 
+    RnStatus:
+      type: string
+      enum:
+      - pending
+      - accepted
+      - partly_accepted
+      - rejected
+      - failed
+      - unmatched
+      description: Pending review, Accepted, Partly accepted, Rejected, Failed (file unreadable) and Unmatched (no vendor trunk found; Assign to trunk, §13.13).
+    RnRow:
+      type: object
+      required:
+      - id
+      - reference
+      - vendorId
+      - vendor
+      - vendorTrunkId
+      - vendorTrunk
+      - rateTableId
+      - rateTable
+      - currency
+      - source
+      - mailbox
+      - fromAddress
+      - subject
+      - fileName
+      - receivedAt
+      - effectiveFrom
+      - lines
+      - newLines
+      - increases
+      - decreases
+      - unchanged
+      - closed
+      - errors
+      - flagged
+      - noticeBreaches
+      - backdated
+      - turnsNegative
+      - status
+      - autoAccepted
+      - dueSoon
+      - decidedBy
+      - decidedAt
+      - updatedAt
+      properties:
+        id: &id006
+          $ref: '#/components/schemas/Id'
+        reference:
+          type: string
+          description: RN-YYYY-NNNNNN.
+        vendorId: &id001
+          oneOf: &id010
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        vendor: &id002
+          type:
+          - string
+          - 'null'
+        vendorTrunkId: *id001
+        vendorTrunk: *id002
+        rateTableId: *id001
+        rateTable: *id002
+        currency: *id002
+        source:
+          type: string
+          enum:
+          - email
+          - upload
+        mailbox: *id002
+        fromAddress: *id002
+        subject: *id002
+        fileName: *id002
+        receivedAt: &id005
+          $ref: '#/components/schemas/Timestamp'
+        effectiveFrom:
+          oneOf: &id004
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+          description: Earliest stated effective date of the lines.
+        lines: &id003
+          type: integer
+        newLines: *id003
+        increases: *id003
+        decreases: *id003
+        unchanged: *id003
+        closed: *id003
+        errors: *id003
+        flagged:
+          type: integer
+          description: Increases or closes on live traffic (§13.32).
+        noticeBreaches: *id003
+        backdated: *id003
+        turnsNegative: *id003
+        status:
+          $ref: '#/components/schemas/RnStatus'
+        autoAccepted: &id009
+          type: boolean
+        dueSoon:
+          type: boolean
+          description: Flagged, still pending, and its earliest date is within the reminder days.
+        decidedBy: *id002
+        decidedAt: &id007
+          oneOf: *id004
+        updatedAt: *id005
+    RnReply:
+      type: object
+      required:
+      - id
+      - kind
+      - to
+      - subject
+      - body
+      - status
+      - createdAt
+      - sentAt
+      - sentBy
+      properties:
+        id: *id006
+        kind:
+          type: string
+          enum:
+          - successful
+          - failed
+          - rejected
+        to:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        body:
+          type: string
+        status:
+          type: string
+          enum:
+          - draft
+          - sent
+          - failed
+        createdAt: *id005
+        sentAt: *id007
+        sentBy: *id002
+    RnLogEntry:
+      type: object
+      required:
+      - at
+      - user
+      - text
+      properties:
+        at: *id005
+        user: *id002
+        text:
+          type: string
+    RnDetail:
+      allOf:
+      - $ref: '#/components/schemas/RnRow'
+      - type: object
+        required:
+        - matchReason
+        - noticeDaysRequired
+        - rejectReason
+        - changeId
+        - fileErrors
+        - columns
+        - replies
+        - log
+        - affectedRateTableIds
+        - affectedMccmncs
+        properties:
+          matchReason: *id002
+          noticeDaysRequired: *id003
+          rejectReason: *id002
+          changeId: *id001
+          fileErrors:
+            type: array
+            items:
+              type: object
+              required:
+              - line
+              - message
+              properties:
+                line: *id003
+                message:
+                  type: string
+            description: Lines that could not be read (Failed reply lists them).
+          columns:
+            type: array
+            items:
+              type: object
+              required:
+              - header
+              - field
+              properties:
+                header:
+                  type: string
+                field: *id002
+            description: How the file's columns were read (remembered per vendor).
+          replies:
+            type: array
+            items:
+              $ref: '#/components/schemas/RnReply'
+          log:
+            type: array
+            items:
+              $ref: '#/components/schemas/RnLogEntry'
+          affectedRateTableIds:
+            type: array
+            items: *id006
+            description: Customer tables that sent traffic over this vendor trunk to the flagged destinations in the last 7 days (Accept and update customers).
+          affectedMccmncs:
+            type: array
+            items:
+              type: string
+            description: Flagged destinations (Accept and reroute).
+    RnLineRow:
+      type: object
+      required:
+      - id
+      - rnId
+      - lineNo
+      - mccmnc
+      - country
+      - network
+      - senderId
+      - currentRate
+      - newRate
+      - currency
+      - change
+      - changeAmount
+      - changePct
+      - statedFrom
+      - appliedFrom
+      - noticeDaysGiven
+      - liveTraffic
+      - flagged
+      - noticeBreach
+      - backdated
+      - traffic1h
+      - traffic24h
+      - traffic7d
+      - sentBetween
+      - costBetween
+      - affectedCustomers
+      - marginNowPct
+      - marginNewPct
+      - turnsNegative
+      - decision
+      - rejectReason
+      properties:
+        id: *id006
+        rnId: *id006
+        lineNo: *id003
+        mccmnc:
+          type: string
+        country: *id002
+        network: *id002
+        senderId: *id002
+        currentRate: &id008
+          type:
+          - number
+          - 'null'
+        newRate: *id008
+        currency:
+          type: string
+        change:
+          type: string
+          enum:
+          - new
+          - increase
+          - decrease
+          - unchanged
+          - closed
+        changeAmount: *id008
+        changePct: *id008
+        statedFrom: *id005
+        appliedFrom:
+          $ref: '#/components/schemas/Timestamp'
+          description: Never before the RN was received or accepted (§13.32 no back-dating).
+        noticeDaysGiven: *id003
+        liveTraffic: *id009
+        flagged: *id009
+        noticeBreach: *id009
+        backdated: *id009
+        traffic1h: *id003
+        traffic24h: *id003
+        traffic7d: *id003
+        sentBetween:
+          type: integer
+          description: 'Back-dated: messages sent between the stated date and receipt, kept at the old rate.'
+        costBetween:
+          type: number
+          description: Their cost at the old rate, RN currency.
+        affectedCustomers: *id002
+        marginNowPct: *id008
+        marginNewPct: *id008
+        turnsNegative: *id009
+        decision:
+          type: string
+          enum:
+          - pending
+          - accepted
+          - rejected
+        rejectReason: *id002
+    RnPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/RnRow'
+    RnLinePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/RnLineRow'
+    RnAttachment:
+      type: object
+      additionalProperties: false
+      required:
+      - fileName
+      - content
+      properties:
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content:
+          type: string
+          minLength: 1
+          maxLength: 5000000
+          description: 'The sheet as text: CSV, semicolon or tab separated (Excel copy). Excel files wait for the backend.'
+    RnIntake:
+      type: object
+      description: One incoming e-mail (fake in this phase) or an upload. A file with a username column, or one tab per account, is split into one RN per trunk.
+      additionalProperties: false
+      required:
+      - source
+      - attachments
+      properties:
+        source:
+          type: string
+          enum:
+          - email
+          - upload
+        mailbox:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        fromAddress:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        subject:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+        body:
+          type:
+          - string
+          - 'null'
+          maxLength: 20000
+        vendorTrunkId:
+          oneOf: *id010
+          description: Upload for a chosen trunk; otherwise the trunk is found from the e-mail and file (username / system_id or trunk name).
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/RnAttachment'
+          minItems: 1
+          maxItems: 5
+    RnIntakeResult:
+      type: object
+      required:
+      - created
+      - autoAccepted
+      - unmatched
+      - failed
+      properties:
+        created:
+          type: array
+          items:
+            $ref: '#/components/schemas/RnRow'
+        autoAccepted: *id003
+        unmatched: *id003
+        failed: *id003
+    RnDecision:
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        lineIds:
+          type: array
+          items: *id006
+          maxItems: 20000
+          uniqueItems: true
+          description: Lines to decide; omitted or empty = every pending line.
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+          description: Required to reject; sent in the Rejected reply.
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+    RnDecisionResult:
+      type: object
+      required:
+      - record
+      - change
+      - applied
+      properties:
+        record:
+          $ref: '#/components/schemas/RnDetail'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+        applied: *id003
+    RnAssign:
+      type: object
+      additionalProperties: false
+      required:
+      - vendorTrunkId
+      properties:
+        vendorTrunkId: *id006
+    RnReplySend:
+      type: object
+      description: Send a draft reply, optionally edited.
+      additionalProperties: false
+      required: []
+      properties:
+        to:
+          type: array
+          items:
+            type: string
+            maxLength: 200
+            format: email
+          maxItems: 20
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 500
+        body:
+          type: string
+          minLength: 1
+          maxLength: 20000
+    RnReplyModes:
+      type: object
+      additionalProperties: false
+      required:
+      - successful
+      - failed
+      - rejected
+      properties:
+        successful: &id011
+          type: string
+          enum:
+          - auto
+          - confirm
+          - 'off'
+          description: Send automatically, keep as a draft to confirm, or never.
+        failed: *id011
+        rejected: *id011
+    RnSettings:
+      type: object
+      required:
+      - liveWindow
+      - minMessages
+      - reminderDays
+      - autoAccept
+      - replyModes
+      properties:
+        liveWindow:
+          type: string
+          enum:
+          - 1h
+          - 24h
+          - 7d
+          description: Traffic in this window makes a destination 'live' (§13.32).
+        minMessages:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+          description: Messages in the window to count as live.
+        reminderDays:
+          type: integer
+          minimum: 0
+          maximum: 30
+          description: Flagged pending RNs this close to their date are due soon.
+        autoAccept:
+          type: boolean
+          description: 'Default for vendors without their own setting: accept RNs with no flagged line.'
+        replyModes:
+          $ref: '#/components/schemas/RnReplyModes'
+        updatedBy:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        updatedAt:
+          oneOf: *id004
+          readOnly: true
+    VendorRnSettings:
+      type: object
+      additionalProperties: false
+      required:
+      - autoAccept
+      - replyModes
+      - replyTo
+      - noticeDays
+      - mapping
+      properties:
+        autoAccept:
+          type:
+          - boolean
+          - 'null'
+          description: Null = the global default.
+        replyModes:
+          oneOf:
+          - $ref: '#/components/schemas/RnReplyModes'
+          - type: 'null'
+        replyTo:
+          type: array
+          items:
+            type: string
+            maxLength: 200
+            format: email
+          maxItems: 20
+          description: Extra reply addresses; the sender of the RN always gets the reply.
+        noticeDays:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: Agreed notice period for increases (the enterprise's rate notice days).
+        mapping:
+          type:
+          - object
+          - 'null'
+          additionalProperties:
+            type: string
+          description: 'Remembered column mapping: file header (lower case) -> field.'
+
     Destination:
       type: object
       required: [id, mccmnc, mcc, mnc, originalMnc, countryId, country, countryIso, dialCode, network, allNetworks, dlrTargetPct, updatedBy, updatedAt, archivedAt]
@@ -23354,7 +24289,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines]
 
     FilterOperator:
       type: string

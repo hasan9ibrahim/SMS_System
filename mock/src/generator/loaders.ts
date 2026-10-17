@@ -88,6 +88,10 @@ export const TABLE_ORDER = [
   "alert_rules",
   "incidents",
   "incident_notes",
+  "rate_notifications",
+  "rate_notification_lines",
+  "rate_notification_replies",
+  "rate_notification_log",
   "changes",
 ];
 

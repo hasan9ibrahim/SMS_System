@@ -128,6 +128,22 @@ import {
 import { withEnumsFromDb } from "./lists/dynamic.js";
 import { applyRateBulk, previewRateBulk } from "./api/rateBulk.js";
 import {
+  acceptRn,
+  assignRn,
+  downloadRnFile,
+  getRn,
+  getRnSettings,
+  getVendorRnSettings,
+  intakeRn,
+  queryRnLines,
+  queryRns,
+  recheckRn,
+  rejectRn,
+  sendRnReply,
+  updateRnSettings,
+  updateVendorRnSettings,
+} from "./api/rn.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -415,7 +431,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.24.0";
+const VERSION = "0.25.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -492,6 +508,21 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   // Bulk rating across tables (§13.11)
   previewRateBulk,
   applyRateBulk: (request, reply) => Promise.resolve(applyRateBulk(request, reply)).finally(clearRouteCaches),
+  // Incoming vendor rate notifications (§13.13 A, §13.32); accepting changes vendor costs.
+  queryRateNotifications: queryRns,
+  queryRateNotificationLines: queryRnLines,
+  intakeRateNotification: (request, reply) => Promise.resolve(intakeRn(request, reply)).finally(clearRouteCaches),
+  getRnSettings,
+  updateRnSettings,
+  getRateNotification: getRn,
+  downloadRateNotificationFile: downloadRnFile,
+  acceptRateNotification: (request, reply) => Promise.resolve(acceptRn(request, reply)).finally(clearRouteCaches),
+  rejectRateNotification: rejectRn,
+  assignRateNotification: assignRn,
+  recheckRateNotification: recheckRn,
+  sendRnReply,
+  getVendorRnSettings,
+  updateVendorRnSettings,
   queryDestinations: queryList("destinations"),
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
