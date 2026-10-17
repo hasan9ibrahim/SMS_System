@@ -148,7 +148,7 @@ What the Phoenix backend must match so the screens need no change:
 - **Decisions**: accept or reject the whole RN or selected lines. Reject needs a reason. Accepting loads the lines through the same code as Rate Manager edits and saves ONE undoable change on the vendor rate table (§13.10); undoing it puts the rates back, but the RN keeps its decision. The RN stays Pending review while lines are pending; then it becomes Accepted, Rejected or Partly accepted.
 - **Auto-accept**: per vendor, or the global default. It applies when an RN has no flagged line, no notice breach and no file error.
 - **Replies** use the Email Templates (`rate_upload_notification` for Successful, `auto_upload_rejected` for Rejected and Failed) with the details added. Each kind is sent at once, drafted for confirmation (edit, then Send), or switched off, per vendor or by the global default. Replies go to the sender plus the vendor's extra addresses; if there is no sender (an upload), to the vendor's rates contact. Every reply is logged in Email Logs and kept with the RN.
-- **Due soon**: a flagged RN still pending within the reminder days (default 2) of its earliest date is shown amber in the queue. *The reminder pop-up / e-mail through the alert engine (§13.6, §13.7) waits for an alert metric for it: open question below.*
+- **Due soon**: a flagged RN still pending within the reminder days (default 2) of its earliest date is shown amber in the queue. Decided 2026-10-17 (team): the "Due soon" mark in the queue is enough for now; no reminder pop-up or e-mail through the alert engine (§13.6, §13.7).
 - Seed data: 1,800 RNs over 6 months (171k lines), most accepted, some partly accepted, rejected, failed or unmatched, and about 60 pending in the last 10 days. Historical flags are generated; pending RNs are checked against the EDR store at start. The history does not change the rate tables (they have their own history).
 - *Not in this step (rest of §13.13)*: B (vendor SOA intake and reconciliation) and C (customer SOA outbox) are still open, and mailbox polling belongs to the backend. Excel parsing is also not done.
 
@@ -326,4 +326,4 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- **RN reminder alerts (§13.32 "Reminder alerts (§13.6, §13.7) when a flagged RN is still pending near its effective date")**: should this be a new alert-rule metric (e.g. `pending_flagged_rn`, so the NOC / Rates team choose severity, recipients and channels like any rule), or a fixed system alert to the Rates department? The queue marks such RNs "Due soon" until this is decided.
+- None open.
