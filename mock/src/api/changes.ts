@@ -42,6 +42,16 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
       network: "network",
     },
   },
+  // QBR vendor stat overrides (§6.3)
+  qbr_stat: {
+    table: "qbr_stats",
+    columns: {
+      overridden: "overridden",
+      overrideAsr: "override_asr",
+      overrideDlr: "override_dlr",
+      overrideAddSeconds: "override_add_s",
+    },
+  },
   // Product reference data (§6.1)
   product_category: { table: "product_categories", columns: { name: "name" } },
   country: { table: "countries", columns: { name: "name", iso: "iso", dialCode: "dial_code", region: "region" } },
@@ -61,6 +71,9 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
     },
   },
 };
+
+/** Workflow records logged for the history but not undone (§12.2 maker-checker). */
+const NOT_UNDOABLE = new Set(["rerating_request"]);
 
 const TABLES: Record<string, string> = {
   ...Object.fromEntries(Object.entries(ENTITY_COLUMNS).map(([k, v]) => [k, v.table])),
@@ -134,6 +147,8 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
     );
     const target = rows[0];
     if (!target) return sendProblem(reply, 404, `Change ${id} not found`);
+    if (NOT_UNDOABLE.has(target.entity_type))
+      return sendProblem(reply, 400, "Re-rating requests are not undone: edit or decline a pending request instead");
     if (target.undone_by_id)
       return sendProblem(reply, 400, `Change #${id} was already undone by #${target.undone_by_id}`);
     const me = await getCurrentUser();

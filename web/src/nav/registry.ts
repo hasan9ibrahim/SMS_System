@@ -257,7 +257,7 @@ export const PAGES: PageDef[] = [
     "4.3",
     "Match conditions to vendors, with live traffic per rule",
   ),
-  p("routing", "route-map", "Route map", "/routing/map", "map", "§6.3", "5", "Which rule routes each destination"),
+  p("routing", "route-map", "Route map", "/routing/map", "map", "§6.3", "5.2", "Which rule routes each destination"),
   p(
     "routing",
     "lcr",
@@ -275,7 +275,7 @@ export const PAGES: PageDef[] = [
     "/routing/re-rating",
     "refresh",
     "§6.3, §12.2",
-    "5",
+    "5.2",
     "Recompute past charges after a rate correction",
   ),
   p(
@@ -327,7 +327,7 @@ export const PAGES: PageDef[] = [
     "/switch/qbr-stats",
     "gauge",
     "§6.3",
-    "5",
+    "5.2",
     "Quality feed for quality-based routing",
   ),
   p(

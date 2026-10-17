@@ -194,3 +194,17 @@ export type ChangeResult = Schemas["ChangeResult"];
 export type MoNumber = Schemas["MoNumber"];
 export type MoNumberInput = Schemas["MoNumberInput"];
 export type MoNumberSaved = Schemas["MoNumberSaved"];
+
+// Route map, Re-rating, QBR stats (§6.3)
+export type RouteMapRow = Schemas["RouteMapRow"];
+export type RouteMapStatus = Schemas["RouteMapStatus"];
+export type ReratingInput = Schemas["ReratingInput"];
+export type ReratingDecline = Schemas["ReratingDecline"];
+export type ReratingSummaryRow = Schemas["ReratingSummaryRow"];
+export type ReratingPreview = Schemas["ReratingPreview"];
+export type ReratingRequest = Schemas["ReratingRequestFields"];
+export type ReratingDetail = Schemas["ReratingDetail"];
+export type ReratingSaved = Schemas["ReratingSaved"];
+export type QbrStat = Schemas["QbrStat"];
+export type QbrOverrideInput = Schemas["QbrOverrideInput"];
+export type QbrStatSaved = Schemas["QbrStatSaved"];

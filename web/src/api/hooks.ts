@@ -50,6 +50,14 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/dial-codes/query", { body })) as Promise<ListPage<Row>>;
     case "mo_numbers":
       return unwrap(api.POST("/mo-numbers/query", { body })) as Promise<ListPage<Row>>;
+    case "route_map":
+      // Needs a customerTrunkId condition: the Route map page adds it.
+      return unwrap(api.POST("/route-map/query", { body })) as Promise<ListPage<Row>>;
+    case "rerating_requests":
+      return unwrap(api.POST("/rerating-requests/query", { body })) as Promise<ListPage<Row>>;
+    case "qbr_stats":
+      // Needs a side condition: the QBR stats page adds it.
+      return unwrap(api.POST("/qbr-stats/query", { body })) as Promise<ListPage<Row>>;
     case "enterprise_report":
       // The report needs its settings with every query: the page passes its own fetchPage.
       return Promise.reject(new Error("The Enterprise report is fetched with its settings"));

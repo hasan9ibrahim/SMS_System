@@ -211,7 +211,7 @@ describe("undo (§13.10)", { skip }, () => {
     const { rows } = await db().query(
       `SELECT c.id, (c.diff->0->>'entity_id')::int AS rule_id, (c.diff->0->>'before')::int AS before
          FROM changes c
-        WHERE c.change_type = 'edit' AND c.diff->0->>'field' = 'priority'
+        WHERE c.change_type = 'edit' AND c.entity_type = 'route_rule' AND c.diff->0->>'field' = 'priority'
           AND NOT EXISTS (SELECT 1 FROM changes x WHERE x.undo_of_id = c.id)
           AND NOT EXISTS (SELECT 1 FROM changes l WHERE l.id > c.id AND l.entity_ids && c.entity_ids AND l.diff->0->>'field' = 'priority')
         ORDER BY c.id DESC LIMIT 1`,
@@ -232,7 +232,7 @@ describe("undo (§13.10)", { skip }, () => {
   test("a later change by someone else answers 409 with both values", async () => {
     const { rows } = await db().query(
       `SELECT c.id FROM changes c
-        WHERE c.change_type = 'edit' AND c.diff->0->>'field' = 'priority'
+        WHERE c.change_type = 'edit' AND c.entity_type = 'route_rule' AND c.diff->0->>'field' = 'priority'
           AND NOT EXISTS (SELECT 1 FROM changes x WHERE x.undo_of_id = c.id)
           AND EXISTS (SELECT 1 FROM changes l WHERE l.id > c.id AND l.user_id <> c.user_id AND l.change_type <> 'undo'
                         AND l.entity_ids && c.entity_ids AND l.diff->0->>'field' = 'priority'

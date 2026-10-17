@@ -38,6 +38,7 @@ import {
   type FieldError,
   type FieldSpec,
 } from "./records.js";
+import { qbrDlrByCode } from "./qbr.js";
 import { ruleTraffic } from "./routeTraffic.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
@@ -886,7 +887,12 @@ export async function vendorOptions(
   mccmnc: string | null,
   onlyIds: number[] | null,
 ): Promise<Map<number, VendorOption>> {
-  const quality = await vendorQuality();
+  const [quality, qbr] = await Promise.all([
+    vendorQuality(),
+    qbrDlrByCode(db, mccmnc ? [mccmnc, mccmnc.slice(0, 3)] : []),
+  ]);
+  // QBR uses the destination's effective vendor DLR (QBR stats, §6.3), else the 7-day DLR.
+  const destDlr = qbr.get(mccmnc ?? "") ?? qbr.get(mccmnc?.slice(0, 3) ?? "") ?? new Map<number, number>();
   const { rows } = await db.query(
     `SELECT vt.id, vt.name, vt.product_category_id, c.conv FROM vendor_trunks vt
        LEFT JOIN LATERAL (
@@ -906,7 +912,7 @@ export async function vendorOptions(
         vendorTrunkId: Number(r.id),
         name: r.name as string,
         cost: r.conv === null ? null : Math.round(Number(r.conv) * 1e6) / 1e6,
-        dlr: quality.get(Number(r.id)) ?? null,
+        dlr: destDlr.get(Number(r.id)) ?? quality.get(Number(r.id)) ?? null,
         categoryId: r.product_category_id ?? null,
       },
     ]),

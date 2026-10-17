@@ -57,6 +57,9 @@ export const TABLE_ORDER = [
   "transactions",
   "vendor_invoices",
   "mo_numbers",
+  "rerating_requests",
+  "rerating_results",
+  "qbr_stats",
   "changes",
 ];
 

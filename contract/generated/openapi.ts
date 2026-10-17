@@ -1778,6 +1778,245 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/route-map/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Route map of a customer trunk (server-side filter, sort and paging)
+     * @description Which rule and vendor each destination the trunk sells gets today (§6.3 Route map; assumed scope,
+     *     see BACKEND_TODO): every destination with a sell rate in the trunk's rate tables, run through the
+     *     live route rules in order as a message without receiver or content (steady state: no warm-up, no
+     *     number whitelists). The `customerTrunkId` filter (eq) is required. Filter, sort and paging work on
+     *     every column, including the routed vendor, cost and margin.
+     */
+    post: operations["queryRouteMap"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/route-map/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export a trunk's route map as CSV
+     * @description Same filter (with `customerTrunkId`), search and sort as the grid; every matching row.
+     */
+    post: operations["exportRouteMap"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rerating-requests/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List re-rating requests (server-side filter, sort and paging)
+     * @description Re-Rating (§6.3, §12.2): requests to recompute charges on past EDRs after a rate correction, with
+     *     their request status (maker-checker) and reprocess status.
+     */
+    post: operations["queryReratingRequests"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rerating-requests/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Estimate a re-rating before requesting it
+     * @description Runs the computation without saving: EDRs in scope and the difference per enterprise between the
+     *     billed amount and the amount at the rate table's rates valid at send time (a back-dated line counts
+     *     from its stated date, §13.32).
+     */
+    post: operations["previewRerating"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rerating-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Request a re-rating (§12.2 Re-Rating Request)
+     * @description Saved as Pending Approval. Another user approves or declines it (maker-checker); nothing is
+     *     re-rated before that. One undoable change while pending.
+     */
+    post: operations["createReratingRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rerating-requests/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One re-rating request with its summary (§12.2 Re-Rating view)
+     * @description The request fields, statuses and times, and the Re-Rating Summary per enterprise.
+     */
+    get: operations["getReratingRequest"];
+    /**
+     * Change a pending re-rating request
+     * @description Only the requester, and only while it is Pending Approval (409 otherwise). One undoable change.
+     */
+    put: operations["updateReratingRequest"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rerating-requests/{id}/approve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Approve a re-rating request (checker)
+     * @description Another user than the requester (403 otherwise). The request is queued and processed in the
+     *     background: In Queue, In Process, then Completed (or Failed). Unless `noNote` is set, each
+     *     enterprise with a difference gets a credit or debit note in Transactions (type Reprocess). EDRs
+     *     keep the amounts they were billed at (§13.29).
+     */
+    post: operations["approveReratingRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rerating-requests/{id}/decline": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Decline a re-rating request (checker)
+     * @description Another user than the requester (403 otherwise), with a reason. Nothing is re-rated.
+     */
+    post: operations["declineReratingRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/qbr-stats/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List QBR stats (server-side filter, sort and paging)
+     * @description QBR Stats (§6.3): ASR, DLR and ADD (average delivery delay, s) per vendor or customer trunk and
+     *     MCCMNC, from the last 24 hours of EDRs, refreshed every 5 minutes. The `side` filter (eq customer or
+     *     vendor) is required. A vendor stat can be overridden by hand; the override wins until cleared, and
+     *     QBR routing uses the effective DLR per destination.
+     */
+    post: operations["queryQbrStats"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/qbr-stats/vendor-override": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Add or override a vendor stat (Add Vendor Stat)
+     * @description Seeds or overrides the scores of a vendor trunk for a destination; a null value keeps the traffic
+     *     figure. One undoable change.
+     */
+    put: operations["setQbrVendorOverride"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/qbr-stats/{id}/clear-override": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Clear a vendor stat override
+     * @description The traffic figures apply again. One undoable change.
+     */
+    post: operations["clearQbrOverride"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -3384,6 +3623,205 @@ export type components = {
       rows: components["schemas"]["MoNumber"][];
     };
     /**
+     * @description routed: a rule picks a vendor; blocked: a block rule matches; no_vendor: rules match but no vendor qualifies; no_rule: no rule matches.
+     * @enum {string}
+     */
+    RouteMapStatus: "routed" | "blocked" | "no_vendor" | "no_rule";
+    RouteMapRow: {
+      id: components["schemas"]["Id"];
+      mccmnc: string;
+      country: string;
+      network: string;
+      allNetworks: boolean;
+      sellRate: number;
+      sellCurrency: string;
+      /** @description Sell rate in the platform currency (`currency`). */
+      sellRateConverted: number;
+      rateTableId: components["schemas"]["Id"];
+      rateTableName: string;
+      status: components["schemas"]["RouteMapStatus"];
+      ruleId: components["schemas"]["Id"] | null;
+      ruleName: string | null;
+      rulePriority: number | null;
+      /** @enum {string|null} */
+      routeType: "static" | "dynamic" | "qbr" | "block" | null;
+      vendorTrunkId: components["schemas"]["Id"] | null;
+      vendor: string | null;
+      /** @description The routed vendor's buy rate, platform currency. */
+      vendorCost: number | null;
+      margin: number | null;
+      marginPct: number | null;
+      /** @description How the vendor was chosen (priority, percentage, least cost, quality …). */
+      decidedBy: string | null;
+      /** @description Platform currency of the converted figures. */
+      currency: string;
+    };
+    RouteMapPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RouteMapRow"][];
+    };
+    ReratingInput: {
+      description: string | null;
+      /**
+       * Format: date
+       * @description First day, UTC.
+       */
+      startDate: string;
+      /**
+       * Format: date
+       * @description Last day (inclusive), UTC.
+       */
+      endDate: string;
+      /** @enum {string} */
+      side: "customer" | "vendor";
+      enterpriseIds: components["schemas"]["Id"][];
+      /** @description The corrected table; only EDRs billed with it are re-rated. */
+      rateTableId: components["schemas"]["Id"];
+      /** @enum {string} */
+      reason: "rate_correction";
+      /** @description Limit to these codes (a 3-digit code = the whole country); empty = all. */
+      mccmncs: string[];
+      senderId: string | null;
+      /** @description "Don't add credit/debit note to transaction": compute only. */
+      noNote: boolean;
+      /** @enum {string} */
+      priority: "P1" | "P2" | "P3";
+    };
+    ReratingDecline: {
+      reason: string;
+    };
+    ReratingSummaryRow: {
+      enterpriseId: components["schemas"]["Id"];
+      enterpriseName: string;
+      /** @enum {string} */
+      side: "customer" | "vendor";
+      totalEdrs: number;
+      /** @description Billed, in `currency` (the rate table's). */
+      oldAmount: number;
+      newAmount: number;
+      /** @description newAmount - oldAmount. */
+      amount: number;
+      currency: string;
+      /**
+       * @description The note posted to the enterprise; null when there is no difference.
+       * @enum {string|null}
+       */
+      paymentType: "credit" | "debit" | null;
+      /**
+       * @description pending: not processed yet; not_posted: noNote was set.
+       * @enum {string}
+       */
+      transactionStatus: "pending" | "posted" | "not_posted" | "no_difference";
+      transactionId: components["schemas"]["Id"] | null;
+      /** Format: date-time */
+      startTime: string | null;
+      /** Format: date-time */
+      endTime: string | null;
+      updatedBy: string | null;
+    };
+    ReratingPreview: {
+      totalEdrs: number;
+      rows: components["schemas"]["ReratingSummaryRow"][];
+    };
+    ReratingRequestFields: {
+      id: components["schemas"]["Id"];
+      /** @enum {string} */
+      side: "customer" | "vendor";
+      /** @enum {string} */
+      reprocessType: "manual" | "auto";
+      description: string | null;
+      senderId: string | null;
+      /** Format: date */
+      startDate: string;
+      /** Format: date */
+      endDate: string;
+      enterprises: {
+        id: components["schemas"]["Id"];
+        name: string;
+      }[];
+      rateTableId: components["schemas"]["Id"];
+      rateTableName: string;
+      /** @enum {string} */
+      reason: "rate_correction";
+      mccmncs: string[];
+      noNote: boolean;
+      /** @enum {string} */
+      priority: "P1" | "P2" | "P3";
+      /** @enum {string} */
+      requestStatus: "pending_approval" | "approved" | "declined";
+      /** @enum {string} */
+      reprocessStatus: "not_started" | "in_queue" | "in_process" | "completed" | "failed";
+      requestedBy: string;
+      requestedAt: components["schemas"]["Timestamp"];
+      decidedBy: string | null;
+      /** Format: date-time */
+      decidedAt: string | null;
+      declineReason: string | null;
+      /** Format: date-time */
+      startedAt: string | null;
+      /** Format: date-time */
+      finishedAt: string | null;
+      totalEdrs: number | null;
+      error: string | null;
+      /** @description The signed-in user may approve or decline (pending, and not the requester). */
+      canDecide: boolean;
+      /** @description The signed-in user may change it (pending, and the requester). */
+      canEdit: boolean;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    ReratingDetail: components["schemas"]["ReratingRequestFields"] & {
+      summary: components["schemas"]["ReratingSummaryRow"][];
+    };
+    ReratingSaved: {
+      record: components["schemas"]["ReratingDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    ReratingRequestPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["ReratingRequestFields"][];
+    };
+    QbrStat: {
+      id: components["schemas"]["Id"];
+      /** @enum {string} */
+      side: "customer" | "vendor";
+      trunkId: components["schemas"]["Id"];
+      trunk: string;
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      destinationId: components["schemas"]["Id"];
+      mccmnc: string;
+      country: string;
+      network: string;
+      /** @description EDRs in the last 24 hours behind the traffic figures. */
+      attempts: number;
+      /** @description Effective ASR % (override, else traffic). */
+      asr: number | null;
+      /** @description Effective DLR %. */
+      dlr: number | null;
+      /** @description Effective average delivery delay, seconds. */
+      addSeconds: number | null;
+      trafficAsr: number | null;
+      trafficDlr: number | null;
+      trafficAddSeconds: number | null;
+      overridden: boolean;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** @description Who set the override; null for traffic figures. */
+      updatedBy: string | null;
+    };
+    QbrOverrideInput: {
+      vendorTrunkId: components["schemas"]["Id"];
+      destinationId: components["schemas"]["Id"];
+      asr: number | null;
+      dlr: number | null;
+      addSeconds: number | null;
+    };
+    QbrStatSaved: {
+      record: components["schemas"]["QbrStat"];
+      change: components["schemas"]["Change"] | null;
+    };
+    QbrStatPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["QbrStat"][];
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -3775,7 +4213,10 @@ export type components = {
       | "countries"
       | "dial_code_profiles"
       | "dial_codes"
-      | "mo_numbers";
+      | "mo_numbers"
+      | "route_map"
+      | "rerating_requests"
+      | "qbr_stats";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -7058,6 +7499,336 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRouteMap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of destinations with their route */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteMapPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportRouteMap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryReratingRequests: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of re-rating requests */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReratingRequestPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewRerating: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReratingInput"];
+      };
+    };
+    responses: {
+      /** @description The estimate */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReratingPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createReratingRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReratingInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReratingSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getReratingRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReratingDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateReratingRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReratingInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReratingSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  approveReratingRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Approved, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReratingSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  declineReratingRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReratingDecline"];
+      };
+    };
+    responses: {
+      /** @description Declined, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReratingSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryQbrStats: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of QBR stats */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QbrStatPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setQbrVendorOverride: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["QbrOverrideInput"];
+      };
+    };
+    responses: {
+      /** @description The stat, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QbrStatSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  clearQbrOverride: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stat, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QbrStatSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

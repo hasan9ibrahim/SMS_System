@@ -24,6 +24,7 @@ import type {
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
+import { qbrDlrByCode } from "./qbr.js";
 import { sendProblem } from "../problem.js";
 import { rulesForDestination, type VendorOption } from "../routing/evaluate.js";
 import { loadRulesInOrder, routeThrough, vendorQuality, type RuleCore } from "./routeRules.js";
@@ -314,6 +315,8 @@ export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<Ve
 }
 
 /** Each customer trunk's sell rate: the first of its rate tables with a line (§5.4). */
+export type { ClientLine, Dest };
+
 export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<ClientLine[]> {
   if (!dests.length) return [];
   const p = pairs(dests);
@@ -369,6 +372,49 @@ async function rulesNow(db: Db): Promise<RuleCore[]> {
   return rulesCache.rules;
 }
 
+const COST_TTL_MS = 60_000;
+const costCache = new Map<string, { at: number; costs: { trunkId: number; conv: number }[] }>();
+
+/** Forgets cached routing costs (after a rate change, so routes follow it at once). */
+export function clearRoutingCostCache() {
+  costCache.clear();
+}
+
+/**
+ * Each vendor trunk's buy rate now (platform currency) per destination code, for routing: the
+ * line for the code, else its country's (a country-level code never takes a network's line).
+ * Costs do not depend on the client, so they are kept a minute across Route map trunks.
+ */
+async function routingCosts(db: Db, reqs: string[]): Promise<{ req: string; trunkId: number; conv: number }[]> {
+  const now = Date.now();
+  const missing = reqs.filter((r) => (costCache.get(r)?.at ?? 0) < now - COST_TTL_MS);
+  if (missing.length) {
+    const req: string[] = [];
+    const code: string[] = [];
+    const pref: number[] = [];
+    for (const r of missing)
+      (r.length === 3 ? [r] : [r, r.slice(0, 3)]).forEach((c, i) => {
+        req.push(r);
+        code.push(c);
+        pref.push(i);
+      });
+    const { rows } = await db.query(
+      `SELECT DISTINCT ON (d.req, rt.vendor_trunk_id) d.req, rt.vendor_trunk_id AS trunk_id, ${toPlatformSql("l.rate")} AS conv
+         FROM unnest($1::text[], $2::text[], $3::int[]) AS d(req, code, pref)
+         JOIN rate_lines l ON l.mccmnc = d.code AND l.sender_id IS NULL AND NOT l.is_blocked
+              AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
+         JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
+         JOIN currency_latest cl ON cl.iso = l.currency
+        ORDER BY d.req, rt.vendor_trunk_id, d.pref`,
+      [req, code, pref],
+    );
+    const fresh = new Map(missing.map((r) => [r, [] as { trunkId: number; conv: number }[]]));
+    for (const r of rows) fresh.get(r.req)!.push({ trunkId: Number(r.trunk_id), conv: Number(r.conv) });
+    for (const [r, costs] of fresh) costCache.set(r, { at: now, costs });
+  }
+  return reqs.flatMap((r) => (costCache.get(r)?.costs ?? []).map((c) => ({ req: r, ...c })));
+}
+
 /**
  * What routing sees for each destination: every live, active vendor trunk with its buy rate
  * now (null without a rate), whatever the lookup's vendor filters, in one query for all
@@ -383,11 +429,7 @@ async function routingOptions(
   const [quality, { rows: trunks }, lines] = await Promise.all([
     vendorQuality(),
     db.query("SELECT id, name, product_category_id FROM vendor_trunks WHERE deleted_at IS NULL AND status = 'active'"),
-    vendorsNow ??
-      db
-        .query(`${DEST_SELECT} WHERE m.mccmnc = ANY($1)`, [reqs])
-        .then(({ rows }) => withCodes(db, rows.map(toDest)))
-        .then((d) => vendorLines(db, d, { at: new Date(), senderId: null, includeInactive: false })),
+    vendorsNow ? vendorsNow.map((l) => ({ req: l.req, trunkId: l.trunkId, conv: l.conv })) : routingCosts(db, reqs),
   ]);
   const base = (): Map<number, VendorOption> =>
     new Map(
@@ -407,7 +449,18 @@ async function routingOptions(
     const o = out.get(l.req)?.get(l.trunkId);
     if (o) o.cost = l.conv;
   }
+  // QBR orders vendors by the destination's effective DLR (QBR stats, §6.3) where known.
+  const qbr = await qbrDlrByCode(db, [...new Set(reqs.flatMap((r) => [r, r.slice(0, 3)]))]);
+  for (const [req, options] of out) {
+    const dlr = qbr.get(req) ?? qbr.get(req.slice(0, 3));
+    if (dlr) for (const [id, o] of options) if (dlr.has(id)) o.dlr = dlr.get(id)!;
+  }
   return out;
+}
+
+export interface RouteOutcome {
+  outcome: "route" | "block" | "no_vendor" | "no_rule";
+  ruleId: number | null;
 }
 
 interface Routed {
@@ -427,6 +480,8 @@ export async function routedVendors(
   db: Db,
   clients: ClientLine[],
   vendorsNow?: VendorLine[],
+  /** Filled with each line's outcome and deciding rule, also when no vendor is routed (Route map, §6.3). */
+  outcomes?: Map<string, RouteOutcome>,
 ): Promise<Map<string, Routed | null>> {
   const out = new Map<string, Routed | null>();
   if (!clients.length) return out;
@@ -442,10 +497,12 @@ export async function routedVendors(
     // category, sender and sell rate route alike, so each such case is routed once.
     const listed = new Set(candidates.filter((r) => r.customerTrunkMode !== "all").flatMap((r) => r.customerTrunkIds));
     const memo = new Map<string, Routed | null>();
+    const memoOutcome = new Map<string, RouteOutcome>();
     for (const c of lines) {
       const key = `${c.trunkCategoryId}|${listed.has(c.trunkId) ? c.trunkId : "-"}|${c.conv}|${c.senderId ?? ""}`;
       if (memo.has(key)) {
         out.set(`${c.req}|${c.trunkId}`, memo.get(key)!);
+        outcomes?.set(`${c.req}|${c.trunkId}`, memoOutcome.get(key)!);
         continue;
       }
       const { decision } = routeThrough(
@@ -481,6 +538,13 @@ export async function routedVendors(
         : null;
       memo.set(key, routed);
       out.set(`${c.req}|${c.trunkId}`, routed);
+      // routeThrough returns only a matching rule's decision; no decision means no rule matched.
+      const outcome: RouteOutcome =
+        decision && decision.outcome !== "not_matched"
+          ? { outcome: decision.outcome, ruleId: decision.ruleId }
+          : { outcome: "no_rule", ruleId: null };
+      memoOutcome.set(key, outcome);
+      outcomes?.set(`${c.req}|${c.trunkId}`, outcome);
     }
   }
   return out;

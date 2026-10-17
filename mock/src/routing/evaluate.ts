@@ -100,8 +100,13 @@ export function compare(
 const inMode = (mode: string, hit: boolean) => (mode === "all" ? true : mode === "inclusive" ? hit : !hit);
 
 /** A 3-digit code covers every network of the country (§6.1 All networks). */
-export const destinationHit = (codes: string[], mccmnc: string) =>
-  codes.some((c) => c === mccmnc || (c.length === 3 && mccmnc.startsWith(c)));
+export const destinationHit = (codes: string[], mccmnc: string) => {
+  // A code list as a set, built once per array (rules route thousands of destinations).
+  let set = codeSets.get(codes);
+  if (!set) codeSets.set(codes, (set = new Set(codes)));
+  return set.has(mccmnc) || set.has(mccmnc.slice(0, 3));
+};
+const codeSets = new WeakMap<string[], Set<string>>();
 
 const compiled = new Map<string, RegExp | null>();
 function regex(pattern: string, value: string): boolean {
@@ -119,6 +124,12 @@ function regex(pattern: string, value: string): boolean {
 }
 
 const liveTimes = new WeakMap<object, [number, number]>();
+/** A rule's start and stop as epoch ms, parsed once per rule object. */
+function liveWindow(rule: Rule): [number, number] {
+  let t = liveTimes.get(rule);
+  if (!t) liveTimes.set(rule, (t = [Date.parse(rule.startsAt), Date.parse(rule.stopsAt)]));
+  return t;
+}
 
 /**
  * Whether a rule matches, without the check details: the same answer as
@@ -127,8 +138,7 @@ const liveTimes = new WeakMap<object, [number, number]>();
  */
 export function quickMatch(rule: Rule, m: MessageContext): boolean {
   if (rule.status !== "active") return false;
-  let t = liveTimes.get(rule);
-  if (!t) liveTimes.set(rule, (t = [Date.parse(rule.startsAt), Date.parse(rule.stopsAt)]));
+  const t = liveWindow(rule);
   if (!(t[0] <= m.now && m.now < t[1])) return false;
   const all = rule.matchMode === "all";
   let set = false;
@@ -203,6 +213,21 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
 
 /** Sorted least-cost / quality pools per vendor options map and rule (they don't depend on the message). */
 const pools = new WeakMap<Map<number, VendorOption>, WeakMap<object, VendorOption[]>>();
+
+/** A rule's vendor scope as sets, built once per rule object (the LCR pool runs per destination). */
+const scopes = new WeakMap<object, { listed: Set<number>; trunks: Set<number>; categories: Set<number> }>();
+function scopeSets(rule: Rule) {
+  let sc = scopes.get(rule);
+  if (!sc) {
+    sc = {
+      listed: new Set(rule.vendors.map((v) => v.vendorTrunkId)),
+      trunks: new Set(rule.vendorTrunkIds),
+      categories: new Set(rule.vendorCategoryIds),
+    };
+    scopes.set(rule, sc);
+  }
+  return sc;
+}
 
 /** Condition checks. `set` = the rule actually uses the condition (matters for "any"). */
 export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { set: boolean; gate: boolean })[] {
@@ -377,12 +402,12 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
 
   // 3. Least cost and quality: every vendor in scope with a rate for the destination.
   if (rule.routeType === "dynamic" || (rule.routeType === "qbr" && rule.vendors.length === 0)) {
-    const listed = rule.vendors.map((v) => v.vendorTrunkId);
+    const sc = scopeSets(rule);
     const inScope = (o: VendorOption) =>
-      (listed.length
-        ? listed.includes(o.vendorTrunkId)
-        : inMode(rule.vendorTrunkMode, rule.vendorTrunkIds.includes(o.vendorTrunkId))) &&
-      inMode(rule.vendorCategoryMode, o.categoryId !== null && rule.vendorCategoryIds.includes(o.categoryId));
+      (sc.listed.size
+        ? sc.listed.has(o.vendorTrunkId)
+        : inMode(rule.vendorTrunkMode, sc.trunks.has(o.vendorTrunkId))) &&
+      inMode(rule.vendorCategoryMode, o.categoryId !== null && sc.categories.has(o.categoryId));
     let byRule = pools.get(options);
     if (!byRule) pools.set(options, (byRule = new WeakMap()));
     let pool = byRule.get(rule);
@@ -471,12 +496,42 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
  * to one destination (Rate Lookup's routed vendor per client, §13.16) only needs these;
  * the order is kept, so routing through them gives the same answer as through all rules.
  */
+/**
+ * Rules indexed by destination code, built once per rules array: an inclusive code list is
+ * looked up by code, everything else (all codes, patterns, exclusions, "any" matching) is
+ * checked for every destination. Positions keep the evaluation order.
+ */
+const destIndexes = new WeakMap<object, { general: number[]; byCode: Map<string, number[]> }>();
+function destIndex(rules: Rule[]) {
+  let ix = destIndexes.get(rules);
+  if (!ix) {
+    ix = { general: [], byCode: new Map() };
+    rules.forEach((r, i) => {
+      if (r.matchMode === "all" && r.mccmncMode === "inclusive" && !r.mccmncPattern) {
+        for (const c of new Set(r.mccmncs)) ix!.byCode.set(c, [...(ix!.byCode.get(c) ?? []), i]);
+      } else ix!.general.push(i);
+    });
+    destIndexes.set(rules, ix);
+  }
+  return ix;
+}
+
 export function rulesForDestination<R extends Rule>(rules: R[], mccmnc: string, now: number): R[] {
-  return rules.filter((r) => {
-    if (r.status !== "active") return false;
-    if (!(Date.parse(r.startsAt) <= now && now < Date.parse(r.stopsAt))) return false;
-    if (r.matchMode !== "all" || (r.mccmncMode === "all" && !r.mccmncPattern)) return true;
-    if (r.mccmncPattern) return regex(r.mccmncPattern, mccmnc);
-    return inMode(r.mccmncMode, destinationHit(r.mccmncs, mccmnc));
-  });
+  const ix = destIndex(rules);
+  const hits = [
+    ...ix.general,
+    ...(ix.byCode.get(mccmnc) ?? []),
+    ...(mccmnc.length > 3 ? (ix.byCode.get(mccmnc.slice(0, 3)) ?? []) : []),
+  ];
+  return [...new Set(hits)]
+    .sort((a, b) => a - b)
+    .map((i) => rules[i]!)
+    .filter((r) => {
+      if (r.status !== "active") return false;
+      const t = liveWindow(r);
+      if (!(t[0] <= now && now < t[1])) return false;
+      if (r.matchMode !== "all" || (r.mccmncMode === "all" && !r.mccmncPattern)) return true;
+      if (r.mccmncPattern) return regex(r.mccmncPattern, mccmnc);
+      return inMode(r.mccmncMode, destinationHit(r.mccmncs, mccmnc));
+    });
 }

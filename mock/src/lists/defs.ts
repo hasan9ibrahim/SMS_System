@@ -9,6 +9,9 @@ import type {
   DialCodeProfile,
   MoNumber,
   ProductCategory,
+  QbrStat,
+  ReratingRequest,
+  RouteMapRow,
   Enterprise,
   ListId,
   RateLineRow,
@@ -22,6 +25,7 @@ import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
 import type { ListDef } from "./engine.js";
 
+const ymd = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
 const fullName = (alias: string) => `(${alias}.first_name || ' ' || ${alias}.last_name)`;
 
@@ -623,6 +627,224 @@ export const moNumberList: ListDef<MoNumber> = {
   }),
 };
 
+// ---------------------------------------------------------------- route map, re-rating, QBR stats (§6.3)
+
+/**
+ * Route map rows per customer trunk, computed by api/routeMap.ts before each query. The list
+ * reads them as a JSON record set, so the whole filter grammar (§13.25) works on computed columns.
+ */
+export const routeMapRows = new Map<number, Omit<RouteMapRow, "currency">[]>();
+const ROUTE_MAP_COLUMNS: [string, string][] = [
+  ["id", "bigint"],
+  ["mccmnc", "text"],
+  ["country", "text"],
+  ["network", "text"],
+  ["allNetworks", "boolean"],
+  ["sellRate", "numeric"],
+  ["sellCurrency", "text"],
+  ["sellRateConverted", "numeric"],
+  ["rateTableId", "bigint"],
+  ["rateTableName", "text"],
+  ["status", "text"],
+  ["ruleId", "bigint"],
+  ["ruleName", "text"],
+  ["rulePriority", "int"],
+  ["routeType", "text"],
+  ["vendorTrunkId", "bigint"],
+  ["vendor", "text"],
+  ["vendorCost", "numeric"],
+  ["margin", "numeric"],
+  ["marginPct", "numeric"],
+  ["decidedBy", "text"],
+];
+
+/** The trunk of a route map query (a top-level customerTrunkId eq condition), or null. */
+export function routeMapTrunk(query: ListQuery): number | null {
+  const top = !query.filter || query.filter.logic === "and" ? (query.filter?.conditions ?? []) : [];
+  const c = top.find((x) => !("logic" in x) && x.field === "customerTrunkId" && x.op === "eq") as
+    { value?: unknown } | undefined;
+  return c && Number.isInteger(Number(c.value)) ? Number(c.value) : null;
+}
+
+export const routeMapList: ListDef<RouteMapRow> = {
+  fields: listFields.route_map,
+  from: (query) => {
+    const trunk = routeMapTrunk(query) ?? 0;
+    const json = JSON.stringify((routeMapRows.get(trunk) ?? []).map((r) => ({ ...r, customerTrunkId: trunk })));
+    const cols = [...ROUTE_MAP_COLUMNS, ["customerTrunkId", "bigint"]].map(([c, t]) => `"${c}" ${t}`).join(", ");
+    return `jsonb_to_recordset($rm$${json}$rm$::jsonb) AS rm(${cols})`;
+  },
+  columns: Object.fromEntries(
+    [...ROUTE_MAP_COLUMNS.map(([c]) => c), "customerTrunkId"].map((c) => [c, { sql: `rm."${c}"` }]),
+  ),
+  search: ["country", "network", "mccmnc", "ruleName", "vendor"],
+  idSql: 'rm."id"',
+  select: [...ROUTE_MAP_COLUMNS.map(([c]) => `rm."${c}"`)].join(", "),
+  mapRow: (r) => ({
+    id: Number(r.id),
+    mccmnc: r.mccmnc as string,
+    country: r.country as string,
+    network: r.network as string,
+    allNetworks: r.allNetworks as boolean,
+    sellRate: Number(r.sellRate),
+    sellCurrency: r.sellCurrency as string,
+    sellRateConverted: Number(r.sellRateConverted),
+    rateTableId: Number(r.rateTableId),
+    rateTableName: r.rateTableName as string,
+    status: r.status as RouteMapRow["status"],
+    ruleId: r.ruleId == null ? null : Number(r.ruleId),
+    ruleName: (r.ruleName as string | null) ?? null,
+    rulePriority: r.rulePriority == null ? null : Number(r.rulePriority),
+    routeType: (r.routeType as RouteMapRow["routeType"]) ?? null,
+    vendorTrunkId: r.vendorTrunkId == null ? null : Number(r.vendorTrunkId),
+    vendor: (r.vendor as string | null) ?? null,
+    vendorCost: r.vendorCost == null ? null : Number(r.vendorCost),
+    margin: r.margin == null ? null : Number(r.margin),
+    marginPct: r.marginPct == null ? null : Number(r.marginPct),
+    decidedBy: (r.decidedBy as string | null) ?? null,
+    currency: PLATFORM_CURRENCY,
+  }),
+};
+
+const SIGNED_IN = Number(process.env.MOCK_USER_ID ?? 1);
+const reratingEnterprises = `(SELECT string_agg(e.name, ', ' ORDER BY e.name) FROM enterprises e WHERE e.id = ANY(rr.enterprise_ids))`;
+
+export const reratingList: ListDef<ReratingRequest> = {
+  fields: listFields.rerating_requests,
+  from: `rerating_requests rr JOIN rate_tables rt ON rt.id = rr.rate_table_id
+    JOIN users rb ON rb.id = rr.requested_by_id LEFT JOIN users db ON db.id = rr.decided_by_id
+    LEFT JOIN users ub ON ub.id = rr.updated_by_id`,
+  columns: {
+    id: { sql: "rr.id" },
+    side: { sql: "rr.side" },
+    reprocessType: { sql: "rr.reprocess_type" },
+    enterprises: { sql: reratingEnterprises },
+    rateTableName: { sql: "rt.name" },
+    description: { sql: "rr.description" },
+    senderId: { sql: "rr.sender_id" },
+    startDate: { sql: "rr.start_date" },
+    endDate: { sql: "rr.end_date" },
+    priority: { sql: "rr.priority" },
+    requestStatus: { sql: "rr.request_status" },
+    reprocessStatus: { sql: "rr.reprocess_status" },
+    totalEdrs: { sql: "rr.total_edrs" },
+    requestedBy: { sql: "rb.username" },
+    requestedAt: { sql: "rr.inserted_at" },
+    decidedBy: { sql: "db.username" },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "rr.updated_at" },
+  },
+  search: ["description", "enterprises", "rateTableName", "requestedBy"],
+  idSql: "rr.id",
+  select: `rr.*, rt.name AS rate_table_name, rb.username AS requested_by, db.username AS decided_by, ub.username AS updated_by,
+    (SELECT json_agg(json_build_object('id', e.id, 'name', e.name) ORDER BY e.name) FROM enterprises e
+      WHERE e.id = ANY(rr.enterprise_ids)) AS enterprise_list`,
+  mapRow: (r) => {
+    const pending = r.request_status === "pending_approval";
+    const mine = Number(r.requested_by_id) === SIGNED_IN;
+    return {
+      id: r.id as number,
+      side: r.side as ReratingRequest["side"],
+      reprocessType: r.reprocess_type as ReratingRequest["reprocessType"],
+      description: (r.description as string | null) ?? null,
+      senderId: (r.sender_id as string | null) ?? null,
+      startDate: ymd(r.start_date),
+      endDate: ymd(r.end_date),
+      enterprises: ((r.enterprise_list as { id: number; name: string }[] | null) ?? []).map((e) => ({
+        id: Number(e.id),
+        name: e.name,
+      })),
+      rateTableId: Number(r.rate_table_id),
+      rateTableName: r.rate_table_name as string,
+      reason: "rate_correction",
+      mccmncs: (r.mccmncs as string[]) ?? [],
+      noNote: r.no_note as boolean,
+      priority: r.priority as ReratingRequest["priority"],
+      requestStatus: r.request_status as ReratingRequest["requestStatus"],
+      reprocessStatus: r.reprocess_status as ReratingRequest["reprocessStatus"],
+      requestedBy: r.requested_by as string,
+      requestedAt: iso(r.inserted_at)!,
+      decidedBy: (r.decided_by as string | null) ?? null,
+      decidedAt: iso(r.decided_at),
+      declineReason: (r.decline_reason as string | null) ?? null,
+      startedAt: iso(r.started_at),
+      finishedAt: iso(r.finished_at),
+      totalEdrs: r.total_edrs == null ? null : Number(r.total_edrs),
+      error: (r.error as string | null) ?? null,
+      canDecide: pending && !mine,
+      canEdit: pending && mine,
+      updatedBy: (r.updated_by as string | null) ?? null,
+      updatedAt: iso(r.updated_at)!,
+    };
+  },
+};
+
+const eff = (col: string) => `(CASE WHEN q.overridden THEN COALESCE(q.override_${col}, q.${col}) ELSE q.${col} END)`;
+
+export const qbrStatList: ListDef<QbrStat> = {
+  fields: listFields.qbr_stats,
+  // One join to customer and vendor trunks together keeps the planner's row estimates right.
+  from: `qbr_stats q JOIN mccmnc m ON m.id = q.mccmnc_id JOIN countries co ON co.id = m.country_id
+    JOIN (SELECT 'customer' AS side, id, name, enterprise_id, deleted_at FROM customer_trunks
+          UNION ALL SELECT 'vendor', id, name, enterprise_id, deleted_at FROM vendor_trunks) tr
+      ON tr.side = q.side AND tr.id = q.trunk_id
+    JOIN enterprises e ON e.id = tr.enterprise_id
+    LEFT JOIN users ub ON ub.id = q.updated_by_id`,
+  baseWhere: "tr.deleted_at IS NULL AND (q.attempts > 0 OR q.overridden)",
+  columns: {
+    id: { sql: "q.id" },
+    // Plain equality on the fixed lowercase values, so the planner estimates the side right.
+    side: {
+      sql: "q.side",
+      where: (_op, c, p) => `q.side = ${p(String(c.value).toLowerCase())}`,
+    },
+    trunkId: { sql: "q.trunk_id" },
+    trunk: { sql: "tr.name" },
+    enterprise: { sql: "e.name" },
+    mccmnc: { sql: "m.mccmnc" },
+    country: { sql: "co.name" },
+    network: { sql: "CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END" },
+    attempts: { sql: "q.attempts" },
+    asr: { sql: eff("asr") },
+    dlr: { sql: eff("dlr") },
+    addSeconds: { sql: eff("add_s") },
+    overridden: { sql: "q.overridden" },
+    updatedAt: { sql: "q.updated_at" },
+    updatedBy: { sql: "ub.username" },
+  },
+  search: ["trunk", "mccmnc", "country", "network"],
+  idSql: "q.id",
+  select: `q.id, q.side, q.trunk_id, tr.name AS trunk, e.id AS enterprise_id, e.name AS enterprise,
+    m.id AS mccmnc_id, m.mccmnc, co.name AS country, CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END AS network,
+    q.attempts, q.asr, q.dlr, q.add_s, ${eff("asr")} AS e_asr, ${eff("dlr")} AS e_dlr, ${eff("add_s")} AS e_add,
+    q.overridden, q.updated_at, CASE WHEN q.overridden THEN ub.username END AS updated_by`,
+  mapRow: (r) => {
+    const n = (v: unknown) => (v == null ? null : Number(v));
+    return {
+      id: r.id as number,
+      side: r.side as QbrStat["side"],
+      trunkId: Number(r.trunk_id),
+      trunk: r.trunk as string,
+      enterpriseId: Number(r.enterprise_id),
+      enterprise: r.enterprise as string,
+      destinationId: Number(r.mccmnc_id),
+      mccmnc: r.mccmnc as string,
+      country: r.country as string,
+      network: r.network as string,
+      attempts: Number(r.attempts),
+      asr: n(r.e_asr),
+      dlr: n(r.e_dlr),
+      addSeconds: n(r.e_add),
+      trafficAsr: n(r.asr),
+      trafficDlr: n(r.dlr),
+      trafficAddSeconds: n(r.add_s),
+      overridden: r.overridden as boolean,
+      updatedAt: iso(r.updated_at)!,
+      updatedBy: (r.updated_by as string | null) ?? null,
+    };
+  },
+};
+
 // ---------------------------------------------------------------- route rules (§15.4 grid)
 
 const WINDOW_VALUES = new Set(["15m", "1h", "24h", "7d", "30d"]);
@@ -903,4 +1125,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   dial_code_profiles: dialCodeProfileList as ListDef<unknown>,
   dial_codes: dialCodeList as ListDef<unknown>,
   mo_numbers: moNumberList as ListDef<unknown>,
+  route_map: routeMapList as ListDef<unknown>,
+  rerating_requests: reratingList as ListDef<unknown>,
+  qbr_stats: qbrStatList as ListDef<unknown>,
 };

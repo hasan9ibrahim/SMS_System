@@ -136,6 +136,20 @@ the dialog shows the counts, errors by line, rows kept because they are in use, 
 is enabled only without errors. "Replace" mode archives what the file leaves out. Templates are
 downloadable from the dialog. Every save, delete and import is one undoable change.
 
+## Route map, Re-rating, QBR stats (build step 5.2)
+
+- **Route map** (`/routing/map`, `src/pages/routing/RouteMapPage.tsx`, §6.3): pick a customer trunk (kept in the
+  URL, `?trunk=`); the grid shows every destination it sells with the route status (routed, blocked, no vendor,
+  no rule), the deciding rule (links to Route rules), the vendor, cost and margin. Server-side filter and sort on
+  every column; Export.
+- **Re-rating** (`/routing/re-rating`, `ReratingPage.tsx`, §6.3, §12.2): requests with Request Status (maker-checker)
+  and Reprocess Status. "Request re-rating" opens the §12.2 form with a Preview of the EDRs and amounts per
+  enterprise. The detail shows the Re-Rating Summary and, for another user's pending request, Approve and Decline;
+  it refreshes itself while the job runs.
+- **QBR stats** (`/switch/qbr-stats`, `src/pages/switch/QbrStatsPage.tsx`, §6.3): customer or vendor trunks
+  (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
+  detail compares traffic and the figures QBR routing uses; Clear override; undo.
+
 ## Building a record page
 
 - **Form kit** (`src/form/form.tsx`): `useForm(initial)` holds one state object with a dirty flag

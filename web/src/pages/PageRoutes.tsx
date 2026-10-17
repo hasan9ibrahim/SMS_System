@@ -12,6 +12,9 @@ import { CountriesPage } from "./reference/CountriesPage";
 import { MasterTablePage } from "./reference/MasterTablePage";
 import { MoBookPage } from "./reference/MoBookPage";
 import { ProductCategoriesPage } from "./reference/ProductCategoriesPage";
+import { RouteMapPage } from "./routing/RouteMapPage";
+import { ReratingPage } from "./routing/ReratingPage";
+import { QbrStatsPage } from "./switch/QbrStatsPage";
 import { RateManagerPage } from "./rates/RateManagerPage";
 import { EnterpriseReportPage } from "./reports/EnterpriseReportPage";
 import { TrunkPage } from "./trunk/TrunkPage";
@@ -33,6 +36,9 @@ const BUILT = new Set([
   "/rates/countries",
   "/rates/master-table",
   "/rates/mo-book",
+  "/routing/map",
+  "/routing/re-rating",
+  "/switch/qbr-stats",
   "/reports/enterprise",
   "/routing/rules",
   "/routing/rate-lookup",
@@ -64,6 +70,9 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/rates/countries" element={<CountriesPage />} />
       <Route path="/rates/master-table" element={<MasterTablePage />} />
       <Route path="/rates/mo-book" element={<MoBookPage />} />
+      <Route path="/routing/map" element={<RouteMapPage />} />
+      <Route path="/routing/re-rating" element={<ReratingPage />} />
+      <Route path="/switch/qbr-stats" element={<QbrStatsPage />} />
       <Route path="/reports/enterprise" element={<EnterpriseReportPage />} />
       <Route
         path="/routing/rate-lookup"

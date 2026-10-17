@@ -392,3 +392,93 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Route map, Re-rating, QBR stats (§6.3) ---------- */
+.rm-trunk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.rm-pick {
+  width: 340px;
+}
+.rm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rm-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.rm-status.tone-muted {
+  color: var(--color-text-secondary);
+}
+.rr-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid currentColor;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.rr-badge.tone-muted {
+  color: var(--color-text-secondary);
+}
+.rr-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rr-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rr-h {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.rr-summary {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.rr-summary th,
+.rr-summary td {
+  padding: 5px 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+}
+.rr-summary th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 12px;
+}
+.rr-summary .r {
+  text-align: right;
+}
+.rr-summary tr.strong td {
+  font-weight: 600;
+}
+.rr-preview {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.rr-preview p {
+  margin: 0 0 8px;
+}
+.qbr-compare {
+  max-width: 640px;
+}

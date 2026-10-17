@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.11.0
+  version: 0.12.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -2737,6 +2737,351 @@ paths:
                 type: string
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-map/query:
+    post:
+      tags: [routing]
+      operationId: queryRouteMap
+      summary: "Route map of a customer trunk (server-side filter, sort and paging)"
+      description: |
+        Which rule and vendor each destination the trunk sells gets today (§6.3 Route map; assumed scope,
+        see BACKEND_TODO): every destination with a sell rate in the trunk's rate tables, run through the
+        live route rules in order as a message without receiver or content (steady state: no warm-up, no
+        number whitelists). The `customerTrunkId` filter (eq) is required. Filter, sort and paging work on
+        every column, including the routed vendor, cost and margin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of destinations with their route
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteMapPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-map/export:
+    post:
+      tags: [routing]
+      operationId: exportRouteMap
+      summary: "Export a trunk's route map as CSV"
+      description: |
+        Same filter (with `customerTrunkId`), search and sort as the grid; every matching row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rerating-requests/query:
+    post:
+      tags: [routing]
+      operationId: queryReratingRequests
+      summary: "List re-rating requests (server-side filter, sort and paging)"
+      description: |
+        Re-Rating (§6.3, §12.2): requests to recompute charges on past EDRs after a rate correction, with
+        their request status (maker-checker) and reprocess status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of re-rating requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReratingRequestPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rerating-requests/preview:
+    post:
+      tags: [routing]
+      operationId: previewRerating
+      summary: "Estimate a re-rating before requesting it"
+      description: |
+        Runs the computation without saving: EDRs in scope and the difference per enterprise between the
+        billed amount and the amount at the rate table's rates valid at send time (a back-dated line counts
+        from its stated date, §13.32).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReratingInput"
+      responses:
+        "200":
+          description: The estimate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReratingPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rerating-requests:
+    post:
+      tags: [routing]
+      operationId: createReratingRequest
+      summary: "Request a re-rating (§12.2 Re-Rating Request)"
+      description: |
+        Saved as Pending Approval. Another user approves or declines it (maker-checker); nothing is
+        re-rated before that. One undoable change while pending.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReratingInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReratingSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rerating-requests/{id}:
+    get:
+      tags: [routing]
+      operationId: getReratingRequest
+      summary: "One re-rating request with its summary (§12.2 Re-Rating view)"
+      description: |
+        The request fields, statuses and times, and the Re-Rating Summary per enterprise.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReratingDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [routing]
+      operationId: updateReratingRequest
+      summary: "Change a pending re-rating request"
+      description: |
+        Only the requester, and only while it is Pending Approval (409 otherwise). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReratingInput"
+      responses:
+        "200":
+          description: Saved, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReratingSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rerating-requests/{id}/approve:
+    post:
+      tags: [routing]
+      operationId: approveReratingRequest
+      summary: "Approve a re-rating request (checker)"
+      description: |
+        Another user than the requester (403 otherwise). The request is queued and processed in the
+        background: In Queue, In Process, then Completed (or Failed). Unless `noNote` is set, each
+        enterprise with a difference gets a credit or debit note in Transactions (type Reprocess). EDRs
+        keep the amounts they were billed at (§13.29).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Approved, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReratingSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rerating-requests/{id}/decline:
+    post:
+      tags: [routing]
+      operationId: declineReratingRequest
+      summary: "Decline a re-rating request (checker)"
+      description: |
+        Another user than the requester (403 otherwise), with a reason. Nothing is re-rated.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReratingDecline"
+      responses:
+        "200":
+          description: Declined, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReratingSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /qbr-stats/query:
+    post:
+      tags: [routing]
+      operationId: queryQbrStats
+      summary: "List QBR stats (server-side filter, sort and paging)"
+      description: |
+        QBR Stats (§6.3): ASR, DLR and ADD (average delivery delay, s) per vendor or customer trunk and
+        MCCMNC, from the last 24 hours of EDRs, refreshed every 5 minutes. The `side` filter (eq customer or
+        vendor) is required. A vendor stat can be overridden by hand; the override wins until cleared, and
+        QBR routing uses the effective DLR per destination.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of QBR stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QbrStatPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /qbr-stats/vendor-override:
+    put:
+      tags: [routing]
+      operationId: setQbrVendorOverride
+      summary: "Add or override a vendor stat (Add Vendor Stat)"
+      description: |
+        Seeds or overrides the scores of a vendor trunk for a destination; a null value keeps the traffic
+        figure. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QbrOverrideInput"
+      responses:
+        "200":
+          description: The stat, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QbrStatSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /qbr-stats/{id}/clear-override:
+    post:
+      tags: [routing]
+      operationId: clearQbrOverride
+      summary: "Clear a vendor stat override"
+      description: |
+        The traffic figures apply again. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The stat, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QbrStatSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -5981,6 +6326,408 @@ components:
               items:
                 $ref: "#/components/schemas/MoNumber"
 
+    # ------------------------------------------------------------- Route map, Re-rating, QBR stats (§6.3)
+    RouteMapStatus:
+      type: string
+      enum: [routed, blocked, no_vendor, no_rule]
+      description: "routed: a rule picks a vendor; blocked: a block rule matches; no_vendor: rules match but no vendor qualifies; no_rule: no rule matches."
+
+    RouteMapRow:
+      type: object
+      required: [id, mccmnc, country, network, allNetworks, sellRate, sellCurrency, sellRateConverted, rateTableId, rateTableName, status, ruleId, ruleName, rulePriority, routeType, vendorTrunkId, vendor, vendorCost, margin, marginPct, decidedBy, currency]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        mccmnc:
+          type: string
+        country:
+          type: string
+        network:
+          type: string
+        allNetworks:
+          type: boolean
+        sellRate:
+          type: number
+        sellCurrency:
+          type: string
+        sellRateConverted:
+          type: number
+          description: Sell rate in the platform currency (`currency`).
+        rateTableId:
+          $ref: "#/components/schemas/Id"
+        rateTableName:
+          type: string
+        status:
+          $ref: "#/components/schemas/RouteMapStatus"
+        ruleId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        ruleName:
+          type: [string, "null"]
+        rulePriority:
+          type: [integer, "null"]
+        routeType:
+          type: [string, "null"]
+          enum: [static, dynamic, qbr, block, null]
+        vendorTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        vendor:
+          type: [string, "null"]
+        vendorCost:
+          type: [number, "null"]
+          description: The routed vendor's buy rate, platform currency.
+        margin:
+          type: [number, "null"]
+        marginPct:
+          type: [number, "null"]
+        decidedBy:
+          type: [string, "null"]
+          description: How the vendor was chosen (priority, percentage, least cost, quality …).
+        currency:
+          type: string
+          description: Platform currency of the converted figures.
+
+    RouteMapPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/RouteMapRow"
+
+    ReratingInput:
+      type: object
+      additionalProperties: false
+      required: [description, startDate, endDate, side, enterpriseIds, rateTableId, reason, mccmncs, senderId, noNote, priority]
+      properties:
+        description:
+          type: [string, "null"]
+          maxLength: 500
+        startDate:
+          type: string
+          format: date
+          description: First day, UTC.
+        endDate:
+          type: string
+          format: date
+          description: Last day (inclusive), UTC.
+        side:
+          type: string
+          enum: [customer, vendor]
+        enterpriseIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/Id"
+        rateTableId:
+          $ref: "#/components/schemas/Id"
+          description: The corrected table; only EDRs billed with it are re-rated.
+        reason:
+          type: string
+          enum: [rate_correction]
+        mccmncs:
+          type: array
+          maxItems: 500
+          description: Limit to these codes (a 3-digit code = the whole country); empty = all.
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
+        senderId:
+          type: [string, "null"]
+          maxLength: 20
+        noNote:
+          type: boolean
+          description: "\"Don't add credit/debit note to transaction\": compute only."
+        priority:
+          type: string
+          enum: [P1, P2, P3]
+
+    ReratingDecline:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    ReratingSummaryRow:
+      type: object
+      required: [enterpriseId, enterpriseName, side, totalEdrs, oldAmount, newAmount, amount, currency, paymentType, transactionStatus, transactionId, startTime, endTime, updatedBy]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterpriseName:
+          type: string
+        side:
+          type: string
+          enum: [customer, vendor]
+        totalEdrs:
+          type: integer
+        oldAmount:
+          type: number
+          description: Billed, in `currency` (the rate table's).
+        newAmount:
+          type: number
+        amount:
+          type: number
+          description: newAmount - oldAmount.
+        currency:
+          type: string
+        paymentType:
+          type: [string, "null"]
+          enum: [credit, debit, null]
+          description: The note posted to the enterprise; null when there is no difference.
+        transactionStatus:
+          type: string
+          enum: [pending, posted, not_posted, no_difference]
+          description: "pending: not processed yet; not_posted: noNote was set."
+        transactionId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        startTime:
+          type: [string, "null"]
+          format: date-time
+        endTime:
+          type: [string, "null"]
+          format: date-time
+        updatedBy:
+          type: [string, "null"]
+
+    ReratingPreview:
+      type: object
+      required: [totalEdrs, rows]
+      properties:
+        totalEdrs:
+          type: integer
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReratingSummaryRow"
+
+    ReratingRequestFields:
+      type: object
+      required: [id, side, reprocessType, description, senderId, startDate, endDate, enterprises, rateTableId, rateTableName, reason, mccmncs, noNote, priority, requestStatus, reprocessStatus, requestedBy, requestedAt, decidedBy, decidedAt, declineReason, startedAt, finishedAt, totalEdrs, error, canDecide, canEdit, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        side:
+          type: string
+          enum: [customer, vendor]
+        reprocessType:
+          type: string
+          enum: [manual, auto]
+        description:
+          type: [string, "null"]
+        senderId:
+          type: [string, "null"]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        enterprises:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              name:
+                type: string
+        rateTableId:
+          $ref: "#/components/schemas/Id"
+        rateTableName:
+          type: string
+        reason:
+          type: string
+          enum: [rate_correction]
+        mccmncs:
+          type: array
+          items:
+            type: string
+        noNote:
+          type: boolean
+        priority:
+          type: string
+          enum: [P1, P2, P3]
+        requestStatus:
+          type: string
+          enum: [pending_approval, approved, declined]
+        reprocessStatus:
+          type: string
+          enum: [not_started, in_queue, in_process, completed, failed]
+        requestedBy:
+          type: string
+        requestedAt:
+          $ref: "#/components/schemas/Timestamp"
+        decidedBy:
+          type: [string, "null"]
+        decidedAt:
+          type: [string, "null"]
+          format: date-time
+        declineReason:
+          type: [string, "null"]
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+        totalEdrs:
+          type: [integer, "null"]
+        error:
+          type: [string, "null"]
+        canDecide:
+          type: boolean
+          description: The signed-in user may approve or decline (pending, and not the requester).
+        canEdit:
+          type: boolean
+          description: The signed-in user may change it (pending, and the requester).
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    ReratingDetail:
+      allOf:
+        - $ref: "#/components/schemas/ReratingRequestFields"
+        - type: object
+          required: [summary]
+          properties:
+            summary:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReratingSummaryRow"
+
+    ReratingSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/ReratingDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    ReratingRequestPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReratingRequestFields"
+
+    QbrStat:
+      type: object
+      required: [id, side, trunkId, trunk, enterpriseId, enterprise, destinationId, mccmnc, country, network, attempts, asr, dlr, addSeconds, trafficAsr, trafficDlr, trafficAddSeconds, overridden, updatedAt, updatedBy]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        side:
+          type: string
+          enum: [customer, vendor]
+        trunkId:
+          $ref: "#/components/schemas/Id"
+        trunk:
+          type: string
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        destinationId:
+          $ref: "#/components/schemas/Id"
+        mccmnc:
+          type: string
+        country:
+          type: string
+        network:
+          type: string
+        attempts:
+          type: integer
+          description: EDRs in the last 24 hours behind the traffic figures.
+        asr:
+          type: [number, "null"]
+          description: Effective ASR % (override, else traffic).
+        dlr:
+          type: [number, "null"]
+          description: Effective DLR %.
+        addSeconds:
+          type: [number, "null"]
+          description: Effective average delivery delay, seconds.
+        trafficAsr:
+          type: [number, "null"]
+        trafficDlr:
+          type: [number, "null"]
+        trafficAddSeconds:
+          type: [number, "null"]
+        overridden:
+          type: boolean
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          type: [string, "null"]
+          description: Who set the override; null for traffic figures.
+
+    QbrOverrideInput:
+      type: object
+      additionalProperties: false
+      required: [vendorTrunkId, destinationId, asr, dlr, addSeconds]
+      properties:
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        destinationId:
+          $ref: "#/components/schemas/Id"
+        asr:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+        dlr:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+        addSeconds:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 86400
+
+    QbrStatSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/QbrStat"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    QbrStatPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/QbrStat"
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -6686,7 +7433,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats]
 
     FilterOperator:
       type: string

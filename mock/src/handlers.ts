@@ -72,8 +72,19 @@ import {
   rateLookupMatrix,
   resolveLookupDestinations,
   updateSavedLookup,
+  clearRoutingCostCache,
 } from "./api/rateLookup.js";
 import { setDestinationDlrTarget } from "./api/destinations.js";
+import { clearRouteMaps, exportRouteMap, queryRouteMap } from "./api/routeMap.js";
+import {
+  approveReratingRequest,
+  createReratingRequest,
+  declineReratingRequest,
+  getReratingRequest,
+  previewRerating,
+  updateReratingRequest,
+} from "./api/rerating.js";
+import { clearQbrOverride, setQbrVendorOverride } from "./api/qbr.js";
 import {
   archiveDestination,
   archiveDialCodeProfile,
@@ -112,10 +123,27 @@ import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
 import { undoChange } from "./api/changes.js";
 
+/** Routing costs and route maps are cached a minute; rate changes and undos clear them. */
+const clearRouteCaches = () => {
+  clearRoutingCostCache();
+  clearRouteMaps();
+};
+
+/** QBR stats need the side ("QBR Stats For"): one list per side, never both mixed. */
+const queryQbrStatsList: Handler = (request, reply) => {
+  const q = request.body as { filter?: { logic: string; conditions: { field?: string; op?: string }[] } };
+  const top = !q.filter || q.filter.logic === "and" ? (q.filter?.conditions ?? []) : [];
+  if (!top.some((c) => c.field === "side" && c.op === "eq"))
+    return sendProblem(reply, 400, "Invalid list query", {
+      errors: [{ path: "/filter", message: "the filter needs a top-level side eq condition" }],
+    });
+  return queryList("qbr_stats")(request, reply);
+};
+
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.11.0";
+const VERSION = "0.12.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -187,7 +215,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   restoreRateTable,
   exportRateLines,
   queryRateLines,
-  changeRateLines,
+  // Routing costs are cached a minute; a rate change or an undo clears them (api/rateLookup.ts).
+  changeRateLines: (request, reply) => Promise.resolve(changeRateLines(request, reply)).finally(clearRouteCaches),
   queryDestinations: queryList("destinations"),
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
@@ -215,6 +244,20 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   createSavedLookup,
   updateSavedLookup,
   deleteSavedLookup,
+  // Route map, Re-rating, QBR stats (§6.3)
+  queryRouteMap,
+  exportRouteMap,
+  queryReratingRequests: queryList("rerating_requests"),
+  previewRerating,
+  createReratingRequest,
+  getReratingRequest,
+  updateReratingRequest,
+  approveReratingRequest,
+  declineReratingRequest,
+  queryQbrStats: queryQbrStatsList,
+  setQbrVendorOverride,
+  clearQbrOverride,
+
   // Product reference data (§6.1)
   queryProductCategories: queryList("product_categories"),
   createProductCategory,
@@ -254,7 +297,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
 
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),
-  undoChange,
+  undoChange: (request, reply) => Promise.resolve(undoChange(request, reply)).finally(clearRouteCaches),
 
   listViews,
   createView,

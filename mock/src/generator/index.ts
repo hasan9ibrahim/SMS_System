@@ -15,6 +15,7 @@ import { generateRules } from "./rules.js";
 import { generateFinance } from "./finance.js";
 import { generateHistory } from "./history.js";
 import { generateMasterData } from "./masterData.js";
+import { generateRoutingExtras } from "./routingExtras.js";
 
 export function emptyWorld(anchor: number, profile: Profile): World {
   return {
@@ -71,6 +72,7 @@ export async function generateWorld(opts: {
   await step("history", (rng) => generateHistory(world, rng, opts.sink));
   // Last, so it draws nothing the earlier steps depend on (§6.1 screens, build step 5).
   await step("master data", (rng) => generateMasterData(world, rng, opts.sink, opts.profile));
+  await step("routing extras", (rng) => generateRoutingExtras(world, rng, opts.sink, opts.profile));
   return world;
 }
 
