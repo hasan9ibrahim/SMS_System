@@ -32,13 +32,18 @@ BEGIN
       deny_multipart, threshold, threshold_interval, 'Copy for the Cleanup Center (fake)', created_by_id, updated_by_id,
       inserted_at, updated_at, dlr_target_pct, lcr_profile_id
     FROM route_rules WHERE id = src RETURNING id INTO nid;
+  -- With a vendor shift, each vendor row gets a different replacement trunk (none of the source rule's own),
+  -- so a source with several vendors on one level never yields the same level and trunk twice.
   INSERT INTO route_rule_vendors (route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per)
   SELECT nid, v.level,
          CASE WHEN vendor_shift = 0 THEN v.vendor_trunk_id
-              ELSE (SELECT vt.id FROM vendor_trunks vt WHERE vt.deleted_at IS NULL AND vt.status = 'active' AND vt.id <> v.vendor_trunk_id
-                     ORDER BY vt.id OFFSET vendor_shift LIMIT 1) END,
+              ELSE coalesce((SELECT vt.id FROM vendor_trunks vt
+                              WHERE vt.deleted_at IS NULL AND vt.status = 'active'
+                                AND vt.id NOT IN (SELECT x.vendor_trunk_id FROM route_rule_vendors x WHERE x.route_rule_id = src)
+                              ORDER BY vt.id OFFSET vendor_shift + v.rn LIMIT 1), v.vendor_trunk_id) END,
          v.share_pct, v.is_backup, v.warmup_count, v.warmup_reset, v.warmup_per
-    FROM route_rule_vendors v WHERE v.route_rule_id = src;
+    FROM (SELECT y.*, row_number() OVER (ORDER BY y.id) - 1 AS rn FROM route_rule_vendors y WHERE y.route_rule_id = src) v
+  ON CONFLICT DO NOTHING;
   RETURN nid;
 END $$;
 
@@ -53,7 +58,7 @@ SELECT pg_temp.fx_copy(s.id, s.name || ' – other trunks', NULL,
 -- Conflicting: same priority and conditions, another vendor.
 SELECT pg_temp.fx_copy(s.id, s.name || ' – alt vendor', NULL, NULL, 7) FROM (SELECT * FROM fx_src ORDER BY id OFFSET 6 LIMIT 2) s;
 -- Shadowed: the same traffic again further down the list (the original decides first).
-SELECT pg_temp.fx_copy(s.id, s.name || ' – fallback', s.priority + 500, NULL, 11) FROM (SELECT * FROM fx_src ORDER BY id OFFSET 8 LIMIT 2) s;
+SELECT pg_temp.fx_copy(s.id, s.name || ' – fallback', least(s.priority + 20, 100), NULL, 11) FROM (SELECT * FROM fx_src ORDER BY id OFFSET 8 LIMIT 2) s;
 
 -- Duplicate enterprises: the same company entered again (name with punctuation, same VAT number).
 INSERT INTO enterprises (business_company_id, name, alias, type, tier, status, account_manager_id, bind_alert, credit_alert,
