@@ -7860,6 +7860,12 @@ export type components = {
         /** @description Must be the side's billing currency; null = that currency. */
         currency?: string | null;
         description: string;
+        /**
+         * @description Changes the balance (decided 2026-10-17): also records a real transaction (payment → Receipt or Bill
+         *     Payment, credit note → Credit Note, adjustment and opening balance → Adjustment) dated and signed like
+         *     the entry. False or omitted = the line shows on the SOA only.
+         */
+        affectsBalance?: boolean;
       } | null;
       /** @description Required to remove an automatic line. */
       note: string | null;
@@ -7879,6 +7885,9 @@ export type components = {
       amount: number | null;
       currency: string | null;
       description: string | null;
+      affectsBalance: boolean;
+      /** @description The transaction a balance-changing entry recorded; taking the entry back deletes it. */
+      transactionId: components["schemas"]["Id"] | null;
       note: string | null;
       createdBy: string | null;
       createdAt: components["schemas"]["Timestamp"];

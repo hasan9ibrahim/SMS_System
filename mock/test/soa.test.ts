@@ -205,6 +205,42 @@ describe("SOA statement (§7, §13.31, §13.33)", { skip }, () => {
     near(s2.closingBalance, customer.closingBalance + 25, "a manual entry is on the SOA");
     near(s2.systemBalance, customer.systemBalance, "but not in the system balance");
     await undo(entry.change);
+
+    // The other option (decided 2026-10-17): the entry records a real transaction and changes the balance.
+    const real = await ok(
+      "createSoaAdjustment",
+      call("POST", "/soa/adjustments", {
+        enterpriseId: id,
+        action: "entry",
+        entry: {
+          side: "customer",
+          kind: "payment",
+          date: "2026-05-02",
+          amount: 40,
+          currency: null,
+          description: "Cash received at the office",
+          affectsBalance: true,
+        },
+        note: null,
+      }),
+      201,
+    );
+    assert.equal(real.record.affectsBalance, true);
+    const txId = real.record.transactionId;
+    assert.ok(txId, "a transaction was recorded");
+    const tx = await ok("getTransaction", call("GET", `/transactions/${txId}`));
+    assert.deepEqual([tx.transactionType, tx.paymentType, tx.amount, tx.side], ["receipt", "credit", 40, "customer"]);
+    s2 = (await statement(id)).sides.find((s) => s.side === "customer")!;
+    const realLines = s2.lines.filter((l) => l.adjustmentId === real.record.id);
+    assert.equal(realLines.length, 1, "shown once, as the entry's line");
+    assert.equal(realLines[0]!.source, "manual");
+    near(s2.systemBalance, customer.systemBalance + 40, "the balance changes");
+    near(s2.difference, customer.difference, "and the SOA agrees with it as before");
+    await undo(real.change);
+    const gone = await ok("getTransaction", call("GET", `/transactions/${txId}`));
+    assert.ok(gone.archivedAt, "undo deletes the transaction too");
+    s2 = (await statement(id)).sides.find((s) => s.side === "customer")!;
+    near(s2.systemBalance, customer.systemBalance, "balance back");
   });
 });
 

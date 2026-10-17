@@ -263,7 +263,7 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.18.0";
+const VERSION = "0.18.1";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({

@@ -158,7 +158,7 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   All, Send Email (preview per enterprise, confirm to send) and Queue SOA Export (Excel or PDF). Click a row for the
   statement: per side every line with source (Auto / Manual), status, amount and running balance; Remove or Take
   back by hand (reason logged, Undo); the disputed block with Add to SOA; payments left off with Include; removed
-  lines with Put back; Manual entry; the difference from the system balance; the net balance. Opened from Send SOA
+  lines with Put back; Manual entry (SOA only, or Changes the balance: also records a transaction); the difference from the system balance; the net balance. Opened from Send SOA
   on the Enterprise balance and Invoice pages (`?enterprises=`).
 - **SOA report** (`/finance/soa-report`, `SoaReportPage.tsx`): exports and sent SOAs with status, error, download and
   per-row Send Email (template picker).

@@ -181,6 +181,13 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
       const archive = e.field === "*" ? e.before == null : e.before === true;
       if (table)
         await c.query(`UPDATE ${table} SET deleted_at = ${archive ? "now()" : "NULL"} WHERE id = $1`, [e.entity_id]);
+      // A balance-changing manual SOA entry carries its transaction along (§13.31, decided 2026-10-17).
+      if (entityType === "soa_adjustment")
+        await c.query(
+          `UPDATE transactions SET deleted_at = ${archive ? "now()" : "NULL"}, updated_at = now()
+            WHERE id = (SELECT transaction_id FROM soa_adjustments WHERE id = $1)`,
+          [e.entity_id],
+        );
       continue;
     }
     if (entityType === "enterprise") {

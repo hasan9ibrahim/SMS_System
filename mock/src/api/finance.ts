@@ -91,7 +91,8 @@ export function getTransaction(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /** Final Amount (§7): base currency of the enterprise's business company at the payment date. */
-async function convert(db: Db, enterpriseId: number, amount: number, currency: string, date: string) {
+/** Final Amount in the business company base currency at the date (§7 Transaction Conversion). */
+export async function convert(db: Db, enterpriseId: number, amount: number, currency: string, date: string) {
   const { rows } = await db.query(
     `SELECT bc.base_currency,
             rate_per_usd_at(bc.base_currency, $3::date::timestamptz) / rate_per_usd_at($2, $3::date::timestamptz) AS rate

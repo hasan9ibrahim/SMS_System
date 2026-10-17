@@ -111,6 +111,8 @@ function EntryDialog({ st, done }: { st: SoaStatement; done: () => void }) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
+  // Both options (decided 2026-10-17): SOA only, or also a real transaction that changes the balance.
+  const [affectsBalance, setAffectsBalance] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ccy = st.sides.find((s) => s.side === side)!.currency;
   const submit = () =>
@@ -125,12 +127,19 @@ function EntryDialog({ st, done }: { st: SoaStatement; done: () => void }) {
           amount: signedAmount(Number(amount), effect),
           currency: null,
           description: description.trim(),
+          affectsBalance,
         },
         note: note.trim() || null,
       },
       {
         onSuccess: (r) => {
-          if (r.change) notifySaved(r.change, "Manual SOA entry added");
+          if (r.change)
+            notifySaved(
+              r.change,
+              r.record.transactionId
+                ? `Manual SOA entry added and recorded as TX-${r.record.transactionId}`
+                : "Manual SOA entry added (SOA only)",
+            );
           done();
         },
         onError: (e) => setError(problemText(e)),
@@ -217,8 +226,24 @@ function EntryDialog({ st, done }: { st: SoaStatement; done: () => void }) {
           <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
         </label>
       </div>
+      <div className="segmented small soa-entry-mode" role="radiogroup" aria-label="Balance">
+        {([false, true] as const).map((v) => (
+          <button
+            key={String(v)}
+            type="button"
+            role="radio"
+            aria-checked={affectsBalance === v}
+            className={affectsBalance === v ? "on" : ""}
+            onClick={() => setAffectsBalance(v)}
+          >
+            {v ? "Changes the balance" : "SOA only"}
+          </button>
+        ))}
+      </div>
       <p className="muted small">
-        A manual entry shows on the SOA only; balances do not change. Record real money as a transaction instead.
+        {affectsBalance
+          ? `Also records a real ${kind === "payment" ? (side === "customer" ? "Receipt" : "Bill Payment") : kind === "credit_note" ? "Credit Note" : "Adjustment"} transaction for this amount, so the ${side} balance changes. Taking the entry back or Undo deletes it again.`
+          : "Shows on the SOA only; balances do not change and the SOA shows the difference."}
       </p>
     </Modal>
   );
@@ -599,7 +624,7 @@ export function SoaPage() {
   const [query, setQuery] = useState<SoaQuery | null>(() =>
     initialIds.length ? { enterpriseIds: initialIds, invoiceType: "all", ...period } : null,
   );
-  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [checked, setChecked] = useState<Set<number>>(() => new Set(initialIds));
   const [open, setOpen] = useState<number | null>(initialIds.length === 1 ? initialIds[0]! : null);
   const result = useSoaSearch(query);
   const follow = useFollowReports();

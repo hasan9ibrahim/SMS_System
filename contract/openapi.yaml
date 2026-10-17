@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.18.0
+  version: 0.18.1
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -13325,6 +13325,12 @@ components:
                   type: string
                   minLength: 1
                   maxLength: 300
+                affectsBalance:
+                  type: boolean
+                  description: |
+                    Changes the balance (decided 2026-10-17): also records a real transaction (payment → Receipt or Bill
+                    Payment, credit note → Credit Note, adjustment and opening balance → Adjustment) dated and signed like
+                    the entry. False or omitted = the line shows on the SOA only.
             - type: "null"
         note:
           type: [string, "null"]
@@ -13333,7 +13339,7 @@ components:
 
     SoaAdjustment:
       type: object
-      required: [id, enterpriseId, action, invoiceId, vendorInvoiceId, side, kind, date, amount, currency, description, note, createdBy, createdAt, archivedAt]
+      required: [id, enterpriseId, action, invoiceId, vendorInvoiceId, side, kind, date, amount, currency, description, affectsBalance, transactionId, note, createdBy, createdAt, archivedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -13364,6 +13370,13 @@ components:
           type: [string, "null"]
         description:
           type: [string, "null"]
+        affectsBalance:
+          type: boolean
+        transactionId:
+          description: The transaction a balance-changing entry recorded; taking the entry back deletes it.
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
         note:
           type: [string, "null"]
         createdBy:

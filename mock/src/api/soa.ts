@@ -24,7 +24,7 @@ import { db, withDb } from "../db.js";
 import { mapSoaReport, SOA_REPORT_FROM, SOA_REPORT_SELECT } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
 import { simplePdf, spreadsheetXml, type PdfLine } from "../billing/files.js";
-import { billingContacts } from "./finance.js";
+import { billingContacts, convert } from "./finance.js";
 import { notFound, setArchived } from "./masterData.js";
 import { recordChange, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
@@ -173,6 +173,8 @@ async function buildSide(
       WHERE t.enterprise_id = $1 AND t.side = $2 AND t.deleted_at IS NULL AND t.payment_date >= $3 AND t.payment_date < $4`,
     [enterpriseId, side, from, end],
   );
+  // Transactions recorded by balance-changing manual entries show as the entry's (manual) line.
+  const byTx = new Map(adj.filter((a) => a.transaction_id !== null).map((a) => [Number(a.transaction_id), a]));
   for (const t of txs) {
     const raises = side === "customer" ? t.payment_type === "credit" : t.payment_type === "debit";
     const line: SoaLine = {
@@ -188,10 +190,18 @@ async function buildSide(
     };
     if (String(t.currency).trim() !== currency)
       line.description += ` (${fmt(Number(t.amount))} ${String(t.currency).trim()})`;
+    const entry = byTx.get(Number(t.id));
+    if (entry) {
+      line.kind = `manual_${entry.kind === "opening_balance" ? "opening" : entry.kind}` as SoaLine["kind"];
+      line.source = "manual";
+      line.adjustmentId = Number(entry.id);
+      line.note = (entry.note as string) ?? null;
+      line.description = `${entry.description} · recorded as TX-${t.id}`;
+    }
     if (t.include_in_soa) lines.push(line);
     else excluded.push({ ...line, note: t.exclude_reason ?? null });
   }
-  for (const a of adj.filter((x) => x.action === "entry" && x.side === side)) {
+  for (const a of adj.filter((x) => x.action === "entry" && x.side === side && x.transaction_id === null)) {
     const day = ymd(a.entry_date);
     if (day < from || day > to) continue;
     lines.push({
@@ -375,6 +385,8 @@ async function loadAdjustment(c: Db, id: number): Promise<SoaAdjustment | null> 
     amount: a.amount === null ? null : Number(a.amount),
     currency: a.currency ? String(a.currency).trim() : null,
     description: a.description ?? null,
+    affectsBalance: a.affects_balance === true,
+    transactionId: a.transaction_id === null ? null : Number(a.transaction_id),
     note: a.note ?? null,
     createdBy: a.created_by ?? null,
     createdAt: (a.inserted_at as Date).toISOString(),
@@ -449,6 +461,7 @@ export function createSoaAdjustment(request: FastifyRequest, reply: FastifyReply
       if (e.currency && e.currency !== ccy)
         return badInput(reply, [{ path: "/entry/currency", message: `the ${e.side} side is billed in ${ccy}` }]);
       Object.assign(values, {
+        affects: e.affectsBalance === true,
         side: e.side,
         kind: e.kind,
         entry_date: e.date,
@@ -456,7 +469,9 @@ export function createSoaAdjustment(request: FastifyRequest, reply: FastifyReply
         currency: ccy,
         description: e.description.trim(),
       });
-      label = `Manual SOA entry: ${e.description.trim()} ${fmt(e.amount)} ${ccy}`;
+      label = `Manual SOA entry: ${e.description.trim()} ${fmt(e.amount)} ${ccy}${
+        e.affectsBalance ? " (recorded as a transaction)" : " (SOA only)"
+      }`;
     }
     const me = await getCurrentUser();
     const { id, change } = await inTransaction(pool, async (c) => {
@@ -480,6 +495,14 @@ export function createSoaAdjustment(request: FastifyRequest, reply: FastifyReply
         ],
       );
       const id = Number(rows[0].id);
+      if (values.affects) {
+        // Changes the balance (decided 2026-10-17): the entry records a real transaction.
+        const txId = await entryTransaction(c, b.enterpriseId, values, me.id);
+        await c.query("UPDATE soa_adjustments SET affects_balance = true, transaction_id = $2 WHERE id = $1", [
+          id,
+          txId,
+        ]);
+      }
       const change = await recordChange(c, {
         entityType: "soa_adjustment",
         entityIds: [id],
@@ -493,6 +516,46 @@ export function createSoaAdjustment(request: FastifyRequest, reply: FastifyReply
     });
     return reply.code(201).send({ record: await loadAdjustment(pool, id), change });
   });
+}
+
+const ENTRY_TX_TYPE: Record<string, string> = {
+  payment: "receipt",
+  credit_note: "credit_note",
+  adjustment: "adjustment",
+  opening_balance: "adjustment",
+};
+
+/** The transaction behind a balance-changing manual entry, signed like the entry (§7). */
+async function entryTransaction(c: pg.PoolClient, enterpriseId: number, v: Record<string, unknown>, userId: number) {
+  const side = v.side as Side;
+  const amount = Number(v.amount);
+  const raises = amount > 0;
+  const paymentType = side === "customer" ? (raises ? "credit" : "debit") : raises ? "debit" : "credit";
+  let type = ENTRY_TX_TYPE[v.kind as string]!;
+  if (v.kind === "payment" && side === "vendor") type = "bill_payment";
+  const abs = Math.abs(amount);
+  const conv = await convert(c, enterpriseId, abs, v.currency as string, v.entry_date as string);
+  const { rows } = await c.query(
+    `INSERT INTO transactions (enterprise_id, side, payment_mode, payment_type, transaction_type, amount, currency,
+                               amount_base, base_currency, ex_rate, payment_date, description, send_confirmation,
+                               confirmation_status, include_in_soa, created_by_id, updated_by_id)
+     VALUES ($1, $2, 'bank_transfer', $3, $4, $5, $6, $7, $8, $9, $10, $11, false, 'not_sent', true, $12, $12) RETURNING id`,
+    [
+      enterpriseId,
+      side,
+      paymentType,
+      type,
+      abs,
+      v.currency,
+      conv?.amountBase ?? abs,
+      conv?.baseCurrency ?? v.currency,
+      conv?.exRate ?? 1,
+      v.entry_date,
+      `${v.description} (SOA entry)`,
+      userId,
+    ],
+  );
+  return Number(rows[0].id);
 }
 
 export function archiveSoaAdjustment(request: FastifyRequest, reply: FastifyReply) {
@@ -509,6 +572,11 @@ export function archiveSoaAdjustment(request: FastifyRequest, reply: FastifyRepl
       note: `Took back a manual SOA ${before.action === "entry" ? "entry" : "change"}${reason ? `: ${reason}` : ""}`,
     });
     if ("reply" in r) return r.reply;
+    // A balance-changing entry takes its transaction with it (undo brings both back, changes.ts).
+    if (before.transactionId)
+      await pool.query("UPDATE transactions SET deleted_at = now(), updated_at = now() WHERE id = $1", [
+        before.transactionId,
+      ]);
     return { record: await loadAdjustment(pool, id), change: r.change };
   });
 }
