@@ -108,7 +108,8 @@ services:
     ports:
       - "${WEB_PORT:-8080}:80"
     depends_on:
-      mock: { condition: service_started }
+      # nginx answers 502 until the mock listens (it loads caches for a few seconds at start).
+      mock: { condition: service_healthy }
 
   # One-off: load the fake data (resets the schema). Full = production-like volume (takes a while; small is quick).
   seed:

@@ -25,6 +25,12 @@ Then open `http://<server>:8080` (set `WEB_PORT` in `.env` for another port).
   The default `full` profile is the production-like volume the screens were tuned for, and takes longer.
 - Re-running the seed job **resets all data**, including everything changed during the trial. Export
   anything worth keeping first (Migration center → New export).
+- If the server reaches the internet only through a proxy, the image build's `npm ci` fails. Pass the
+  proxy to the build, e.g. `HTTPS_PROXY=http://proxy:3128 docker compose --profile app build
+  --build-arg HTTPS_PROXY --build-arg HTTP_PROXY`. If the proxy re-signs TLS, its CA must also be trusted
+  in the build (`NODE_EXTRA_CA_CERTS`). Docker Hub may also rate-limit image pulls (HTTP 429); wait and
+  retry, or sign in with `docker login`.
+- The web container waits until the mock answers its health check (a few seconds at start).
 - Stop with `docker compose --profile app down`. The data stays in Docker volumes until you
   add `-v`.
 
