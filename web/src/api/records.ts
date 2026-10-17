@@ -18,6 +18,10 @@ import type {
   HandoverRequest,
   RateLineChanges,
   RateLineChangesSaved,
+  RateBulkApply,
+  RateBulkPreview,
+  RateBulkSaved,
+  RateBulkScope,
   RateTableDetail,
   RateTableInput,
   RateTableUpdate,
@@ -409,6 +413,17 @@ export function useChangeRateLines(id: number) {
   return useMutation({
     mutationFn: (body: RateLineChanges): Promise<RateLineChangesSaved> =>
       unwrap(api.POST("/rate-tables/{id}/lines/changes", { params: { path: { id } }, body })),
+    onSuccess: () => void refresh(),
+  });
+}
+
+/** Bulk rating across tables (§13.11): preview changes nothing; apply is one undoable change. */
+export const previewRateBulk = (body: RateBulkScope): Promise<RateBulkPreview> =>
+  unwrap(api.POST("/rate-bulk/preview", { body }));
+export function useApplyRateBulk() {
+  const refresh = useRefreshRecords();
+  return useMutation({
+    mutationFn: (body: RateBulkApply): Promise<RateBulkSaved> => unwrap(api.POST("/rate-bulk/apply", { body })),
     onSuccess: () => void refresh(),
   });
 }

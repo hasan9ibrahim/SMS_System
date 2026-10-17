@@ -235,12 +235,12 @@ export const PAGES: PageDef[] = [
   p(
     "rates",
     "bulk",
-    "Bulk workspace",
+    "Bulk rating",
     "/rates/bulk",
     "layers",
     "§13.11",
-    "5",
-    "Change many rates and routes together, with preview",
+    "5.13",
+    "Re-price several clients and destinations at once, with review and impact preview",
   ),
   p(
     "rates",

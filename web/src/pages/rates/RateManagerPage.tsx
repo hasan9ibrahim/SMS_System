@@ -11,6 +11,7 @@ import { ListScreen } from "../../page/ListScreen";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
+import { scopeUrl } from "./bulkModel";
 import { NewRateTableDialog } from "./dialogs";
 import { RateTablePanel } from "./RateTablePanel";
 import { RateTableView } from "./RateTableView";
@@ -64,6 +65,7 @@ function AmFilter({ value, onChange }: { value: number | null; onChange: (id: nu
 
 function FullList() {
   const open = useOpenTable();
+  const navigate = useTabNavigate();
   const names = (list: string[], more: number) =>
     list.length ? (
       <span title={list.join(", ")}>
@@ -78,6 +80,20 @@ function FullList() {
       list="rate_tables"
       page={page}
       historyScope={{ entityTypes: ["rate_table"] }}
+      // Several clients' tables at once open the bulk rating workspace (§13.11, §13.12).
+      selection={{
+        summary: (_rows, ids) => `${ids.size} table${ids.size === 1 ? "" : "s"} selected`,
+        bulk: (ids, clear) => [
+          {
+            label: `Bulk rating (${ids.length} table${ids.length === 1 ? "" : "s"})…`,
+            icon: "layers",
+            onSelect: () => {
+              navigate(scopeUrl({ tables: ids }), { newTab: true, title: "Bulk rating" });
+              clear();
+            },
+          },
+        ],
+      }}
       primary={{ label: "New rate table", onClick: () => void newRateTable((id) => open(id)) }}
       toolbar={(state, setState) => {
         const c = state.columns.accountManagerId;

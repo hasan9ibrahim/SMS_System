@@ -987,6 +987,50 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rate-bulk/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview a bulk rating job (§13.11 Steps 1-4)
+     * @description Works out every affected line of the chosen tables and destinations: current and new rate, cost and margin,
+     *     change %, below-cost and notice-period flags, and the impact on the last 7 days of traffic. Nothing changes.
+     *     At most 20,000 rows; a larger scope answers 400.
+     */
+    post: operations["previewRateBulk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-bulk/apply": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Apply reviewed bulk rates (§13.11 Step 5)
+     * @description Applies the reviewed rows (after exclusions and edits) to all their tables in one transaction, saved as ONE
+     *     change in History that undoes as one (§13.10). Rules as for one table's edits: a new rate opens a new version,
+     *     never in the past; increases sooner than a client's notice period answer 409 unless acceptNoticeBreach.
+     */
+    post: operations["applyRateBulk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-lines/query": {
     parameters: {
       query?: never;
@@ -8814,7 +8858,159 @@ export type components = {
         noticeDays: number;
         earliestAllowed: components["schemas"]["Timestamp"];
         enterpriseName: string;
+        rateTableId?: components["schemas"]["Id"];
+        /** @description The rate table (bulk apply only). */
+        table?: string;
       }[];
+    };
+    RateBulkAction: {
+      /**
+       * @description Set a fixed rate; change the current rate by % or by an amount (negative lowers it); sell = cost + margin % or + amount; close the lines; block or unblock them (§13.11 Rating).
+       * @enum {string}
+       */
+      type:
+        | "set"
+        | "change_pct"
+        | "change_amount"
+        | "cost_plus_pct"
+        | "cost_plus_amount"
+        | "close"
+        | "block"
+        | "unblock";
+      /** @description The rate, the % or the amount; null for close / block / unblock. */
+      value?: number | null;
+      /**
+       * @description Cost for cost_plus_*: the best vendor (best buy) or one vendor trunk's current rate. Default best_buy.
+       * @enum {string}
+       */
+      costSource?: "best_buy" | "vendor_trunk";
+      vendorTrunkId?: components["schemas"]["Id"] | null;
+      /** @description Round new rates to N decimals; null = 6. */
+      round?: number | null;
+    };
+    /** @description Step 1 and 2 of the bulk workspace: scope (tables × destinations; both destination lists empty = every current line of the tables) and one action. */
+    RateBulkScope: {
+      /** @description The clients' (or vendors') rate tables. */
+      rateTableIds: components["schemas"]["Id"][];
+      /** @description Destinations by MCCMNC. */
+      mccmncs?: string[];
+      /** @description Destinations by country (every network of it). */
+      countryIsos?: string[];
+      /** @description Default true: only lines the tables already have. False also adds the listed destinations a table lacks (set and cost_plus_* only; needs mccmncs or countryIsos). */
+      onlyExisting?: boolean;
+      action: components["schemas"]["RateBulkAction"];
+      /** @description When new rates, closes and blocks start; null = now. Never in the past (§13.32). */
+      effectiveFrom?: components["schemas"]["Timestamp"] | null;
+      /** @description Move each increase to the end of the notice period of the clients using its table (§13.14). */
+      respectNotice?: boolean;
+    };
+    RateBulkRow: {
+      /** @description rateTableId:mccmnc:senderId - stable row key. */
+      key: string;
+      rateTableId: components["schemas"]["Id"];
+      table: string;
+      /** @enum {string} */
+      kind: "customer" | "vendor";
+      currency: string;
+      /** @description Enterprises using the table (comma-separated). */
+      clients: string;
+      noticeDays: number | null;
+      mccmnc: string;
+      country: string | null;
+      countryIso: string | null;
+      network: string | null;
+      senderId: string | null;
+      lineId: components["schemas"]["Id"] | null;
+      currentRate: number | null;
+      blocked: boolean;
+      /**
+       * @description What apply would do; none = nothing changes (same rate, no cost, or missing line).
+       * @enum {string}
+       */
+      edit: "set" | "close" | "block" | "none";
+      newRate: number | null;
+      newBlocked: boolean | null;
+      effectiveFrom: components["schemas"]["Timestamp"];
+      /** @enum {string} */
+      change: "new" | "increase" | "decrease" | "same" | "close" | "block" | "unblock" | "skip";
+      /** @description Cost in the table currency: the chosen cost source, else best buy. */
+      cost: number | null;
+      costVendor: string | null;
+      currentMarginPct: number | null;
+      newMarginPct: number | null;
+      changePct: number | null;
+      /** @description The new rate sells below cost (§13.11 Step 3). */
+      belowCost: boolean;
+      /** @description An increase starts sooner than the clients' notice period. */
+      noticeBreach: boolean;
+      /** @description respectNotice moved this increase later. */
+      noticeAdjusted: boolean;
+      messages7d: number;
+      /** @description Last 7 days' revenue on this table and destination, table currency. */
+      revenue7d: number;
+      /** @description Last 7 days' margin (revenue - cost) on this table and destination, table currency. */
+      margin7d: number;
+      /** @description Multiply a table-currency amount by this to get the platform currency (summary money). */
+      toPlatform: number;
+      /** @description The same traffic at the new rate minus at the old one (closed: all of it lost). */
+      revenueChange7d: number;
+      /** @description Why a row is skipped or flagged, in words. */
+      note: string | null;
+    };
+    /** @description Step 4 impact: counts and money on the last 7 days of traffic. */
+    RateBulkSummary: {
+      tables: number;
+      destinations: number;
+      lines: number;
+      up: number;
+      down: number;
+      new: number;
+      same: number;
+      closed: number;
+      blocked: number;
+      unblocked: number;
+      skipped: number;
+      belowCost: number;
+      noticeBreach: number;
+      noticeAdjusted: number;
+      /** @description The platform currency of the money figures below. */
+      currency: string;
+      /** @description False when the EDR store did not answer (money figures are 0). */
+      traffic: boolean;
+      messages7d: number;
+      revenue7d: number;
+      margin7d: number;
+      revenueChange7d: number;
+      marginChange7d: number;
+    };
+    RateBulkPreview: {
+      rows: components["schemas"]["RateBulkRow"][];
+      summary: components["schemas"]["RateBulkSummary"];
+    };
+    /** @description One reviewed row: as a rate line edit (set by lineId or mccmnc, close / block by lineId) on its table. effectiveFrom is also the close / block time. */
+    RateBulkItem: {
+      rateTableId: components["schemas"]["Id"];
+      /** @enum {string} */
+      action: "set" | "close" | "block";
+      mccmnc?: string;
+      lineId?: components["schemas"]["Id"];
+      senderId?: string | null;
+      rate?: number;
+      blocked?: boolean;
+      effectiveFrom?: components["schemas"]["Timestamp"];
+    };
+    RateBulkApply: {
+      items: components["schemas"]["RateBulkItem"][];
+      note?: string;
+      /** @description Apply increases that start sooner than a client's notice period (§13.14). */
+      acceptNoticeBreach?: boolean;
+    };
+    RateBulkSaved: {
+      change: components["schemas"]["Change"] | null;
+      applied: number;
+      skipped: number;
+      /** @description Tables that changed. */
+      tables: number;
     };
     Destination: {
       /** @description The MNC as the operator publishes it, when the code uses another form. */
@@ -15433,6 +15629,69 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      /** @description Increases sooner than a client's notice period */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["NoticeBreach"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewRateBulk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateBulkScope"];
+      };
+    };
+    responses: {
+      /** @description Rows and impact */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateBulkPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  applyRateBulk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RateBulkApply"];
+      };
+    };
+    responses: {
+      /** @description Applied, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateBulkSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
       /** @description Increases sooner than a client's notice period */
       409: {
         headers: {

@@ -597,7 +597,7 @@ export async function applyRateTableEntries(
   }
 }
 
-interface Breach {
+export interface Breach {
   mccmnc: string;
   currentRate: number;
   newRate: number;
@@ -605,6 +605,247 @@ interface Breach {
   noticeDays: number;
   earliestAllowed: string;
   enterpriseName: string;
+  rateTableId?: number;
+  table?: string;
+}
+
+/** A rate table being edited, with the longest notice period of the clients using it (§13.14). */
+export interface EditTable {
+  id: number;
+  name: string;
+  kind: string;
+  currency: string;
+  notice: { days: number; name: string } | null;
+}
+
+/** Longest notice period among the clients pricing with each customer table (§13.14). */
+export async function noticePeriods(db: Db, ids: number[]): Promise<Map<number, { days: number; name: string }>> {
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (x.rate_table_id) x.rate_table_id AS id, e.rate_notice_days AS days, e.name
+       FROM customer_trunk_rate_tables x
+       JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL
+       JOIN enterprises e ON e.id = t.enterprise_id
+      WHERE x.rate_table_id = ANY($1) AND e.rate_notice_days > 0
+      ORDER BY x.rate_table_id, e.rate_notice_days DESC, e.name`,
+    [ids],
+  );
+  return new Map(rows.map((r) => [Number(r.id), { days: r.days as number, name: r.name as string }]));
+}
+
+/**
+ * Shape checks the schema can't express, for edits on one table: rates for set, lines that
+ * belong to the table, MCCMNCs from the master (collected into `mccmncIds`).
+ */
+export async function checkLineEdits(
+  db: Db,
+  tableId: number,
+  edits: { it: RateLineEdit; at: string }[],
+  mccmncIds: Map<string, number>,
+  nowMs: number,
+): Promise<FieldError[]> {
+  const errors: FieldError[] = [];
+  for (const { it, at } of edits) {
+    if (it.action === "set") {
+      if (it.rate === undefined) errors.push({ path: `${at}/rate`, message: "required to set a rate" });
+      if (it.lineId === undefined && !it.mccmnc) errors.push({ path: at, message: "give lineId or mccmnc" });
+      if (it.effectiveFrom && Date.parse(it.effectiveFrom) < nowMs - SKEW_MS)
+        errors.push({
+          path: `${at}/effectiveFrom`,
+          message: "can't be in the past (traffic already sent keeps its rate)",
+        });
+    } else {
+      if (it.lineId === undefined) errors.push({ path: `${at}/lineId`, message: `required to ${it.action} a line` });
+      if (it.action === "block" && it.blocked === undefined)
+        errors.push({ path: `${at}/blocked`, message: "required" });
+      if (it.at && Date.parse(it.at) < nowMs - SKEW_MS)
+        errors.push({ path: `${at}/at`, message: "can't be in the past" });
+    }
+  }
+  const lineIds = [...new Set(edits.flatMap(({ it }) => (it.lineId === undefined ? [] : [it.lineId])))];
+  if (lineIds.length) {
+    const { rows } = await db.query("SELECT id FROM rate_lines WHERE id = ANY($1) AND rate_table_id = $2", [
+      lineIds,
+      tableId,
+    ]);
+    const ok = new Set(rows.map((r) => Number(r.id)));
+    for (const { it, at } of edits)
+      if (it.lineId !== undefined && !ok.has(it.lineId))
+        errors.push({ path: `${at}/lineId`, message: `line ${it.lineId} is not in this table` });
+  }
+  const codes = [
+    ...new Set(
+      edits.flatMap(({ it }) => (it.lineId === undefined && it.mccmnc && !mccmncIds.has(it.mccmnc) ? [it.mccmnc] : [])),
+    ),
+  ];
+  if (codes.length) {
+    const { rows } = await db.query("SELECT id, mccmnc FROM mccmnc WHERE mccmnc = ANY($1) AND deleted_at IS NULL", [
+      codes,
+    ]);
+    for (const r of rows) mccmncIds.set(r.mccmnc, Number(r.id));
+  }
+  for (const { it, at } of edits)
+    if (it.lineId === undefined && it.mccmnc && !mccmncIds.has(it.mccmnc))
+      errors.push({ path: `${at}/mccmnc`, message: `${it.mccmnc} is not in the MCCMNC master` });
+  return errors;
+}
+
+/**
+ * Applies checked edits to one table inside a transaction: diff entries go to `diff`, short-notice
+ * increases to `breaches`. Answers how many edits changed nothing.
+ */
+export async function applyLineEdits(
+  c: pg.PoolClient,
+  table: EditTable,
+  items: RateLineEdit[],
+  mccmncIds: Map<string, number>,
+  userId: number,
+  now: Date,
+  diff: DiffEntry[],
+  breaches: Breach[],
+): Promise<number> {
+  const id = table.id;
+  const nowMs = now.getTime();
+  const notice = table.notice;
+  let skipped = 0;
+  const lineById = async (lineId: number) =>
+    (await c.query(`SELECT ${LINE_COLS} FROM rate_lines WHERE id = $1`, [lineId])).rows[0] as
+      Record<string, unknown> | undefined;
+  for (const it of items) {
+    if (it.action === "set") {
+      const ref = it.lineId !== undefined ? await lineById(it.lineId) : undefined;
+      const mccmncId = ref ? (ref.mccmnc_id as number) : mccmncIds.get(it.mccmnc!)!;
+      const senderId = ref ? ((ref.sender_id as string | null) ?? null) : it.senderId?.trim() || null;
+      const from = it.effectiveFrom ? new Date(Math.max(Date.parse(it.effectiveFrom), nowMs)) : now;
+      const key = [id, mccmncId, senderId];
+      const keySql = "rate_table_id = $1 AND mccmnc_id = $2 AND sender_id IS NOT DISTINCT FROM $3";
+      const { rows: curRows } = await c.query(
+        `SELECT ${LINE_COLS} FROM rate_lines WHERE ${keySql} AND valid_from <= $4 AND (valid_to IS NULL OR valid_to > $4)`,
+        [...key, from],
+      );
+      const cur = curRows[0];
+      const rate = Math.round(it.rate! * 1e6) / 1e6;
+      const note = it.rateNote === undefined ? null : it.rateNote?.trim() || null;
+      if (cur && Number(cur.rate) === rate && (it.rateNote === undefined || note === cur.rate_note)) {
+        skipped++;
+        continue;
+      }
+      if (notice && cur && rate > Number(cur.rate)) {
+        const earliest = nowMs + notice.days * 86_400_000;
+        if (from.getTime() < earliest - SKEW_MS)
+          breaches.push({
+            mccmnc: String(cur.mccmnc),
+            currentRate: Number(cur.rate),
+            newRate: rate,
+            effectiveFrom: from.toISOString(),
+            noticeDays: notice.days,
+            earliestAllowed: new Date(earliest).toISOString(),
+            enterpriseName: notice.name,
+            rateTableId: id,
+            table: table.name,
+          });
+      }
+      // Versions starting at or after the new date are replaced by it.
+      const { rows: later } = await c.query(
+        `SELECT ${LINE_COLS} FROM rate_lines WHERE ${keySql} AND valid_from >= $4`,
+        [...key, from],
+      );
+      for (const l of later) {
+        await c.query("DELETE FROM rate_lines WHERE id = $1", [l.id]);
+        diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: null });
+      }
+      const prev = cur && !later.some((l) => l.id === cur.id) ? cur : null;
+      if (prev) {
+        const { rows: upd } = await c.query(
+          `UPDATE rate_lines SET valid_to = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
+          [prev.id, from, userId],
+        );
+        diff.push({ entity_id: prev.id as number, field: "line", before: snap(prev), after: snap(upd[0]) });
+      }
+      const base = prev ?? cur;
+      const changeType = !base
+        ? "new"
+        : rate > Number(base.rate)
+          ? "increase"
+          : rate < Number(base.rate)
+            ? "decrease"
+            : "same";
+      const mccmnc = ref ? (ref.mccmnc as string) : it.mccmnc!;
+      const { rows: ins } = await c.query(
+        `INSERT INTO rate_lines (rate_table_id, mccmnc_id, mccmnc, dial_code, sender_id, rate, currency, valid_from,
+                                is_blocked, change_type, rate_note, created_by_id, updated_by_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12) RETURNING ${LINE_COLS}`,
+        [
+          id,
+          mccmncId,
+          mccmnc,
+          base?.dial_code ?? null,
+          senderId,
+          rate,
+          table.currency,
+          from,
+          base?.is_blocked ?? false,
+          changeType,
+          note ?? (it.rateNote === undefined ? (base?.rate_note ?? null) : null),
+          userId,
+        ],
+      );
+      diff.push({ entity_id: ins[0].id as number, field: "line", before: null, after: snap(ins[0]) });
+    } else if (it.action === "close") {
+      const l = await lineById(it.lineId!);
+      if (!l) continue;
+      const at = it.at ? new Date(Math.max(Date.parse(it.at), nowMs)) : now;
+      if ((l.valid_from as Date) >= at) {
+        // Not started yet: a scheduled rate is withdrawn, and the version before it runs on
+        // as long as the withdrawn one would have.
+        await c.query("DELETE FROM rate_lines WHERE id = $1", [l.id]);
+        diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: null });
+        const { rows: prev } = await c.query(
+          `SELECT ${LINE_COLS} FROM rate_lines WHERE rate_table_id = $1 AND mccmnc_id = $2
+              AND sender_id IS NOT DISTINCT FROM $3 AND valid_to = $4`,
+          [id, l.mccmnc_id, l.sender_id, l.valid_from],
+        );
+        if (prev[0]) {
+          const { rows: upd } = await c.query(
+            `UPDATE rate_lines SET valid_to = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
+            [prev[0].id, l.valid_to, userId],
+          );
+          diff.push({ entity_id: prev[0].id as number, field: "line", before: snap(prev[0]), after: snap(upd[0]) });
+        }
+      } else if (!l.valid_to || (l.valid_to as Date) > at) {
+        const { rows: upd } = await c.query(
+          `UPDATE rate_lines SET valid_to = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
+          [l.id, at, userId],
+        );
+        diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: snap(upd[0]) });
+      } else skipped++;
+    } else {
+      const l = await lineById(it.lineId!);
+      if (!l || l.is_blocked === it.blocked) {
+        skipped++;
+        continue;
+      }
+      const { rows: upd } = await c.query(
+        `UPDATE rate_lines SET is_blocked = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
+        [l.id, it.blocked, userId],
+      );
+      diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: snap(upd[0]) });
+    }
+  }
+  return skipped;
+}
+
+/** 409 for increases sooner than a client's notice period (§13.14). */
+export function sendNoticeBreach(reply: FastifyReply, breaches: Breach[]) {
+  return reply
+    .code(409)
+    .type("application/problem+json")
+    .send({
+      type: "about:blank",
+      title: "Increases sooner than the client's notice period",
+      status: 409,
+      detail: `${breaches.length} increase${breaches.length === 1 ? "" : "s"} start before ${breaches[0]!.earliestAllowed.slice(0, 10)} (${breaches[0]!.noticeDays} days' notice for ${breaches[0]!.enterpriseName})`,
+      breaches,
+    });
 }
 
 export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
@@ -613,202 +854,37 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const { rows: tr } = await pool.query(
-      `SELECT rt.id, rt.kind, rt.currency, rt.deleted_at, vt.deleted_at AS trunk_deleted_at
+      `SELECT rt.id, rt.name, rt.kind, rt.currency, rt.deleted_at, vt.deleted_at AS trunk_deleted_at
          FROM rate_tables rt LEFT JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id WHERE rt.id = $1`,
       [id],
     );
-    const table = tr[0];
-    if (!table) return notFound(reply, id);
-    if (table.deleted_at || table.trunk_deleted_at)
+    const row = tr[0];
+    if (!row) return notFound(reply, id);
+    if (row.deleted_at || row.trunk_deleted_at)
       return sendProblem(reply, 400, "This rate table is archived; restore it before editing");
     const now = new Date();
-    const nowMs = now.getTime();
-
-    // Shape checks that the schema can't express.
-    const errors: FieldError[] = [];
-    body.items.forEach((it: RateLineEdit, i) => {
-      const at = `/items/${i}`;
-      if (it.action === "set") {
-        if (it.rate === undefined) errors.push({ path: `${at}/rate`, message: "required to set a rate" });
-        if (it.lineId === undefined && !it.mccmnc) errors.push({ path: at, message: "give lineId or mccmnc" });
-        if (it.effectiveFrom && Date.parse(it.effectiveFrom) < nowMs - SKEW_MS)
-          errors.push({
-            path: `${at}/effectiveFrom`,
-            message: "can't be in the past (traffic already sent keeps its rate)",
-          });
-      } else {
-        if (it.lineId === undefined) errors.push({ path: `${at}/lineId`, message: `required to ${it.action} a line` });
-        if (it.action === "block" && it.blocked === undefined)
-          errors.push({ path: `${at}/blocked`, message: "required" });
-        if (it.at && Date.parse(it.at) < nowMs - SKEW_MS)
-          errors.push({ path: `${at}/at`, message: "can't be in the past" });
-      }
-    });
-    const lineIds = [...new Set(body.items.flatMap((it) => (it.lineId === undefined ? [] : [it.lineId])))];
-    if (lineIds.length) {
-      const { rows } = await pool.query("SELECT id FROM rate_lines WHERE id = ANY($1) AND rate_table_id = $2", [
-        lineIds,
-        id,
-      ]);
-      const ok = new Set(rows.map((r) => r.id));
-      body.items.forEach((it, i) => {
-        if (it.lineId !== undefined && !ok.has(it.lineId))
-          errors.push({ path: `/items/${i}/lineId`, message: `line ${it.lineId} is not in this table` });
-      });
-    }
-    const codes = [...new Set(body.items.flatMap((it) => (it.lineId === undefined && it.mccmnc ? [it.mccmnc] : [])))];
     const mccmncIds = new Map<string, number>();
-    if (codes.length) {
-      const { rows } = await pool.query("SELECT id, mccmnc FROM mccmnc WHERE mccmnc = ANY($1) AND deleted_at IS NULL", [
-        codes,
-      ]);
-      for (const r of rows) mccmncIds.set(r.mccmnc, r.id);
-      body.items.forEach((it, i) => {
-        if (it.lineId === undefined && it.mccmnc && !mccmncIds.has(it.mccmnc))
-          errors.push({ path: `/items/${i}/mccmnc`, message: `${it.mccmnc} is not in the MCCMNC master` });
-      });
-    }
+    const errors = await checkLineEdits(
+      pool,
+      id,
+      body.items.map((it, i) => ({ it, at: `/items/${i}` })),
+      mccmncIds,
+      now.getTime(),
+    );
     if (errors.length) return badInput(reply, errors);
-
-    // Shortest notice period among the clients pricing with this table (§13.14).
-    let notice: { days: number; name: string } | null = null;
-    if (table.kind === "customer") {
-      const { rows } = await pool.query(
-        `SELECT e.rate_notice_days AS days, e.name FROM customer_trunk_rate_tables x
-           JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL
-           JOIN enterprises e ON e.id = t.enterprise_id
-          WHERE x.rate_table_id = $1 AND e.rate_notice_days > 0 ORDER BY e.rate_notice_days DESC LIMIT 1`,
-        [id],
-      );
-      if (rows[0]) notice = { days: rows[0].days, name: rows[0].name };
-    }
+    const table: EditTable = {
+      id,
+      name: row.name,
+      kind: row.kind,
+      currency: row.currency,
+      notice: row.kind === "customer" ? ((await noticePeriods(pool, [id])).get(id) ?? null) : null,
+    };
 
     const breaches: Breach[] = [];
     let skipped = 0;
     const result = await inTransaction(pool, async (c) => {
       const diff: DiffEntry[] = [];
-      const lineById = async (lineId: number) =>
-        (await c.query(`SELECT ${LINE_COLS} FROM rate_lines WHERE id = $1`, [lineId])).rows[0] as
-          Record<string, unknown> | undefined;
-      for (const it of body.items) {
-        if (it.action === "set") {
-          const ref = it.lineId !== undefined ? await lineById(it.lineId) : undefined;
-          const mccmncId = ref ? (ref.mccmnc_id as number) : mccmncIds.get(it.mccmnc!)!;
-          const senderId = ref ? ((ref.sender_id as string | null) ?? null) : it.senderId?.trim() || null;
-          const from = it.effectiveFrom ? new Date(Math.max(Date.parse(it.effectiveFrom), nowMs)) : now;
-          const key = [id, mccmncId, senderId];
-          const keySql = "rate_table_id = $1 AND mccmnc_id = $2 AND sender_id IS NOT DISTINCT FROM $3";
-          const { rows: curRows } = await c.query(
-            `SELECT ${LINE_COLS} FROM rate_lines WHERE ${keySql} AND valid_from <= $4 AND (valid_to IS NULL OR valid_to > $4)`,
-            [...key, from],
-          );
-          const cur = curRows[0];
-          const rate = Math.round(it.rate! * 1e6) / 1e6;
-          const note = it.rateNote === undefined ? null : it.rateNote?.trim() || null;
-          if (cur && Number(cur.rate) === rate && (it.rateNote === undefined || note === cur.rate_note)) {
-            skipped++;
-            continue;
-          }
-          if (notice && cur && rate > Number(cur.rate)) {
-            const earliest = nowMs + notice.days * 86_400_000;
-            if (from.getTime() < earliest - SKEW_MS)
-              breaches.push({
-                mccmnc: String(cur.mccmnc),
-                currentRate: Number(cur.rate),
-                newRate: rate,
-                effectiveFrom: from.toISOString(),
-                noticeDays: notice.days,
-                earliestAllowed: new Date(earliest).toISOString(),
-                enterpriseName: notice.name,
-              });
-          }
-          // Versions starting at or after the new date are replaced by it.
-          const { rows: later } = await c.query(
-            `SELECT ${LINE_COLS} FROM rate_lines WHERE ${keySql} AND valid_from >= $4`,
-            [...key, from],
-          );
-          for (const l of later) {
-            await c.query("DELETE FROM rate_lines WHERE id = $1", [l.id]);
-            diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: null });
-          }
-          const prev = cur && !later.some((l) => l.id === cur.id) ? cur : null;
-          if (prev) {
-            const { rows: upd } = await c.query(
-              `UPDATE rate_lines SET valid_to = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
-              [prev.id, from, me.id],
-            );
-            diff.push({ entity_id: prev.id as number, field: "line", before: snap(prev), after: snap(upd[0]) });
-          }
-          const base = prev ?? cur;
-          const changeType = !base
-            ? "new"
-            : rate > Number(base.rate)
-              ? "increase"
-              : rate < Number(base.rate)
-                ? "decrease"
-                : "same";
-          const mccmnc = ref ? (ref.mccmnc as string) : it.mccmnc!;
-          const { rows: ins } = await c.query(
-            `INSERT INTO rate_lines (rate_table_id, mccmnc_id, mccmnc, dial_code, sender_id, rate, currency, valid_from,
-                                    is_blocked, change_type, rate_note, created_by_id, updated_by_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12) RETURNING ${LINE_COLS}`,
-            [
-              id,
-              mccmncId,
-              mccmnc,
-              base?.dial_code ?? null,
-              senderId,
-              rate,
-              table.currency,
-              from,
-              base?.is_blocked ?? false,
-              changeType,
-              note ?? (it.rateNote === undefined ? (base?.rate_note ?? null) : null),
-              me.id,
-            ],
-          );
-          diff.push({ entity_id: ins[0].id as number, field: "line", before: null, after: snap(ins[0]) });
-        } else if (it.action === "close") {
-          const l = await lineById(it.lineId!);
-          if (!l) continue;
-          const at = it.at ? new Date(Math.max(Date.parse(it.at), nowMs)) : now;
-          if ((l.valid_from as Date) >= at) {
-            // Not started yet: a scheduled rate is withdrawn, and the version before it runs on
-            // as long as the withdrawn one would have.
-            await c.query("DELETE FROM rate_lines WHERE id = $1", [l.id]);
-            diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: null });
-            const { rows: prev } = await c.query(
-              `SELECT ${LINE_COLS} FROM rate_lines WHERE rate_table_id = $1 AND mccmnc_id = $2
-                  AND sender_id IS NOT DISTINCT FROM $3 AND valid_to = $4`,
-              [id, l.mccmnc_id, l.sender_id, l.valid_from],
-            );
-            if (prev[0]) {
-              const { rows: upd } = await c.query(
-                `UPDATE rate_lines SET valid_to = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
-                [prev[0].id, l.valid_to, me.id],
-              );
-              diff.push({ entity_id: prev[0].id as number, field: "line", before: snap(prev[0]), after: snap(upd[0]) });
-            }
-          } else if (!l.valid_to || (l.valid_to as Date) > at) {
-            const { rows: upd } = await c.query(
-              `UPDATE rate_lines SET valid_to = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
-              [l.id, at, me.id],
-            );
-            diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: snap(upd[0]) });
-          } else skipped++;
-        } else {
-          const l = await lineById(it.lineId!);
-          if (!l || l.is_blocked === it.blocked) {
-            skipped++;
-            continue;
-          }
-          const { rows: upd } = await c.query(
-            `UPDATE rate_lines SET is_blocked = $2, updated_by_id = $3, updated_at = now() WHERE id = $1 RETURNING ${LINE_COLS}`,
-            [l.id, it.blocked, me.id],
-          );
-          diff.push({ entity_id: l.id as number, field: "line", before: snap(l), after: snap(upd[0]) });
-        }
-      }
+      skipped = await applyLineEdits(c, table, body.items, mccmncIds, me.id, now, diff, breaches);
       if (breaches.length && !body.acceptNoticeBreach) throw new NoticeBreachError();
       if (diff.length === 0) return { change: null, applied: 0 };
       await c.query("UPDATE rate_tables SET updated_by_id = $2, updated_at = now() WHERE id = $1", [id, me.id]);
@@ -827,21 +903,14 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
       if (err instanceof NoticeBreachError) return null;
       throw err;
     });
-    if (result === null) {
-      return reply
-        .code(409)
-        .type("application/problem+json")
-        .send({
-          type: "about:blank",
-          title: "Increases sooner than the client's notice period",
-          status: 409,
-          detail: `${breaches.length} increase${breaches.length === 1 ? "" : "s"} start before ${breaches[0]!.earliestAllowed.slice(0, 10)} (${breaches[0]!.noticeDays} days' notice for ${breaches[0]!.enterpriseName})`,
-          breaches,
-        });
-    }
+    if (result === null)
+      return sendNoticeBreach(
+        reply,
+        breaches.map(({ rateTableId: _r, table: _t, ...b }) => b),
+      );
     if (result.change && table.kind === "vendor") scheduleBestBuyRefresh();
     return { change: result.change, applied: result.applied, skipped };
   });
 }
 
-class NoticeBreachError extends Error {}
+export class NoticeBreachError extends Error {}

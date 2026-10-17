@@ -257,3 +257,101 @@
   border-radius: var(--radius-sm);
   padding: 4px;
 }
+
+/* ---------- bulk rating workspace (§13.11) ---------- */
+.page.bulk-page {
+  gap: 12px;
+  overflow: hidden;
+}
+.bulk-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  flex: none;
+}
+@media (max-width: 1100px) {
+  .bulk-setup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.bulk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.bulk-card h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.bulk-card .field {
+  margin: 0;
+}
+.bulk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px 12px;
+}
+.bulk-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.bulk-review {
+  min-height: 260px;
+}
+.bulk-review .vt {
+  border: 0;
+  border-radius: 0;
+  border-top: var(--border-width) solid var(--color-border);
+}
+.bulk-search {
+  width: 260px;
+  height: 30px;
+}
+.bulk-formula {
+  width: 120px;
+  height: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.bulk-rate {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-sm, 5px);
+}
+.bulk-rate:hover,
+.bulk-rate:focus {
+  border-color: var(--color-border);
+  background: var(--color-panel);
+}
+.vt-cell.bulk-edited .bulk-rate {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  font-weight: 600;
+}
+.vt-row.off .vt-cell {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+.vt-row.off .vt-cell:first-child {
+  text-decoration: none;
+}
+.vt-row.negative .vt-cell {
+  background: color-mix(in srgb, var(--color-error) 7%, var(--color-panel));
+}
+.vt-row.warn .vt-cell:first-child {
+  box-shadow: inset 3px 0 0 var(--color-warning);
+}
+.bulk-empty {
+  padding: 28px;
+  text-align: center;
+}

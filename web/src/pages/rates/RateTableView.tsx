@@ -16,6 +16,7 @@ import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../s
 import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button, Menu, Modal, Popover } from "../../ui/primitives";
+import { scopeUrl } from "./bulkModel";
 import { AddRatesDialog, RenameTableDialog } from "./dialogs";
 import { formatMoney, formatPct, formatRate, formatSigned, shortDate, shortDateTime } from "./format";
 import { buildItems, changeRate, merge, round6, type ChangeMode, type Pending } from "./pending";
@@ -206,7 +207,8 @@ function DateForm({ value, onApply }: { value: string | null; onApply: (iso: str
   );
 }
 
-function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok: boolean | null) => void }) {
+export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok: boolean | null) => void }) {
+  const byTable = breach.breaches.some((b) => b.table);
   return (
     <Modal
       title="Increases sooner than the client's notice"
@@ -225,6 +227,7 @@ function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok: boole
       <table className="rtable">
         <thead>
           <tr>
+            {byTable && <th>Table</th>}
             <th>MCCMNC</th>
             <th className="num">Now</th>
             <th className="num">New</th>
@@ -234,7 +237,8 @@ function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok: boole
         </thead>
         <tbody>
           {breach.breaches.slice(0, 12).map((b) => (
-            <tr key={`${b.mccmnc}-${b.effectiveFrom}`}>
+            <tr key={`${b.rateTableId ?? ""}-${b.mccmnc}-${b.effectiveFrom}`}>
+              {byTable && <td>{b.table}</td>}
               <td className="num">{b.mccmnc}</td>
               <td className="num">{formatRate(b.currentRate)}</td>
               <td className="num">{formatRate(b.newRate)}</td>
@@ -246,8 +250,10 @@ function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok: boole
       </table>
       {breach.breaches.length > 12 && <p className="muted small">and {breach.breaches.length - 12} more.</p>}
       <p className="muted small">
-        Or set the effective date to the earliest date with notice from the bulk bar. Applying anyway is logged with the
-        change (§13.14).
+        {byTable
+          ? 'Or tick "Respect notice periods" and preview again.'
+          : "Or set the effective date to the earliest date with notice from the bulk bar."}{" "}
+        Applying anyway is logged with the change (§13.14).
       </p>
     </Modal>
   );
@@ -771,6 +777,23 @@ export function RateTableView({ id }: { id: number }) {
               }}
             >
               Close rate
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm bar-btn"
+              disabled={!selected.size || t.kind !== "customer"}
+              title="Re-price these destinations for this and other clients' tables at once (§13.11)"
+              onClick={() =>
+                navigate(
+                  scopeUrl({
+                    tables: [t.id],
+                    mccmncs: [...new Set(selectedRows.flatMap((id) => rowsById.current.get(id)?.mccmnc ?? []))],
+                  }),
+                  { newTab: true, title: "Bulk rating" },
+                )
+              }
+            >
+              Bulk rating…
             </button>
             <span className="fb-spacer" />
             {pending.size > 0 && (

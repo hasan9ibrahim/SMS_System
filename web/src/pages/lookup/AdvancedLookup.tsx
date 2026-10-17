@@ -21,6 +21,7 @@ import { ApiError } from "../../api/client";
 import { usePlatformCurrency, useReference } from "../../api/records";
 import { exportMatrix, fetchMatrixPage, useDeleteLookup, useSaveLookup, useSavedLookups } from "../../api/lookup";
 import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
+import { scopeUrl } from "../rates/bulkModel";
 import { confirmDialog, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal, Popover } from "../../ui/primitives";
@@ -816,10 +817,23 @@ export function AdvancedLookup({
             </span>
           )}
           <span className="fb-spacer" />
-          <Button small disabled title="Opens the bulk workspace (§13.11, build step 5)">
+          <Button
+            small
+            disabled={!rows.length}
+            title="Re-price the destinations shown (up to 500) in the bulk rating workspace (§13.11)"
+            onClick={() =>
+              navigate(
+                scopeUrl({
+                  tables: applied?.rateTableIds ?? [],
+                  mccmncs: [...new Set(rows.slice(0, 500).map((r) => r.destination.mccmnc))],
+                }),
+                { newTab: true, title: "Bulk rating" },
+              )
+            }
+          >
             Update rates
           </Button>
-          <Button small disabled title="Opens the bulk workspace (§13.11, build step 5)">
+          <Button small disabled title="Bulk routing: use Route Rules' Bulk edit (§13.11)">
             Change route
           </Button>
           <Button small icon="copy" onClick={copyTable} disabled={!rows.length}>

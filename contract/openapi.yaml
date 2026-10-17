@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.23.0
+  version: 0.24.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1613,6 +1613,73 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/Unavailable"
+
+  /rate-bulk/preview:
+    post:
+      tags:
+      - rates
+      operationId: previewRateBulk
+      summary: Preview a bulk rating job (§13.11 Steps 1-4)
+      description: 'Works out every affected line of the chosen tables and destinations: current and new rate, cost and margin,
+
+        change %, below-cost and notice-period flags, and the impact on the last 7 days of traffic. Nothing changes.
+
+        At most 20,000 rows; a larger scope answers 400.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateBulkScope'
+      responses:
+        '200':
+          description: Rows and impact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateBulkPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /rate-bulk/apply:
+    post:
+      tags:
+      - rates
+      operationId: applyRateBulk
+      summary: Apply reviewed bulk rates (§13.11 Step 5)
+      description: 'Applies the reviewed rows (after exclusions and edits) to all their tables in one transaction, saved as ONE
+
+        change in History that undoes as one (§13.10). Rules as for one table''s edits: a new rate opens a new version,
+
+        never in the past; increases sooner than a client''s notice period answer 409 unless acceptNoticeBreach.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateBulkApply'
+      responses:
+        '200':
+          description: Applied, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateBulkSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '409':
+          description: Increases sooner than a client's notice period
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/NoticeBreach'
 
   /rate-lines/query:
     post:
@@ -13597,6 +13664,356 @@ components:
                     $ref: "#/components/schemas/Timestamp"
                   enterpriseName:
                     type: string
+                  rateTableId:
+                    $ref: "#/components/schemas/Id"
+                  table:
+                    type: string
+                    description: The rate table (bulk apply only).
+
+    RateBulkAction:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      properties:
+        type:
+          type: string
+          enum:
+          - set
+          - change_pct
+          - change_amount
+          - cost_plus_pct
+          - cost_plus_amount
+          - close
+          - block
+          - unblock
+          description: Set a fixed rate; change the current rate by % or by an amount (negative lowers it); sell = cost + margin % or + amount; close the lines; block or unblock them (§13.11 Rating).
+        value:
+          type:
+          - number
+          - 'null'
+          description: The rate, the % or the amount; null for close / block / unblock.
+        costSource:
+          type: string
+          enum:
+          - best_buy
+          - vendor_trunk
+          description: 'Cost for cost_plus_*: the best vendor (best buy) or one vendor trunk''s current rate. Default best_buy.'
+        vendorTrunkId: &id003
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        round:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 6
+          description: Round new rates to N decimals; null = 6.
+    RateBulkScope:
+      type: object
+      description: 'Step 1 and 2 of the bulk workspace: scope (tables × destinations; both destination lists empty = every current line of the tables) and one action.'
+      additionalProperties: false
+      required:
+      - rateTableIds
+      - action
+      properties:
+        rateTableIds:
+          type: array
+          items: &id001
+            $ref: '#/components/schemas/Id'
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          description: The clients' (or vendors') rate tables.
+        mccmncs:
+          type: array
+          items: &id009
+            type: string
+            pattern: ^[0-9]{3,6}$
+          maxItems: 5000
+          uniqueItems: true
+          description: Destinations by MCCMNC.
+        countryIsos:
+          type: array
+          items:
+            type: string
+            pattern: ^[A-Z]{2}$
+          maxItems: 300
+          uniqueItems: true
+          description: Destinations by country (every network of it).
+        onlyExisting:
+          type: boolean
+          description: 'Default true: only lines the tables already have. False also adds the listed destinations a table lacks (set and cost_plus_* only; needs mccmncs or countryIsos).'
+        action:
+          $ref: '#/components/schemas/RateBulkAction'
+        effectiveFrom:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+          description: When new rates, closes and blocks start; null = now. Never in the past (§13.32).
+        respectNotice:
+          type: boolean
+          description: Move each increase to the end of the notice period of the clients using its table (§13.14).
+    RateBulkRow:
+      type: object
+      required:
+      - key
+      - rateTableId
+      - table
+      - kind
+      - currency
+      - clients
+      - noticeDays
+      - mccmnc
+      - country
+      - countryIso
+      - network
+      - senderId
+      - lineId
+      - currentRate
+      - blocked
+      - edit
+      - newRate
+      - newBlocked
+      - effectiveFrom
+      - change
+      - cost
+      - costVendor
+      - currentMarginPct
+      - newMarginPct
+      - changePct
+      - belowCost
+      - noticeBreach
+      - noticeAdjusted
+      - messages7d
+      - revenue7d
+      - margin7d
+      - revenueChange7d
+      - toPlatform
+      - note
+      properties:
+        key:
+          type: string
+          description: rateTableId:mccmnc:senderId - stable row key.
+        rateTableId: *id001
+        table:
+          type: string
+        kind:
+          type: string
+          enum:
+          - customer
+          - vendor
+        currency:
+          type: string
+        clients:
+          type: string
+          description: Enterprises using the table (comma-separated).
+        noticeDays:
+          type:
+          - integer
+          - 'null'
+        mccmnc:
+          type: string
+        country: &id002
+          type: &id006
+          - string
+          - 'null'
+        countryIso: *id002
+        network: *id002
+        senderId: *id002
+        lineId: *id003
+        currentRate: &id004
+          type: &id005
+          - number
+          - 'null'
+        blocked: &id010
+          type: boolean
+        edit:
+          type: string
+          enum:
+          - set
+          - close
+          - block
+          - none
+          description: What apply would do; none = nothing changes (same rate, no cost, or missing line).
+        newRate: *id004
+        newBlocked:
+          type:
+          - boolean
+          - 'null'
+        effectiveFrom: &id011
+          $ref: '#/components/schemas/Timestamp'
+        change:
+          type: string
+          enum:
+          - new
+          - increase
+          - decrease
+          - same
+          - close
+          - block
+          - unblock
+          - skip
+        cost:
+          type: *id005
+          description: 'Cost in the table currency: the chosen cost source, else best buy.'
+        costVendor: *id002
+        currentMarginPct: *id004
+        newMarginPct: *id004
+        changePct: *id004
+        belowCost:
+          type: boolean
+          description: The new rate sells below cost (§13.11 Step 3).
+        noticeBreach:
+          type: boolean
+          description: An increase starts sooner than the clients' notice period.
+        noticeAdjusted:
+          type: boolean
+          description: respectNotice moved this increase later.
+        messages7d: &id007
+          type: integer
+        revenue7d:
+          type: number
+          description: Last 7 days' revenue on this table and destination, table currency.
+        margin7d:
+          type: number
+          description: Last 7 days' margin (revenue - cost) on this table and destination, table currency.
+        toPlatform:
+          type: number
+          description: Multiply a table-currency amount by this to get the platform currency (summary money).
+        revenueChange7d:
+          type: number
+          description: 'The same traffic at the new rate minus at the old one (closed: all of it lost).'
+        note:
+          type: *id006
+          description: Why a row is skipped or flagged, in words.
+    RateBulkSummary:
+      type: object
+      description: 'Step 4 impact: counts and money on the last 7 days of traffic.'
+      required:
+      - tables
+      - destinations
+      - lines
+      - up
+      - down
+      - new
+      - same
+      - closed
+      - blocked
+      - unblocked
+      - skipped
+      - belowCost
+      - noticeBreach
+      - noticeAdjusted
+      - currency
+      - traffic
+      - messages7d
+      - revenue7d
+      - margin7d
+      - revenueChange7d
+      - marginChange7d
+      properties:
+        tables: *id007
+        destinations: *id007
+        lines: *id007
+        up: *id007
+        down: *id007
+        new: *id007
+        same: *id007
+        closed: *id007
+        blocked: *id007
+        unblocked: *id007
+        skipped: *id007
+        belowCost: *id007
+        noticeBreach: *id007
+        noticeAdjusted: *id007
+        currency:
+          type: string
+          description: The platform currency of the money figures below.
+        traffic:
+          type: boolean
+          description: False when the EDR store did not answer (money figures are 0).
+        messages7d: *id007
+        revenue7d: &id008
+          type: number
+        margin7d: *id008
+        revenueChange7d: *id008
+        marginChange7d: *id008
+    RateBulkPreview:
+      type: object
+      required:
+      - rows
+      - summary
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateBulkRow'
+        summary:
+          $ref: '#/components/schemas/RateBulkSummary'
+    RateBulkItem:
+      type: object
+      description: 'One reviewed row: as a rate line edit (set by lineId or mccmnc, close / block by lineId) on its table. effectiveFrom is also the close / block time.'
+      additionalProperties: false
+      required:
+      - rateTableId
+      - action
+      properties:
+        rateTableId: *id001
+        action:
+          type: string
+          enum:
+          - set
+          - close
+          - block
+        mccmnc: *id009
+        lineId: *id001
+        senderId:
+          type:
+          - string
+          - 'null'
+          maxLength: 20
+        rate:
+          type: number
+          minimum: 0
+        blocked: *id010
+        effectiveFrom: *id011
+    RateBulkApply:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateBulkItem'
+          minItems: 1
+          maxItems: 20000
+        note:
+          type: string
+          maxLength: 500
+        acceptNoticeBreach:
+          type: boolean
+          description: Apply increases that start sooner than a client's notice period (§13.14).
+    RateBulkSaved:
+      type: object
+      required:
+      - change
+      - applied
+      - skipped
+      - tables
+      properties:
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+        applied: *id007
+        skipped: *id007
+        tables:
+          type: integer
+          description: Tables that changed.
 
     Destination:
       type: object

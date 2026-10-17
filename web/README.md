@@ -43,6 +43,14 @@ rate to edit it in place; select rows for the bulk bar (set rate, change by % / 
 + margin, effective date, block, close). "Save n changes" sends one batch (`pending.ts`), which is
 one change with Undo; increases inside a client's notice period ask for confirmation first.
 
+**Bulk rating** (`/rates/bulk`, `BulkRatingPage.tsx` + `bulkModel.ts`, §13.11): several clients' rate
+tables × destinations (MCCMNC, country or a pasted list) with one action (fixed rate, change by % /
+amount, cost + margin from best buy or a vendor trunk, round, close, block). Preview fills a review
+grid: type over a rate or a formula (`=cost*1.15`), exclude below-cost or short-notice rows, and the
+impact cards follow. Apply is one change over all tables, undone as one. It opens pre-filled from the
+Rate Manager list (select tables › Bulk edit › Bulk rating), the table bulk bar and Rate Lookup's
+"Update rates".
+
 ## Route Rules (build step 4.3)
 
 `/routing/rules` (`src/pages/routing/`, §15.4) copies the reference screenshot's layout and form.

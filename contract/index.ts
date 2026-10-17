@@ -112,6 +112,14 @@ export type RateLineEdit = Schemas["RateLineEdit"];
 export type RateLineChanges = Schemas["RateLineChanges"];
 export type RateLineChangesSaved = Schemas["RateLineChangesSaved"];
 export type NoticeBreach = Schemas["NoticeBreach"];
+export type RateBulkAction = Schemas["RateBulkAction"];
+export type RateBulkScope = Schemas["RateBulkScope"];
+export type RateBulkRow = Schemas["RateBulkRow"];
+export type RateBulkSummary = Schemas["RateBulkSummary"];
+export type RateBulkPreview = Schemas["RateBulkPreview"];
+export type RateBulkItem = Schemas["RateBulkItem"];
+export type RateBulkApply = Schemas["RateBulkApply"];
+export type RateBulkSaved = Schemas["RateBulkSaved"];
 export type Destination = Schemas["Destination"];
 export type DestinationPage = Schemas["DestinationPage"];
 

@@ -126,6 +126,7 @@ import {
   updateRouteRule,
 } from "./api/routeRules.js";
 import { withEnumsFromDb } from "./lists/dynamic.js";
+import { applyRateBulk, previewRateBulk } from "./api/rateBulk.js";
 import {
   archiveRateTable,
   changeRateLines,
@@ -414,7 +415,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.23.0";
+const VERSION = "0.24.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -488,6 +489,9 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryRateLines,
   // Routing costs are cached a minute; a rate change or an undo clears them (api/rateLookup.ts).
   changeRateLines: (request, reply) => Promise.resolve(changeRateLines(request, reply)).finally(clearRouteCaches),
+  // Bulk rating across tables (§13.11)
+  previewRateBulk,
+  applyRateBulk: (request, reply) => Promise.resolve(applyRateBulk(request, reply)).finally(clearRouteCaches),
   queryDestinations: queryList("destinations"),
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
