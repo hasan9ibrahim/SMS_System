@@ -228,7 +228,7 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
   );
 }
 
-type BulkKind = "set_priority" | "shift_priority" | "replace_vendor";
+type BulkKind = "set_priority" | "shift_priority" | "replace_vendor" | "set_lcr_profile";
 
 /** Bulk edit with a value (§13.11); enable, disable and delete need none. One bulk = one change. */
 export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[]; done: (ok: boolean) => void }) {
@@ -238,14 +238,25 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
   const [shift, setShift] = useState(10);
   const [from, setFrom] = useState<number | null>(null);
   const [to, setTo] = useState<number | null>(null);
+  const [profile, setProfile] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const title =
-    kind === "set_priority" ? "Set priority" : kind === "shift_priority" ? "Shift priority" : "Replace vendor";
+    kind === "set_priority"
+      ? "Set priority"
+      : kind === "shift_priority"
+        ? "Shift priority"
+        : kind === "set_lcr_profile"
+          ? "Apply LCR profile"
+          : "Replace vendor";
   const submit = () => {
     const body: RouteBulkRequest = { ruleIds: ids, action: kind, ...(note.trim() ? { note: note.trim() } : {}) };
     if (kind === "set_priority") body.priority = priority;
     if (kind === "shift_priority") body.shift = shift;
+    if (kind === "set_lcr_profile") {
+      if (!profile) return setError("Choose an LCR profile.");
+      body.lcrProfileId = profile;
+    }
     if (kind === "replace_vendor") {
       if (!from || !to) return setError("Choose both vendor trunks.");
       if (from === to) return setError("Choose two different vendor trunks.");
@@ -299,6 +310,20 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
           />
           <small className="muted">Results are kept between 1 and 100.</small>
         </label>
+      )}
+      {kind === "set_lcr_profile" && (
+        <div className="field">
+          <span>LCR profile (§13.23)</span>
+          <ListLookup<{ id: number; name: string; vendorCount: number }>
+            list="lcr_profiles"
+            value={profile}
+            onChange={(r) => setProfile(r?.id ?? null)}
+            labelOf={(r) => r.name}
+            detailOf={(r) => `${r.vendorCount} vendors`}
+            placeholder="Profile…"
+          />
+          <small className="muted">The rules become Least cost with this profile. One Undo restores them all.</small>
+        </div>
       )}
       {kind === "replace_vendor" && (
         <div className="fgrid cols-2">

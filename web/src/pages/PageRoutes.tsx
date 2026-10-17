@@ -13,6 +13,7 @@ import { LiveAnalyticsPage } from "./live/LiveAnalyticsPage";
 import { BulkRatingPage } from "./rates/BulkRatingPage";
 import { IncomingRnsPage } from "./rates/incoming/IncomingRnsPage";
 import { MarketMovesPage } from "./rates/market/MarketMovesPage";
+import { LcrPage } from "./routing/lcr/LcrPage";
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
@@ -83,6 +84,7 @@ const BUILT = new Set([
   "/rates/bulk",
   "/rates/incoming",
   "/rates/market-moves",
+  "/routing/lcr",
   "/rates/mccmnc",
   "/rates/categories",
   "/rates/countries",
@@ -253,6 +255,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/rates/bulk" element={<BulkRatingPage />} />
       <Route path="/rates/incoming" element={<IncomingRnsPage />} />
       <Route path="/rates/market-moves" element={<MarketMovesPage />} />
+      <Route path="/routing/lcr" element={<LcrPage />} />
       <Route path="/monitoring/alert-rules" element={<AlertRulesPage />} />
       <Route path="/monitoring/incidents" element={<IncidentsPage />} />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (

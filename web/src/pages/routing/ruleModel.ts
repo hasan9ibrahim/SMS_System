@@ -42,6 +42,7 @@ const INPUT_KEYS = [
   "margin",
   "qbrFormula",
   "skipVendorAtTpsPct",
+  "lcrProfileId",
   "dlrTargetPct",
   "hlrAction",
   "denyMultipart",

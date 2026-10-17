@@ -13,6 +13,7 @@ import { startReportJobs } from "./api/reports.js";
 import { startLive } from "./live/socket.js";
 import { checkPendingRns } from "./api/rn.js";
 import { startMarketMoves } from "./api/marketMoves.js";
+import { startLcrChecks } from "./api/lcr.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -33,3 +34,4 @@ startReportJobs();
 startLive();
 void checkPendingRns();
 startMarketMoves();
+startLcrChecks();

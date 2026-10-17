@@ -7978,6 +7978,220 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/lcr/table": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Live LCR table for one destination (§13.23)
+     * @description Every vendor trunk with a rate for the destination at the point in time, ranked by cost in the platform currency
+     *     (or the quality-weighted score), with QBR quality, TPS, scheduled changes and whether routing uses it now. A profile
+     *     marks the vendors it leaves out and the ones it would use; a what-if returns the new ranking with each vendor's
+     *     former rank and the routes and margin that would change.
+     */
+    post: operations["lcrTable"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr/client-view": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A client's sell rates against LCR cost (§13.23)
+     * @description Per client trunk and destination: sell rate, the three cheapest eligible costs and the margin at each position,
+     *     and whether it sells below cost. Paged on the server.
+     */
+    post: operations["lcrClientView"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr/alert-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * LCR change alert settings
+     * @description Top vendor change and cheapest cost move (§13.23).
+     */
+    get: operations["getLcrAlertSettings"];
+    /**
+     * Change LCR change alert settings
+     * @description Used by the next check.
+     */
+    put: operations["updateLcrAlertSettings"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr-changes/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List LCR changes (server-side filter, sort and paging)
+     * @description Destinations where the top LCR vendor changed or the cheapest cost moved by more than the threshold (§13.23),
+     *     checked every 15 minutes; linked to the market move when there is one (§13.14).
+     */
+    post: operations["queryLcrChanges"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr-profiles/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List LCR profiles (server-side filter, sort and paging)
+     * @description LCR profiles (§13.23): Name, vendors, tiers, quality limits, vendors used, split, rules using it.
+     */
+    post: operations["queryLcrProfiles"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr-profiles": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an LCR profile
+     * @description Named rule set reused by route rules of type Least cost (§13.23).
+     *     One undoable change.
+     */
+    post: operations["createLcrProfile"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr-profiles/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One an LCR profile
+     * @description Every field of the form.
+     */
+    get: operations["getLcrProfile"];
+    /**
+     * Change an LCR profile
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateLcrProfile"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr-profiles/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) an LCR profile (§13.29)
+     * @description Blocked while route rules use it. It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveLcrProfile"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr-profiles/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an LCR profile
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreLcrProfile"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lcr-profiles/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses an LCR profile
+     * @description Route rules of type Least cost.
+     */
+    get: operations["getLcrProfileDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -13845,6 +14059,212 @@ export type components = {
     IncidentPage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["IncidentRow"][];
     };
+    /** @description Weights of the quality-weighted score (§13.23); relative, need not add up to 100. */
+    LcrWeights: {
+      cost: number;
+      asr: number;
+      dlr: number;
+      delay: number;
+    };
+    LcrProfileFields: {
+      name: string;
+      description: string | null;
+      status: components["schemas"]["RecordStatus"];
+      /** @enum {string} */
+      vendorTrunkMode: "all" | "inclusive" | "exclusive";
+      vendorTrunkIds: components["schemas"]["Id"][];
+      /** @description Vendor tiers allowed; empty = all. */
+      tiers: ("tier1" | "tier2" | "tier3")[];
+      minAsr: number | null;
+      minDlr: number | null;
+      maxDelayS: number | null;
+      /** @description Highest cost allowed, platform currency. */
+      maxRate: number | null;
+      /** @description Number of vendors to use. */
+      vendorCount: number;
+      /** @enum {string} */
+      split: "top_down" | "percentage";
+      /** @description Percentage split, one share per vendor position, adding up to 100. */
+      shares: number[];
+      /**
+       * @description Equal score or cost: the better DLR (quality) or the lower cost first.
+       * @enum {string}
+       */
+      tieBreaker: "quality" | "cost";
+      /** @description Leave out vendors at their TPS limit now. */
+      excludeAtTpsLimit: boolean;
+      /** @description Rank by the quality-weighted score instead of cost. */
+      qualityWeighted: boolean;
+      weights: components["schemas"]["LcrWeights"];
+    };
+    LcrProfileInput: components["schemas"]["LcrProfileFields"];
+    LcrProfileRow: components["schemas"]["LcrProfileFields"] & {
+      id: components["schemas"]["Id"];
+      /** @description Route rules of type Least cost using it. */
+      ruleCount: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    LcrProfileSaved: {
+      record: components["schemas"]["LcrProfileRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    LcrProfilePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["LcrProfileRow"][];
+    };
+    LcrWhatIf: {
+      /** @description Vendor trunks taken out. */
+      remove?: components["schemas"]["Id"][];
+      /** @description New cost (platform currency) for a vendor, or an offer from a vendor without a rate here. */
+      rates?: {
+        vendorTrunkId: components["schemas"]["Id"];
+        rate: number;
+      }[];
+    };
+    LcrQuery: {
+      mccmnc: string;
+      /** @description Point in time: past or future (scheduled vendor changes applied); null = now. */
+      at?: components["schemas"]["Timestamp"] | null;
+      profileId?: components["schemas"]["Id"] | null;
+      /** @description Overrides the profile; without a profile, false = rank by cost. */
+      qualityWeighted?: boolean;
+      weights?: components["schemas"]["LcrWeights"];
+      whatIf?: components["schemas"]["LcrWhatIf"];
+    };
+    LcrRow: {
+      /** @description Position among the eligible vendors; null when the profile leaves the vendor out. */
+      rank: number | null;
+      vendorTrunkId: components["schemas"]["Id"];
+      vendorTrunk: string;
+      vendor: string;
+      tier: string;
+      status: string;
+      rate: number;
+      currency: string;
+      /** @description Platform currency. */
+      cost: number;
+      effectiveFrom: components["schemas"]["Timestamp"];
+      nextRate: number | null;
+      nextFrom: components["schemas"]["Timestamp"] | null;
+      asr: number | null;
+      dlr: number | null;
+      delayS: number | null;
+      /** @description QBR sample behind ASR / DLR. */
+      attempts: number;
+      tpsNow: number | null;
+      tpsLimit: number | null;
+      atLimit: boolean;
+      /** @description Client trunks routed to this vendor for the destination now. */
+      routedNow: number;
+      /** @description Quality-weighted score, 0–100 (higher is better). */
+      score: number | null;
+      /** @description Why the profile leaves it out. */
+      excluded: string | null;
+      /** @description Within the profile's number of vendors. */
+      pick: boolean;
+      share: number | null;
+      /** @enum {string|null} */
+      whatIf: "removed" | "changed" | "added" | null;
+      /** @description Rank before the what-if changes. */
+      baselineRank: number | null;
+    };
+    /** @description What-if: routes that change and the margin effect on last 7 days' traffic (Least cost rules). */
+    LcrImpact: {
+      /** @description Client trunks selling the destination. */
+      clientLines: number;
+      routesChanged: number;
+      messages7d: number;
+      /** @description Last 7 days' traffic at the new routed cost minus the current one, platform currency. */
+      costChange7d: number;
+      marginChange7d: number;
+      changes: {
+        customerTrunk: string;
+        from: string | null;
+        to: string | null;
+        messages7d: number;
+      }[];
+    };
+    LcrTable: {
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      at: components["schemas"]["Timestamp"];
+      currency: string;
+      profile: string | null;
+      rows: components["schemas"]["LcrRow"][];
+      impact: components["schemas"]["LcrImpact"] | null;
+    };
+    /** @description One client (enterprise) or an account manager's clients. */
+    LcrClientQuery: {
+      enterpriseId?: components["schemas"]["Id"] | null;
+      accountManagerId?: components["schemas"]["Id"] | null;
+      profileId?: components["schemas"]["Id"] | null;
+      at?: components["schemas"]["Timestamp"] | null;
+      onlyBelowCost?: boolean;
+      search?: string | null;
+      /** @enum {string} */
+      sort?: "margin" | "messages" | "destination";
+      limit?: number;
+      offset?: number;
+    };
+    LcrClientRow: {
+      customerTrunkId: components["schemas"]["Id"];
+      customerTrunk: string;
+      enterprise: string;
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      /** @description Platform currency. */
+      sellRate: number;
+      cost1: number | null;
+      vendor1: string | null;
+      cost2: number | null;
+      vendor2: string | null;
+      cost3: number | null;
+      vendor3: string | null;
+      margin1Pct: number | null;
+      margin2Pct: number | null;
+      margin3Pct: number | null;
+      /** @description Sells below the cheapest LCR cost. */
+      belowCost: boolean;
+      messages7d: number;
+    };
+    LcrClientPage: {
+      rows: components["schemas"]["LcrClientRow"][];
+      total: number;
+      currency: string;
+      summary: {
+        lines: number;
+        belowCost: number;
+        avgMargin1Pct: number | null;
+      };
+    };
+    LcrChangeRow: {
+      id: components["schemas"]["Id"];
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      /** @enum {string} */
+      kind: "top_changed" | "cost_moved";
+      oldVendor: string | null;
+      newVendor: string | null;
+      oldCost: number | null;
+      newCost: number | null;
+      changePct: number | null;
+      detectedAt: components["schemas"]["Timestamp"];
+      marketMoveId: components["schemas"]["Id"] | null;
+    };
+    LcrChangePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["LcrChangeRow"][];
+    };
+    LcrAlertSettings: {
+      enabled: boolean;
+      /** @description Alert when the cheapest cost moves by more than this %. */
+      costMovePct: number;
+      /** @description Alert when the top LCR vendor changes. */
+      topChanged: boolean;
+    };
     /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
@@ -13982,6 +14402,8 @@ export type components = {
       qbrFormula?: string | null;
       /** @description Skip a vendor at this % of its TPS limit (§13.8 vendor capacity option). */
       skipVendorAtTpsPct?: number | null;
+      /** @description LCR profile of a Least cost (dynamic) rule (§13.23); null = cheapest vendors in scope. */
+      lcrProfileId?: components["schemas"]["Id"] | null;
       /** @description The rule's own DLR target; null = its destinations' targets (decided 2026-10-16). */
       dlrTargetPct?: number | null;
       hlrAction?: components["schemas"]["HlrAction"] | null;
@@ -14041,6 +14463,7 @@ export type components = {
       | "margin"
       | "qbrFormula"
       | "skipVendorAtTpsPct"
+      | "lcrProfileId"
       | "dlrTargetPct"
       | "hlrAction"
       | "denyMultipart"
@@ -14113,11 +14536,19 @@ export type components = {
       ruleIds: components["schemas"]["Id"][];
       /** @enum {string} */
       action:
-        "enable" | "disable" | "set_priority" | "shift_priority" | "replace_vendor" | "archive";
+        | "enable"
+        | "disable"
+        | "set_priority"
+        | "shift_priority"
+        | "replace_vendor"
+        | "archive"
+        | "set_lcr_profile";
       priority?: number;
       shift?: number;
       fromVendorTrunkId?: components["schemas"]["Id"];
       toVendorTrunkId?: components["schemas"]["Id"];
+      /** @description For set_lcr_profile — the rules become Least cost with this profile (Apply LCR, §13.23). */
+      lcrProfileId?: components["schemas"]["Id"];
       note?: string;
     };
     RouteBulkSaved: {
@@ -14288,7 +14719,9 @@ export type components = {
       | "incidents"
       | "rate_notifications"
       | "rate_notification_lines"
-      | "market_moves";
+      | "market_moves"
+      | "lcr_profiles"
+      | "lcr_changes";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -26502,6 +26935,337 @@ export interface operations {
         };
       };
       400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  lcrTable: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LcrQuery"];
+      };
+    };
+    responses: {
+      /** @description The ranking */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrTable"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  lcrClientView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LcrClientQuery"];
+      };
+    };
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrClientPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getLcrAlertSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrAlertSettings"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateLcrAlertSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LcrAlertSettings"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrAlertSettings"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryLcrChanges: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of LCR changes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrChangePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryLcrProfiles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of LCR profiles */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrProfilePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createLcrProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LcrProfileInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrProfileSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getLcrProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The an LCR profile */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrProfileRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateLcrProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LcrProfileInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrProfileSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveLcrProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrProfileSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreLcrProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LcrProfileSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getLcrProfileDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The dependencies */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];

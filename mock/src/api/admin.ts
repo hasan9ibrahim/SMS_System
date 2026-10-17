@@ -77,7 +77,7 @@ const exists = async (c: Db, table: string, id: number | null, live = true) => {
 
 // ---------------------------------------------------------------- generic records
 
-interface Spec<I, R> {
+export interface Spec<I, R> {
   table: string;
   entityType: string;
   label: string;
@@ -93,7 +93,7 @@ interface Spec<I, R> {
   restoreClash?: (c: Db, id: number) => Promise<string | null>;
 }
 
-function records<I, R extends { archivedAt: string | null }>(spec: Spec<I, R>) {
+export function records<I, R extends { archivedAt: string | null }>(spec: Spec<I, R>) {
   const cols = spec.fields.map(([, col]) => col);
   async function insert(c: pg.PoolClient, b: I, extra: Record<string, unknown> = {}) {
     const me = await getCurrentUser();

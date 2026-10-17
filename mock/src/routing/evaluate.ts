@@ -2,6 +2,7 @@
 // §13.24, §13.27). Pure: the caller loads the rule, the message context and vendor costs.
 // The switch evaluates the same way: conditions (all or any must match), then the vendor:
 // number whitelist first, then the warm-up threshold, then the normal split / LCR / QBR.
+import { rankLcr, splitPick, type LcrProfileCore } from "../lcr/rank.js";
 import type { RouteCandidate, RouteCheck, RouteDecision, RouteRuleDetail } from "@sms/contract";
 
 export interface MessageContext {
@@ -33,6 +34,11 @@ export interface VendorOption {
   /** Recent delivered %, for QBR ordering. */
   dlr: number | null;
   categoryId: number | null;
+  /** For LCR profiles (§13.23): QBR ASR and delivery delay, the vendor's tier, at its TPS limit. */
+  asr?: number | null;
+  delayS?: number | null;
+  tier?: string | null;
+  atLimit?: boolean;
 }
 
 type Rule = Pick<
@@ -69,7 +75,10 @@ type Rule = Pick<
   | "vendorTrunkIds"
   | "vendorCategoryMode"
   | "vendorCategoryIds"
->;
+> & {
+  /** The LCR profile of a Least cost rule, loaded with the rules (§13.23). */
+  lcrProfile?: LcrProfileCore | null;
+};
 
 export function compare(
   op: string,
@@ -418,7 +427,25 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
       );
       byRule.set(rule, pool);
     }
-    const candidates = pool.slice(0, 10).map((o, i) => candidate(o.vendorTrunkId, i + 1, null));
+    let candidates: RouteCandidate[];
+    if (rule.routeType === "dynamic" && rule.lcrProfile) {
+      // An LCR profile filters, orders and splits the vendors (§13.23).
+      const ranked = rankLcr(
+        pool.map((o) => ({
+          ...o,
+          cost: o.cost!,
+          asr: o.asr ?? null,
+          delayS: o.delayS ?? null,
+          tier: o.tier ?? null,
+          atLimit: o.atLimit ?? false,
+        })),
+        rule.lcrProfile,
+      );
+      candidates = splitPick(
+        ranked.filter((r) => r.pick),
+        bucket(m.receiver),
+      ).map((r, i) => candidate(r.c.vendorTrunkId, i + 1, r.share !== null ? `${r.share}%` : null));
+    } else candidates = pool.slice(0, 10).map((o, i) => candidate(o.vendorTrunkId, i + 1, null));
     for (const c of candidates) if (!marginOk(c)) c.note = `margin below ${rule.margin}`;
     const pick = candidates.find(marginOk);
     return pick

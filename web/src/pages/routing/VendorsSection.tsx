@@ -19,6 +19,7 @@ type Draft = Pick<
   | "margin"
   | "qbrFormula"
   | "skipVendorAtTpsPct"
+  | "lcrProfileId"
   | "threshold"
   | "thresholdInterval"
   | "vendorCategoryMode"
@@ -37,6 +38,7 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
   margin: r.margin,
   qbrFormula: r.qbrFormula,
   skipVendorAtTpsPct: r.skipVendorAtTpsPct,
+  lcrProfileId: r.lcrProfileId ?? null,
   threshold: r.threshold,
   thresholdInterval: r.thresholdInterval,
   vendorCategoryMode: r.vendorCategoryMode,
@@ -100,7 +102,7 @@ export function VendorsSection({
                 role="radio"
                 aria-checked={d.routeType === t.value}
                 className={d.routeType === t.value ? "on" : ""}
-                onClick={() => set({ routeType: t.value })}
+                onClick={() => set({ routeType: t.value, ...(t.value === "dynamic" ? {} : { lcrProfileId: null }) })}
               >
                 <span className={`dot dot-${t.tone}`} /> {t.label}
               </button>
@@ -356,6 +358,24 @@ export function VendorsSection({
                   )}
                 </div>
               </div>
+              {d.routeType === "dynamic" && (
+                <div className="field">
+                  <span>LCR profile (§13.23)</span>
+                  <ListLookup<{ id: number; name: string; vendorCount: number; split: string }>
+                    list="lcr_profiles"
+                    value={d.lcrProfileId ?? null}
+                    onChange={(p) => set({ lcrProfileId: p?.id ?? null })}
+                    labelOf={(p) => p.name}
+                    detailOf={(p) =>
+                      `${p.vendorCount} vendor${p.vendorCount === 1 ? "" : "s"} · ${p.split === "percentage" ? "percentage" : "top-down"}`
+                    }
+                    placeholder="None: the cheapest vendors in scope"
+                  />
+                  <small className="muted">
+                    The profile filters vendors (tiers, quality, max rate, TPS), orders them and sets how many are used.
+                  </small>
+                </div>
+              )}
               {d.routeType === "qbr" && (
                 <label className="field">
                   <span>QBR formula</span>

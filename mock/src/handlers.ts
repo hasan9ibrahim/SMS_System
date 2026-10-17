@@ -158,6 +158,20 @@ import {
   updateMarketMoveSettings,
 } from "./api/marketMoves.js";
 import {
+  archiveLcrProfile,
+  createLcrProfile,
+  getLcrAlertSettings,
+  getLcrProfile,
+  getLcrProfileDependencies,
+  lcrClientView,
+  lcrTable,
+  queryLcrChanges,
+  queryLcrProfiles,
+  restoreLcrProfile,
+  updateLcrAlertSettings,
+  updateLcrProfile,
+} from "./api/lcr.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -445,7 +459,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.26.0";
+const VERSION = "0.27.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -550,6 +564,19 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveMarketAutoRule,
   getMarketMove,
   actOnMarketMove,
+  // Advanced LCR (§13.23)
+  lcrTable,
+  lcrClientView,
+  getLcrAlertSettings,
+  updateLcrAlertSettings,
+  queryLcrChanges,
+  queryLcrProfiles,
+  getLcrProfile,
+  getLcrProfileDependencies,
+  createLcrProfile,
+  updateLcrProfile: (request, reply) => Promise.resolve(updateLcrProfile(request, reply)).finally(clearRouteCaches),
+  archiveLcrProfile,
+  restoreLcrProfile,
   queryDestinations: queryList("destinations"),
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)

@@ -284,7 +284,7 @@ export const PAGES: PageDef[] = [
     "/routing/lcr",
     "sort",
     "§13.23",
-    "5",
+    "5.16",
     "Vendors ranked by cost and quality per destination",
   ),
   p(

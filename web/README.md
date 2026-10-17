@@ -66,6 +66,13 @@ opens Route Rules on one), the affected clients with margins, notice and a sugge
 rating pre-filled with the chosen suggestions), snooze / dismiss / handled / note and the log. Settings hold the
 detection rules, the digest hour and auto-apply rules. The dashboard summary shows a Market moves count.
 
+**LCR** (`/routing/lcr`, `src/pages/routing/lcr/`, §13.23): views in the URL (`?view=table|clients|profiles|changes`).
+The LCR table ranks every vendor trunk for a destination (picker, point in time with "Next Monday", profile,
+quality-weighted score with weights) with quality, TPS, scheduled changes and current routing. What-if removes vendors
+or sets a vendor's cost and shows the routes and 7-day margin that change. The client view compares a client's or
+account manager's sell rates with LCR 1–3. Profiles are edited in a dialog; Least cost route rules pick one in their
+Vendors section, and Route Rules' Bulk edit can apply one to many rules. Changes lists top-vendor changes and cost moves.
+
 ## Route Rules (build step 4.3)
 
 `/routing/rules` (`src/pages/routing/`, §15.4) copies the reference screenshot's layout and form.

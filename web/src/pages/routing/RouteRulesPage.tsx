@@ -341,6 +341,11 @@ export function RouteRulesPage() {
             icon: "shuffle",
             onSelect: () => void ask<boolean>((done) => <BulkDialog kind="replace_vendor" ids={ids} done={done} />),
           },
+          {
+            label: "Apply LCR profile…",
+            icon: "route",
+            onSelect: () => void ask<boolean>((done) => <BulkDialog kind="set_lcr_profile" ids={ids} done={done} />),
+          },
           "separator",
           {
             label: ids.length === 1 ? "Delete…" : `Delete ${ids.length} rules…`,

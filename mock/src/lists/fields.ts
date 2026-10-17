@@ -2802,6 +2802,72 @@ export const listFields: Record<ListId, ListFields> = {
     ],
   },
 
+  // LCR (§13.23)
+  lcr_profiles: {
+    list: "lcr_profiles",
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
+      field({
+        field: "status",
+        label: "Status",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "active", label: "Active" },
+          { value: "inactive", label: "Inactive" },
+        ],
+      }),
+      field({ field: "vendorCount", label: "Vendors Used", type: "integer", defaultOperator: "eq" }),
+      field({
+        field: "split",
+        label: "Split",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "top_down", label: "Top-down" },
+          { value: "percentage", label: "Percentage" },
+        ],
+      }),
+      field({ field: "minDlr", label: "Min DLR", type: "percent", defaultOperator: "gte" }),
+      field({ field: "minAsr", label: "Min ASR", type: "percent", defaultOperator: "gte", hidden: true }),
+      field({ field: "maxRate", label: "Max Rate", type: "decimal", defaultOperator: "lte", hidden: true }),
+      field({ field: "qualityWeighted", label: "Quality-weighted", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "ruleCount", label: "Rules", type: "integer", defaultOperator: "gte" }),
+      field({ field: "description", label: "Description", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated", type: "datetime", defaultOperator: "between" }),
+      field({ field: "archived", label: "Deleted", type: "boolean", defaultOperator: "eq", hidden: true }),
+    ],
+  },
+  lcr_changes: {
+    list: "lcr_changes",
+    defaultSort: [{ field: "detectedAt", dir: "desc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "detectedAt", label: "Detected", type: "datetime", defaultOperator: "between" }),
+      field({ field: "country", label: "Country", type: "text", defaultOperator: "like" }),
+      field({ field: "network", label: "Network", type: "text", defaultOperator: "like" }),
+      field({ field: "mccmnc", label: "MCCMNC", type: "text", defaultOperator: "like" }),
+      field({
+        field: "kind",
+        label: "Change",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "top_changed", label: "Top vendor changed" },
+          { value: "cost_moved", label: "Cheapest cost moved" },
+        ],
+      }),
+      field({ field: "oldVendor", label: "From Vendor", type: "text", defaultOperator: "like" }),
+      field({ field: "newVendor", label: "To Vendor", type: "text", defaultOperator: "like" }),
+      field({ field: "oldCost", label: "Old Cost", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "newCost", label: "New Cost", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "changePct", label: "Change %", type: "percent", defaultOperator: "gte" }),
+    ],
+  },
+
   // Admin (§11)
   departments: {
     list: "departments",

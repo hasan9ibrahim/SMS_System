@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.26.0
+  version: 0.27.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -11647,6 +11647,325 @@ paths:
                 $ref: '#/components/schemas/IncidentDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /lcr/table:
+    post:
+      tags:
+      - routing
+      operationId: lcrTable
+      summary: Live LCR table for one destination (§13.23)
+      description: 'Every vendor trunk with a rate for the destination at the point in time, ranked by cost in the platform currency
+
+        (or the quality-weighted score), with QBR quality, TPS, scheduled changes and whether routing uses it now. A profile
+
+        marks the vendors it leaves out and the ones it would use; a what-if returns the new ranking with each vendor''s
+
+        former rank and the routes and margin that would change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LcrQuery'
+      responses:
+        '200':
+          description: The ranking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrTable'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr/client-view:
+    post:
+      tags:
+      - routing
+      operationId: lcrClientView
+      summary: A client's sell rates against LCR cost (§13.23)
+      description: 'Per client trunk and destination: sell rate, the three cheapest eligible costs and the margin at each position,
+
+        and whether it sells below cost. Paged on the server.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LcrClientQuery'
+      responses:
+        '200':
+          description: One page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrClientPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr/alert-settings:
+    get:
+      tags:
+      - routing
+      operationId: getLcrAlertSettings
+      summary: LCR change alert settings
+      description: Top vendor change and cheapest cost move (§13.23).
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrAlertSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - routing
+      operationId: updateLcrAlertSettings
+      summary: Change LCR change alert settings
+      description: Used by the next check.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LcrAlertSettings'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrAlertSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr-changes/query:
+    post:
+      tags:
+      - routing
+      operationId: queryLcrChanges
+      summary: List LCR changes (server-side filter, sort and paging)
+      description: 'Destinations where the top LCR vendor changed or the cheapest cost moved by more than the threshold (§13.23),
+
+        checked every 15 minutes; linked to the market move when there is one (§13.14).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of LCR changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrChangePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr-profiles/query:
+    post:
+      tags:
+      - routing
+      operationId: queryLcrProfiles
+      summary: List LCR profiles (server-side filter, sort and paging)
+      description: 'LCR profiles (§13.23): Name, vendors, tiers, quality limits, vendors used, split, rules using it.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of LCR profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrProfilePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr-profiles:
+    post:
+      tags:
+      - routing
+      operationId: createLcrProfile
+      summary: Add an LCR profile
+      description: 'Named rule set reused by route rules of type Least cost (§13.23).
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LcrProfileInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrProfileSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr-profiles/{id}:
+    get:
+      tags:
+      - routing
+      operationId: getLcrProfile
+      summary: One an LCR profile
+      description: Every field of the form.
+      parameters: &id001
+      - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The an LCR profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrProfileRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - routing
+      operationId: updateLcrProfile
+      summary: Change an LCR profile
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LcrProfileInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrProfileSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr-profiles/{id}/archive:
+    post:
+      tags:
+      - routing
+      operationId: archiveLcrProfile
+      summary: Delete (archive) an LCR profile (§13.29)
+      description: Blocked while route rules use it. It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrProfileSaved'
+        '409':
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ArchiveBlocked'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr-profiles/{id}/restore:
+    post:
+      tags:
+      - routing
+      operationId: restoreLcrProfile
+      summary: Restore an LCR profile
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrProfileSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /lcr-profiles/{id}/dependencies:
+    get:
+      tags:
+      - routing
+      operationId: getLcrProfileDependencies
+      summary: What uses an LCR profile
+      description: Route rules of type Least cost.
+      parameters: *id001
+      responses:
+        '200':
+          description: The dependencies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dependencies'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -24266,6 +24585,563 @@ components:
             items:
               $ref: '#/components/schemas/IncidentRow'
 
+    # ------------------------------------------------------------- LCR (§13.23)
+    LcrWeights:
+      type: object
+      description: Weights of the quality-weighted score (§13.23); relative, need not add up to 100.
+      additionalProperties: false
+      required:
+      - cost
+      - asr
+      - dlr
+      - delay
+      properties:
+        cost:
+          type: number
+          minimum: 0
+          maximum: 100
+        asr:
+          type: number
+          minimum: 0
+          maximum: 100
+        dlr:
+          type: number
+          minimum: 0
+          maximum: 100
+        delay:
+          type: number
+          minimum: 0
+          maximum: 100
+    LcrProfileFields:
+      type: object
+      required:
+      - name
+      - description
+      - status
+      - vendorTrunkMode
+      - vendorTrunkIds
+      - tiers
+      - minAsr
+      - minDlr
+      - maxDelayS
+      - maxRate
+      - vendorCount
+      - split
+      - shares
+      - tieBreaker
+      - excludeAtTpsLimit
+      - qualityWeighted
+      - weights
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+        vendorTrunkMode:
+          type: string
+          enum:
+          - all
+          - inclusive
+          - exclusive
+        vendorTrunkIds:
+          type: array
+          items: &id002
+            $ref: '#/components/schemas/Id'
+          maxItems: 500
+          uniqueItems: true
+        tiers:
+          type: array
+          items:
+            type: string
+            enum:
+            - tier1
+            - tier2
+            - tier3
+          maxItems: 3
+          uniqueItems: true
+          description: Vendor tiers allowed; empty = all.
+        minAsr: &id001
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          maximum: 100
+        minDlr: *id001
+        maxDelayS:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          maximum: 3600
+        maxRate:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          description: Highest cost allowed, platform currency.
+        vendorCount:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Number of vendors to use.
+        split:
+          type: string
+          enum:
+          - top_down
+          - percentage
+        shares:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 100
+          maxItems: 10
+          description: Percentage split, one share per vendor position, adding up to 100.
+        tieBreaker:
+          type: string
+          enum:
+          - quality
+          - cost
+          description: 'Equal score or cost: the better DLR (quality) or the lower cost first.'
+        excludeAtTpsLimit:
+          type: boolean
+          description: Leave out vendors at their TPS limit now.
+        qualityWeighted:
+          type: boolean
+          description: Rank by the quality-weighted score instead of cost.
+        weights:
+          $ref: '#/components/schemas/LcrWeights'
+    LcrProfileInput:
+      allOf:
+      - $ref: '#/components/schemas/LcrProfileFields'
+      unevaluatedProperties: false
+    LcrProfileRow:
+      allOf:
+      - $ref: '#/components/schemas/LcrProfileFields'
+      - type: object
+        required:
+        - id
+        - ruleCount
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id002
+          ruleCount:
+            type: integer
+            description: Route rules of type Least cost using it.
+          updatedBy:
+            type:
+            - string
+            - 'null'
+          updatedAt: &id004
+            $ref: '#/components/schemas/Timestamp'
+          archivedAt: &id005
+            oneOf: &id003
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+    LcrProfileSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/LcrProfileRow'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    LcrProfilePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/LcrProfileRow'
+    LcrWhatIf:
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        remove:
+          type: array
+          items: *id002
+          maxItems: 100
+          uniqueItems: true
+          description: Vendor trunks taken out.
+        rates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - vendorTrunkId
+            - rate
+            properties:
+              vendorTrunkId: *id002
+              rate:
+                type: number
+                minimum: 0
+          maxItems: 100
+          description: New cost (platform currency) for a vendor, or an offer from a vendor without a rate here.
+    LcrQuery:
+      type: object
+      additionalProperties: false
+      required:
+      - mccmnc
+      properties:
+        mccmnc:
+          type: string
+          pattern: ^[0-9]{3,6}$
+        at:
+          oneOf: *id003
+          description: 'Point in time: past or future (scheduled vendor changes applied); null = now.'
+        profileId: &id014
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        qualityWeighted:
+          type: boolean
+          description: Overrides the profile; without a profile, false = rank by cost.
+        weights:
+          $ref: '#/components/schemas/LcrWeights'
+        whatIf:
+          $ref: '#/components/schemas/LcrWhatIf'
+    LcrRow:
+      type: object
+      required:
+      - rank
+      - vendorTrunkId
+      - vendorTrunk
+      - vendor
+      - tier
+      - status
+      - rate
+      - currency
+      - cost
+      - effectiveFrom
+      - nextRate
+      - nextFrom
+      - asr
+      - dlr
+      - delayS
+      - attempts
+      - tpsNow
+      - tpsLimit
+      - atLimit
+      - routedNow
+      - score
+      - excluded
+      - pick
+      - share
+      - whatIf
+      - baselineRank
+      properties:
+        rank:
+          type: &id007
+          - integer
+          - 'null'
+          description: Position among the eligible vendors; null when the profile leaves the vendor out.
+        vendorTrunkId: *id002
+        vendorTrunk:
+          type: string
+        vendor:
+          type: string
+        tier:
+          type: string
+        status:
+          type: string
+        rate: &id011
+          type: number
+        currency:
+          type: string
+        cost:
+          type: number
+          description: Platform currency.
+        effectiveFrom: *id004
+        nextRate: &id006
+          type: &id008
+          - number
+          - 'null'
+        nextFrom: *id005
+        asr: *id006
+        dlr: *id006
+        delayS: *id006
+        attempts:
+          type: integer
+          description: QBR sample behind ASR / DLR.
+        tpsNow: *id006
+        tpsLimit: &id009
+          type: *id007
+        atLimit: &id015
+          type: boolean
+        routedNow:
+          type: integer
+          description: Client trunks routed to this vendor for the destination now.
+        score:
+          type: *id008
+          description: Quality-weighted score, 0–100 (higher is better).
+        excluded:
+          type: &id012
+          - string
+          - 'null'
+          description: Why the profile leaves it out.
+        pick:
+          type: boolean
+          description: Within the profile's number of vendors.
+        share: *id009
+        whatIf:
+          type:
+          - string
+          - 'null'
+          enum:
+          - removed
+          - changed
+          - added
+          - null
+        baselineRank:
+          type: *id007
+          description: Rank before the what-if changes.
+    LcrImpact:
+      type: object
+      description: 'What-if: routes that change and the margin effect on last 7 days'' traffic (Least cost rules).'
+      required:
+      - clientLines
+      - routesChanged
+      - messages7d
+      - costChange7d
+      - marginChange7d
+      - changes
+      properties:
+        clientLines:
+          type: integer
+          description: Client trunks selling the destination.
+        routesChanged: &id010
+          type: integer
+        messages7d: *id010
+        costChange7d:
+          type: number
+          description: Last 7 days' traffic at the new routed cost minus the current one, platform currency.
+        marginChange7d: *id011
+        changes:
+          type: array
+          items:
+            type: object
+            required:
+            - customerTrunk
+            - from
+            - to
+            - messages7d
+            properties:
+              customerTrunk:
+                type: string
+              from: &id013
+                type: *id012
+              to: *id013
+              messages7d: *id010
+    LcrTable:
+      type: object
+      required:
+      - mccmnc
+      - country
+      - network
+      - at
+      - currency
+      - profile
+      - rows
+      - impact
+      properties:
+        mccmnc:
+          type: string
+        country: *id013
+        network: *id013
+        at: *id004
+        currency:
+          type: string
+        profile: *id013
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/LcrRow'
+        impact:
+          oneOf:
+          - $ref: '#/components/schemas/LcrImpact'
+          - type: 'null'
+    LcrClientQuery:
+      type: object
+      description: One client (enterprise) or an account manager's clients.
+      additionalProperties: false
+      required: []
+      properties:
+        enterpriseId: *id014
+        accountManagerId: *id014
+        profileId: *id014
+        at: *id005
+        onlyBelowCost: *id015
+        search:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        sort:
+          type: string
+          enum:
+          - margin
+          - messages
+          - destination
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+        offset:
+          type: integer
+          minimum: 0
+    LcrClientRow:
+      type: object
+      required:
+      - customerTrunkId
+      - customerTrunk
+      - enterprise
+      - mccmnc
+      - country
+      - network
+      - sellRate
+      - cost1
+      - vendor1
+      - cost2
+      - vendor2
+      - cost3
+      - vendor3
+      - margin1Pct
+      - margin2Pct
+      - margin3Pct
+      - belowCost
+      - messages7d
+      properties:
+        customerTrunkId: *id002
+        customerTrunk:
+          type: string
+        enterprise:
+          type: string
+        mccmnc:
+          type: string
+        country: *id013
+        network: *id013
+        sellRate:
+          type: number
+          description: Platform currency.
+        cost1: *id006
+        vendor1: *id013
+        cost2: *id006
+        vendor2: *id013
+        cost3: *id006
+        vendor3: *id013
+        margin1Pct: *id006
+        margin2Pct: *id006
+        margin3Pct: *id006
+        belowCost:
+          type: boolean
+          description: Sells below the cheapest LCR cost.
+        messages7d: *id010
+    LcrClientPage:
+      type: object
+      required:
+      - rows
+      - total
+      - currency
+      - summary
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/LcrClientRow'
+        total: *id010
+        currency:
+          type: string
+        summary:
+          type: object
+          required:
+          - lines
+          - belowCost
+          - avgMargin1Pct
+          properties:
+            lines: *id010
+            belowCost: *id010
+            avgMargin1Pct: *id006
+    LcrChangeRow:
+      type: object
+      required:
+      - id
+      - mccmnc
+      - country
+      - network
+      - kind
+      - oldVendor
+      - newVendor
+      - oldCost
+      - newCost
+      - changePct
+      - detectedAt
+      - marketMoveId
+      properties:
+        id: *id002
+        mccmnc:
+          type: string
+        country: *id013
+        network: *id013
+        kind:
+          type: string
+          enum:
+          - top_changed
+          - cost_moved
+        oldVendor: *id013
+        newVendor: *id013
+        oldCost: *id006
+        newCost: *id006
+        changePct: *id006
+        detectedAt: *id004
+        marketMoveId: *id014
+    LcrChangePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/LcrChangeRow'
+    LcrAlertSettings:
+      type: object
+      additionalProperties: false
+      required:
+      - enabled
+      - costMovePct
+      - topChanged
+      properties:
+        enabled: *id015
+        costMovePct:
+          type: number
+          minimum: 0.1
+          maximum: 100
+          description: Alert when the cheapest cost moves by more than this %.
+        topChanged:
+          type: boolean
+          description: Alert when the top LCR vendor changes.
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -24543,6 +25419,11 @@ components:
           minimum: 1
           maximum: 100
           description: Skip a vendor at this % of its TPS limit (§13.8 vendor capacity option).
+        lcrProfileId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: LCR profile of a Least cost (dynamic) rule (§13.23); null = cheapest vendors in scope.
         dlrTargetPct:
           type: [number, "null"]
           minimum: 0
@@ -24587,7 +25468,7 @@ components:
           type: string
 
     RouteRuleDetail:
-      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
+      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, lcrProfileId, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
       allOf:
         - $ref: "#/components/schemas/RouteRuleFields"
         - type: object
@@ -24731,7 +25612,7 @@ components:
             $ref: "#/components/schemas/Id"
         action:
           type: string
-          enum: [enable, disable, set_priority, shift_priority, replace_vendor, archive]
+          enum: [enable, disable, set_priority, shift_priority, replace_vendor, archive, set_lcr_profile]
         priority:
           type: integer
           minimum: 1
@@ -24744,6 +25625,9 @@ components:
           $ref: "#/components/schemas/Id"
         toVendorTrunkId:
           $ref: "#/components/schemas/Id"
+        lcrProfileId:
+          $ref: "#/components/schemas/Id"
+          description: For set_lcr_profile — the rules become Least cost with this profile (Apply LCR, §13.23).
         note:
           type: string
           maxLength: 500
@@ -24973,7 +25857,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes]
 
     FilterOperator:
       type: string

@@ -1,6 +1,8 @@
 // Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4): record with every field, clone,
 // safe delete, bulk operations, traffic per customer and vendor, rule Test and the Route
 // Simulator. Every save is one change with a field-level diff that undo puts back (§13.10).
+import { atLimit, loadLcrProfiles, qbrQuality, qualityFor, tpsNow, vendorTiers, type Quality } from "../lcr/data.js";
+import type { LcrProfileCore } from "../lcr/rank.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -88,6 +90,7 @@ const SCALARS: FieldSpec[] = [
   { api: "margin", col: "margin" },
   { api: "qbrFormula", col: "qbr_formula" },
   { api: "skipVendorAtTpsPct", col: "skip_vendor_at_tps_pct" },
+  { api: "lcrProfileId", col: "lcr_profile_id" },
   { api: "dlrTargetPct", col: "dlr_target_pct" },
   { api: "denyMultipart", col: "deny_multipart" },
   { api: "threshold", col: "threshold" },
@@ -128,6 +131,8 @@ export type RuleCore = Omit<
   "labels" | "archived" | "createdBy" | "createdAt" | "updatedBy" | "updatedAt"
 > & {
   id: number;
+  /** Loaded for evaluation only (§13.23); not part of the record. */
+  lcrProfile?: LcrProfileCore | null;
 };
 
 function rowToRule(r: Record<string, unknown>, vendors: RouteVendor[], whitelists: RouteWhitelist[]): RuleCore {
@@ -280,6 +285,7 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     dlrTargetPct: null,
     qbrFormula: null,
     skipVendorAtTpsPct: null,
+    lcrProfileId: null,
     hlrAction: null,
     denyMultipart: false,
     threshold: null,
@@ -410,6 +416,14 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
     for (const [level, total] of levels)
       if (total !== 100)
         errors.push({ path: "/vendors", message: `shares on level ${level} add up to ${total}%, not 100%` });
+  }
+  if (r.lcrProfileId !== null && r.lcrProfileId !== undefined) {
+    if (r.routeType !== "dynamic")
+      errors.push({ path: "/lcrProfileId", message: "an LCR profile is for Least cost rules only" });
+    const { rows } = await db.query("SELECT 1 FROM lcr_profiles WHERE id = $1 AND deleted_at IS NULL", [
+      r.lcrProfileId,
+    ]);
+    if (!rows[0]) errors.push({ path: "/lcrProfileId", message: "unknown or deleted LCR profile" });
   }
   const vendorIds = new Set(r.vendors.map((v) => v.vendorTrunkId));
   r.whitelists.forEach((w, i) => {
@@ -737,10 +751,19 @@ export function bulkRouteRules(request: FastifyRequest, reply: FastifyReply) {
         if (!rows[0]) errors.push({ path: "/toVendorTrunkId", message: "unknown or archived vendor trunk" });
       }
     }
+    if (body.action === "set_lcr_profile") {
+      if (!body.lcrProfileId) errors.push({ path: "/lcrProfileId", message: "required" });
+      else {
+        const { rows } = await pool.query("SELECT 1 FROM lcr_profiles WHERE id = $1 AND deleted_at IS NULL", [
+          body.lcrProfileId,
+        ]);
+        if (!rows[0]) errors.push({ path: "/lcrProfileId", message: "unknown or deleted LCR profile" });
+      }
+    }
     if (errors.length) return badInput(reply, errors);
     const ids = [...new Set(body.ruleIds)];
     const { rows } = await pool.query(
-      "SELECT id, status, priority, route_type, deleted_at FROM route_rules WHERE id = ANY($1) AND deleted_at IS NULL",
+      "SELECT id, status, priority, route_type, lcr_profile_id, deleted_at FROM route_rules WHERE id = ANY($1) AND deleted_at IS NULL",
       [ids],
     );
     const { vendors, whitelists } = await vendorsOf(pool, ids);
@@ -767,6 +790,14 @@ export function bulkRouteRules(request: FastifyRequest, reply: FastifyReply) {
         if (next !== r.priority) diff.push({ entity_id: id, field: "priority", before: r.priority, after: next });
       }
       if (body.action === "archive") diff.push({ entity_id: id, field: "archived", before: false, after: true });
+      // Apply LCR (§13.23): the rule becomes Least cost with the profile.
+      if (body.action === "set_lcr_profile") {
+        if (r.route_type !== "dynamic")
+          diff.push({ entity_id: id, field: "routeType", before: r.route_type, after: "dynamic" });
+        const before = r.lcr_profile_id === null ? null : Number(r.lcr_profile_id);
+        if (before !== body.lcrProfileId)
+          diff.push({ entity_id: id, field: "lcrProfileId", before, after: body.lcrProfileId });
+      }
       if (body.action === "replace_vendor") {
         const swap = <T extends { vendorTrunkId: number }>(list: T[]) =>
           list.map((v) =>
@@ -897,10 +928,14 @@ export async function vendorOptions(
   mccmnc: string | null,
   onlyIds: number[] | null,
 ): Promise<Map<number, VendorOption>> {
-  const [quality, qbr] = await Promise.all([
+  const [quality, qbr, lcrQ, tiers] = await Promise.all([
     vendorQuality(),
     qbrDlrByCode(db, mccmnc ? [mccmnc, mccmnc.slice(0, 3)] : []),
+    qbrQuality(db, mccmnc ? [mccmnc, mccmnc.slice(0, 3)] : []),
+    vendorTiers(db),
   ]);
+  const destQ = mccmnc ? qualityFor(lcrQ, mccmnc) : new Map<number, Quality>();
+  const tps = tpsNow();
   // QBR uses the destination's effective vendor DLR (QBR stats, §6.3), else the 7-day DLR.
   const destDlr = qbr.get(mccmnc ?? "") ?? qbr.get(mccmnc?.slice(0, 3) ?? "") ?? new Map<number, number>();
   const { rows } = await db.query(
@@ -924,6 +959,10 @@ export async function vendorOptions(
         cost: r.conv === null ? null : Math.round(Number(r.conv) * 1e6) / 1e6,
         dlr: destDlr.get(Number(r.id)) ?? quality.get(Number(r.id)) ?? null,
         categoryId: r.product_category_id ?? null,
+        asr: destQ.get(Number(r.id))?.asr ?? null,
+        delayS: destQ.get(Number(r.id))?.delayS ?? null,
+        tier: tiers.get(Number(r.id))?.tier ?? null,
+        atLimit: atLimit(tps.get(Number(r.id)), tiers.get(Number(r.id))?.limit),
       },
     ]),
   );
@@ -956,7 +995,12 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
     const ids = dynamic
       ? null
       : [...rule.vendors.map((v) => v.vendorTrunkId), ...rule.whitelists.map((w) => w.vendorTrunkId)];
-    return decide(rule, m, await vendorOptions(pool, m.mccmnc, ids));
+    const profiles = rule.lcrProfileId ? await loadLcrProfiles(pool) : null;
+    return decide(
+      { ...rule, lcrProfile: profiles?.get(rule.lcrProfileId!) ?? null },
+      m,
+      await vendorOptions(pool, m.mccmnc, ids),
+    );
   });
 }
 
@@ -964,8 +1008,12 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
 export async function loadRulesInOrder(db: Db): Promise<RuleCore[]> {
   const { rows } = await db.query(`${ruleSelect} WHERE r.deleted_at IS NULL ORDER BY r.priority, r.id`);
   const ids = rows.map((r) => r.id as number);
-  const { vendors, whitelists } = await vendorsOf(db, ids);
-  return rows.map((r) => rowToRule(r, vendors.get(r.id) ?? [], whitelists.get(r.id) ?? []));
+  const [{ vendors, whitelists }, profiles] = await Promise.all([vendorsOf(db, ids), loadLcrProfiles(db)]);
+  // Least cost rules carry their LCR profile for the evaluator (§13.23).
+  return rows.map((r) => ({
+    ...rowToRule(r, vendors.get(r.id) ?? [], whitelists.get(r.id) ?? []),
+    lcrProfile: r.lcr_profile_id ? (profiles.get(Number(r.lcr_profile_id)) ?? null) : null,
+  }));
 }
 
 export interface TriedRule {

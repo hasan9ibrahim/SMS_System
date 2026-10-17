@@ -2,6 +2,7 @@
 // number), compare every vendor cost with every client rate for it, and an advanced matrix
 // over many destinations with filters, a point in time, four views and highlights. Saved
 // lookups are private with optional read-only sharing, like saved views (§13.25).
+import { atLimit, qbrQuality, qualityFor, tpsNow, vendorTiers } from "../lcr/data.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -365,9 +366,10 @@ let rulesCache: { key: string; rules: RuleCore[] } | null = null;
 /** All live rules, reloaded when a rule changes (any save touches updated_at or the count). */
 async function rulesNow(db: Db): Promise<RuleCore[]> {
   const { rows } = await db.query(
-    "SELECT max(updated_at)::text AS at, count(*) AS n, count(*) FILTER (WHERE deleted_at IS NULL) AS live FROM route_rules",
+    `SELECT max(updated_at)::text AS at, count(*) AS n, count(*) FILTER (WHERE deleted_at IS NULL) AS live,
+            (SELECT max(updated_at)::text || count(*) FROM lcr_profiles) AS lcr FROM route_rules`,
   );
-  const key = `${rows[0].at}|${rows[0].n}|${rows[0].live}`;
+  const key = `${rows[0].at}|${rows[0].n}|${rows[0].live}|${rows[0].lcr}`;
   if (rulesCache?.key !== key) rulesCache = { key, rules: await loadRulesInOrder(db) };
   return rulesCache.rules;
 }
@@ -450,10 +452,20 @@ async function routingOptions(
     if (o) o.cost = l.conv;
   }
   // QBR orders vendors by the destination's effective DLR (QBR stats, §6.3) where known.
-  const qbr = await qbrDlrByCode(db, [...new Set(reqs.flatMap((r) => [r, r.slice(0, 3)]))]);
+  const codes = [...new Set(reqs.flatMap((r) => [r, r.slice(0, 3)]))];
+  const [qbr, lcrQ, tiers] = await Promise.all([qbrDlrByCode(db, codes), qbrQuality(db, codes), vendorTiers(db)]);
+  const tps = tpsNow();
   for (const [req, options] of out) {
     const dlr = qbr.get(req) ?? qbr.get(req.slice(0, 3));
     if (dlr) for (const [id, o] of options) if (dlr.has(id)) o.dlr = dlr.get(id)!;
+    // LCR profiles also filter on ASR, delay, tier and the TPS limit (§13.23).
+    const q = qualityFor(lcrQ, req);
+    for (const [id, o] of options) {
+      o.asr = q.get(id)?.asr ?? null;
+      o.delayS = q.get(id)?.delayS ?? null;
+      o.tier = tiers.get(id)?.tier ?? null;
+      o.atLimit = atLimit(tps.get(id), tiers.get(id)?.limit);
+    }
   }
   return out;
 }

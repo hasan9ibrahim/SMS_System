@@ -42,6 +42,11 @@ let ticks = 0;
 let lastEvaluation = 0;
 let evaluating = false;
 
+/** The simulator if it is running, without starting it (LCR TPS figures, §13.23). */
+export function runningSimulator() {
+  return sim ?? null;
+}
+
 /** The running simulator (started on first use). */
 export function liveSimulator() {
   return getSimulator();

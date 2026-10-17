@@ -1135,3 +1135,37 @@ textarea.mono {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- LCR (§13.23) ---------- */
+.page.lcr-page {
+  gap: 12px;
+  overflow: hidden;
+}
+.lcr-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px 14px;
+  padding: 12px 14px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  flex: none;
+}
+.lcr-controls .field {
+  margin: 0;
+}
+.lcr-whatif {
+  flex: none;
+}
+.lcr-weights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+}
+.lcr-rate {
+  width: 110px;
+}
+.vt-row.lcr-pick .vt-cell:first-child {
+  box-shadow: inset 3px 0 0 var(--color-good);
+}

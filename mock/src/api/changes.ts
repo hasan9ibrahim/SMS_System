@@ -89,6 +89,29 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
     },
   },
   business_company: { table: "business_companies", columns: {} },
+  // LCR profiles (§13.23)
+  lcr_profile: {
+    table: "lcr_profiles",
+    columns: {
+      name: "name",
+      description: "description",
+      status: "status",
+      vendorTrunkMode: "vendor_trunk_mode",
+      vendorTrunkIds: "vendor_trunk_ids",
+      tiers: "tiers",
+      minAsr: "min_asr",
+      minDlr: "min_dlr",
+      maxDelayS: "max_delay_s",
+      maxRate: "max_rate",
+      vendorCount: "vendor_count",
+      split: "split",
+      shares: "shares",
+      tieBreaker: "tie_breaker",
+      excludeAtTpsLimit: "exclude_at_tps_limit",
+      qualityWeighted: "quality_weighted",
+      weights: "weights",
+    },
+  },
   // Alert rules (§13.6) write their nested fields through applyAlertRuleField.
   alert_rule: { table: "alert_rules", columns: {} },
   // Translation rules write every field through applyTranslationRuleField (§6.4).
