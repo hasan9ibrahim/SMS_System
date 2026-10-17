@@ -21,7 +21,12 @@ export interface ServerOptions {
 
 export async function buildServer(options: ServerOptions = {}): Promise<FastifyInstance> {
   // Document uploads carry up to 10 MB as base64 (§5.2), so the body limit is raised.
-  const app = Fastify({ logger: options.logger ?? false, bodyLimit: 16 * 1024 * 1024 });
+  // Behind the trial instance's nginx, the client IP (audit trail, sessions) comes from X-Forwarded-For.
+  const app = Fastify({
+    logger: options.logger ?? false,
+    bodyLimit: 16 * 1024 * 1024,
+    trustProxy: process.env.TRUST_PROXY === "1",
+  });
   const handlers: Partial<Record<string, Handler>> = options.handlers ?? defaultHandlers;
   if (options.socket !== false) await registerSocket(app);
 

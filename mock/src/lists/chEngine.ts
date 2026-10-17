@@ -303,9 +303,12 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
   if (pageIds.length) {
     const times = pageIds.map((r) => r.t).sort();
     const full = await chQuery<Record<string, unknown>>(
+      // PREWHERE on the IDs: only the ID column is read until the page's rows are found. When the page
+      // spans the whole period (e.g. sorted by ID), letting ClickHouse pick start_time reads every
+      // column of every row (7 s at 5 M EDRs instead of 0.4 s).
       `SELECT ${chSelect(d)}, toString(${def.idSql}) AS _id FROM ${def.table}
-        WHERE start_time BETWEEN ${lit(times[0]!)} AND ${lit(times[times.length - 1]!)}
-          AND ${def.idSql} IN (${pageIds.map((r) => lit(r.id)).join(",")})`,
+        PREWHERE ${def.idSql} IN (${pageIds.map((r) => lit(r.id)).join(",")})
+        WHERE start_time BETWEEN ${lit(times[0]!)} AND ${lit(times[times.length - 1]!)}`,
     );
     const byId = new Map(full.map((r) => [String(r._id), r]));
     rows = pageIds.map((r) => byId.get(r.id)).filter((r): r is Record<string, unknown> => !!r);

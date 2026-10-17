@@ -1,5 +1,10 @@
 # Local data stores for the frontend phase (spec §14).
 # Values come from .env (copy .env.example). Defaults below are fake, local-only.
+#
+# Developers:          docker compose up -d                  (data stores only; run mock and web with npm)
+# Shared trial (step 6, docs/TRIAL_GUIDE.md):
+#   docker compose --profile app up -d --build               (data stores + mock + web on port ${WEB_PORT:-8080})
+#   docker compose --profile seed run --rm seed              (one-off: load the fake data; SEED_PROFILE=full|small)
 name: sms-platform
 
 services:
@@ -58,6 +63,64 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # ---------------------------------------------------------------- shared trial instance (build step 6)
+  # Mock server answering the contract (the Elixir backend replaces it later, same contract).
+  mock:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.mock
+    restart: unless-stopped
+    environment: &app-env
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sms_config}
+      POSTGRES_USER: ${POSTGRES_USER:-sms_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sms_dev_password}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: 8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-sms_edr}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-sms_dev}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-sms_dev_password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PLATFORM_CURRENCY: ${PLATFORM_CURRENCY:-EUR}
+      PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-UTC}
+      MOCK_SECRET_KEY: ${MOCK_SECRET_KEY:-trial-only-not-a-real-key}
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4010/api/v1/health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+
+  # The web app (production build) behind nginx; /api and /socket go to the mock.
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      mock: { condition: service_started }
+
+  # One-off: load the fake data (resets the schema). Full = production-like volume (takes a while; small is quick).
+  seed:
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.mock
+    environment: *app-env
+    command: ["sh", "-c", "node --max-old-space-size=6144 --import tsx src/generator/cli.ts --profile ${SEED_PROFILE:-full}"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
 
 volumes:
   postgres-data:

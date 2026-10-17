@@ -1,0 +1,16 @@
+# Mock server and fake data generator for a shared trial instance (build step 6).
+# The same image runs the API (default command) and the one-off seed job (see docker-compose.yml).
+FROM node:22.11.0-alpine3.20
+WORKDIR /app
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY contract/package.json contract/
+COPY mock/package.json mock/
+COPY web/package.json web/
+RUN npm ci --workspace=contract --workspace=mock --no-audit --no-fund
+COPY contract contract
+COPY mock mock
+COPY db db
+ENV MOCK_HOST=0.0.0.0 MOCK_PORT=4010 TRUST_PROXY=1
+EXPOSE 4010
+WORKDIR /app/mock
+CMD ["node", "--import", "tsx", "src/index.ts"]
