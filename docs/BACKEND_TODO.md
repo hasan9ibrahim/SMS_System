@@ -23,6 +23,8 @@ backend team knows exactly what to build. Newest first.
 
 ## Decisions
 
+- 2026-10-17, Route map (§6.3): kept as built. Pick a customer trunk; every destination it sells with the rule and vendor today's routing picks, cost and margin. Decided by: Hasan Ibrahim.
+- 2026-10-17, QBR stats window (§6.3): the last 24 hours of EDRs, refreshed every 5 minutes. Decided by: Hasan Ibrahim.
 - 2026-10-17, MO reference book currency (§6.1): every amount of an entry (rate, vendor rate, setup and fixed charge) is in the **customer trunk's currency**: its first rate table's currency, else the enterprise's customer billing currency, else the platform currency. The entry stores no currency of its own. Decided by: Hasan Ibrahim.
 - 2026-10-17, Master Table profiles (§6.1): kept as they are. "All" is the default profile and the only one that resolves numbers; other profiles are named prefix sets nothing else refers to yet. Decided by: Hasan Ibrahim.
 - 2026-10-16, "today" (live dashboard §13.3, Rate Manager money today §13.12, and later every "today" figure): the day in the **platform time zone** (`ReferenceData.platformTimezone`, UTC by default, an admin setting later), not the UTC day. Partner reports keep their own time zone choice (§13.31). Decided by: Hasan Ibrahim.
@@ -109,10 +111,10 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Route map, Re-rating and QBR notes (build step 5.2)
 
-- **Route map** (assumed scope, see Open questions): per customer trunk, every destination with a sell line in its rate tables, run through the live rules in order as a message without receiver or content (no warm-up, no number whitelists: the steady-state route). Same engine as Rate Lookup and the rule simulator. The mock computes a trunk's map in about 0.5 to 2 s and keeps it a minute; the backend should precompute it per trunk on rule and rate changes.
+- **Route map** (scope confirmed 2026-10-17): per customer trunk, every destination with a sell line in its rate tables, run through the live rules in order as a message without receiver or content (no warm-up, no number whitelists: the steady-state route). Same engine as Rate Lookup and the rule simulator. The mock computes a trunk's map in about 0.5 to 2 s and keeps it a minute; the backend should precompute it per trunk on rule and rate changes.
 - **Routing speed-ups (mock)**: rules are indexed by destination code, rule time windows and vendor scopes are parsed once, and vendor costs per destination are cached a minute (cleared on rate changes and undo). A country-level code is now costed with each vendor's country line only, never a network's.
 - **Re-rating**: EDRs billed with the request's rate table in the period (UTC days) are grouped by enterprise, destination, billed rate and hour and re-priced with the table's line valid at that time; a back-dated line counts from its stated date, which is how a back-dated RN rate is applied after all (§13.32). Billable units are `msg_count` where the EDR was billable. The difference per enterprise is a Reprocess note: customer, lower amount = credit note; vendor, lower cost = debit note. "No note" computes only. EDRs are never changed (§13.29). Requests are logged in the change history but not undone (maker-checker workflow). The mock runs the job in the background a moment after approval; the backend should use the job queue with progress.
-- **QBR stats**: the window is the last 24 hours of EDRs (spec says "refreshed every 5 minutes" without a window; tell us if it should differ). ADD = average delivery delay of delivered messages. A manual vendor stat wins until cleared; QBR rules order vendors by the destination's effective DLR, else the vendor's 7-day DLR.
+- **QBR stats**: the window is the last 24 hours of EDRs (confirmed 2026-10-17). ADD = average delivery delay of delivered messages. A manual vendor stat wins until cleared; QBR rules order vendors by the destination's effective DLR, else the vendor's 7-day DLR.
 
 ## Product reference data notes (build step 5.1)
 
@@ -153,4 +155,4 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- **Route map (§6.3, §15.4 sibling link):** the spec names the page but does not describe it. Built as: pick a customer trunk, see every destination it sells with the rule and vendor today's routing picks, the cost and the margin, filterable (e.g. "No rule" or negative margin). Is that what the team expects, or should it start from a destination (all trunks for one MCCMNC) instead?
+- None open.

@@ -1789,8 +1789,8 @@ export type paths = {
     put?: never;
     /**
      * Route map of a customer trunk (server-side filter, sort and paging)
-     * @description Which rule and vendor each destination the trunk sells gets today (§6.3 Route map; assumed scope,
-     *     see BACKEND_TODO): every destination with a sell rate in the trunk's rate tables, run through the
+     * @description Which rule and vendor each destination the trunk sells gets today (§6.3 Route map, scope decided
+     *     2026-10-17): every destination with a sell rate in the trunk's rate tables, run through the
      *     live route rules in order as a message without receiver or content (steady state: no warm-up, no
      *     number whitelists). The `customerTrunkId` filter (eq) is required. Filter, sort and paging work on
      *     every column, including the routed vendor, cost and margin.
