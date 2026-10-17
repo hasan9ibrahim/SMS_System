@@ -1,4 +1,12 @@
 // The route tree each tab renders from its own path (§13.5).
+import { AccessGroupsPage } from "./admin/AccessGroupsPage";
+import { AuditTrailPage } from "./admin/AuditTrailPage";
+import { BusinessCompaniesPage } from "./admin/BusinessCompaniesPage";
+import { CustomerPortalPage } from "./admin/CustomerPortalPage";
+import { DepartmentsPage } from "./admin/DepartmentsPage";
+import { EmailTemplatesPage } from "./admin/EmailTemplatesPage";
+import { LoggedInUsersPage } from "./admin/LoggedInUsersPage";
+import { UsersPage } from "./admin/UsersPage";
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
@@ -111,6 +119,14 @@ const BUILT = new Set([
   "/routing/rules",
   "/routing/rate-lookup",
   "/admin/changes",
+  "/admin/users",
+  "/admin/access-groups",
+  "/admin/departments",
+  "/admin/business-companies",
+  "/admin/logged-in",
+  "/admin/audit",
+  "/admin/email-templates",
+  "/admin/customer-portal",
 ]);
 
 export function PageRoutes({ path }: { path: string }) {
@@ -213,6 +229,14 @@ export function PageRoutes({ path }: { path: string }) {
         }
       />
       <Route path="/admin/changes" element={<ChangeHistoryPage />} />
+      <Route path="/admin/users" element={<UsersPage />} />
+      <Route path="/admin/access-groups" element={<AccessGroupsPage />} />
+      <Route path="/admin/departments" element={<DepartmentsPage />} />
+      <Route path="/admin/business-companies" element={<BusinessCompaniesPage />} />
+      <Route path="/admin/logged-in" element={<LoggedInUsersPage />} />
+      <Route path="/admin/audit" element={<AuditTrailPage />} />
+      <Route path="/admin/email-templates" element={<EmailTemplatesPage />} />
+      <Route path="/admin/customer-portal" element={<CustomerPortalPage />} />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (
         <Route key={p.key} path={p.path} element={<PlaceholderPage page={p} />} />
       ))}

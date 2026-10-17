@@ -1,5 +1,6 @@
 // Per-user undo (§13.10). Undo restores only the fields the change touched; if someone
 // else changed one of them since, the caller gets 409 with both values and decides.
+import { applyBusinessCompanyField } from "./businessCompanies.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type { UndoRequest } from "@sms/contract";
@@ -28,6 +29,65 @@ interface DiffEntry {
  * map yet. Other fields (e.g. a vendor share inside a route) are history-only until then.
  */
 const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, string> }> = {
+  // Admin (§11). Business companies write nested fields through applyBusinessCompanyField.
+  user: {
+    table: "users",
+    columns: {
+      username: "username",
+      firstName: "first_name",
+      lastName: "last_name",
+      email: "email",
+      phone: "phone",
+      departmentId: "department_id",
+      accessGroupId: "access_group_id",
+      businessCompanyId: "business_company_id",
+      managerId: "manager_id",
+      userType: "user_type",
+      isAccountManager: "is_account_manager",
+      isTeamLead: "is_team_lead",
+      status: "status",
+      allowMultipleLogin: "allow_multiple_login",
+      otpMethod: "otp_method",
+      language: "language",
+      address1: "address1",
+      address2: "address2",
+      countryIso: "country_iso",
+      state: "state",
+      city: "city",
+      zip: "zip",
+      mustChangePassword: "must_change_password",
+    },
+  },
+  department: {
+    table: "departments",
+    columns: { name: "name", status: "status", managerId: "manager_id", description: "description" },
+  },
+  access_group: {
+    table: "access_groups",
+    columns: { name: "name", status: "status", description: "description", permissions: "permissions" },
+  },
+  email_template: {
+    table: "email_templates",
+    columns: {
+      name: "name",
+      emailType: "email_type",
+      subject: "subject",
+      body: "body",
+      businessCompanyId: "business_company_id",
+    },
+  },
+  portal_user: {
+    table: "customer_portal_users",
+    columns: {
+      email: "email",
+      username: "username",
+      enterpriseId: "enterprise_id",
+      firstName: "first_name",
+      lastName: "last_name",
+      status: "status",
+    },
+  },
+  business_company: { table: "business_companies", columns: {} },
   // Translation rules write every field through applyTranslationRuleField (§6.4).
   translation_rule: { table: "translation_rules", columns: {} },
   // Number lists and their entries (§6.4)
@@ -216,7 +276,14 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
 };
 
 /** Workflow records logged for the history but not undone (§12.2 maker-checker). */
-const NOT_UNDOABLE = new Set(["rerating_request"]);
+// Passwords, 2FA and uploaded files are never put back by an undo (§13.28: secrets are not kept).
+const NOT_UNDOABLE = new Set([
+  "rerating_request",
+  "user_password",
+  "portal_user_password",
+  "user_totp",
+  "business_company_file",
+]);
 
 const TABLES: Record<string, string> = {
   ...Object.fromEntries(Object.entries(ENTITY_COLUMNS).map(([k, v]) => [k, v.table])),
@@ -263,6 +330,10 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
             WHERE id = (SELECT transaction_id FROM soa_adjustments WHERE id = $1)`,
           [e.entity_id],
         );
+      continue;
+    }
+    if (entityType === "business_company") {
+      await applyBusinessCompanyField(c, e.entity_id, e.field, e.before);
       continue;
     }
     if (entityType === "enterprise") {

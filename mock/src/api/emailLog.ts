@@ -52,9 +52,12 @@ export async function logEmail(c: Db, m: EmailLogInput): Promise<"sent" | "faile
 /** The business company's mailbox for a department, e.g. billing@company.example (§11 sender blocks). */
 export async function companyMailbox(c: Db, enterpriseId: number, department: string): Promise<string | null> {
   const { rows } = await c.query(
-    `SELECT bc.website FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id WHERE e.id = $1`,
-    [enterpriseId],
+    `SELECT mb.smtp_email, bc.website FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id
+       LEFT JOIN business_company_mailboxes mb ON mb.business_company_id = bc.id AND mb.department = $2
+      WHERE e.id = $1`,
+    [enterpriseId, department],
   );
+  if (rows[0]?.smtp_email) return rows[0].smtp_email as string;
   const host = (rows[0]?.website as string | undefined)?.replace(/^https?:\/\/(www\.)?/, "");
   return host ? `${department}@${host}` : null;
 }

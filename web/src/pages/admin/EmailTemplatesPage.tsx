@@ -1,0 +1,284 @@
+// Email Template (§11): Info ID, Name, Email Type, Subject, Business Company. Form: Name, Email Type,
+// Subject, Body (rich text or plain text with {placeholders}). The placeholders of the chosen type are
+// chips that insert at the caret, and the preview fills them with fake sample values. Clone copies a
+// template; one in use by a business company, traffic alert or SOA report cannot be deleted (§13.29).
+import { useRef, useState } from "react";
+import type { EmailTemplateInput, EmailTemplateRecord, EmailTemplateRow } from "@sms/contract";
+import {
+  useCloneEmailTemplate,
+  useEmailPlaceholders,
+  useEmailTemplate,
+  useSaveEmailTemplate,
+  useTemplatePreview,
+} from "../../api/admin";
+import { useReference } from "../../api/records";
+import { SelectField, TextField, useForm } from "../../form/form";
+import { HistoryList, useNotifySaved } from "../../history/undo";
+import { pageForPath } from "../../nav/registry";
+import { ListScreen } from "../../page/ListScreen";
+import { ask, toast } from "../../ui/feedback";
+import { Button, Modal } from "../../ui/primitives";
+import { problemText } from "../routing/dialogs";
+import { fmtWhen, RecordActions } from "../reference/shared";
+import { insertAt, TEMPLATE_TYPE } from "./adminModel";
+import { Kv } from "./parts";
+
+const page = pageForPath("/admin/email-templates")!;
+const TYPES = Object.entries(TEMPLATE_TYPE).map(([value, label]) => ({ value, label }));
+
+/** The filled e-mail in a sandboxed frame: template HTML never runs in the app. */
+export function MailFrame({ subject, html }: { subject: string; html: string }) {
+  return (
+    <div className="mail-preview">
+      <div className="small">
+        <strong>Subject:</strong> {subject}
+      </div>
+      <iframe
+        className="mail-frame"
+        title="E-mail preview"
+        sandbox=""
+        srcDoc={`<!doctype html><meta charset="utf-8"><body style="font:13px/1.5 Inter,system-ui,sans-serif;margin:10px;color:#1f2937">${html}</body>`}
+      />
+    </div>
+  );
+}
+
+function TemplateDialog({ record, done }: { record: EmailTemplateRecord | null; done: () => void }) {
+  const ref = useReference();
+  const placeholders = useEmailPlaceholders();
+  const form = useForm<EmailTemplateInput>(
+    record
+      ? {
+          name: record.name,
+          emailType: record.emailType,
+          subject: record.subject,
+          body: record.body,
+          businessCompanyId: record.businessCompanyId,
+        }
+      : { name: "", emailType: "customer_rate", subject: "", body: "", businessCompanyId: null },
+  );
+  const save = useSaveEmailTemplate();
+  const notifySaved = useNotifySaved();
+  const [error, setError] = useState<string | null>(null);
+  const body = useRef<HTMLTextAreaElement>(null);
+  const v = form.values;
+  const preview = useTemplatePreview({
+    emailType: v.emailType,
+    subject: v.subject,
+    body: v.body,
+    businessCompanyId: v.businessCompanyId,
+  });
+  const chips = placeholders.data?.types.find((t) => t.emailType === v.emailType)?.placeholders ?? [];
+  const insert = (key: string) => {
+    const el = body.current;
+    const r = insertAt(v.body, el?.selectionStart ?? v.body.length, el?.selectionEnd ?? v.body.length, `{${key}}`);
+    form.set("body", r.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(r.caret, r.caret);
+    });
+  };
+  return (
+    <Modal
+      title={record ? `Edit ${record.name}` : "Add e-mail template"}
+      width={1040}
+      onClose={done}
+      footer={
+        <>
+          {error && <span className="error-text small">{error}</span>}
+          <span className="fb-spacer" />
+          <Button onClick={done}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={save.isPending}
+            onClick={() =>
+              save.mutate(
+                { id: record?.id ?? null, input: v },
+                {
+                  onSuccess: (r) => {
+                    if (r.change) notifySaved(r.change, `Saved ${r.record.name}`);
+                    done();
+                  },
+                  onError: (e) => setError(form.fail(e)),
+                },
+              )
+            }
+          >
+            {record ? "Save" : "Add template"}
+          </Button>
+        </>
+      }
+    >
+      <div className="tpl-edit">
+        <div>
+          <div className="fgrid cols-2">
+            <TextField form={form} path="name" label="Name" required maxLength={120} />
+            <SelectField form={form} path="emailType" label="Email Type" required options={TYPES} />
+            <SelectField
+              form={form}
+              path="businessCompanyId"
+              label="Business Company"
+              options={(ref.data?.businessCompanies ?? []).map((b) => ({ value: b.id, label: b.name }))}
+              placeholder="Shared by every company"
+            />
+            <TextField form={form} path="subject" label="Subject" required maxLength={300} />
+          </div>
+          <div className="ff wide">
+            <label className="ff-label">
+              Body<span className="req">*</span>
+              <span className="muted small"> · plain text or HTML</span>
+            </label>
+            <textarea
+              ref={body}
+              className="tpl-body"
+              rows={14}
+              value={v.body}
+              maxLength={100000}
+              onChange={(e) => form.set("body", e.target.value)}
+            />
+            {form.error("body") && <span className="ff-error">{form.error("body")}</span>}
+          </div>
+          <div className="tpl-chips" aria-label="Placeholders">
+            {chips.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className="chip"
+                title={`${p.description} – e.g. ${p.sample}`}
+                onClick={() => insert(p.key)}
+              >
+                {`{${p.key}}`}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="ff-label">Preview (fake sample values)</div>
+          {preview.data ? (
+            <>
+              <MailFrame subject={preview.data.subject} html={preview.data.bodyHtml} />
+              {preview.data.unknownPlaceholders.length > 0 && (
+                <p className="tone-warning small">
+                  Not a placeholder of this type: {preview.data.unknownPlaceholders.map((k) => `{${k}}`).join(", ")}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="muted small">Write a subject and body to see the e-mail.</p>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+const openDialog = (record: EmailTemplateRecord | null) =>
+  ask<void>((d) => <TemplateDialog record={record} done={() => d()} />);
+
+function TemplateDetail({ r }: { r: EmailTemplateRow }) {
+  const rec = useEmailTemplate(r.id);
+  const preview = useTemplatePreview(
+    rec.data
+      ? {
+          emailType: rec.data.emailType,
+          subject: rec.data.subject,
+          body: rec.data.body,
+          businessCompanyId: rec.data.businessCompanyId,
+        }
+      : null,
+  );
+  if (!rec.data || !preview.data) return <p className="muted">Loading…</p>;
+  return <MailFrame subject={preview.data.subject} html={preview.data.bodyHtml} />;
+}
+
+function TemplateActions({ r }: { r: EmailTemplateRow }) {
+  const rec = useEmailTemplate(r.archivedAt ? null : r.id);
+  const clone = useCloneEmailTemplate();
+  const notifySaved = useNotifySaved();
+  return (
+    <>
+      {!r.archivedAt && (
+        <Button
+          small
+          icon="copy"
+          disabled={clone.isPending}
+          onClick={() => {
+            const name = window.prompt("Name of the copy", `${r.name} (copy)`);
+            if (name?.trim())
+              clone.mutate(
+                { id: r.id, name: name.trim() },
+                {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                },
+              );
+          }}
+        >
+          Clone
+        </Button>
+      )}
+      <RecordActions
+        kind="email_template"
+        id={r.id}
+        name={r.name}
+        archived={!!r.archivedAt}
+        onEdit={rec.data ? () => void openDialog(rec.data!) : undefined}
+      />
+    </>
+  );
+}
+
+export function EmailTemplatesPage() {
+  return (
+    <ListScreen<EmailTemplateRow>
+      list="email_templates"
+      page={page}
+      noSelection
+      historyScope={{ entityTypes: ["email_template"] }}
+      primary={{ label: "Add template", icon: "plus", onClick: () => void openDialog(null) }}
+      columns={{
+        id: { width: 90 },
+        name: { width: 280, render: (r) => <strong>{r.name}</strong> },
+        emailType: { width: 200, render: (r) => TEMPLATE_TYPE[r.emailType] },
+        subject: { width: 360 },
+        businessCompany: { width: 200, render: (r) => r.businessCompany ?? <span className="muted">Shared</span> },
+        usedBy: { width: 90, align: "right", render: (r) => <span className="num">{r.usedBy}</span> },
+        updatedAt: { width: 170, render: (r) => fmtWhen(r.updatedAt) },
+      }}
+      rowClass={(r) => (r.archivedAt ? "row-muted" : undefined)}
+      detail={(r) => ({
+        title: (
+          <>
+            <strong>{r.name}</strong>
+            <span className="muted">
+              {TEMPLATE_TYPE[r.emailType]} · {r.businessCompany ?? "shared"} · used by {r.usedBy}
+            </span>
+          </>
+        ),
+        sections: [
+          { key: "preview", label: "Preview", actions: <TemplateActions r={r} />, content: <TemplateDetail r={r} /> },
+          {
+            key: "info",
+            label: "Info",
+            content: (
+              <Kv
+                items={[
+                  ["Subject", r.subject],
+                  ["Business company", r.businessCompany ?? "Shared by every company"],
+                  ["Used by", `${r.usedBy} business company default(s), traffic alert(s) and SOA report(s)`],
+                  ["Updated", `${fmtWhen(r.updatedAt)}${r.updatedBy ? ` by ${r.updatedBy}` : ""}`],
+                ]}
+              />
+            ),
+          },
+          {
+            key: "history",
+            label: "History",
+            content: <HistoryList scope={{ entityTypes: ["email_template"], entityId: r.id }} />,
+          },
+        ],
+      })}
+      shortcuts="↑↓ move · Ctrl+Z undo"
+    />
+  );
+}

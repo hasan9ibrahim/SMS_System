@@ -1,9 +1,10 @@
 // Builds the Fastify app: one route per contract operation, validated against the contract.
 import Fastify, { type FastifyInstance } from "fastify";
-import { operations } from "./contract.js";
+import { operations, type ContractOperation } from "./contract.js";
 import { handlers as defaultHandlers, type Handler } from "./handlers.js";
 import { ajvErrors, sendProblem } from "./problem.js";
 import { registerSocket } from "./live/socket.js";
+import { auditCall } from "./api/audit.js";
 
 export const API_PREFIX = "/api/v1";
 
@@ -26,6 +27,7 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
         api.route({
           method: op.method,
           url: op.routePath,
+          config: { op },
           handler: async (request, reply) => {
             // Path parameters arrive as strings; numeric ones are checked as numbers.
             const params = (request.params ?? {}) as Record<string, unknown>;
@@ -84,6 +86,12 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
     },
     { prefix: API_PREFIX },
   );
+
+  // Audit Trail (§11): every call that changes something, after its answer is sent.
+  app.addHook("onResponse", async (request, reply) => {
+    const op = (request.routeOptions.config as { op?: ContractOperation }).op;
+    if (op) auditCall(op, request, reply);
+  });
 
   app.setNotFoundHandler((request, reply) =>
     sendProblem(reply, 404, `No contract operation for ${request.method} ${request.url}`),

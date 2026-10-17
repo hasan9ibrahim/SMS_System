@@ -557,7 +557,7 @@ export const PAGES: PageDef[] = [
     "3",
     "Every save, with per-user undo",
   ),
-  p("admin", "users", "Users", "/admin/users", "users", "§11, §13.28", "5", "Staff users, passwords and 2FA"),
+  p("admin", "users", "Users", "/admin/users", "users", "§11, §13.28", "5.11", "Staff users, passwords and 2FA"),
   p(
     "admin",
     "access-groups",
@@ -565,7 +565,7 @@ export const PAGES: PageDef[] = [
     "/admin/access-groups",
     "key",
     "§11",
-    "5",
+    "5.11",
     "Which pages and buttons each role sees",
   ),
   p(
@@ -578,7 +578,7 @@ export const PAGES: PageDef[] = [
     "5",
     "Account manager masking and hiding",
   ),
-  p("admin", "departments", "Departments", "/admin/departments", "folder", "§11", "5", "Departments and managers"),
+  p("admin", "departments", "Departments", "/admin/departments", "folder", "§11", "5.11", "Departments and managers"),
   p(
     "admin",
     "business-companies",
@@ -586,11 +586,11 @@ export const PAGES: PageDef[] = [
     "/admin/business-companies",
     "building",
     "§11",
-    "5",
+    "5.11",
     "Selling entities, formats and mailboxes",
   ),
-  p("admin", "logged-in", "Logged-in users", "/admin/logged-in", "monitor", "§11, §13.18", "5", "Who is online now"),
-  p("admin", "audit", "Audit trail", "/admin/audit", "file", "§11", "5", "Every action, by user"),
+  p("admin", "logged-in", "Logged-in users", "/admin/logged-in", "monitor", "§11, §13.18", "5.11", "Who is online now"),
+  p("admin", "audit", "Audit trail", "/admin/audit", "file", "§11", "5.11", "Every action, by user"),
   p(
     "admin",
     "email-templates",
@@ -598,7 +598,7 @@ export const PAGES: PageDef[] = [
     "/admin/email-templates",
     "mail",
     "§11",
-    "5",
+    "5.11",
     "Templates with placeholders",
   ),
   p(
@@ -638,7 +638,7 @@ export const PAGES: PageDef[] = [
     "/admin/customer-portal",
     "users",
     "§11",
-    "5",
+    "5.11",
     "Customer self-service logins",
   ),
 ];

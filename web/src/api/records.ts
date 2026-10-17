@@ -56,7 +56,13 @@ export type RecordKind =
   | "sms_voice_rule"
   | "edr_template"
   | "scheduled_report"
-  | "daily_traffic_alert";
+  | "daily_traffic_alert"
+  | "user"
+  | "department"
+  | "access_group"
+  | "email_template"
+  | "business_company"
+  | "portal_user";
 
 export interface Saved<T> {
   record: T;
@@ -275,6 +281,13 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
     kind === "daily_traffic_alert"
   )
     return Promise.resolve({ blocked: false, items: [] });
+  // Admin (§11): what blocks a delete is checked by the server.
+  if (kind === "user") return unwrap(api.GET("/users/{id}/dependencies", params));
+  if (kind === "department") return unwrap(api.GET("/departments/{id}/dependencies", params));
+  if (kind === "access_group") return unwrap(api.GET("/access-groups/{id}/dependencies", params));
+  if (kind === "email_template") return unwrap(api.GET("/email-templates/{id}/dependencies", params));
+  if (kind === "business_company") return unwrap(api.GET("/business-companies/{id}/dependencies", params));
+  if (kind === "portal_user") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -307,6 +320,12 @@ export function useArchive(kind: RecordKind) {
       if (kind === "edr_template") return unwrap(api.POST("/edr-templates/{id}/archive", req));
       if (kind === "scheduled_report") return unwrap(api.POST("/scheduled-reports/{id}/archive", req));
       if (kind === "daily_traffic_alert") return unwrap(api.POST("/daily-traffic-alerts/{id}/archive", req));
+      if (kind === "user") return unwrap(api.POST("/users/{id}/archive", req));
+      if (kind === "department") return unwrap(api.POST("/departments/{id}/archive", req));
+      if (kind === "access_group") return unwrap(api.POST("/access-groups/{id}/archive", req));
+      if (kind === "email_template") return unwrap(api.POST("/email-templates/{id}/archive", req));
+      if (kind === "business_company") return unwrap(api.POST("/business-companies/{id}/archive", req));
+      if (kind === "portal_user") return unwrap(api.POST("/customer-portal-users/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -342,6 +361,12 @@ export function useRestore(kind: RecordKind) {
       if (kind === "edr_template") return unwrap(api.POST("/edr-templates/{id}/restore", req));
       if (kind === "scheduled_report") return unwrap(api.POST("/scheduled-reports/{id}/restore", req));
       if (kind === "daily_traffic_alert") return unwrap(api.POST("/daily-traffic-alerts/{id}/restore", req));
+      if (kind === "user") return unwrap(api.POST("/users/{id}/restore", req));
+      if (kind === "department") return unwrap(api.POST("/departments/{id}/restore", req));
+      if (kind === "access_group") return unwrap(api.POST("/access-groups/{id}/restore", req));
+      if (kind === "email_template") return unwrap(api.POST("/email-templates/{id}/restore", req));
+      if (kind === "business_company") return unwrap(api.POST("/business-companies/{id}/restore", req));
+      if (kind === "portal_user") return unwrap(api.POST("/customer-portal-users/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

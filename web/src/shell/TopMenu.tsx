@@ -1,5 +1,6 @@
 // Top menu bar (§15.1): logo, main menu with dropdowns, search / jump-to (Ctrl K), live TPS
 // pill, alert bell with count, user avatar.
+import { openMyPassword } from "../pages/admin/parts";
 import { useRef, useState } from "react";
 import { useMe, useUpdatePreferences } from "../api/hooks";
 import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
@@ -174,6 +175,8 @@ function Avatar() {
             },
             "separator",
             { label: "My changes", icon: "history", onSelect: () => open(`/admin/changes?mine=1`) },
+            // §13.28: current password, 2FA code and the new-password rules.
+            { label: "Change password", icon: "lock", disabled: !me, onSelect: () => me && void openMyPassword(me.id) },
             { label: "Sign out", icon: "logout", disabled: true, hint: "§13.28", onSelect: () => undefined },
           ]}
         />

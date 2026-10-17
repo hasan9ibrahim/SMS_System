@@ -1,5 +1,16 @@
 // SQL side of each list: FROM clause, an expression per catalogue field, and the
 // mapping from database row to the contract's row schema.
+import {
+  accessGroupList,
+  auditList,
+  businessCompanyList,
+  departmentList,
+  emailTemplateList,
+  portalUserList,
+  sessionList,
+  userList,
+} from "./adminDefs.js";
+import { CURRENT_USER_ID } from "../api/session.js";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   Change,
@@ -1057,38 +1068,6 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
       archived: r.deleted_at != null,
     };
   },
-};
-
-export const userList: ListDef<UserSummary> = {
-  fields: listFields.users,
-  from: `users u
-    LEFT JOIN departments d ON d.id = u.department_id
-    LEFT JOIN access_groups g ON g.id = u.access_group_id`,
-  baseWhere: "u.deleted_at IS NULL",
-  columns: {
-    id: { sql: "u.id" },
-    username: { sql: "u.username" },
-    displayName: { sql: fullName("u") },
-    email: { sql: "u.email" },
-    department: { sql: "d.name" },
-    accessGroup: { sql: "g.name" },
-    status: { sql: "u.status" },
-    isAccountManager: { sql: "u.is_account_manager" },
-  },
-  search: ["username", "displayName", "email"],
-  idSql: "u.id",
-  select: `u.id, u.username, ${fullName("u")} AS display_name, u.email, d.name AS department, g.name AS access_group,
-    u.status, u.is_account_manager`,
-  mapRow: (r) => ({
-    id: r.id as number,
-    username: r.username as string,
-    displayName: r.display_name as string,
-    email: r.email as string,
-    department: (r.department as string | null) ?? null,
-    accessGroup: (r.access_group as string | null) ?? null,
-    status: r.status as UserSummary["status"],
-    isAccountManager: r.is_account_manager as boolean,
-  }),
 };
 
 export const changeSelect = `c.id, c.entity_type, c.entity_ids, c.change_type, c.diff, c.note, c.undo_of_id, c.user_id,
@@ -2465,34 +2444,6 @@ export function mapSoaReport(r: Record<string, unknown>): SoaReportRow {
   };
 }
 
-export const emailTemplateList: ListDef<EmailTemplateRow> = {
-  fields: listFields.email_templates,
-  from: `email_templates t LEFT JOIN business_companies bc ON bc.id = t.business_company_id
-    LEFT JOIN users u ON u.id = t.updated_by_id`,
-  baseWhere: "t.deleted_at IS NULL",
-  columns: {
-    id: { sql: "t.id" },
-    name: { sql: "t.name" },
-    emailType: { sql: "t.email_type" },
-    subject: { sql: "t.subject" },
-    businessCompany: { sql: "bc.name" },
-    updatedBy: { sql: "u.username" },
-    updatedAt: { sql: "t.updated_at" },
-  },
-  search: ["name", "subject"],
-  idSql: "t.id",
-  select: "t.id, t.name, t.email_type, t.subject, bc.name AS business_company, u.username AS updated_by, t.updated_at",
-  mapRow: (r) => ({
-    id: Number(r.id),
-    name: r.name as string,
-    emailType: r.email_type as EmailTemplateRow["emailType"],
-    subject: r.subject as string,
-    businessCompany: (r.business_company as string | null) ?? null,
-    updatedBy: (r.updated_by as string | null) ?? null,
-    updatedAt: iso(r.updated_at)!,
-  }),
-};
-
 /** Reconciliation rules (§13.31): the default rule (no enterprise) first, then partners. */
 const rrInvoicesSql = `(CASE WHEN rr.enterprise_id IS NULL
     THEN (SELECT count(*)::int FROM vendor_invoices vi WHERE vi.deleted_at IS NULL AND NOT EXISTS
@@ -2891,6 +2842,12 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   recon_rules: reconRuleList as ListDef<unknown>,
   soa_reports: soaReportList as ListDef<unknown>,
   email_templates: emailTemplateList as ListDef<unknown>,
+  departments: departmentList as ListDef<unknown>,
+  access_groups: accessGroupList as ListDef<unknown>,
+  user_sessions: sessionList(CURRENT_USER_ID) as ListDef<unknown>,
+  audit_log: auditList as ListDef<unknown>,
+  business_companies: businessCompanyList as ListDef<unknown>,
+  customer_portal_users: portalUserList as ListDef<unknown>,
   email_logs: emailLogList as ListDef<unknown>,
   firewall_rules: firewallRuleList as ListDef<unknown>,
   firewall_filters: firewallFilterList as ListDef<unknown>,
@@ -2910,3 +2867,5 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   billing_cycles: billingCycleList as ListDef<unknown>,
   enterprise_balances: enterpriseBalanceList as ListDef<unknown>,
 };
+
+export { emailTemplateList, userList };

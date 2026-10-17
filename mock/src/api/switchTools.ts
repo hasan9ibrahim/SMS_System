@@ -1008,23 +1008,6 @@ export function testSmsVoiceRules(request: FastifyRequest, reply: FastifyReply) 
 
 // ---------------------------------------------------------------- broadcast
 
-const DEPARTMENTS = ["noc", "sales", "rates", "billing", "support"];
-
-export function listCompanyMailboxes(request: FastifyRequest, reply: FastifyReply) {
-  const { id } = request.params as Params;
-  return withDb(reply, async (pool) => {
-    const { rows } = await pool.query("SELECT website FROM business_companies WHERE id = $1", [id]);
-    if (!rows[0]) return notFound(reply, "Business company", id);
-    const host = String(rows[0].website ?? "").replace(/^https?:\/\/(www\.)?/, "");
-    return {
-      mailboxes: DEPARTMENTS.map((d) => ({
-        email: `${d}@${host}`,
-        department: d === "noc" ? "NOC" : d.charAt(0).toUpperCase() + d.slice(1),
-      })),
-    };
-  });
-}
-
 async function audience(c: Db, b: BroadcastAudienceInput) {
   const { rows } = await c.query(
     `SELECT e.id, e.name,
@@ -1070,12 +1053,13 @@ const textOf = (html: string) =>
 export function sendBroadcast(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as BroadcastInput;
   return withDb(reply, async (pool) => {
-    const { rows: bc } = await pool.query("SELECT name, website FROM business_companies WHERE id = $1", [
-      b.businessCompanyId,
-    ]);
+    const { rows: bc } = await pool.query("SELECT name FROM business_companies WHERE id = $1", [b.businessCompanyId]);
     if (!bc[0]) return badInput(reply, [{ path: "/businessCompanyId", message: "business company not found" }]);
-    const host = String(bc[0].website ?? "").replace(/^https?:\/\/(www\.)?/, "");
-    if (!DEPARTMENTS.some((d) => `${d}@${host}` === b.sender))
+    const { rows: mb } = await pool.query(
+      "SELECT 1 FROM business_company_mailboxes WHERE business_company_id = $1 AND smtp_email = $2",
+      [b.businessCompanyId, b.sender],
+    );
+    if (!mb[0])
       return badInput(reply, [{ path: "/sender", message: "choose one of the business company's mailboxes" }]);
     if (b.attachment && (b.attachment.contentBase64.length * 3) / 4 > 5 * 1024 * 1024)
       return badInput(reply, [{ path: "/attachment", message: "at most 5 MB" }]);

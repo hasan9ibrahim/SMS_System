@@ -14,6 +14,8 @@ type JsonObject = Record<string, unknown>;
 
 export interface ContractOperation {
   operationId: string;
+  /** First tag, e.g. routing (the Audit Trail's Module Name, §11). */
+  tag: string;
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** OpenAPI path, e.g. /enterprises/{id} */
   path: string;
@@ -65,6 +67,7 @@ export const operations: ContractOperation[] = Object.entries(document.paths).fl
   METHODS.filter((m) => item[m]).map((m) => {
     const op = item[m] as JsonObject & {
       operationId: string;
+      tags?: string[];
       parameters?: JsonObject[];
       requestBody?: { content?: Record<string, unknown> };
       responses: Record<string, JsonObject>;
@@ -103,6 +106,7 @@ export const operations: ContractOperation[] = Object.entries(document.paths).fl
     }
     return {
       operationId: op.operationId,
+      tag: op.tags?.[0] ?? "",
       method: m.toUpperCase() as ContractOperation["method"],
       path,
       routePath: path.replace(/\{([^}]+)\}/g, ":$1"),

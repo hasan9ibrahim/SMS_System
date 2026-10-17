@@ -128,6 +128,18 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/billing-cycles/query", { body })) as Promise<ListPage<Row>>;
     case "enterprise_balances":
       return unwrap(api.POST("/enterprise-balances/query", { body })) as Promise<ListPage<Row>>;
+    case "departments":
+      return unwrap(api.POST("/departments/query", { body })) as Promise<ListPage<Row>>;
+    case "access_groups":
+      return unwrap(api.POST("/access-groups/query", { body })) as Promise<ListPage<Row>>;
+    case "user_sessions":
+      return unwrap(api.POST("/user-sessions/query", { body })) as Promise<ListPage<Row>>;
+    case "audit_log":
+      return unwrap(api.POST("/audit-log/query", { body })) as Promise<ListPage<Row>>;
+    case "business_companies":
+      return unwrap(api.POST("/business-companies/query", { body })) as Promise<ListPage<Row>>;
+    case "customer_portal_users":
+      return unwrap(api.POST("/customer-portal-users/query", { body })) as Promise<ListPage<Row>>;
     case "enterprise_report":
       // The report needs its settings with every query: the page passes its own fetchPage.
       return Promise.reject(new Error("The Enterprise report is fetched with its settings"));

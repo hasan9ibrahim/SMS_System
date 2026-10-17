@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.21.0
+  version: 0.22.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -59,6 +59,8 @@ tags:
     description: Product reference data - categories, countries, MCCMNC codes, Master Table, MO reference book (§6.1)
   - name: observation
     description: Observation Deck (§9) - EDR search, downloads, repush, network status, signaling, simulator, diagnosis.
+  - name: admin
+    description: Admin (§11, §13.28) - business companies, departments, users, access groups, sessions, audit trail, e-mail templates, customer portal.
 
 security:
   - sessionCookie: []
@@ -6613,9 +6615,9 @@ paths:
     post:
       tags: [reference]
       operationId: queryEmailTemplates
-      summary: "List e-mail templates (read-only until the Email Template screen)"
+      summary: "List e-mail templates (server-side filter, sort and paging)"
       description: |
-        Email Template grid (§11): Info ID, Name, Email Type, Subject. Used by the SOA template picker.
+        Email Template grid (§11): Info ID, Name, Email Type, Subject, Business Company. Also used by template pickers.
       requestBody:
         required: true
         content:
@@ -8939,6 +8941,1577 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /users:
+    post:
+      tags:
+      - admin
+      operationId: createUser
+      summary: Add a user
+      description: 'User edit form (§12.5). The password sent is temporary: valid 24 hours, changed at first login (§13.28).
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getUser
+      summary: One a user
+      description: Every field of the form.
+      parameters: &id001
+      - &id003
+        $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The a user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateUser
+      summary: Change a user
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}/dependencies:
+    get:
+      tags: [admin]
+      operationId: getUserDependencies
+      summary: What depends on a user (safe delete, §13.29)
+      description: Live enterprises it is account manager of (blocking), users reporting to it, open sessions.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /users/{id}/archive:
+    post:
+      tags:
+      - admin
+      operationId: archiveUser
+      summary: Delete (archive) a user (§13.29)
+      description: Blocked while the user is account manager of live enterprises. It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSaved'
+        '409': &id002
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ArchiveBlocked'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}/restore:
+    post:
+      tags:
+      - admin
+      operationId: restoreUser
+      summary: Restore a user
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}/password:
+    post:
+      tags:
+      - admin
+      operationId: setUserPassword
+      summary: Set a temporary password (Change Others Passwd, §11, §13.28)
+      description: Valid 24 hours, must be changed at first login; the user's sessions are signed out. Checked against the §13.28 rules.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TempPasswordInput'
+      responses:
+        '200':
+          description: Saved, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/force-password-change:
+    post:
+      tags:
+      - admin
+      operationId: forcePasswordChange
+      summary: Force a password change at next login (§13.28)
+      description: One user or several selected users. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForcePasswordChangeInput'
+      responses:
+        '200':
+          description: How many users were marked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForcePasswordChangeResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}/totp/setup:
+    post:
+      tags:
+      - admin
+      operationId: setupUserTotp
+      summary: Start QR 2FA (TOTP) enrolment (§12.5)
+      description: Returns a new secret and its otpauth URI for the QR code; 2FA is on once a code is confirmed.
+      parameters: *id001
+      responses:
+        '200':
+          description: The secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpSetup'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}/totp/confirm:
+    post:
+      tags:
+      - admin
+      operationId: confirmUserTotp
+      summary: Confirm QR 2FA with a code from the app
+      description: RFC 6238, 30 s steps, ±1 step.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpConfirmInput'
+      responses:
+        '200':
+          description: 2FA enabled, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/{id}/totp/disable:
+    post:
+      tags:
+      - admin
+      operationId: disableUserTotp
+      summary: Disable QR 2FA
+      description: One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: 2FA disabled, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSaved'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /me/password:
+    post:
+      tags:
+      - session
+      operationId: changeMyPassword
+      summary: Change my password (§13.28)
+      description: Checks the current password, the 2FA code when 2FA is on, and the new-password rules. Signs out every other session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeInput'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordChanged'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /password-check:
+    post:
+      tags:
+      - session
+      operationId: checkPassword
+      summary: Check a new password against the rules (§13.28)
+      description: 'At least 12 characters, not the username or name, not one of the last 12 passwords, not on the leaked list.
+
+        The screens show each rule as it is met.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordCheckInput'
+      responses:
+        '200':
+          description: Each rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordCheck'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /departments/query:
+    post:
+      tags:
+      - admin
+      operationId: queryDepartments
+      summary: List departments (server-side filter, sort and paging)
+      description: 'Departments (§11): Info ID, Department Name, Manager, Users, Status, Updated By.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of departments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /departments:
+    post:
+      tags:
+      - admin
+      operationId: createDepartment
+      summary: Add a department
+      description: 'Department Name, Status, Manager.
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartmentInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /departments/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getDepartment
+      summary: One a department
+      description: Every field of the form.
+      parameters: *id001
+      responses:
+        '200':
+          description: The a department
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateDepartment
+      summary: Change a department
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartmentInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /departments/{id}/dependencies:
+    get:
+      tags: [admin]
+      operationId: getDepartmentDependencies
+      summary: What depends on a department (safe delete, §13.29)
+      description: Users in the department (blocking).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /departments/{id}/archive:
+    post:
+      tags:
+      - admin
+      operationId: archiveDepartment
+      summary: Delete (archive) a department (§13.29)
+      description: Blocked while users are assigned to it. It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentSaved'
+        '409': *id002
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /departments/{id}/restore:
+    post:
+      tags:
+      - admin
+      operationId: restoreDepartment
+      summary: Restore a department
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /access-groups/query:
+    post:
+      tags:
+      - admin
+      operationId: queryAccessGroups
+      summary: List GUI access groups (server-side filter, sort and paging)
+      description: 'GUI Access Group (§11): Info ID, Access Group Name, Status, Users.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of GUI access groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGroupPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /access-groups/catalog:
+    get:
+      tags:
+      - admin
+      operationId: getAccessCatalog
+      summary: Pages and actions an access group can allow (§11)
+      description: Every page of the menu with the buttons it has (view, add, edit, delete, export, ...).
+      responses:
+        '200':
+          description: The catalogue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessCatalog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /access-groups:
+    post:
+      tags:
+      - admin
+      operationId: createAccessGroup
+      summary: Add a GUI access group
+      description: 'Name, Status, Description and the page x action matrix that decides which menus, pages and buttons a role sees.
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessGroupInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGroupSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /access-groups/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getAccessGroup
+      summary: One a GUI access group
+      description: Every field of the form.
+      parameters: *id001
+      responses:
+        '200':
+          description: The a GUI access group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGroupRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateAccessGroup
+      summary: Change a GUI access group
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessGroupInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGroupSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /access-groups/{id}/dependencies:
+    get:
+      tags: [admin]
+      operationId: getAccessGroupDependencies
+      summary: What depends on a GUI access group (safe delete, §13.29)
+      description: Users with the group (blocking).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /access-groups/{id}/archive:
+    post:
+      tags:
+      - admin
+      operationId: archiveAccessGroup
+      summary: Delete (archive) a GUI access group (§13.29)
+      description: Blocked while users are assigned to it. It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGroupSaved'
+        '409': *id002
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /access-groups/{id}/restore:
+    post:
+      tags:
+      - admin
+      operationId: restoreAccessGroup
+      summary: Restore a GUI access group
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGroupSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /access-groups/{id}/clone:
+    post:
+      tags:
+      - admin
+      operationId: cloneAccessGroup
+      summary: Clone a GUI access group
+      description: Copies the matrix under a new name. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloneInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGroupSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /user-sessions/query:
+    post:
+      tags:
+      - admin
+      operationId: queryUserSessions
+      summary: List logged-in users (server-side filter, sort and paging)
+      description: 'Logged In Users (§11): Logged In At, User, User Type (Wholesale / Customer), IP Address, Location, Device, OS, Browser.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of logged-in users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSessionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /user-sessions/{id}/end:
+    post:
+      tags:
+      - admin
+      operationId: endUserSession
+      summary: Force logout (§11)
+      description: Ends the session; the user's next request needs a new login.
+      parameters: *id001
+      responses:
+        '200':
+          description: Ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionEnded'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /audit-log/query:
+    post:
+      tags:
+      - admin
+      operationId: queryAuditLog
+      summary: List audit trail entries (server-side filter, sort and paging)
+      description: 'Audit Trail (§11): Info ID, IP Address, Module Name, Controller, Method, Action, Table Name, Master ID, Update Time,
+
+        User. Every call that changes something is recorded; read-only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of audit trail entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-templates:
+    post:
+      tags:
+      - admin
+      operationId: createEmailTemplate
+      summary: Add an e-mail template
+      description: 'Name, Email Type, Subject, Body (rich text with placeholders) and an optional Business Company.
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailTemplateInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplateSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-templates/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getEmailTemplate
+      summary: One an e-mail template
+      description: Every field of the form.
+      parameters: *id001
+      responses:
+        '200':
+          description: The an e-mail template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplateRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateEmailTemplate
+      summary: Change an e-mail template
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailTemplateInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplateSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-templates/{id}/dependencies:
+    get:
+      tags: [admin]
+      operationId: getEmailTemplateDependencies
+      summary: What depends on an e-mail template (safe delete, §13.29)
+      description: Business company defaults, traffic alerts and SOA reports using it (blocking).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /email-templates/{id}/archive:
+    post:
+      tags:
+      - admin
+      operationId: archiveEmailTemplate
+      summary: Delete (archive) an e-mail template (§13.29)
+      description: Blocked while business companies, traffic alerts or SOA reports use it. It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplateSaved'
+        '409': *id002
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-templates/{id}/restore:
+    post:
+      tags:
+      - admin
+      operationId: restoreEmailTemplate
+      summary: Restore an e-mail template
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplateSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-templates/{id}/clone:
+    post:
+      tags:
+      - admin
+      operationId: cloneEmailTemplate
+      summary: Clone an e-mail template
+      description: One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloneInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplateSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-templates/placeholders:
+    get:
+      tags:
+      - admin
+      operationId: listEmailPlaceholders
+      summary: Placeholders per e-mail type
+      description: What each {placeholder} is replaced with, with a sample value.
+      responses:
+        '200':
+          description: The placeholders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailPlaceholderCatalog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-templates/preview:
+    post:
+      tags:
+      - admin
+      operationId: previewEmailTemplate
+      summary: Preview a template with sample values
+      description: Fills the placeholders with sample data (fake); unknown placeholders are listed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailTemplatePreviewInput'
+      responses:
+        '200':
+          description: The filled subject and body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplatePreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/query:
+    post:
+      tags:
+      - admin
+      operationId: queryBusinessCompanies
+      summary: List business companies (server-side filter, sort and paging)
+      description: 'Business Company (§11): Info ID, Name, Description, Base Currency, TPS Limit, Updated By / Time.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of business companies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanyPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies:
+    post:
+      tags:
+      - admin
+      operationId: createBusinessCompany
+      summary: Add a business company
+      description: 'The §11 form: company, format files (uploaded separately), default templates, address, bank and one sender block
+
+        per department mailbox. SMTP passwords and client secrets are write-only.
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessCompanyInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanySaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getBusinessCompany
+      summary: One a business company
+      description: Every field of the form.
+      parameters: *id001
+      responses:
+        '200':
+          description: The a business company
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanyRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updateBusinessCompany
+      summary: Change a business company
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessCompanyInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanySaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/{id}/dependencies:
+    get:
+      tags: [admin]
+      operationId: getBusinessCompanyDependencies
+      summary: What depends on a business company (safe delete, §13.29)
+      description: Live enterprises and users (blocking), scheduled reports.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /business-companies/{id}/archive:
+    post:
+      tags:
+      - admin
+      operationId: archiveBusinessCompany
+      summary: Delete (archive) a business company (§13.29)
+      description: Blocked while live enterprises or users belong to it. It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanySaved'
+        '409': *id002
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/{id}/restore:
+    post:
+      tags:
+      - admin
+      operationId: restoreBusinessCompany
+      summary: Restore a business company
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanySaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/{id}/clone:
+    post:
+      tags:
+      - admin
+      operationId: cloneBusinessCompany
+      summary: Clone a business company
+      description: Copies the form, default templates and mailboxes (without passwords or secrets) and the format files.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloneInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanySaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/{id}/files/{kind}:
+    put:
+      tags:
+      - admin
+      operationId: uploadCompanyFile
+      summary: Upload a format file or the logo (§11)
+      description: Company Logo (PNG), Invoice / Customer Rate / SOA Format File (XLSX). One undoable change.
+      parameters:
+      - *id003
+      - &id004
+        name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - logo
+          - invoice_format
+          - customer_rate_format
+          - soa_format
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyFileUpload'
+      responses:
+        '200':
+          description: Saved, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCompanySaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      tags:
+      - admin
+      operationId: downloadCompanyFile
+      summary: Download a format file or the logo
+      description: As uploaded.
+      parameters:
+      - *id003
+      - *id004
+      responses:
+        '200':
+          description: The file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/check-smtp:
+    post:
+      tags:
+      - admin
+      operationId: checkSmtp
+      summary: Check SMTP Connection (§11)
+      description: Connects, starts TLS and logs in with the mailbox settings. Simulated in this phase - no network connection is made.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmtpCheckInput'
+      responses:
+        '200':
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmtpCheckResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /business-companies/format-variables:
+    get:
+      tags:
+      - admin
+      operationId: listFormatVariables
+      summary: Format File Variables help (§11)
+      description: The variables the invoice, customer rate, SOA formats and the rate file name may use.
+      responses:
+        '200':
+          description: The variables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormatVariables'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /customer-portal-users/query:
+    post:
+      tags:
+      - admin
+      operationId: queryPortalUsers
+      summary: List customer portal users (server-side filter, sort and paging)
+      description: 'Customer Portal (§11): Info ID, Email, UserName, Enterprise, First Name, Last Name, Status.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of customer portal users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUserPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /customer-portal-users:
+    post:
+      tags:
+      - admin
+      operationId: createPortalUser
+      summary: Add a customer portal user
+      description: 'Login for the customer self-service portal; the password sent is temporary (24 h, §13.28).
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalUserInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUserSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /customer-portal-users/{id}:
+    get:
+      tags:
+      - admin
+      operationId: getPortalUser
+      summary: One a customer portal user
+      description: Every field of the form.
+      parameters: *id001
+      responses:
+        '200':
+          description: The a customer portal user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUserRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - admin
+      operationId: updatePortalUser
+      summary: Change a customer portal user
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalUserInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUserSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /customer-portal-users/{id}/archive:
+    post:
+      tags:
+      - admin
+      operationId: archivePortalUser
+      summary: Delete (archive) a customer portal user (§13.29)
+      description: It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUserSaved'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /customer-portal-users/{id}/restore:
+    post:
+      tags:
+      - admin
+      operationId: restorePortalUser
+      summary: Restore a customer portal user
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUserSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /customer-portal-users/{id}/password:
+    post:
+      tags:
+      - admin
+      operationId: setPortalUserPassword
+      summary: Set a temporary portal password (§11, §13.28)
+      description: Valid 24 hours, changed at first login.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TempPasswordInput'
+      responses:
+        '200':
+          description: Saved, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUserSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -9875,27 +11448,6 @@ components:
             $ref: "#/components/schemas/SearchHit"
 
     # ------------------------------------------------------------------ users (§11)
-    UserSummary:
-      type: object
-      required: [id, username, displayName, email, status, isAccountManager]
-      properties:
-        id:
-          $ref: "#/components/schemas/Id"
-        username:
-          type: string
-        displayName:
-          type: string
-        email:
-          type: string
-        department:
-          type: [string, "null"]
-        accessGroup:
-          type: [string, "null"]
-        status:
-          $ref: "#/components/schemas/RecordStatus"
-        isAccountManager:
-          type: boolean
-
     UserPage:
       allOf:
         - $ref: "#/components/schemas/ListPageMeta"
@@ -9905,7 +11457,7 @@ components:
             rows:
               type: array
               items:
-                $ref: "#/components/schemas/UserSummary"
+                $ref: "#/components/schemas/UserRow"
 
     # ------------------------------------------------------------- saved views (§13.25)
     ViewState:
@@ -15854,7 +17406,7 @@ components:
 
     EmailTemplateRow:
       type: object
-      required: [id, name, emailType, subject, businessCompany, updatedBy, updatedAt]
+      required: [id, name, emailType, subject, businessCompanyId, businessCompany, usedBy, updatedBy, updatedAt, archivedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -15865,13 +17417,24 @@ components:
           enum: [customer_rate, invoice, low_balance, bind_down, customer_tech_info, trunk_change_info, soa_statement, rate_upload_notification, traffic_alert, auto_upload_rejected, trouble_ticket, send_soa]
         subject:
           type: string
+        businessCompanyId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
         businessCompany:
           type: [string, "null"]
           description: Null = shared by every business company.
         updatedBy:
           type: [string, "null"]
+        usedBy:
+          type: integer
+          description: Business companies, traffic alerts and SOA reports using it.
         updatedAt:
           $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
 
     EmailTemplatePage:
       allOf:
@@ -18202,6 +19765,1495 @@ components:
             - $ref: "#/components/schemas/Change"
             - type: "null"
 
+    # ------------------------------------------------------------- Admin (§11, §13.28)
+    EmailTemplateType:
+      type: string
+      enum:
+      - customer_rate
+      - invoice
+      - low_balance
+      - bind_down
+      - customer_tech_info
+      - trunk_change_info
+      - soa_statement
+      - rate_upload_notification
+      - traffic_alert
+      - auto_upload_rejected
+      - trouble_ticket
+      - send_soa
+      description: Email Type (§11).
+    UserFields:
+      type: object
+      required:
+      - username
+      - firstName
+      - lastName
+      - email
+      - phone
+      - departmentId
+      - accessGroupId
+      - businessCompanyId
+      - managerId
+      - userType
+      - isAccountManager
+      - isTeamLead
+      - status
+      - allowMultipleLogin
+      - otpMethod
+      - language
+      - address1
+      - address2
+      - countryIso
+      - state
+      - city
+      - zip
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 40
+          pattern: ^[a-z0-9._-]+$
+          description: Lower case letters, digits, dot, dash, underscore.
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        email:
+          type: string
+          maxLength: 200
+          format: email
+        phone:
+          type:
+          - string
+          - 'null'
+          maxLength: 50
+        departmentId: &id004
+          $ref: '#/components/schemas/Id'
+        accessGroupId: &id001
+          oneOf: &id002
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        businessCompanyId: *id001
+        managerId:
+          oneOf: *id002
+          description: Team lead the user reports to (§13.18).
+        userType:
+          type: string
+          enum:
+          - wholesale
+          - api
+          description: User Type - Wholesale (GUI) or Api User.
+        isAccountManager: &id003
+          type: boolean
+        isTeamLead: *id003
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+        allowMultipleLogin: *id003
+        otpMethod:
+          type: string
+          enum:
+          - 'off'
+          - email
+          description: OTP verification at login, on top of 2FA (TOTP).
+        language:
+          type: string
+          enum:
+          - en
+        address1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        address2:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        countryIso:
+          type: string
+          pattern: ^[A-Z]{2}$
+        state:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        city:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        zip:
+          type:
+          - string
+          - 'null'
+          maxLength: 20
+    UserInput:
+      allOf:
+      - $ref: '#/components/schemas/UserFields'
+      - type: object
+        required: []
+        properties:
+          password:
+            type:
+            - string
+            - 'null'
+            maxLength: 200
+            writeOnly: true
+            description: Create only - the temporary password, valid 24 hours and changed at first login (§13.28). Never returned.
+      unevaluatedProperties: false
+    UserRow:
+      allOf:
+      - $ref: '#/components/schemas/UserFields'
+      - type: object
+        required:
+        - id
+        - displayName
+        - department
+        - accessGroup
+        - businessCompany
+        - manager
+        - passwordChangedAt
+        - passwordExpiresAt
+        - passwordDaysLeft
+        - passwordState
+        - mustChangePassword
+        - tempPasswordExpiresAt
+        - totpEnabled
+        - lastLoginAt
+        - activeSessions
+        - liveEnterprises
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id004
+          displayName:
+            type: string
+          department:
+            type:
+            - string
+            - 'null'
+          accessGroup:
+            type:
+            - string
+            - 'null'
+          businessCompany:
+            type:
+            - string
+            - 'null'
+          manager:
+            type:
+            - string
+            - 'null'
+          passwordChangedAt: &id005
+            $ref: '#/components/schemas/Timestamp'
+          passwordExpiresAt: *id005
+          passwordDaysLeft:
+            type: integer
+            description: Negative when expired.
+          passwordState:
+            type: string
+            enum:
+            - ok
+            - expiring
+            - expired
+            - temporary
+            - must_change
+            description: Password column (§13.28) - expiring = 7 days or less left; temporary = admin-set, valid 24 h.
+          mustChangePassword: *id003
+          tempPasswordExpiresAt: &id006
+            oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+          totpEnabled: *id003
+          lastLoginAt: *id006
+          activeSessions: &id007
+            type: integer
+          liveEnterprises:
+            type: integer
+            description: Live enterprises this user is account manager of (blocks delete, §13.29).
+          updatedBy: &id008
+            type:
+            - string
+            - 'null'
+          updatedAt: *id005
+          archivedAt: *id006
+    UserSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/UserRow'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    TempPasswordInput:
+      type: object
+      description: 'Change Others Passwd (§11): a temporary password valid 24 hours that must be changed at first login (§13.28).'
+      additionalProperties: false
+      required:
+      - password
+      - confirmPassword
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+        confirmPassword:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+    ForcePasswordChangeInput:
+      type: object
+      additionalProperties: false
+      required:
+      - ids
+      properties:
+        ids:
+          type: array
+          items: *id004
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+    ForcePasswordChangeResult:
+      type: object
+      required:
+      - updated
+      - change
+      properties:
+        updated: *id007
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    TotpSetup:
+      type: object
+      required:
+      - secret
+      - otpauthUri
+      properties:
+        secret:
+          type: string
+          description: Base32 secret (fake in this phase).
+        otpauthUri:
+          type: string
+          description: otpauth:// URI for the QR code.
+    TotpConfirmInput:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      properties:
+        code:
+          type: string
+          pattern: ^[0-9]{6}$
+    PasswordChangeInput:
+      type: object
+      additionalProperties: false
+      required:
+      - currentPassword
+      - newPassword
+      - totpCode
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+        totpCode:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{6}$
+          description: Required when 2FA is enabled (§13.28).
+    PasswordChanged:
+      type: object
+      required:
+      - changedAt
+      - expiresAt
+      - signedOutSessions
+      properties:
+        changedAt: *id005
+        expiresAt: *id005
+        signedOutSessions:
+          type: integer
+          description: Other sessions and devices signed out (§13.28).
+    PasswordCheckInput:
+      type: object
+      description: userId for an existing user (checks the last 12 passwords); names for a new one.
+      additionalProperties: false
+      required:
+      - password
+      properties:
+        password:
+          type: string
+          minLength: 0
+          maxLength: 200
+          writeOnly: true
+        userId: *id001
+        username:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        firstName:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+        lastName:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+    PasswordCheck:
+      type: object
+      required:
+      - ok
+      - rules
+      properties:
+        ok: *id003
+        rules:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - label
+            - met
+            properties:
+              key:
+                type: string
+                enum:
+                - length
+                - not_name
+                - not_recent
+                - not_leaked
+              label:
+                type: string
+              met: *id003
+    DepartmentFields:
+      type: object
+      required:
+      - name
+      - status
+      - managerId
+      - description
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+        managerId: *id001
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+    DepartmentInput:
+      allOf:
+      - $ref: '#/components/schemas/DepartmentFields'
+      unevaluatedProperties: false
+    DepartmentRow:
+      allOf:
+      - $ref: '#/components/schemas/DepartmentFields'
+      - type: object
+        required:
+        - id
+        - manager
+        - userCount
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id004
+          manager:
+            type:
+            - string
+            - 'null'
+          userCount: *id007
+          updatedBy: *id008
+          updatedAt: *id005
+          archivedAt: *id006
+    DepartmentSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/DepartmentRow'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    AccessGroupFields:
+      type: object
+      required:
+      - name
+      - status
+      - description
+      - permissions
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+        permissions:
+          type: object
+          maxProperties: 300
+          description: Page key -> allowed actions (catalogue in /access-groups/catalog); key * = every page (§1).
+          additionalProperties:
+            type: array
+            items:
+              type: string
+              minLength: 1
+              maxLength: 40
+            maxItems: 30
+            uniqueItems: true
+    AccessGroupInput:
+      allOf:
+      - $ref: '#/components/schemas/AccessGroupFields'
+      unevaluatedProperties: false
+    AccessGroupRow:
+      allOf:
+      - $ref: '#/components/schemas/AccessGroupFields'
+      - type: object
+        required:
+        - id
+        - userCount
+        - moduleCount
+        - fullAccess
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id004
+          userCount: *id007
+          moduleCount: *id007
+          fullAccess:
+            type: boolean
+            description: Holds * (every page).
+          updatedBy: *id008
+          updatedAt: *id005
+          archivedAt: *id006
+    AccessGroupSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/AccessGroupRow'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    CloneInput:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    AccessCatalog:
+      type: object
+      required:
+      - actions
+      - sections
+      - modules
+      properties:
+        actions:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - label
+            - description
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              description:
+                type: string
+        sections:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - label
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+        modules:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - label
+            - section
+            - actions
+            properties:
+              key:
+                type: string
+                description: Page key, as in the web page registry.
+              label:
+                type: string
+              section:
+                type: string
+              actions:
+                type: array
+                items:
+                  type: string
+    UserSessionRow:
+      type: object
+      required:
+      - id
+      - userKind
+      - userId
+      - username
+      - displayName
+      - enterprise
+      - ip
+      - location
+      - device
+      - os
+      - browser
+      - loggedInAt
+      - lastSeenAt
+      - current
+      properties:
+        id: *id004
+        userKind:
+          type: string
+          enum:
+          - staff
+          - customer
+          description: User Type - Wholesale (staff) or Customer (portal).
+        userId: *id004
+        username:
+          type: string
+        displayName:
+          type: string
+        enterprise:
+          type:
+          - string
+          - 'null'
+        ip:
+          type: string
+        location:
+          type:
+          - string
+          - 'null'
+        device:
+          type: string
+          enum:
+          - desktop
+          - mobile
+          - tablet
+          - bot
+        os:
+          type: string
+        browser:
+          type: string
+        loggedInAt: *id005
+        lastSeenAt: *id005
+        current:
+          type: boolean
+          description: The session making this request; it cannot be ended here.
+    SessionEnded:
+      type: object
+      required:
+      - ended
+      properties:
+        ended: *id003
+    AuditRow:
+      type: object
+      required:
+      - id
+      - at
+      - userId
+      - user
+      - ip
+      - module
+      - controller
+      - method
+      - action
+      - tableName
+      - masterId
+      - status
+      - durationMs
+      properties:
+        id: *id004
+        at: *id005
+        userId: *id001
+        user:
+          type:
+          - string
+          - 'null'
+        ip:
+          type:
+          - string
+          - 'null'
+        module:
+          type: string
+          description: Module Name - the API tag, e.g. routing.
+        controller:
+          type: string
+          description: Controller - the path template.
+        method:
+          type: string
+          description: HTTP method.
+        action:
+          type: string
+          description: Action - the contract operation.
+        tableName:
+          type:
+          - string
+          - 'null'
+        masterId:
+          type:
+          - string
+          - 'null'
+        status:
+          type: integer
+          description: HTTP status of the answer.
+        durationMs: *id007
+    EmailTemplateFields:
+      type: object
+      required:
+      - name
+      - emailType
+      - subject
+      - body
+      - businessCompanyId
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        emailType:
+          $ref: '#/components/schemas/EmailTemplateType'
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 300
+        body:
+          type: string
+          minLength: 1
+          maxLength: 100000
+          description: Rich text (HTML) with {placeholders}.
+        businessCompanyId:
+          oneOf: *id002
+          description: Null = shared by every business company.
+    EmailTemplateInput:
+      allOf:
+      - $ref: '#/components/schemas/EmailTemplateFields'
+      unevaluatedProperties: false
+    EmailPlaceholder:
+      type: object
+      required:
+      - key
+      - description
+      - sample
+      properties:
+        key:
+          type: string
+        description:
+          type: string
+        sample:
+          type: string
+    EmailTemplateRecord:
+      allOf:
+      - $ref: '#/components/schemas/EmailTemplateFields'
+      - type: object
+        required:
+        - id
+        - businessCompany
+        - usedBy
+        - placeholders
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id004
+          businessCompany:
+            type:
+            - string
+            - 'null'
+          usedBy: *id007
+          placeholders:
+            type: array
+            items:
+              $ref: '#/components/schemas/EmailPlaceholder'
+          updatedBy: *id008
+          updatedAt: *id005
+          archivedAt: *id006
+    EmailTemplateSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/EmailTemplateRecord'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    EmailPlaceholderCatalog:
+      type: object
+      required:
+      - types
+      properties:
+        types:
+          type: array
+          items:
+            type: object
+            required:
+            - emailType
+            - label
+            - placeholders
+            properties:
+              emailType:
+                $ref: '#/components/schemas/EmailTemplateType'
+              label:
+                type: string
+              placeholders:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmailPlaceholder'
+    EmailTemplatePreviewInput:
+      type: object
+      additionalProperties: false
+      required:
+      - emailType
+      - subject
+      - body
+      - businessCompanyId
+      properties:
+        emailType:
+          $ref: '#/components/schemas/EmailTemplateType'
+        subject:
+          type: string
+          minLength: 0
+          maxLength: 300
+        body:
+          type: string
+          minLength: 0
+          maxLength: 100000
+        businessCompanyId: *id001
+    EmailTemplatePreview:
+      type: object
+      required:
+      - subject
+      - bodyHtml
+      - unknownPlaceholders
+      properties:
+        subject:
+          type: string
+        bodyHtml:
+          type: string
+        unknownPlaceholders:
+          type: array
+          items:
+            type: string
+    MailboxDepartment:
+      type: string
+      enum:
+      - noc
+      - sales
+      - rates
+      - billing
+      - support
+    MailboxFields:
+      type: object
+      required:
+      - department
+      - name
+      - phone
+      - smtpEmail
+      - smtpSecure
+      - smtpHost
+      - smtpPort
+      - smtpUsername
+      - extension
+      - skypeName
+      - oauthRedirectUris
+      - clientId
+      properties:
+        department:
+          $ref: '#/components/schemas/MailboxDepartment'
+        name:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+        phone:
+          type:
+          - string
+          - 'null'
+          maxLength: 50
+        smtpEmail:
+          type: string
+          maxLength: 200
+          format: email
+        smtpSecure:
+          type: string
+          enum:
+          - none
+          - ssl
+          - starttls
+        smtpHost:
+          type: string
+          minLength: 1
+          maxLength: 200
+        smtpPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        smtpUsername:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        extension:
+          type:
+          - string
+          - 'null'
+          maxLength: 20
+        skypeName:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        oauthRedirectUris:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+          minItems: 1
+          maxItems: 10
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 200
+    MailboxInput:
+      allOf:
+      - $ref: '#/components/schemas/MailboxFields'
+      - type: object
+        required:
+        - smtpPassword
+        - clientSecret
+        properties:
+          smtpPassword:
+            type:
+            - string
+            - 'null'
+            maxLength: 200
+            writeOnly: true
+            description: Null keeps the stored one.
+          clientSecret:
+            type:
+            - string
+            - 'null'
+            maxLength: 500
+            writeOnly: true
+            description: Null keeps the stored one.
+      unevaluatedProperties: false
+    MailboxRow:
+      allOf:
+      - $ref: '#/components/schemas/MailboxFields'
+      - type: object
+        required:
+        - hasSmtpPassword
+        - hasClientSecret
+        - lastCheckAt
+        - lastCheckOk
+        properties:
+          hasSmtpPassword: *id003
+          hasClientSecret: *id003
+          lastCheckAt: *id006
+          lastCheckOk:
+            type:
+            - boolean
+            - 'null'
+    CompanyAddress:
+      type: object
+      additionalProperties: false
+      required:
+      - line1
+      - line2
+      - city
+      - state
+      - countryIso
+      - zip
+      properties:
+        line1:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        line2:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        city:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        state:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        countryIso:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+        zip:
+          type:
+          - string
+          - 'null'
+          maxLength: 20
+    CompanyBank:
+      type: object
+      additionalProperties: false
+      required:
+      - beneficiaryName
+      - beneficiaryAddress
+      - bankName
+      - bankAddress
+      - currency
+      - accountNumber
+      - iban
+      - swift
+      properties:
+        beneficiaryName:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        beneficiaryAddress:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+        bankName:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        bankAddress:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+        accountNumber:
+          type:
+          - string
+          - 'null'
+          maxLength: 60
+        iban:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        swift:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+    CompanyDefaultTemplates:
+      type: object
+      description: Default e-mail template per type (§11); null = the shared default.
+      additionalProperties: false
+      required:
+      - customerRate
+      - invoice
+      - lowBalance
+      - bindDown
+      - customerTechInfo
+      - trunkChangeInfo
+      - soaStatement
+      - rateUploadNotification
+      - autoUploadRejected
+      properties:
+        customerRate: *id001
+        invoice: *id001
+        lowBalance: *id001
+        bindDown: *id001
+        customerTechInfo: *id001
+        trunkChangeInfo: *id001
+        soaStatement: *id001
+        rateUploadNotification: *id001
+        autoUploadRejected: *id001
+    BusinessCompanyFields:
+      type: object
+      required:
+      - name
+      - description
+      - baseCurrency
+      - tpsLimit
+      - website
+      - smppHost
+      - smppPort
+      - invoiceNumberStart
+      - companyIp
+      - customerRateFileName
+      - address
+      - bank
+      - defaultTemplates
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+        baseCurrency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        tpsLimit:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 100000
+        website:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        smppHost:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+          description: SMPP IP shown in tech-info e-mails.
+        smppPort:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 65535
+        invoiceNumberStart:
+          type: integer
+          minimum: 1
+          description: Invoice Number sequence start.
+        companyIp:
+          type:
+          - string
+          - 'null'
+          maxLength: 45
+        customerRateFileName:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+          description: Customer Rate File Name, with format variables.
+        address:
+          $ref: '#/components/schemas/CompanyAddress'
+        bank:
+          $ref: '#/components/schemas/CompanyBank'
+        defaultTemplates:
+          $ref: '#/components/schemas/CompanyDefaultTemplates'
+    BusinessCompanyInput:
+      allOf:
+      - $ref: '#/components/schemas/BusinessCompanyFields'
+      - type: object
+        required:
+        - mailboxes
+        properties:
+          mailboxes:
+            type: array
+            items:
+              $ref: '#/components/schemas/MailboxInput'
+            maxItems: 5
+            description: One sender block per department mailbox.
+      unevaluatedProperties: false
+    CompanyFile:
+      type: object
+      required:
+      - kind
+      - name
+      - size
+      - contentType
+      - uploadedAt
+      - uploadedBy
+      properties:
+        kind:
+          type: string
+          enum:
+          - logo
+          - invoice_format
+          - customer_rate_format
+          - soa_format
+        name:
+          type: string
+        size: *id007
+        contentType:
+          type: string
+        uploadedAt: *id005
+        uploadedBy:
+          type:
+          - string
+          - 'null'
+    BusinessCompanyRow:
+      type: object
+      required:
+      - id
+      - name
+      - description
+      - baseCurrency
+      - tpsLimit
+      - website
+      - enterprises
+      - users
+      - mailboxCount
+      - updatedBy
+      - updatedAt
+      - archivedAt
+      properties:
+        id: *id004
+        name:
+          type: string
+        description:
+          type:
+          - string
+          - 'null'
+        baseCurrency:
+          type: string
+        tpsLimit:
+          type:
+          - integer
+          - 'null'
+        website:
+          type:
+          - string
+          - 'null'
+        enterprises: *id007
+        users: *id007
+        mailboxCount: *id007
+        updatedBy: *id008
+        updatedAt: *id005
+        archivedAt: *id006
+    BusinessCompanyRecord:
+      allOf:
+      - $ref: '#/components/schemas/BusinessCompanyFields'
+      - type: object
+        required:
+        - id
+        - mailboxes
+        - files
+        - enterprises
+        - users
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id004
+          mailboxes:
+            type: array
+            items:
+              $ref: '#/components/schemas/MailboxRow'
+          files:
+            type: array
+            items:
+              $ref: '#/components/schemas/CompanyFile'
+          enterprises: *id007
+          users: *id007
+          updatedBy: *id008
+          updatedAt: *id005
+          archivedAt: *id006
+    BusinessCompanySaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/BusinessCompanyRecord'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    CompanyFileUpload:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - contentBase64
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        contentBase64:
+          type: string
+          minLength: 1
+          maxLength: 14000000
+    SmtpCheckInput:
+      type: object
+      additionalProperties: false
+      required:
+      - businessCompanyId
+      - mailbox
+      properties:
+        businessCompanyId:
+          oneOf: *id002
+          description: Uses the stored password / secret when they are null.
+        mailbox:
+          $ref: '#/components/schemas/MailboxInput'
+    SmtpCheckResult:
+      type: object
+      required:
+      - ok
+      - message
+      - steps
+      properties:
+        ok: *id003
+        message:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+            required:
+            - step
+            - ok
+            - detail
+            properties:
+              step:
+                type: string
+              ok: *id003
+              detail:
+                type: string
+    FormatVariables:
+      type: object
+      required:
+      - formats
+      properties:
+        formats:
+          type: array
+          items:
+            type: object
+            required:
+            - kind
+            - label
+            - variables
+            properties:
+              kind:
+                type: string
+              label:
+                type: string
+              variables:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - key
+                  - description
+                  properties:
+                    key:
+                      type: string
+                    description:
+                      type: string
+    PortalUserFields:
+      type: object
+      required:
+      - email
+      - username
+      - enterpriseId
+      - firstName
+      - lastName
+      - status
+      properties:
+        email:
+          type: string
+          maxLength: 200
+          format: email
+        username:
+          type: string
+          minLength: 3
+          maxLength: 60
+          pattern: ^[A-Za-z0-9._@-]+$
+        enterpriseId: *id004
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+    PortalUserInput:
+      allOf:
+      - $ref: '#/components/schemas/PortalUserFields'
+      - type: object
+        required: []
+        properties:
+          password:
+            type:
+            - string
+            - 'null'
+            maxLength: 200
+            writeOnly: true
+            description: Create only - temporary password, valid 24 hours.
+      unevaluatedProperties: false
+    PortalUserRow:
+      allOf:
+      - $ref: '#/components/schemas/PortalUserFields'
+      - type: object
+        required:
+        - id
+        - enterprise
+        - passwordChangedAt
+        - passwordExpiresAt
+        - passwordDaysLeft
+        - mustChangePassword
+        - tempPasswordExpiresAt
+        - lastLoginAt
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id004
+          enterprise:
+            type: string
+          passwordChangedAt: *id005
+          passwordExpiresAt: *id005
+          passwordDaysLeft: *id007
+          mustChangePassword: *id003
+          tempPasswordExpiresAt: *id006
+          lastLoginAt: *id006
+          updatedBy: *id008
+          updatedAt: *id005
+          archivedAt: *id006
+    PortalUserSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/PortalUserRow'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    DepartmentPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/DepartmentRow'
+    AccessGroupPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/AccessGroupRow'
+    UserSessionPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/UserSessionRow'
+    AuditPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/AuditRow'
+    BusinessCompanyPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/BusinessCompanyRow'
+    PortalUserPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/PortalUserRow'
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -18909,7 +21961,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users]
 
     FilterOperator:
       type: string

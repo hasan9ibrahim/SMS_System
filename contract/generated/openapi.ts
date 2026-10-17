@@ -4445,8 +4445,8 @@ export type paths = {
     get?: never;
     put?: never;
     /**
-     * List e-mail templates (read-only until the Email Template screen)
-     * @description Email Template grid (§11): Info ID, Name, Email Type, Subject. Used by the SOA template picker.
+     * List e-mail templates (server-side filter, sort and paging)
+     * @description Email Template grid (§11): Info ID, Name, Email Type, Subject, Business Company. Also used by template pickers.
      */
     post: operations["queryEmailTemplates"];
     delete?: never;
@@ -6068,6 +6068,1103 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/users": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a user
+     * @description User edit form (§12.5). The password sent is temporary: valid 24 hours, changed at first login (§13.28).
+     *     One undoable change.
+     */
+    post: operations["createUser"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a user
+     * @description Every field of the form.
+     */
+    get: operations["getUser"];
+    /**
+     * Change a user
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateUser"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a user (safe delete, §13.29)
+     * @description Live enterprises it is account manager of (blocking), users reporting to it, open sessions.
+     */
+    get: operations["getUserDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a user (§13.29)
+     * @description Blocked while the user is account manager of live enterprises. It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveUser"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a user
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreUser"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set a temporary password (Change Others Passwd, §11, §13.28)
+     * @description Valid 24 hours, must be changed at first login; the user's sessions are signed out. Checked against the §13.28 rules.
+     */
+    post: operations["setUserPassword"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/force-password-change": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Force a password change at next login (§13.28)
+     * @description One user or several selected users. One undoable change.
+     */
+    post: operations["forcePasswordChange"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/totp/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start QR 2FA (TOTP) enrolment (§12.5)
+     * @description Returns a new secret and its otpauth URI for the QR code; 2FA is on once a code is confirmed.
+     */
+    post: operations["setupUserTotp"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/totp/confirm": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm QR 2FA with a code from the app
+     * @description RFC 6238, 30 s steps, ±1 step.
+     */
+    post: operations["confirmUserTotp"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/users/{id}/totp/disable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Disable QR 2FA
+     * @description One undoable change.
+     */
+    post: operations["disableUserTotp"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/me/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change my password (§13.28)
+     * @description Checks the current password, the 2FA code when 2FA is on, and the new-password rules. Signs out every other session.
+     */
+    post: operations["changeMyPassword"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/password-check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Check a new password against the rules (§13.28)
+     * @description At least 12 characters, not the username or name, not one of the last 12 passwords, not on the leaked list.
+     *     The screens show each rule as it is met.
+     */
+    post: operations["checkPassword"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/departments/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List departments (server-side filter, sort and paging)
+     * @description Departments (§11): Info ID, Department Name, Manager, Users, Status, Updated By.
+     */
+    post: operations["queryDepartments"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/departments": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a department
+     * @description Department Name, Status, Manager.
+     *     One undoable change.
+     */
+    post: operations["createDepartment"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/departments/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a department
+     * @description Every field of the form.
+     */
+    get: operations["getDepartment"];
+    /**
+     * Change a department
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateDepartment"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/departments/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a department (safe delete, §13.29)
+     * @description Users in the department (blocking).
+     */
+    get: operations["getDepartmentDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/departments/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a department (§13.29)
+     * @description Blocked while users are assigned to it. It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveDepartment"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/departments/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a department
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreDepartment"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List GUI access groups (server-side filter, sort and paging)
+     * @description GUI Access Group (§11): Info ID, Access Group Name, Status, Users.
+     */
+    post: operations["queryAccessGroups"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups/catalog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Pages and actions an access group can allow (§11)
+     * @description Every page of the menu with the buttons it has (view, add, edit, delete, export, ...).
+     */
+    get: operations["getAccessCatalog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a GUI access group
+     * @description Name, Status, Description and the page x action matrix that decides which menus, pages and buttons a role sees.
+     *     One undoable change.
+     */
+    post: operations["createAccessGroup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a GUI access group
+     * @description Every field of the form.
+     */
+    get: operations["getAccessGroup"];
+    /**
+     * Change a GUI access group
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateAccessGroup"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a GUI access group (safe delete, §13.29)
+     * @description Users with the group (blocking).
+     */
+    get: operations["getAccessGroupDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a GUI access group (§13.29)
+     * @description Blocked while users are assigned to it. It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveAccessGroup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a GUI access group
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreAccessGroup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/access-groups/{id}/clone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Clone a GUI access group
+     * @description Copies the matrix under a new name. One undoable change.
+     */
+    post: operations["cloneAccessGroup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/user-sessions/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List logged-in users (server-side filter, sort and paging)
+     * @description Logged In Users (§11): Logged In At, User, User Type (Wholesale / Customer), IP Address, Location, Device, OS, Browser.
+     */
+    post: operations["queryUserSessions"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/user-sessions/{id}/end": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Force logout (§11)
+     * @description Ends the session; the user's next request needs a new login.
+     */
+    post: operations["endUserSession"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/audit-log/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List audit trail entries (server-side filter, sort and paging)
+     * @description Audit Trail (§11): Info ID, IP Address, Module Name, Controller, Method, Action, Table Name, Master ID, Update Time,
+     *     User. Every call that changes something is recorded; read-only.
+     */
+    post: operations["queryAuditLog"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an e-mail template
+     * @description Name, Email Type, Subject, Body (rich text with placeholders) and an optional Business Company.
+     *     One undoable change.
+     */
+    post: operations["createEmailTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One an e-mail template
+     * @description Every field of the form.
+     */
+    get: operations["getEmailTemplate"];
+    /**
+     * Change an e-mail template
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateEmailTemplate"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on an e-mail template (safe delete, §13.29)
+     * @description Business company defaults, traffic alerts and SOA reports using it (blocking).
+     */
+    get: operations["getEmailTemplateDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) an e-mail template (§13.29)
+     * @description Blocked while business companies, traffic alerts or SOA reports use it. It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveEmailTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an e-mail template
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreEmailTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/{id}/clone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Clone an e-mail template
+     * @description One undoable change.
+     */
+    post: operations["cloneEmailTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/placeholders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Placeholders per e-mail type
+     * @description What each {placeholder} is replaced with, with a sample value.
+     */
+    get: operations["listEmailPlaceholders"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-templates/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview a template with sample values
+     * @description Fills the placeholders with sample data (fake); unknown placeholders are listed.
+     */
+    post: operations["previewEmailTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List business companies (server-side filter, sort and paging)
+     * @description Business Company (§11): Info ID, Name, Description, Base Currency, TPS Limit, Updated By / Time.
+     */
+    post: operations["queryBusinessCompanies"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a business company
+     * @description The §11 form: company, format files (uploaded separately), default templates, address, bank and one sender block
+     *     per department mailbox. SMTP passwords and client secrets are write-only.
+     *     One undoable change.
+     */
+    post: operations["createBusinessCompany"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a business company
+     * @description Every field of the form.
+     */
+    get: operations["getBusinessCompany"];
+    /**
+     * Change a business company
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateBusinessCompany"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a business company (safe delete, §13.29)
+     * @description Live enterprises and users (blocking), scheduled reports.
+     */
+    get: operations["getBusinessCompanyDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a business company (§13.29)
+     * @description Blocked while live enterprises or users belong to it. It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveBusinessCompany"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a business company
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreBusinessCompany"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/{id}/clone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Clone a business company
+     * @description Copies the form, default templates and mailboxes (without passwords or secrets) and the format files.
+     */
+    post: operations["cloneBusinessCompany"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/{id}/files/{kind}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download a format file or the logo
+     * @description As uploaded.
+     */
+    get: operations["downloadCompanyFile"];
+    /**
+     * Upload a format file or the logo (§11)
+     * @description Company Logo (PNG), Invoice / Customer Rate / SOA Format File (XLSX). One undoable change.
+     */
+    put: operations["uploadCompanyFile"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/check-smtp": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Check SMTP Connection (§11)
+     * @description Connects, starts TLS and logs in with the mailbox settings. Simulated in this phase - no network connection is made.
+     */
+    post: operations["checkSmtp"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/business-companies/format-variables": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Format File Variables help (§11)
+     * @description The variables the invoice, customer rate, SOA formats and the rate file name may use.
+     */
+    get: operations["listFormatVariables"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-portal-users/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List customer portal users (server-side filter, sort and paging)
+     * @description Customer Portal (§11): Info ID, Email, UserName, Enterprise, First Name, Last Name, Status.
+     */
+    post: operations["queryPortalUsers"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-portal-users": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a customer portal user
+     * @description Login for the customer self-service portal; the password sent is temporary (24 h, §13.28).
+     *     One undoable change.
+     */
+    post: operations["createPortalUser"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-portal-users/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a customer portal user
+     * @description Every field of the form.
+     */
+    get: operations["getPortalUser"];
+    /**
+     * Change a customer portal user
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updatePortalUser"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-portal-users/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a customer portal user (§13.29)
+     * @description It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archivePortalUser"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-portal-users/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a customer portal user
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restorePortalUser"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-portal-users/{id}/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set a temporary portal password (§11, §13.28)
+     * @description Valid 24 hours, changed at first login.
+     */
+    post: operations["setPortalUserPassword"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -6611,18 +7708,8 @@ export type components = {
     SearchResults: {
       hits: components["schemas"]["SearchHit"][];
     };
-    UserSummary: {
-      id: components["schemas"]["Id"];
-      username: string;
-      displayName: string;
-      email: string;
-      department?: string | null;
-      accessGroup?: string | null;
-      status: components["schemas"]["RecordStatus"];
-      isAccountManager: boolean;
-    };
     UserPage: components["schemas"]["ListPageMeta"] & {
-      rows: components["schemas"]["UserSummary"][];
+      rows: components["schemas"]["UserRow"][];
     };
     /** @description What a saved view restores on a grid. */
     ViewState: {
@@ -9598,10 +10685,14 @@ export type components = {
         | "trouble_ticket"
         | "send_soa";
       subject: string;
+      businessCompanyId: components["schemas"]["Id"] | null;
       /** @description Null = shared by every business company. */
       businessCompany: string | null;
       updatedBy: string | null;
+      /** @description Business companies, traffic alerts and SOA reports using it. */
+      usedBy: number;
       updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
     };
     EmailTemplatePage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["EmailTemplateRow"][];
@@ -10713,6 +11804,494 @@ export type components = {
       change: components["schemas"]["Change"] | null;
     };
     /**
+     * @description Email Type (§11).
+     * @enum {string}
+     */
+    EmailTemplateType:
+      | "customer_rate"
+      | "invoice"
+      | "low_balance"
+      | "bind_down"
+      | "customer_tech_info"
+      | "trunk_change_info"
+      | "soa_statement"
+      | "rate_upload_notification"
+      | "traffic_alert"
+      | "auto_upload_rejected"
+      | "trouble_ticket"
+      | "send_soa";
+    UserFields: {
+      /** @description Lower case letters, digits, dot, dash, underscore. */
+      username: string;
+      firstName: string;
+      lastName: string;
+      /** Format: email */
+      email: string;
+      phone: string | null;
+      departmentId: components["schemas"]["Id"];
+      accessGroupId: components["schemas"]["Id"] | null;
+      businessCompanyId: components["schemas"]["Id"] | null;
+      /** @description Team lead the user reports to (§13.18). */
+      managerId: components["schemas"]["Id"] | null;
+      /**
+       * @description User Type - Wholesale (GUI) or Api User.
+       * @enum {string}
+       */
+      userType: "wholesale" | "api";
+      isAccountManager: boolean;
+      isTeamLead: boolean;
+      status: components["schemas"]["RecordStatus"];
+      allowMultipleLogin: boolean;
+      /**
+       * @description OTP verification at login, on top of 2FA (TOTP).
+       * @enum {string}
+       */
+      otpMethod: "off" | "email";
+      /** @enum {string} */
+      language: "en";
+      address1: string;
+      address2: string | null;
+      countryIso: string;
+      state: string | null;
+      city: string | null;
+      zip: string | null;
+    };
+    UserInput: components["schemas"]["UserFields"] & {
+      /** @description Create only - the temporary password, valid 24 hours and changed at first login (§13.28). Never returned. */
+      password?: string | null;
+    };
+    UserRow: components["schemas"]["UserFields"] & {
+      id: components["schemas"]["Id"];
+      displayName: string;
+      department: string | null;
+      accessGroup: string | null;
+      businessCompany: string | null;
+      manager: string | null;
+      passwordChangedAt: components["schemas"]["Timestamp"];
+      passwordExpiresAt: components["schemas"]["Timestamp"];
+      /** @description Negative when expired. */
+      passwordDaysLeft: number;
+      /**
+       * @description Password column (§13.28) - expiring = 7 days or less left; temporary = admin-set, valid 24 h.
+       * @enum {string}
+       */
+      passwordState: "ok" | "expiring" | "expired" | "temporary" | "must_change";
+      mustChangePassword: boolean;
+      tempPasswordExpiresAt: components["schemas"]["Timestamp"] | null;
+      totpEnabled: boolean;
+      lastLoginAt: components["schemas"]["Timestamp"] | null;
+      activeSessions: number;
+      /** @description Live enterprises this user is account manager of (blocks delete, §13.29). */
+      liveEnterprises: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    UserSaved: {
+      record: components["schemas"]["UserRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    /** @description Change Others Passwd (§11): a temporary password valid 24 hours that must be changed at first login (§13.28). */
+    TempPasswordInput: {
+      password: string;
+      confirmPassword: string;
+    };
+    ForcePasswordChangeInput: {
+      ids: components["schemas"]["Id"][];
+    };
+    ForcePasswordChangeResult: {
+      updated: number;
+      change: components["schemas"]["Change"] | null;
+    };
+    TotpSetup: {
+      /** @description Base32 secret (fake in this phase). */
+      secret: string;
+      /** @description otpauth:// URI for the QR code. */
+      otpauthUri: string;
+    };
+    TotpConfirmInput: {
+      code: string;
+    };
+    PasswordChangeInput: {
+      currentPassword: string;
+      newPassword: string;
+      /** @description Required when 2FA is enabled (§13.28). */
+      totpCode: string | null;
+    };
+    PasswordChanged: {
+      changedAt: components["schemas"]["Timestamp"];
+      expiresAt: components["schemas"]["Timestamp"];
+      /** @description Other sessions and devices signed out (§13.28). */
+      signedOutSessions: number;
+    };
+    /** @description userId for an existing user (checks the last 12 passwords); names for a new one. */
+    PasswordCheckInput: {
+      password: string;
+      userId?: components["schemas"]["Id"] | null;
+      username?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+    };
+    PasswordCheck: {
+      ok: boolean;
+      rules: {
+        /** @enum {string} */
+        key: "length" | "not_name" | "not_recent" | "not_leaked";
+        label: string;
+        met: boolean;
+      }[];
+    };
+    DepartmentFields: {
+      name: string;
+      status: components["schemas"]["RecordStatus"];
+      managerId: components["schemas"]["Id"] | null;
+      description: string | null;
+    };
+    DepartmentInput: components["schemas"]["DepartmentFields"];
+    DepartmentRow: components["schemas"]["DepartmentFields"] & {
+      id: components["schemas"]["Id"];
+      manager: string | null;
+      userCount: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    DepartmentSaved: {
+      record: components["schemas"]["DepartmentRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    AccessGroupFields: {
+      name: string;
+      status: components["schemas"]["RecordStatus"];
+      description: string | null;
+      /** @description Page key -> allowed actions (catalogue in /access-groups/catalog); key * = every page (§1). */
+      permissions: {
+        [key: string]: string[];
+      };
+    };
+    AccessGroupInput: components["schemas"]["AccessGroupFields"];
+    AccessGroupRow: components["schemas"]["AccessGroupFields"] & {
+      id: components["schemas"]["Id"];
+      userCount: number;
+      moduleCount: number;
+      /** @description Holds * (every page). */
+      fullAccess: boolean;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    AccessGroupSaved: {
+      record: components["schemas"]["AccessGroupRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    CloneInput: {
+      name: string;
+    };
+    AccessCatalog: {
+      actions: {
+        key: string;
+        label: string;
+        description: string;
+      }[];
+      sections: {
+        key: string;
+        label: string;
+      }[];
+      modules: {
+        /** @description Page key, as in the web page registry. */
+        key: string;
+        label: string;
+        section: string;
+        actions: string[];
+      }[];
+    };
+    UserSessionRow: {
+      id: components["schemas"]["Id"];
+      /**
+       * @description User Type - Wholesale (staff) or Customer (portal).
+       * @enum {string}
+       */
+      userKind: "staff" | "customer";
+      userId: components["schemas"]["Id"];
+      username: string;
+      displayName: string;
+      enterprise: string | null;
+      ip: string;
+      location: string | null;
+      /** @enum {string} */
+      device: "desktop" | "mobile" | "tablet" | "bot";
+      os: string;
+      browser: string;
+      loggedInAt: components["schemas"]["Timestamp"];
+      lastSeenAt: components["schemas"]["Timestamp"];
+      /** @description The session making this request; it cannot be ended here. */
+      current: boolean;
+    };
+    SessionEnded: {
+      ended: boolean;
+    };
+    AuditRow: {
+      id: components["schemas"]["Id"];
+      at: components["schemas"]["Timestamp"];
+      userId: components["schemas"]["Id"] | null;
+      user: string | null;
+      ip: string | null;
+      /** @description Module Name - the API tag, e.g. routing. */
+      module: string;
+      /** @description Controller - the path template. */
+      controller: string;
+      /** @description HTTP method. */
+      method: string;
+      /** @description Action - the contract operation. */
+      action: string;
+      tableName: string | null;
+      masterId: string | null;
+      /** @description HTTP status of the answer. */
+      status: number;
+      durationMs: number;
+    };
+    EmailTemplateFields: {
+      name: string;
+      emailType: components["schemas"]["EmailTemplateType"];
+      subject: string;
+      /** @description Rich text (HTML) with {placeholders}. */
+      body: string;
+      /** @description Null = shared by every business company. */
+      businessCompanyId: components["schemas"]["Id"] | null;
+    };
+    EmailTemplateInput: components["schemas"]["EmailTemplateFields"];
+    EmailPlaceholder: {
+      key: string;
+      description: string;
+      sample: string;
+    };
+    EmailTemplateRecord: components["schemas"]["EmailTemplateFields"] & {
+      id: components["schemas"]["Id"];
+      businessCompany: string | null;
+      usedBy: number;
+      placeholders: components["schemas"]["EmailPlaceholder"][];
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    EmailTemplateSaved: {
+      record: components["schemas"]["EmailTemplateRecord"];
+      change: components["schemas"]["Change"] | null;
+    };
+    EmailPlaceholderCatalog: {
+      types: {
+        emailType: components["schemas"]["EmailTemplateType"];
+        label: string;
+        placeholders: components["schemas"]["EmailPlaceholder"][];
+      }[];
+    };
+    EmailTemplatePreviewInput: {
+      emailType: components["schemas"]["EmailTemplateType"];
+      subject: string;
+      body: string;
+      businessCompanyId: components["schemas"]["Id"] | null;
+    };
+    EmailTemplatePreview: {
+      subject: string;
+      bodyHtml: string;
+      unknownPlaceholders: string[];
+    };
+    /** @enum {string} */
+    MailboxDepartment: "noc" | "sales" | "rates" | "billing" | "support";
+    MailboxFields: {
+      department: components["schemas"]["MailboxDepartment"];
+      name: string | null;
+      phone: string | null;
+      /** Format: email */
+      smtpEmail: string;
+      /** @enum {string} */
+      smtpSecure: "none" | "ssl" | "starttls";
+      smtpHost: string;
+      smtpPort: number;
+      smtpUsername: string | null;
+      extension: string | null;
+      skypeName: string | null;
+      oauthRedirectUris: string[];
+      clientId: string;
+    };
+    MailboxInput: components["schemas"]["MailboxFields"] & {
+      /** @description Null keeps the stored one. */
+      smtpPassword: string | null;
+      /** @description Null keeps the stored one. */
+      clientSecret: string | null;
+    };
+    MailboxRow: components["schemas"]["MailboxFields"] & {
+      hasSmtpPassword: boolean;
+      hasClientSecret: boolean;
+      lastCheckAt: components["schemas"]["Timestamp"] | null;
+      lastCheckOk: boolean | null;
+    };
+    CompanyAddress: {
+      line1: string | null;
+      line2: string | null;
+      city: string | null;
+      state: string | null;
+      countryIso: string | null;
+      zip: string | null;
+    };
+    CompanyBank: {
+      beneficiaryName: string | null;
+      beneficiaryAddress: string | null;
+      bankName: string | null;
+      bankAddress: string | null;
+      currency: string | null;
+      accountNumber: string | null;
+      iban: string | null;
+      swift: string | null;
+    };
+    /** @description Default e-mail template per type (§11); null = the shared default. */
+    CompanyDefaultTemplates: {
+      customerRate: components["schemas"]["Id"] | null;
+      invoice: components["schemas"]["Id"] | null;
+      lowBalance: components["schemas"]["Id"] | null;
+      bindDown: components["schemas"]["Id"] | null;
+      customerTechInfo: components["schemas"]["Id"] | null;
+      trunkChangeInfo: components["schemas"]["Id"] | null;
+      soaStatement: components["schemas"]["Id"] | null;
+      rateUploadNotification: components["schemas"]["Id"] | null;
+      autoUploadRejected: components["schemas"]["Id"] | null;
+    };
+    BusinessCompanyFields: {
+      name: string;
+      description: string | null;
+      baseCurrency: string;
+      tpsLimit: number | null;
+      website: string | null;
+      /** @description SMPP IP shown in tech-info e-mails. */
+      smppHost: string | null;
+      smppPort: number | null;
+      /** @description Invoice Number sequence start. */
+      invoiceNumberStart: number;
+      companyIp: string | null;
+      /** @description Customer Rate File Name, with format variables. */
+      customerRateFileName: string | null;
+      address: components["schemas"]["CompanyAddress"];
+      bank: components["schemas"]["CompanyBank"];
+      defaultTemplates: components["schemas"]["CompanyDefaultTemplates"];
+    };
+    BusinessCompanyInput: components["schemas"]["BusinessCompanyFields"] & {
+      /** @description One sender block per department mailbox. */
+      mailboxes: components["schemas"]["MailboxInput"][];
+    };
+    CompanyFile: {
+      /** @enum {string} */
+      kind: "logo" | "invoice_format" | "customer_rate_format" | "soa_format";
+      name: string;
+      size: number;
+      contentType: string;
+      uploadedAt: components["schemas"]["Timestamp"];
+      uploadedBy: string | null;
+    };
+    BusinessCompanyRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      description: string | null;
+      baseCurrency: string;
+      tpsLimit: number | null;
+      website: string | null;
+      enterprises: number;
+      users: number;
+      mailboxCount: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    BusinessCompanyRecord: components["schemas"]["BusinessCompanyFields"] & {
+      id: components["schemas"]["Id"];
+      mailboxes: components["schemas"]["MailboxRow"][];
+      files: components["schemas"]["CompanyFile"][];
+      enterprises: number;
+      users: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    BusinessCompanySaved: {
+      record: components["schemas"]["BusinessCompanyRecord"];
+      change: components["schemas"]["Change"] | null;
+    };
+    CompanyFileUpload: {
+      name: string;
+      contentBase64: string;
+    };
+    SmtpCheckInput: {
+      /** @description Uses the stored password / secret when they are null. */
+      businessCompanyId: components["schemas"]["Id"] | null;
+      mailbox: components["schemas"]["MailboxInput"];
+    };
+    SmtpCheckResult: {
+      ok: boolean;
+      message: string;
+      steps: {
+        step: string;
+        ok: boolean;
+        detail: string;
+      }[];
+    };
+    FormatVariables: {
+      formats: {
+        kind: string;
+        label: string;
+        variables: {
+          key: string;
+          description: string;
+        }[];
+      }[];
+    };
+    PortalUserFields: {
+      /** Format: email */
+      email: string;
+      username: string;
+      enterpriseId: components["schemas"]["Id"];
+      firstName: string;
+      lastName: string;
+      status: components["schemas"]["RecordStatus"];
+    };
+    PortalUserInput: components["schemas"]["PortalUserFields"] & {
+      /** @description Create only - temporary password, valid 24 hours. */
+      password?: string | null;
+    };
+    PortalUserRow: components["schemas"]["PortalUserFields"] & {
+      id: components["schemas"]["Id"];
+      enterprise: string;
+      passwordChangedAt: components["schemas"]["Timestamp"];
+      passwordExpiresAt: components["schemas"]["Timestamp"];
+      passwordDaysLeft: number;
+      mustChangePassword: boolean;
+      tempPasswordExpiresAt: components["schemas"]["Timestamp"] | null;
+      lastLoginAt: components["schemas"]["Timestamp"] | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    PortalUserSaved: {
+      record: components["schemas"]["PortalUserRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    DepartmentPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["DepartmentRow"][];
+    };
+    AccessGroupPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["AccessGroupRow"][];
+    };
+    UserSessionPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["UserSessionRow"][];
+    };
+    AuditPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["AuditRow"][];
+    };
+    BusinessCompanyPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["BusinessCompanyRow"][];
+    };
+    PortalUserPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["PortalUserRow"][];
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -11144,7 +12723,13 @@ export type components = {
       | "master_report"
       | "billing_report"
       | "scheduled_reports"
-      | "daily_traffic_alerts";
+      | "daily_traffic_alerts"
+      | "departments"
+      | "access_groups"
+      | "user_sessions"
+      | "audit_log"
+      | "business_companies"
+      | "customer_portal_users";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -20475,6 +22060,1695 @@ export interface operations {
           "application/json": components["schemas"]["EmailPreview"];
         };
       };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UserInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a user */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UserInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getUserDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setUserPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TempPasswordInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  forcePasswordChange: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ForcePasswordChangeInput"];
+      };
+    };
+    responses: {
+      /** @description How many users were marked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ForcePasswordChangeResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setupUserTotp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The secret */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TotpSetup"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  confirmUserTotp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TotpConfirmInput"];
+      };
+    };
+    responses: {
+      /** @description 2FA enabled, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  disableUserTotp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 2FA disabled, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  changeMyPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordChangeInput"];
+      };
+    };
+    responses: {
+      /** @description Changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordChanged"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  checkPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordCheckInput"];
+      };
+    };
+    responses: {
+      /** @description Each rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordCheck"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryDepartments: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of departments */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DepartmentPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createDepartment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DepartmentInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DepartmentSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getDepartment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a department */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DepartmentRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateDepartment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DepartmentInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DepartmentSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getDepartmentDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveDepartment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DepartmentSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreDepartment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DepartmentSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryAccessGroups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of GUI access groups */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessGroupPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getAccessCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessCatalog"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createAccessGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AccessGroupInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessGroupSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getAccessGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a GUI access group */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessGroupRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateAccessGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AccessGroupInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessGroupSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getAccessGroupDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveAccessGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessGroupSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreAccessGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessGroupSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cloneAccessGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CloneInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccessGroupSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryUserSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of logged-in users */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UserSessionPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  endUserSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Ended */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SessionEnded"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryAuditLog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of audit trail entries */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuditPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmailTemplateInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplateSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The an e-mail template */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplateRecord"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmailTemplateInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplateSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getEmailTemplateDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplateSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplateSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cloneEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CloneInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplateSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listEmailPlaceholders: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The placeholders */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailPlaceholderCatalog"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmailTemplatePreviewInput"];
+      };
+    };
+    responses: {
+      /** @description The filled subject and body */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplatePreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryBusinessCompanies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of business companies */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanyPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createBusinessCompany: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BusinessCompanyInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getBusinessCompany: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a business company */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanyRecord"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateBusinessCompany: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BusinessCompanyInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getBusinessCompanyDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveBusinessCompany: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanySaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreBusinessCompany: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanySaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cloneBusinessCompany: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CloneInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadCompanyFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+        kind: "logo" | "invoice_format" | "customer_rate_format" | "soa_format";
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/octet-stream": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  uploadCompanyFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+        kind: "logo" | "invoice_format" | "customer_rate_format" | "soa_format";
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CompanyFileUpload"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BusinessCompanySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  checkSmtp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SmtpCheckInput"];
+      };
+    };
+    responses: {
+      /** @description The result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmtpCheckResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listFormatVariables: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The variables */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FormatVariables"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryPortalUsers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of customer portal users */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalUserPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createPortalUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PortalUserInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalUserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getPortalUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a customer portal user */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalUserRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updatePortalUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PortalUserInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalUserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archivePortalUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalUserSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restorePortalUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalUserSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setPortalUserPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TempPasswordInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalUserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];

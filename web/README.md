@@ -150,6 +150,30 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Admin (build step 5.11)
+
+Pages in `src/pages/admin/` (§11, §12.5, §13.28), hooks in `src/api/admin.ts`, pure helpers in `adminModel.ts`, and
+shared pieces (password rules checklist, temporary password dialog, my password dialog) in `parts.tsx`:
+
+- **Users** (`/admin/users`): the §11 grid with the §13.28 Password column (state and days left, filterable), 2FA
+  and last login. The form is the §12.5 user edit page; a new user needs a temporary password, checked live against
+  the rules. The detail has Profile and Password & 2FA. Change password sets a temporary password (24 h). Force change
+  works on one user or, through Bulk edit, on the selected users. QR 2FA is enrolled with a code from the app.
+  Delete shows what blocks it (AM of live enterprises).
+- **Departments** (`/admin/departments`) and **GUI access groups** (`/admin/access-groups`): the access group form is
+  the page × action matrix of every menu page, with "Every page", all / none per section and a page filter. The
+  detail shows the matrix read-only; Clone; "Users" opens the Users page filtered to the department or group.
+- **Logged-in users** (`/admin/logged-in`): open sessions with Force logout; your own session is marked.
+- **Audit trail** (`/admin/audit`): read-only list of every call that changed something.
+- **Email templates** (`/admin/email-templates`): the editor has placeholder chips for the chosen type (they insert
+  at the caret) and a live preview with fake sample values in a sandboxed frame; Clone.
+- **Business companies** (`/admin/business-companies`): the form has five parts (Company, Default templates,
+  Address & bank, Mailboxes with Check SMTP Connection, Format files with the variables help). Mailbox passwords and
+  secrets are write-only: blank keeps the stored one.
+- **Customer portal** (`/admin/customer-portal`): portal logins for customers, with temporary passwords.
+- **Change password** in the avatar menu: current password, new password with the rules, and the 2FA code. In this
+  phase, user 1's fake password is `demo-password-2026` and its fake TOTP secret is in `docs/BACKEND_TODO.md`.
+
 ## Reports (build step 5.10)
 
 Pages in `src/pages/reports/` (§10, §13.15), hooks in `src/api/masterReports.ts`, helpers in `masterModel.ts`:

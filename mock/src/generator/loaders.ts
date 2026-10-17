@@ -22,6 +22,8 @@ export const TABLE_ORDER = [
   "departments",
   "access_groups",
   "users",
+  "business_company_mailboxes",
+  "business_company_files",
   "currency_rates",
   "billing_cycles",
   "product_categories",
@@ -79,6 +81,10 @@ export const TABLE_ORDER = [
   "signaling_captures",
   "scheduled_reports",
   "daily_traffic_alerts",
+  "customer_portal_users",
+  "password_history",
+  "user_sessions",
+  "audit_log",
   "changes",
 ];
 

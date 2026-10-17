@@ -1,0 +1,241 @@
+/* Admin (§11, §13.28). Tokens only (§15.2). */
+
+/* Password rules checklist (§13.28): each rule ticks as it is met. */
+.pw-rules {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.pw-rules li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pw-rules li.met {
+  color: var(--color-good);
+}
+.pw-input {
+  display: flex;
+  gap: 4px;
+}
+.pw-input input {
+  flex: 1;
+  min-width: 0;
+}
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  align-items: center;
+}
+.totp-setup {
+  display: grid;
+  gap: 8px;
+}
+.selectable {
+  user-select: all;
+  word-break: break-all;
+}
+.chip-mini {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+/* GUI access group matrix (§11) */
+.perm-matrix {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.perm-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.perm-filter {
+  width: 220px;
+}
+.perm-scroll {
+  max-height: 52vh;
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.perm-matrix table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+.perm-matrix th,
+.perm-matrix td {
+  padding: 3px 6px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: center;
+  white-space: nowrap;
+}
+.perm-matrix thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-panel);
+  z-index: 1;
+  font-weight: 600;
+}
+.perm-matrix .perm-page {
+  text-align: left;
+  min-width: 210px;
+}
+.perm-section td {
+  background: var(--color-page-bg);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.perm-all td {
+  background: var(--color-page-bg);
+}
+.perm-off td.perm-page {
+  color: var(--color-text-secondary);
+}
+.perm-na {
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 4px,
+    color-mix(in srgb, var(--color-border) 40%, transparent) 4px 5px
+  );
+}
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  color: var(--color-accent);
+  cursor: pointer;
+  font: inherit;
+  text-transform: none;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+/* E-mail templates (§11) */
+.tpl-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.tpl-body {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.tpl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.tpl-chips .chip {
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.mail-frame {
+  width: 100%;
+  min-height: 300px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff; /* e-mail clients render on white in both themes */
+}
+
+/* Business companies (§11) */
+.bc-parts {
+  margin-bottom: 12px;
+}
+.bc-part {
+  min-height: 360px;
+}
+.part-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 4px 0 6px;
+}
+.fsection.mailbox {
+  margin-bottom: 10px;
+}
+.add-mailbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.smtp-check {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--color-border);
+  font-size: 12px;
+}
+.smtp-check.ok {
+  border-color: var(--color-good);
+}
+.smtp-check.bad {
+  border-color: var(--color-error);
+}
+.smtp-check ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.simple-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.simple-table th,
+.simple-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.simple-table th {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.bc-files {
+  display: grid;
+  gap: 12px;
+}
+.format-help summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.format-vars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.format-vars ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.format-vars code {
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .tpl-edit {
+    grid-template-columns: 1fr;
+  }
+}
