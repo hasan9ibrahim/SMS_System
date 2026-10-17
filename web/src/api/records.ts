@@ -47,7 +47,10 @@ export type RecordKind =
   | "hlr_rule"
   | "hlr_policy"
   | "transaction"
-  | "billing_cycle";
+  | "billing_cycle"
+  | "invoice"
+  | "vendor_invoice"
+  | "recon_rule";
 
 export interface Saved<T> {
   record: T;
@@ -251,6 +254,10 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   if (kind === "hlr_policy") return unwrap(api.GET("/hlr-policies/{id}/dependencies", params));
   if (kind === "transaction") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "billing_cycle") return unwrap(api.GET("/billing-cycles/{id}/dependencies", params));
+  if (kind === "invoice") return unwrap(api.GET("/invoices/{id}/dependencies", params));
+  if (kind === "vendor_invoice") return unwrap(api.GET("/vendor-invoices/{id}/dependencies", params));
+  // Removing a partner's own rule only brings the default rule back (§13.31).
+  if (kind === "recon_rule") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -274,6 +281,9 @@ export function useArchive(kind: RecordKind) {
       if (kind === "hlr_policy") return unwrap(api.POST("/hlr-policies/{id}/archive", req));
       if (kind === "transaction") return unwrap(api.POST("/transactions/{id}/archive", req));
       if (kind === "billing_cycle") return unwrap(api.POST("/billing-cycles/{id}/archive", req));
+      if (kind === "invoice") return unwrap(api.POST("/invoices/{id}/archive", req));
+      if (kind === "vendor_invoice") return unwrap(api.POST("/vendor-invoices/{id}/archive", req));
+      if (kind === "recon_rule") return unwrap(api.POST("/recon-rules/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -300,6 +310,9 @@ export function useRestore(kind: RecordKind) {
       if (kind === "hlr_policy") return unwrap(api.POST("/hlr-policies/{id}/restore", req));
       if (kind === "transaction") return unwrap(api.POST("/transactions/{id}/restore", req));
       if (kind === "billing_cycle") return unwrap(api.POST("/billing-cycles/{id}/restore", req));
+      if (kind === "invoice") return unwrap(api.POST("/invoices/{id}/restore", req));
+      if (kind === "vendor_invoice") return unwrap(api.POST("/vendor-invoices/{id}/restore", req));
+      if (kind === "recon_rule") return unwrap(api.POST("/recon-rules/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

@@ -37,6 +37,24 @@ function field(def: Def): FieldDescriptor {
 }
 
 /** "Show deleted" (§13.29): archived records are hidden unless this filter is set. */
+const JOB_STATUS = [
+  { value: "pending", label: "Pending" },
+  { value: "inprogress", label: "Inprogress" },
+  { value: "completed", label: "Completed" },
+  { value: "failed", label: "Failed" },
+];
+/** Vendor invoice status after the comparison (§13.31). */
+const RECON_STATUS = [
+  { value: "pending", label: "Pending" },
+  { value: "accepted", label: "Accepted" },
+  { value: "disputed", label: "Disputed" },
+  { value: "rejected", label: "Rejected" },
+];
+const COMBINE = [
+  { value: "stricter", label: "Both (stricter)" },
+  { value: "looser", label: "Either (looser)" },
+];
+
 const ARCHIVED = field({
   field: "archived",
   label: "Deleted",
@@ -910,7 +928,34 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "invoiceNumber", label: "Invoice No", type: "text", defaultOperator: "like" }),
       field({ field: "enterprise", label: "Enterprise Name", type: "text", defaultOperator: "like" }),
       field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
-      field({ field: "enterpriseType", label: "Enterprise Type", type: "text", defaultOperator: "eq", hidden: true }),
+      field({
+        field: "enterpriseType",
+        label: "Enterprise Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "customer", label: "Customer" },
+          { value: "reciprocal", label: "Reciprocal" },
+        ],
+      }),
+      field({
+        field: "businessCompany",
+        label: "Business Company",
+        type: "text",
+        defaultOperator: "like",
+        hidden: true,
+      }),
+      field({
+        field: "kind",
+        label: "Kind",
+        type: "enum",
+        defaultOperator: "in",
+        hidden: true,
+        enumValues: [
+          { value: "traffic", label: "Traffic" },
+          { value: "proforma", label: "Proforma" },
+        ],
+      }),
       field({
         field: "invoiceType",
         label: "Invoice Type",
@@ -932,6 +977,7 @@ export const listFields: Record<ListId, ListFields> = {
         ],
       }),
       field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq" }),
+      field({ field: "timezone", label: "Time Zone", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "invoiceDate", label: "Invoice Date", type: "date", defaultOperator: "between" }),
       field({ field: "usageStart", label: "Usage Start Date", type: "date", defaultOperator: "between" }),
       field({ field: "usageEnd", label: "Usage End Date", type: "date", defaultOperator: "between" }),
@@ -951,18 +997,8 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "sent", label: "Sent" },
         ],
       }),
-      field({
-        field: "status",
-        label: "Status",
-        type: "enum",
-        defaultOperator: "in",
-        enumValues: [
-          { value: "pending", label: "Pending" },
-          { value: "inprogress", label: "Inprogress" },
-          { value: "completed", label: "Completed" },
-          { value: "failed", label: "Failed" },
-        ],
-      }),
+      field({ field: "emailSentAt", label: "Email Sent", type: "datetime", defaultOperator: "between", hidden: true }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: JOB_STATUS }),
       field({
         field: "paymentStatus",
         label: "Payment",
@@ -975,6 +1011,178 @@ export const listFields: Record<ListId, ListFields> = {
         ],
       }),
       field({ field: "remarks", label: "Remarks", type: "text", defaultOperator: "like" }),
+      ARCHIVED,
+    ],
+  },
+
+  invoice_requests: {
+    list: "invoice_requests",
+    defaultSort: [{ field: "id", dir: "desc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "requestNo", label: "Request No", type: "text", defaultOperator: "like" }),
+      field({ field: "startedAt", label: "Request Start Time", type: "datetime", defaultOperator: "between" }),
+      field({ field: "finishedAt", label: "Request End Time", type: "datetime", defaultOperator: "between" }),
+      field({
+        field: "invoiceType",
+        label: "Invoice Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "auto", label: "Auto" },
+          { value: "manual", label: "Manual" },
+        ],
+      }),
+      field({
+        field: "kind",
+        label: "Kind",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "traffic", label: "Traffic" },
+          { value: "proforma", label: "Proforma" },
+        ],
+      }),
+      field({ field: "regenerate", label: "Regenerate", type: "boolean", defaultOperator: "eq", hidden: true }),
+      field({ field: "enterprise", label: "Enterprise Name", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "enterpriseType", label: "Enterprise Type", type: "text", defaultOperator: "eq" }),
+      field({
+        field: "billingType",
+        label: "Billing Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "prepaid", label: "Prepaid" },
+          { value: "postpaid", label: "Postpaid" },
+        ],
+      }),
+      field({ field: "timezone", label: "Time Zone", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "usageStart", label: "Usage Start", type: "date", defaultOperator: "between", hidden: true }),
+      field({ field: "usageEnd", label: "Usage End", type: "date", defaultOperator: "between", hidden: true }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: JOB_STATUS }),
+      field({ field: "error", label: "Error", type: "text", defaultOperator: "like" }),
+      field({ field: "invoiceNumber", label: "Invoice No", type: "text", defaultOperator: "like" }),
+      field({ field: "remarks", label: "Remarks", type: "text", defaultOperator: "like" }),
+      field({ field: "createdBy", label: "Created By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "createdAt", label: "Created Time", type: "datetime", defaultOperator: "between", hidden: true }),
+    ],
+  },
+
+  vendor_invoices: {
+    list: "vendor_invoices",
+    defaultSort: [
+      { field: "invoiceDate", dir: "desc" },
+      { field: "id", dir: "desc" },
+    ],
+    fields: [
+      field({ field: "id", label: "Info ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "enterprise", label: "Enterprise Name", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "accountManager", label: "Account Manager", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "invoiceNumber", label: "Invoice Number", type: "text", defaultOperator: "like" }),
+      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: RECON_STATUS }),
+      field({
+        field: "comparison",
+        label: "Check",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "match", label: "Match" },
+          { value: "mismatch", label: "Mismatch" },
+          { value: "no_data", label: "No EDR data" },
+        ],
+      }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq", hidden: true }),
+      field({ field: "chargeVolume", label: "Charge Volume", type: "integer", defaultOperator: "gte" }),
+      field({ field: "chargeAmount", label: "Charge Amount", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "ourVolume", label: "Our Volume", type: "integer", defaultOperator: "gte", hidden: true }),
+      field({ field: "ourAmount", label: "Our Amount", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "disputeAmount", label: "Dispute Amount", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "differencePct", label: "Difference %", type: "percent", defaultOperator: "gte" }),
+      field({
+        field: "volumeDifference",
+        label: "Volume Difference",
+        type: "integer",
+        defaultOperator: "gte",
+        hidden: true,
+      }),
+      field({ field: "invoiceDate", label: "Invoice Date", type: "date", defaultOperator: "between" }),
+      field({ field: "dueDate", label: "Invoice Due Date", type: "date", defaultOperator: "between" }),
+      field({ field: "periodFrom", label: "Invoice From Date", type: "date", defaultOperator: "between" }),
+      field({ field: "periodTo", label: "Invoice To Date", type: "date", defaultOperator: "between" }),
+      field({ field: "timezone", label: "Timezone", type: "text", defaultOperator: "like", hidden: true }),
+      field({
+        field: "emailStatus",
+        label: "Email",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "none", label: "None" },
+          { value: "waiting", label: "Waiting to confirm" },
+          { value: "sent", label: "Sent" },
+          { value: "failed", label: "Failed" },
+        ],
+      }),
+      field({
+        field: "source",
+        label: "Source",
+        type: "enum",
+        defaultOperator: "in",
+        hidden: true,
+        enumValues: [
+          { value: "manual", label: "Manual" },
+          { value: "import", label: "Import" },
+          { value: "email", label: "Email" },
+        ],
+      }),
+      field({ field: "lineCount", label: "Lines", type: "integer", defaultOperator: "gte", hidden: true }),
+      field({ field: "remarks", label: "Remarks", type: "text", defaultOperator: "like" }),
+      field({ field: "checkedAt", label: "Checked Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      field({ field: "createdBy", label: "Created By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "createdAt", label: "Created Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  },
+
+  recon_rules: {
+    list: "recon_rules",
+    defaultSort: [{ field: "enterprise", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "enterprise", label: "Partner", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "amountPct", label: "Amount %", type: "decimal", defaultOperator: "lte" }),
+      field({ field: "amountFixed", label: "Amount (fixed)", type: "decimal", defaultOperator: "lte" }),
+      field({ field: "amountCombine", label: "Amount Rule", type: "enum", defaultOperator: "in", enumValues: COMBINE }),
+      field({ field: "countPct", label: "Count %", type: "decimal", defaultOperator: "lte" }),
+      field({ field: "countFixed", label: "Count (fixed)", type: "integer", defaultOperator: "lte" }),
+      field({ field: "countCombine", label: "Count Rule", type: "enum", defaultOperator: "in", enumValues: COMBINE }),
+      field({ field: "destinationPct", label: "Destination %", type: "decimal", defaultOperator: "lte" }),
+      field({
+        field: "autoSend",
+        label: "Acceptance Email",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "auto", label: "Send at once" },
+          { value: "confirm", label: "Confirm before sending" },
+        ],
+      }),
+      field({
+        field: "disputedInSoa",
+        label: "Disputed in SOA",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "exclude", label: "Left off" },
+          { value: "separate_block", label: "Separate block" },
+        ],
+      }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq", hidden: true }),
+      field({ field: "invoices", label: "Invoices", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
       ARCHIVED,
     ],
   },

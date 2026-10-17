@@ -19,12 +19,15 @@ function ImportDialog({
   title,
   help,
   replaceHint,
+  addOnly,
   done,
 }: {
   target: ImportTarget;
   title: string;
   help: ReactNode;
   replaceHint: string;
+  /** No Replace mode: the import only adds (e.g. vendor invoices). */
+  addOnly?: boolean;
   done: (r: ImportResult | null) => void;
 }) {
   const notifySaved = useNotifySaved();
@@ -108,23 +111,25 @@ function ImportDialog({
           Download template
         </button>
       </div>
-      <div className="segmented small" role="radiogroup" aria-label="Import mode">
-        {(["merge", "replace"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="radio"
-            aria-checked={mode === m}
-            className={mode === m ? "on" : ""}
-            onClick={() => {
-              setMode(m);
-              if (file) void dryRun(file.text, m);
-            }}
-          >
-            {m === "merge" ? "Add and update" : "Replace"}
-          </button>
-        ))}
-      </div>
+      {!addOnly && (
+        <div className="segmented small" role="radiogroup" aria-label="Import mode">
+          {(["merge", "replace"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              className={mode === m ? "on" : ""}
+              onClick={() => {
+                setMode(m);
+                if (file) void dryRun(file.text, m);
+              }}
+            >
+              {m === "merge" ? "Add and update" : "Replace"}
+            </button>
+          ))}
+        </div>
+      )}
       <p className="muted small imp-mode">
         {mode === "merge" ? "Rows not in the file stay as they are." : replaceHint}
       </p>

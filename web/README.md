@@ -150,6 +150,27 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Invoices and vendor invoices (build step 5.6)
+
+- **Invoices** (`/finance/invoices`, `src/pages/finance/InvoicesPage.tsx`, §7, §12.3): the invoice grid with PDF and
+  Charge Details icons, balances with the §7 sign (owed amounts amber) and the due amount; bulk Send Invoice and Mark;
+  the detail panel (invoice, linked payments, e-mail, Edit due date / remarks, PDF, Send, Regenerate, delete) and
+  Charge Details per MCCMNC and rate. Generate Request (Traffic or Proforma, several enterprises, time zone, usage
+  period, due date auto / manual) starts background requests; the page follows them and reports when they finish.
+  Invoice requests list: `?view=requests`.
+- **Vendor invoices** (`/finance/vendor-invoices`, `VendorInvoicesPage.tsx`, §13.31), three views (`?view=`):
+  - **Invoices**: their and our figures, dispute amount and difference %, check result and status; Add (with
+    optional per-destination lines pasted as text), Import (CSV, dry run first), Export. The result screen shows the
+    figures, why it matched or not, the rule used, the e-mail and SOA status, and every check, status change, note and
+    e-mail; Accept / Reject / Keep pending / Send acceptance with an e-mail preview, Check again, Note, delete. The
+    Destinations section compares per MCCMNC, largest difference first.
+  - **Reconciliation rules**: the default rule and per-partner rules (amount and count tolerance, stricter / looser,
+    per-destination check, acceptance e-mail at once or after confirmation, disputed invoices in the SOA).
+  - **Monthly summary**: invoices per month by result and status, their and our amounts and the difference in the
+    platform currency; filters by partner and account manager.
+- The mock "receives" weekly vendor invoices for weeks the fake EDRs fully hold, so mismatches and destination
+  lines can be tried on fresh data.
+
 ## Finance part 1 (build step 5.5)
 
 - **Transactions** (`/finance/transactions`, `src/pages/finance/TransactionsPage.tsx`, §7, §13.33): the grid with

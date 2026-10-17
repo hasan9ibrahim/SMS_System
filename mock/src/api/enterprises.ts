@@ -399,11 +399,12 @@ async function sideBalances(db: Db, id: number): Promise<Record<Side, number>> {
     `SELECT
        COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
                   WHERE enterprise_id = $1 AND side = 'customer' AND deleted_at IS NULL), 0)
-       - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = $1 AND deleted_at IS NULL AND status <> 'failed'), 0) AS customer,
+       - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = $1 AND deleted_at IS NULL
+                    AND status <> 'failed' AND kind = 'traffic'), 0) AS customer,
        COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
                   WHERE enterprise_id = $1 AND side = 'vendor' AND deleted_at IS NULL), 0)
        - COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
-                    WHERE enterprise_id = $1 AND deleted_at IS NULL AND recon_status IN ('match', 'accepted')), 0) AS vendor`,
+                    WHERE enterprise_id = $1 AND deleted_at IS NULL AND recon_status = 'accepted'), 0) AS vendor`,
     [id],
   );
   return { customer: Number(rows[0].customer), vendor: Number(rows[0].vendor) };
@@ -795,7 +796,7 @@ async function enterpriseDependencies(db: Db, id: number) {
        (SELECT count(*)::int FROM invoices WHERE enterprise_id = $1 AND deleted_at IS NULL
           AND (payment_status <> 'paid' OR status IN ('pending', 'inprogress'))) AS unpaid_invoices,
        (SELECT count(*)::int FROM vendor_invoices WHERE enterprise_id = $1 AND deleted_at IS NULL
-          AND recon_status IN ('mismatch', 'pending')) AS disputes`,
+          AND recon_status = 'disputed') AS disputes`,
     [id],
   );
   const r = rows[0];

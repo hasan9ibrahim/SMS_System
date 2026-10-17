@@ -127,8 +127,8 @@ export const PAGES: PageDef[] = [
     "Invoices",
     "/finance/invoices",
     "file",
-    "§7",
-    "5",
+    "§7, §12.3",
+    "5.6",
     "Customer invoices, generation requests and sending",
   ),
   p(
@@ -138,7 +138,7 @@ export const PAGES: PageDef[] = [
     "/finance/vendor-invoices",
     "file",
     "§7, §13.31",
-    "5",
+    "5.6",
     "Partner invoices with automatic reconciliation",
   ),
   p(
@@ -148,7 +148,7 @@ export const PAGES: PageDef[] = [
     "/finance/soa",
     "file",
     "§7, §13.13, §13.31",
-    "5",
+    "5.7",
     "Statements of account, outbox and sending",
   ),
   p(

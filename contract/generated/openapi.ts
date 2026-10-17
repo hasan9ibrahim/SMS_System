@@ -3175,8 +3175,9 @@ export type paths = {
     put?: never;
     /**
      * List invoices (server-side filter, sort and paging)
-     * @description Invoice grid columns (§7). Read-only in build step 5.5 (the payment form picks the invoice it
-     *     settles); actions come with the Invoice screen.
+     * @description Invoice grid (§7): Invoice No, PDF, Charge Details, enterprise, types, dates, due amount, opening
+     *     balance, usage charges, closing balance, e-mail status, status and remarks. Hidden `archived` field
+     *     = deleted invoices.
      */
     post: operations["queryInvoices"];
     delete?: never;
@@ -3523,6 +3524,683 @@ export type paths = {
      *     enterprise's billing time zone (§13.31). One enterprise, or all with traffic.
      */
     post: operations["calculateCharges"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export invoices as CSV
+     * @description Same filter and sort as the list; up to 100,000 rows.
+     */
+    post: operations["exportInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One invoice with its payments
+     * @description Every column plus the e-mail recipients, the payments that settle it and who created it.
+     */
+    get: operations["getInvoice"];
+    /**
+     * Change an invoice's due date or remarks
+     * @description Amounts come from the usage and can only change by Regenerate. One undoable change (§13.10).
+     */
+    put: operations["updateInvoice"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/{id}/charges": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Charge Details: per-destination lines of an invoice (§7)
+     * @description Messages and amount per MCCMNC and rate for the usage period, cut at midnight in the invoice's time
+     *     zone (§13.31), from the EDR store. Proforma invoices have one line.
+     */
+    get: operations["getInvoiceCharges"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/{id}/pdf": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download the invoice PDF (§7 PDF column)
+     * @description Made from the invoice and the business company's details. Saved as {invoiceNumber}.pdf.
+     */
+    get: operations["downloadInvoicePdf"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/{id}/regenerate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Regenerate an invoice (per-row action)
+     * @description Starts an invoice request that recomputes usage, balances and due amount for the same enterprise,
+     *     period and number. Runs in the background like Generate Request; the invoice shows Inprogress until
+     *     it is done. Not for invoices with payments linked.
+     */
+    post: operations["regenerateInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/send": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send Invoice: e-mail invoices to the partners' billing contacts
+     * @description Uses the business company's Invoice e-mail template and attaches the PDF (the mock records it as
+     *     sent). Invoices that are not completed or whose partner has no billing contact are skipped and
+     *     listed. One undoable change of the e-mail status.
+     */
+    post: operations["sendInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/mark": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark: set payment or e-mail status of many invoices (§7)
+     * @description One undoable change for all of them.
+     */
+    post: operations["markInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on an invoice (safe delete, §13.29)
+     * @description Payments linked to the invoice block deleting it; a sent invoice is reported but does not block.
+     */
+    get: operations["getInvoiceDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) an invoice (§13.29)
+     * @description The invoice leaves balances and lists; it is never removed. Blocked while payments are linked (409)
+     *     unless an administrator overrides with a reason. One undoable change.
+     */
+    post: operations["archiveInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a deleted invoice
+     * @description Administrators; one undoable change.
+     */
+    post: operations["restoreInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoice-requests/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List invoice requests (server-side filter, sort and paging)
+     * @description Invoice Request list (§12.3 /invoices/manual): Request No, start and end time, invoice type,
+     *     enterprise, enterprise type, billing type, status, error and remarks. Auto invoicing adds one
+     *     request per enterprise at the end of each billing cycle (§7).
+     */
+    post: operations["queryInvoiceRequests"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoice-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Generate Request (§12.3 /invoices/manualrequest)
+     * @description One request per enterprise, run in the background: pending, inprogress, then completed (with the
+     *     invoice) or failed (with the error). Traffic invoices take usage from the EDR store for the period in
+     *     the chosen time zone; proforma invoices take the amount and volume given. An enterprise already
+     *     invoiced for an overlapping period fails with the invoice number (use Regenerate).
+     */
+    post: operations["createInvoiceRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoice-requests/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One invoice request (poll for its status)
+     * @description Status, error and the invoice it made.
+     */
+    get: operations["getInvoiceRequest"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List vendor invoices (server-side filter, sort and paging)
+     * @description Vendor Invoice grid (§7) and the reconciliation list (§13.31): their and our figures, dispute amount
+     *     (theirs − ours), comparison and status, with filters by status, partner, period and account manager.
+     */
+    post: operations["queryVendorInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export vendor invoices as CSV
+     * @description Same filter and sort as the list; up to 100,000 rows.
+     */
+    post: operations["exportVendorInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a vendor invoice (upload by hand, §13.31)
+     * @description Saves the invoice and runs the comparison with our EDR figures for the same partner, period,
+     *     currency and time zone straight away; a match is accepted (and the acceptance e-mail sent or queued,
+     *     as the partner's rule says). One undoable change.
+     */
+    post: operations["createVendorInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import vendor invoices from CSV (modal Vendor Invoice)
+     * @description Columns: `enterprise` (name or alias), `invoice_number`, `charge_volume`, `charge_amount`, `currency`,
+     *     `invoice_date`, `due_date`, `period_from`, `period_to`, `timezone`, `remarks`. Invoices already on
+     *     file (same partner and number) are reported as unchanged. All or nothing; each added invoice is
+     *     checked as on Add. One undoable change.
+     */
+    post: operations["importVendorInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One vendor invoice with its reconciliation history
+     * @description Figures, the rule used for the last check and why it matched or not, every status change, note and
+     *     e-mail with user and time (§13.31).
+     */
+    get: operations["getVendorInvoice"];
+    /**
+     * Edit a vendor invoice
+     * @description Saves the whole form and checks the invoice again. A decided invoice (accepted or rejected) keeps
+     *     its status. One undoable change.
+     */
+    put: operations["updateVendorInvoice"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/comparison": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Result screen: their figures against ours per destination (§13.31)
+     * @description Our vendor cost and billable messages per MCCMNC for the invoice's period and time zone, against
+     *     the invoice lines when it has them, sorted by the largest difference. `coverage` says whether the
+     *     EDR store holds the whole period.
+     */
+    get: operations["getVendorInvoiceComparison"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/recheck": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run the comparison again
+     * @description Reads our figures again and applies the partner's current rule. A pending invoice that now
+     *     matches is accepted. Logged in the history.
+     */
+    post: operations["recheckVendorInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/decide": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept, reject or keep pending (§13.31 Actions)
+     * @description accept: status Accepted, acceptance e-mail when `sendEmail`. reject: status Rejected and the rejection
+     *     e-mail with the note and our figures. keep_pending: status Disputed, the note is kept. send_acceptance:
+     *     sends the acceptance e-mail queued under "confirm before sending". A note is required to reject, to
+     *     keep pending and to accept an invoice that did not match. One undoable change.
+     */
+    post: operations["decideVendorInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/notes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a note to a vendor invoice
+     * @description Shows in the invoice history and on the partner's dispute list.
+     */
+    post: operations["addVendorInvoiceNote"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/email-preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview the acceptance or rejection e-mail
+     * @description Recipients (the partner's billing contacts), subject and body with invoice number, period, amounts
+     *     and, for a rejection, the note and our figures.
+     */
+    post: operations["previewVendorInvoiceEmail"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What depends on a vendor invoice (safe delete, §13.29)
+     * @description An accepted invoice counts in the partner's balance and SOA, which blocks deleting it.
+     */
+    get: operations["getVendorInvoiceDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a vendor invoice (§13.29)
+     * @description Blocked while accepted (409) unless an administrator overrides with a reason. One undoable change.
+     */
+    post: operations["archiveVendorInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a deleted vendor invoice
+     * @description Administrators; one undoable change.
+     */
+    post: operations["restoreVendorInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-invoices/summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Monthly reconciliation summary for the billing team (§13.31)
+     * @description Per invoice month: how many invoices, by comparison and status, and their and our amounts in the
+     *     platform currency with the difference.
+     */
+    post: operations["summariseVendorInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/recon-rules/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List reconciliation rules (server-side filter, sort and paging)
+     * @description Reconciliation rules (§13.31 Enterprise › Billing › Reconciliation rules): the default rule (no
+     *     enterprise) and every partner's own rule.
+     */
+    post: operations["queryReconRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/recon-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Give a partner its own reconciliation rule
+     * @description One rule per partner (409 when it has one). One undoable change.
+     */
+    post: operations["createReconRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/recon-rules/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change a reconciliation rule
+     * @description The partner cannot change. Applies to the next checks; past results keep the rule they used.
+     *     One undoable change.
+     */
+    put: operations["updateReconRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/recon-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Remove a partner's own rule (the default applies again)
+     * @description The default rule cannot be removed (400). One undoable change.
+     */
+    post: operations["archiveReconRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/recon-rules/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a removed partner rule
+     * @description Fails when the partner has a new rule (409). One undoable change.
+     */
+    post: operations["restoreReconRule"];
     delete?: never;
     options?: never;
     head?: never;
@@ -6146,43 +6824,6 @@ export type components = {
       exRate: number;
       amountBase: number;
     };
-    InvoiceRow: {
-      id: components["schemas"]["Id"];
-      invoiceNumber: string;
-      enterpriseId: components["schemas"]["Id"];
-      enterprise: string;
-      enterpriseType: string;
-      /** @enum {string} */
-      invoiceType: "auto" | "manual";
-      /** @enum {string} */
-      billingType: "prepaid" | "postpaid";
-      currency: string;
-      /** Format: date */
-      invoiceDate: string;
-      /** Format: date */
-      usageStart: string;
-      /** Format: date */
-      usageEnd: string;
-      /** Format: date */
-      dueDate: string;
-      openingBalance: number;
-      usageCharges: number;
-      closingBalance: number;
-      dueAmount: number;
-      messageCount: number;
-      /** @enum {string} */
-      status: "pending" | "inprogress" | "completed" | "failed";
-      /** @enum {string} */
-      paymentStatus: "unpaid" | "partial" | "paid";
-      /** @enum {string} */
-      emailStatus: "unsent" | "sent";
-      remarks: string | null;
-      /** Format: date-time */
-      archivedAt: string | null;
-    };
-    InvoicePage: components["schemas"]["ListPageMeta"] & {
-      rows: components["schemas"]["InvoiceRow"][];
-    };
     CurrencyRow: {
       id: components["schemas"]["Id"];
       name: string;
@@ -6349,6 +6990,470 @@ export type components = {
         vendor: number;
       };
       platformCurrency: string;
+    };
+    InvoiceRow: {
+      id: components["schemas"]["Id"];
+      invoiceNumber: string;
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      enterpriseType: string;
+      businessCompany: string;
+      /**
+       * @description auto = made by Auto Invoicing at the end of the billing cycle; manual = Generate Request.
+       * @enum {string}
+       */
+      invoiceType: "auto" | "manual";
+      /**
+       * @description Traffic invoices bill usage; proforma invoices ask for an amount in advance and leave balances alone.
+       * @enum {string}
+       */
+      kind: "traffic" | "proforma";
+      /** @enum {string} */
+      billingType: "prepaid" | "postpaid";
+      currency: string;
+      /** @description Usage days are cut at midnight in this zone (§13.31). */
+      timezone: string;
+      /** Format: date */
+      invoiceDate: string;
+      /** Format: date */
+      usageStart: string;
+      /** Format: date */
+      usageEnd: string;
+      /** Format: date */
+      dueDate: string;
+      /** @description Customer balance before the usage, same sign as every balance (positive = the client's credit, negative = owed). */
+      openingBalance: number;
+      usageCharges: number;
+      /** @description Opening balance − usage charges. */
+      closingBalance: number;
+      /** @description What the client must pay, never negative (the owed part of the closing balance). */
+      dueAmount: number;
+      messageCount: number;
+      /** @enum {string} */
+      status: "pending" | "inprogress" | "completed" | "failed";
+      /** @enum {string} */
+      paymentStatus: "unpaid" | "partial" | "paid";
+      /** @enum {string} */
+      emailStatus: "unsent" | "sent";
+      /** Format: date-time */
+      emailSentAt: string | null;
+      remarks: string | null;
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    InvoicePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["InvoiceRow"][];
+    };
+    InvoiceDetail: components["schemas"]["InvoiceRow"] & {
+      emailRecipients: string[];
+      /** @description Credits linked to the invoice minus debits, in the invoice currency. */
+      paidAmount: number;
+      payments: {
+        id: components["schemas"]["Id"];
+        /** Format: date */
+        paymentDate: string;
+        transactionType: components["schemas"]["TransactionType"];
+        /** @enum {string} */
+        paymentType: "credit" | "debit";
+        amount: number;
+        currency: string;
+      }[];
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    InvoiceUpdate: {
+      /** Format: date */
+      dueDate: string;
+      remarks: string | null;
+    };
+    InvoiceSaved: {
+      record: components["schemas"]["InvoiceDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    InvoiceCharges: {
+      invoiceId: components["schemas"]["Id"];
+      currency: string;
+      timezone: string;
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      /**
+       * @description none = the EDR store holds no traffic for the period.
+       * @enum {string}
+       */
+      source: "edr" | "proforma" | "none";
+      note: string | null;
+      rows: {
+        mccmnc: string;
+        country: string | null;
+        network: string | null;
+        rate: number | null;
+        messages: number;
+        amount: number;
+      }[];
+      totalMessages: number;
+      totalAmount: number;
+    };
+    InvoiceIdsInput: {
+      ids: components["schemas"]["Id"][];
+    };
+    InvoiceSendResult: {
+      sent: number;
+      skipped: {
+        id: components["schemas"]["Id"];
+        invoiceNumber: string;
+        reason: string;
+      }[];
+      change: components["schemas"]["Change"] | null;
+    };
+    InvoiceMarkInput: {
+      ids: components["schemas"]["Id"][];
+      /** @enum {string|null} */
+      paymentStatus?: "unpaid" | "partial" | "paid" | null;
+      /**
+       * @description At least one of paymentStatus and emailStatus.
+       * @enum {string|null}
+       */
+      emailStatus?: "unsent" | "sent" | null;
+    };
+    InvoiceRequestInput: {
+      /**
+       * @description Invoice Type (Traffic / Proforma).
+       * @enum {string}
+       */
+      kind: "traffic" | "proforma";
+      enterpriseIds: components["schemas"]["Id"][];
+      /** @description IANA zone; null = each enterprise's billing time zone. */
+      timezone: string | null;
+      /** Format: date */
+      usageStart: string;
+      /**
+       * Format: date
+       * @description Inclusive; at most 366 days after usageStart.
+       */
+      usageEnd: string;
+      /**
+       * @description auto = invoice date + the billing cycle's due days.
+       * @enum {string}
+       */
+      dueDateType: "auto" | "manual";
+      /**
+       * Format: date
+       * @description Required when dueDateType is manual.
+       */
+      dueDate: string | null;
+      /** @description One enterprise only; null = the business company's next number. */
+      invoiceNumber: string | null;
+      /** @description Proforma only (required there). */
+      amount: number | null;
+      /** @description Proforma only. */
+      volume: number | null;
+      /** @description Proforma only; null = the customer billing currency. Traffic invoices use the billing currency. */
+      currency: string | null;
+      /**
+       * Format: date
+       * @description null = today.
+       */
+      invoiceDate: string | null;
+      remarks: string | null;
+    };
+    InvoiceRequestRow: {
+      id: components["schemas"]["Id"];
+      requestNo: string;
+      /** @enum {string} */
+      kind: "traffic" | "proforma";
+      /** @enum {string} */
+      invoiceType: "auto" | "manual";
+      /** @description Made by Regenerate on an existing invoice. */
+      regenerate: boolean;
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      enterpriseType: string;
+      /** @enum {string|null} */
+      billingType: "prepaid" | "postpaid" | null;
+      timezone: string;
+      /** Format: date */
+      usageStart: string;
+      /** Format: date */
+      usageEnd: string;
+      /** @enum {string} */
+      status: "pending" | "inprogress" | "completed" | "failed";
+      error: string | null;
+      remarks: string | null;
+      invoiceId: components["schemas"]["Id"] | null;
+      invoiceNumber: string | null;
+      /** Format: date-time */
+      startedAt: string | null;
+      /** Format: date-time */
+      finishedAt: string | null;
+      /** @description Null = Auto Invoicing. */
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+    };
+    InvoiceRequestPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["InvoiceRequestRow"][];
+    };
+    InvoiceRequestCreated: {
+      requests: components["schemas"]["InvoiceRequestRow"][];
+    };
+    /**
+     * @description Result of the last check; no_data = the EDR store does not hold the whole period; null = not checked yet.
+     * @enum {string|null}
+     */
+    ReconComparison: "match" | "mismatch" | "no_data" | null;
+    /**
+     * @description pending = waiting for a check or decision; disputed = did not match and is kept pending with a note.
+     * @enum {string}
+     */
+    ReconStatus: "pending" | "accepted" | "disputed" | "rejected";
+    VendorInvoiceLine: {
+      mccmnc: string;
+      volume: number | null;
+      amount: number;
+    };
+    VendorInvoiceInput: {
+      enterpriseId: components["schemas"]["Id"];
+      invoiceNumber: string;
+      chargeVolume: number | null;
+      chargeAmount: number;
+      /** @description null = the partner's vendor billing currency. */
+      currency: string | null;
+      /** Format: date */
+      invoiceDate: string;
+      /** Format: date */
+      dueDate: string | null;
+      /** Format: date */
+      periodFrom: string;
+      /** Format: date */
+      periodTo: string;
+      /** @description null = the partner's billing time zone. */
+      timezone: string | null;
+      remarks: string | null;
+      /** @description Per-destination lines from the invoice, when it has them. Omitted on update = kept. */
+      lines?: components["schemas"]["VendorInvoiceLine"][];
+    };
+    VendorInvoiceRow: {
+      id: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      accountManager: string | null;
+      invoiceNumber: string;
+      currency: string;
+      chargeVolume: number | null;
+      chargeAmount: number;
+      /** @description Our billable vendor messages for the period; null = not checked. */
+      ourVolume: number | null;
+      /** @description Our vendor cost for the period in the invoice currency. */
+      ourAmount: number | null;
+      /** @description Dispute Amount = their amount − ours. */
+      disputeAmount: number | null;
+      /** @description Dispute amount as a share of our amount. */
+      differencePct: number | null;
+      volumeDifference: number | null;
+      /** Format: date */
+      invoiceDate: string;
+      /** Format: date */
+      dueDate: string | null;
+      /** Format: date */
+      periodFrom: string;
+      /** Format: date */
+      periodTo: string;
+      timezone: string;
+      comparison: components["schemas"]["ReconComparison"];
+      status: components["schemas"]["ReconStatus"];
+      /**
+       * @description Acceptance or rejection e-mail; waiting = queued under "confirm before sending".
+       * @enum {string}
+       */
+      emailStatus: "none" | "waiting" | "sent" | "failed";
+      /** @enum {string} */
+      source: "manual" | "import" | "email";
+      lineCount: number;
+      remarks: string | null;
+      /** Format: date-time */
+      checkedAt: string | null;
+      createdBy: string | null;
+      createdAt: components["schemas"]["Timestamp"];
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    VendorInvoicePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["VendorInvoiceRow"][];
+    };
+    VendorInvoiceEvent: {
+      id: components["schemas"]["Id"];
+      /** @enum {string} */
+      kind: "created" | "edited" | "checked" | "status" | "note" | "email";
+      statusFrom: string | null;
+      statusTo: string | null;
+      note: string | null;
+      emailTo: string[];
+      /** @description Null = the platform (automatic check or e-mail). */
+      user: string | null;
+      at: components["schemas"]["Timestamp"];
+    };
+    VendorInvoiceDetail: components["schemas"]["VendorInvoiceRow"] & {
+      /** @description Why the last check matched or not, one line per check. */
+      reasons: string[];
+      /** @description The rule the last check used (a copy; later rule changes do not alter it). */
+      rule: components["schemas"]["ReconRuleValues"] | null;
+      /**
+       * @description How the invoice shows on the partner's SOA (§13.31).
+       * @enum {string}
+       */
+      inSoa: "included" | "disputed_block" | "excluded";
+      events: components["schemas"]["VendorInvoiceEvent"][];
+    };
+    VendorInvoiceSaved: {
+      record: components["schemas"]["VendorInvoiceDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    VendorInvoiceComparison: {
+      invoiceId: components["schemas"]["Id"];
+      currency: string;
+      timezone: string;
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      /** @enum {string} */
+      coverage: "full" | "partial" | "none";
+      /** Format: date-time */
+      edrFrom: string | null;
+      /** Format: date-time */
+      edrTo: string | null;
+      rows: {
+        mccmnc: string;
+        country: string | null;
+        network: string | null;
+        theirVolume: number | null;
+        theirAmount: number | null;
+        ourVolume: number;
+        ourAmount: number;
+        /** @description Their amount − ours; null when the invoice has no lines. */
+        difference: number | null;
+        differencePct: number | null;
+        /** @description Off by more than the rule's per-destination tolerance. */
+        flagged: boolean;
+      }[];
+    };
+    VendorInvoiceDecision: {
+      /** @enum {string} */
+      action: "accept" | "reject" | "keep_pending" | "send_acceptance";
+      note: string | null;
+      /** @description accept and reject only; send_acceptance always sends. */
+      sendEmail: boolean;
+    };
+    VendorInvoiceNote: {
+      note: string;
+    };
+    VendorInvoiceEmailInput: {
+      /** @enum {string} */
+      kind: "acceptance" | "rejection";
+      note: string | null;
+    };
+    EmailPreview: {
+      /** @description Empty = the partner has no billing contact. */
+      recipients: string[];
+      subject: string;
+      body: string;
+    };
+    VendorInvoiceSummaryInput: {
+      fromMonth: string;
+      /** @description Inclusive; at most 36 months. */
+      toMonth: string;
+      enterpriseId: components["schemas"]["Id"] | null;
+      accountManagerId: components["schemas"]["Id"] | null;
+    };
+    VendorInvoiceSummary: {
+      platformCurrency: string;
+      rows: {
+        /** @description Invoice month, YYYY-MM. */
+        month: string;
+        invoices: number;
+        match: number;
+        mismatch: number;
+        noData: number;
+        unchecked: number;
+        pending: number;
+        accepted: number;
+        disputed: number;
+        rejected: number;
+        /** @description Platform currency at each invoice date's rate. */
+        theirAmount: number;
+        ourAmount: number;
+        difference: number;
+      }[];
+    };
+    ReconRuleValues: {
+      /** @description Amount matches when the difference is at most this share of our amount; null = no percentage check. */
+      amountPct: number | null;
+      /** @description ... or at most this amount in the invoice currency; null = no fixed check. */
+      amountFixed: number | null;
+      /**
+       * @description With both set, stricter = both must hold, looser = either is enough.
+       * @enum {string}
+       */
+      amountCombine: "stricter" | "looser";
+      countPct: number | null;
+      /** @description Messages. */
+      countFixed: number | null;
+      /** @enum {string} */
+      countCombine: "stricter" | "looser";
+      /** @description Flag any destination off by more than this share even when the total matches; null = off. */
+      destinationPct: number | null;
+      /**
+       * @description Acceptance e-mail on a match - sent at once, or queued until confirmed.
+       * @enum {string}
+       */
+      autoSend: "auto" | "confirm";
+      /**
+       * @description Rejected and pending invoices are left off the SOA or shown in a separate "disputed" block.
+       * @enum {string}
+       */
+      disputedInSoa: "exclude" | "separate_block";
+    };
+    ReconRuleInput: {
+      /** @description The partner; null only for the default rule (which already exists). */
+      enterpriseId: components["schemas"]["Id"] | null;
+      amountPct: number | null;
+      amountFixed: number | null;
+      /** @enum {string} */
+      amountCombine: "stricter" | "looser";
+      countPct: number | null;
+      countFixed: number | null;
+      /** @enum {string} */
+      countCombine: "stricter" | "looser";
+      destinationPct: number | null;
+      /** @enum {string} */
+      autoSend: "auto" | "confirm";
+      /** @enum {string} */
+      disputedInSoa: "exclude" | "separate_block";
+    };
+    ReconRuleRow: components["schemas"]["ReconRuleValues"] & {
+      id: components["schemas"]["Id"];
+      enterpriseId: components["schemas"]["Id"] | null;
+      /** @description Null = the default rule for partners without their own. */
+      enterprise: string | null;
+      /** @description The partner's vendor billing currency (for the fixed amount). */
+      currency: string | null;
+      /** @description Vendor invoices of the partner (all partners without a rule, for the default). */
+      invoices: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    ReconRulePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["ReconRuleRow"][];
+    };
+    ReconRuleSaved: {
+      record: components["schemas"]["ReconRuleRow"];
+      change: components["schemas"]["Change"] | null;
     };
     /**
      * @description Time frame for traffic figures (§13.27).
@@ -6760,7 +7865,10 @@ export type components = {
       | "currency_rates"
       | "currency_rate_history"
       | "billing_cycles"
-      | "enterprise_balances";
+      | "enterprise_balances"
+      | "invoice_requests"
+      | "vendor_invoices"
+      | "recon_rules";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -12574,6 +13682,959 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The invoice */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InvoiceUpdate"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getInvoiceCharges: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The lines */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceCharges"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadInvoicePdf: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The invoice as PDF */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/pdf": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  regenerateInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The request, pending */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceRequestRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InvoiceIdsInput"];
+      };
+    };
+    responses: {
+      /** @description What was sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceSendResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  markInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InvoiceMarkInput"];
+      };
+    };
+    responses: {
+      /** @description The change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChangeResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getInvoiceDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryInvoiceRequests: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of invoice requests */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceRequestPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createInvoiceRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InvoiceRequestInput"];
+      };
+    };
+    responses: {
+      /** @description The requests, pending */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceRequestCreated"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getInvoiceRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoiceRequestRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryVendorInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of vendor invoices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoicePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportVendorInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createVendorInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorInvoiceInput"];
+      };
+    };
+    responses: {
+      /** @description Created and checked, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  importVendorInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportRequest"];
+      };
+    };
+    responses: {
+      /** @description What the import adds; `applied` says whether it was saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The invoice */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateVendorInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorInvoiceInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorInvoiceComparison: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The comparison */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceComparison"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  recheckVendorInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The invoice after the check, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  decideVendorInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorInvoiceDecision"];
+      };
+    };
+    responses: {
+      /** @description The invoice, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  addVendorInvoiceNote: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorInvoiceNote"];
+      };
+    };
+    responses: {
+      /** @description The invoice */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceDetail"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewVendorInvoiceEmail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorInvoiceEmailInput"];
+      };
+    };
+    responses: {
+      /** @description The e-mail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorInvoiceDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveVendorInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreVendorInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  summariseVendorInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VendorInvoiceSummaryInput"];
+      };
+    };
+    responses: {
+      /** @description One row per month */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VendorInvoiceSummary"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryReconRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of reconciliation rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReconRulePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createReconRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReconRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReconRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateReconRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReconRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReconRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveReconRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReconRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreReconRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReconRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
     };
   };

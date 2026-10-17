@@ -15,6 +15,9 @@ import type {
   EnterpriseBalanceRow,
   HlrPolicyRow,
   InvoiceRow,
+  InvoiceRequestRow,
+  ReconRuleRow,
+  VendorInvoiceRow,
   TransactionRow,
   HlrProviderRate,
   HlrProviderRow,
@@ -1534,7 +1537,7 @@ export const transactionList: ListDef<TransactionRow> = {
 
 export const invoiceList: ListDef<InvoiceRow> = {
   fields: listFields.invoices,
-  from: "invoices inv JOIN enterprises e ON e.id = inv.enterprise_id",
+  from: "invoices inv JOIN enterprises e ON e.id = inv.enterprise_id JOIN business_companies bco ON bco.id = e.business_company_id",
   baseWhere: "inv.deleted_at IS NULL",
   archivedField: "archived",
   columns: {
@@ -1543,9 +1546,12 @@ export const invoiceList: ListDef<InvoiceRow> = {
     enterpriseId: { sql: "inv.enterprise_id" },
     enterprise: { sql: "e.name" },
     enterpriseType: { sql: "e.type" },
+    businessCompany: { sql: "bco.name" },
+    kind: { sql: "inv.kind" },
     invoiceType: { sql: "inv.invoice_type" },
     billingType: { sql: "inv.billing_type" },
     currency: { sql: "inv.currency" },
+    timezone: { sql: "inv.timezone" },
     invoiceDate: { sql: "inv.invoice_date" },
     usageStart: { sql: "inv.usage_start" },
     usageEnd: { sql: "inv.usage_end" },
@@ -1558,21 +1564,30 @@ export const invoiceList: ListDef<InvoiceRow> = {
     status: { sql: "inv.status" },
     paymentStatus: { sql: "inv.payment_status" },
     emailStatus: { sql: "inv.email_status" },
+    emailSentAt: { sql: "inv.email_sent_at" },
     remarks: { sql: "inv.remarks" },
     archived: { sql: "(inv.deleted_at IS NOT NULL)" },
   },
   search: ["invoiceNumber", "enterprise"],
   idSql: "inv.id",
-  select: `inv.*, e.name AS enterprise, e.type AS enterprise_type`,
-  mapRow: (r) => ({
+  select: `inv.*, e.name AS enterprise, e.type AS enterprise_type, bco.name AS business_company`,
+  mapRow: (r) => mapInvoiceRow(r),
+};
+
+/** Shared by the list and the invoice detail. */
+export function mapInvoiceRow(r: Record<string, unknown>): InvoiceRow {
+  return {
     id: Number(r.id),
     invoiceNumber: r.invoice_number as string,
     enterpriseId: Number(r.enterprise_id),
     enterprise: r.enterprise as string,
     enterpriseType: r.enterprise_type as string,
+    businessCompany: r.business_company as string,
     invoiceType: r.invoice_type as InvoiceRow["invoiceType"],
+    kind: r.kind as InvoiceRow["kind"],
     billingType: r.billing_type as InvoiceRow["billingType"],
     currency: String(r.currency).trim(),
+    timezone: r.timezone as string,
     invoiceDate: ymd(r.invoice_date),
     usageStart: ymd(r.usage_start),
     usageEnd: ymd(r.usage_end),
@@ -1585,10 +1600,232 @@ export const invoiceList: ListDef<InvoiceRow> = {
     status: r.status as InvoiceRow["status"],
     paymentStatus: r.payment_status as InvoiceRow["paymentStatus"],
     emailStatus: r.email_status as InvoiceRow["emailStatus"],
+    emailSentAt: iso(r.email_sent_at),
     remarks: (r.remarks as string | null) ?? null,
     archivedAt: iso(r.deleted_at),
-  }),
+  };
+}
+
+/** Invoice Request list (§12.3): Request No is the id with a prefix. */
+export const requestNoSql = (alias: string) => `('IR-' || lpad(${alias}.id::text, 6, '0'))`;
+export const INVOICE_REQUEST_FROM = `invoice_requests r
+    JOIN enterprises e ON e.id = r.enterprise_id
+    LEFT JOIN enterprise_billing cb ON cb.enterprise_id = r.enterprise_id AND cb.side = 'customer'
+    LEFT JOIN invoices inv ON inv.id = r.invoice_id
+    LEFT JOIN users u ON u.id = r.created_by_id`;
+export const INVOICE_REQUEST_SELECT = `r.*, ${requestNoSql("r")} AS request_no, e.name AS enterprise, e.type AS enterprise_type,
+    cb.billing_type, inv.invoice_number, u.username AS created_by`;
+export const invoiceRequestList: ListDef<InvoiceRequestRow> = {
+  fields: listFields.invoice_requests,
+  from: INVOICE_REQUEST_FROM,
+  columns: {
+    id: { sql: "r.id" },
+    requestNo: { sql: requestNoSql("r") },
+    startedAt: { sql: "r.started_at" },
+    finishedAt: { sql: "r.finished_at" },
+    invoiceType: { sql: "r.invoice_type" },
+    kind: { sql: "r.kind" },
+    regenerate: { sql: "r.regenerate" },
+    enterprise: { sql: "e.name" },
+    enterpriseId: { sql: "r.enterprise_id" },
+    enterpriseType: { sql: "e.type" },
+    billingType: { sql: "cb.billing_type" },
+    timezone: { sql: "r.timezone" },
+    usageStart: { sql: "r.usage_start" },
+    usageEnd: { sql: "r.usage_end" },
+    status: { sql: "r.status" },
+    error: { sql: "r.error" },
+    invoiceNumber: { sql: "inv.invoice_number" },
+    remarks: { sql: "r.remarks" },
+    createdBy: { sql: "u.username" },
+    createdAt: { sql: "r.inserted_at" },
+  },
+  search: ["requestNo", "enterprise", "invoiceNumber"],
+  idSql: "r.id",
+  select: INVOICE_REQUEST_SELECT,
+  mapRow: (r) => mapInvoiceRequest(r),
 };
+
+export function mapInvoiceRequest(r: Record<string, unknown>): InvoiceRequestRow {
+  return {
+    id: Number(r.id),
+    requestNo: r.request_no as string,
+    kind: r.kind as InvoiceRequestRow["kind"],
+    invoiceType: r.invoice_type as InvoiceRequestRow["invoiceType"],
+    regenerate: r.regenerate as boolean,
+    enterpriseId: Number(r.enterprise_id),
+    enterprise: r.enterprise as string,
+    enterpriseType: r.enterprise_type as string,
+    billingType: (r.billing_type as InvoiceRequestRow["billingType"]) ?? null,
+    timezone: r.timezone as string,
+    usageStart: ymd(r.usage_start),
+    usageEnd: ymd(r.usage_end),
+    status: r.status as InvoiceRequestRow["status"],
+    error: (r.error as string | null) ?? null,
+    remarks: (r.remarks as string | null) ?? null,
+    invoiceId: r.invoice_id === null ? null : Number(r.invoice_id),
+    invoiceNumber: (r.invoice_number as string | null) ?? null,
+    startedAt: iso(r.started_at),
+    finishedAt: iso(r.finished_at),
+    createdBy: (r.created_by as string | null) ?? null,
+    createdAt: iso(r.inserted_at)!,
+  };
+}
+
+/** Vendor invoices and the reconciliation list (§7, §13.31). Dispute amount = theirs − ours. */
+const viDisputeSql = "(v.charge_amount - v.our_amount)";
+const viPctSql =
+  "(CASE WHEN v.our_amount > 0 THEN round((v.charge_amount - v.our_amount) / v.our_amount * 100, 2) END)";
+const viLinesSql = "(SELECT count(*)::int FROM vendor_invoice_lines l WHERE l.vendor_invoice_id = v.id)";
+export const VENDOR_INVOICE_FROM = `vendor_invoices v
+    JOIN enterprises e ON e.id = v.enterprise_id
+    LEFT JOIN users am ON am.id = e.account_manager_id
+    LEFT JOIN users cu ON cu.id = v.created_by_id`;
+export const VENDOR_INVOICE_SELECT = `v.*, e.name AS enterprise, ${fullName("am")} AS account_manager,
+    cu.username AS created_by, ${viLinesSql} AS line_count`;
+export const vendorInvoiceList: ListDef<VendorInvoiceRow> = {
+  fields: listFields.vendor_invoices,
+  from: VENDOR_INVOICE_FROM,
+  baseWhere: "v.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "v.id" },
+    enterprise: { sql: "e.name" },
+    enterpriseId: { sql: "v.enterprise_id" },
+    accountManager: { sql: fullName("am") },
+    invoiceNumber: { sql: "v.invoice_number" },
+    status: { sql: "v.recon_status" },
+    comparison: { sql: "v.comparison" },
+    currency: { sql: "v.currency" },
+    chargeVolume: { sql: "v.charge_volume" },
+    chargeAmount: { sql: "v.charge_amount" },
+    ourVolume: { sql: "v.our_volume" },
+    ourAmount: { sql: "v.our_amount" },
+    disputeAmount: { sql: viDisputeSql },
+    differencePct: { sql: viPctSql },
+    volumeDifference: { sql: "(v.charge_volume - v.our_volume)" },
+    invoiceDate: { sql: "v.invoice_date" },
+    dueDate: { sql: "v.due_date" },
+    periodFrom: { sql: "v.period_from" },
+    periodTo: { sql: "v.period_to" },
+    timezone: { sql: "v.timezone" },
+    emailStatus: { sql: "v.email_status" },
+    source: { sql: "v.source" },
+    lineCount: { sql: viLinesSql },
+    remarks: { sql: "v.remarks" },
+    checkedAt: { sql: "v.checked_at" },
+    createdBy: { sql: "cu.username" },
+    createdAt: { sql: "v.inserted_at" },
+    archived: { sql: "(v.deleted_at IS NOT NULL)" },
+  },
+  search: ["invoiceNumber", "enterprise"],
+  idSql: "v.id",
+  select: VENDOR_INVOICE_SELECT,
+  mapRow: (r) => mapVendorInvoice(r),
+};
+
+const numOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+export function mapVendorInvoice(r: Record<string, unknown>): VendorInvoiceRow {
+  const their = Number(r.charge_amount);
+  const our = numOrNull(r.our_amount);
+  const theirVol = numOrNull(r.charge_volume);
+  const ourVol = numOrNull(r.our_volume);
+  return {
+    id: Number(r.id),
+    enterpriseId: Number(r.enterprise_id),
+    enterprise: r.enterprise as string,
+    accountManager: (r.account_manager as string | null) ?? null,
+    invoiceNumber: r.invoice_number as string,
+    currency: String(r.currency).trim(),
+    chargeVolume: theirVol,
+    chargeAmount: their,
+    ourVolume: ourVol,
+    ourAmount: our,
+    disputeAmount: our === null ? null : Math.round((their - our) * 100) / 100,
+    differencePct: our === null || our <= 0 ? null : Math.round(((their - our) / our) * 10000) / 100,
+    volumeDifference: theirVol === null || ourVol === null ? null : theirVol - ourVol,
+    invoiceDate: ymd(r.invoice_date),
+    dueDate: r.due_date === null ? null : ymd(r.due_date),
+    periodFrom: ymd(r.period_from),
+    periodTo: ymd(r.period_to),
+    timezone: r.timezone as string,
+    comparison: (r.comparison as VendorInvoiceRow["comparison"]) ?? null,
+    status: r.recon_status as VendorInvoiceRow["status"],
+    emailStatus: r.email_status as VendorInvoiceRow["emailStatus"],
+    source: r.source as VendorInvoiceRow["source"],
+    lineCount: Number(r.line_count ?? 0),
+    remarks: (r.remarks as string | null) ?? null,
+    checkedAt: iso(r.checked_at),
+    createdBy: (r.created_by as string | null) ?? null,
+    createdAt: iso(r.inserted_at)!,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
+/** Reconciliation rules (§13.31): the default rule (no enterprise) first, then partners. */
+const rrInvoicesSql = `(CASE WHEN rr.enterprise_id IS NULL
+    THEN (SELECT count(*)::int FROM vendor_invoices vi WHERE vi.deleted_at IS NULL AND NOT EXISTS
+           (SELECT 1 FROM recon_rules x WHERE x.enterprise_id = vi.enterprise_id AND x.deleted_at IS NULL))
+    ELSE (SELECT count(*)::int FROM vendor_invoices vi WHERE vi.deleted_at IS NULL AND vi.enterprise_id = rr.enterprise_id) END)`;
+export const RECON_RULE_FROM = `recon_rules rr
+    LEFT JOIN enterprises e ON e.id = rr.enterprise_id
+    LEFT JOIN enterprise_billing vb ON vb.enterprise_id = rr.enterprise_id AND vb.side = 'vendor'
+    LEFT JOIN users u ON u.id = rr.updated_by_id`;
+export const RECON_RULE_SELECT = `rr.*, e.name AS enterprise, vb.currency AS vendor_currency, u.username AS updated_by,
+    ${rrInvoicesSql} AS invoices`;
+export const reconRuleList: ListDef<ReconRuleRow> = {
+  fields: listFields.recon_rules,
+  from: RECON_RULE_FROM,
+  baseWhere: "rr.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "rr.id" },
+    // The default rule sorts first.
+    enterprise: { sql: "COALESCE(e.name, '')" },
+    enterpriseId: { sql: "rr.enterprise_id" },
+    amountPct: { sql: "rr.amount_pct" },
+    amountFixed: { sql: "rr.amount_fixed" },
+    amountCombine: { sql: "rr.amount_combine" },
+    countPct: { sql: "rr.count_pct" },
+    countFixed: { sql: "rr.count_fixed" },
+    countCombine: { sql: "rr.count_combine" },
+    destinationPct: { sql: "rr.destination_pct" },
+    autoSend: { sql: "rr.auto_send" },
+    disputedInSoa: { sql: "rr.disputed_in_soa" },
+    currency: { sql: "vb.currency" },
+    invoices: { sql: rrInvoicesSql },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "rr.updated_at" },
+    archived: { sql: "(rr.deleted_at IS NOT NULL)" },
+  },
+  search: ["enterprise"],
+  idSql: "rr.id",
+  select: RECON_RULE_SELECT,
+  mapRow: (r) => mapReconRule(r),
+};
+
+export function mapReconRule(r: Record<string, unknown>): ReconRuleRow {
+  return {
+    id: Number(r.id),
+    enterpriseId: numOrNull(r.enterprise_id),
+    enterprise: (r.enterprise as string | null) ?? null,
+    amountPct: numOrNull(r.amount_pct),
+    amountFixed: numOrNull(r.amount_fixed),
+    amountCombine: r.amount_combine as ReconRuleRow["amountCombine"],
+    countPct: numOrNull(r.count_pct),
+    countFixed: numOrNull(r.count_fixed),
+    countCombine: r.count_combine as ReconRuleRow["countCombine"],
+    destinationPct: numOrNull(r.destination_pct),
+    autoSend: r.auto_send as ReconRuleRow["autoSend"],
+    disputedInSoa: r.disputed_in_soa as ReconRuleRow["disputedInSoa"],
+    currency: r.vendor_currency ? String(r.vendor_currency).trim() : null,
+    invoices: Number(r.invoices ?? 0),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
 
 const currencyRateSql = "(SELECT cl.rate_per_usd FROM currency_latest cl WHERE cl.iso = c.iso)";
 const currencyRateAtSql =
@@ -1738,12 +1975,13 @@ export const BALANCE_FROM = `enterprises e
         CASE WHEN cb.id IS NULL THEN NULL ELSE cb.opening_balance
           + COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
                        WHERE enterprise_id = e.id AND side = 'customer' AND deleted_at IS NULL), 0)
-          - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = e.id AND deleted_at IS NULL AND status <> 'failed'), 0) END AS customer,
+          - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = e.id AND deleted_at IS NULL
+                       AND status <> 'failed' AND kind = 'traffic'), 0) END AS customer,
         CASE WHEN vb.id IS NULL THEN NULL ELSE vb.opening_balance
           + COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
                        WHERE enterprise_id = e.id AND side = 'vendor' AND deleted_at IS NULL), 0)
           - COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
-                       WHERE enterprise_id = e.id AND deleted_at IS NULL AND recon_status IN ('match', 'accepted')), 0) END AS vendor) bal ON true
+                       WHERE enterprise_id = e.id AND deleted_at IS NULL AND recon_status = 'accepted'), 0) END AS vendor) bal ON true
     LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
     LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
 const netSql = `round(COALESCE(bal.customer, 0)
@@ -1825,6 +2063,9 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   hlr_policies: hlrPolicyList as ListDef<unknown>,
   transactions: transactionList as ListDef<unknown>,
   invoices: invoiceList as ListDef<unknown>,
+  invoice_requests: invoiceRequestList as ListDef<unknown>,
+  vendor_invoices: vendorInvoiceList as ListDef<unknown>,
+  recon_rules: reconRuleList as ListDef<unknown>,
   currencies: currencyList as ListDef<unknown>,
   currency_rates: currencyRateList as ListDef<unknown>,
   currency_rate_history: currencyRateHistoryList as ListDef<unknown>,

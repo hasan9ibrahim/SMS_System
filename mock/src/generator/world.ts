@@ -82,6 +82,8 @@ export interface Enterprise {
   customerCurrency: string | null;
   vendorCurrency: string | null;
   customerBillingType: "prepaid" | "postpaid" | null;
+  /** Billing time zone (§13.31): invoice and report days are cut at midnight here. */
+  billingTimezone: string;
 }
 
 export type BillingType = "attempt" | "submit" | "reported" | "delivery";

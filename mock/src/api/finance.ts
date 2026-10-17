@@ -147,7 +147,7 @@ async function checkTransaction(
 }
 
 /** The side's billing contacts (finance, else commercial) for the confirmation. */
-async function billingContacts(db: Db, enterpriseId: number): Promise<string[]> {
+export async function billingContacts(db: Db, enterpriseId: number): Promise<string[]> {
   const { rows } = await db.query(
     `SELECT emails FROM enterprise_contacts WHERE enterprise_id = $1 AND contact_type IN ('finance', 'commercial')
       ORDER BY contact_type = 'finance' DESC LIMIT 1`,

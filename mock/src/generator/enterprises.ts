@@ -117,6 +117,7 @@ export async function generateEnterprises(world: World, rng: Rng, sink: TableSin
       customerCurrency,
       vendorCurrency,
       customerBillingType: isCustomer ? (rng.chance(0.25) ? "prepaid" : "postpaid") : null,
+      billingTimezone: "UTC",
     };
     world.enterprises.push(e);
     world.enterpriseById.set(id, e);
@@ -146,7 +147,7 @@ export async function generateEnterprises(world: World, rng: Rng, sink: TableSin
       website: `https://www.${e.domain}`,
       registration_number: `REG-${rng.digits(8)}`,
       vat_number: rng.chance(0.7) ? `${country.iso}${rng.digits(9)}` : null,
-      billing_timezone: rng.pick(TIMEZONES),
+      billing_timezone: (e.billingTimezone = rng.pick(TIMEZONES)),
       rate_notice_days: rng.pick([0, 3, 7, 7, 7, 14, 30]),
       created_by_id: editor,
       updated_by_id: rng.pick(editors).id,

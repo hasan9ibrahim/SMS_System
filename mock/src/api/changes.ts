@@ -52,6 +52,47 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
       dueDays: "due_days",
     },
   },
+  // Invoices (§7): amounts change only by Regenerate (not undone); these fields are.
+  invoice: {
+    table: "invoices",
+    columns: { dueDate: "due_date", remarks: "remarks", paymentStatus: "payment_status", emailStatus: "email_status" },
+  },
+  // Vendor invoices (§13.31): the form, our figures and the status; lines and events stay history.
+  vendor_invoice: {
+    table: "vendor_invoices",
+    columns: {
+      enterpriseId: "enterprise_id",
+      invoiceNumber: "invoice_number",
+      chargeVolume: "charge_volume",
+      chargeAmount: "charge_amount",
+      currency: "currency",
+      invoiceDate: "invoice_date",
+      dueDate: "due_date",
+      periodFrom: "period_from",
+      periodTo: "period_to",
+      timezone: "timezone",
+      remarks: "remarks",
+      comparison: "comparison",
+      ourVolume: "our_volume",
+      ourAmount: "our_amount",
+      status: "recon_status",
+      emailStatus: "email_status",
+    },
+  },
+  recon_rule: {
+    table: "recon_rules",
+    columns: {
+      amountPct: "amount_pct",
+      amountFixed: "amount_fixed",
+      amountCombine: "amount_combine",
+      countPct: "count_pct",
+      countFixed: "count_fixed",
+      countCombine: "count_combine",
+      destinationPct: "destination_pct",
+      autoSend: "auto_send",
+      disputedInSoa: "disputed_in_soa",
+    },
+  },
   enterprise_doc: { table: "enterprise_docs", columns: {} },
   // MCCMNC master (§6.1); DLR targets live here too (decided 2026-10-16).
   destination: {
@@ -168,6 +209,13 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
       );
       continue;
     }
+    // Vendor invoice history (§13.31) records every status change, undone ones too.
+    if (entityType === "vendor_invoice" && e.field === "status")
+      await c.query(
+        `INSERT INTO vendor_invoice_events (vendor_invoice_id, kind, status_from, status_to, note, user_id)
+         VALUES ($1, 'status', $2, $3, 'Change undone', $4)`,
+        [e.entity_id, e.after, e.before, userId],
+      );
     const target = ENTITY_COLUMNS[entityType];
     const column = target?.columns[e.field];
     if (target && column)

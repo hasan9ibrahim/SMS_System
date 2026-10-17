@@ -94,11 +94,13 @@ export type ImportTarget =
   | { kind: "dial_codes"; profileId: number; profile: string }
   | { kind: "mo_numbers" }
   | { kind: "number_list"; listId: number }
-  | { kind: "hlr_rates"; providerId: number };
+  | { kind: "hlr_rates"; providerId: number }
+  | { kind: "vendor_invoices" };
 
 export function runImport(target: ImportTarget, body: ImportRequest): Promise<ImportResult> {
   if (target.kind === "destinations") return unwrap(api.POST("/destinations/import", { body }));
   if (target.kind === "mo_numbers") return unwrap(api.POST("/mo-numbers/import", { body }));
+  if (target.kind === "vendor_invoices") return unwrap(api.POST("/vendor-invoices/import", { body }));
   if (target.kind === "hlr_rates")
     return unwrap(api.POST("/hlr-providers/{id}/rates/import", { params: { path: { id: target.providerId } }, body }));
   if (target.kind === "number_list")

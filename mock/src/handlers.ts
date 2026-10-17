@@ -191,6 +191,41 @@ import {
   updateCurrency,
   updateTransaction,
 } from "./api/finance.js";
+import {
+  archiveInvoice,
+  createInvoiceRequest,
+  downloadInvoicePdf,
+  exportInvoices,
+  getInvoice,
+  getInvoiceCharges,
+  getInvoiceDependencies,
+  getInvoiceRequest,
+  markInvoices,
+  regenerateInvoice,
+  restoreInvoice,
+  sendInvoices,
+  updateInvoice,
+} from "./api/invoices.js";
+import {
+  addVendorInvoiceNote,
+  archiveReconRule,
+  archiveVendorInvoice,
+  createReconRule,
+  createVendorInvoice,
+  decideVendorInvoice,
+  exportVendorInvoices,
+  getVendorInvoice,
+  getVendorInvoiceComparison,
+  getVendorInvoiceDependencies,
+  importVendorInvoices,
+  previewVendorInvoiceEmail,
+  recheckVendorInvoice,
+  restoreReconRule,
+  restoreVendorInvoice,
+  summariseVendorInvoices,
+  updateReconRule,
+  updateVendorInvoice,
+} from "./api/vendorInvoices.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -216,7 +251,7 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.16.0";
+const VERSION = "0.17.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -434,6 +469,42 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   bulkUpdateTransactions,
   convertTransactionAmount,
   queryInvoices: queryList("invoices"),
+  // Invoices and invoice requests (§7, §12.3)
+  exportInvoices,
+  getInvoice,
+  updateInvoice,
+  getInvoiceCharges,
+  downloadInvoicePdf,
+  regenerateInvoice,
+  sendInvoices,
+  markInvoices,
+  getInvoiceDependencies,
+  archiveInvoice,
+  restoreInvoice,
+  queryInvoiceRequests: queryList("invoice_requests"),
+  createInvoiceRequest,
+  getInvoiceRequest,
+  // Vendor invoices and reconciliation (§7, §13.31)
+  queryVendorInvoices: queryList("vendor_invoices"),
+  exportVendorInvoices,
+  createVendorInvoice,
+  importVendorInvoices,
+  getVendorInvoice,
+  updateVendorInvoice,
+  getVendorInvoiceComparison,
+  recheckVendorInvoice,
+  decideVendorInvoice,
+  addVendorInvoiceNote,
+  previewVendorInvoiceEmail,
+  getVendorInvoiceDependencies,
+  archiveVendorInvoice,
+  restoreVendorInvoice,
+  summariseVendorInvoices,
+  queryReconRules: queryList("recon_rules"),
+  createReconRule,
+  updateReconRule,
+  archiveReconRule,
+  restoreReconRule,
   queryCurrencies: queryList("currencies"),
   exportCurrencies,
   createCurrency,

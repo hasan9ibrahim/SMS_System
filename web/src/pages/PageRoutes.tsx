@@ -18,6 +18,8 @@ import { BalancesPage } from "./finance/BalancesPage";
 import { BillingCyclesPage } from "./finance/BillingCyclesPage";
 import { ChargesPage } from "./finance/ChargesPage";
 import { CurrenciesPage } from "./finance/CurrenciesPage";
+import { InvoicesPage } from "./finance/InvoicesPage";
+import { VendorInvoicesPage } from "./finance/VendorInvoicesPage";
 import { TransactionsPage } from "./finance/TransactionsPage";
 import { HlrPage } from "./switch/hlr/HlrPage";
 import { NumberListsPage } from "./switch/NumberListsPage";
@@ -51,6 +53,8 @@ const BUILT = new Set([
   "/switch/translation-rules",
   "/switch/hlr",
   "/finance/transactions",
+  "/finance/invoices",
+  "/finance/vendor-invoices",
   "/finance/currencies",
   "/finance/billing-cycles",
   "/finance/balances",
@@ -93,6 +97,8 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/switch/translation-rules" element={<TranslationRulesPage />} />
       <Route path="/switch/hlr" element={<HlrPage />} />
       <Route path="/finance/transactions" element={<TransactionsPage />} />
+      <Route path="/finance/invoices" element={<InvoicesPage />} />
+      <Route path="/finance/vendor-invoices" element={<VendorInvoicesPage />} />
       <Route path="/finance/currencies" element={<CurrenciesPage />} />
       <Route path="/finance/billing-cycles" element={<BillingCyclesPage />} />
       <Route path="/finance/balances" element={<BalancesPage />} />

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.16.0
+  version: 0.17.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -52,7 +52,7 @@ tags:
   - name: reports
     description: Traffic reports from the EDR store (§10, §13.31)
   - name: finance
-    description: Finance - transactions, currencies and exchange rates, billing cycles, balances, charges (§7, §13.33)
+    description: Finance - transactions, invoices, vendor invoices and reconciliation, currencies and exchange rates, billing cycles, balances, charges (§7, §13.31, §13.33)
   - name: switch
     description: Switch rules - translation rules, number lists, HLR providers, rules and policies (§6.4, §6.5, §13.2, §13.24)
   - name: reference
@@ -4806,8 +4806,9 @@ paths:
       operationId: queryInvoices
       summary: "List invoices (server-side filter, sort and paging)"
       description: |
-        Invoice grid columns (§7). Read-only in build step 5.5 (the payment form picks the invoice it
-        settles); actions come with the Invoice screen.
+        Invoice grid (§7): Invoice No, PDF, Charge Details, enterprise, types, dates, due amount, opening
+        balance, usage charges, closing balance, e-mail status, status and remarks. Hidden `archived` field
+        = deleted invoices.
       requestBody:
         required: true
         content:
@@ -5309,6 +5310,978 @@ paths:
                 $ref: "#/components/schemas/ChargesResult"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/export:
+    post:
+      tags: [finance]
+      operationId: exportInvoices
+      summary: "Export invoices as CSV"
+      description: |
+        Same filter and sort as the list; up to 100,000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/{id}:
+    get:
+      tags: [finance]
+      operationId: getInvoice
+      summary: "One invoice with its payments"
+      description: |
+        Every column plus the e-mail recipients, the payments that settle it and who created it.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [finance]
+      operationId: updateInvoice
+      summary: "Change an invoice's due date or remarks"
+      description: |
+        Amounts come from the usage and can only change by Regenerate. One undoable change (§13.10).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceUpdate"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/{id}/charges:
+    get:
+      tags: [finance]
+      operationId: getInvoiceCharges
+      summary: "Charge Details: per-destination lines of an invoice (§7)"
+      description: |
+        Messages and amount per MCCMNC and rate for the usage period, cut at midnight in the invoice's time
+        zone (§13.31), from the EDR store. Proforma invoices have one line.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceCharges"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/{id}/pdf:
+    get:
+      tags: [finance]
+      operationId: downloadInvoicePdf
+      summary: "Download the invoice PDF (§7 PDF column)"
+      description: |
+        Made from the invoice and the business company's details. Saved as {invoiceNumber}.pdf.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The invoice as PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/{id}/regenerate:
+    post:
+      tags: [finance]
+      operationId: regenerateInvoice
+      summary: "Regenerate an invoice (per-row action)"
+      description: |
+        Starts an invoice request that recomputes usage, balances and due amount for the same enterprise,
+        period and number. Runs in the background like Generate Request; the invoice shows Inprogress until
+        it is done. Not for invoices with payments linked.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "202":
+          description: The request, pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceRequestRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/send:
+    post:
+      tags: [finance]
+      operationId: sendInvoices
+      summary: "Send Invoice: e-mail invoices to the partners' billing contacts"
+      description: |
+        Uses the business company's Invoice e-mail template and attaches the PDF (the mock records it as
+        sent). Invoices that are not completed or whose partner has no billing contact are skipped and
+        listed. One undoable change of the e-mail status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceIdsInput"
+      responses:
+        "200":
+          description: What was sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSendResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/mark:
+    post:
+      tags: [finance]
+      operationId: markInvoices
+      summary: "Mark: set payment or e-mail status of many invoices (§7)"
+      description: |
+        One undoable change for all of them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceMarkInput"
+      responses:
+        "200":
+          description: The change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/{id}/dependencies:
+    get:
+      tags: [finance]
+      operationId: getInvoiceDependencies
+      summary: "What depends on an invoice (safe delete, §13.29)"
+      description: |
+        Payments linked to the invoice block deleting it; a sent invoice is reported but does not block.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/{id}/archive:
+    post:
+      tags: [finance]
+      operationId: archiveInvoice
+      summary: "Delete (archive) an invoice (§13.29)"
+      description: |
+        The invoice leaves balances and lists; it is never removed. Blocked while payments are linked (409)
+        unless an administrator overrides with a reason. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/{id}/restore:
+    post:
+      tags: [finance]
+      operationId: restoreInvoice
+      summary: "Restore a deleted invoice"
+      description: |
+        Administrators; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoice-requests/query:
+    post:
+      tags: [finance]
+      operationId: queryInvoiceRequests
+      summary: "List invoice requests (server-side filter, sort and paging)"
+      description: |
+        Invoice Request list (§12.3 /invoices/manual): Request No, start and end time, invoice type,
+        enterprise, enterprise type, billing type, status, error and remarks. Auto invoicing adds one
+        request per enterprise at the end of each billing cycle (§7).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of invoice requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceRequestPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoice-requests:
+    post:
+      tags: [finance]
+      operationId: createInvoiceRequest
+      summary: "Generate Request (§12.3 /invoices/manualrequest)"
+      description: |
+        One request per enterprise, run in the background: pending, inprogress, then completed (with the
+        invoice) or failed (with the error). Traffic invoices take usage from the EDR store for the period in
+        the chosen time zone; proforma invoices take the amount and volume given. An enterprise already
+        invoiced for an overlapping period fails with the invoice number (use Regenerate).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceRequestInput"
+      responses:
+        "202":
+          description: The requests, pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceRequestCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoice-requests/{id}:
+    get:
+      tags: [finance]
+      operationId: getInvoiceRequest
+      summary: "One invoice request (poll for its status)"
+      description: |
+        Status, error and the invoice it made.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceRequestRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/query:
+    post:
+      tags: [finance]
+      operationId: queryVendorInvoices
+      summary: "List vendor invoices (server-side filter, sort and paging)"
+      description: |
+        Vendor Invoice grid (§7) and the reconciliation list (§13.31): their and our figures, dispute amount
+        (theirs − ours), comparison and status, with filters by status, partner, period and account manager.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of vendor invoices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoicePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/export:
+    post:
+      tags: [finance]
+      operationId: exportVendorInvoices
+      summary: "Export vendor invoices as CSV"
+      description: |
+        Same filter and sort as the list; up to 100,000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices:
+    post:
+      tags: [finance]
+      operationId: createVendorInvoice
+      summary: "Add a vendor invoice (upload by hand, §13.31)"
+      description: |
+        Saves the invoice and runs the comparison with our EDR figures for the same partner, period,
+        currency and time zone straight away; a match is accepted (and the acceptance e-mail sent or queued,
+        as the partner's rule says). One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInvoiceInput"
+      responses:
+        "201":
+          description: Created and checked, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/import:
+    post:
+      tags: [finance]
+      operationId: importVendorInvoices
+      summary: "Import vendor invoices from CSV (modal Vendor Invoice)"
+      description: |
+        Columns: `enterprise` (name or alias), `invoice_number`, `charge_volume`, `charge_amount`, `currency`,
+        `invoice_date`, `due_date`, `period_from`, `period_to`, `timezone`, `remarks`. Invoices already on
+        file (same partner and number) are reported as unchanged. All or nothing; each added invoice is
+        checked as on Add. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRequest"
+      responses:
+        "200":
+          description: What the import adds; `applied` says whether it was saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}:
+    get:
+      tags: [finance]
+      operationId: getVendorInvoice
+      summary: "One vendor invoice with its reconciliation history"
+      description: |
+        Figures, the rule used for the last check and why it matched or not, every status change, note and
+        e-mail with user and time (§13.31).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [finance]
+      operationId: updateVendorInvoice
+      summary: "Edit a vendor invoice"
+      description: |
+        Saves the whole form and checks the invoice again. A decided invoice (accepted or rejected) keeps
+        its status. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInvoiceInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/comparison:
+    get:
+      tags: [finance]
+      operationId: getVendorInvoiceComparison
+      summary: "Result screen: their figures against ours per destination (§13.31)"
+      description: |
+        Our vendor cost and billable messages per MCCMNC for the invoice's period and time zone, against
+        the invoice lines when it has them, sorted by the largest difference. `coverage` says whether the
+        EDR store holds the whole period.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceComparison"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/recheck:
+    post:
+      tags: [finance]
+      operationId: recheckVendorInvoice
+      summary: "Run the comparison again"
+      description: |
+        Reads our figures again and applies the partner's current rule. A pending invoice that now
+        matches is accepted. Logged in the history.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The invoice after the check, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/decide:
+    post:
+      tags: [finance]
+      operationId: decideVendorInvoice
+      summary: "Accept, reject or keep pending (§13.31 Actions)"
+      description: |
+        accept: status Accepted, acceptance e-mail when `sendEmail`. reject: status Rejected and the rejection
+        e-mail with the note and our figures. keep_pending: status Disputed, the note is kept. send_acceptance:
+        sends the acceptance e-mail queued under "confirm before sending". A note is required to reject, to
+        keep pending and to accept an invoice that did not match. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInvoiceDecision"
+      responses:
+        "200":
+          description: The invoice, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/notes:
+    post:
+      tags: [finance]
+      operationId: addVendorInvoiceNote
+      summary: "Add a note to a vendor invoice"
+      description: |
+        Shows in the invoice history and on the partner's dispute list.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInvoiceNote"
+      responses:
+        "200":
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/email-preview:
+    post:
+      tags: [finance]
+      operationId: previewVendorInvoiceEmail
+      summary: "Preview the acceptance or rejection e-mail"
+      description: |
+        Recipients (the partner's billing contacts), subject and body with invoice number, period, amounts
+        and, for a rejection, the note and our figures.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInvoiceEmailInput"
+      responses:
+        "200":
+          description: The e-mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/dependencies:
+    get:
+      tags: [finance]
+      operationId: getVendorInvoiceDependencies
+      summary: "What depends on a vendor invoice (safe delete, §13.29)"
+      description: |
+        An accepted invoice counts in the partner's balance and SOA, which blocks deleting it.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/archive:
+    post:
+      tags: [finance]
+      operationId: archiveVendorInvoice
+      summary: "Delete (archive) a vendor invoice (§13.29)"
+      description: |
+        Blocked while accepted (409) unless an administrator overrides with a reason. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/{id}/restore:
+    post:
+      tags: [finance]
+      operationId: restoreVendorInvoice
+      summary: "Restore a deleted vendor invoice"
+      description: |
+        Administrators; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-invoices/summary:
+    post:
+      tags: [finance]
+      operationId: summariseVendorInvoices
+      summary: "Monthly reconciliation summary for the billing team (§13.31)"
+      description: |
+        Per invoice month: how many invoices, by comparison and status, and their and our amounts in the
+        platform currency with the difference.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInvoiceSummaryInput"
+      responses:
+        "200":
+          description: One row per month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorInvoiceSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /recon-rules/query:
+    post:
+      tags: [finance]
+      operationId: queryReconRules
+      summary: "List reconciliation rules (server-side filter, sort and paging)"
+      description: |
+        Reconciliation rules (§13.31 Enterprise › Billing › Reconciliation rules): the default rule (no
+        enterprise) and every partner's own rule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of reconciliation rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconRulePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /recon-rules:
+    post:
+      tags: [finance]
+      operationId: createReconRule
+      summary: "Give a partner its own reconciliation rule"
+      description: |
+        One rule per partner (409 when it has one). One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconRuleInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /recon-rules/{id}:
+    put:
+      tags: [finance]
+      operationId: updateReconRule
+      summary: "Change a reconciliation rule"
+      description: |
+        The partner cannot change. Applies to the next checks; past results keep the rule they used.
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconRuleInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /recon-rules/{id}/archive:
+    post:
+      tags: [finance]
+      operationId: archiveReconRule
+      summary: "Remove a partner's own rule (the default applies again)"
+      description: |
+        The default rule cannot be removed (400). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /recon-rules/{id}/restore:
+    post:
+      tags: [finance]
+      operationId: restoreReconRule
+      summary: "Restore a removed partner rule"
+      description: |
+        Fails when the partner has a new rule (409). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -10442,76 +11415,6 @@ components:
         amountBase:
           type: number
 
-    InvoiceRow:
-      type: object
-      required: [id, invoiceNumber, enterpriseId, enterprise, enterpriseType, invoiceType, billingType, currency, invoiceDate, usageStart, usageEnd, dueDate, openingBalance, usageCharges, closingBalance, dueAmount, messageCount, status, paymentStatus, emailStatus, remarks, archivedAt]
-      properties:
-        id:
-          $ref: "#/components/schemas/Id"
-        invoiceNumber:
-          type: string
-        enterpriseId:
-          $ref: "#/components/schemas/Id"
-        enterprise:
-          type: string
-        enterpriseType:
-          type: string
-        invoiceType:
-          type: string
-          enum: [auto, manual]
-        billingType:
-          type: string
-          enum: [prepaid, postpaid]
-        currency:
-          type: string
-        invoiceDate:
-          type: string
-          format: date
-        usageStart:
-          type: string
-          format: date
-        usageEnd:
-          type: string
-          format: date
-        dueDate:
-          type: string
-          format: date
-        openingBalance:
-          type: number
-        usageCharges:
-          type: number
-        closingBalance:
-          type: number
-        dueAmount:
-          type: number
-        messageCount:
-          type: integer
-        status:
-          type: string
-          enum: [pending, inprogress, completed, failed]
-        paymentStatus:
-          type: string
-          enum: [unpaid, partial, paid]
-        emailStatus:
-          type: string
-          enum: [unsent, sent]
-        remarks:
-          type: [string, "null"]
-        archivedAt:
-          type: [string, "null"]
-          format: date-time
-
-    InvoicePage:
-      allOf:
-        - $ref: "#/components/schemas/ListPageMeta"
-        - type: object
-          required: [rows]
-          properties:
-            rows:
-              type: array
-              items:
-                $ref: "#/components/schemas/InvoiceRow"
-
     CurrencyRow:
       type: object
       required: [id, name, iso, symbol, ratePerUsd, rateUpdatedAt, enterprises, updatedBy, updatedAt]
@@ -10884,6 +11787,915 @@ components:
               type: number
         platformCurrency:
           type: string
+
+    # ------------------------------------------------------------- Invoices (§7, §12.3)
+    InvoiceRow:
+      type: object
+      required: [id, invoiceNumber, enterpriseId, enterprise, enterpriseType, businessCompany, invoiceType, kind, billingType, currency, timezone, invoiceDate, usageStart, usageEnd, dueDate, openingBalance, usageCharges, closingBalance, dueAmount, messageCount, status, paymentStatus, emailStatus, emailSentAt, remarks, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        invoiceNumber:
+          type: string
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        enterpriseType:
+          type: string
+        businessCompany:
+          type: string
+        invoiceType:
+          type: string
+          enum: [auto, manual]
+          description: auto = made by Auto Invoicing at the end of the billing cycle; manual = Generate Request.
+        kind:
+          type: string
+          enum: [traffic, proforma]
+          description: Traffic invoices bill usage; proforma invoices ask for an amount in advance and leave balances alone.
+        billingType:
+          type: string
+          enum: [prepaid, postpaid]
+        currency:
+          type: string
+        timezone:
+          type: string
+          description: Usage days are cut at midnight in this zone (§13.31).
+        invoiceDate:
+          type: string
+          format: date
+        usageStart:
+          type: string
+          format: date
+        usageEnd:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        openingBalance:
+          type: number
+          description: Customer balance before the usage, same sign as every balance (positive = the client's credit, negative = owed).
+        usageCharges:
+          type: number
+        closingBalance:
+          type: number
+          description: Opening balance − usage charges.
+        dueAmount:
+          type: number
+          description: What the client must pay, never negative (the owed part of the closing balance).
+        messageCount:
+          type: integer
+        status:
+          type: string
+          enum: [pending, inprogress, completed, failed]
+        paymentStatus:
+          type: string
+          enum: [unpaid, partial, paid]
+        emailStatus:
+          type: string
+          enum: [unsent, sent]
+        emailSentAt:
+          type: [string, "null"]
+          format: date-time
+        remarks:
+          type: [string, "null"]
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    InvoicePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/InvoiceRow"
+
+    InvoiceDetail:
+      allOf:
+        - $ref: "#/components/schemas/InvoiceRow"
+        - type: object
+          required: [emailRecipients, paidAmount, payments, createdBy, createdAt, updatedBy, updatedAt]
+          properties:
+            emailRecipients:
+              type: array
+              items:
+                type: string
+            paidAmount:
+              type: number
+              description: Credits linked to the invoice minus debits, in the invoice currency.
+            payments:
+              type: array
+              items:
+                type: object
+                required: [id, paymentDate, transactionType, paymentType, amount, currency]
+                properties:
+                  id:
+                    $ref: "#/components/schemas/Id"
+                  paymentDate:
+                    type: string
+                    format: date
+                  transactionType:
+                    $ref: "#/components/schemas/TransactionType"
+                  paymentType:
+                    type: string
+                    enum: [credit, debit]
+                  amount:
+                    type: number
+                  currency:
+                    type: string
+            createdBy:
+              type: [string, "null"]
+            createdAt:
+              $ref: "#/components/schemas/Timestamp"
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+
+    InvoiceUpdate:
+      type: object
+      additionalProperties: false
+      required: [dueDate, remarks]
+      properties:
+        dueDate:
+          type: string
+          format: date
+        remarks:
+          type: [string, "null"]
+          maxLength: 500
+
+    InvoiceSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/InvoiceDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    InvoiceCharges:
+      type: object
+      required: [invoiceId, currency, timezone, from, to, source, note, rows, totalMessages, totalAmount]
+      properties:
+        invoiceId:
+          $ref: "#/components/schemas/Id"
+        currency:
+          type: string
+        timezone:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        source:
+          type: string
+          enum: [edr, proforma, none]
+          description: none = the EDR store holds no traffic for the period.
+        note:
+          type: [string, "null"]
+        rows:
+          type: array
+          items:
+            type: object
+            required: [mccmnc, country, network, rate, messages, amount]
+            properties:
+              mccmnc:
+                type: string
+              country:
+                type: [string, "null"]
+              network:
+                type: [string, "null"]
+              rate:
+                type: [number, "null"]
+              messages:
+                type: integer
+              amount:
+                type: number
+        totalMessages:
+          type: integer
+        totalAmount:
+          type: number
+
+    InvoiceIdsInput:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/Id"
+
+    InvoiceSendResult:
+      type: object
+      required: [sent, skipped, change]
+      properties:
+        sent:
+          type: integer
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [id, invoiceNumber, reason]
+            properties:
+              id:
+                $ref: "#/components/schemas/Id"
+              invoiceNumber:
+                type: string
+              reason:
+                type: string
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    InvoiceMarkInput:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/Id"
+        paymentStatus:
+          type: [string, "null"]
+          enum: [unpaid, partial, paid, null]
+        emailStatus:
+          type: [string, "null"]
+          enum: [unsent, sent, null]
+          description: At least one of paymentStatus and emailStatus.
+
+    InvoiceRequestInput:
+      type: object
+      additionalProperties: false
+      required: [kind, enterpriseIds, timezone, usageStart, usageEnd, dueDateType, dueDate, invoiceNumber, amount, volume, currency, invoiceDate, remarks]
+      properties:
+        kind:
+          type: string
+          enum: [traffic, proforma]
+          description: Invoice Type (Traffic / Proforma).
+        enterpriseIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+        timezone:
+          type: [string, "null"]
+          description: IANA zone; null = each enterprise's billing time zone.
+        usageStart:
+          type: string
+          format: date
+        usageEnd:
+          type: string
+          format: date
+          description: Inclusive; at most 366 days after usageStart.
+        dueDateType:
+          type: string
+          enum: [auto, manual]
+          description: auto = invoice date + the billing cycle's due days.
+        dueDate:
+          type: [string, "null"]
+          format: date
+          description: Required when dueDateType is manual.
+        invoiceNumber:
+          type: [string, "null"]
+          maxLength: 40
+          description: One enterprise only; null = the business company's next number.
+        amount:
+          type: [number, "null"]
+          minimum: 0
+          description: Proforma only (required there).
+        volume:
+          type: [integer, "null"]
+          minimum: 0
+          description: Proforma only.
+        currency:
+          type: [string, "null"]
+          pattern: "^[A-Z]{3}$"
+          description: Proforma only; null = the customer billing currency. Traffic invoices use the billing currency.
+        invoiceDate:
+          type: [string, "null"]
+          format: date
+          description: null = today.
+        remarks:
+          type: [string, "null"]
+          maxLength: 500
+
+    InvoiceRequestRow:
+      type: object
+      required: [id, requestNo, kind, invoiceType, regenerate, enterpriseId, enterprise, enterpriseType, billingType, timezone, usageStart, usageEnd, status, error, remarks, invoiceId, invoiceNumber, startedAt, finishedAt, createdBy, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        requestNo:
+          type: string
+        kind:
+          type: string
+          enum: [traffic, proforma]
+        invoiceType:
+          type: string
+          enum: [auto, manual]
+        regenerate:
+          type: boolean
+          description: Made by Regenerate on an existing invoice.
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        enterpriseType:
+          type: string
+        billingType:
+          type: [string, "null"]
+          enum: [prepaid, postpaid, null]
+        timezone:
+          type: string
+        usageStart:
+          type: string
+          format: date
+        usageEnd:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [pending, inprogress, completed, failed]
+        error:
+          type: [string, "null"]
+        remarks:
+          type: [string, "null"]
+        invoiceId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        invoiceNumber:
+          type: [string, "null"]
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+        createdBy:
+          type: [string, "null"]
+          description: Null = Auto Invoicing.
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    InvoiceRequestPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/InvoiceRequestRow"
+
+    InvoiceRequestCreated:
+      type: object
+      required: [requests]
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceRequestRow"
+
+    # ------------------------------------------------------------- Vendor invoices (§7, §13.31)
+    ReconComparison:
+      type: [string, "null"]
+      enum: [match, mismatch, no_data, null]
+      description: Result of the last check; no_data = the EDR store does not hold the whole period; null = not checked yet.
+
+    ReconStatus:
+      type: string
+      enum: [pending, accepted, disputed, rejected]
+      description: pending = waiting for a check or decision; disputed = did not match and is kept pending with a note.
+
+    VendorInvoiceLine:
+      type: object
+      additionalProperties: false
+      required: [mccmnc, volume, amount]
+      properties:
+        mccmnc:
+          type: string
+          pattern: "^[0-9]{5,6}$"
+        volume:
+          type: [integer, "null"]
+          minimum: 0
+        amount:
+          type: number
+
+    VendorInvoiceInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseId, invoiceNumber, chargeVolume, chargeAmount, currency, invoiceDate, dueDate, periodFrom, periodTo, timezone, remarks]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        invoiceNumber:
+          type: string
+          minLength: 1
+          maxLength: 60
+        chargeVolume:
+          type: [integer, "null"]
+          minimum: 0
+        chargeAmount:
+          type: number
+          minimum: 0
+          maximum: 100000000
+        currency:
+          type: [string, "null"]
+          pattern: "^[A-Z]{3}$"
+          description: null = the partner's vendor billing currency.
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type: [string, "null"]
+          format: date
+        periodFrom:
+          type: string
+          format: date
+        periodTo:
+          type: string
+          format: date
+        timezone:
+          type: [string, "null"]
+          description: null = the partner's billing time zone.
+        remarks:
+          type: [string, "null"]
+          maxLength: 500
+        lines:
+          type: array
+          maxItems: 5000
+          description: Per-destination lines from the invoice, when it has them. Omitted on update = kept.
+          items:
+            $ref: "#/components/schemas/VendorInvoiceLine"
+
+    VendorInvoiceRow:
+      type: object
+      required: [id, enterpriseId, enterprise, accountManager, invoiceNumber, currency, chargeVolume, chargeAmount, ourVolume, ourAmount, disputeAmount, differencePct, volumeDifference, invoiceDate, dueDate, periodFrom, periodTo, timezone, comparison, status, emailStatus, source, lineCount, remarks, checkedAt, createdBy, createdAt, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        accountManager:
+          type: [string, "null"]
+        invoiceNumber:
+          type: string
+        currency:
+          type: string
+        chargeVolume:
+          type: [integer, "null"]
+        chargeAmount:
+          type: number
+        ourVolume:
+          type: [integer, "null"]
+          description: Our billable vendor messages for the period; null = not checked.
+        ourAmount:
+          type: [number, "null"]
+          description: Our vendor cost for the period in the invoice currency.
+        disputeAmount:
+          type: [number, "null"]
+          description: Dispute Amount = their amount − ours.
+        differencePct:
+          type: [number, "null"]
+          description: Dispute amount as a share of our amount.
+        volumeDifference:
+          type: [integer, "null"]
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type: [string, "null"]
+          format: date
+        periodFrom:
+          type: string
+          format: date
+        periodTo:
+          type: string
+          format: date
+        timezone:
+          type: string
+        comparison:
+          $ref: "#/components/schemas/ReconComparison"
+        status:
+          $ref: "#/components/schemas/ReconStatus"
+        emailStatus:
+          type: string
+          enum: [none, waiting, sent, failed]
+          description: Acceptance or rejection e-mail; waiting = queued under "confirm before sending".
+        source:
+          type: string
+          enum: [manual, import, email]
+        lineCount:
+          type: integer
+        remarks:
+          type: [string, "null"]
+        checkedAt:
+          type: [string, "null"]
+          format: date-time
+        createdBy:
+          type: [string, "null"]
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    VendorInvoicePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/VendorInvoiceRow"
+
+    VendorInvoiceEvent:
+      type: object
+      required: [id, kind, statusFrom, statusTo, note, emailTo, user, at]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        kind:
+          type: string
+          enum: [created, edited, checked, status, note, email]
+        statusFrom:
+          type: [string, "null"]
+        statusTo:
+          type: [string, "null"]
+        note:
+          type: [string, "null"]
+        emailTo:
+          type: array
+          items:
+            type: string
+        user:
+          type: [string, "null"]
+          description: Null = the platform (automatic check or e-mail).
+        at:
+          $ref: "#/components/schemas/Timestamp"
+
+    VendorInvoiceDetail:
+      allOf:
+        - $ref: "#/components/schemas/VendorInvoiceRow"
+        - type: object
+          required: [reasons, rule, inSoa, events]
+          properties:
+            reasons:
+              type: array
+              items:
+                type: string
+              description: Why the last check matched or not, one line per check.
+            rule:
+              description: The rule the last check used (a copy; later rule changes do not alter it).
+              oneOf:
+                - $ref: "#/components/schemas/ReconRuleValues"
+                - type: "null"
+            inSoa:
+              type: string
+              enum: [included, disputed_block, excluded]
+              description: How the invoice shows on the partner's SOA (§13.31).
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/VendorInvoiceEvent"
+
+    VendorInvoiceSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/VendorInvoiceDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    VendorInvoiceComparison:
+      type: object
+      required: [invoiceId, currency, timezone, from, to, coverage, edrFrom, edrTo, rows]
+      properties:
+        invoiceId:
+          $ref: "#/components/schemas/Id"
+        currency:
+          type: string
+        timezone:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        coverage:
+          type: string
+          enum: [full, partial, none]
+        edrFrom:
+          type: [string, "null"]
+          format: date-time
+        edrTo:
+          type: [string, "null"]
+          format: date-time
+        rows:
+          type: array
+          items:
+            type: object
+            required: [mccmnc, country, network, theirVolume, theirAmount, ourVolume, ourAmount, difference, differencePct, flagged]
+            properties:
+              mccmnc:
+                type: string
+              country:
+                type: [string, "null"]
+              network:
+                type: [string, "null"]
+              theirVolume:
+                type: [integer, "null"]
+              theirAmount:
+                type: [number, "null"]
+              ourVolume:
+                type: integer
+              ourAmount:
+                type: number
+              difference:
+                type: [number, "null"]
+                description: Their amount − ours; null when the invoice has no lines.
+              differencePct:
+                type: [number, "null"]
+              flagged:
+                type: boolean
+                description: Off by more than the rule's per-destination tolerance.
+
+    VendorInvoiceDecision:
+      type: object
+      additionalProperties: false
+      required: [action, note, sendEmail]
+      properties:
+        action:
+          type: string
+          enum: [accept, reject, keep_pending, send_acceptance]
+        note:
+          type: [string, "null"]
+          maxLength: 1000
+        sendEmail:
+          type: boolean
+          description: accept and reject only; send_acceptance always sends.
+
+    VendorInvoiceNote:
+      type: object
+      additionalProperties: false
+      required: [note]
+      properties:
+        note:
+          type: string
+          minLength: 1
+          maxLength: 1000
+
+    VendorInvoiceEmailInput:
+      type: object
+      additionalProperties: false
+      required: [kind, note]
+      properties:
+        kind:
+          type: string
+          enum: [acceptance, rejection]
+        note:
+          type: [string, "null"]
+          maxLength: 1000
+
+    EmailPreview:
+      type: object
+      required: [recipients, subject, body]
+      properties:
+        recipients:
+          type: array
+          items:
+            type: string
+          description: Empty = the partner has no billing contact.
+        subject:
+          type: string
+        body:
+          type: string
+
+    VendorInvoiceSummaryInput:
+      type: object
+      additionalProperties: false
+      required: [fromMonth, toMonth, enterpriseId, accountManagerId]
+      properties:
+        fromMonth:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}$"
+        toMonth:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}$"
+          description: Inclusive; at most 36 months.
+        enterpriseId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        accountManagerId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+
+    VendorInvoiceSummary:
+      type: object
+      required: [platformCurrency, rows]
+      properties:
+        platformCurrency:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            required: [month, invoices, match, mismatch, noData, unchecked, pending, accepted, disputed, rejected, theirAmount, ourAmount, difference]
+            properties:
+              month:
+                type: string
+                description: Invoice month, YYYY-MM.
+              invoices:
+                type: integer
+              match:
+                type: integer
+              mismatch:
+                type: integer
+              noData:
+                type: integer
+              unchecked:
+                type: integer
+              pending:
+                type: integer
+              accepted:
+                type: integer
+              disputed:
+                type: integer
+              rejected:
+                type: integer
+              theirAmount:
+                type: number
+                description: Platform currency at each invoice date's rate.
+              ourAmount:
+                type: number
+              difference:
+                type: number
+
+    # ------------------------------------------------------------- Reconciliation rules (§13.31)
+    ReconRuleValues:
+      type: object
+      required: [amountPct, amountFixed, amountCombine, countPct, countFixed, countCombine, destinationPct, autoSend, disputedInSoa]
+      properties:
+        amountPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: Amount matches when the difference is at most this share of our amount; null = no percentage check.
+        amountFixed:
+          type: [number, "null"]
+          minimum: 0
+          description: ... or at most this amount in the invoice currency; null = no fixed check.
+        amountCombine:
+          type: string
+          enum: [stricter, looser]
+          description: With both set, stricter = both must hold, looser = either is enough.
+        countPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+        countFixed:
+          type: [integer, "null"]
+          minimum: 0
+          description: Messages.
+        countCombine:
+          type: string
+          enum: [stricter, looser]
+        destinationPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: Flag any destination off by more than this share even when the total matches; null = off.
+        autoSend:
+          type: string
+          enum: [auto, confirm]
+          description: Acceptance e-mail on a match - sent at once, or queued until confirmed.
+        disputedInSoa:
+          type: string
+          enum: [exclude, separate_block]
+          description: Rejected and pending invoices are left off the SOA or shown in a separate "disputed" block.
+
+    ReconRuleInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseId, amountPct, amountFixed, amountCombine, countPct, countFixed, countCombine, destinationPct, autoSend, disputedInSoa]
+      properties:
+        enterpriseId:
+          description: The partner; null only for the default rule (which already exists).
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        amountPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+        amountFixed:
+          type: [number, "null"]
+          minimum: 0
+        amountCombine:
+          type: string
+          enum: [stricter, looser]
+        countPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+        countFixed:
+          type: [integer, "null"]
+          minimum: 0
+        countCombine:
+          type: string
+          enum: [stricter, looser]
+        destinationPct:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+        autoSend:
+          type: string
+          enum: [auto, confirm]
+        disputedInSoa:
+          type: string
+          enum: [exclude, separate_block]
+
+    ReconRuleRow:
+      allOf:
+        - $ref: "#/components/schemas/ReconRuleValues"
+        - type: object
+          required: [id, enterpriseId, enterprise, currency, invoices, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            enterpriseId:
+              oneOf:
+                - $ref: "#/components/schemas/Id"
+                - type: "null"
+            enterprise:
+              type: [string, "null"]
+              description: Null = the default rule for partners without their own.
+            currency:
+              type: [string, "null"]
+              description: The partner's vendor billing currency (for the fixed amount).
+            invoices:
+              type: integer
+              description: Vendor invoices of the partner (all partners without a rule, for the default).
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+
+    ReconRulePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReconRuleRow"
+
+    ReconRuleSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/ReconRuleRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
 
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
@@ -11592,7 +13404,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules]
 
     FilterOperator:
       type: string

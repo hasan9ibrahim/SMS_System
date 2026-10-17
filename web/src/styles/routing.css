@@ -638,3 +638,72 @@
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
 }
+
+/* ---------- invoices and vendor invoices (§7, §13.31) ---------- */
+.row-icons {
+  display: inline-flex;
+  gap: 2px;
+}
+.row-icons .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.inv-charges .mini-table {
+  width: 100%;
+}
+.inv-charges .mini-table tr.flagged td:first-child {
+  box-shadow: inset 3px 0 0 var(--color-error);
+}
+.recon-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+.recon-figures > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.recon-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.recon-events li {
+  padding-bottom: 6px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.pre-line {
+  white-space: pre-line;
+}
+.recon-summary-form {
+  grid-template-columns: repeat(2, minmax(140px, 1fr)) repeat(2, minmax(220px, 2fr));
+}
+.mini-table tr.total-row td {
+  font-weight: 600;
+  border-top: var(--border-width) solid var(--color-border-strong, var(--color-border));
+}
+textarea.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.section-label {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.recon-figures .num {
+  text-align: left;
+}
