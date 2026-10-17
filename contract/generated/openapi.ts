@@ -4333,6 +4333,7 @@ export type components = {
       billingType?: "prepaid" | "postpaid" | null;
       /** @description Customer side, postpaid. */
       creditLimit?: number | null;
+      /** @description Positive = the partner starts in credit, negative = they start owing (§7 balance sign). */
       openingBalance?: number;
       /** @description Customer side only. */
       autoInvoicing?: boolean;
@@ -4348,7 +4349,7 @@ export type components = {
       components["schemas"]["BillingSideFields"],
       "currency" | "billingCycleId" | "timezone" | "openingBalance"
     > & {
-      /** @description Opening balance + usage charges − payments and credits + debits, in the side's currency. */
+      /** @description Opening balance + payments and credits − usage charges, in the side's currency (§7, decided 2026-10-17): positive = the partner's credit with us, negative = what the client owes us (customer) or what we owe the vendor (vendor). */
       balance: number;
       billingCycleName: string;
       updatedBy: string | null;
@@ -6293,20 +6294,20 @@ export type components = {
       id: components["schemas"]["Id"];
       enterprise: string;
       enterpriseType: string;
-      /** @description What the client owes us, in the customer billing currency; null = no customer billing. */
+      /** @description Customer balance in the customer billing currency; positive = the client's credit, negative = what the client owes us; null = no customer billing. */
       customerBalance: number | null;
       customerCurrency: string | null;
-      /** @description What we owe the vendor, in the vendor billing currency. */
+      /** @description Vendor balance in the vendor billing currency; positive = the vendor's credit with us (we paid ahead), negative = what we owe the vendor. */
       vendorBalance: number | null;
       vendorCurrency: string | null;
-      /** @description Customer − vendor, in `currency` (the vendor side converted at the latest rate). */
+      /** @description Customer − vendor, in `currency` (the vendor side converted at the latest rate); negative = the partner owes us after offsetting. */
       netBalance: number;
       accountManager: string | null;
       /** @enum {string|null} */
       billingType: "prepaid" | "postpaid" | null;
       /** @description Customer Credit. */
       creditLimit: number | null;
-      /** @description Customer balance as a share of the credit limit (postpaid); 0 when the client is in credit. */
+      /** @description What the client owes us as a share of the credit limit (postpaid); 0 when the client is in credit. */
       creditUsedPct: number | null;
       billingCycle: string | null;
       /** @description Customer billing currency, else the vendor's. */

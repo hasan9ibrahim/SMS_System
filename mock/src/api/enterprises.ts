@@ -391,17 +391,19 @@ export async function applyEnterpriseField(
 // ---------------------------------------------------------------- billing (§5.3)
 
 async function sideBalances(db: Db, id: number): Promise<Record<Side, number>> {
-  // Customer: what the client owes us; vendor: what we owe the vendor (§13.33: excluded
-  // payments still count in the balance).
+  // Balance sign (decided 2026-10-17, §7): opening + payments and credits − usage charges, so a
+  // positive balance is the partner's credit and a negative one is what the client owes us (or
+  // what we owe the vendor). Returns the movements; the caller adds the opening balance.
+  // §13.33: payments left off the SOA still count.
   const { rows } = await db.query(
     `SELECT
-       COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = $1 AND deleted_at IS NULL AND status <> 'failed'), 0)
-       - COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
-                    WHERE enterprise_id = $1 AND side = 'customer' AND deleted_at IS NULL), 0) AS customer,
-       COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
-                  WHERE enterprise_id = $1 AND deleted_at IS NULL AND recon_status IN ('match', 'accepted')), 0)
-       - COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
-                    WHERE enterprise_id = $1 AND side = 'vendor' AND deleted_at IS NULL), 0) AS vendor`,
+       COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
+                  WHERE enterprise_id = $1 AND side = 'customer' AND deleted_at IS NULL), 0)
+       - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = $1 AND deleted_at IS NULL AND status <> 'failed'), 0) AS customer,
+       COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
+                  WHERE enterprise_id = $1 AND side = 'vendor' AND deleted_at IS NULL), 0)
+       - COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
+                    WHERE enterprise_id = $1 AND deleted_at IS NULL AND recon_status IN ('match', 'accepted')), 0) AS vendor`,
     [id],
   );
   return { customer: Number(rows[0].customer), vendor: Number(rows[0].vendor) };

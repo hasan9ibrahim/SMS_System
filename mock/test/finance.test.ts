@@ -264,7 +264,7 @@ describe("currencies, rates, billing cycles (§7)", { skip }, () => {
 });
 
 describe("balances and charges (§7)", { skip }, () => {
-  test("balances list sorts by net balance; a payment lowers the customer balance", async () => {
+  test("balances list sorts by net balance; a payment raises the customer balance (positive = credit)", async () => {
     const f = await customerWithInvoice();
     const one = () =>
       ok(
@@ -281,7 +281,7 @@ describe("balances and charges (§7)", { skip }, () => {
       201,
     );
     const after = await one();
-    assert.equal(Math.round((before.customerBalance - after.customerBalance) * 100) / 100, 10);
+    assert.equal(Math.round((after.customerBalance - before.customerBalance) * 100) / 100, 10);
     await undo(pay.change);
     const sorted = await ok(
       "queryEnterpriseBalances",

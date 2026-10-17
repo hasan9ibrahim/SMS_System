@@ -156,7 +156,7 @@ async function billingContacts(db: Db, enterpriseId: number): Promise<string[]> 
   return (rows[0]?.emails as string[] | undefined) ?? [];
 }
 
-/** Balance of one side now (owed convention of §7 Enterprise Balance). */
+/** Balance of one side now (§7: positive = the partner's credit, negative = owed). */
 async function sideBalance(db: Db, enterpriseId: number, side: "customer" | "vendor") {
   const { rows } = await db.query(
     `SELECT bal.customer, bal.vendor, cb.currency AS ccur, vb.currency AS vcur FROM ${BALANCE_FROM} WHERE e.id = $1`,
@@ -177,7 +177,8 @@ async function confirmationEmail(db: Db, t: TransactionInput, txId: number | nul
     t.invoiceId ? db.query("SELECT invoice_number FROM invoices WHERE id = $1", [t.invoiceId]) : null,
   ]);
   // A saved payment is already in the balance; a new one is not yet.
-  const sign = (t.side === "customer") === (t.paymentType === "credit") ? -1 : 1;
+  // Balance sign (decided 2026-10-17): a customer credit or a vendor debit raises the balance.
+  const sign = (t.side === "customer") === (t.paymentType === "credit") ? 1 : -1;
   const currency = bal.currency ?? t.currency;
   const after = money(bal.balance + (txId === null && currency === t.currency ? sign * t.amount : 0));
   const invoice = inv?.rows[0]?.invoice_number as string | undefined;

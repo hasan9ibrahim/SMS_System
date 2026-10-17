@@ -198,7 +198,8 @@ export async function generateEnterprises(world: World, rng: Rng, sink: TableSin
         timezone: rng.pick(TIMEZONES),
         billing_type: side === "customer" ? e.customerBillingType : null,
         credit_limit: side === "customer" && !prepaid ? Math.round(rng.logNormal(5000, 1) / 100) * 100 : null,
-        opening_balance: Math.round(rng.float(-2000, 2000) * 100) / 100,
+        // Balance sign (decided 2026-10-17): positive = the partner's credit.
+        opening_balance: -Math.round(rng.float(-2000, 2000) * 100) / 100,
         auto_invoicing: side === "customer" && rng.chance(0.7),
         send_payment_confirmation: rng.chance(0.4),
         description: null,

@@ -1,6 +1,15 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { balanceEffect, blankTransaction, modeLabel, money, periodDays, typeLabel } from "./financeModel";
+import {
+  balanceEffect,
+  balanceWords,
+  blankTransaction,
+  netWords,
+  modeLabel,
+  money,
+  periodDays,
+  typeLabel,
+} from "./financeModel";
 
 describe("finance model (§7, §13.33)", () => {
   test("a new payment follows the side", () => {
@@ -11,10 +20,18 @@ describe("finance model (§7, §13.33)", () => {
     assert.equal(c.includeInSoa, true, "In SOA is ticked by default (§13.33)");
   });
 
-  test("balance effect: payments lower what is owed, the opposite raises it", () => {
-    assert.equal(balanceEffect({ side: "customer", paymentType: "credit", amount: 100 }), -100);
-    assert.equal(balanceEffect({ side: "customer", paymentType: "debit", amount: 100 }), 100);
-    assert.equal(balanceEffect({ side: "vendor", paymentType: "debit", amount: 50 }), -50);
+  test("balance effect (positive = credit): payments raise the balance, the opposite lowers it", () => {
+    assert.equal(balanceEffect({ side: "customer", paymentType: "credit", amount: 100 }), 100);
+    assert.equal(balanceEffect({ side: "customer", paymentType: "debit", amount: 100 }), -100);
+    assert.equal(balanceEffect({ side: "vendor", paymentType: "debit", amount: 50 }), 50);
+  });
+
+  test("balance in words", () => {
+    assert.deepEqual(balanceWords(-400, "customer"), { text: "owes us", tone: "tone-warning" });
+    assert.deepEqual(balanceWords(500, "customer"), { text: "in credit", tone: "" });
+    assert.deepEqual(balanceWords(-300, "vendor"), { text: "we owe", tone: "tone-warning" });
+    assert.equal(balanceWords(0.001, "customer").text, "settled");
+    assert.equal(netWords(-100), "partner owes us (net)");
   });
 
   test("labels and formatting", () => {

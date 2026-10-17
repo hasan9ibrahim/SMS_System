@@ -241,7 +241,7 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
             ]}
             hint={
               v.amount > 0
-                ? `${effect < 0 ? "Lowers" : "Raises"} what ${v.side === "customer" ? "the client owes us" : "we owe the vendor"}`
+                ? `${effect > 0 ? "Raises" : "Lowers"} the ${v.side}'s balance by ${money(v.amount, v.currency)}`
                 : undefined
             }
           />

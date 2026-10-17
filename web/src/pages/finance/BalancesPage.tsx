@@ -1,5 +1,5 @@
-// Enterprise Balance (§7): customer balance (what the client owes us), vendor balance (what we
-// owe the vendor) and net balance (customer − vendor) per enterprise, with account manager,
+// Enterprise Balance (§7): customer, vendor and net balance (customer − vendor) per enterprise,
+// positive = the partner's credit, negative = owed (decided 2026-10-17), with account manager,
 // customer credit and use, billing cycle and currency. Server-side filters and sort; CSV export.
 // Send SOA comes with the SOA screen (build step 5.6).
 import type { EnterpriseBalanceRow } from "@sms/contract";
@@ -11,7 +11,7 @@ import { useTabNavigate } from "../../shell/tabContext";
 import { toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
-import { money } from "./financeModel";
+import { balanceWords, money, netWords } from "./financeModel";
 
 const page = pageForPath("/finance/balances")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -31,8 +31,8 @@ export function BalancesPage() {
       above={
         <div className="rm-trunk">
           <span className="muted small">
-            Customer balance = what the client owes us; vendor balance = what we owe the vendor; net = customer − vendor
-            in the customer currency. Payments left off the SOA still count (§13.33).
+            Balance = opening + payments − usage: positive = the partner&apos;s credit, negative = owed (amber). Net =
+            customer − vendor in the customer currency. Payments left off the SOA still count (§13.33).
           </span>
         </div>
       }
@@ -50,7 +50,12 @@ export function BalancesPage() {
             r.customerBalance === null ? (
               muted("—")
             ) : (
-              <span className="num">{money(r.customerBalance, r.customerCurrency)}</span>
+              <span
+                className={`num ${balanceWords(r.customerBalance, "customer").tone}`}
+                title={balanceWords(r.customerBalance, "customer").text}
+              >
+                {money(r.customerBalance, r.customerCurrency)}
+              </span>
             ),
         },
         vendorBalance: {
@@ -60,13 +65,22 @@ export function BalancesPage() {
             r.vendorBalance === null ? (
               muted("—")
             ) : (
-              <span className="num">{money(r.vendorBalance, r.vendorCurrency)}</span>
+              <span
+                className={`num ${balanceWords(r.vendorBalance, "vendor").tone}`}
+                title={balanceWords(r.vendorBalance, "vendor").text}
+              >
+                {money(r.vendorBalance, r.vendorCurrency)}
+              </span>
             ),
         },
         netBalance: {
           width: 160,
           align: "right",
-          render: (r) => <strong className="num">{money(r.netBalance, r.currency)}</strong>,
+          render: (r) => (
+            <strong className={`num${r.netBalance < 0 ? " tone-warning" : ""}`} title={netWords(r.netBalance)}>
+              {money(r.netBalance, r.currency)}
+            </strong>
+          ),
         },
         accountManager: { width: 170, render: (r) => r.accountManager ?? muted("—") },
         billingType: {
@@ -129,7 +143,9 @@ export function BalancesPage() {
               <dl className="kv">
                 <dt>Customer</dt>
                 <dd>
-                  {r.customerBalance === null ? "no customer billing" : money(r.customerBalance, r.customerCurrency)}
+                  {r.customerBalance === null
+                    ? "no customer billing"
+                    : `${money(r.customerBalance, r.customerCurrency)} · ${balanceWords(r.customerBalance, "customer").text}`}
                   {r.creditLimit !== null && (
                     <span className="muted small">
                       {" "}
@@ -139,10 +155,14 @@ export function BalancesPage() {
                   )}
                 </dd>
                 <dt>Vendor</dt>
-                <dd>{r.vendorBalance === null ? "no vendor billing" : money(r.vendorBalance, r.vendorCurrency)}</dd>
+                <dd>
+                  {r.vendorBalance === null
+                    ? "no vendor billing"
+                    : `${money(r.vendorBalance, r.vendorCurrency)} · ${balanceWords(r.vendorBalance, "vendor").text}`}
+                </dd>
                 <dt>Net</dt>
                 <dd>
-                  <strong>{money(r.netBalance, r.currency)}</strong>
+                  <strong>{money(r.netBalance, r.currency)}</strong> · {netWords(r.netBalance)}
                   {r.vendorCurrency && r.customerCurrency && r.vendorCurrency !== r.customerCurrency && (
                     <span className="muted small"> · vendor side converted at today&apos;s rate</span>
                   )}

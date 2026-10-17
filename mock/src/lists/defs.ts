@@ -1724,9 +1724,10 @@ export const billingCycleList: ListDef<BillingCycleRow> = {
 };
 
 /**
- * Balances (§7, same rule as the enterprise Billing tab): customer = opening + invoiced usage −
- * payments and credits + debits (what the client owes us); vendor = opening + accepted vendor
- * invoices − payments (what we owe the vendor). Excluded-from-SOA payments still count (§13.33).
+ * Balances (§7, sign decided 2026-10-17): opening + payments and credits − usage charges, so a
+ * positive balance is the partner's credit with us and a negative one is what the client owes us
+ * (customer) or what we owe the vendor (vendor: opening + our payments − accepted vendor
+ * invoices). Payments left off the SOA still count (§13.33).
  */
 export const BALANCE_FROM = `enterprises e
     LEFT JOIN enterprise_billing cb ON cb.enterprise_id = e.id AND cb.side = 'customer'
@@ -1735,19 +1736,20 @@ export const BALANCE_FROM = `enterprises e
     LEFT JOIN users am ON am.id = e.account_manager_id
     LEFT JOIN LATERAL (SELECT
         CASE WHEN cb.id IS NULL THEN NULL ELSE cb.opening_balance
-          + COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = e.id AND deleted_at IS NULL AND status <> 'failed'), 0)
-          - COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
-                       WHERE enterprise_id = e.id AND side = 'customer' AND deleted_at IS NULL), 0) END AS customer,
+          + COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
+                       WHERE enterprise_id = e.id AND side = 'customer' AND deleted_at IS NULL), 0)
+          - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = e.id AND deleted_at IS NULL AND status <> 'failed'), 0) END AS customer,
         CASE WHEN vb.id IS NULL THEN NULL ELSE vb.opening_balance
-          + COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
-                       WHERE enterprise_id = e.id AND deleted_at IS NULL AND recon_status IN ('match', 'accepted')), 0)
-          - COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
-                       WHERE enterprise_id = e.id AND side = 'vendor' AND deleted_at IS NULL), 0) END AS vendor) bal ON true
+          + COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
+                       WHERE enterprise_id = e.id AND side = 'vendor' AND deleted_at IS NULL), 0)
+          - COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
+                       WHERE enterprise_id = e.id AND deleted_at IS NULL AND recon_status IN ('match', 'accepted')), 0) END AS vendor) bal ON true
     LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
     LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
 const netSql = `round(COALESCE(bal.customer, 0)
     - COALESCE(bal.vendor * COALESCE(ccl.rate_per_usd, vcl.rate_per_usd) / vcl.rate_per_usd, 0), 2)`;
-const creditUsedSql = `CASE WHEN cb.credit_limit > 0 THEN GREATEST(0, round(bal.customer / cb.credit_limit * 100, 1)) END`;
+/** Credit used: what the client owes us (a negative balance) as a share of the limit, never below 0. */
+const creditUsedSql = `CASE WHEN cb.credit_limit > 0 THEN GREATEST(0, round(-bal.customer / cb.credit_limit * 100, 1)) END`;
 
 export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
   fields: listFields.enterprise_balances,

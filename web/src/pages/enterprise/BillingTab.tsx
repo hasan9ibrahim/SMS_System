@@ -25,6 +25,7 @@ import {
 import { useNotifySaved } from "../../history/undo";
 import { Button } from "../../ui/primitives";
 import { HeaderAction, type SectionProps } from "../../records/parts";
+import { balanceWords } from "../finance/financeModel";
 
 type Side = "customer" | "vendor";
 interface Form {
@@ -56,7 +57,8 @@ const money = (n: number, ccy: string) =>
 
 function CreditUse({ side, enterprise }: { side: BillingSide; enterprise: EnterpriseDetail }) {
   if (side.billingType !== "postpaid" || !side.creditLimit) return null;
-  const pct = Math.max(0, (side.balance / side.creditLimit) * 100);
+  // A negative balance is what the client owes us (§7 balance sign).
+  const pct = Math.max(0, (-side.balance / side.creditLimit) * 100);
   const p = enterprise.creditAlertPercent;
   const tone = pct >= p.critical ? "error" : pct >= p.warning ? "warning" : null;
   return (
@@ -161,13 +163,17 @@ function SideSection({
         form={form}
         path={p("openingBalance")}
         label="Opening balance"
+        hint="Positive = starts in credit, negative = starts owing"
         required
         step={0.01}
         suffix={v.currency}
       />
       {saved && (
-        <ReadOnly label="Balance" hint={side === "customer" ? "What the client owes us" : "What we owe the vendor"}>
-          <span className="balance">{money(saved.balance, saved.currency)}</span>
+        <ReadOnly label="Balance" hint="Opening balance + payments − usage: positive = credit, negative = owed">
+          <span className="balance">{money(saved.balance, saved.currency)}</span>{" "}
+          <span className={`small ${balanceWords(saved.balance, side).tone || "muted"}`}>
+            {balanceWords(saved.balance, side).text}
+          </span>
           <CreditUse side={saved} enterprise={enterprise} />
         </ReadOnly>
       )}

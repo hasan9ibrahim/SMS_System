@@ -62,13 +62,27 @@ export function transactionInput(d: TransactionDetail): TransactionInput {
 }
 
 /**
- * What the payment does to the side's balance (owed convention): a customer credit lowers what
- * the client owes us, a vendor debit lowers what we owe the vendor; the opposite raises it.
+ * What the payment does to the side's balance (§7 sign, decided 2026-10-17: positive = the
+ * partner's credit): a customer credit or a vendor debit raises it, the opposite lowers it.
  */
 export function balanceEffect(t: Pick<TransactionInput, "side" | "paymentType" | "amount">): number {
-  const lowers = (t.side === "customer") === (t.paymentType === "credit");
-  return lowers ? -t.amount : t.amount;
+  const raises = (t.side === "customer") === (t.paymentType === "credit");
+  return raises ? t.amount : -t.amount;
 }
+
+/** The balance in words next to the number, and its tone (owed = amber, credit = plain). */
+export function balanceWords(
+  balance: number,
+  side: "customer" | "vendor",
+): { text: string; tone: "" | "tone-warning" } {
+  if (Math.abs(balance) < 0.005) return { text: "settled", tone: "" };
+  if (balance > 0) return { text: side === "customer" ? "in credit" : "vendor in credit", tone: "" };
+  return { text: side === "customer" ? "owes us" : "we owe", tone: "tone-warning" };
+}
+
+/** Net balance (customer − vendor) in words: negative = the partner owes us after offsetting. */
+export const netWords = (net: number) =>
+  Math.abs(net) < 0.005 ? "settled" : net < 0 ? "partner owes us (net)" : "we owe the partner (net)";
 
 export const money = (v: number | null | undefined, currency?: string | null) =>
   v === null || v === undefined

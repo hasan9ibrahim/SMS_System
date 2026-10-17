@@ -6839,6 +6839,7 @@ components:
           description: Customer side, postpaid.
         openingBalance:
           type: number
+          description: Positive = the partner starts in credit, negative = they start owing (§7 balance sign).
         autoInvoicing:
           type: boolean
           description: Customer side only.
@@ -6864,7 +6865,7 @@ components:
           properties:
             balance:
               type: number
-              description: Opening balance + usage charges − payments and credits + debits, in the side's currency.
+              description: "Opening balance + payments and credits − usage charges, in the side's currency (§7, decided 2026-10-17): positive = the partner's credit with us, negative = what the client owes us (customer) or what we owe the vendor (vendor)."
             billingCycleName:
               type: string
             updatedBy:
@@ -10782,17 +10783,17 @@ components:
           type: string
         customerBalance:
           type: [number, "null"]
-          description: What the client owes us, in the customer billing currency; null = no customer billing.
+          description: Customer balance in the customer billing currency; positive = the client's credit, negative = what the client owes us; null = no customer billing.
         customerCurrency:
           type: [string, "null"]
         vendorBalance:
           type: [number, "null"]
-          description: What we owe the vendor, in the vendor billing currency.
+          description: Vendor balance in the vendor billing currency; positive = the vendor's credit with us (we paid ahead), negative = what we owe the vendor.
         vendorCurrency:
           type: [string, "null"]
         netBalance:
           type: number
-          description: Customer − vendor, in `currency` (the vendor side converted at the latest rate).
+          description: Customer − vendor, in `currency` (the vendor side converted at the latest rate); negative = the partner owes us after offsetting.
         accountManager:
           type: [string, "null"]
         billingType:
@@ -10803,7 +10804,7 @@ components:
           description: Customer Credit.
         creditUsedPct:
           type: [number, "null"]
-          description: Customer balance as a share of the credit limit (postpaid); 0 when the client is in credit.
+          description: What the client owes us as a share of the credit limit (postpaid); 0 when the client is in credit.
         billingCycle:
           type: [string, "null"]
         currency:
