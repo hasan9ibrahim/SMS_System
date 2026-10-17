@@ -147,7 +147,7 @@ What the Phoenix backend must match so the screens need no change:
 - **Account managers**: each move keeps the account managers of the affected clients (`affected_am_ids`). The list filters on them (account manager picker), and the dashboard card counts "mine". *Hiding other AMs' moves by default comes with AM visibility (§13.17).*
 - **Daily digest**: one e-mail per account manager at the digest hour (default 07:00 UTC), with the moves not yet in a digest. It is logged in Email Logs as `daily_report`; "Send digest now" sends it at once.
 - **Auto-apply rules** (per client or product category): follow increases, or decreases too, to keep a minimum margin. When a new move is recorded, each covered table whose margin at the new cost falls below the minimum is re-priced at the new cost / (1 − minimum), from the move's last date or the client's notice, whichever is later. That is one undoable change per table, logged on the move. Rules and settings are not in the change history (they are settings, not rates).
-- **Volume**: with the default settings, the fake data gives about 2,400 open moves in 30 days. Typically 2 of about 20 top vendors move, because 35 vendors are Tier 1 and price every destination. Without Tier 1 vendors it gives about 100 (2 of the 3 cheapest). See the open question.
+- **Volume**: with the default settings, the fake data gives about 2,400 open moves in 30 days. Typically 2 of about 20 top vendors move, because 35 vendors are Tier 1 and price every destination. Without Tier 1 vendors it gives about 100 (2 of the 3 cheapest). Decided 2026-10-17 (team): Tier 1 vendors are top vendors, so the default stays on.
 - *Not in this step*: "Notify clients" goes through the normal rate notification e-mail (Switch › Notifications, §8) after the rates change; it is not started from here.
 
 ## Incoming RN notes (build step 5.14, §13.13 A, §13.32)
@@ -346,4 +346,4 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- **Market moves: should Tier 1 vendors count by default (§13.14 "Top tier: vendors marked Tier 1 … plus the cheapest N")?** On the fake data, 35 Tier 1 vendors price almost every destination. The default therefore finds about 2,400 moves in 30 days, typically "2 of 20" top vendors. With Tier 1 off (only the cheapest 3) it finds about 100 clearer moves ("2 of 3"). The setting is editable on the page; the default follows the spec until decided.
+- None open.
