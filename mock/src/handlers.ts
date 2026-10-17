@@ -9,6 +9,22 @@ import { sendProblem } from "./problem.js";
 import { getCurrentUser, getWorkspace, saveWorkspace, updatePreferences } from "./api/session.js";
 import { queryList } from "./api/lists.js";
 import {
+  acknowledgeIncident,
+  addIncidentNote,
+  archiveAlertRule,
+  cloneAlertRule,
+  createAlertRule,
+  exportIncidents,
+  getAlertRule,
+  getIncident,
+  listOpenIncidents,
+  restoreAlertRule,
+  setAlertRuleStatus,
+  snoozeIncident,
+  testAlertRule,
+  updateAlertRule,
+} from "./api/alerts.js";
+import {
   archiveAccessGroup,
   archiveDepartment,
   archiveEmailTemplate,
@@ -398,7 +414,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.22.0";
+const VERSION = "0.23.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -770,6 +786,24 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   calculateCharges,
 
   queryUsers: queryList("users"),
+
+  // Monitoring alerts (§13.6, §13.7)
+  queryAlertRules: queryList("alert_rules"),
+  queryIncidents: queryList("incidents"),
+  acknowledgeIncident,
+  addIncidentNote,
+  archiveAlertRule,
+  cloneAlertRule,
+  createAlertRule,
+  exportIncidents,
+  getAlertRule,
+  getIncident,
+  listOpenIncidents,
+  restoreAlertRule,
+  setAlertRuleStatus,
+  snoozeIncident,
+  testAlertRule,
+  updateAlertRule,
 
   // Admin (§11, §13.28)
   archiveAccessGroup,

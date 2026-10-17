@@ -62,7 +62,8 @@ export type RecordKind =
   | "access_group"
   | "email_template"
   | "business_company"
-  | "portal_user";
+  | "portal_user"
+  | "alert_rule";
 
 export interface Saved<T> {
   record: T;
@@ -288,6 +289,8 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   if (kind === "email_template") return unwrap(api.GET("/email-templates/{id}/dependencies", params));
   if (kind === "business_company") return unwrap(api.GET("/business-companies/{id}/dependencies", params));
   if (kind === "portal_user") return Promise.resolve({ blocked: false, items: [] });
+  // Deleting an alert rule only closes its open incidents (§13.6); nothing blocks it.
+  if (kind === "alert_rule") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
 }
@@ -326,6 +329,7 @@ export function useArchive(kind: RecordKind) {
       if (kind === "email_template") return unwrap(api.POST("/email-templates/{id}/archive", req));
       if (kind === "business_company") return unwrap(api.POST("/business-companies/{id}/archive", req));
       if (kind === "portal_user") return unwrap(api.POST("/customer-portal-users/{id}/archive", req));
+      if (kind === "alert_rule") return unwrap(api.POST("/alert-rules/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -367,6 +371,7 @@ export function useRestore(kind: RecordKind) {
       if (kind === "email_template") return unwrap(api.POST("/email-templates/{id}/restore", req));
       if (kind === "business_company") return unwrap(api.POST("/business-companies/{id}/restore", req));
       if (kind === "portal_user") return unwrap(api.POST("/customer-portal-users/{id}/restore", req));
+      if (kind === "alert_rule") return unwrap(api.POST("/alert-rules/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

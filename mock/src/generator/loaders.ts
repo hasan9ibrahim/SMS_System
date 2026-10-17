@@ -85,6 +85,9 @@ export const TABLE_ORDER = [
   "password_history",
   "user_sessions",
   "audit_log",
+  "alert_rules",
+  "incidents",
+  "incident_notes",
   "changes",
 ];
 

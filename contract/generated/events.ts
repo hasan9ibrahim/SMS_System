@@ -19,6 +19,8 @@ export type EventTimestamp1 = string;
  */
 export interface ContractEvents {
   "alerts.incident"?: IncidentEvent;
+  "analytics.join"?: AnalyticsJoinParams;
+  "analytics.snapshot"?: AnalyticsSnapshotEvent;
   "dashboard.join"?: DashboardJoinParams;
   "dashboard.movers"?: DashboardMoversEvent;
   "dashboard.summary"?: DashboardSummaryEvent;
@@ -27,7 +29,7 @@ export interface ContractEvents {
   "traffic.tps_tick"?: TpsTickEvent;
 }
 /**
- * Topic alerts:<userId>, event "incident". An alert rule fired, changed or recovered (§13.6). Drives the pop-up card, the sound, the bell count and the alert dot on tabs (§13.5).
+ * Topic alerts:<userId>, event "incident". An alert rule fired, repeated, was acknowledged or snoozed, or recovered (§13.6). Drives the pop-up card, the sound, the bell count and the alert dot on tabs (§13.5). Sent only to the users the rule notifies.
  */
 export interface IncidentEvent {
   incidentId: number;
@@ -57,6 +59,27 @@ export interface IncidentEvent {
   startedAt: EventTimestamp;
   endedAt?: EventTimestamp | null;
   acknowledgedBy?: string | null;
+  /**
+   * What the incident is about in words: a trunk, an enterprise, "All traffic" or a scope value.
+   */
+  entityName: string;
+  /**
+   * Worst value seen while open.
+   */
+  peakValue?: number | null;
+  /**
+   * How the rule notifies; popup and sound apply to the GUI.
+   */
+  channels: ("popup" | "sound" | "email")[];
+  /**
+   * True for a re-alert while the condition lasts (rule repeat interval).
+   */
+  repeat: boolean;
+  /**
+   * No pop-up or sound until then.
+   */
+  snoozedUntil?: EventTimestamp | null;
+  acknowledgedAt?: EventTimestamp | null;
 }
 /**
  * An enterprise or trunk as shown in live panels.
@@ -65,6 +88,102 @@ export interface PartyRef {
   kind: "customer_enterprise" | "vendor_enterprise" | "customer_trunk" | "vendor_trunk";
   id: number;
   name: string;
+}
+/**
+ * Client to server: the phx_join payload for topic live:analytics (§13.4 live mode). Report By, the streaming interval, the compare window, a name search, sort and row limit; the server filters and sorts (CLAUDE.md rule 3). To change them, leave and join again.
+ */
+export interface AnalyticsJoinParams {
+  /**
+   * Report By.
+   */
+  groupBy: "customer" | "customer_trunk" | "vendor" | "vendor_trunk" | "destination" | "country";
+  intervalSeconds?: 1 | 5 | 15;
+  /**
+   * TPS now against the window before (compare column).
+   */
+  compareMinutes?: 5 | 15 | 60;
+  /**
+   * Name contains (case-insensitive); % and _ are wildcards.
+   */
+  search?: string;
+  /**
+   * Only rows sending now.
+   */
+  onlyActive?: boolean;
+  sort?:
+    | "name"
+    | "attempts"
+    | "delivered"
+    | "asr"
+    | "dlr"
+    | "revenue"
+    | "cost"
+    | "margin"
+    | "marginPct"
+    | "tps"
+    | "changePct";
+  dir?: "asc" | "desc";
+  limit?: number;
+}
+/**
+ * Topic live:analytics, event "snapshot": today's figures (platform day) per Report By row, pushed every intervalSeconds (§13.4). The client updates changed cells in place.
+ */
+export interface AnalyticsSnapshotEvent {
+  at: EventTimestamp;
+  groupBy: "customer" | "customer_trunk" | "vendor" | "vendor_trunk" | "destination" | "country";
+  currency: string;
+  /**
+   * The platform day the figures cover.
+   */
+  day: string;
+  compareMinutes: number;
+  /**
+   * Rows matching before the limit.
+   */
+  total: number;
+  rows: {
+    /**
+     * Stable row key (for in-place updates).
+     */
+    key: string;
+    /**
+     * Enterprise or trunk ID, MCCMNC or country ISO.
+     */
+    id: number | string;
+    name: string;
+    /**
+     * The trunk's enterprise, or the network's country.
+     */
+    parent: string | null;
+    attempts: number;
+    submitted: number;
+    delivered: number;
+    asr: number | null;
+    dlr: number | null;
+    revenue: number | null;
+    cost: number | null;
+    margin: number | null;
+    marginPct: number | null;
+    tps: number | null;
+    tpsBefore: number | null;
+    changePct: number | null;
+    /**
+     * TPS per minute, last 60 minutes, oldest first; null where not tracked (destinations).
+     */
+    sparkline: number[] | null;
+  }[];
+  totals: {
+    attempts: number;
+    submitted: number;
+    delivered: number;
+    asr: number | null;
+    dlr: number | null;
+    revenue: number | null;
+    cost: number | null;
+    margin: number | null;
+    marginPct: number | null;
+    tps: number | null;
+  };
 }
 /**
  * Client to server: the phx_join payload for topic live:dashboard. Window and threshold of the traffic movers panel (§13.3); the user's saved dashboard preferences. To change them, leave and join again.

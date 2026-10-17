@@ -54,6 +54,6 @@ test("limit colours: amber above 80 %, red at 100 %", () => {
 
 test("new keys and analytics links", () => {
   assert.deepEqual([...newKeys(new Set(["a"]), ["a", "b"])], ["b"]);
-  assert.equal(analyticsPath({ kind: "vendor_enterprise", id: 4, name: "V" }), "/live/analytics?vendor=4");
-  assert.equal(analyticsPath({ mccmnc: "40474" }), "/live/analytics?mccmnc=40474");
+  assert.equal(analyticsPath({ kind: "vendor_enterprise", id: 4, name: "V" }), "/live/analytics?by=vendor&q=V");
+  assert.equal(analyticsPath({ mccmnc: "40474" }), "/live/analytics?by=destination&q=40474");
 });

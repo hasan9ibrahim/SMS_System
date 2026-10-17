@@ -150,6 +150,22 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Live analytics and monitoring alerts (build step 5.12)
+
+- **Live analytics** (`/live/analytics`, `src/pages/live/`, helpers in `analyticsModel.ts`): Report By, period (today live,
+  or yesterday / this week / this month from the Master Report), update interval, compare window, search and "only sending
+  now". Figures are pushed on `live:analytics`; when rates change, the cells flash green or red. The header and the first
+  column stay in place, and column headers sort on the server. Pause / Resume. The URL keeps `?by=&q=&period=`.
+- **Alert rules** (`/monitoring/alert-rules`, `src/pages/monitoring/alerts/`): the §13.6 form covers scope with chips,
+  metric, condition, window and minimum sample, active hours, severity, notify (users, departments, pop-up, sound,
+  e-mail with extra addresses and the partner's contact), repeat, cooldown and recovery. "Test on live traffic" shows
+  what would fire now. Detail actions: Enable / Disable, Clone, Incidents, Edit, Delete; undoable.
+- **Incidents** (`/monitoring/incidents`): history and live incidents. The detail has Acknowledge, Snooze, Open in
+  Analytics and notes; Export to CSV. `?incident=<id>` selects one.
+- **Shell**: the bell lists the open incidents from the API; pop-up cards (`src/shell/IncidentPopups.tsx`) acknowledge
+  and snooze through the API. Sounds are in `src/live/sounds.ts`; avatar menu › Alert sounds sets mute and a sound per
+  severity.
+
 ## Admin (build step 5.11)
 
 Pages in `src/pages/admin/` (§11, §12.5, §13.28), hooks in `src/api/admin.ts`, pure helpers in `adminModel.ts`, and

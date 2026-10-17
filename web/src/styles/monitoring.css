@@ -1,0 +1,208 @@
+/* Live analytics (§13.4), alert rules and incidents (§13.6). Tokens only (§15.2). */
+
+.row-muted {
+  opacity: 0.62;
+}
+.row-alert {
+  box-shadow: inset 3px 0 0 var(--color-error);
+}
+
+/* ---------- Live analytics ---------- */
+.la {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.la-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0 4px 8px;
+}
+.la-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+.la-search {
+  min-width: 260px;
+  margin-left: auto;
+}
+.la-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+}
+.la-totals b {
+  font-size: 16px;
+}
+.la-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+}
+.la-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.la-table th,
+.la-table td {
+  padding: 5px 10px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  white-space: nowrap;
+  text-align: left;
+}
+.la-table th.num,
+.la-table td.num {
+  text-align: right;
+}
+.la-table td.num {
+  font-size: 14px;
+}
+/* Fixed header and sticky first column (§13.4 readable layout). */
+.la-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-panel);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+.la-table .la-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-panel);
+  min-width: 240px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.la-table thead .la-name {
+  z-index: 3;
+}
+.la-sort {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.la-spark {
+  color: var(--color-accent);
+  vertical-align: middle;
+}
+@keyframes la-flash-up {
+  from {
+    background: color-mix(in srgb, var(--color-good) 28%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+@keyframes la-flash-down {
+  from {
+    background: color-mix(in srgb, var(--color-error) 24%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+.flash-up {
+  animation: la-flash-up 1.6s ease-out;
+}
+.flash-down {
+  animation: la-flash-down 1.6s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash-up,
+  .flash-down {
+    animation: none;
+  }
+}
+
+/* ---------- Alert rules ---------- */
+.rule-form section {
+  margin-bottom: 10px;
+}
+.hours-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.id-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.id-chips > :last-child {
+  min-width: 200px;
+}
+.rule-test {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 6px;
+}
+.sound-grid {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+.sound-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---------- Incidents ---------- */
+.incident-detail {
+  display: grid;
+  gap: 8px;
+}
+.incident-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.incident-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.incident-notes li {
+  padding: 4px 8px;
+  border-left: 2px solid var(--color-border);
+}
+.note-add {
+  display: flex;
+  gap: 6px;
+}
+.note-add input {
+  flex: 1;
+}
+.snooze-select {
+  padding-right: 4px;
+}

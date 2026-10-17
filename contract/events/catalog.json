@@ -38,6 +38,12 @@
       "event": "incident",
       "schema": "alerts.incident.json",
       "spec": "§13.6"
+    },
+    {
+      "topic": "live:analytics",
+      "event": "snapshot",
+      "schema": "analytics.snapshot.json",
+      "spec": "§13.4"
     }
   ],
   "joins": [
@@ -45,6 +51,11 @@
       "topic": "live:dashboard",
       "schema": "dashboard.join.json",
       "spec": "§13.3"
+    },
+    {
+      "topic": "live:analytics",
+      "schema": "analytics.join.json",
+      "spec": "§13.4"
     }
   ]
 }

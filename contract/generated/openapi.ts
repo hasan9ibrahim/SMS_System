@@ -7165,6 +7165,313 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/alert-rules/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List alert rules (server-side filter, sort and paging)
+     * @description Alert Rules (§13.6): Name, Scope, Metric, Condition, Severity, Channels, Status, Last Triggered, Updated By.
+     */
+    post: operations["queryAlertRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/alert-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an alert rule
+     * @description Scope, metric, condition, window and minimum sample, active hours, severity, who is notified and how (pop-up,
+     *     sound, e-mail §13.7), repeat, cooldown and recovery notice. Rules are evaluated on the server every 15 s.
+     *     One undoable change.
+     */
+    post: operations["createAlertRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/alert-rules/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One an alert rule
+     * @description Every field of the form.
+     */
+    get: operations["getAlertRule"];
+    /**
+     * Change an alert rule
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateAlertRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/alert-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) an alert rule (§13.29)
+     * @description It is never removed (§13.29). One undoable change.
+     */
+    post: operations["archiveAlertRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/alert-rules/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an alert rule
+     * @description Administrators only. One undoable change.
+     */
+    post: operations["restoreAlertRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/alert-rules/{id}/clone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Clone an alert rule
+     * @description One undoable change.
+     */
+    post: operations["cloneAlertRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/alert-rules/{id}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Enable or disable an alert rule
+     * @description One undoable change.
+     */
+    post: operations["setAlertRuleStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/alert-rules/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Test a rule against live traffic now
+     * @description Evaluates the (unsaved) rule on the current live data and says, per scope entity, the value, the baseline and
+     *     whether it would fire. Nothing is raised.
+     */
+    post: operations["testAlertRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/incidents/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List incidents (server-side filter, sort and paging)
+     * @description Incidents (§13.6): every alert with start, end, duration, peak value, who acknowledged and when, notes.
+     */
+    post: operations["queryIncidents"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/incidents/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export incidents (CSV)
+     * @description Same filters and sort; up to 100,000 rows.
+     */
+    post: operations["exportIncidents"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/incidents/open": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Open incidents for the bell (§13.6)
+     * @description Open and acknowledged incidents the signed-in user is notified of, newest first (at most 50), and the count.
+     */
+    get: operations["listOpenIncidents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/incidents/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One incident with its notes
+     * @description Detail panel.
+     */
+    get: operations["getIncident"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/incidents/{id}/acknowledge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Acknowledge an incident
+     * @description Stops the critical sound and the pop-up for everyone; the incident stays open until it recovers. Optional note.
+     */
+    post: operations["acknowledgeIncident"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/incidents/{id}/snooze": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Snooze an incident
+     * @description No pop-up or sound for 15 min, 1 h or until tomorrow 07:00 UTC.
+     */
+    post: operations["snoozeIncident"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/incidents/{id}/notes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a note to an incident
+     * @description Notes are kept with the incident.
+     */
+    post: operations["addIncidentNote"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -7658,6 +7965,7 @@ export type components = {
          */
         animations: boolean;
         dashboard: components["schemas"]["DashboardSettings"];
+        alertSounds?: components["schemas"]["AlertSoundPrefs"];
       };
       /** @description GUI Access Group permission keys; buttons not covered are hidden (§1). */
       permissions: string[];
@@ -7667,6 +7975,7 @@ export type components = {
       openInNewTab?: boolean;
       animations?: boolean;
       dashboard?: components["schemas"]["DashboardSettings"];
+      alertSounds?: components["schemas"]["AlertSoundPrefs"];
     };
     /** @description The live dashboard's time window, thresholds and panels, saved per user (§13.3). */
     DashboardSettings: {
@@ -10683,7 +10992,8 @@ export type components = {
         | "traffic_alert"
         | "auto_upload_rejected"
         | "trouble_ticket"
-        | "send_soa";
+        | "send_soa"
+        | "monitoring_alert";
       subject: string;
       businessCompanyId: components["schemas"]["Id"] | null;
       /** @description Null = shared by every business company. */
@@ -10698,7 +11008,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33) and invoice_acceptance / invoice_rejection (§13.31).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31) and monitoring_alert (§13.7).
      * @enum {string}
      */
     EmailType:
@@ -10721,7 +11031,8 @@ export type components = {
       | "send_soa"
       | "payment_confirmation"
       | "invoice_acceptance"
-      | "invoice_rejection";
+      | "invoice_rejection"
+      | "monitoring_alert";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -11819,7 +12130,8 @@ export type components = {
       | "traffic_alert"
       | "auto_upload_rejected"
       | "trouble_ticket"
-      | "send_soa";
+      | "send_soa"
+      | "monitoring_alert";
     UserFields: {
       /** @description Lower case letters, digits, dot, dash, underscore. */
       username: string;
@@ -12292,6 +12604,212 @@ export type components = {
       rows: components["schemas"]["PortalUserRow"][];
     };
     /**
+     * @description Info, Warning, Critical - each with its own colour and sound (§13.6).
+     * @enum {string}
+     */
+    AlertSeverity: "info" | "warning" | "critical";
+    /**
+     * @description Volume (attempts, submitted, delivered), TPS, ASR %, DLR %, margin (amount, %), revenue, average delivery delay (s), bind status.
+     * @enum {string}
+     */
+    AlertMetric:
+      | "attempts"
+      | "submitted"
+      | "delivered"
+      | "tps"
+      | "asr"
+      | "dlr"
+      | "margin"
+      | "margin_pct"
+      | "revenue"
+      | "avg_delivery_delay"
+      | "bind_status";
+    AlertScope: {
+      /**
+       * @description all = every customer trunk together. customer / vendor are enterprises.
+       * @enum {string}
+       */
+      kind:
+        | "all"
+        | "customer"
+        | "customer_trunk"
+        | "vendor"
+        | "vendor_trunk"
+        | "country"
+        | "mccmnc"
+        | "sender_id"
+        | "product_category";
+      /** @description Enterprise or trunk IDs (customer, customer_trunk, vendor, vendor_trunk, product_category); empty = each one with traffic. */
+      ids: components["schemas"]["Id"][];
+      /** @description Country ISO codes, MCCMNC codes or sender IDs (country, mccmnc, sender_id). */
+      values: string[];
+    };
+    AlertCondition: {
+      /**
+       * @description Above / below a fixed value; increase / decrease by X % against a baseline; started sending; stopped sending (no traffic for the window); a bind of the scope is down.
+       * @enum {string}
+       */
+      type:
+        "above" | "below" | "increase_pct" | "decrease_pct" | "started" | "stopped" | "bind_down";
+      /** @description The fixed value or the % change; null for started / stopped / bind_down. */
+      value: number | null;
+      /**
+       * @description For increase / decrease: the previous window, the same time yesterday or the same weekday last week.
+       * @enum {string|null}
+       */
+      baseline: "previous_window" | "yesterday" | "last_week" | null;
+    };
+    AlertActiveHours: {
+      always: boolean;
+      /** @description 0 = Sunday. */
+      days: number[];
+      fromHour: number;
+      /** @description Exclusive; UTC. */
+      toHour: number;
+    };
+    AlertChannels: {
+      popup: boolean;
+      sound: boolean;
+      email: boolean;
+    };
+    AlertRuleFields: {
+      name: string;
+      status: components["schemas"]["RecordStatus"];
+      description: string | null;
+      scope: components["schemas"]["AlertScope"];
+      metric: components["schemas"]["AlertMetric"];
+      condition: components["schemas"]["AlertCondition"];
+      /** @enum {integer} */
+      windowMinutes: 1 | 5 | 15 | 30 | 60;
+      /** @description Evaluate only with at least this many messages in the window. */
+      minSample: number;
+      activeHours: components["schemas"]["AlertActiveHours"];
+      severity: components["schemas"]["AlertSeverity"];
+      notifyUserIds: components["schemas"]["Id"][];
+      /** @description Users and departments notified in the GUI; both empty = everyone. */
+      notifyDepartmentIds: components["schemas"]["Id"][];
+      channels: components["schemas"]["AlertChannels"];
+      /** @description Extra recipients besides the notified users (§13.7). */
+      emailAddresses: string[];
+      /**
+       * @description Also e-mail this contact type of the partner the incident is about (partner-facing alerts).
+       * @enum {string|null}
+       */
+      partnerContactType: "commercial" | "technical" | "rates" | "finance" | null;
+      /** @description Re-alert while the condition lasts; null = once. */
+      repeatMinutes: number | null;
+      /** @description Quiet period after recovery. */
+      cooldownMinutes: number;
+      /** @description Send an OK notice when the metric is back to normal. */
+      recoveryNotice: boolean;
+    };
+    AlertRuleInput: components["schemas"]["AlertRuleFields"];
+    AlertRuleRow: components["schemas"]["AlertRuleFields"] & {
+      id: components["schemas"]["Id"];
+      scopeLabel: string;
+      /** @description e.g. DLR % decrease 20 % vs previous window, 15 min, ≥ 500 msgs. */
+      conditionLabel: string;
+      lastTriggeredAt: components["schemas"]["Timestamp"] | null;
+      openIncidents: number;
+      incidents30d: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    AlertRuleSaved: {
+      record: components["schemas"]["AlertRuleRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    AlertRuleTest: {
+      evaluatedAt: components["schemas"]["Timestamp"];
+      firing: number;
+      entities: {
+        name: string;
+        value: number | null;
+        baseline: number | null;
+        sample: number;
+        firing: boolean;
+        /** @description Why it fires or not, in words. */
+        reason: string;
+      }[];
+    };
+    AlertRuleStatusInput: {
+      status: components["schemas"]["RecordStatus"];
+    };
+    IncidentRow: {
+      id: components["schemas"]["Id"];
+      ruleId: components["schemas"]["Id"];
+      ruleName: string;
+      severity: components["schemas"]["AlertSeverity"];
+      metric: components["schemas"]["AlertMetric"];
+      /** @description all, customer, customer_trunk, vendor, vendor_trunk or a scope kind. */
+      entityKind: string;
+      entityId: number | null;
+      entityName: string;
+      message: string;
+      /** @enum {string} */
+      state: "open" | "acknowledged" | "recovered";
+      currentValue: number | null;
+      baselineValue: number | null;
+      peakValue: number | null;
+      startedAt: components["schemas"]["Timestamp"];
+      endedAt: components["schemas"]["Timestamp"] | null;
+      durationSeconds: number;
+      acknowledgedBy: string | null;
+      acknowledgedAt: components["schemas"]["Timestamp"] | null;
+      snoozedUntil: components["schemas"]["Timestamp"] | null;
+      notesCount: number;
+      emailedAt: components["schemas"]["Timestamp"] | null;
+    };
+    IncidentNote: {
+      id: components["schemas"]["Id"];
+      text: string;
+      user: string | null;
+      at: components["schemas"]["Timestamp"];
+    };
+    IncidentDetail: components["schemas"]["IncidentRow"] & {
+      conditionLabel: string;
+      windowMinutes: number;
+      notes: components["schemas"]["IncidentNote"][];
+    };
+    IncidentAckInput: {
+      note?: string | null;
+    };
+    IncidentSnoozeInput: {
+      /**
+       * @description Tomorrow = 07:00 UTC next day.
+       * @enum {string}
+       */
+      for: "15m" | "1h" | "tomorrow";
+    };
+    IncidentNoteInput: {
+      text: string;
+    };
+    OpenIncidents: {
+      incidents: components["schemas"]["IncidentRow"][];
+      open: number;
+    };
+    /** @description Sound per severity, chosen from a list. */
+    AlertSoundPrefs: {
+      /** @description Mute alert sounds for me (§13.6). */
+      mute: boolean;
+      /** @enum {string} */
+      info: "none" | "chime" | "ping" | "beep" | "siren";
+      /** @enum {string} */
+      warning: "none" | "chime" | "ping" | "beep" | "siren";
+      /**
+       * @description Critical repeats until acknowledged.
+       * @enum {string}
+       */
+      critical: "none" | "chime" | "ping" | "beep" | "siren";
+    };
+    AlertRulePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["AlertRuleRow"][];
+    };
+    IncidentPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["IncidentRow"][];
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -12729,7 +13247,9 @@ export type components = {
       | "user_sessions"
       | "audit_log"
       | "business_companies"
-      | "customer_portal_users";
+      | "customer_portal_users"
+      | "alert_rules"
+      | "incidents";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -23746,6 +24266,451 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PortalUserSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryAlertRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of alert rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRulePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AlertRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The an alert rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AlertRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  cloneAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CloneInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setAlertRuleStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AlertRuleStatusInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  testAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AlertRuleInput"];
+      };
+    };
+    responses: {
+      /** @description The evaluation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AlertRuleTest"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryIncidents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of incidents */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportIncidents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listOpenIncidents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The open incidents */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenIncidents"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getIncident: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The incident */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  acknowledgeIncident: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["IncidentAckInput"];
+      };
+    };
+    responses: {
+      /** @description The incident */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  snoozeIncident: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IncidentSnoozeInput"];
+      };
+    };
+    responses: {
+      /** @description The incident */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  addIncidentNote: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IncidentNoteInput"];
+      };
+    };
+    responses: {
+      /** @description The incident */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentDetail"];
         };
       };
       400: components["responses"]["BadRequest"];

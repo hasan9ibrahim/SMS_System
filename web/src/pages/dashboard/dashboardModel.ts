@@ -84,12 +84,13 @@ export function newKeys(prev: Set<string>, now: string[]): Set<string> {
 
 /** Analytics view (§13.4) for a client, vendor, trunk or destination, opened in a new tab. */
 export function analyticsPath(target: PartyRef | { mccmnc: string }): string {
-  if ("mccmnc" in target) return `/live/analytics?mccmnc=${encodeURIComponent(target.mccmnc)}`;
-  const key = {
+  // Live analytics (§13.4) takes Report By and a search (name, parent or code).
+  if ("mccmnc" in target) return `/live/analytics?by=destination&q=${encodeURIComponent(target.mccmnc)}`;
+  const by = {
     customer_enterprise: "customer",
     vendor_enterprise: "vendor",
-    customer_trunk: "customerTrunk",
-    vendor_trunk: "vendorTrunk",
+    customer_trunk: "customer_trunk",
+    vendor_trunk: "vendor_trunk",
   }[target.kind];
-  return `/live/analytics?${key}=${target.id}`;
+  return `/live/analytics?by=${by}&q=${encodeURIComponent(target.name)}`;
 }

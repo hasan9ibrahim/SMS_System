@@ -76,7 +76,7 @@ export const PAGES: PageDef[] = [
     "/live/analytics",
     "activity",
     "§13.4",
-    "5",
+    "5.12",
     "Analytics report with figures streaming in place",
   ),
 
@@ -390,7 +390,7 @@ export const PAGES: PageDef[] = [
     "/monitoring/alert-rules",
     "bell",
     "§13.6, §13.7",
-    "5",
+    "5.12",
     "Sound, pop-up and email alerts on traffic statistics",
   ),
   p(
@@ -400,7 +400,7 @@ export const PAGES: PageDef[] = [
     "/monitoring/incidents",
     "alert",
     "§13.6",
-    "5",
+    "5.12",
     "Every alert with duration, peak and who acknowledged",
   ),
   p(

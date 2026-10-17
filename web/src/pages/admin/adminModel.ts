@@ -200,6 +200,7 @@ export const TEMPLATE_TYPE: Record<EmailTemplateRow["emailType"], string> = {
   auto_upload_rejected: "Auto Upload Report – Reject",
   trouble_ticket: "EDR – Trouble Ticket",
   send_soa: "Send SOA",
+  monitoring_alert: "Monitoring Alert",
 };
 
 /** Inserts a token at the caret (placeholder chips in the template editor). */

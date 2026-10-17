@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "analytics.snapshot.json",
+  "title": "AnalyticsSnapshotEvent",
+  "description": "Topic live:analytics, event \"snapshot\": today's figures (platform day) per Report By row, pushed every intervalSeconds (§13.4). The client updates changed cells in place.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "at",
+    "groupBy",
+    "currency",
+    "day",
+    "compareMinutes",
+    "total",
+    "rows",
+    "totals"
+  ],
+  "properties": {
+    "at": {
+      "$ref": "common.json#/$defs/Timestamp"
+    },
+    "groupBy": {
+      "type": "string",
+      "enum": [
+        "customer",
+        "customer_trunk",
+        "vendor",
+        "vendor_trunk",
+        "destination",
+        "country"
+      ]
+    },
+    "currency": {
+      "type": "string"
+    },
+    "day": {
+      "type": "string",
+      "format": "date",
+      "description": "The platform day the figures cover."
+    },
+    "compareMinutes": {
+      "type": "integer"
+    },
+    "total": {
+      "type": "integer",
+      "description": "Rows matching before the limit."
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "id",
+          "name",
+          "parent",
+          "attempts",
+          "submitted",
+          "delivered",
+          "asr",
+          "dlr",
+          "revenue",
+          "cost",
+          "margin",
+          "marginPct",
+          "tps",
+          "tpsBefore",
+          "changePct",
+          "sparkline"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Stable row key (for in-place updates)."
+          },
+          "id": {
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Enterprise or trunk ID, MCCMNC or country ISO."
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The trunk's enterprise, or the network's country."
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "submitted": {
+            "type": "integer"
+          },
+          "delivered": {
+            "type": "integer"
+          },
+          "asr": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "dlr": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "revenue": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "cost": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "margin": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "marginPct": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "tps": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "tpsBefore": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "changePct": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "sparkline": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "description": "TPS per minute, last 60 minutes, oldest first; null where not tracked (destinations)."
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempts",
+        "submitted",
+        "delivered",
+        "asr",
+        "dlr",
+        "revenue",
+        "cost",
+        "margin",
+        "marginPct",
+        "tps"
+      ],
+      "properties": {
+        "attempts": {
+          "type": "integer"
+        },
+        "submitted": {
+          "type": "integer"
+        },
+        "delivered": {
+          "type": "integer"
+        },
+        "asr": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "dlr": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "revenue": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "cost": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "margin": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "marginPct": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tps": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "at": "2026-10-17T10:00:05Z",
+      "groupBy": "customer",
+      "currency": "USD",
+      "day": "2026-10-17",
+      "compareMinutes": 15,
+      "total": 1,
+      "rows": [
+        {
+          "key": "c:101",
+          "id": 101,
+          "name": "Acme Telecom (fake)",
+          "parent": null,
+          "attempts": 120400,
+          "submitted": 114380,
+          "delivered": 97223,
+          "asr": 95.0,
+          "dlr": 85.0,
+          "revenue": 3612.0,
+          "cost": 2889.6,
+          "margin": 722.4,
+          "marginPct": 20.0,
+          "tps": 14.2,
+          "tpsBefore": 11.8,
+          "changePct": 20.3,
+          "sparkline": [
+            11.2,
+            12.0,
+            14.2
+          ]
+        }
+      ],
+      "totals": {
+        "attempts": 120400,
+        "submitted": 114380,
+        "delivered": 97223,
+        "asr": 95.0,
+        "dlr": 85.0,
+        "revenue": 3612.0,
+        "cost": 2889.6,
+        "margin": 722.4,
+        "marginPct": 20.0,
+        "tps": 14.2
+      }
+    }
+  ]
+}

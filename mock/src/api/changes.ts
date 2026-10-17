@@ -1,6 +1,7 @@
 // Per-user undo (§13.10). Undo restores only the fields the change touched; if someone
 // else changed one of them since, the caller gets 409 with both values and decides.
 import { applyBusinessCompanyField } from "./businessCompanies.js";
+import { applyAlertRuleField } from "./alerts.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type { UndoRequest } from "@sms/contract";
@@ -88,6 +89,8 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
     },
   },
   business_company: { table: "business_companies", columns: {} },
+  // Alert rules (§13.6) write their nested fields through applyAlertRuleField.
+  alert_rule: { table: "alert_rules", columns: {} },
   // Translation rules write every field through applyTranslationRuleField (§6.4).
   translation_rule: { table: "translation_rules", columns: {} },
   // Number lists and their entries (§6.4)
@@ -330,6 +333,10 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
             WHERE id = (SELECT transaction_id FROM soa_adjustments WHERE id = $1)`,
           [e.entity_id],
         );
+      continue;
+    }
+    if (entityType === "alert_rule") {
+      await applyAlertRuleField(c, e.entity_id, e.field, e.before);
       continue;
     }
     if (entityType === "business_company") {

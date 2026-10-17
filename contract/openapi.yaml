@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.22.0
+  version: 0.23.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -61,6 +61,8 @@ tags:
     description: Observation Deck (§9) - EDR search, downloads, repush, network status, signaling, simulator, diagnosis.
   - name: admin
     description: Admin (§11, §13.28) - business companies, departments, users, access groups, sessions, audit trail, e-mail templates, customer portal.
+  - name: monitoring
+    description: Monitoring alerts (§13.6, §13.7) - alert rules evaluated on the server, incidents, e-mail alerts.
 
 security:
   - sessionCookie: []
@@ -10512,6 +10514,433 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /alert-rules/query:
+    post:
+      tags:
+      - monitoring
+      operationId: queryAlertRules
+      summary: List alert rules (server-side filter, sort and paging)
+      description: 'Alert Rules (§13.6): Name, Scope, Metric, Condition, Severity, Channels, Status, Last Triggered, Updated By.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of alert rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRulePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /alert-rules:
+    post:
+      tags:
+      - monitoring
+      operationId: createAlertRule
+      summary: Add an alert rule
+      description: 'Scope, metric, condition, window and minimum sample, active hours, severity, who is notified and how (pop-up,
+
+        sound, e-mail §13.7), repeat, cooldown and recovery notice. Rules are evaluated on the server every 15 s.
+
+        One undoable change.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /alert-rules/{id}:
+    get:
+      tags:
+      - monitoring
+      operationId: getAlertRule
+      summary: One an alert rule
+      description: Every field of the form.
+      parameters: &id001
+      - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The an alert rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - monitoring
+      operationId: updateAlertRule
+      summary: Change an alert rule
+      description: Saves the whole form. One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleInput'
+      responses:
+        '200':
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /alert-rules/{id}/archive:
+    post:
+      tags:
+      - monitoring
+      operationId: archiveAlertRule
+      summary: Delete (archive) an alert rule (§13.29)
+      description: It is never removed (§13.29). One undoable change.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleSaved'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /alert-rules/{id}/restore:
+    post:
+      tags:
+      - monitoring
+      operationId: restoreAlertRule
+      summary: Restore an alert rule
+      description: Administrators only. One undoable change.
+      parameters: *id001
+      responses:
+        '200':
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /alert-rules/{id}/clone:
+    post:
+      tags:
+      - monitoring
+      operationId: cloneAlertRule
+      summary: Clone an alert rule
+      description: One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloneInput'
+      responses:
+        '201':
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /alert-rules/{id}/status:
+    post:
+      tags:
+      - monitoring
+      operationId: setAlertRuleStatus
+      summary: Enable or disable an alert rule
+      description: One undoable change.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleStatusInput'
+      responses:
+        '200':
+          description: Saved, with the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleSaved'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /alert-rules/test:
+    post:
+      tags:
+      - monitoring
+      operationId: testAlertRule
+      summary: Test a rule against live traffic now
+      description: 'Evaluates the (unsaved) rule on the current live data and says, per scope entity, the value, the baseline and
+
+        whether it would fire. Nothing is raised.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleInput'
+      responses:
+        '200':
+          description: The evaluation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRuleTest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/query:
+    post:
+      tags:
+      - monitoring
+      operationId: queryIncidents
+      summary: List incidents (server-side filter, sort and paging)
+      description: 'Incidents (§13.6): every alert with start, end, duration, peak value, who acknowledged and when, notes.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of incidents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/export:
+    post:
+      tags:
+      - monitoring
+      operationId: exportIncidents
+      summary: Export incidents (CSV)
+      description: Same filters and sort; up to 100,000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/open:
+    get:
+      tags:
+      - monitoring
+      operationId: listOpenIncidents
+      summary: Open incidents for the bell (§13.6)
+      description: Open and acknowledged incidents the signed-in user is notified of, newest first (at most 50), and the count.
+      responses:
+        '200':
+          description: The open incidents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenIncidents'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/{id}:
+    get:
+      tags:
+      - monitoring
+      operationId: getIncident
+      summary: One incident with its notes
+      description: Detail panel.
+      parameters: *id001
+      responses:
+        '200':
+          description: The incident
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/{id}/acknowledge:
+    post:
+      tags:
+      - monitoring
+      operationId: acknowledgeIncident
+      summary: Acknowledge an incident
+      description: Stops the critical sound and the pop-up for everyone; the incident stays open until it recovers. Optional note.
+      parameters: *id001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentAckInput'
+      responses:
+        '200':
+          description: The incident
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/{id}/snooze:
+    post:
+      tags:
+      - monitoring
+      operationId: snoozeIncident
+      summary: Snooze an incident
+      description: No pop-up or sound for 15 min, 1 h or until tomorrow 07:00 UTC.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentSnoozeInput'
+      responses:
+        '200':
+          description: The incident
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /incidents/{id}/notes:
+    post:
+      tags:
+      - monitoring
+      operationId: addIncidentNote
+      summary: Add a note to an incident
+      description: Notes are kept with the incident.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentNoteInput'
+      responses:
+        '201':
+          description: The incident
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -11345,6 +11774,8 @@ components:
               description: Live value animations on/off (§13.3).
             dashboard:
               $ref: "#/components/schemas/DashboardSettings"
+            alertSounds:
+              $ref: "#/components/schemas/AlertSoundPrefs"
         permissions:
           type: array
           description: GUI Access Group permission keys; buttons not covered are hidden (§1).
@@ -11364,6 +11795,8 @@ components:
           type: boolean
         dashboard:
           $ref: "#/components/schemas/DashboardSettings"
+        alertSounds:
+          $ref: "#/components/schemas/AlertSoundPrefs"
 
     DashboardSettings:
       type: object
@@ -17414,7 +17847,7 @@ components:
           type: string
         emailType:
           type: string
-          enum: [customer_rate, invoice, low_balance, bind_down, customer_tech_info, trunk_change_info, soa_statement, rate_upload_notification, traffic_alert, auto_upload_rejected, trouble_ticket, send_soa]
+          enum: [customer_rate, invoice, low_balance, bind_down, customer_tech_info, trunk_change_info, soa_statement, rate_upload_notification, traffic_alert, auto_upload_rejected, trouble_ticket, send_soa, monitoring_alert]
         subject:
           type: string
         businessCompanyId:
@@ -17450,8 +17883,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection]
-      description: The §8 list plus payment_confirmation (§13.33) and invoice_acceptance / invoice_rejection (§13.31).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31) and monitoring_alert (§13.7).
 
     EmailLogRow:
       type: object
@@ -19781,6 +20214,7 @@ components:
       - auto_upload_rejected
       - trouble_ticket
       - send_soa
+      - monitoring_alert
       description: Email Type (§11).
     UserFields:
       type: object
@@ -21254,6 +21688,548 @@ components:
             items:
               $ref: '#/components/schemas/PortalUserRow'
 
+    # ------------------------------------------------------------- Monitoring alerts (§13.6, §13.7)
+    AlertSeverity:
+      type: string
+      enum:
+      - info
+      - warning
+      - critical
+      description: Info, Warning, Critical - each with its own colour and sound (§13.6).
+    AlertMetric:
+      type: string
+      enum:
+      - attempts
+      - submitted
+      - delivered
+      - tps
+      - asr
+      - dlr
+      - margin
+      - margin_pct
+      - revenue
+      - avg_delivery_delay
+      - bind_status
+      description: Volume (attempts, submitted, delivered), TPS, ASR %, DLR %, margin (amount, %), revenue, average delivery delay (s), bind status.
+    AlertScope:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      - ids
+      - values
+      properties:
+        kind:
+          type: string
+          enum:
+          - all
+          - customer
+          - customer_trunk
+          - vendor
+          - vendor_trunk
+          - country
+          - mccmnc
+          - sender_id
+          - product_category
+          description: all = every customer trunk together. customer / vendor are enterprises.
+        ids:
+          type: array
+          items: &id002
+            $ref: '#/components/schemas/Id'
+          maxItems: 200
+          uniqueItems: true
+          description: Enterprise or trunk IDs (customer, customer_trunk, vendor, vendor_trunk, product_category); empty = each one with traffic.
+        values:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+          maxItems: 200
+          uniqueItems: true
+          description: Country ISO codes, MCCMNC codes or sender IDs (country, mccmnc, sender_id).
+    AlertCondition:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      - value
+      - baseline
+      properties:
+        type:
+          type: string
+          enum:
+          - above
+          - below
+          - increase_pct
+          - decrease_pct
+          - started
+          - stopped
+          - bind_down
+          description: Above / below a fixed value; increase / decrease by X % against a baseline; started sending; stopped sending (no traffic for the window); a bind of the scope is down.
+        value:
+          type:
+          - number
+          - 'null'
+          description: The fixed value or the % change; null for started / stopped / bind_down.
+        baseline:
+          type:
+          - string
+          - 'null'
+          enum:
+          - previous_window
+          - yesterday
+          - last_week
+          - null
+          description: 'For increase / decrease: the previous window, the same time yesterday or the same weekday last week.'
+    AlertActiveHours:
+      type: object
+      additionalProperties: false
+      required:
+      - always
+      - days
+      - fromHour
+      - toHour
+      properties:
+        always: &id001
+          type: boolean
+        days:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+          maxItems: 7
+          uniqueItems: true
+          description: 0 = Sunday.
+        fromHour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        toHour:
+          type: integer
+          minimum: 1
+          maximum: 24
+          description: Exclusive; UTC.
+    AlertChannels:
+      type: object
+      additionalProperties: false
+      required:
+      - popup
+      - sound
+      - email
+      properties:
+        popup: *id001
+        sound: *id001
+        email: *id001
+    AlertRuleFields:
+      type: object
+      required:
+      - name
+      - status
+      - description
+      - scope
+      - metric
+      - condition
+      - windowMinutes
+      - minSample
+      - activeHours
+      - severity
+      - notifyUserIds
+      - notifyDepartmentIds
+      - channels
+      - emailAddresses
+      - partnerContactType
+      - repeatMinutes
+      - cooldownMinutes
+      - recoveryNotice
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+        scope:
+          $ref: '#/components/schemas/AlertScope'
+        metric:
+          $ref: '#/components/schemas/AlertMetric'
+        condition:
+          $ref: '#/components/schemas/AlertCondition'
+        windowMinutes:
+          type: integer
+          enum:
+          - 1
+          - 5
+          - 15
+          - 30
+          - 60
+        minSample:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          description: Evaluate only with at least this many messages in the window.
+        activeHours:
+          $ref: '#/components/schemas/AlertActiveHours'
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        notifyUserIds:
+          type: array
+          items: *id002
+          maxItems: 200
+          uniqueItems: true
+        notifyDepartmentIds:
+          type: array
+          items: *id002
+          maxItems: 50
+          uniqueItems: true
+          description: Users and departments notified in the GUI; both empty = everyone.
+        channels:
+          $ref: '#/components/schemas/AlertChannels'
+        emailAddresses:
+          type: array
+          items:
+            type: string
+            maxLength: 200
+            format: email
+          maxItems: 50
+          description: Extra recipients besides the notified users (§13.7).
+        partnerContactType:
+          type:
+          - string
+          - 'null'
+          enum:
+          - commercial
+          - technical
+          - rates
+          - finance
+          - null
+          description: Also e-mail this contact type of the partner the incident is about (partner-facing alerts).
+        repeatMinutes:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 1440
+          description: Re-alert while the condition lasts; null = once.
+        cooldownMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          description: Quiet period after recovery.
+        recoveryNotice:
+          type: boolean
+          description: Send an OK notice when the metric is back to normal.
+    AlertRuleInput:
+      allOf:
+      - $ref: '#/components/schemas/AlertRuleFields'
+      unevaluatedProperties: false
+    AlertRuleRow:
+      allOf:
+      - $ref: '#/components/schemas/AlertRuleFields'
+      - type: object
+        required:
+        - id
+        - scopeLabel
+        - conditionLabel
+        - lastTriggeredAt
+        - openIncidents
+        - incidents30d
+        - updatedBy
+        - updatedAt
+        - archivedAt
+        properties:
+          id: *id002
+          scopeLabel:
+            type: string
+          conditionLabel:
+            type: string
+            description: e.g. DLR % decrease 20 % vs previous window, 15 min, ≥ 500 msgs.
+          lastTriggeredAt: &id004
+            oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+          openIncidents: &id003
+            type: integer
+          incidents30d: *id003
+          updatedBy:
+            type:
+            - string
+            - 'null'
+          updatedAt: &id005
+            $ref: '#/components/schemas/Timestamp'
+          archivedAt: *id004
+    AlertRuleSaved:
+      type: object
+      required:
+      - record
+      - change
+      properties:
+        record:
+          $ref: '#/components/schemas/AlertRuleRow'
+        change:
+          oneOf:
+          - $ref: '#/components/schemas/Change'
+          - type: 'null'
+    AlertRuleTest:
+      type: object
+      required:
+      - evaluatedAt
+      - firing
+      - entities
+      properties:
+        evaluatedAt: *id005
+        firing: *id003
+        entities:
+          type: array
+          items:
+            type: object
+            required:
+            - name
+            - value
+            - baseline
+            - sample
+            - firing
+            - reason
+            properties:
+              name:
+                type: string
+              value:
+                type:
+                - number
+                - 'null'
+              baseline:
+                type:
+                - number
+                - 'null'
+              sample: *id003
+              firing: *id001
+              reason:
+                type: string
+                description: Why it fires or not, in words.
+    AlertRuleStatusInput:
+      type: object
+      additionalProperties: false
+      required:
+      - status
+      properties:
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+    IncidentRow:
+      type: object
+      required:
+      - id
+      - ruleId
+      - ruleName
+      - severity
+      - metric
+      - entityKind
+      - entityId
+      - entityName
+      - message
+      - state
+      - currentValue
+      - baselineValue
+      - peakValue
+      - startedAt
+      - endedAt
+      - durationSeconds
+      - acknowledgedBy
+      - acknowledgedAt
+      - snoozedUntil
+      - notesCount
+      - emailedAt
+      properties:
+        id: *id002
+        ruleId: *id002
+        ruleName:
+          type: string
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        metric:
+          $ref: '#/components/schemas/AlertMetric'
+        entityKind:
+          type: string
+          description: all, customer, customer_trunk, vendor, vendor_trunk or a scope kind.
+        entityId:
+          type:
+          - integer
+          - 'null'
+        entityName:
+          type: string
+        message:
+          type: string
+        state:
+          type: string
+          enum:
+          - open
+          - acknowledged
+          - recovered
+        currentValue:
+          type:
+          - number
+          - 'null'
+        baselineValue:
+          type:
+          - number
+          - 'null'
+        peakValue:
+          type:
+          - number
+          - 'null'
+        startedAt: *id005
+        endedAt: *id004
+        durationSeconds: *id003
+        acknowledgedBy:
+          type:
+          - string
+          - 'null'
+        acknowledgedAt: *id004
+        snoozedUntil: *id004
+        notesCount: *id003
+        emailedAt: *id004
+    IncidentNote:
+      type: object
+      required:
+      - id
+      - text
+      - user
+      - at
+      properties:
+        id: *id002
+        text:
+          type: string
+        user:
+          type:
+          - string
+          - 'null'
+        at: *id005
+    IncidentDetail:
+      allOf:
+      - $ref: '#/components/schemas/IncidentRow'
+      - type: object
+        required:
+        - conditionLabel
+        - windowMinutes
+        - notes
+        properties:
+          conditionLabel:
+            type: string
+          windowMinutes: *id003
+          notes:
+            type: array
+            items:
+              $ref: '#/components/schemas/IncidentNote'
+    IncidentAckInput:
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+    IncidentSnoozeInput:
+      type: object
+      additionalProperties: false
+      required:
+      - for
+      properties:
+        for:
+          type: string
+          enum:
+          - 15m
+          - 1h
+          - tomorrow
+          description: Tomorrow = 07:00 UTC next day.
+    IncidentNoteInput:
+      type: object
+      additionalProperties: false
+      required:
+      - text
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    OpenIncidents:
+      type: object
+      required:
+      - incidents
+      - open
+      properties:
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentRow'
+        open: *id003
+    AlertSoundPrefs:
+      type: object
+      description: Sound per severity, chosen from a list.
+      additionalProperties: false
+      required:
+      - mute
+      - info
+      - warning
+      - critical
+      properties:
+        mute:
+          type: boolean
+          description: Mute alert sounds for me (§13.6).
+        info:
+          type: string
+          enum:
+          - none
+          - chime
+          - ping
+          - beep
+          - siren
+        warning:
+          type: string
+          enum:
+          - none
+          - chime
+          - ping
+          - beep
+          - siren
+        critical:
+          type: string
+          enum:
+          - none
+          - chime
+          - ping
+          - beep
+          - siren
+          description: Critical repeats until acknowledged.
+    AlertRulePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/AlertRuleRow'
+    IncidentPage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/IncidentRow'
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -21961,7 +22937,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents]
 
     FilterOperator:
       type: string

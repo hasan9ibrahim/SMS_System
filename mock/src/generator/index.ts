@@ -21,6 +21,7 @@ import { generateSwitchExtras } from "./switchExtras.js";
 import { generateObservationExtras } from "./observationExtras.js";
 import { generateReportExtras } from "./reportExtras.js";
 import { generateAdminExtras } from "./adminExtras.js";
+import { generateAlertExtras } from "./alertExtras.js";
 
 export function emptyWorld(anchor: number, profile: Profile): World {
   return {
@@ -83,6 +84,7 @@ export async function generateWorld(opts: {
   await step("observation extras", (rng) => generateObservationExtras(world, rng, opts.sink, opts.profile));
   await step("report extras", (rng) => generateReportExtras(world, rng, opts.sink, opts.profile));
   await step("admin extras", (rng) => generateAdminExtras(world, rng, opts.sink, opts.profile));
+  await step("alert extras", (rng) => generateAlertExtras(world, rng, opts.sink, opts.profile));
   return world;
 }
 

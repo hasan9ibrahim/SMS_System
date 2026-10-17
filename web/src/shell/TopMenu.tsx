@@ -1,7 +1,6 @@
 // Top menu bar (§15.1): logo, main menu with dropdowns, search / jump-to (Ctrl K), live TPS
 // pill, alert bell with count, user avatar.
-import { openMyPassword } from "../pages/admin/parts";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMe, useUpdatePreferences } from "../api/hooks";
 import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
 import { Icon } from "../ui/Icon";
@@ -11,6 +10,8 @@ import { useTabs } from "./tabs";
 import { useOpener } from "./useOpener";
 import { useToggleTheme } from "./theme";
 import { usePalette } from "./CommandPalette";
+import { openMyPassword } from "../pages/admin/parts";
+import { openAlertSounds } from "../pages/monitoring/alerts/parts";
 
 const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n < 100 ? 1 : 0 });
 
@@ -78,6 +79,11 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
 
 function AlertBell() {
   const live = useLive();
+  const { data: me } = useMe();
+  // The user's alert sounds (§13.6) drive the live store.
+  useEffect(() => {
+    if (me?.preferences.alertSounds) useLive.setState({ sounds: me.preferences.alertSounds });
+  }, [me?.preferences.alertSounds]);
   const open = useOpener();
   const [shown, setShown] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -177,6 +183,8 @@ function Avatar() {
             { label: "My changes", icon: "history", onSelect: () => open(`/admin/changes?mine=1`) },
             // §13.28: current password, 2FA code and the new-password rules.
             { label: "Change password", icon: "lock", disabled: !me, onSelect: () => me && void openMyPassword(me.id) },
+            // §13.6: mute and a sound per severity.
+            { label: "Alert sounds", icon: "bell", onSelect: () => void openAlertSounds() },
             { label: "Sign out", icon: "logout", disabled: true, hint: "§13.28", onSelect: () => undefined },
           ]}
         />

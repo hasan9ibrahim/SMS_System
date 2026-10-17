@@ -10,6 +10,7 @@ import { startTrafficAlertChecks } from "./api/switchTools.js";
 import { startEdrDownloads } from "./api/edrDownloads.js";
 import { startNetworkStatus } from "./api/network.js";
 import { startReportJobs } from "./api/reports.js";
+import { startLive } from "./live/socket.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -27,3 +28,4 @@ startTrafficAlertChecks();
 startEdrDownloads();
 startNetworkStatus();
 startReportJobs();
+startLive();

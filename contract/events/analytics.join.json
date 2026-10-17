@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "analytics.join.json",
+  "title": "AnalyticsJoinParams",
+  "description": "Client to server: the phx_join payload for topic live:analytics (§13.4 live mode). Report By, the streaming interval, the compare window, a name search, sort and row limit; the server filters and sorts (CLAUDE.md rule 3). To change them, leave and join again.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "groupBy"
+  ],
+  "properties": {
+    "groupBy": {
+      "type": "string",
+      "enum": [
+        "customer",
+        "customer_trunk",
+        "vendor",
+        "vendor_trunk",
+        "destination",
+        "country"
+      ],
+      "description": "Report By."
+    },
+    "intervalSeconds": {
+      "type": "integer",
+      "enum": [
+        1,
+        5,
+        15
+      ],
+      "default": 5
+    },
+    "compareMinutes": {
+      "type": "integer",
+      "enum": [
+        5,
+        15,
+        60
+      ],
+      "default": 15,
+      "description": "TPS now against the window before (compare column)."
+    },
+    "search": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Name contains (case-insensitive); % and _ are wildcards."
+    },
+    "onlyActive": {
+      "type": "boolean",
+      "default": false,
+      "description": "Only rows sending now."
+    },
+    "sort": {
+      "type": "string",
+      "enum": [
+        "name",
+        "attempts",
+        "delivered",
+        "asr",
+        "dlr",
+        "revenue",
+        "cost",
+        "margin",
+        "marginPct",
+        "tps",
+        "changePct"
+      ],
+      "default": "attempts"
+    },
+    "dir": {
+      "type": "string",
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "default": "desc"
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500,
+      "default": 200
+    }
+  },
+  "examples": [
+    {
+      "groupBy": "customer_trunk",
+      "intervalSeconds": 5,
+      "compareMinutes": 15,
+      "search": "acme",
+      "sort": "tps",
+      "dir": "desc",
+      "limit": 200
+    }
+  ]
+}

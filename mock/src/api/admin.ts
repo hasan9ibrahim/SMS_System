@@ -861,6 +861,21 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["currency", "Currency", "USD"],
     ["balance_words", "Balance in words", "you owe us"],
   ],
+  monitoring_alert: [
+    ["severity", "CRITICAL / WARNING / INFO, or OK on recovery", "CRITICAL"],
+    ["rule", "Alert rule", "DLR drop – key clients"],
+    ["entity", "What the incident is about", "FENPHY-MAIN"],
+    ["metric", "Metric and condition", "DLR – DLR down 20 % vs previous window · 15 min"],
+    ["current", "Value now", "61 %"],
+    ["baseline", "Baseline", "92 %"],
+    ["started", "Start time (UTC)", "2026-10-16 18:05"],
+    ["link", "Link that opens the incident", "https://platform.example/monitoring/incidents?incident=5001"],
+    [
+      "state_line",
+      "What happened in words (or the digest list)",
+      "FENPHY-MAIN DLR dropped from 92 % to 61 % in 15 min",
+    ],
+  ],
 };
 const TYPE_LABELS: Record<string, string> = {
   customer_rate: "Customer Rate",
@@ -875,6 +890,7 @@ const TYPE_LABELS: Record<string, string> = {
   auto_upload_rejected: "Auto Upload Report – Reject",
   trouble_ticket: "EDR – Trouble Ticket",
   send_soa: "Send SOA",
+  monitoring_alert: "Monitoring Alert",
 };
 const placeholdersOf = (type: string) =>
   [...COMMON, ...(PLACEHOLDERS[type] ?? [])].map(([key, description, sample]) => ({ key, description, sample }));

@@ -1,7 +1,8 @@
 // Pop-up cards for new incidents (§13.6): severity, what happened, value vs baseline, time,
-// and Acknowledge / Open in Analytics / Snooze. Sounds and the Incidents page arrive with
-// the Alert rules module (build step 5).
+// and Acknowledge / Open in Analytics / Snooze (15 min, 1 h, until tomorrow). Acknowledge and snooze
+// go to the server, so every tab and colleague sees them; sounds play from the live store.
 import { useEffect } from "react";
+import type { IncidentEvent } from "@sms/contract";
 import { useLive, openIncidents } from "../live/store";
 import { useTabs } from "./tabs";
 import { useOpener } from "./useOpener";
@@ -22,8 +23,24 @@ export function useTabAlertDots() {
   }, [open, tabs]);
 }
 
+/** Live analytics for what the incident is about (§13.4): Report By and a name search in the URL. */
+export function analyticsPath(i: Pick<IncidentEvent, "scope" | "entityName">): string {
+  const first = i.scope?.[0];
+  const kind = first?.kind;
+  const by =
+    kind === "customer_trunk"
+      ? "customer_trunk"
+      : kind === "vendor_trunk"
+        ? "vendor_trunk"
+        : kind === "vendor_enterprise"
+          ? "vendor"
+          : "customer";
+  const q = first ? `&q=${encodeURIComponent(first.name)}` : "";
+  return `/live/analytics?by=${by}${q}`;
+}
+
 export function IncidentPopups({ popout = false }: { popout?: boolean }) {
-  const { incidents, popups, dismissPopup, acknowledge } = useLive();
+  const { incidents, popups, dismissPopup, acknowledge, snooze } = useLive();
   const opener = useOpener({ popout });
   const cards = popups.map((id) => incidents.find((i) => i.incidentId === id)).filter((i) => i !== undefined);
   if (cards.length === 0) return null;
@@ -33,7 +50,10 @@ export function IncidentPopups({ popout = false }: { popout?: boolean }) {
         <div key={i.incidentId} className={`incident-card sev-${i.severity}`} role="alert">
           <div className="incident-head">
             <Icon name="alert" size={15} />
-            <strong>{i.severity === "critical" ? "Critical" : i.severity === "warning" ? "Warning" : "Info"}</strong>
+            <strong>
+              {i.severity === "critical" ? "Critical" : i.severity === "warning" ? "Warning" : "Info"}
+              {i.repeat ? " · still on" : ""}
+            </strong>
             <span className="muted small">{i.ruleName}</span>
             <span className="muted small num">{new Date(i.startedAt).toISOString().slice(11, 16)} UTC</span>
             <button
@@ -53,7 +73,7 @@ export function IncidentPopups({ popout = false }: { popout?: boolean }) {
             </p>
           )}
           <div className="incident-actions">
-            <button type="button" className="btn btn-sm btn-default" onClick={() => acknowledge(i.incidentId)}>
+            <button type="button" className="btn btn-sm btn-default" onClick={() => void acknowledge(i.incidentId)}>
               Acknowledge
             </button>
             <button
@@ -61,14 +81,22 @@ export function IncidentPopups({ popout = false }: { popout?: boolean }) {
               className="btn btn-sm btn-ghost"
               onClick={() => {
                 dismissPopup(i.incidentId);
-                opener("/live/analytics", { ctrlKey: true });
+                opener(analyticsPath(i), { ctrlKey: true });
               }}
             >
               Open in Analytics
             </button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => dismissPopup(i.incidentId)}>
-              Snooze 15 min
-            </button>
+            <select
+              className="btn btn-sm btn-ghost snooze-select"
+              aria-label="Snooze"
+              value=""
+              onChange={(e) => e.target.value && void snooze(i.incidentId, e.target.value as "15m" | "1h" | "tomorrow")}
+            >
+              <option value="">Snooze…</option>
+              <option value="15m">15 min</option>
+              <option value="1h">1 hour</option>
+              <option value="tomorrow">Until tomorrow</option>
+            </select>
           </div>
         </div>
       ))}

@@ -110,5 +110,32 @@ test("live:dashboard: join params, then summary, movers and tops; history on liv
   valid("dashboard.movers.json", (await waitFor((f) => f[3] === "movers"))[4]);
   const tick = (await waitFor((f) => f[3] === "tick"))[4] as { trunks: { trunk: { kind: string } }[] };
   valid("traffic.tps_tick.json", tick);
+
+  // Live analytics (§13.4): join params validated, a snapshot at once and on the interval.
+  ws.send(JSON.stringify(["7", "7", "live:analytics", "phx_join", { groupBy: "region" }]));
+  assert.equal((await waitFor((f) => f[1] === "7"))[4].status, "error", "groupBy outside the enum");
+  ws.send(
+    JSON.stringify([
+      "8",
+      "8",
+      "live:analytics",
+      "phx_join",
+      { groupBy: "customer", intervalSeconds: 1, sort: "tps", limit: 20 },
+    ]),
+  );
+  assert.equal((await waitFor((f) => f[1] === "8"))[4].status, "ok");
+  const snap = (await waitFor((f) => f[2] === "live:analytics" && f[3] === "snapshot"))[4] as {
+    rows: { tps: number | null }[];
+    groupBy: string;
+  };
+  valid("analytics.snapshot.json", snap);
+  assert.equal(snap.groupBy, "customer");
+  assert.ok(snap.rows.length <= 20);
+  const tps = snap.rows.map((r) => r.tps ?? 0);
+  assert.deepEqual(
+    tps,
+    [...tps].sort((a, b) => b - a),
+    "sorted on the server",
+  );
   ws.close();
 });

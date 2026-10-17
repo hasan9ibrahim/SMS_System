@@ -7,6 +7,9 @@ import { DepartmentsPage } from "./admin/DepartmentsPage";
 import { EmailTemplatesPage } from "./admin/EmailTemplatesPage";
 import { LoggedInUsersPage } from "./admin/LoggedInUsersPage";
 import { UsersPage } from "./admin/UsersPage";
+import { AlertRulesPage } from "./monitoring/alerts/AlertRulesPage";
+import { IncidentsPage } from "./monitoring/alerts/IncidentsPage";
+import { LiveAnalyticsPage } from "./live/LiveAnalyticsPage";
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
@@ -127,6 +130,9 @@ const BUILT = new Set([
   "/admin/audit",
   "/admin/email-templates",
   "/admin/customer-portal",
+  "/live/analytics",
+  "/monitoring/alert-rules",
+  "/monitoring/incidents",
 ]);
 
 export function PageRoutes({ path }: { path: string }) {
@@ -237,6 +243,9 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/admin/audit" element={<AuditTrailPage />} />
       <Route path="/admin/email-templates" element={<EmailTemplatesPage />} />
       <Route path="/admin/customer-portal" element={<CustomerPortalPage />} />
+      <Route path="/live/analytics" element={<LiveAnalyticsPage />} />
+      <Route path="/monitoring/alert-rules" element={<AlertRulesPage />} />
+      <Route path="/monitoring/incidents" element={<IncidentsPage />} />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (
         <Route key={p.key} path={p.path} element={<PlaceholderPage page={p} />} />
       ))}

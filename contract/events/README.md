@@ -20,9 +20,11 @@ interchangeable for the GUI.
 | `live:tps` | `tick` | `traffic.tps_tick.json` | §13.3, §15.1 |
 | `live:tps` | `history` (once, after joining) | `traffic.tps_history.json` | §13.3 |
 | `alerts:<userId>` | `incident` | `alerts.incident.json` | §13.6 |
+| `live:analytics` | `snapshot` | `analytics.snapshot.json` | §13.4 |
 
 Join parameters (client to server) are listed under `joins` in `catalog.json`:
-`live:dashboard` takes `dashboard.join.json` (movers window and threshold).
+`live:dashboard` takes `dashboard.join.json` (movers window and threshold);
+`live:analytics` takes `analytics.join.json` (Report By, interval, compare window, search, sort, limit).
 
 Shared definitions live in `common.json`. Every schema carries an `examples`
 entry; the contract tests validate each example against its schema.

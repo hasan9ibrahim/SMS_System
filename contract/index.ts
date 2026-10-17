@@ -509,3 +509,27 @@ export type PortalUserInput = Schemas["PortalUserInput"];
 export type PortalUserRow = Schemas["PortalUserRow"];
 export type PortalUserSaved = Schemas["PortalUserSaved"];
 export type PortalUserPage = Schemas["PortalUserPage"];
+
+// Monitoring alerts (§13.6, §13.7)
+export type AlertSeverity = Schemas["AlertSeverity"];
+export type AlertMetric = Schemas["AlertMetric"];
+export type AlertScope = Schemas["AlertScope"];
+export type AlertCondition = Schemas["AlertCondition"];
+export type AlertActiveHours = Schemas["AlertActiveHours"];
+export type AlertChannels = Schemas["AlertChannels"];
+export type AlertRuleFields = Schemas["AlertRuleFields"];
+export type AlertRuleInput = Schemas["AlertRuleInput"];
+export type AlertRuleRow = Schemas["AlertRuleRow"];
+export type AlertRuleSaved = Schemas["AlertRuleSaved"];
+export type AlertRuleTest = Schemas["AlertRuleTest"];
+export type AlertRuleStatusInput = Schemas["AlertRuleStatusInput"];
+export type IncidentRow = Schemas["IncidentRow"];
+export type IncidentNote = Schemas["IncidentNote"];
+export type IncidentDetail = Schemas["IncidentDetail"];
+export type IncidentAckInput = Schemas["IncidentAckInput"];
+export type IncidentSnoozeInput = Schemas["IncidentSnoozeInput"];
+export type IncidentNoteInput = Schemas["IncidentNoteInput"];
+export type OpenIncidents = Schemas["OpenIncidents"];
+export type AlertSoundPrefs = Schemas["AlertSoundPrefs"];
+export type AlertRulePage = Schemas["AlertRulePage"];
+export type IncidentPage = Schemas["IncidentPage"];

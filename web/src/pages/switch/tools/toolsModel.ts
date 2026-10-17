@@ -24,6 +24,7 @@ export const EMAIL_TYPE: Record<EmailLogRow["emailType"], string> = {
   payment_confirmation: "Payment Confirmation",
   invoice_acceptance: "Invoice Acceptance",
   invoice_rejection: "Invoice Rejection",
+  monitoring_alert: "Monitoring Alert",
 };
 
 export const ALERT_STATE: Record<TrafficAlertRow["state"], { label: string; tone: Tone }> = {

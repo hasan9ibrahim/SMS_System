@@ -4,13 +4,16 @@
 //
 // Live traffic simulator (simulator.ts): `live:tps` ticks once a second (TPS pill §15.1 and
 // the dashboard tables §13.3) and sends an hour of history on join; `live:dashboard` pushes
-// the summary bar each second and the movers and tops panels every 5 seconds; `alerts:<userId>`
-// raises incidents now and then (bell and pop-ups, §13.6).
+// the summary bar each second and the movers and tops panels every 5 seconds; `live:analytics`
+// pushes each subscriber's Report By snapshot every 1, 5 or 15 seconds (§13.4); `alerts:<userId>`
+// carries incidents raised by the alert engine (alerts/engine.ts, §13.6), which runs every 15 seconds
+// from server start, whether or not anyone is connected.
 import type { FastifyInstance } from "fastify";
 import websocket from "@fastify/websocket";
 import type { WebSocket } from "ws";
-import type { IncidentEvent } from "@sms/contract";
+import { EVALUATE_EVERY_MS, evaluateRound, setPusher, toEvent } from "../alerts/engine.js";
 import { CURRENT_USER_ID } from "../api/session.js";
+import { analyticsParams, analyticsSnapshot, type AnalyticsParams } from "./analytics.js";
 import {
   computeMovers,
   createSimulator,
@@ -28,6 +31,7 @@ interface Client {
   socket: WebSocket;
   topics: Map<string, string | null>; // topic -> join_ref
   movers: { windowMinutes: number; thresholdPct: number };
+  analytics: AnalyticsParams | null;
 }
 
 const clients = new Set<Client>();
@@ -35,11 +39,13 @@ let sim: Simulator | null = null;
 let loading: Promise<Simulator> | null = null;
 let timer: NodeJS.Timeout | null = null;
 let ticks = 0;
-let nextIncidentAt = 0;
-let incidentSeq = 5000;
-const openIncidents: { at: number; event: IncidentEvent }[] = [];
+let lastEvaluation = 0;
+let evaluating = false;
 
-const rand = (min: number, max: number) => min + Math.random() * (max - min);
+/** The running simulator (started on first use). */
+export function liveSimulator() {
+  return getSimulator();
+}
 
 function getSimulator() {
   loading ??= createSimulator().then((s) => (sim = s));
@@ -70,61 +76,26 @@ function tick() {
     push("live:dashboard", "tops", topsEvent(sim, now));
     for (const c of clients) if (c.topics.has("live:dashboard")) moversFor(sim, c, now);
   }
-  incidents(sim, now);
-}
-
-// Incidents: one every 1.5-4 minutes, recovering after 3-8 minutes.
-function incidents(s: Simulator, now: number) {
-  if (now >= nextIncidentAt && s.trunks.length) {
-    nextIncidentAt = now + rand(90_000, 240_000);
-    const t = s.trunks[Math.floor(Math.random() * s.trunks.length)]!;
-    const metric = Math.random() < 0.6 ? "dlr" : "asr";
-    const baseline = Math.round(rand(88, 97));
-    const current = Math.round(baseline - rand(15, 35));
-    const severity = baseline - current > 25 ? "critical" : "warning";
-    const event: IncidentEvent = {
-      incidentId: ++incidentSeq,
-      ruleId: metric === "dlr" ? 12 : 14,
-      ruleName: metric === "dlr" ? "DLR drop - key clients" : "ASR drop",
-      state: "open",
-      severity,
-      message: `${t.name} ${metric.toUpperCase()} dropped from ${baseline} % to ${current} % in 15 min`,
-      metric,
-      currentValue: current,
-      baselineValue: baseline,
-      scope: [{ kind: "customer_trunk", id: t.id, name: t.name }],
-      startedAt: new Date(now).toISOString(),
-      endedAt: null,
-      acknowledgedBy: null,
-    };
-    openIncidents.push({ at: now + rand(180_000, 480_000), event });
-    push(`alerts:${CURRENT_USER_ID}`, "incident", event);
-  }
-  for (let i = openIncidents.length - 1; i >= 0; i--) {
-    const o = openIncidents[i]!;
-    if (now < o.at) continue;
-    openIncidents.splice(i, 1);
-    push(`alerts:${CURRENT_USER_ID}`, "incident", {
-      ...o.event,
-      state: "recovered",
-      endedAt: new Date(now).toISOString(),
-    });
+  for (const c of clients)
+    if (c.analytics && c.topics.has("live:analytics") && ticks % c.analytics.intervalSeconds === 0)
+      send(c, "live:analytics", "snapshot", analyticsSnapshot(sim, c.analytics, now));
+  if (!evaluating && now - lastEvaluation >= EVALUATE_EVERY_MS) {
+    lastEvaluation = now;
+    evaluating = true;
+    evaluateRound(sim, now)
+      .catch((err: Error) => console.warn(`alert engine: ${err.message}`))
+      .finally(() => (evaluating = false));
   }
 }
 
-function start() {
+/** Runs the simulator and the alert engine from server start (§13.6: alerts fire with nobody connected). */
+export function startLive() {
   if (timer) return;
-  nextIncidentAt = Date.now() + rand(20_000, 60_000);
+  setPusher(push);
+  lastEvaluation = Date.now() - EVALUATE_EVERY_MS + 20_000; // first round once the history is in
   timer = setInterval(tick, 1000);
   timer.unref();
   void getSimulator();
-}
-
-function stop() {
-  if (timer && clients.size === 0) {
-    clearInterval(timer);
-    timer = null;
-  }
 }
 
 /** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes and 30 %. */
@@ -138,14 +109,19 @@ function moverParams(p: Record<string, unknown>): Client["movers"] | null {
 }
 
 const KNOWN_TOPICS = (topic: string) =>
-  topic === "live:tps" || topic === "live:dashboard" || topic.startsWith("alerts:");
+  topic === "live:tps" || topic === "live:dashboard" || topic === "live:analytics" || topic.startsWith("alerts:");
 
 export async function registerSocket(app: FastifyInstance) {
   await app.register(websocket);
   app.get("/socket/websocket", { websocket: true }, (socket) => {
-    const client: Client = { socket, topics: new Map(), movers: { windowMinutes: 15, thresholdPct: 30 } };
+    const client: Client = {
+      socket,
+      topics: new Map(),
+      movers: { windowMinutes: 15, thresholdPct: 30 },
+      analytics: null,
+    };
     clients.add(client);
-    start();
+    startLive();
     socket.on("message", (data) => {
       let frame: Frame;
       try {
@@ -164,6 +140,11 @@ export async function registerSocket(app: FastifyInstance) {
           if (!params) return reply("error", { reason: "invalid join params" });
           client.movers = params;
         }
+        if (topic === "live:analytics") {
+          const params = analyticsParams(payload ?? {});
+          if (!params) return reply("error", { reason: "invalid join params" });
+          client.analytics = params;
+        }
         client.topics.set(topic, joinRef);
         reply("ok");
         // Panels fill at once instead of after the first 5-second push.
@@ -175,25 +156,61 @@ export async function registerSocket(app: FastifyInstance) {
             send(client, topic, "tops", topsEvent(s, now));
             moversFor(s, client, now);
           }
+          if (topic === "live:analytics" && client.analytics)
+            send(client, topic, "snapshot", analyticsSnapshot(s, client.analytics, now));
         });
         return;
       }
       if (event === "phx_leave") {
         client.topics.delete(topic);
+        if (topic === "live:analytics") client.analytics = null;
         return reply("ok");
       }
     });
     socket.on("close", () => {
       clients.delete(client);
-      stop();
     });
   });
 }
 
-/** Test hook: run one simulator step now. */
-export async function simulateTick(forceIncident = false) {
+/** Test hook: run one simulator step now (movers and tops included), optionally with a sample incident. */
+export async function simulateTick(withIncident = false) {
   await getSimulator();
-  if (forceIncident) nextIncidentAt = 0;
+  setPusher(push);
   ticks = 4; // the next step also pushes movers and tops
+  lastEvaluation = Date.now(); // the engine is tested on its own (alerts.test.ts)
   tick();
+  if (withIncident) {
+    const at = new Date().toISOString();
+    push(
+      `alerts:${CURRENT_USER_ID}`,
+      "incident",
+      toEvent(
+        {
+          id: 1,
+          ruleId: 1,
+          ruleName: "DLR drop – sample",
+          severity: "warning",
+          metric: "dlr",
+          entityKind: "customer_trunk",
+          entityId: 1,
+          entityName: "SAMPLE_TRUNK",
+          message: "SAMPLE_TRUNK DLR dropped from 90 % to 60 % in 15 min",
+          state: "open",
+          currentValue: 60,
+          baselineValue: 90,
+          peakValue: 58,
+          startedAt: at,
+          endedAt: null,
+          durationSeconds: 0,
+          acknowledgedBy: null,
+          acknowledgedAt: null,
+          snoozedUntil: null,
+          notesCount: 0,
+          emailedAt: null,
+        },
+        { channels: { popup: true, sound: true, email: false } },
+      ),
+    );
+  }
 }

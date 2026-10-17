@@ -45,6 +45,17 @@ export interface SimTrunk {
   asr: number | null;
   dlr: number | null;
   segments: Segment[];
+  /** Quality now (§13.6 alerts): ASR / DLR %, delivery delay in seconds; dips come and go. */
+  asrNow: number | null;
+  dlrNow: number | null;
+  delayNow: number;
+  dip: Dip | null;
+  /** Per-minute averages aligned with `minutes`. */
+  minAsr: (number | null)[];
+  minDlr: (number | null)[];
+  minDelay: number[];
+  qSum: [number, number, number];
+  day: PartyDay;
   /** Average TPS per minute, oldest first; the last entry is the current minute so far. */
   minutes: number[];
   minuteSum: number;
@@ -65,7 +76,41 @@ export interface SimVendor {
   cost: number;
   asr: number | null;
   dlr: number | null;
+  asrNow: number | null;
+  dlrNow: number | null;
+  delayNow: number;
+  dip: Dip | null;
+  minutes: number[];
+  minAsr: (number | null)[];
+  minDlr: (number | null)[];
+  minDelay: number[];
+  minuteSum: number;
+  minuteN: number;
+  qSum: [number, number, number];
+  day: PartyDay;
 }
+
+/** A quality episode: ASR, DLR and delay factors until a time. */
+export interface Dip {
+  until: number;
+  asrF: number;
+  dlrF: number;
+  delayF: number;
+}
+
+/** Today's figures of one trunk (live analytics §13.4). */
+export interface PartyDay {
+  attempts: number;
+  submitted: number;
+  delivered: number;
+  revenue: number;
+  cost: number;
+}
+const emptyDay = (): PartyDay => ({ attempts: 0, submitted: 0, delivered: 0, revenue: 0, cost: 0 });
+/** Normal delivery delay in seconds when quality is fine. */
+export const BASE_DELAY = 3;
+/** Chance per second that a sending trunk starts a quality dip (about once a day per trunk). */
+const DIP_PER_SECOND = Number(process.env.SIM_DIP_PER_DAY ?? 1) / 86_400;
 
 interface DayTotals {
   day: string;
@@ -235,6 +280,15 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
       asr: s ? ratio(Number(s.ok), n) : null,
       dlr: s ? ratio(Number(s.dl), Number(s.ok)) : null,
       segments: [],
+      asrNow: s ? ratio(Number(s.ok), n) : null,
+      dlrNow: s ? ratio(Number(s.dl), Number(s.ok)) : null,
+      delayNow: BASE_DELAY,
+      dip: null,
+      minAsr: [],
+      minDlr: [],
+      minDelay: [],
+      qSum: [0, 0, 0],
+      day: emptyDay(),
       minutes: [],
       minuteSum: 0,
       minuteN: 0,
@@ -260,6 +314,18 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
         cost: s && n ? s.cost / n : 0.024,
         asr: s ? ratio(Number(s.ok), n) : null,
         dlr: s ? ratio(Number(s.dl), Number(s.ok)) : null,
+        asrNow: s ? ratio(Number(s.ok), n) : null,
+        dlrNow: s ? ratio(Number(s.dl), Number(s.ok)) : null,
+        delayNow: BASE_DELAY,
+        dip: null,
+        minutes: [],
+        minAsr: [],
+        minDlr: [],
+        minDelay: [],
+        minuteSum: 0,
+        minuteN: 0,
+        qSum: [0, 0, 0] as [number, number, number],
+        day: emptyDay(),
       };
     })
     .filter((v) => v.weight > 0);
@@ -310,7 +376,43 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
 
 /** Fills two hours of per-minute history and an hour of 5-second chart slots from the timelines. */
 function seedHistory(sim: Simulator, now: number) {
+  // Today's figures per trunk: the enterprise's day split by the trunks' normal levels.
+  const split = <T extends { enterpriseId: number; day: PartyDay }>(
+    xs: T[],
+    weight: (x: T) => number,
+    m: Map<number, PartyTotals>,
+    vendor: boolean,
+  ) => {
+    const byEnt = new Map<number, T[]>();
+    for (const x of xs) byEnt.set(x.enterpriseId, [...(byEnt.get(x.enterpriseId) ?? []), x]);
+    for (const [ent, list] of byEnt) {
+      const p = m.get(ent);
+      if (!p) continue;
+      const w = list.reduce((acc, x) => acc + weight(x), 0) || 1;
+      for (const x of list) {
+        const f = weight(x) / w;
+        x.day = {
+          attempts: p.attempts * f,
+          submitted: p.successful * f,
+          delivered: p.delivered * f,
+          revenue: vendor ? 0 : p.money * f,
+          cost: vendor ? p.money * f : (p.money - p.margin) * f,
+        };
+      }
+    }
+  };
+  split(sim.trunks, (t) => t.base, sim.today.clients, false);
+  split(sim.vendors, (v) => v.weight, sim.today.vendors, true);
+  for (const v of sim.vendors) {
+    v.minutes = Array.from({ length: MINUTES }, () => 0);
+    v.minAsr = Array.from({ length: MINUTES }, () => v.asr);
+    v.minDlr = Array.from({ length: MINUTES }, () => v.dlr);
+    v.minDelay = Array.from({ length: MINUTES }, () => BASE_DELAY);
+  }
   for (const t of sim.trunks) {
+    t.minAsr = Array.from({ length: MINUTES }, () => t.asr);
+    t.minDlr = Array.from({ length: MINUTES }, () => t.dlr);
+    t.minDelay = Array.from({ length: MINUTES }, () => BASE_DELAY);
     t.minutes = [];
     for (let m = MINUTES - 1; m >= 1; m--) {
       const at = now - m * 60_000 + 30_000;
@@ -327,6 +429,72 @@ function seedHistory(sim: Simulator, now: number) {
   let total = 0;
   for (const t of sim.trunks) total += t.tps = t.base * levelAt(t.segments, now);
   for (const v of sim.vendors) v.tps = total * v.weight;
+  // Vendor minute history follows the customers' total by share.
+  for (let i = 0; i < MINUTES; i++) {
+    const sum = sim.trunks.reduce((acc, t) => acc + (t.minutes[i] ?? 0), 0);
+    for (const v of sim.vendors) v.minutes[i] = sum * v.weight;
+  }
+}
+
+/** Starts, ends or applies a quality dip; returns the quality now (§13.6 alert material). */
+function quality(
+  x: {
+    asr: number | null;
+    dlr: number | null;
+    dip: Dip | null;
+    asrNow: number | null;
+    dlrNow: number | null;
+    delayNow: number;
+  },
+  sending: boolean,
+  now: number,
+) {
+  if (x.dip && now >= x.dip.until) x.dip = null;
+  if (!x.dip && sending && Math.random() < DIP_PER_SECOND)
+    x.dip = { until: now + rand(6, 25) * 60_000, asrF: rand(0.75, 0.97), dlrF: rand(0.45, 0.8), delayF: rand(2, 6) };
+  const d = x.dip;
+  const jitter = () => rand(-0.6, 0.6);
+  x.asrNow = x.asr === null ? null : Math.min(100, Math.max(0, x.asr * (d?.asrF ?? 1) + jitter()));
+  x.dlrNow = x.dlr === null ? null : Math.min(100, Math.max(0, x.dlr * (d?.dlrF ?? 1) + jitter()));
+  x.delayNow = Math.max(0.5, BASE_DELAY * (d?.delayF ?? 1) * rand(0.9, 1.1));
+}
+
+/** Per-minute averages of a trunk's or vendor's TPS and quality. */
+function rollMinute(
+  x: {
+    minutes: number[];
+    minAsr: (number | null)[];
+    minDlr: (number | null)[];
+    minDelay: number[];
+    minuteSum: number;
+    minuteN: number;
+    qSum: [number, number, number];
+    tps: number;
+    asrNow: number | null;
+    dlrNow: number | null;
+    delayNow: number;
+  },
+  newMinute: boolean,
+) {
+  if (newMinute) {
+    for (const a of [x.minutes, x.minAsr, x.minDlr, x.minDelay] as unknown[][]) {
+      a.push(0);
+      if (a.length > MINUTES) a.shift();
+    }
+    x.minuteSum = 0;
+    x.minuteN = 0;
+    x.qSum = [0, 0, 0];
+  }
+  x.minuteSum += x.tps;
+  x.minuteN += 1;
+  x.qSum[0] += x.asrNow ?? 0;
+  x.qSum[1] += x.dlrNow ?? 0;
+  x.qSum[2] += x.delayNow;
+  const last = x.minutes.length - 1;
+  x.minutes[last] = x.minuteSum / x.minuteN;
+  x.minAsr[last] = x.asrNow === null ? null : x.qSum[0] / x.minuteN;
+  x.minDlr[last] = x.dlrNow === null ? null : x.qSum[1] / x.minuteN;
+  x.minDelay[last] = x.qSum[2] / x.minuteN;
 }
 
 export async function createSimulator(): Promise<Simulator> {
@@ -351,6 +519,15 @@ export async function createSimulator(): Promise<Simulator> {
         asr: 95,
         dlr: 85,
         segments: [],
+        asrNow: 95,
+        dlrNow: 85,
+        delayNow: BASE_DELAY,
+        dip: null,
+        minAsr: [],
+        minDlr: [],
+        minDelay: [],
+        qSum: [0, 0, 0],
+        day: emptyDay(),
         minutes: [],
         minuteSum: 0,
         minuteN: 0,
@@ -395,6 +572,7 @@ export function step(sim: Simulator, now = Date.now()) {
     sim.today.clients = new Map();
     sim.today.vendors = new Map();
     sim.today.destinations = new Map();
+    for (const x of [...sim.trunks, ...sim.vendors]) x.day = emptyDay();
   }
   const newMinute = Math.floor(now / 60_000) !== prevMinute;
   const newSlot = Math.floor(now / (SLOT_S * 1000)) !== prevSlot;
@@ -408,15 +586,8 @@ export function step(sim: Simulator, now = Date.now()) {
     // About one burst every 5 seconds across the platform, so queues and red limit bars show up.
     if (target > 0 && Math.random() < 0.2 / sim.trunks.length) t.tps += t.limit * 0.6;
     total += t.tps;
-    if (newMinute) {
-      t.minutes.push(0);
-      if (t.minutes.length > MINUTES) t.minutes.shift();
-      t.minuteSum = 0;
-      t.minuteN = 0;
-    }
-    t.minuteSum += t.tps;
-    t.minuteN += 1;
-    t.minutes[t.minutes.length - 1] = t.minuteSum / t.minuteN;
+    quality(t, t.tps > 0.05, now);
+    rollMinute(t, newMinute);
     if (newSlot) {
       t.slotSum = 0;
       t.slotN = 0;
@@ -428,8 +599,13 @@ export function step(sim: Simulator, now = Date.now()) {
     // Today's money and counts, as messages accrue.
     const msgs = t.tps * dt;
     if (msgs > 0) {
-      const asr = (t.asr ?? 95) / 100;
-      const dlr = (t.dlr ?? 85) / 100;
+      const asr = (t.asrNow ?? 95) / 100;
+      const dlr = (t.dlrNow ?? 85) / 100;
+      t.day.attempts += msgs;
+      t.day.submitted += msgs * asr;
+      t.day.delivered += msgs * asr * dlr;
+      t.day.revenue += msgs * t.revenue;
+      t.day.cost += msgs * t.cost;
       const today = sim.today;
       today.attempts += msgs;
       today.submitted += msgs * asr;
@@ -455,8 +631,16 @@ export function step(sim: Simulator, now = Date.now()) {
   // Vendors carry the total by their share, with their own noise.
   for (const v of sim.vendors) {
     v.tps = Math.max(0, v.tps * 0.6 + total * v.weight * 0.4 * rand(0.85, 1.15));
+    quality(v, v.tps > 0.05, now);
+    rollMinute(v, newMinute);
     const msgs = v.tps * dt;
     if (msgs <= 0) continue;
+    const vAsr = (v.asrNow ?? 95) / 100;
+    const vDlr = (v.dlrNow ?? 85) / 100;
+    v.day.attempts += msgs;
+    v.day.submitted += msgs * vAsr;
+    v.day.delivered += msgs * vAsr * vDlr;
+    v.day.cost += msgs * v.cost;
     const p = sim.today.vendors.get(v.enterpriseId) ?? {
       name: v.enterpriseName,
       attempts: 0,
@@ -467,8 +651,8 @@ export function step(sim: Simulator, now = Date.now()) {
     };
     p.attempts += msgs;
     p.money += msgs * v.cost;
-    p.successful += msgs * ((v.asr ?? 95) / 100);
-    p.delivered += msgs * ((v.asr ?? 95) / 100) * ((v.dlr ?? 85) / 100);
+    p.successful += msgs * vAsr;
+    p.delivered += msgs * vAsr * vDlr;
     sim.today.vendors.set(v.enterpriseId, p);
   }
   // Destinations keep today's mix.
