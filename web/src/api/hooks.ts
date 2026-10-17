@@ -106,6 +106,10 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/network-binds/query", { body })) as Promise<ListPage<Row>>;
     case "signaling_captures":
       return unwrap(api.POST("/signaling-captures/query", { body })) as Promise<ListPage<Row>>;
+    case "scheduled_reports":
+      return unwrap(api.POST("/scheduled-reports/query", { body })) as Promise<ListPage<Row>>;
+    case "daily_traffic_alerts":
+      return unwrap(api.POST("/daily-traffic-alerts/query", { body })) as Promise<ListPage<Row>>;
     case "broadcasts":
       return unwrap(api.POST("/broadcasts/query", { body })) as Promise<ListPage<Row>>;
     case "soa_reports":
@@ -127,6 +131,10 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
     case "enterprise_report":
       // The report needs its settings with every query: the page passes its own fetchPage.
       return Promise.reject(new Error("The Enterprise report is fetched with its settings"));
+    case "master_report":
+    case "billing_report":
+      // Like the Enterprise report: these pages pass their own fetchPage with the report settings.
+      return Promise.reject(new Error("This report is fetched with its settings"));
   }
 }
 

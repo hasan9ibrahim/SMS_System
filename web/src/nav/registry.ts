@@ -491,7 +491,7 @@ export const PAGES: PageDef[] = [
     "/reports/master",
     "chart",
     "§13.15",
-    "5",
+    "5.10",
     "Every metric, grouped and filtered by anything",
   ),
   p(
@@ -511,7 +511,7 @@ export const PAGES: PageDef[] = [
     "/reports/sales",
     "chart",
     "§13.15",
-    "5",
+    "5.10",
     "Clients and destinations growing or declining",
   ),
   p(
@@ -521,10 +521,10 @@ export const PAGES: PageDef[] = [
     "/reports/billing",
     "chart",
     "§13.15",
-    "5",
+    "5.10",
     "Billed, invoiced, paid and disputed",
   ),
-  p("reports", "noc-report", "NOC report", "/reports/noc", "chart", "§13.15", "5", "Where traffic has problems"),
+  p("reports", "noc-report", "NOC report", "/reports/noc", "chart", "§13.15", "5.10", "Where traffic has problems"),
   p("reports", "team-report", "Team", "/reports/team", "users", "§13.18", "5", "Team members' results and activity"),
   p(
     "reports",
@@ -533,8 +533,18 @@ export const PAGES: PageDef[] = [
     "/reports/scheduled",
     "clock",
     "§10",
-    "5",
+    "5.10",
     "Reports emailed on a schedule",
+  ),
+  p(
+    "reports",
+    "daily-traffic",
+    "Daily traffic alerts",
+    "/reports/daily-traffic",
+    "mail",
+    "§10",
+    "5.10",
+    "Yesterday's traffic e-mailed to partners",
   ),
 
   p(

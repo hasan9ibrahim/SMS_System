@@ -77,6 +77,8 @@ export const TABLE_ORDER = [
   "edr_downloads",
   "repush_requests",
   "signaling_captures",
+  "scheduled_reports",
+  "daily_traffic_alerts",
   "changes",
 ];
 

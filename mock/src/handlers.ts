@@ -318,7 +318,29 @@ import {
 } from "./api/network.js";
 import { runRouteSimulator } from "./api/routeSimulator.js";
 
-const VERSION = "0.20.0";
+import {
+  archiveDailyTrafficAlert,
+  archiveScheduledReport,
+  createDailyTrafficAlert,
+  createScheduledReport,
+  exportMasterReport,
+  getDailyTrafficAlert,
+  getScheduledReport,
+  listReportPresets,
+  nocInsights,
+  previewCron,
+  queryBillingReport,
+  restoreDailyTrafficAlert,
+  restoreScheduledReport,
+  runMasterReportHandler,
+  runScheduledReport,
+  salesInsights,
+  sendDailyTrafficAlert,
+  updateDailyTrafficAlert,
+  updateScheduledReport,
+} from "./api/reports.js";
+
+const VERSION = "0.21.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -643,6 +665,28 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   downloadSignalingCapture,
   runRouteSimulator,
   runNetworkDiagnosis,
+  // Reports (§10, §13.15)
+  runMasterReport: runMasterReportHandler,
+  exportMasterReport,
+  listReportPresets,
+  salesInsights,
+  queryBillingReport,
+  nocInsights,
+  queryScheduledReports: queryList("scheduled_reports"),
+  createScheduledReport,
+  getScheduledReport,
+  updateScheduledReport,
+  archiveScheduledReport,
+  restoreScheduledReport,
+  runScheduledReport,
+  previewCron,
+  queryDailyTrafficAlerts: queryList("daily_traffic_alerts"),
+  createDailyTrafficAlert,
+  getDailyTrafficAlert,
+  updateDailyTrafficAlert,
+  archiveDailyTrafficAlert,
+  restoreDailyTrafficAlert,
+  sendDailyTrafficAlert,
   listCompanyMailboxes,
   createReconRule,
   updateReconRule,

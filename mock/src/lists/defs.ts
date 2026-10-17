@@ -28,6 +28,9 @@ import type {
   RepushRequestRow,
   NetworkBindRow,
   SignalingCaptureRow,
+  ScheduledReportRow,
+  DailyTrafficAlertRow,
+  BillingReportRow,
   SoaReportRow,
   ReconRuleRow,
   VendorInvoiceRow,
@@ -53,6 +56,7 @@ import type {
 } from "@sms/contract";
 import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
+import { PRESETS } from "../reports/presets.js";
 import type { ListDef } from "./engine.js";
 
 const ymd = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
@@ -2302,6 +2306,108 @@ export function mapCapture(r: Record<string, unknown>): SignalingCaptureRow {
   };
 }
 
+// ---------------------------------------------------------------- Reports (§10, §13.15)
+
+const presetSql = `CASE s.preset_key ${PRESETS.map((p) => `WHEN '${p.key}' THEN '${p.name.replace(/'/g, "''")}'`).join(" ")} ELSE s.preset_key END`;
+export const SCHEDULED_REPORT_FROM = `scheduled_reports s JOIN business_companies bc ON bc.id = s.business_company_id
+    LEFT JOIN saved_views v ON v.id = s.view_id LEFT JOIN users u ON u.id = s.updated_by_id`;
+export const SCHEDULED_REPORT_SELECT = `s.*, bc.name AS business_company, u.username AS updated_by,
+    CASE WHEN s.template_kind = 'view' THEN coalesce(v.name, '(deleted view)') ELSE ${presetSql} END AS template`;
+export const scheduledReportList: ListDef<ScheduledReportRow> = {
+  fields: listFields.scheduled_reports,
+  from: SCHEDULED_REPORT_FROM,
+  baseWhere: "s.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "s.id" },
+    name: { sql: "s.name" },
+    template: { sql: `CASE WHEN s.template_kind = 'view' THEN coalesce(v.name, '') ELSE ${presetSql} END` },
+    status: { sql: "s.status" },
+    cronExpression: { sql: "s.cron_expression" },
+    nextRunAt: { sql: "s.next_run_at" },
+    lastRunAt: { sql: "s.last_run_at" },
+    lastStatus: { sql: "s.last_status" },
+    businessCompany: { sql: "bc.name" },
+    updatedBy: { sql: "u.username" },
+    archived: { sql: "(s.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "template"],
+  idSql: "s.id",
+  select: SCHEDULED_REPORT_SELECT,
+  mapRow: (r) => mapScheduledReport(r),
+};
+export function mapScheduledReport(r: Record<string, unknown>): ScheduledReportRow {
+  return {
+    id: Number(r.id),
+    name: r.name as string,
+    description: (r.description as string | null) ?? null,
+    templateKind: r.template_kind as ScheduledReportRow["templateKind"],
+    presetKey: (r.preset_key as string | null) ?? null,
+    viewId: r.view_id == null ? null : Number(r.view_id),
+    template: r.template as string,
+    status: r.status as ScheduledReportRow["status"],
+    businessCompanyId: Number(r.business_company_id),
+    businessCompany: r.business_company as string,
+    notificationEmails: (r.notification_emails as string[]) ?? [],
+    cronInterval: r.cron_interval as ScheduledReportRow["cronInterval"],
+    cronFrequency: Number(r.cron_frequency),
+    cronExpression: r.cron_expression as string,
+    fileType: r.file_type as ScheduledReportRow["fileType"],
+    emailBody: r.email_body as string,
+    nextRunAt: iso(r.next_run_at),
+    lastRunAt: iso(r.last_run_at),
+    lastStatus: (r.last_status as ScheduledReportRow["lastStatus"]) ?? null,
+    lastError: (r.last_error as string | null) ?? null,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
+export const DAILY_ALERT_FROM = `daily_traffic_alerts d JOIN enterprises e ON e.id = d.enterprise_id
+    LEFT JOIN business_companies bc ON bc.id = coalesce(d.business_company_id, e.business_company_id)
+    LEFT JOIN users u ON u.id = d.updated_by_id`;
+export const DAILY_ALERT_SELECT = "d.*, e.name AS enterprise, bc.name AS business_company, u.username AS updated_by";
+export const dailyAlertList: ListDef<DailyTrafficAlertRow> = {
+  fields: listFields.daily_traffic_alerts,
+  from: DAILY_ALERT_FROM,
+  baseWhere: "d.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "d.id" },
+    name: { sql: "d.name" },
+    enterprise: { sql: "e.name" },
+    contactType: { sql: "d.contact_type" },
+    sendHour: { sql: "d.send_hour" },
+    status: { sql: "d.status" },
+    lastSentAt: { sql: "d.last_sent_at" },
+    updatedBy: { sql: "u.username" },
+    archived: { sql: "(d.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "enterprise"],
+  idSql: "d.id",
+  select: DAILY_ALERT_SELECT,
+  mapRow: (r) => mapDailyAlert(r),
+};
+export function mapDailyAlert(r: Record<string, unknown>): DailyTrafficAlertRow {
+  return {
+    id: Number(r.id),
+    name: r.name as string,
+    status: r.status as DailyTrafficAlertRow["status"],
+    businessCompanyId: r.business_company_id == null ? null : Number(r.business_company_id),
+    businessCompany: (r.business_company as string | null) ?? null,
+    contactType: r.contact_type as DailyTrafficAlertRow["contactType"],
+    enterpriseId: Number(r.enterprise_id),
+    enterprise: r.enterprise as string,
+    sendHour: Number(r.send_hour),
+    emailBody: r.email_body as string,
+    lastSentAt: iso(r.last_sent_at),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
 /** SOA Report (§7): exports and sends with the statement kept as it was. */
 export const SOA_REPORT_FROM = `soa_reports s
     JOIN enterprises e ON e.id = s.enterprise_id
@@ -2657,8 +2763,101 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
   }),
 };
 
+/**
+ * Billing report (§13.15): enterprises with the period's traffic (a temporary table `br_traffic`
+ * filled from the EDR store in the same transaction), invoices, payments, balances and disputes.
+ * The period is filled in by billingReportDef.
+ */
+const BR_PERIOD = "'__FROM__'::timestamptz";
+const BR_PERIOD_END = "'__TO__'::timestamptz";
+const BILLING_REPORT_FROM = `${BALANCE_FROM}
+    LEFT JOIN br_traffic tr ON tr.enterprise_id = e.id
+    LEFT JOIN LATERAL (SELECT count(*) AS n, coalesce(sum(usage_charges), 0) AS amount FROM invoices i
+       WHERE i.enterprise_id = e.id AND i.deleted_at IS NULL AND i.status <> 'failed'
+         AND i.invoice_date >= ${BR_PERIOD}::date AND i.invoice_date < ${BR_PERIOD_END}::date) inv ON true
+    LEFT JOIN LATERAL (SELECT
+         coalesce(sum(amount) FILTER (WHERE side = 'customer' AND payment_type = 'credit'), 0) AS received,
+         coalesce(sum(amount) FILTER (WHERE side = 'vendor' AND payment_type = 'debit'), 0) AS made
+       FROM transactions t WHERE t.enterprise_id = e.id AND t.deleted_at IS NULL AND t.transaction_type IN ('receipt', 'bill_payment')
+         AND t.payment_date >= ${BR_PERIOD}::date AND t.payment_date < ${BR_PERIOD_END}::date) pay ON true
+    LEFT JOIN LATERAL (SELECT count(*) FILTER (WHERE recon_status = 'disputed') AS disputed,
+         coalesce(sum(charge_amount - our_amount) FILTER (WHERE our_amount IS NOT NULL), 0) AS diff
+       FROM vendor_invoices vi WHERE vi.enterprise_id = e.id AND vi.deleted_at IS NULL
+         AND vi.period_from < ${BR_PERIOD_END}::date AND vi.period_to >= ${BR_PERIOD}::date) vin ON true
+    LEFT JOIN LATERAL (SELECT coalesce(sum(new_amount - old_amount), 0) AS amount FROM rerating_results rr
+       WHERE rr.enterprise_id = e.id AND rr.start_time < ${BR_PERIOD_END} AND rr.end_time >= ${BR_PERIOD}) rer ON true`;
+const brCurrency = "COALESCE(cb.currency, vb.currency, 'EUR')";
+/** The Billing report list for a period [from, to). */
+export const billingReportDef = (from: Date, to: Date): ListDef<BillingReportRow> => ({
+  ...billingReportList,
+  from: BILLING_REPORT_FROM.replace(/__FROM__/g, from.toISOString()).replace(/__TO__/g, to.toISOString()),
+});
+export const billingReportList: ListDef<BillingReportRow> = {
+  fields: listFields.billing_report,
+  from: BILLING_REPORT_FROM,
+  baseWhere: "e.deleted_at IS NULL AND (cb.id IS NOT NULL OR vb.id IS NOT NULL)",
+  columns: {
+    id: { sql: "e.id" },
+    enterprise: { sql: "e.name" },
+    type: { sql: "e.type" },
+    accountManager: { sql: fullName("am") },
+    billingCycle: { sql: "bcy.name" },
+    currency: { sql: brCurrency },
+    customerBillable: { sql: "coalesce(tr.c_billable, 0)" },
+    customerAmount: { sql: "round(coalesce(tr.c_amount, 0), 2)" },
+    vendorBillable: { sql: "coalesce(tr.v_billable, 0)" },
+    vendorAmount: { sql: "round(coalesce(tr.v_amount, 0), 2)" },
+    invoicesIssued: { sql: "inv.n" },
+    invoicedAmount: { sql: "round(inv.amount, 2)" },
+    paymentsReceived: { sql: "round(pay.received, 2)" },
+    paymentsMade: { sql: "round(pay.made, 2)" },
+    balance: { sql: "round(COALESCE(bal.customer, -bal.vendor), 2)" },
+    creditLimit: { sql: "cb.credit_limit" },
+    creditUsePct: { sql: creditUsedSql },
+    disputedInvoices: { sql: "vin.disputed" },
+    vendorInvoiceDifference: { sql: "round(vin.diff, 2)" },
+    negativeMarginMessages: { sql: "coalesce(tr.neg_msgs, 0)" },
+    negativeMarginAmount: { sql: "round(coalesce(tr.neg_amount, 0), 2)" },
+    reratedAmount: { sql: "round(rer.amount, 2)" },
+  },
+  search: ["enterprise", "accountManager"],
+  idSql: "e.id",
+  select: `e.id, e.name, e.type, ${fullName("am")} AS account_manager, bcy.name AS billing_cycle, ${brCurrency} AS currency,
+    coalesce(tr.c_billable, 0) AS c_billable, coalesce(tr.c_amount, 0) AS c_amount, coalesce(tr.v_billable, 0) AS v_billable,
+    coalesce(tr.v_amount, 0) AS v_amount, inv.n AS invoices, inv.amount AS invoiced, pay.received, pay.made,
+    COALESCE(bal.customer, -bal.vendor) AS balance, cb.credit_limit, ${creditUsedSql} AS credit_use, vin.disputed, vin.diff,
+    coalesce(tr.neg_msgs, 0) AS neg_msgs, coalesce(tr.neg_amount, 0) AS neg_amount, rer.amount AS rerated`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    enterprise: r.name as string,
+    type: r.type as string,
+    accountManager: (r.account_manager as string | null) ?? null,
+    billingCycle: (r.billing_cycle as string | null) ?? null,
+    currency: String(r.currency).trim(),
+    customerBillable: Number(r.c_billable),
+    customerAmount: Math.round(Number(r.c_amount) * 100) / 100,
+    vendorBillable: Number(r.v_billable),
+    vendorAmount: Math.round(Number(r.v_amount) * 100) / 100,
+    invoicesIssued: Number(r.invoices),
+    invoicedAmount: Math.round(Number(r.invoiced) * 100) / 100,
+    paymentsReceived: Math.round(Number(r.received) * 100) / 100,
+    paymentsMade: Math.round(Number(r.made) * 100) / 100,
+    balance: r.balance == null ? null : Math.round(Number(r.balance) * 100) / 100,
+    creditLimit: r.credit_limit == null ? null : Number(r.credit_limit),
+    creditUsePct: r.credit_use == null ? null : Number(r.credit_use),
+    disputedInvoices: Number(r.disputed),
+    vendorInvoiceDifference: Math.round(Number(r.diff) * 100) / 100,
+    negativeMarginMessages: Number(r.neg_msgs),
+    negativeMarginAmount: Math.round(Number(r.neg_amount) * 100) / 100,
+    reratedAmount: Math.round(Number(r.rerated) * 100) / 100,
+  }),
+};
+
 /** Lists answered from PostgreSQL; the Enterprise report and EDR lists run on the EDR store (enterpriseReport.ts, edrDefs.ts). */
-export type PgListId = Exclude<ListId, "enterprise_report" | "edrs" | "failed_edrs">;
+export type PgListId = Exclude<
+  ListId,
+  "enterprise_report" | "edrs" | "failed_edrs" | "master_report" | "billing_report"
+>;
 
 export const listDefs: Record<PgListId, ListDef<unknown>> = {
   enterprises: enterpriseList as ListDef<unknown>,
@@ -2703,6 +2902,8 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   repush_requests: repushList as ListDef<unknown>,
   network_binds: networkBindList as ListDef<unknown>,
   signaling_captures: captureList as ListDef<unknown>,
+  scheduled_reports: scheduledReportList as ListDef<unknown>,
+  daily_traffic_alerts: dailyAlertList as ListDef<unknown>,
   currencies: currencyList as ListDef<unknown>,
   currency_rates: currencyRateList as ListDef<unknown>,
   currency_rate_history: currencyRateHistoryList as ListDef<unknown>,

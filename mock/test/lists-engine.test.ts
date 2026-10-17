@@ -11,7 +11,7 @@ import {
   searchPattern,
   type ListDef,
 } from "../src/lists/engine.js";
-import { listDefs } from "../src/lists/defs.js";
+import { billingReportList, listDefs } from "../src/lists/defs.js";
 import { checkChDef, type ChListDef } from "../src/lists/chEngine.js";
 import { edrList, failedEdrList } from "../src/lists/edrDefs.js";
 import { listFields } from "../src/lists/fields.js";
@@ -24,10 +24,11 @@ test("every list field has SQL and every list has a definition", () => {
   // The Enterprise report and the EDR lists are answered from the EDR store (enterpriseReport.ts, edrDefs.ts).
   assert.deepEqual(checkChDef("edrs", edrList as ChListDef<unknown>), []);
   assert.deepEqual(checkChDef("failed_edrs", failedEdrList as ChListDef<unknown>), []);
+  assert.deepEqual(checkDef("billing_report", billingReportList as ListDef<unknown>), []);
   assert.deepEqual(
     Object.keys(listDefs).sort(),
     Object.keys(listFields)
-      .filter((l) => !["enterprise_report", "edrs", "failed_edrs"].includes(l))
+      .filter((l) => !["enterprise_report", "edrs", "failed_edrs", "master_report", "billing_report"].includes(l))
       .sort(),
   );
 });

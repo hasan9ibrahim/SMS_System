@@ -9,6 +9,7 @@ import { resumeSoaReports } from "./api/soa.js";
 import { startTrafficAlertChecks } from "./api/switchTools.js";
 import { startEdrDownloads } from "./api/edrDownloads.js";
 import { startNetworkStatus } from "./api/network.js";
+import { startReportJobs } from "./api/reports.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -25,3 +26,4 @@ void resumeSoaReports();
 startTrafficAlertChecks();
 startEdrDownloads();
 startNetworkStatus();
+startReportJobs();

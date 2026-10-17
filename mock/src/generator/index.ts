@@ -19,6 +19,7 @@ import { generateRoutingExtras } from "./routingExtras.js";
 import { generateHlrExtras } from "./hlrExtras.js";
 import { generateSwitchExtras } from "./switchExtras.js";
 import { generateObservationExtras } from "./observationExtras.js";
+import { generateReportExtras } from "./reportExtras.js";
 
 export function emptyWorld(anchor: number, profile: Profile): World {
   return {
@@ -79,6 +80,7 @@ export async function generateWorld(opts: {
   await step("hlr extras", (rng) => generateHlrExtras(world, rng, opts.sink, opts.profile));
   await step("switch extras", (rng) => generateSwitchExtras(world, rng, opts.sink, opts.profile));
   await step("observation extras", (rng) => generateObservationExtras(world, rng, opts.sink, opts.profile));
+  await step("report extras", (rng) => generateReportExtras(world, rng, opts.sink, opts.profile));
   return world;
 }
 

@@ -150,6 +150,22 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Reports (build step 5.10)
+
+Pages in `src/pages/reports/` (§10, §13.15), hooks in `src/api/masterReports.ts`, helpers in `masterModel.ts`:
+
+- **Master report** (`/reports/master`), **Sales report** (`/reports/sales`) and **NOC report** (`/reports/noc`) share
+  `ReportScreen.tsx`. It has settings (period, time zone, MO / MT, compare) in the tab URL (`?r=`). Group-by fields
+  (ordered chips, up to 5) and metrics (Column Selection) are the grid's visible columns, so the standard grid gives a
+  filter under every column (fields before grouping, metrics after), sort, paging and Views. Above the grid: totals
+  with deltas and a chart. Each row offers drill-down (keep this row, add a level) and "EDRs behind this row" (EDR
+  search with the matching filters). Export goes to Excel / CSV / PDF. Save view keeps the report settings;
+  "Report views…" opens one. The Master report adds "Start from…" with the presets. Sales and NOC add their panels
+  (collapsible). These three pages load lazily, with ECharts.
+- **Billing report** (`/reports/billing`): per enterprise list with the period in the URL.
+- **Scheduled reports** (`/reports/scheduled`) and **Daily traffic alerts** (`/reports/daily-traffic`): forms with CRON
+  preview and Run now / Send now; undoable.
+
 ## Observation Deck (build step 5.9)
 
 Pages in `src/pages/monitoring/` (§9), hooks in `src/api/observation.ts`, pure helpers in `monitorModel.ts`, shared

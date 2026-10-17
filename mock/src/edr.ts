@@ -37,7 +37,17 @@ export async function chQuery<T>(sql: string, timeoutMs = 30_000): Promise<T[]> 
   } catch (err) {
     throw new ChUnavailable(String((err as Error).message ?? err));
   }
-  if (!res.ok) throw new ChError(await res.text());
+  if (!res.ok) {
+    // Errors come as JSON ({"exception": "..."}) when a format is set, else as plain text.
+    const text = await res.text();
+    let message = text;
+    try {
+      message = (JSON.parse(text) as { exception?: string }).exception ?? text;
+    } catch {
+      /* plain text */
+    }
+    throw new ChError(message.trim());
+  }
   // INSERT and ALTER answer with an empty body.
   const text = await res.text();
   return text ? (JSON.parse(text) as { data: T[] }).data : [];

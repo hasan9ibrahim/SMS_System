@@ -54,7 +54,9 @@ export type RecordKind =
   | "firewall_rule"
   | "traffic_alert"
   | "sms_voice_rule"
-  | "edr_template";
+  | "edr_template"
+  | "scheduled_report"
+  | "daily_traffic_alert";
 
 export interface Saved<T> {
   record: T;
@@ -264,7 +266,14 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   if (kind === "recon_rule") return Promise.resolve({ blocked: false, items: [] });
   // Nothing depends on a firewall IP, a traffic alert or an SMS to voice rule (§8), or an EDR template
   // (downloads keep their own columns, §9.2).
-  if (kind === "firewall_rule" || kind === "traffic_alert" || kind === "sms_voice_rule" || kind === "edr_template")
+  if (
+    kind === "firewall_rule" ||
+    kind === "traffic_alert" ||
+    kind === "sms_voice_rule" ||
+    kind === "edr_template" ||
+    kind === "scheduled_report" ||
+    kind === "daily_traffic_alert"
+  )
     return Promise.resolve({ blocked: false, items: [] });
   if (kind === "customer") return unwrap(api.GET("/customer-trunks/{id}/dependencies", params));
   return unwrap(api.GET("/vendor-trunks/{id}/dependencies", params));
@@ -296,6 +305,8 @@ export function useArchive(kind: RecordKind) {
       if (kind === "traffic_alert") return unwrap(api.POST("/traffic-alerts/{id}/archive", req));
       if (kind === "sms_voice_rule") return unwrap(api.POST("/sms-voice-rules/{id}/archive", req));
       if (kind === "edr_template") return unwrap(api.POST("/edr-templates/{id}/archive", req));
+      if (kind === "scheduled_report") return unwrap(api.POST("/scheduled-reports/{id}/archive", req));
+      if (kind === "daily_traffic_alert") return unwrap(api.POST("/daily-traffic-alerts/{id}/archive", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/archive", req));
       return unwrap(api.POST("/vendor-trunks/{id}/archive", req));
     },
@@ -329,6 +340,8 @@ export function useRestore(kind: RecordKind) {
       if (kind === "traffic_alert") return unwrap(api.POST("/traffic-alerts/{id}/restore", req));
       if (kind === "sms_voice_rule") return unwrap(api.POST("/sms-voice-rules/{id}/restore", req));
       if (kind === "edr_template") return unwrap(api.POST("/edr-templates/{id}/restore", req));
+      if (kind === "scheduled_report") return unwrap(api.POST("/scheduled-reports/{id}/restore", req));
+      if (kind === "daily_traffic_alert") return unwrap(api.POST("/daily-traffic-alerts/{id}/restore", req));
       if (kind === "customer") return unwrap(api.POST("/customer-trunks/{id}/restore", req));
       return unwrap(api.POST("/vendor-trunks/{id}/restore", req));
     },

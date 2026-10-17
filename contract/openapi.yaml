@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.20.0
+  version: 0.21.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -8360,6 +8360,585 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /reports/master:
+    post:
+      tags: [reports]
+      operationId: runMasterReport
+      summary: "Master Report (§13.15): any metrics, grouped and filtered by anything"
+      description: |
+        Up to 5 group-by levels in any order, any metrics, a period (or custom From / To) in a time zone, MO / MT, and
+        filters with the §13.25 grammar on the `master_report` field catalogue: conditions on group-by fields (names match
+        with wildcards, include / exclude lists) apply before grouping, metric thresholds (e.g. margin < 0) after. Metric
+        thresholds cannot be OR-ed with field conditions. Compare adds the previous period's figures per row and in the
+        totals. Money is in the platform currency (`currency`), Revenue / Cost (Base) in the base currency. Relative periods
+        end at the latest EDR in this phase.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MasterReportQuery"
+      responses:
+        "200":
+          description: One page of grouped rows with totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /reports/master/export:
+    post:
+      tags: [reports]
+      operationId: exportMasterReport
+      summary: "Export the Master Report (Excel, CSV or PDF)"
+      description: |
+        Same settings, filters and sort; every row (up to 100,000) with the totals row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MasterReportExportInput"
+      responses:
+        "200":
+          description: The file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /reports/presets:
+    get:
+      tags: [reports]
+      operationId: listReportPresets
+      summary: "Ready-made report settings"
+      description: |
+        The department reports (Sales, Billing, NOC) and the §10 reports that became saved views of the Master Report
+        (Customize, Enterprise, Master Grouping, Usage Enterprise, Negative Margin, Bilateral).
+      responses:
+        "200":
+          description: The presets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportPresetList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /reports/sales/insights:
+    post:
+      tags: [reports]
+      operationId: salesInsights
+      summary: "Sales report: growing, declining, new and stopped clients (§13.15)"
+      description: |
+        Per customer enterprise: revenue and volume this period against the previous one of the same length. Growing /
+        declining = change at or beyond the threshold; new = traffic now and none before; stopped = traffic before and none
+        now.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesInsightsInput"
+      responses:
+        "200":
+          description: The movers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesInsights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /reports/billing/query:
+    post:
+      tags: [reports]
+      operationId: queryBillingReport
+      summary: "List billing report rows (server-side filter, sort and paging)"
+      description: |
+        Billing report (§13.15): per enterprise for the period: billable volume and amount on the customer and vendor
+        side, invoices issued, payments, balance, credit limit use, disputed vendor invoices and their differences,
+        negative-margin traffic and re-rating effects. Server-side filter / sort / paging on the `billing_report` catalogue.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingReportQuery"
+      responses:
+        "200":
+          description: One page of billing report rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /reports/noc/insights:
+    post:
+      tags: [reports]
+      operationId: nocInsights
+      summary: "NOC report: where traffic has problems now (§13.15)"
+      description: |
+        Binds that are down and for how long, the top error codes, and the vendor trunks with the worst ASR, DLR or delay
+        in the window (down to minutes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NocInsightsInput"
+      responses:
+        "200":
+          description: The problems
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NocInsights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /scheduled-reports/query:
+    post:
+      tags: [reports]
+      operationId: queryScheduledReports
+      summary: "List scheduled reports (server-side filter, sort and paging)"
+      description: |
+        Schedule Report (§10): Info ID, Name, Status, report template, schedule, next and last run.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of scheduled reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /scheduled-reports:
+    post:
+      tags: [reports]
+      operationId: createScheduledReport
+      summary: "Add a scheduled report"
+      description: |
+        Report Template (a preset or a saved Master Report view), Description, Name, Status, Business Company, Notification
+        Email, CRON interval / frequency / expression (5 fields, UTC), file type and Email Body (rich text).
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduledReportInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledReportSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /scheduled-reports/{id}:
+    get:
+      tags: [reports]
+      operationId: getScheduledReport
+      summary: "One a scheduled report"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The a scheduled report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledReportRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [reports]
+      operationId: updateScheduledReport
+      summary: "Change a scheduled report"
+      description: |
+        Saves the whole form. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduledReportInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledReportSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /scheduled-reports/{id}/archive:
+    post:
+      tags: [reports]
+      operationId: archiveScheduledReport
+      summary: "Delete (archive) a scheduled report (§13.29)"
+      description: |
+        It is never removed. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledReportSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /scheduled-reports/{id}/restore:
+    post:
+      tags: [reports]
+      operationId: restoreScheduledReport
+      summary: "Restore a scheduled report"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledReportSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /scheduled-reports/{id}/run:
+    post:
+      tags: [reports]
+      operationId: runScheduledReport
+      summary: "Run a scheduled report now"
+      description: |
+        Builds the report for its period and e-mails it (logged in Email Logs, type schedule_report_alert).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledReportRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /scheduled-reports/cron-preview:
+    post:
+      tags: [reports]
+      operationId: previewCron
+      summary: "The next run times of a CRON expression"
+      description: |
+        Five fields (minute hour day month weekday), UTC; `*`, lists, ranges and steps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CronPreviewInput"
+      responses:
+        "200":
+          description: The next runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CronPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /daily-traffic-alerts/query:
+    post:
+      tags: [reports]
+      operationId: queryDailyTrafficAlerts
+      summary: "List daily traffic alerts (server-side filter, sort and paging)"
+      description: |
+        Daily Traffic Alert (§10): Info ID, Name, Enterprise, Status, last sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of daily traffic alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTrafficAlertPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /daily-traffic-alerts:
+    post:
+      tags: [reports]
+      operationId: createDailyTrafficAlert
+      summary: "Add a daily traffic alert"
+      description: |
+        Name, Status, Business Company, Enterprise Contact Email (contact type), Enterprise, send hour (UTC) and Email
+        Body: a daily traffic summary e-mailed to the partner.
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyTrafficAlertInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTrafficAlertSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /daily-traffic-alerts/{id}:
+    get:
+      tags: [reports]
+      operationId: getDailyTrafficAlert
+      summary: "One a daily traffic alert"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The a daily traffic alert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTrafficAlertRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [reports]
+      operationId: updateDailyTrafficAlert
+      summary: "Change a daily traffic alert"
+      description: |
+        Saves the whole form. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyTrafficAlertInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTrafficAlertSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /daily-traffic-alerts/{id}/archive:
+    post:
+      tags: [reports]
+      operationId: archiveDailyTrafficAlert
+      summary: "Delete (archive) a daily traffic alert (§13.29)"
+      description: |
+        It is never removed. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTrafficAlertSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /daily-traffic-alerts/{id}/restore:
+    post:
+      tags: [reports]
+      operationId: restoreDailyTrafficAlert
+      summary: "Restore a daily traffic alert"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTrafficAlertSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /daily-traffic-alerts/{id}/send:
+    post:
+      tags: [reports]
+      operationId: sendDailyTrafficAlert
+      summary: "Send a daily traffic alert now"
+      description: |
+        Yesterday's summary (the last full day of traffic) per trunk; logged in Email Logs (type daily_report).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The e-mail sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailPreview"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
   /route-rules/query:
     post:
       tags: [routing]
@@ -9350,6 +9929,11 @@ components:
           maxItems: 200
           items:
             type: string
+        report:
+          description: Master Report views (list master_report) - the report settings (§13.15).
+          allOf:
+            - $ref: "#/components/schemas/MasterReportSettings"
+          unevaluatedProperties: false
 
     SavedViewInput:
       type: object
@@ -16931,6 +17515,693 @@ components:
         durationMs:
           type: integer
 
+    # ------------------------------------------------------------- Reports (§10, §13.15)
+    ReportDimension:
+      type: string
+      description: "Master Report group-by fields (§13.15). destination = customer MCCMNC (country · network)."
+      enum: [date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorDestination, productCategory, senderId, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
+
+    ReportMetric:
+      type: string
+      description: "Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency."
+      enum: [attempts, successful, submitted, delivered, failedSubmits, billableCustomer, billableVendor, reportedCustomer, reportedVendor, asr, dlrCustomer, dlrVendor, deliveryDelayS, revenue, cost, margin, marginPct, avgRateCustomer, avgRateVendor, costAvg, revenueBase, costBase, hlrCached, hlrLive, hlrTotal, hlrAccomplished, hlrPorted, hlrCost, reroutes, moCount, tpsAvg, tpsPeak]
+
+    ReportPeriod:
+      type: string
+      description: "Relative periods resolve in the report's time zone; custom uses from / to."
+      enum: [today, yesterday, last_24_hours, last_7_days, this_week, last_week, this_month, last_month, custom]
+
+    MasterReportSettings:
+      type: object
+      description: What a Master Report shows; also stored in saved views and scheduled reports.
+      required: [groupBy, metrics, timezone, period]
+      properties:
+        groupBy:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/ReportDimension"
+        metrics:
+          type: array
+          minItems: 1
+          maxItems: 40
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/ReportMetric"
+        timezone:
+          type: string
+          maxLength: 64
+          description: IANA time zone, e.g. UTC or Etc/GMT-3 (= GMT+3).
+        period:
+          $ref: "#/components/schemas/ReportPeriod"
+        from:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: Custom period start (inclusive).
+        to:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: Custom period end (exclusive); at most 400 days after from.
+        msgType:
+          type: [string, "null"]
+          enum: [MT, MO, null]
+        compare:
+          type: string
+          enum: [none, previous_period, previous_week]
+          default: none
+        filter:
+          $ref: "#/components/schemas/FilterGroup"
+
+    MasterReportQuery:
+      allOf:
+        - $ref: "#/components/schemas/MasterReportSettings"
+        - type: object
+          properties:
+            sort:
+              type: array
+              maxItems: 5
+              items:
+                $ref: "#/components/schemas/SortKey"
+            limit:
+              type: integer
+              minimum: 1
+              maximum: 4000
+              default: 200
+            cursor:
+              type: [string, "null"]
+      unevaluatedProperties: false
+
+    MasterReportExportInput:
+      type: object
+      additionalProperties: false
+      required: [query, fileType]
+      properties:
+        query:
+          $ref: "#/components/schemas/MasterReportQuery"
+        fileType:
+          type: string
+          enum: [csv, excel, pdf]
+
+    MasterReportRow:
+      type: object
+      required: [key, dims, metrics, previous]
+      properties:
+        key:
+          type: string
+          description: Stable key of the group (its dimension IDs).
+        dims:
+          type: object
+          description: Per group-by field, its ID (for drill-down and EDRs) and label.
+          additionalProperties:
+            type: object
+            required: [id, label]
+            properties:
+              id:
+                type: [string, number, "null"]
+              label:
+                type: string
+        metrics:
+          type: object
+          additionalProperties:
+            type: [number, "null"]
+        previous:
+          oneOf:
+            - type: object
+              additionalProperties:
+                type: [number, "null"]
+            - type: "null"
+          description: The previous period's metrics when comparing.
+
+    MasterReportPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows, totals, from, to, previousFrom, previousTo, timezone, currency, groupBy, metrics, tookMs]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/MasterReportRow"
+            totals:
+              type: object
+              required: [metrics, previous]
+              properties:
+                metrics:
+                  type: object
+                  additionalProperties:
+                    type: [number, "null"]
+                previous:
+                  oneOf:
+                    - type: object
+                      additionalProperties:
+                        type: [number, "null"]
+                    - type: "null"
+            from:
+              $ref: "#/components/schemas/Timestamp"
+            to:
+              $ref: "#/components/schemas/Timestamp"
+            previousFrom:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+            previousTo:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+            timezone:
+              type: string
+            currency:
+              type: string
+              description: The platform currency of the money metrics.
+            groupBy:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportDimension"
+            metrics:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportMetric"
+            tookMs:
+              type: integer
+
+    ReportPresetList:
+      type: object
+      required: [presets]
+      properties:
+        presets:
+          type: array
+          items:
+            type: object
+            required: [key, name, description, department, settings]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+              department:
+                type: [string, "null"]
+                enum: [sales, billing, noc, null]
+              settings:
+                $ref: "#/components/schemas/MasterReportSettings"
+
+    SalesInsightsInput:
+      type: object
+      additionalProperties: false
+      required: [period, timezone]
+      properties:
+        period:
+          $ref: "#/components/schemas/ReportPeriod"
+        from:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        to:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        timezone:
+          type: string
+          maxLength: 64
+        accountManagerId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        country:
+          type: [string, "null"]
+          pattern: "^[A-Z]{2}$"
+        productCategoryId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        thresholdPct:
+          type: number
+          minimum: 0
+          maximum: 1000
+          default: 20
+
+    SalesMover:
+      type: object
+      required: [enterpriseId, enterprise, accountManager, attempts, previousAttempts, revenue, previousRevenue, margin, changePct]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        accountManager:
+          type: [string, "null"]
+          description: The AM at send time (§13.30).
+        attempts:
+          type: integer
+        previousAttempts:
+          type: integer
+        revenue:
+          type: number
+        previousRevenue:
+          type: number
+        margin:
+          type: number
+        changePct:
+          type: [number, "null"]
+          description: Revenue change in %; null for new clients.
+
+    SalesInsights:
+      type: object
+      required: [from, to, previousFrom, previousTo, currency, growing, declining, newClients, stopped]
+      properties:
+        from:
+          $ref: "#/components/schemas/Timestamp"
+        to:
+          $ref: "#/components/schemas/Timestamp"
+        previousFrom:
+          $ref: "#/components/schemas/Timestamp"
+        previousTo:
+          $ref: "#/components/schemas/Timestamp"
+        currency:
+          type: string
+        growing:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesMover"
+        declining:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesMover"
+        newClients:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesMover"
+        stopped:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesMover"
+
+    BillingReportParams:
+      type: object
+      additionalProperties: false
+      required: [period]
+      properties:
+        period:
+          $ref: "#/components/schemas/ReportPeriod"
+        from:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        to:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+
+    BillingReportQuery:
+      type: object
+      additionalProperties: false
+      required: [params, query]
+      properties:
+        params:
+          $ref: "#/components/schemas/BillingReportParams"
+        query:
+          $ref: "#/components/schemas/ListQuery"
+
+    BillingReportRow:
+      type: object
+      required: [id, enterprise, type, accountManager, billingCycle, currency, customerBillable, customerAmount, vendorBillable, vendorAmount, invoicesIssued, invoicedAmount, paymentsReceived, paymentsMade, balance, creditLimit, creditUsePct, disputedInvoices, vendorInvoiceDifference, negativeMarginMessages, negativeMarginAmount, reratedAmount]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+          description: Enterprise ID.
+        enterprise:
+          type: string
+        type:
+          type: string
+        accountManager:
+          type: [string, "null"]
+        billingCycle:
+          type: [string, "null"]
+        currency:
+          type: string
+          description: The enterprise's billing currency; amounts below are in it.
+        customerBillable:
+          type: integer
+        customerAmount:
+          type: number
+        vendorBillable:
+          type: integer
+        vendorAmount:
+          type: number
+        invoicesIssued:
+          type: integer
+        invoicedAmount:
+          type: number
+        paymentsReceived:
+          type: number
+        paymentsMade:
+          type: number
+        balance:
+          type: [number, "null"]
+          description: Today's balance (§7 sign).
+        creditLimit:
+          type: [number, "null"]
+        creditUsePct:
+          type: [number, "null"]
+        disputedInvoices:
+          type: integer
+        vendorInvoiceDifference:
+          type: number
+          description: Sum of vendor invoice amount − our figure for invoices in the period.
+        negativeMarginMessages:
+          type: integer
+        negativeMarginAmount:
+          type: number
+          description: Money lost on negative-margin traffic (customer side), platform currency.
+        reratedAmount:
+          type: number
+          description: "Re-rating effect in the period (§13.32: past traffic is never re-rated by an RN)."
+
+    BillingReportPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/BillingReportRow"
+
+    NocInsightsInput:
+      type: object
+      additionalProperties: false
+      required: [period, timezone]
+      properties:
+        period:
+          $ref: "#/components/schemas/ReportPeriod"
+        from:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        to:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        timezone:
+          type: string
+          maxLength: 64
+
+    NocInsights:
+      type: object
+      required: [from, to, bindsDown, topErrors, worstVendors]
+      properties:
+        from:
+          $ref: "#/components/schemas/Timestamp"
+        to:
+          $ref: "#/components/schemas/Timestamp"
+        bindsDown:
+          type: array
+          items:
+            type: object
+            required: [side, trunkId, trunk, enterprise, status, since, downMinutes]
+            properties:
+              side:
+                type: string
+              trunkId:
+                $ref: "#/components/schemas/Id"
+              trunk:
+                type: string
+              enterprise:
+                type: string
+              status:
+                type: string
+              since:
+                $ref: "#/components/schemas/Timestamp"
+              downMinutes:
+                type: integer
+        topErrors:
+          type: array
+          items:
+            type: object
+            required: [causeCode, causeText, count, sharePct]
+            properties:
+              causeCode:
+                type: integer
+              causeText:
+                type: string
+              count:
+                type: integer
+              sharePct:
+                type: number
+        worstVendors:
+          type: array
+          items:
+            type: object
+            required: [vendorTrunkId, vendorTrunk, attempts, asr, dlr, deliveryDelayS, problem]
+            properties:
+              vendorTrunkId:
+                $ref: "#/components/schemas/Id"
+              vendorTrunk:
+                type: string
+              attempts:
+                type: integer
+              asr:
+                type: [number, "null"]
+              dlr:
+                type: [number, "null"]
+              deliveryDelayS:
+                type: [number, "null"]
+              problem:
+                type: string
+                description: Low ASR, low DLR or slow delivery.
+
+    ScheduledReportFields:
+      type: object
+      required: [name, description, templateKind, presetKey, viewId, status, businessCompanyId, notificationEmails, cronInterval, cronFrequency, cronExpression, fileType, emailBody]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: [string, "null"]
+          maxLength: 500
+        templateKind:
+          type: string
+          enum: [preset, view]
+          description: Report Template - a ready-made report or a saved Master Report view.
+        presetKey:
+          type: [string, "null"]
+          maxLength: 40
+        viewId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        status:
+          type: string
+          enum: [active, inactive]
+        businessCompanyId:
+          $ref: "#/components/schemas/Id"
+        notificationEmails:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            format: email
+        cronInterval:
+          type: string
+          enum: [minute, hourly, daily, weekly, monthly]
+        cronFrequency:
+          type: integer
+          minimum: 1
+          maximum: 59
+        cronExpression:
+          type: string
+          maxLength: 100
+          description: Five fields - minute hour day month weekday (UTC).
+        fileType:
+          type: string
+          enum: [csv, excel, pdf]
+        emailBody:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: "Rich text (HTML); placeholders {report}, {from}, {to}, {rows}."
+
+    ScheduledReportInput:
+      allOf:
+        - $ref: "#/components/schemas/ScheduledReportFields"
+      unevaluatedProperties: false
+
+    ScheduledReportRow:
+      allOf:
+        - $ref: "#/components/schemas/ScheduledReportFields"
+        - type: object
+          required: [id, template, businessCompany, nextRunAt, lastRunAt, lastStatus, lastError, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            template:
+              type: string
+              description: The preset or view name.
+            businessCompany:
+              type: string
+            nextRunAt:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+            lastRunAt:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+            lastStatus:
+              type: [string, "null"]
+              enum: [sent, failed, null]
+            lastError:
+              type: [string, "null"]
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+
+    ScheduledReportPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/ScheduledReportRow"
+
+    ScheduledReportSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/ScheduledReportRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    CronPreviewInput:
+      type: object
+      additionalProperties: false
+      required: [expression]
+      properties:
+        expression:
+          type: string
+          maxLength: 100
+        count:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+
+    CronPreview:
+      type: object
+      required: [runs, description]
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Timestamp"
+        description:
+          type: string
+
+    DailyTrafficAlertFields:
+      type: object
+      required: [name, status, businessCompanyId, contactType, enterpriseId, sendHour, emailBody]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          type: string
+          enum: [active, inactive]
+        businessCompanyId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: Sender; null = the enterprise's own business company.
+        contactType:
+          type: string
+          enum: [commercial, technical, rates, finance]
+          description: Enterprise Contact Email.
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        sendHour:
+          type: integer
+          minimum: 0
+          maximum: 23
+          description: Hour of the day (UTC) the summary goes out.
+        emailBody:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: "Placeholders {enterprise}, {date}, {summary}, {company}."
+
+    DailyTrafficAlertInput:
+      allOf:
+        - $ref: "#/components/schemas/DailyTrafficAlertFields"
+      unevaluatedProperties: false
+
+    DailyTrafficAlertRow:
+      allOf:
+        - $ref: "#/components/schemas/DailyTrafficAlertFields"
+        - type: object
+          required: [id, enterprise, businessCompany, lastSentAt, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            enterprise:
+              type: string
+            businessCompany:
+              type: [string, "null"]
+            lastSentAt:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              oneOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+
+    DailyTrafficAlertPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/DailyTrafficAlertRow"
+
+    DailyTrafficAlertSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/DailyTrafficAlertRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -17638,7 +18909,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts]
 
     FilterOperator:
       type: string

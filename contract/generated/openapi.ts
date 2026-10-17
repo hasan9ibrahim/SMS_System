@@ -5665,6 +5665,409 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/reports/master": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Master Report (§13.15): any metrics, grouped and filtered by anything
+     * @description Up to 5 group-by levels in any order, any metrics, a period (or custom From / To) in a time zone, MO / MT, and
+     *     filters with the §13.25 grammar on the `master_report` field catalogue: conditions on group-by fields (names match
+     *     with wildcards, include / exclude lists) apply before grouping, metric thresholds (e.g. margin < 0) after. Metric
+     *     thresholds cannot be OR-ed with field conditions. Compare adds the previous period's figures per row and in the
+     *     totals. Money is in the platform currency (`currency`), Revenue / Cost (Base) in the base currency. Relative periods
+     *     end at the latest EDR in this phase.
+     */
+    post: operations["runMasterReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/master/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export the Master Report (Excel, CSV or PDF)
+     * @description Same settings, filters and sort; every row (up to 100,000) with the totals row.
+     */
+    post: operations["exportMasterReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/presets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Ready-made report settings
+     * @description The department reports (Sales, Billing, NOC) and the §10 reports that became saved views of the Master Report
+     *     (Customize, Enterprise, Master Grouping, Usage Enterprise, Negative Margin, Bilateral).
+     */
+    get: operations["listReportPresets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/sales/insights": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sales report: growing, declining, new and stopped clients (§13.15)
+     * @description Per customer enterprise: revenue and volume this period against the previous one of the same length. Growing /
+     *     declining = change at or beyond the threshold; new = traffic now and none before; stopped = traffic before and none
+     *     now.
+     */
+    post: operations["salesInsights"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/billing/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List billing report rows (server-side filter, sort and paging)
+     * @description Billing report (§13.15): per enterprise for the period: billable volume and amount on the customer and vendor
+     *     side, invoices issued, payments, balance, credit limit use, disputed vendor invoices and their differences,
+     *     negative-margin traffic and re-rating effects. Server-side filter / sort / paging on the `billing_report` catalogue.
+     */
+    post: operations["queryBillingReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/reports/noc/insights": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * NOC report: where traffic has problems now (§13.15)
+     * @description Binds that are down and for how long, the top error codes, and the vendor trunks with the worst ASR, DLR or delay
+     *     in the window (down to minutes).
+     */
+    post: operations["nocInsights"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/scheduled-reports/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List scheduled reports (server-side filter, sort and paging)
+     * @description Schedule Report (§10): Info ID, Name, Status, report template, schedule, next and last run.
+     */
+    post: operations["queryScheduledReports"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/scheduled-reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a scheduled report
+     * @description Report Template (a preset or a saved Master Report view), Description, Name, Status, Business Company, Notification
+     *     Email, CRON interval / frequency / expression (5 fields, UTC), file type and Email Body (rich text).
+     *     One undoable change.
+     */
+    post: operations["createScheduledReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/scheduled-reports/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a scheduled report
+     * @description Every field of the form.
+     */
+    get: operations["getScheduledReport"];
+    /**
+     * Change a scheduled report
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateScheduledReport"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/scheduled-reports/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a scheduled report (§13.29)
+     * @description It is never removed. One undoable change.
+     */
+    post: operations["archiveScheduledReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/scheduled-reports/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a scheduled report
+     * @description One undoable change.
+     */
+    post: operations["restoreScheduledReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/scheduled-reports/{id}/run": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a scheduled report now
+     * @description Builds the report for its period and e-mails it (logged in Email Logs, type schedule_report_alert).
+     */
+    post: operations["runScheduledReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/scheduled-reports/cron-preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The next run times of a CRON expression
+     * @description Five fields (minute hour day month weekday), UTC; `*`, lists, ranges and steps.
+     */
+    post: operations["previewCron"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/daily-traffic-alerts/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List daily traffic alerts (server-side filter, sort and paging)
+     * @description Daily Traffic Alert (§10): Info ID, Name, Enterprise, Status, last sent.
+     */
+    post: operations["queryDailyTrafficAlerts"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/daily-traffic-alerts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a daily traffic alert
+     * @description Name, Status, Business Company, Enterprise Contact Email (contact type), Enterprise, send hour (UTC) and Email
+     *     Body: a daily traffic summary e-mailed to the partner.
+     *     One undoable change.
+     */
+    post: operations["createDailyTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/daily-traffic-alerts/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One a daily traffic alert
+     * @description Every field of the form.
+     */
+    get: operations["getDailyTrafficAlert"];
+    /**
+     * Change a daily traffic alert
+     * @description Saves the whole form. One undoable change.
+     */
+    put: operations["updateDailyTrafficAlert"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/daily-traffic-alerts/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a daily traffic alert (§13.29)
+     * @description It is never removed. One undoable change.
+     */
+    post: operations["archiveDailyTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/daily-traffic-alerts/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a daily traffic alert
+     * @description One undoable change.
+     */
+    post: operations["restoreDailyTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/daily-traffic-alerts/{id}/send": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a daily traffic alert now
+     * @description Yesterday's summary (the last full day of traffic) per trunk; logged in Email Logs (type daily_report).
+     */
+    post: operations["sendDailyTrafficAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -6228,6 +6631,8 @@ export type components = {
       sort?: components["schemas"]["SortKey"][];
       /** @description Visible columns in display order (field names). */
       columns?: string[];
+      /** @description Master Report views (list master_report) - the report settings (§13.15). */
+      report?: components["schemas"]["MasterReportSettings"];
     };
     SavedViewInput: {
       list: components["schemas"]["ListId"];
@@ -9945,6 +10350,369 @@ export type components = {
       durationMs: number;
     };
     /**
+     * @description Master Report group-by fields (§13.15). destination = customer MCCMNC (country · network).
+     * @enum {string}
+     */
+    ReportDimension:
+      | "date"
+      | "hour"
+      | "week"
+      | "month"
+      | "customer"
+      | "customerTrunk"
+      | "customerIp"
+      | "vendor"
+      | "vendorTrunk"
+      | "vendorIp"
+      | "country"
+      | "destination"
+      | "vendorDestination"
+      | "productCategory"
+      | "senderId"
+      | "routeRule"
+      | "routeType"
+      | "rateTable"
+      | "accountManager"
+      | "vendorAccountManager"
+      | "businessCompany"
+      | "currency"
+      | "msgType"
+      | "hlrProvider"
+      | "errorCode"
+      | "deliveryStatus";
+    /**
+     * @description Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency.
+     * @enum {string}
+     */
+    ReportMetric:
+      | "attempts"
+      | "successful"
+      | "submitted"
+      | "delivered"
+      | "failedSubmits"
+      | "billableCustomer"
+      | "billableVendor"
+      | "reportedCustomer"
+      | "reportedVendor"
+      | "asr"
+      | "dlrCustomer"
+      | "dlrVendor"
+      | "deliveryDelayS"
+      | "revenue"
+      | "cost"
+      | "margin"
+      | "marginPct"
+      | "avgRateCustomer"
+      | "avgRateVendor"
+      | "costAvg"
+      | "revenueBase"
+      | "costBase"
+      | "hlrCached"
+      | "hlrLive"
+      | "hlrTotal"
+      | "hlrAccomplished"
+      | "hlrPorted"
+      | "hlrCost"
+      | "reroutes"
+      | "moCount"
+      | "tpsAvg"
+      | "tpsPeak";
+    /**
+     * @description Relative periods resolve in the report's time zone; custom uses from / to.
+     * @enum {string}
+     */
+    ReportPeriod:
+      | "today"
+      | "yesterday"
+      | "last_24_hours"
+      | "last_7_days"
+      | "this_week"
+      | "last_week"
+      | "this_month"
+      | "last_month"
+      | "custom";
+    /** @description What a Master Report shows; also stored in saved views and scheduled reports. */
+    MasterReportSettings: {
+      groupBy: components["schemas"]["ReportDimension"][];
+      metrics: components["schemas"]["ReportMetric"][];
+      /** @description IANA time zone, e.g. UTC or Etc/GMT-3 (= GMT+3). */
+      timezone: string;
+      period: components["schemas"]["ReportPeriod"];
+      /** @description Custom period start (inclusive). */
+      from?: components["schemas"]["Timestamp"] | null;
+      /** @description Custom period end (exclusive); at most 400 days after from. */
+      to?: components["schemas"]["Timestamp"] | null;
+      /** @enum {string|null} */
+      msgType?: "MT" | "MO" | null;
+      /**
+       * @default none
+       * @enum {string}
+       */
+      compare: "none" | "previous_period" | "previous_week";
+      filter?: components["schemas"]["FilterGroup"];
+    };
+    MasterReportQuery: components["schemas"]["MasterReportSettings"] & {
+      sort?: components["schemas"]["SortKey"][];
+      /** @default 200 */
+      limit: number;
+      cursor?: string | null;
+    };
+    MasterReportExportInput: {
+      query: components["schemas"]["MasterReportQuery"];
+      /** @enum {string} */
+      fileType: "csv" | "excel" | "pdf";
+    };
+    MasterReportRow: {
+      /** @description Stable key of the group (its dimension IDs). */
+      key: string;
+      /** @description Per group-by field, its ID (for drill-down and EDRs) and label. */
+      dims: {
+        [key: string]: {
+          id: string | number | null;
+          label: string;
+        };
+      };
+      metrics: {
+        [key: string]: number | null;
+      };
+      /** @description The previous period's metrics when comparing. */
+      previous: {
+        [key: string]: number | null;
+      } | null;
+    };
+    MasterReportPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["MasterReportRow"][];
+      totals: {
+        metrics: {
+          [key: string]: number | null;
+        };
+        previous: {
+          [key: string]: number | null;
+        } | null;
+      };
+      from: components["schemas"]["Timestamp"];
+      to: components["schemas"]["Timestamp"];
+      previousFrom: components["schemas"]["Timestamp"] | null;
+      previousTo: components["schemas"]["Timestamp"] | null;
+      timezone: string;
+      /** @description The platform currency of the money metrics. */
+      currency: string;
+      groupBy: components["schemas"]["ReportDimension"][];
+      metrics: components["schemas"]["ReportMetric"][];
+      tookMs: number;
+    };
+    ReportPresetList: {
+      presets: {
+        key: string;
+        name: string;
+        description: string;
+        /** @enum {string|null} */
+        department: "sales" | "billing" | "noc" | null;
+        settings: components["schemas"]["MasterReportSettings"];
+      }[];
+    };
+    SalesInsightsInput: {
+      period: components["schemas"]["ReportPeriod"];
+      from?: components["schemas"]["Timestamp"] | null;
+      to?: components["schemas"]["Timestamp"] | null;
+      timezone: string;
+      accountManagerId?: components["schemas"]["Id"] | null;
+      country?: string | null;
+      productCategoryId?: components["schemas"]["Id"] | null;
+      /** @default 20 */
+      thresholdPct: number;
+    };
+    SalesMover: {
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      /** @description The AM at send time (§13.30). */
+      accountManager: string | null;
+      attempts: number;
+      previousAttempts: number;
+      revenue: number;
+      previousRevenue: number;
+      margin: number;
+      /** @description Revenue change in %; null for new clients. */
+      changePct: number | null;
+    };
+    SalesInsights: {
+      from: components["schemas"]["Timestamp"];
+      to: components["schemas"]["Timestamp"];
+      previousFrom: components["schemas"]["Timestamp"];
+      previousTo: components["schemas"]["Timestamp"];
+      currency: string;
+      growing: components["schemas"]["SalesMover"][];
+      declining: components["schemas"]["SalesMover"][];
+      newClients: components["schemas"]["SalesMover"][];
+      stopped: components["schemas"]["SalesMover"][];
+    };
+    BillingReportParams: {
+      period: components["schemas"]["ReportPeriod"];
+      from?: components["schemas"]["Timestamp"] | null;
+      to?: components["schemas"]["Timestamp"] | null;
+    };
+    BillingReportQuery: {
+      params: components["schemas"]["BillingReportParams"];
+      query: components["schemas"]["ListQuery"];
+    };
+    BillingReportRow: {
+      /** @description Enterprise ID. */
+      id: components["schemas"]["Id"];
+      enterprise: string;
+      type: string;
+      accountManager: string | null;
+      billingCycle: string | null;
+      /** @description The enterprise's billing currency; amounts below are in it. */
+      currency: string;
+      customerBillable: number;
+      customerAmount: number;
+      vendorBillable: number;
+      vendorAmount: number;
+      invoicesIssued: number;
+      invoicedAmount: number;
+      paymentsReceived: number;
+      paymentsMade: number;
+      /** @description Today's balance (§7 sign). */
+      balance: number | null;
+      creditLimit: number | null;
+      creditUsePct: number | null;
+      disputedInvoices: number;
+      /** @description Sum of vendor invoice amount − our figure for invoices in the period. */
+      vendorInvoiceDifference: number;
+      negativeMarginMessages: number;
+      /** @description Money lost on negative-margin traffic (customer side), platform currency. */
+      negativeMarginAmount: number;
+      /** @description Re-rating effect in the period (§13.32: past traffic is never re-rated by an RN). */
+      reratedAmount: number;
+    };
+    BillingReportPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["BillingReportRow"][];
+    };
+    NocInsightsInput: {
+      period: components["schemas"]["ReportPeriod"];
+      from?: components["schemas"]["Timestamp"] | null;
+      to?: components["schemas"]["Timestamp"] | null;
+      timezone: string;
+    };
+    NocInsights: {
+      from: components["schemas"]["Timestamp"];
+      to: components["schemas"]["Timestamp"];
+      bindsDown: {
+        side: string;
+        trunkId: components["schemas"]["Id"];
+        trunk: string;
+        enterprise: string;
+        status: string;
+        since: components["schemas"]["Timestamp"];
+        downMinutes: number;
+      }[];
+      topErrors: {
+        causeCode: number;
+        causeText: string;
+        count: number;
+        sharePct: number;
+      }[];
+      worstVendors: {
+        vendorTrunkId: components["schemas"]["Id"];
+        vendorTrunk: string;
+        attempts: number;
+        asr: number | null;
+        dlr: number | null;
+        deliveryDelayS: number | null;
+        /** @description Low ASR, low DLR or slow delivery. */
+        problem: string;
+      }[];
+    };
+    ScheduledReportFields: {
+      name: string;
+      description: string | null;
+      /**
+       * @description Report Template - a ready-made report or a saved Master Report view.
+       * @enum {string}
+       */
+      templateKind: "preset" | "view";
+      presetKey: string | null;
+      viewId: components["schemas"]["Id"] | null;
+      /** @enum {string} */
+      status: "active" | "inactive";
+      businessCompanyId: components["schemas"]["Id"];
+      notificationEmails: string[];
+      /** @enum {string} */
+      cronInterval: "minute" | "hourly" | "daily" | "weekly" | "monthly";
+      cronFrequency: number;
+      /** @description Five fields - minute hour day month weekday (UTC). */
+      cronExpression: string;
+      /** @enum {string} */
+      fileType: "csv" | "excel" | "pdf";
+      /** @description Rich text (HTML); placeholders {report}, {from}, {to}, {rows}. */
+      emailBody: string;
+    };
+    ScheduledReportInput: components["schemas"]["ScheduledReportFields"];
+    ScheduledReportRow: components["schemas"]["ScheduledReportFields"] & {
+      id: components["schemas"]["Id"];
+      /** @description The preset or view name. */
+      template: string;
+      businessCompany: string;
+      nextRunAt: components["schemas"]["Timestamp"] | null;
+      lastRunAt: components["schemas"]["Timestamp"] | null;
+      /** @enum {string|null} */
+      lastStatus: "sent" | "failed" | null;
+      lastError: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    ScheduledReportPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["ScheduledReportRow"][];
+    };
+    ScheduledReportSaved: {
+      record: components["schemas"]["ScheduledReportRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    CronPreviewInput: {
+      expression: string;
+      /** @default 5 */
+      count: number;
+    };
+    CronPreview: {
+      runs: components["schemas"]["Timestamp"][];
+      description: string;
+    };
+    DailyTrafficAlertFields: {
+      name: string;
+      /** @enum {string} */
+      status: "active" | "inactive";
+      /** @description Sender; null = the enterprise's own business company. */
+      businessCompanyId: components["schemas"]["Id"] | null;
+      /**
+       * @description Enterprise Contact Email.
+       * @enum {string}
+       */
+      contactType: "commercial" | "technical" | "rates" | "finance";
+      enterpriseId: components["schemas"]["Id"];
+      /** @description Hour of the day (UTC) the summary goes out. */
+      sendHour: number;
+      /** @description Placeholders {enterprise}, {date}, {summary}, {company}. */
+      emailBody: string;
+    };
+    DailyTrafficAlertInput: components["schemas"]["DailyTrafficAlertFields"];
+    DailyTrafficAlertRow: components["schemas"]["DailyTrafficAlertFields"] & {
+      id: components["schemas"]["Id"];
+      enterprise: string;
+      businessCompany: string | null;
+      lastSentAt: components["schemas"]["Timestamp"] | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      archivedAt: components["schemas"]["Timestamp"] | null;
+    };
+    DailyTrafficAlertPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["DailyTrafficAlertRow"][];
+    };
+    DailyTrafficAlertSaved: {
+      record: components["schemas"]["DailyTrafficAlertRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
      */
@@ -10372,7 +11140,11 @@ export type components = {
       | "edr_downloads"
       | "repush_requests"
       | "network_binds"
-      | "signaling_captures";
+      | "signaling_captures"
+      | "master_report"
+      | "billing_report"
+      | "scheduled_reports"
+      | "daily_traffic_alerts";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -19137,6 +19909,574 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  runMasterReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MasterReportQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of grouped rows with totals */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MasterReportPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportMasterReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MasterReportExportInput"];
+      };
+    };
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+          "application/vnd.ms-excel": string;
+          "application/pdf": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listReportPresets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The presets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReportPresetList"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  salesInsights: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesInsightsInput"];
+      };
+    };
+    responses: {
+      /** @description The movers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesInsights"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryBillingReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BillingReportQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of billing report rows */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BillingReportPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  nocInsights: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NocInsightsInput"];
+      };
+    };
+    responses: {
+      /** @description The problems */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NocInsights"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryScheduledReports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of scheduled reports */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScheduledReportPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createScheduledReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ScheduledReportInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScheduledReportSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getScheduledReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a scheduled report */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScheduledReportRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateScheduledReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ScheduledReportInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScheduledReportSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveScheduledReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScheduledReportSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreScheduledReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScheduledReportSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  runScheduledReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The run */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScheduledReportRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewCron: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CronPreviewInput"];
+      };
+    };
+    responses: {
+      /** @description The next runs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CronPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryDailyTrafficAlerts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of daily traffic alerts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DailyTrafficAlertPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createDailyTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DailyTrafficAlertInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DailyTrafficAlertSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getDailyTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The a daily traffic alert */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DailyTrafficAlertRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateDailyTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DailyTrafficAlertInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DailyTrafficAlertSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveDailyTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DailyTrafficAlertSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreDailyTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DailyTrafficAlertSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendDailyTrafficAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The e-mail sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailPreview"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

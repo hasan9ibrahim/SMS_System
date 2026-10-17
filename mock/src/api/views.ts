@@ -28,10 +28,22 @@ const toView = (r: Record<string, unknown>): SavedView => ({
 function checkInput(input: SavedViewInput) {
   const { filter, sort } = input.state;
   const query = { ...(filter ? { filter } : {}), ...(sort ? { sort } : {}) } as ListQuery;
-  return checkListQuery(query, listFields[input.list]).map((e) => ({
+  const errors = checkListQuery(query, listFields[input.list]).map((e) => ({
     ...e,
     path: `/state${e.path}`,
   }));
+  // Master Report views also keep the report settings (§13.15); their filter uses the report's fields.
+  const report = input.state.report;
+  if (report?.filter)
+    errors.push(
+      ...checkListQuery({ filter: report.filter } as ListQuery, listFields.master_report).map((e) => ({
+        ...e,
+        path: `/state/report${e.path}`,
+      })),
+    );
+  if (report && input.list !== "master_report")
+    errors.push({ path: "/state/report", message: "report settings belong to Master Report views" });
+  return errors;
 }
 
 /** Unique name per owner and list, and shared users must exist. */

@@ -42,6 +42,9 @@ import { NetworkStatusPage } from "./monitoring/NetworkStatusPage";
 import { RepushRequestsPage } from "./monitoring/RepushRequestsPage";
 import { RouteSimulatorPage } from "./monitoring/RouteSimulatorPage";
 import { SignalingPage } from "./monitoring/SignalingPage";
+import { BillingReportPage } from "./reports/BillingReportPage";
+import { DailyTrafficAlertsPage } from "./reports/DailyTrafficAlertsPage";
+import { ScheduledReportsPage } from "./reports/ScheduledReportsPage";
 import { RateManagerPage } from "./rates/RateManagerPage";
 import { EnterpriseReportPage } from "./reports/EnterpriseReportPage";
 import { TrunkPage } from "./trunk/TrunkPage";
@@ -50,6 +53,11 @@ import { TrunksPage } from "./TrunksPage";
 // Pages with charts load on first use, so ECharts stays out of the main bundle.
 const RouteRulesPage = lazy(() => import("./routing/RouteRulesPage").then((m) => ({ default: m.RouteRulesPage })));
 const DashboardPage = lazy(() => import("./dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const MasterReportPage = lazy(() =>
+  import("./reports/MasterReportPage").then((m) => ({ default: m.MasterReportPage })),
+);
+const SalesReportPage = lazy(() => import("./reports/SalesReportPage").then((m) => ({ default: m.SalesReportPage })));
+const NocReportPage = lazy(() => import("./reports/NocReportPage").then((m) => ({ default: m.NocReportPage })));
 const RateLookupPage = lazy(() => import("./lookup/RateLookupPage").then((m) => ({ default: m.RateLookupPage })));
 
 const BUILT = new Set([
@@ -84,6 +92,12 @@ const BUILT = new Set([
   "/monitoring/diagnosis",
   "/monitoring/repush",
   "/routing/simulator",
+  "/reports/master",
+  "/reports/sales",
+  "/reports/billing",
+  "/reports/noc",
+  "/reports/scheduled",
+  "/reports/daily-traffic",
   "/finance/transactions",
   "/finance/invoices",
   "/finance/vendor-invoices",
@@ -145,6 +159,33 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/monitoring/diagnosis" element={<NetworkDiagnosisPage />} />
       <Route path="/monitoring/repush" element={<RepushRequestsPage />} />
       <Route path="/routing/simulator" element={<RouteSimulatorPage />} />
+      <Route
+        path="/reports/master"
+        element={
+          <Suspense fallback={<div className="grid-message muted">Loading…</div>}>
+            <MasterReportPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/reports/sales"
+        element={
+          <Suspense fallback={<div className="grid-message muted">Loading…</div>}>
+            <SalesReportPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/reports/noc"
+        element={
+          <Suspense fallback={<div className="grid-message muted">Loading…</div>}>
+            <NocReportPage />
+          </Suspense>
+        }
+      />
+      <Route path="/reports/billing" element={<BillingReportPage />} />
+      <Route path="/reports/scheduled" element={<ScheduledReportsPage />} />
+      <Route path="/reports/daily-traffic" element={<DailyTrafficAlertsPage />} />
       <Route path="/finance/transactions" element={<TransactionsPage />} />
       <Route path="/finance/invoices" element={<InvoicesPage />} />
       <Route path="/finance/vendor-invoices" element={<VendorInvoicesPage />} />
