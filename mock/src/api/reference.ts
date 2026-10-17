@@ -14,7 +14,7 @@ export function getReference(_request: FastifyRequest, reply: FastifyReply) {
       pool.query("SELECT id, name, base_currency FROM business_companies WHERE deleted_at IS NULL ORDER BY name"),
       pool.query("SELECT id, name, iso, dial_code FROM countries ORDER BY name"),
       pool.query("SELECT id, name FROM product_categories WHERE deleted_at IS NULL ORDER BY name"),
-      pool.query("SELECT iso, name, symbol FROM currencies ORDER BY iso"),
+      pool.query("SELECT iso, name, symbol FROM currencies WHERE deleted_at IS NULL ORDER BY iso"),
       pool.query("SELECT id, name FROM billing_cycles WHERE deleted_at IS NULL ORDER BY id"),
       pool.query(
         `SELECT id, first_name || ' ' || last_name AS display_name FROM users

@@ -150,6 +150,19 @@ downloadable from the dialog. Every save, delete and import is one undoable chan
   (`?side=`), ASR / DLR / ADD per destination over 24 hours. "Add vendor stat" and Override set a manual stat; the
   detail compares traffic and the figures QBR routing uses; Clear override; undo.
 
+## Finance part 1 (build step 5.5)
+
+- **Transactions** (`/finance/transactions`, `src/pages/finance/TransactionsPage.tsx`, §7, §13.33): the grid with
+  Confirmation and In SOA columns; the form (Transaction Information, Conversion with the Final Amount in the base
+  currency, Send payment confirmation with a preview, Include in SOA with a reason). Bulk include / exclude / send
+  confirmations; re-send from the detail panel; delete and restore; export.
+- **Currencies** (`/finance/currencies`, `CurrenciesPage.tsx`): Currency (add, edit, export), Currency Exchange (edit a
+  rate, Sync Rates) and the exchange history (`?view=`).
+- **Billing cycles** (`/finance/billing-cycles`): add, edit, safe delete.
+- **Enterprise balance** (`/finance/balances`): customer, vendor and net balances, credit use, export.
+- **Charges calculator** (`/finance/charges`): usage charges per enterprise and side for a period.
+- Pickers and menus now open above dialogs (`.popover` z-index), so list pickers inside forms work.
+
 ## HLR (build step 5.4)
 
 - **HLR** (`/switch/hlr`, `src/pages/switch/hlr/`, §6.5, §13.24): one page with three views (`?view=`).

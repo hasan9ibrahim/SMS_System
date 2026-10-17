@@ -9,7 +9,7 @@ import { usersOf } from "./admin.js";
 import type { Profile } from "./profiles.js";
 import type { Rng } from "./rng.js";
 import type { TableSink } from "./sink.js";
-import { DAY, fxPerUsd, type World } from "./world.js";
+import { DAY, fxPerUsd, toBase, type World } from "./world.js";
 
 /** The mock's signed-in user (MOCK_USER_ID, default 1): a few requests are theirs, to show maker-checker. */
 const SIGNED_IN_USER = 1;
@@ -78,7 +78,7 @@ export async function generateRoutingExtras(world: World, rng: Rng, sink: TableS
             transaction_type: "reprocess",
             amount: Math.abs(delta),
             currency: table.currency,
-            amount_base: money(Math.abs(delta) / fxPerUsd(world, table.currency, finishedAt)),
+            ...toBase(world, enterpriseId, Math.abs(delta), table.currency, finishedAt),
             payment_date: ymd(finishedAt),
             invoice_id: null,
             description: `Re-rating #${i}: ${table.name} ${ymd(start)} to ${ymd(end)}`,

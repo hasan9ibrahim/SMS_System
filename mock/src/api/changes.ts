@@ -14,6 +14,7 @@ import { applyRateTableEntries } from "./rates.js";
 import { applyRouteRuleField } from "./routeRules.js";
 import { applyTranslationRuleField } from "./translationRules.js";
 import { applyHlrField } from "./hlr.js";
+import { applyCurrencyRate, applyTransactionEntries } from "./finance.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -37,6 +38,20 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
   hlr_provider: { table: "hlr_providers", columns: {} },
   hlr_policy: { table: "hlr_policies", columns: {} },
   hlr_provider_rate: { table: "hlr_provider_rates", columns: { rate: "rate" } },
+  // Finance (§7): transactions are written in one statement (applyTransactionEntries); a
+  // currency's rate is undone by a new rate row (history is never rewritten).
+  transaction: { table: "transactions", columns: {} },
+  currency: { table: "currencies", columns: { name: "name", symbol: "symbol" } },
+  billing_cycle: {
+    table: "billing_cycles",
+    columns: {
+      name: "name",
+      billingType: "billing_type",
+      weekDay: "week_day",
+      usageDays: "usage_days",
+      dueDays: "due_days",
+    },
+  },
   enterprise_doc: { table: "enterprise_docs", columns: {} },
   // MCCMNC master (§6.1); DLR targets live here too (decided 2026-10-16).
   destination: {
@@ -107,7 +122,15 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
     );
     entries = rest;
   }
+  if (entityType === "transaction") {
+    await applyTransactionEntries(c, entries, userId);
+    return;
+  }
   for (const e of entries) {
+    if (entityType === "currency" && e.field === "rate") {
+      await applyCurrencyRate(c, e.entity_id, e.before, userId);
+      continue;
+    }
     // "*" = the record itself: no value before means it was created, so undo archives it;
     // a value before means it was deleted, so undo restores it (§13.10, §13.29).
     if (e.field === "*" || (e.field === "archived" && entityType in ENTITY_COLUMNS)) {

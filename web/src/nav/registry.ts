@@ -118,7 +118,7 @@ export const PAGES: PageDef[] = [
     "/finance/transactions",
     "wallet",
     "§7, §13.33",
-    "5",
+    "5.5",
     "Payments, credit notes and adjustments",
   ),
   p(
@@ -158,7 +158,7 @@ export const PAGES: PageDef[] = [
     "/finance/balances",
     "scale",
     "§7",
-    "5",
+    "5.5",
     "Customer, vendor and net balances",
   ),
   p(
@@ -168,10 +168,19 @@ export const PAGES: PageDef[] = [
     "/finance/charges",
     "calculator",
     "§7",
-    "5",
+    "5.5",
     "Usage charges for a period",
   ),
-  p("finance", "currencies", "Currencies", "/finance/currencies", "coins", "§7", "5", "Currencies and exchange rates"),
+  p(
+    "finance",
+    "currencies",
+    "Currencies",
+    "/finance/currencies",
+    "coins",
+    "§7",
+    "5.5",
+    "Currencies and exchange rates",
+  ),
   p(
     "finance",
     "billing-cycles",
@@ -179,7 +188,7 @@ export const PAGES: PageDef[] = [
     "/finance/billing-cycles",
     "calendar",
     "§7",
-    "5",
+    "5.5",
     "Named billing cycles (e.g. Monthly – Net 7)",
   ),
 

@@ -334,3 +334,18 @@ export function amAt(e: Enterprise, t: number): number {
 export const DAY = 86_400_000;
 export const HOUR = 3_600_000;
 export const MINUTE = 60_000;
+
+/**
+ * A transaction's Final Amount (§7 Transaction Conversion): the amount in the enterprise's
+ * business company base currency at the payment time, with the rate used (base units per unit).
+ */
+export function toBase(world: World, enterpriseId: number, amount: number, iso: string, t: number) {
+  const e = world.enterpriseById.get(enterpriseId)!;
+  const base = world.businessCompanies.find((b) => b.id === e.businessCompanyId)!.baseCurrency;
+  const rate = fxPerUsd(world, base, t) / fxPerUsd(world, iso, t);
+  return {
+    amount_base: Math.round(amount * rate * 100) / 100,
+    base_currency: base,
+    ex_rate: Number(rate.toFixed(8)),
+  };
+}

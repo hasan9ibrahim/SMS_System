@@ -7,7 +7,7 @@
 import type { Rng } from "./rng.js";
 import type { TableSink } from "./sink.js";
 import { usersOf } from "./admin.js";
-import { fxPerUsd, DAY, type World } from "./world.js";
+import { fxPerUsd, DAY, toBase, type World } from "./world.js";
 import type { Profile } from "./profiles.js";
 
 /** Monthly revenue in USD of the biggest client; others scale by Zipf size. */
@@ -123,7 +123,7 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
               transaction_type: "receipt",
               amount,
               currency: ccy,
-              amount_base: money(amount / fx),
+              ...toBase(world, e.id, amount, ccy, payDate.getTime()),
               payment_date: ymd(payDate),
               invoice_id: id,
               description: `Payment for ${number}`,
@@ -150,7 +150,7 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
                 transaction_type: "bank_charges",
                 amount: fee,
                 currency: ccy,
-                amount_base: money(fee / fx),
+                ...toBase(world, e.id, fee, ccy, payDate.getTime()),
                 payment_date: ymd(payDate),
                 invoice_id: id,
                 description: "Incoming transfer fee",
@@ -181,7 +181,7 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
               transaction_type: rng.pick(["credit_note", "adjustment", "dispute"]),
               amount,
               currency: ccy,
-              amount_base: money(amount / fx),
+              ...toBase(world, e.id, amount, ccy, at.getTime()),
               payment_date: ymd(at),
               invoice_id: id,
               description: "Agreed after dispute",
@@ -255,7 +255,7 @@ export async function generateFinance(world: World, rng: Rng, sink: TableSink, p
             transaction_type: "bill_payment",
             amount: theirs,
             currency: ccy,
-            amount_base: money(theirs / fx),
+            ...toBase(world, e.id, theirs, ccy, payDate.getTime()),
             payment_date: ymd(payDate),
             invoice_id: null,
             description: "Vendor invoice payment",

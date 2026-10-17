@@ -167,6 +167,30 @@ import {
   updateHlrProvider,
   updateHlrRule,
 } from "./api/hlr.js";
+import {
+  archiveBillingCycle,
+  archiveTransaction,
+  bulkUpdateTransactions,
+  calculateCharges,
+  convertTransactionAmount,
+  createBillingCycle,
+  createCurrency,
+  createTransaction,
+  exportCurrencies,
+  exportEnterpriseBalances,
+  exportTransactions,
+  getBillingCycleDependencies,
+  getTransaction,
+  previewTransactionConfirmation,
+  restoreBillingCycle,
+  restoreTransaction,
+  sendTransactionConfirmation,
+  setCurrencyRate,
+  syncCurrencyRates,
+  updateBillingCycle,
+  updateCurrency,
+  updateTransaction,
+} from "./api/finance.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -192,7 +216,7 @@ const queryQbrStatsList: Handler = (request, reply) => {
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => unknown;
 type OperationId = keyof operations;
 
-const VERSION = "0.15.0";
+const VERSION = "0.16.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -396,6 +420,38 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveHlrPolicy,
   restoreHlrPolicy,
   testHlrPolicy,
+
+  // Finance part 1 (§7, §13.33)
+  queryTransactions: queryList("transactions"),
+  exportTransactions,
+  createTransaction,
+  getTransaction,
+  updateTransaction,
+  archiveTransaction,
+  restoreTransaction,
+  previewTransactionConfirmation,
+  sendTransactionConfirmation,
+  bulkUpdateTransactions,
+  convertTransactionAmount,
+  queryInvoices: queryList("invoices"),
+  queryCurrencies: queryList("currencies"),
+  exportCurrencies,
+  createCurrency,
+  updateCurrency,
+  queryCurrencyRates: queryList("currency_rates"),
+  // Converted rates and route costs use the latest exchange rate, so their caches are cleared.
+  setCurrencyRate: (request, reply) => Promise.resolve(setCurrencyRate(request, reply)).finally(clearRouteCaches),
+  syncCurrencyRates: (request, reply) => Promise.resolve(syncCurrencyRates(request, reply)).finally(clearRouteCaches),
+  queryCurrencyRateHistory: queryList("currency_rate_history"),
+  queryBillingCycles: queryList("billing_cycles"),
+  createBillingCycle,
+  updateBillingCycle,
+  getBillingCycleDependencies,
+  archiveBillingCycle,
+  restoreBillingCycle,
+  queryEnterpriseBalances: queryList("enterprise_balances"),
+  exportEnterpriseBalances,
+  calculateCharges,
 
   queryUsers: queryList("users"),
   queryChanges: queryList("changes"),

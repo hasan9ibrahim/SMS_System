@@ -600,3 +600,41 @@
   align-items: center;
   flex-wrap: wrap;
 }
+
+/* ---------- Finance (§7, §13.33) ---------- */
+.mail-preview {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+.mail-preview pre {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  font: inherit;
+}
+.charges-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 2fr) repeat(2, minmax(140px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 12px 0;
+}
+.charges-totals {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.charges-totals > div:not(.segmented) {
+  display: grid;
+  gap: 2px;
+}
+.charges-table {
+  max-height: calc(100vh - 330px);
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}

@@ -2955,6 +2955,580 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/transactions/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List transactions (server-side filter, sort and paging)
+     * @description Transaction grid (§7) with Confirmation and In SOA columns (§13.33). Hidden `archived` field =
+     *     deleted transactions.
+     */
+    post: operations["queryTransactions"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export transactions as CSV
+     * @description Same filter and sort as the list; up to 100,000 rows.
+     */
+    post: operations["exportTransactions"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a transaction (payment, adjustment, credit note…)
+     * @description Transaction Information and Conversion (§7). With `sendConfirmation` the confirmation email goes to
+     *     the partner's billing contacts on save (§13.33). One undoable change.
+     */
+    post: operations["createTransaction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One transaction
+     * @description Every field of the form.
+     */
+    get: operations["getTransaction"];
+    /**
+     * Change a transaction
+     * @description Saves the whole form; the Final Amount is converted again when amount, currency or date changes.
+     *     Changing In SOA is logged with its reason (§13.33). One undoable change.
+     */
+    put: operations["updateTransaction"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a transaction (§13.29)
+     * @description The transaction leaves balances and lists; it is never removed. One undoable change.
+     */
+    post: operations["archiveTransaction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a deleted transaction
+     * @description Administrators; one undoable change.
+     */
+    post: operations["restoreTransaction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/confirmation-preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview the payment confirmation email (§13.33)
+     * @description The Payment Confirmation email the form would send: recipients, subject and body with amount,
+     *     currency, date, mode, reference, invoice and the balance after the payment.
+     */
+    post: operations["previewTransactionConfirmation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/{id}/send-confirmation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send or re-send the payment confirmation (§13.33)
+     * @description Emails the confirmation now (the mock records it as sent) and keeps recipients and time. One
+     *     undoable change of the confirmation status.
+     */
+    post: operations["sendTransactionConfirmation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/bulk": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change In SOA or send confirmations for many transactions (§13.33)
+     * @description One undoable change for all of them; excluding from the SOA needs a reason.
+     */
+    post: operations["bulkUpdateTransactions"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/transactions/convert": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Final Amount in the base currency (§7 Transaction Conversion)
+     * @description Converts an amount to the enterprise's business company base currency at the payment date's rate.
+     */
+    post: operations["convertTransactionAmount"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/invoices/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List invoices (server-side filter, sort and paging)
+     * @description Invoice grid columns (§7). Read-only in build step 5.5 (the payment form picks the invoice it
+     *     settles); actions come with the Invoice screen.
+     */
+    post: operations["queryInvoices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currencies/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List currencies (server-side filter, sort and paging)
+     * @description Currency grid (§7): Currency ID, Currency, ISO, Symbol, Updated By, with the latest rate.
+     */
+    post: operations["queryCurrencies"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currencies/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export currencies as CSV
+     * @description Same filter and sort as the list; up to 100,000 rows.
+     */
+    post: operations["exportCurrencies"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a currency
+     * @description Needs a first exchange rate. One undoable change.
+     */
+    post: operations["createCurrency"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currencies/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Rename a currency or change its symbol
+     * @description The ISO code cannot change. One undoable change.
+     */
+    put: operations["updateCurrency"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currency-rates/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List current exchange rates (server-side filter, sort and paging)
+     * @description Currency Exchange (§7): the rate in force per currency (units per 1 USD), with who set it and when.
+     */
+    post: operations["queryCurrencyRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currency-rates/{iso}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Edit a currency's rate (Currency Exchange › Edit)
+     * @description Adds a new rate valid from now; earlier rates stay in the history so past amounts never move.
+     *     One undoable change.
+     */
+    put: operations["setCurrencyRate"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currency-rates/sync": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sync Rates (pull market rates)
+     * @description Pulls today's market rates for every currency (the mock simulates the feed) as one undoable change.
+     */
+    post: operations["syncCurrencyRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/currency-rate-history/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List exchange-rate history (server-side filter, sort and paging)
+     * @description Currency Exchange History Information (§7): every rate with ISO, currency, rate, time and user.
+     */
+    post: operations["queryCurrencyRateHistory"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/billing-cycles/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List billing cycles (server-side filter, sort and paging)
+     * @description Billing Cycle grid (§7): Info ID, Name, Usage Days, Due Days, Billing Type, Week Day, Updated
+     *     By/Time, plus how many enterprises use each.
+     */
+    post: operations["queryBillingCycles"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/billing-cycles": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a billing cycle
+     * @description One undoable change.
+     */
+    post: operations["createBillingCycle"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/billing-cycles/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change a billing cycle
+     * @description One undoable change.
+     */
+    put: operations["updateBillingCycle"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/billing-cycles/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses a billing cycle (safe delete, §13.29)
+     * @description Enterprise billing settings on the cycle; they block archiving.
+     */
+    get: operations["getBillingCycleDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/billing-cycles/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Archive (delete) a billing cycle (§13.29)
+     * @description Blocked while enterprises use it (409) unless an administrator overrides with a reason.
+     */
+    post: operations["archiveBillingCycle"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/billing-cycles/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore an archived billing cycle
+     * @description Administrators; one undoable change.
+     */
+    post: operations["restoreBillingCycle"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprise-balances/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List enterprise balances (server-side filter, sort and paging)
+     * @description Enterprise Balance (§7): customer and vendor balance, net balance (customer − vendor, in the
+     *     customer currency), account manager, credit limit and use, billing cycle and currency.
+     */
+    post: operations["queryEnterpriseBalances"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/enterprise-balances/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export enterprise balances as CSV
+     * @description Same filter and sort as the list; up to 100,000 rows.
+     */
+    post: operations["exportEnterpriseBalances"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/charges/calculate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Charges Calculator (§7)
+     * @description Usage charges for a period per enterprise and side, from the EDR store, cut at midnight in each
+     *     enterprise's billing time zone (§13.31). One enterprise, or all with traffic.
+     */
+    post: operations["calculateCharges"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/query": {
     parameters: {
       query?: never;
@@ -5450,6 +6024,331 @@ export type components = {
         skipped: string | null;
       }[];
     };
+    /** @enum {string} */
+    PaymentMode:
+      | "cash"
+      | "cheque"
+      | "bank_transfer"
+      | "paypal"
+      | "credit_card"
+      | "debit_card"
+      | "wire_transfer"
+      | "crypto";
+    /**
+     * @description reprocess = posted by a re-rating request (§12.2), not entered by hand.
+     * @enum {string}
+     */
+    TransactionType:
+      | "receipt"
+      | "adjustment"
+      | "dispute"
+      | "credit_note"
+      | "bank_charges"
+      | "bill_payment"
+      | "reprocess";
+    TransactionInput: {
+      /**
+       * @description Enterprise Type.
+       * @enum {string}
+       */
+      side: "customer" | "vendor";
+      enterpriseId: components["schemas"]["Id"];
+      invoiceId: components["schemas"]["Id"] | null;
+      /** @description Mode of Payment; required except for reprocess notes. */
+      paymentMode: components["schemas"]["PaymentMode"] | null;
+      transactionType: components["schemas"]["TransactionType"];
+      /** @enum {string} */
+      paymentType: "credit" | "debit";
+      /** Format: date */
+      paymentDate: string;
+      amount: number;
+      /** @description Source Currency. */
+      currency: string;
+      description: string | null;
+      /** @description Send the payment confirmation on save (§13.33); default from the partner's billing settings. */
+      sendConfirmation: boolean;
+      includeInSoa: boolean;
+      /** @description Required when includeInSoa is false. */
+      excludeReason: string | null;
+    };
+    TransactionRow: {
+      id: components["schemas"]["Id"];
+      /** @enum {string} */
+      side: "customer" | "vendor";
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      paymentMode: components["schemas"]["PaymentMode"] | null;
+      /** @enum {string} */
+      paymentType: "credit" | "debit";
+      transactionType: components["schemas"]["TransactionType"];
+      amount: number;
+      currency: string;
+      /** @description Final Amount in the business company base currency at the payment date. */
+      amountBase: number;
+      baseCurrency: string;
+      /** Format: date */
+      paymentDate: string;
+      transactionTime: components["schemas"]["Timestamp"];
+      invoiceId: components["schemas"]["Id"] | null;
+      invoiceNumber: string | null;
+      description: string | null;
+      sendConfirmation: boolean;
+      /** @enum {string} */
+      confirmationStatus: "sent" | "not_sent" | "failed";
+      includeInSoa: boolean;
+      excludeReason: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    TransactionPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["TransactionRow"][];
+    };
+    TransactionDetail: components["schemas"]["TransactionRow"] & {
+      /** @description Base currency units per unit of the source currency. */
+      exRate: number;
+      /** Format: date-time */
+      confirmationSentAt: string | null;
+      confirmationRecipients: string[];
+      createdBy: string | null;
+    };
+    TransactionSaved: {
+      record: components["schemas"]["TransactionDetail"];
+      change: components["schemas"]["Change"] | null;
+    };
+    ConfirmationPreview: {
+      /** @description The partner's billing contacts; empty = nobody to send to. */
+      recipients: string[];
+      subject: string;
+      body: string;
+      /** @description The side's balance after this payment, in the billing currency. */
+      balanceAfter: number;
+      currency: string;
+    };
+    TransactionBulkInput: {
+      ids: components["schemas"]["Id"][];
+      /** @enum {string} */
+      action: "include_in_soa" | "exclude_from_soa" | "send_confirmation";
+      /** @description Required for exclude_from_soa. */
+      reason?: string | null;
+    };
+    ConvertInput: {
+      enterpriseId: components["schemas"]["Id"];
+      amount: number;
+      currency: string;
+      /** Format: date */
+      date: string;
+    };
+    ConvertResult: {
+      baseCurrency: string;
+      exRate: number;
+      amountBase: number;
+    };
+    InvoiceRow: {
+      id: components["schemas"]["Id"];
+      invoiceNumber: string;
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      enterpriseType: string;
+      /** @enum {string} */
+      invoiceType: "auto" | "manual";
+      /** @enum {string} */
+      billingType: "prepaid" | "postpaid";
+      currency: string;
+      /** Format: date */
+      invoiceDate: string;
+      /** Format: date */
+      usageStart: string;
+      /** Format: date */
+      usageEnd: string;
+      /** Format: date */
+      dueDate: string;
+      openingBalance: number;
+      usageCharges: number;
+      closingBalance: number;
+      dueAmount: number;
+      messageCount: number;
+      /** @enum {string} */
+      status: "pending" | "inprogress" | "completed" | "failed";
+      /** @enum {string} */
+      paymentStatus: "unpaid" | "partial" | "paid";
+      /** @enum {string} */
+      emailStatus: "unsent" | "sent";
+      remarks: string | null;
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    InvoicePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["InvoiceRow"][];
+    };
+    CurrencyRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      iso: string;
+      symbol: string;
+      ratePerUsd: number;
+      /** Format: date-time */
+      rateUpdatedAt: string | null;
+      /** @description Enterprise billing settings in this currency. */
+      enterprises: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    CurrencyPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["CurrencyRow"][];
+    };
+    CurrencyUpdate: {
+      name: string;
+      symbol: string;
+    };
+    CurrencyInput: {
+      name: string;
+      symbol: string;
+      iso: string;
+      /** @description First exchange rate, units per 1 USD. */
+      ratePerUsd: number;
+    };
+    CurrencySaved: {
+      record: components["schemas"]["CurrencyRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    CurrencyRateRow: {
+      /** @description The currency's ID (one row per currency). */
+      id: components["schemas"]["Id"];
+      iso: string;
+      currency: string;
+      /** @description Units of the currency per 1 USD (USD = 1). */
+      ratePerUsd: number;
+      /** Format: date-time */
+      validFrom: string | null;
+      /** @description Null = market feed or seed data. */
+      updatedBy: string | null;
+      previousRate: number | null;
+    };
+    CurrencyRatePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["CurrencyRateRow"][];
+    };
+    CurrencyRateInput: {
+      ratePerUsd: number;
+    };
+    CurrencyRateSaved: {
+      record: components["schemas"]["CurrencyRateRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    CurrencySyncResult: {
+      updated: number;
+      change: components["schemas"]["Change"] | null;
+    };
+    CurrencyRateHistoryRow: {
+      id: components["schemas"]["Id"];
+      iso: string;
+      currency: string;
+      ratePerUsd: number;
+      validFrom: components["schemas"]["Timestamp"];
+      updatedBy: string | null;
+    };
+    CurrencyRateHistoryPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["CurrencyRateHistoryRow"][];
+    };
+    BillingCycleInput: {
+      name: string;
+      /** @enum {string} */
+      billingType: "custom" | "daily" | "weekly" | "fortnightly" | "monthly";
+      /**
+       * @description Weekly and fortnightly cycles start on this day.
+       * @enum {string|null}
+       */
+      weekDay: "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" | null;
+      usageDays: number;
+      dueDays: number;
+    };
+    BillingCycleRow: {
+      name: string;
+      /** @enum {string} */
+      billingType: "custom" | "daily" | "weekly" | "fortnightly" | "monthly";
+      /**
+       * @description Weekly and fortnightly cycles start on this day.
+       * @enum {string|null}
+       */
+      weekDay: "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" | null;
+      usageDays: number;
+      dueDays: number;
+      id: components["schemas"]["Id"];
+      enterprises: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    BillingCyclePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["BillingCycleRow"][];
+    };
+    BillingCycleSaved: {
+      record: components["schemas"]["BillingCycleRow"];
+      change: components["schemas"]["Change"] | null;
+    };
+    EnterpriseBalanceRow: {
+      /** @description The enterprise's ID. */
+      id: components["schemas"]["Id"];
+      enterprise: string;
+      enterpriseType: string;
+      /** @description What the client owes us, in the customer billing currency; null = no customer billing. */
+      customerBalance: number | null;
+      customerCurrency: string | null;
+      /** @description What we owe the vendor, in the vendor billing currency. */
+      vendorBalance: number | null;
+      vendorCurrency: string | null;
+      /** @description Customer − vendor, in `currency` (the vendor side converted at the latest rate). */
+      netBalance: number;
+      accountManager: string | null;
+      /** @enum {string|null} */
+      billingType: "prepaid" | "postpaid" | null;
+      /** @description Customer Credit. */
+      creditLimit: number | null;
+      /** @description Customer balance as a share of the credit limit (postpaid); 0 when the client is in credit. */
+      creditUsedPct: number | null;
+      billingCycle: string | null;
+      /** @description Customer billing currency, else the vendor's. */
+      currency: string;
+    };
+    EnterpriseBalancePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["EnterpriseBalanceRow"][];
+    };
+    ChargesInput: {
+      /** @description One enterprise; null = all with traffic in the period (Select All). */
+      enterpriseId: components["schemas"]["Id"] | null;
+      /** Format: date */
+      from: string;
+      /**
+       * Format: date
+       * @description Inclusive; at most 366 days after `from`.
+       */
+      to: string;
+    };
+    ChargesResult: {
+      /** Format: date */
+      from: string;
+      /** Format: date */
+      to: string;
+      rows: {
+        enterpriseId: components["schemas"]["Id"];
+        enterprise: string;
+        /** @enum {string} */
+        side: "customer" | "vendor";
+        currency: string;
+        timezone: string;
+        messages: number;
+        /** @description Usage charges in the trunk currency (revenue for customers, cost for vendors). */
+        amount: number;
+        amountPlatform: number;
+      }[];
+      totalPlatform: {
+        customer: number;
+        vendor: number;
+      };
+      platformCurrency: string;
+    };
     /**
      * @description Time frame for traffic figures (§13.27).
      * @enum {string}
@@ -5853,7 +6752,14 @@ export type components = {
       | "hlr_providers"
       | "hlr_provider_rates"
       | "hlr_rules"
-      | "hlr_policies";
+      | "hlr_policies"
+      | "transactions"
+      | "invoices"
+      | "currencies"
+      | "currency_rates"
+      | "currency_rate_history"
+      | "billing_cycles"
+      | "enterprise_balances";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -10864,6 +11770,809 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryTransactions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of transactions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TransactionPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportTransactions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createTransaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TransactionInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TransactionSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getTransaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The transaction */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TransactionDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateTransaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TransactionInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TransactionSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveTransaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TransactionSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreTransaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TransactionSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewTransactionConfirmation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TransactionInput"];
+      };
+    };
+    responses: {
+      /** @description The email */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ConfirmationPreview"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendTransactionConfirmation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The transaction, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TransactionSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  bulkUpdateTransactions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TransactionBulkInput"];
+      };
+    };
+    responses: {
+      /** @description The change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChangeResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  convertTransactionAmount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ConvertInput"];
+      };
+    };
+    responses: {
+      /** @description The conversion */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ConvertResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of invoices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvoicePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryCurrencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of currencies */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrencyPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportCurrencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createCurrency: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CurrencyInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrencySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateCurrency: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CurrencyUpdate"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrencySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryCurrencyRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of current exchange rates */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrencyRatePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  setCurrencyRate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        iso: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CurrencyRateInput"];
+      };
+    };
+    responses: {
+      /** @description The new rate, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrencyRateSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  syncCurrencyRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrencySyncResult"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryCurrencyRateHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of exchange-rate history */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CurrencyRateHistoryPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryBillingCycles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of billing cycles */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BillingCyclePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createBillingCycle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BillingCycleInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BillingCycleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateBillingCycle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BillingCycleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BillingCycleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getBillingCycleDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveBillingCycle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BillingCycleSaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by dependencies that must be settled first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreBillingCycle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BillingCycleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryEnterpriseBalances: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of enterprise balances */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseBalancePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportEnterpriseBalances: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  calculateCharges: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChargesInput"];
+      };
+    };
+    responses: {
+      /** @description Charges per enterprise and side */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChargesResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };
   };

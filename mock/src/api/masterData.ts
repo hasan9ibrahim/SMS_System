@@ -170,7 +170,7 @@ export function parseCsv(text: string): { header: string[]; rows: { line: number
 }
 
 /** Streams the rows of a list query as CSV with the given columns. */
-async function exportList<Row>(
+export async function exportList<Row>(
   request: FastifyRequest,
   reply: FastifyReply,
   list: keyof typeof listFields,

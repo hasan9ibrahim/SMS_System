@@ -74,6 +74,20 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/hlr-rules/query", { body })) as Promise<ListPage<Row>>;
     case "hlr_policies":
       return unwrap(api.POST("/hlr-policies/query", { body })) as Promise<ListPage<Row>>;
+    case "transactions":
+      return unwrap(api.POST("/transactions/query", { body })) as Promise<ListPage<Row>>;
+    case "invoices":
+      return unwrap(api.POST("/invoices/query", { body })) as Promise<ListPage<Row>>;
+    case "currencies":
+      return unwrap(api.POST("/currencies/query", { body })) as Promise<ListPage<Row>>;
+    case "currency_rates":
+      return unwrap(api.POST("/currency-rates/query", { body })) as Promise<ListPage<Row>>;
+    case "currency_rate_history":
+      return unwrap(api.POST("/currency-rate-history/query", { body })) as Promise<ListPage<Row>>;
+    case "billing_cycles":
+      return unwrap(api.POST("/billing-cycles/query", { body })) as Promise<ListPage<Row>>;
+    case "enterprise_balances":
+      return unwrap(api.POST("/enterprise-balances/query", { body })) as Promise<ListPage<Row>>;
     case "enterprise_report":
       // The report needs its settings with every query: the page passes its own fetchPage.
       return Promise.reject(new Error("The Enterprise report is fetched with its settings"));

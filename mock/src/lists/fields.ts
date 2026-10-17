@@ -45,6 +45,30 @@ const ARCHIVED = field({
   hidden: true,
 });
 
+const SIDES = [
+  { value: "customer", label: "Customer" },
+  { value: "vendor", label: "Vendor" },
+];
+const PAYMENT_MODES = [
+  { value: "cash", label: "Cash" },
+  { value: "cheque", label: "By Cheque" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "paypal", label: "Paypal" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "debit_card", label: "Debit Card" },
+  { value: "wire_transfer", label: "Wire Transfer" },
+  { value: "crypto", label: "Crypto" },
+];
+const TRANSACTION_TYPES = [
+  { value: "receipt", label: "Receipt" },
+  { value: "adjustment", label: "Adjustment" },
+  { value: "dispute", label: "Disputes" },
+  { value: "credit_note", label: "Credit Note" },
+  { value: "bank_charges", label: "Bank Charges" },
+  { value: "bill_payment", label: "Bill Payment" },
+  { value: "reprocess", label: "Reprocess" },
+];
+
 const HLR_TYPES = [
   { value: "hlr", label: "HLR" },
   { value: "mnp", label: "MNP / NPQ" },
@@ -813,6 +837,261 @@ export const listFields: Record<ListId, ListFields> = {
     ],
   },
 
+  // Finance (§7, §13.33)
+  transactions: {
+    list: "transactions",
+    defaultSort: [
+      { field: "paymentDate", dir: "desc" },
+      { field: "id", dir: "desc" },
+    ],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "enterprise", label: "Name", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "side", label: "Enterprise Type", type: "enum", defaultOperator: "in", enumValues: SIDES }),
+      field({ field: "paymentDate", label: "Payment Date", type: "date", defaultOperator: "between" }),
+      field({ field: "transactionTime", label: "Transaction Time", type: "datetime", defaultOperator: "between" }),
+      field({
+        field: "paymentMode",
+        label: "Mode of Payment",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: PAYMENT_MODES,
+      }),
+      field({
+        field: "paymentType",
+        label: "Payment Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "credit", label: "Credit" },
+          { value: "debit", label: "Debit" },
+        ],
+      }),
+      field({
+        field: "transactionType",
+        label: "Transaction Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: TRANSACTION_TYPES,
+      }),
+      field({ field: "amount", label: "Amount", type: "decimal", defaultOperator: "between" }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq" }),
+      field({ field: "amountBase", label: "Final Amount", type: "decimal", defaultOperator: "between", hidden: true }),
+      field({ field: "baseCurrency", label: "Base Currency", type: "text", defaultOperator: "eq", hidden: true }),
+      field({ field: "invoiceNumber", label: "Invoice Number", type: "text", defaultOperator: "like" }),
+      field({ field: "description", label: "Description", type: "text", defaultOperator: "like" }),
+      field({
+        field: "confirmationStatus",
+        label: "Confirmation",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "sent", label: "Sent" },
+          { value: "not_sent", label: "Not sent" },
+          { value: "failed", label: "Failed" },
+        ],
+      }),
+      field({ field: "includeInSoa", label: "In SOA", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      ARCHIVED,
+    ],
+  },
+
+  invoices: {
+    list: "invoices",
+    defaultSort: [
+      { field: "invoiceDate", dir: "desc" },
+      { field: "id", dir: "desc" },
+    ],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "invoiceNumber", label: "Invoice No", type: "text", defaultOperator: "like" }),
+      field({ field: "enterprise", label: "Enterprise Name", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "enterpriseType", label: "Enterprise Type", type: "text", defaultOperator: "eq", hidden: true }),
+      field({
+        field: "invoiceType",
+        label: "Invoice Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "auto", label: "Auto" },
+          { value: "manual", label: "Manual" },
+        ],
+      }),
+      field({
+        field: "billingType",
+        label: "Billing Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "prepaid", label: "Prepaid" },
+          { value: "postpaid", label: "Postpaid" },
+        ],
+      }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq" }),
+      field({ field: "invoiceDate", label: "Invoice Date", type: "date", defaultOperator: "between" }),
+      field({ field: "usageStart", label: "Usage Start Date", type: "date", defaultOperator: "between" }),
+      field({ field: "usageEnd", label: "Usage End Date", type: "date", defaultOperator: "between" }),
+      field({ field: "dueDate", label: "Payment Due Date", type: "date", defaultOperator: "between" }),
+      field({ field: "dueAmount", label: "Due Amount", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "openingBalance", label: "Opening Balance", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "usageCharges", label: "Usage Charges", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "closingBalance", label: "Closing Balance", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "messageCount", label: "Messages", type: "integer", defaultOperator: "gte", hidden: true }),
+      field({
+        field: "emailStatus",
+        label: "Email Status",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "unsent", label: "UnSent" },
+          { value: "sent", label: "Sent" },
+        ],
+      }),
+      field({
+        field: "status",
+        label: "Status",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "pending", label: "Pending" },
+          { value: "inprogress", label: "Inprogress" },
+          { value: "completed", label: "Completed" },
+          { value: "failed", label: "Failed" },
+        ],
+      }),
+      field({
+        field: "paymentStatus",
+        label: "Payment",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "unpaid", label: "Unpaid" },
+          { value: "partial", label: "Partly paid" },
+          { value: "paid", label: "Paid" },
+        ],
+      }),
+      field({ field: "remarks", label: "Remarks", type: "text", defaultOperator: "like" }),
+      ARCHIVED,
+    ],
+  },
+
+  currencies: {
+    list: "currencies",
+    defaultSort: [{ field: "iso", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "Currency ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Currency", type: "text", defaultOperator: "like" }),
+      field({ field: "iso", label: "ISO", type: "text", defaultOperator: "eq" }),
+      field({ field: "symbol", label: "Symbol", type: "text", defaultOperator: "eq" }),
+      field({ field: "ratePerUsd", label: "Rate per USD", type: "decimal", defaultOperator: "between" }),
+      field({ field: "rateUpdatedAt", label: "Rate Time", type: "datetime", defaultOperator: "between", hidden: true }),
+      field({ field: "enterprises", label: "Enterprises", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
+    ],
+  },
+
+  currency_rates: {
+    list: "currency_rates",
+    defaultSort: [{ field: "iso", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "Info ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "iso", label: "ISO", type: "text", defaultOperator: "eq" }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "like" }),
+      field({ field: "ratePerUsd", label: "Rate (per USD)", type: "decimal", defaultOperator: "between" }),
+      field({ field: "validFrom", label: "Updated Time", type: "datetime", defaultOperator: "between" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+    ],
+  },
+
+  currency_rate_history: {
+    list: "currency_rate_history",
+    defaultSort: [{ field: "validFrom", dir: "desc" }],
+    fields: [
+      field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "iso", label: "ISO", type: "text", defaultOperator: "eq" }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "like" }),
+      field({ field: "ratePerUsd", label: "Rate (per USD)", type: "decimal", defaultOperator: "between" }),
+      field({ field: "validFrom", label: "Time", type: "datetime", defaultOperator: "between" }),
+      field({ field: "updatedBy", label: "User", type: "text", defaultOperator: "like" }),
+    ],
+  },
+
+  billing_cycles: {
+    list: "billing_cycles",
+    defaultSort: [{ field: "name", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "Info ID", type: "integer", defaultOperator: "eq" }),
+      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
+      field({ field: "usageDays", label: "Usage Days", type: "integer", defaultOperator: "eq" }),
+      field({ field: "dueDays", label: "Due Days", type: "integer", defaultOperator: "eq" }),
+      field({
+        field: "billingType",
+        label: "Billing Type",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "custom", label: "Custom" },
+          { value: "daily", label: "Daily" },
+          { value: "weekly", label: "Weekly" },
+          { value: "fortnightly", label: "Fortnightly" },
+          { value: "monthly", label: "Monthly" },
+        ],
+      }),
+      field({
+        field: "weekDay",
+        label: "Week Day",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d) => ({ value: d, label: d })),
+      }),
+      field({ field: "enterprises", label: "Enterprises", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between" }),
+      ARCHIVED,
+    ],
+  },
+
+  enterprise_balances: {
+    list: "enterprise_balances",
+    defaultSort: [{ field: "enterprise", dir: "asc" }],
+    fields: [
+      field({ field: "id", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "enterprise", label: "Enterprise Name", type: "text", defaultOperator: "like" }),
+      field({ field: "enterpriseType", label: "Type", type: "text", defaultOperator: "eq", hidden: true }),
+      field({ field: "customerBalance", label: "Customer Balance", type: "decimal", defaultOperator: "gte" }),
+      field({
+        field: "customerCurrency",
+        label: "Customer Currency",
+        type: "text",
+        defaultOperator: "eq",
+        hidden: true,
+      }),
+      field({ field: "vendorBalance", label: "Vendor Balance", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "vendorCurrency", label: "Vendor Currency", type: "text", defaultOperator: "eq", hidden: true }),
+      field({ field: "netBalance", label: "Net Balance", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "accountManager", label: "Account Manager", type: "text", defaultOperator: "like" }),
+      field({
+        field: "billingType",
+        label: "Billing",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "prepaid", label: "Prepaid" },
+          { value: "postpaid", label: "Postpaid" },
+        ],
+      }),
+      field({ field: "creditLimit", label: "Customer Credit", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "creditUsedPct", label: "Credit Used", type: "percent", defaultOperator: "gte" }),
+      field({ field: "billingCycle", label: "Billing Cycle", type: "text", defaultOperator: "like" }),
+      field({ field: "currency", label: "Currency", type: "text", defaultOperator: "eq" }),
+    ],
+  },
+
   // Route rules grid (§15.4): the columns of the screenshot, a filter under each header.
   // Traffic columns follow the `window` field (§13.27); the category list comes from the
   // database when the catalogue is served.
@@ -984,6 +1263,9 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "hlr_provider", label: "HLR provider" },
           { value: "hlr_provider_rate", label: "HLR provider price" },
           { value: "hlr_policy", label: "HLR policy" },
+          { value: "transaction", label: "Transaction" },
+          { value: "currency", label: "Currency" },
+          { value: "billing_cycle", label: "Billing cycle" },
         ],
       }),
       field({

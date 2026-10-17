@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.15.0
+  version: 0.16.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -51,6 +51,8 @@ tags:
     description: Jump-to search across records (Ctrl K, §15.1)
   - name: reports
     description: Traffic reports from the EDR store (§10, §13.31)
+  - name: finance
+    description: Finance - transactions, currencies and exchange rates, billing cycles, balances, charges (§7, §13.33)
   - name: switch
     description: Switch rules - translation rules, number lists, HLR providers, rules and policies (§6.4, §6.5, §13.2, §13.24)
   - name: reference
@@ -4493,6 +4495,820 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/query:
+    post:
+      tags: [finance]
+      operationId: queryTransactions
+      summary: "List transactions (server-side filter, sort and paging)"
+      description: |
+        Transaction grid (§7) with Confirmation and In SOA columns (§13.33). Hidden `archived` field =
+        deleted transactions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/export:
+    post:
+      tags: [finance]
+      operationId: exportTransactions
+      summary: "Export transactions as CSV"
+      description: |
+        Same filter and sort as the list; up to 100,000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions:
+    post:
+      tags: [finance]
+      operationId: createTransaction
+      summary: "Add a transaction (payment, adjustment, credit note…)"
+      description: |
+        Transaction Information and Conversion (§7). With `sendConfirmation` the confirmation email goes to
+        the partner's billing contacts on save (§13.33). One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/{id}:
+    get:
+      tags: [finance]
+      operationId: getTransaction
+      summary: "One transaction"
+      description: |
+        Every field of the form.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [finance]
+      operationId: updateTransaction
+      summary: "Change a transaction"
+      description: |
+        Saves the whole form; the Final Amount is converted again when amount, currency or date changes.
+        Changing In SOA is logged with its reason (§13.33). One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/{id}/archive:
+    post:
+      tags: [finance]
+      operationId: archiveTransaction
+      summary: "Delete (archive) a transaction (§13.29)"
+      description: |
+        The transaction leaves balances and lists; it is never removed. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionSaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/{id}/restore:
+    post:
+      tags: [finance]
+      operationId: restoreTransaction
+      summary: "Restore a deleted transaction"
+      description: |
+        Administrators; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/confirmation-preview:
+    post:
+      tags: [finance]
+      operationId: previewTransactionConfirmation
+      summary: "Preview the payment confirmation email (§13.33)"
+      description: |
+        The Payment Confirmation email the form would send: recipients, subject and body with amount,
+        currency, date, mode, reference, invoice and the balance after the payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "200":
+          description: The email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfirmationPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/{id}/send-confirmation:
+    post:
+      tags: [finance]
+      operationId: sendTransactionConfirmation
+      summary: "Send or re-send the payment confirmation (§13.33)"
+      description: |
+        Emails the confirmation now (the mock records it as sent) and keeps recipients and time. One
+        undoable change of the confirmation status.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The transaction, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/bulk:
+    post:
+      tags: [finance]
+      operationId: bulkUpdateTransactions
+      summary: "Change In SOA or send confirmations for many transactions (§13.33)"
+      description: |
+        One undoable change for all of them; excluding from the SOA needs a reason.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionBulkInput"
+      responses:
+        "200":
+          description: The change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /transactions/convert:
+    post:
+      tags: [finance]
+      operationId: convertTransactionAmount
+      summary: "Final Amount in the base currency (§7 Transaction Conversion)"
+      description: |
+        Converts an amount to the enterprise's business company base currency at the payment date's rate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConvertInput"
+      responses:
+        "200":
+          description: The conversion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConvertResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /invoices/query:
+    post:
+      tags: [finance]
+      operationId: queryInvoices
+      summary: "List invoices (server-side filter, sort and paging)"
+      description: |
+        Invoice grid columns (§7). Read-only in build step 5.5 (the payment form picks the invoice it
+        settles); actions come with the Invoice screen.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of invoices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoicePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /currencies/query:
+    post:
+      tags: [finance]
+      operationId: queryCurrencies
+      summary: "List currencies (server-side filter, sort and paging)"
+      description: |
+        Currency grid (§7): Currency ID, Currency, ISO, Symbol, Updated By, with the latest rate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of currencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrencyPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /currencies/export:
+    post:
+      tags: [finance]
+      operationId: exportCurrencies
+      summary: "Export currencies as CSV"
+      description: |
+        Same filter and sort as the list; up to 100,000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /currencies:
+    post:
+      tags: [finance]
+      operationId: createCurrency
+      summary: "Add a currency"
+      description: |
+        Needs a first exchange rate. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CurrencyInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrencySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /currencies/{id}:
+    put:
+      tags: [finance]
+      operationId: updateCurrency
+      summary: "Rename a currency or change its symbol"
+      description: |
+        The ISO code cannot change. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CurrencyUpdate"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrencySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /currency-rates/query:
+    post:
+      tags: [finance]
+      operationId: queryCurrencyRates
+      summary: "List current exchange rates (server-side filter, sort and paging)"
+      description: |
+        Currency Exchange (§7): the rate in force per currency (units per 1 USD), with who set it and when.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of current exchange rates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrencyRatePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /currency-rates/{iso}:
+    put:
+      tags: [finance]
+      operationId: setCurrencyRate
+      summary: "Edit a currency's rate (Currency Exchange › Edit)"
+      description: |
+        Adds a new rate valid from now; earlier rates stay in the history so past amounts never move.
+        One undoable change.
+      parameters:
+        - name: iso
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Z]{3}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CurrencyRateInput"
+      responses:
+        "200":
+          description: The new rate, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrencyRateSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /currency-rates/sync:
+    post:
+      tags: [finance]
+      operationId: syncCurrencyRates
+      summary: "Sync Rates (pull market rates)"
+      description: |
+        Pulls today's market rates for every currency (the mock simulates the feed) as one undoable change.
+      responses:
+        "200":
+          description: What changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrencySyncResult"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /currency-rate-history/query:
+    post:
+      tags: [finance]
+      operationId: queryCurrencyRateHistory
+      summary: "List exchange-rate history (server-side filter, sort and paging)"
+      description: |
+        Currency Exchange History Information (§7): every rate with ISO, currency, rate, time and user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of exchange-rate history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrencyRateHistoryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /billing-cycles/query:
+    post:
+      tags: [finance]
+      operationId: queryBillingCycles
+      summary: "List billing cycles (server-side filter, sort and paging)"
+      description: |
+        Billing Cycle grid (§7): Info ID, Name, Usage Days, Due Days, Billing Type, Week Day, Updated
+        By/Time, plus how many enterprises use each.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of billing cycles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingCyclePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /billing-cycles:
+    post:
+      tags: [finance]
+      operationId: createBillingCycle
+      summary: "Add a billing cycle"
+      description: |
+        One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingCycleInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingCycleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /billing-cycles/{id}:
+    put:
+      tags: [finance]
+      operationId: updateBillingCycle
+      summary: "Change a billing cycle"
+      description: |
+        One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingCycleInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingCycleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /billing-cycles/{id}/dependencies:
+    get:
+      tags: [finance]
+      operationId: getBillingCycleDependencies
+      summary: "What uses a billing cycle (safe delete, §13.29)"
+      description: |
+        Enterprise billing settings on the cycle; they block archiving.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /billing-cycles/{id}/archive:
+    post:
+      tags: [finance]
+      operationId: archiveBillingCycle
+      summary: "Archive (delete) a billing cycle (§13.29)"
+      description: |
+        Blocked while enterprises use it (409) unless an administrator overrides with a reason.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingCycleSaved"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by dependencies that must be settled first
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /billing-cycles/{id}/restore:
+    post:
+      tags: [finance]
+      operationId: restoreBillingCycle
+      summary: "Restore an archived billing cycle"
+      description: |
+        Administrators; one undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingCycleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprise-balances/query:
+    post:
+      tags: [finance]
+      operationId: queryEnterpriseBalances
+      summary: "List enterprise balances (server-side filter, sort and paging)"
+      description: |
+        Enterprise Balance (§7): customer and vendor balance, net balance (customer − vendor, in the
+        customer currency), account manager, credit limit and use, billing cycle and currency.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of enterprise balances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseBalancePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /enterprise-balances/export:
+    post:
+      tags: [finance]
+      operationId: exportEnterpriseBalances
+      summary: "Export enterprise balances as CSV"
+      description: |
+        Same filter and sort as the list; up to 100,000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /charges/calculate:
+    post:
+      tags: [finance]
+      operationId: calculateCharges
+      summary: "Charges Calculator (§7)"
+      description: |
+        Usage charges for a period per enterprise and side, from the EDR store, cut at midnight in each
+        enterprise's billing time zone (§13.31). One enterprise, or all with traffic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargesInput"
+      responses:
+        "200":
+          description: Charges per enterprise and side
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargesResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -9399,6 +10215,675 @@ components:
                 type: [string, "null"]
                 description: Why the provider would be skipped (inactive, down, under the minimum success rate), else null.
 
+    # ------------------------------------------------------------- Finance (§7, §13.33)
+    PaymentMode:
+      type: string
+      enum: [cash, cheque, bank_transfer, paypal, credit_card, debit_card, wire_transfer, crypto]
+
+    TransactionType:
+      type: string
+      enum: [receipt, adjustment, dispute, credit_note, bank_charges, bill_payment, reprocess]
+      description: reprocess = posted by a re-rating request (§12.2), not entered by hand.
+
+    TransactionInput:
+      type: object
+      additionalProperties: false
+      required: [side, enterpriseId, invoiceId, paymentMode, transactionType, paymentType, paymentDate, amount, currency, description, sendConfirmation, includeInSoa, excludeReason]
+      properties:
+        side:
+          type: string
+          enum: [customer, vendor]
+          description: Enterprise Type.
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        invoiceId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        paymentMode:
+          description: Mode of Payment; required except for reprocess notes.
+          oneOf:
+            - $ref: "#/components/schemas/PaymentMode"
+            - type: "null"
+        transactionType:
+          $ref: "#/components/schemas/TransactionType"
+        paymentType:
+          type: string
+          enum: [credit, debit]
+        paymentDate:
+          type: string
+          format: date
+        amount:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 100000000
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          description: Source Currency.
+        description:
+          type: [string, "null"]
+          maxLength: 500
+        sendConfirmation:
+          type: boolean
+          description: Send the payment confirmation on save (§13.33); default from the partner's billing settings.
+        includeInSoa:
+          type: boolean
+        excludeReason:
+          type: [string, "null"]
+          maxLength: 300
+          description: Required when includeInSoa is false.
+
+    TransactionRow:
+      type: object
+      required: [id, side, enterpriseId, enterprise, paymentMode, paymentType, transactionType, amount, currency, amountBase, baseCurrency, paymentDate, transactionTime, invoiceId, invoiceNumber, description, sendConfirmation, confirmationStatus, includeInSoa, excludeReason, updatedBy, updatedAt, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        side:
+          type: string
+          enum: [customer, vendor]
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        paymentMode:
+          oneOf:
+            - $ref: "#/components/schemas/PaymentMode"
+            - type: "null"
+        paymentType:
+          type: string
+          enum: [credit, debit]
+        transactionType:
+          $ref: "#/components/schemas/TransactionType"
+        amount:
+          type: number
+        currency:
+          type: string
+        amountBase:
+          type: number
+          description: Final Amount in the business company base currency at the payment date.
+        baseCurrency:
+          type: string
+        paymentDate:
+          type: string
+          format: date
+        transactionTime:
+          $ref: "#/components/schemas/Timestamp"
+        invoiceId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        invoiceNumber:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+        sendConfirmation:
+          type: boolean
+        confirmationStatus:
+          type: string
+          enum: [sent, not_sent, failed]
+        includeInSoa:
+          type: boolean
+        excludeReason:
+          type: [string, "null"]
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    TransactionPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/TransactionRow"
+
+    TransactionDetail:
+      allOf:
+        - $ref: "#/components/schemas/TransactionRow"
+        - type: object
+          required: [exRate, confirmationSentAt, confirmationRecipients, createdBy]
+          properties:
+            exRate:
+              type: number
+              description: Base currency units per unit of the source currency.
+            confirmationSentAt:
+              type: [string, "null"]
+              format: date-time
+            confirmationRecipients:
+              type: array
+              items:
+                type: string
+            createdBy:
+              type: [string, "null"]
+
+    TransactionSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/TransactionDetail"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    ConfirmationPreview:
+      type: object
+      required: [recipients, subject, body, balanceAfter, currency]
+      properties:
+        recipients:
+          type: array
+          items:
+            type: string
+          description: The partner's billing contacts; empty = nobody to send to.
+        subject:
+          type: string
+        body:
+          type: string
+        balanceAfter:
+          type: number
+          description: The side's balance after this payment, in the billing currency.
+        currency:
+          type: string
+
+    TransactionBulkInput:
+      type: object
+      additionalProperties: false
+      required: [ids, action]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/Id"
+        action:
+          type: string
+          enum: [include_in_soa, exclude_from_soa, send_confirmation]
+        reason:
+          type: [string, "null"]
+          maxLength: 300
+          description: Required for exclude_from_soa.
+
+    ConvertInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseId, amount, currency, date]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        amount:
+          type: number
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        date:
+          type: string
+          format: date
+
+    ConvertResult:
+      type: object
+      required: [baseCurrency, exRate, amountBase]
+      properties:
+        baseCurrency:
+          type: string
+        exRate:
+          type: number
+        amountBase:
+          type: number
+
+    InvoiceRow:
+      type: object
+      required: [id, invoiceNumber, enterpriseId, enterprise, enterpriseType, invoiceType, billingType, currency, invoiceDate, usageStart, usageEnd, dueDate, openingBalance, usageCharges, closingBalance, dueAmount, messageCount, status, paymentStatus, emailStatus, remarks, archivedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        invoiceNumber:
+          type: string
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        enterpriseType:
+          type: string
+        invoiceType:
+          type: string
+          enum: [auto, manual]
+        billingType:
+          type: string
+          enum: [prepaid, postpaid]
+        currency:
+          type: string
+        invoiceDate:
+          type: string
+          format: date
+        usageStart:
+          type: string
+          format: date
+        usageEnd:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        openingBalance:
+          type: number
+        usageCharges:
+          type: number
+        closingBalance:
+          type: number
+        dueAmount:
+          type: number
+        messageCount:
+          type: integer
+        status:
+          type: string
+          enum: [pending, inprogress, completed, failed]
+        paymentStatus:
+          type: string
+          enum: [unpaid, partial, paid]
+        emailStatus:
+          type: string
+          enum: [unsent, sent]
+        remarks:
+          type: [string, "null"]
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    InvoicePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/InvoiceRow"
+
+    CurrencyRow:
+      type: object
+      required: [id, name, iso, symbol, ratePerUsd, rateUpdatedAt, enterprises, updatedBy, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        iso:
+          type: string
+        symbol:
+          type: string
+        ratePerUsd:
+          type: number
+        rateUpdatedAt:
+          type: [string, "null"]
+          format: date-time
+        enterprises:
+          type: integer
+          description: Enterprise billing settings in this currency.
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    CurrencyPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/CurrencyRow"
+
+    CurrencyUpdate:
+      type: object
+      additionalProperties: false
+      required: [name, symbol]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 8
+
+    CurrencyInput:
+      type: object
+      additionalProperties: false
+      required: [name, symbol, iso, ratePerUsd]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 8
+        iso:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        ratePerUsd:
+          type: number
+          exclusiveMinimum: 0
+          description: First exchange rate, units per 1 USD.
+
+    CurrencySaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/CurrencyRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    CurrencyRateRow:
+      type: object
+      required: [id, iso, currency, ratePerUsd, validFrom, updatedBy, previousRate]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+          description: The currency's ID (one row per currency).
+        iso:
+          type: string
+        currency:
+          type: string
+        ratePerUsd:
+          type: number
+          description: Units of the currency per 1 USD (USD = 1).
+        validFrom:
+          type: [string, "null"]
+          format: date-time
+        updatedBy:
+          type: [string, "null"]
+          description: Null = market feed or seed data.
+        previousRate:
+          type: [number, "null"]
+
+    CurrencyRatePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/CurrencyRateRow"
+
+    CurrencyRateInput:
+      type: object
+      additionalProperties: false
+      required: [ratePerUsd]
+      properties:
+        ratePerUsd:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000
+
+    CurrencyRateSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/CurrencyRateRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    CurrencySyncResult:
+      type: object
+      required: [updated, change]
+      properties:
+        updated:
+          type: integer
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    CurrencyRateHistoryRow:
+      type: object
+      required: [id, iso, currency, ratePerUsd, validFrom, updatedBy]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        iso:
+          type: string
+        currency:
+          type: string
+        ratePerUsd:
+          type: number
+        validFrom:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          type: [string, "null"]
+
+    CurrencyRateHistoryPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/CurrencyRateHistoryRow"
+
+    BillingCycleInput:
+      type: object
+      additionalProperties: false
+      required: [name, billingType, weekDay, usageDays, dueDays]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        billingType:
+          type: string
+          enum: [custom, daily, weekly, fortnightly, monthly]
+        weekDay:
+          type: [string, "null"]
+          enum: [MON, TUE, WED, THU, FRI, SAT, SUN, null]
+          description: Weekly and fortnightly cycles start on this day.
+        usageDays:
+          type: integer
+          minimum: 1
+          maximum: 366
+        dueDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+
+    BillingCycleRow:
+      type: object
+      required: [id, name, billingType, weekDay, usageDays, dueDays, enterprises, updatedBy, updatedAt, archivedAt]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        billingType:
+          type: string
+          enum: [custom, daily, weekly, fortnightly, monthly]
+        weekDay:
+          type: [string, "null"]
+          enum: [MON, TUE, WED, THU, FRI, SAT, SUN, null]
+          description: Weekly and fortnightly cycles start on this day.
+        usageDays:
+          type: integer
+          minimum: 1
+          maximum: 366
+        dueDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+        id:
+          $ref: "#/components/schemas/Id"
+        enterprises:
+          type: integer
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+
+    BillingCyclePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/BillingCycleRow"
+
+    BillingCycleSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/BillingCycleRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    EnterpriseBalanceRow:
+      type: object
+      required: [id, enterprise, enterpriseType, customerBalance, customerCurrency, vendorBalance, vendorCurrency, netBalance, accountManager, billingType, creditLimit, creditUsedPct, billingCycle, currency]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+          description: The enterprise's ID.
+        enterprise:
+          type: string
+        enterpriseType:
+          type: string
+        customerBalance:
+          type: [number, "null"]
+          description: What the client owes us, in the customer billing currency; null = no customer billing.
+        customerCurrency:
+          type: [string, "null"]
+        vendorBalance:
+          type: [number, "null"]
+          description: What we owe the vendor, in the vendor billing currency.
+        vendorCurrency:
+          type: [string, "null"]
+        netBalance:
+          type: number
+          description: Customer − vendor, in `currency` (the vendor side converted at the latest rate).
+        accountManager:
+          type: [string, "null"]
+        billingType:
+          type: [string, "null"]
+          enum: [prepaid, postpaid, null]
+        creditLimit:
+          type: [number, "null"]
+          description: Customer Credit.
+        creditUsedPct:
+          type: [number, "null"]
+          description: Customer balance as a share of the credit limit (postpaid); 0 when the client is in credit.
+        billingCycle:
+          type: [string, "null"]
+        currency:
+          type: string
+          description: Customer billing currency, else the vendor's.
+
+    EnterpriseBalancePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/EnterpriseBalanceRow"
+
+    ChargesInput:
+      type: object
+      additionalProperties: false
+      required: [enterpriseId, from, to]
+      properties:
+        enterpriseId:
+          description: One enterprise; null = all with traffic in the period (Select All).
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+          description: Inclusive; at most 366 days after `from`.
+
+    ChargesResult:
+      type: object
+      required: [from, to, rows, totalPlatform, platformCurrency]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            type: object
+            required: [enterpriseId, enterprise, side, currency, timezone, messages, amount, amountPlatform]
+            properties:
+              enterpriseId:
+                $ref: "#/components/schemas/Id"
+              enterprise:
+                type: string
+              side:
+                type: string
+                enum: [customer, vendor]
+              currency:
+                type: string
+              timezone:
+                type: string
+              messages:
+                type: integer
+              amount:
+                type: number
+                description: Usage charges in the trunk currency (revenue for customers, cost for vendors).
+              amountPlatform:
+                type: number
+        totalPlatform:
+          type: object
+          required: [customer, vendor]
+          properties:
+            customer:
+              type: number
+            vendor:
+              type: number
+        platformCurrency:
+          type: string
+
     # ------------------------------------------------------------- Route rules (§6.3, §13.8–13.11, §13.24, §13.27, §15.4)
     TrafficWindow:
       type: string
@@ -10106,7 +11591,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances]
 
     FilterOperator:
       type: string

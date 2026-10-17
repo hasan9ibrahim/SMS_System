@@ -8,7 +8,14 @@ import type {
   DialCode,
   DialCodeProfile,
   MoNumber,
+  BillingCycleRow,
+  CurrencyRateHistoryRow,
+  CurrencyRateRow,
+  CurrencyRow,
+  EnterpriseBalanceRow,
   HlrPolicyRow,
+  InvoiceRow,
+  TransactionRow,
   HlrProviderRate,
   HlrProviderRow,
   HlrRuleRow,
@@ -1462,6 +1469,330 @@ export const hlrPolicyList: ListDef<HlrPolicyRow> = {
   }),
 };
 
+// ---------------------------------------------------------------- Finance (§7, §13.33)
+
+export const transactionList: ListDef<TransactionRow> = {
+  fields: listFields.transactions,
+  from: `transactions tx JOIN enterprises e ON e.id = tx.enterprise_id LEFT JOIN invoices inv ON inv.id = tx.invoice_id
+    LEFT JOIN users ub ON ub.id = tx.updated_by_id`,
+  baseWhere: "tx.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "tx.id" },
+    side: { sql: "tx.side" },
+    enterpriseId: { sql: "tx.enterprise_id" },
+    enterprise: { sql: "e.name" },
+    paymentDate: { sql: "tx.payment_date" },
+    transactionTime: { sql: "tx.inserted_at" },
+    paymentMode: { sql: "tx.payment_mode" },
+    paymentType: { sql: "tx.payment_type" },
+    transactionType: { sql: "tx.transaction_type" },
+    amount: { sql: "tx.amount" },
+    currency: { sql: "tx.currency" },
+    amountBase: { sql: "tx.amount_base" },
+    baseCurrency: { sql: "tx.base_currency" },
+    invoiceNumber: { sql: "inv.invoice_number" },
+    description: { sql: "tx.description" },
+    confirmationStatus: { sql: "tx.confirmation_status" },
+    includeInSoa: { sql: "tx.include_in_soa" },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "tx.updated_at" },
+    archived: { sql: "(tx.deleted_at IS NOT NULL)" },
+  },
+  search: ["enterprise", "description", "invoiceNumber"],
+  idSql: "tx.id",
+  select: `tx.id, tx.side, tx.enterprise_id, e.name AS enterprise, tx.payment_mode, tx.payment_type, tx.transaction_type,
+    tx.amount, tx.currency, tx.amount_base, tx.base_currency, tx.payment_date, tx.inserted_at, tx.invoice_id,
+    inv.invoice_number, tx.description, tx.send_confirmation, tx.confirmation_status, tx.include_in_soa, tx.exclude_reason,
+    ub.username AS updated_by, tx.updated_at, tx.deleted_at`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    side: r.side as TransactionRow["side"],
+    enterpriseId: Number(r.enterprise_id),
+    enterprise: r.enterprise as string,
+    paymentMode: (r.payment_mode as TransactionRow["paymentMode"]) ?? null,
+    paymentType: r.payment_type as TransactionRow["paymentType"],
+    transactionType: r.transaction_type as TransactionRow["transactionType"],
+    amount: Number(r.amount),
+    currency: String(r.currency).trim(),
+    amountBase: Number(r.amount_base),
+    baseCurrency: String(r.base_currency ?? r.currency).trim(),
+    paymentDate: ymd(r.payment_date),
+    transactionTime: iso(r.inserted_at)!,
+    invoiceId: r.invoice_id === null ? null : Number(r.invoice_id),
+    invoiceNumber: (r.invoice_number as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    sendConfirmation: r.send_confirmation as boolean,
+    confirmationStatus: r.confirmation_status as TransactionRow["confirmationStatus"],
+    includeInSoa: r.include_in_soa as boolean,
+    excludeReason: (r.exclude_reason as string | null) ?? null,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+export const invoiceList: ListDef<InvoiceRow> = {
+  fields: listFields.invoices,
+  from: "invoices inv JOIN enterprises e ON e.id = inv.enterprise_id",
+  baseWhere: "inv.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "inv.id" },
+    invoiceNumber: { sql: "inv.invoice_number" },
+    enterpriseId: { sql: "inv.enterprise_id" },
+    enterprise: { sql: "e.name" },
+    enterpriseType: { sql: "e.type" },
+    invoiceType: { sql: "inv.invoice_type" },
+    billingType: { sql: "inv.billing_type" },
+    currency: { sql: "inv.currency" },
+    invoiceDate: { sql: "inv.invoice_date" },
+    usageStart: { sql: "inv.usage_start" },
+    usageEnd: { sql: "inv.usage_end" },
+    dueDate: { sql: "inv.due_date" },
+    openingBalance: { sql: "inv.opening_balance" },
+    usageCharges: { sql: "inv.usage_charges" },
+    closingBalance: { sql: "inv.closing_balance" },
+    dueAmount: { sql: "inv.due_amount" },
+    messageCount: { sql: "inv.message_count" },
+    status: { sql: "inv.status" },
+    paymentStatus: { sql: "inv.payment_status" },
+    emailStatus: { sql: "inv.email_status" },
+    remarks: { sql: "inv.remarks" },
+    archived: { sql: "(inv.deleted_at IS NOT NULL)" },
+  },
+  search: ["invoiceNumber", "enterprise"],
+  idSql: "inv.id",
+  select: `inv.*, e.name AS enterprise, e.type AS enterprise_type`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    invoiceNumber: r.invoice_number as string,
+    enterpriseId: Number(r.enterprise_id),
+    enterprise: r.enterprise as string,
+    enterpriseType: r.enterprise_type as string,
+    invoiceType: r.invoice_type as InvoiceRow["invoiceType"],
+    billingType: r.billing_type as InvoiceRow["billingType"],
+    currency: String(r.currency).trim(),
+    invoiceDate: ymd(r.invoice_date),
+    usageStart: ymd(r.usage_start),
+    usageEnd: ymd(r.usage_end),
+    dueDate: ymd(r.due_date),
+    openingBalance: Number(r.opening_balance),
+    usageCharges: Number(r.usage_charges),
+    closingBalance: Number(r.closing_balance),
+    dueAmount: Number(r.due_amount),
+    messageCount: Number(r.message_count),
+    status: r.status as InvoiceRow["status"],
+    paymentStatus: r.payment_status as InvoiceRow["paymentStatus"],
+    emailStatus: r.email_status as InvoiceRow["emailStatus"],
+    remarks: (r.remarks as string | null) ?? null,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+const currencyRateSql = "(SELECT cl.rate_per_usd FROM currency_latest cl WHERE cl.iso = c.iso)";
+const currencyRateAtSql =
+  "(SELECT max(r.valid_from) FROM currency_rates r WHERE r.iso = c.iso AND r.valid_from <= now())";
+const currencyEnterprisesSql = "(SELECT count(*)::int FROM enterprise_billing b WHERE b.currency = c.iso)";
+
+export const currencyList: ListDef<CurrencyRow> = {
+  fields: listFields.currencies,
+  from: "currencies c LEFT JOIN users ub ON ub.id = c.updated_by_id",
+  baseWhere: "c.deleted_at IS NULL",
+  columns: {
+    id: { sql: "c.id" },
+    name: { sql: "c.name" },
+    iso: { sql: "c.iso" },
+    symbol: { sql: "c.symbol" },
+    ratePerUsd: { sql: currencyRateSql },
+    rateUpdatedAt: { sql: currencyRateAtSql },
+    enterprises: { sql: currencyEnterprisesSql },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "c.updated_at" },
+  },
+  search: ["name", "iso"],
+  idSql: "c.id",
+  select: `c.id, c.name, c.iso, c.symbol, ${currencyRateSql} AS rate, ${currencyRateAtSql} AS rate_at,
+    ${currencyEnterprisesSql} AS enterprises, ub.username AS updated_by, c.updated_at`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    name: r.name as string,
+    iso: String(r.iso).trim(),
+    symbol: r.symbol as string,
+    ratePerUsd: Number(r.rate),
+    rateUpdatedAt: iso(r.rate_at),
+    enterprises: Number(r.enterprises),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+  }),
+};
+
+/** The rate in force per currency (USD = 1, no row), the one before it and who set it. */
+const rateNow = `LEFT JOIN LATERAL (SELECT r.rate_per_usd, r.valid_from, r.updated_by_id FROM currency_rates r
+    WHERE r.iso = c.iso AND r.valid_from <= now() ORDER BY r.valid_from DESC LIMIT 1) cur ON true
+  LEFT JOIN LATERAL (SELECT r.rate_per_usd FROM currency_rates r
+    WHERE r.iso = c.iso AND r.valid_from < cur.valid_from ORDER BY r.valid_from DESC LIMIT 1) prev ON true
+  LEFT JOIN users ub ON ub.id = cur.updated_by_id`;
+
+export const currencyRateList: ListDef<CurrencyRateRow> = {
+  fields: listFields.currency_rates,
+  from: `currencies c ${rateNow}`,
+  baseWhere: "c.deleted_at IS NULL",
+  columns: {
+    id: { sql: "c.id" },
+    iso: { sql: "c.iso" },
+    currency: { sql: "c.name" },
+    ratePerUsd: { sql: "COALESCE(cur.rate_per_usd, 1)" },
+    validFrom: { sql: "cur.valid_from" },
+    updatedBy: { sql: "ub.username" },
+  },
+  search: ["iso", "currency"],
+  idSql: "c.id",
+  select: `c.id, c.iso, c.name, COALESCE(cur.rate_per_usd, 1) AS rate, cur.valid_from, ub.username AS updated_by,
+    prev.rate_per_usd AS previous_rate`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    iso: String(r.iso).trim(),
+    currency: r.name as string,
+    ratePerUsd: Number(r.rate),
+    validFrom: iso(r.valid_from),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    previousRate: r.previous_rate === null ? null : Number(r.previous_rate),
+  }),
+};
+
+export const currencyRateHistoryList: ListDef<CurrencyRateHistoryRow> = {
+  fields: listFields.currency_rate_history,
+  from: "currency_rates r JOIN currencies c ON c.iso = r.iso LEFT JOIN users ub ON ub.id = r.updated_by_id",
+  columns: {
+    id: { sql: "r.id" },
+    iso: { sql: "r.iso" },
+    currency: { sql: "c.name" },
+    ratePerUsd: { sql: "r.rate_per_usd" },
+    validFrom: { sql: "r.valid_from" },
+    updatedBy: { sql: "ub.username" },
+  },
+  search: ["iso", "currency", "updatedBy"],
+  idSql: "r.id",
+  select: "r.id, r.iso, c.name, r.rate_per_usd, r.valid_from, ub.username AS updated_by",
+  mapRow: (r) => ({
+    id: Number(r.id),
+    iso: String(r.iso).trim(),
+    currency: r.name as string,
+    ratePerUsd: Number(r.rate_per_usd),
+    validFrom: iso(r.valid_from)!,
+    updatedBy: (r.updated_by as string | null) ?? null,
+  }),
+};
+
+const cycleEnterprisesSql =
+  "(SELECT count(DISTINCT b.enterprise_id)::int FROM enterprise_billing b WHERE b.billing_cycle_id = bcy.id)";
+
+export const billingCycleList: ListDef<BillingCycleRow> = {
+  fields: listFields.billing_cycles,
+  from: "billing_cycles bcy LEFT JOIN users ub ON ub.id = bcy.updated_by_id",
+  baseWhere: "bcy.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "bcy.id" },
+    name: { sql: "bcy.name" },
+    billingType: { sql: "bcy.billing_type" },
+    weekDay: { sql: "bcy.week_day" },
+    usageDays: { sql: "bcy.usage_days" },
+    dueDays: { sql: "bcy.due_days" },
+    enterprises: { sql: cycleEnterprisesSql },
+    updatedBy: { sql: "ub.username" },
+    updatedAt: { sql: "bcy.updated_at" },
+    archived: { sql: "(bcy.deleted_at IS NOT NULL)" },
+  },
+  search: ["name"],
+  idSql: "bcy.id",
+  select: `bcy.id, bcy.name, bcy.billing_type, bcy.week_day, bcy.usage_days, bcy.due_days,
+    ${cycleEnterprisesSql} AS enterprises, ub.username AS updated_by, bcy.updated_at, bcy.deleted_at`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    name: r.name as string,
+    billingType: r.billing_type as BillingCycleRow["billingType"],
+    weekDay: (r.week_day as BillingCycleRow["weekDay"]) ?? null,
+    usageDays: Number(r.usage_days),
+    dueDays: Number(r.due_days),
+    enterprises: Number(r.enterprises),
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  }),
+};
+
+/**
+ * Balances (§7, same rule as the enterprise Billing tab): customer = opening + invoiced usage −
+ * payments and credits + debits (what the client owes us); vendor = opening + accepted vendor
+ * invoices − payments (what we owe the vendor). Excluded-from-SOA payments still count (§13.33).
+ */
+export const BALANCE_FROM = `enterprises e
+    LEFT JOIN enterprise_billing cb ON cb.enterprise_id = e.id AND cb.side = 'customer'
+    LEFT JOIN enterprise_billing vb ON vb.enterprise_id = e.id AND vb.side = 'vendor'
+    LEFT JOIN billing_cycles bcy ON bcy.id = COALESCE(cb.billing_cycle_id, vb.billing_cycle_id)
+    LEFT JOIN users am ON am.id = e.account_manager_id
+    LEFT JOIN LATERAL (SELECT
+        CASE WHEN cb.id IS NULL THEN NULL ELSE cb.opening_balance
+          + COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = e.id AND deleted_at IS NULL AND status <> 'failed'), 0)
+          - COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
+                       WHERE enterprise_id = e.id AND side = 'customer' AND deleted_at IS NULL), 0) END AS customer,
+        CASE WHEN vb.id IS NULL THEN NULL ELSE vb.opening_balance
+          + COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
+                       WHERE enterprise_id = e.id AND deleted_at IS NULL AND recon_status IN ('match', 'accepted')), 0)
+          - COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
+                       WHERE enterprise_id = e.id AND side = 'vendor' AND deleted_at IS NULL), 0) END AS vendor) bal ON true
+    LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
+    LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
+const netSql = `round(COALESCE(bal.customer, 0)
+    - COALESCE(bal.vendor * COALESCE(ccl.rate_per_usd, vcl.rate_per_usd) / vcl.rate_per_usd, 0), 2)`;
+const creditUsedSql = `CASE WHEN cb.credit_limit > 0 THEN GREATEST(0, round(bal.customer / cb.credit_limit * 100, 1)) END`;
+
+export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
+  fields: listFields.enterprise_balances,
+  from: BALANCE_FROM,
+  baseWhere: "e.deleted_at IS NULL AND (cb.id IS NOT NULL OR vb.id IS NOT NULL)",
+  columns: {
+    id: { sql: "e.id" },
+    enterprise: { sql: "e.name" },
+    enterpriseType: { sql: "e.type" },
+    customerBalance: { sql: "round(bal.customer, 2)" },
+    customerCurrency: { sql: "cb.currency" },
+    vendorBalance: { sql: "round(bal.vendor, 2)" },
+    vendorCurrency: { sql: "vb.currency" },
+    netBalance: { sql: netSql },
+    accountManager: { sql: fullName("am") },
+    billingType: { sql: "cb.billing_type" },
+    creditLimit: { sql: "cb.credit_limit" },
+    creditUsedPct: { sql: creditUsedSql },
+    billingCycle: { sql: "bcy.name" },
+    currency: { sql: "COALESCE(cb.currency, vb.currency)" },
+  },
+  search: ["enterprise", "accountManager"],
+  idSql: "e.id",
+  select: `e.id, e.name, e.type, round(bal.customer, 2) AS customer_balance, cb.currency AS customer_currency,
+    round(bal.vendor, 2) AS vendor_balance, vb.currency AS vendor_currency, ${netSql} AS net_balance,
+    ${fullName("am")} AS account_manager, cb.billing_type, cb.credit_limit, ${creditUsedSql} AS credit_used_pct,
+    bcy.name AS billing_cycle, COALESCE(cb.currency, vb.currency) AS currency`,
+  mapRow: (r) => ({
+    id: Number(r.id),
+    enterprise: r.name as string,
+    enterpriseType: r.type as string,
+    customerBalance: r.customer_balance === null ? null : Number(r.customer_balance),
+    customerCurrency: r.customer_currency === null ? null : String(r.customer_currency).trim(),
+    vendorBalance: r.vendor_balance === null ? null : Number(r.vendor_balance),
+    vendorCurrency: r.vendor_currency === null ? null : String(r.vendor_currency).trim(),
+    netBalance: Number(r.net_balance),
+    accountManager: (r.account_manager as string | null) ?? null,
+    billingType: (r.billing_type as EnterpriseBalanceRow["billingType"]) ?? null,
+    creditLimit: r.credit_limit === null ? null : Number(r.credit_limit),
+    creditUsedPct: r.credit_used_pct === null ? null : Number(r.credit_used_pct),
+    billingCycle: (r.billing_cycle as string | null) ?? null,
+    currency: String(r.currency).trim(),
+  }),
+};
+
 /** Lists answered from PostgreSQL; the Enterprise report runs on the EDR store (api/enterpriseReport.ts). */
 export type PgListId = Exclude<ListId, "enterprise_report">;
 
@@ -1490,4 +1821,11 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   hlr_provider_rates: hlrProviderRateList as ListDef<unknown>,
   hlr_rules: hlrRuleList as ListDef<unknown>,
   hlr_policies: hlrPolicyList as ListDef<unknown>,
+  transactions: transactionList as ListDef<unknown>,
+  invoices: invoiceList as ListDef<unknown>,
+  currencies: currencyList as ListDef<unknown>,
+  currency_rates: currencyRateList as ListDef<unknown>,
+  currency_rate_history: currencyRateHistoryList as ListDef<unknown>,
+  billing_cycles: billingCycleList as ListDef<unknown>,
+  enterprise_balances: enterpriseBalanceList as ListDef<unknown>,
 };
