@@ -144,6 +144,20 @@ import {
   updateVendorRnSettings,
 } from "./api/rn.js";
 import {
+  actOnMarketMove,
+  archiveMarketAutoRule,
+  createMarketAutoRule,
+  getMarketMove,
+  getMarketMoveSettings,
+  getMarketMoveSummary,
+  listMarketAutoRules,
+  queryMarketMoves,
+  scanMarketMoves,
+  sendMarketMoveDigest,
+  updateMarketAutoRule,
+  updateMarketMoveSettings,
+} from "./api/marketMoves.js";
+import {
   archiveRateTable,
   changeRateLines,
   createRateTable,
@@ -431,7 +445,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 
-const VERSION = "0.25.0";
+const VERSION = "0.26.0";
 
 export const handlers: Partial<Record<OperationId, Handler>> = {
   getHealth: (): Health => ({
@@ -523,6 +537,19 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   sendRnReply,
   getVendorRnSettings,
   updateVendorRnSettings,
+  // Market rate movements (§13.14)
+  queryMarketMoves,
+  getMarketMoveSummary,
+  getMarketMoveSettings,
+  updateMarketMoveSettings,
+  scanMarketMoves,
+  sendMarketMoveDigest,
+  listMarketAutoRules,
+  createMarketAutoRule,
+  updateMarketAutoRule,
+  archiveMarketAutoRule,
+  getMarketMove,
+  actOnMarketMove,
   queryDestinations: queryList("destinations"),
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)

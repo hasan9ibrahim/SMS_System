@@ -59,6 +59,13 @@ filters, Accept / Reject for all or selected lines, Accept + reroute (Route Rule
 customers (Bulk rating on the affected tables), Re-check, Assign to trunk, and the replies (drafts can be edited and
 sent), log and file errors.
 
+**Market moves** (`/rates/market-moves`, `src/pages/rates/market/`, §13.14): moves where leading vendors changed their rate
+for a destination (direction and average change, "n of m" top vendors, dates, market cost before and after, urgent),
+filtered by account manager. The detail shows a chart of the top vendors' rates over 90 days, the vendors (Reroute…
+opens Route Rules on one), the affected clients with margins, notice and a suggested rate (Update rates opens Bulk
+rating pre-filled with the chosen suggestions), snooze / dismiss / handled / note and the log. Settings hold the
+detection rules, the digest hour and auto-apply rules. The dashboard summary shows a Market moves count.
+
 ## Route Rules (build step 4.3)
 
 `/routing/rules` (`src/pages/routing/`, §15.4) copies the reference screenshot's layout and form.

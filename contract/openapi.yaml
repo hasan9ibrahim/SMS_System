@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.25.0
+  version: 0.26.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -2048,6 +2048,276 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VendorRnSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /market-moves/query:
+    post:
+      tags:
+      - rates
+      operationId: queryMarketMoves
+      summary: List market moves (server-side filter, sort and paging)
+      description: 'Market moves (§13.14): destination, direction, average change, vendors moved, dates, affected clients, state.
+
+        The `amUserId` field keeps moves affecting that account manager''s clients.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of market moves
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketMovePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/summary:
+    get:
+      tags:
+      - rates
+      operationId: getMarketMoveSummary
+      summary: Counts for the dashboard card (§13.14)
+      description: Open, urgent, up, down and mine.
+      responses:
+        '200':
+          description: Counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketMoveSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/settings:
+    get:
+      tags:
+      - rates
+      operationId: getMarketMoveSettings
+      summary: Market move detection settings
+      description: Defaults per §13.14.
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketMoveSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - rates
+      operationId: updateMarketMoveSettings
+      summary: Change market move settings
+      description: The next scan uses them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketMoveSettings'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketMoveSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/scan:
+    post:
+      tags:
+      - rates
+      operationId: scanMarketMoves
+      summary: Detect market moves now
+      description: Runs the detection that otherwise runs every 15 minutes and after vendor rate changes (imports, RNs §13.13, edits).
+      responses:
+        '200':
+          description: What changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketScanResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/digest:
+    post:
+      tags:
+      - rates
+      operationId: sendMarketMoveDigest
+      summary: Send the daily digest now
+      description: One e-mail per account manager listing new moves for their clients (normally sent daily at the digest hour).
+      responses:
+        '200':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/auto-rules:
+    get:
+      tags:
+      - rates
+      operationId: listMarketAutoRules
+      summary: Auto-apply rules (§13.14)
+      description: 'Per client or category: follow market increases to keep a margin, with the contractual notice.'
+      responses:
+        '200':
+          description: The rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketAutoRuleList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - rates
+      operationId: createMarketAutoRule
+      summary: Add an auto-apply rule
+      description: Saved at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketAutoRuleInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketAutoRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/auto-rules/{id}:
+    put:
+      tags:
+      - rates
+      operationId: updateMarketAutoRule
+      summary: Change an auto-apply rule
+      description: Saved at once.
+      parameters: &id001
+      - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketAutoRuleInput'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketAutoRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/auto-rules/{id}/archive:
+    post:
+      tags:
+      - rates
+      operationId: archiveMarketAutoRule
+      summary: Delete (archive) an auto-apply rule
+      description: It is never removed (§13.29).
+      parameters: *id001
+      responses:
+        '200':
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketAutoRule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/{id}:
+    get:
+      tags:
+      - rates
+      operationId: getMarketMove
+      summary: One move with vendors, affected clients and log
+      description: The card and its client table.
+      parameters: *id001
+      responses:
+        '200':
+          description: The move
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketMoveDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/{id}/action:
+    post:
+      tags:
+      - rates
+      operationId: actOnMarketMove
+      summary: Snooze, dismiss, mark handled, reopen or add a note
+      description: Every action is logged on the move with user and time.
+      parameters: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketMoveAction'
+      responses:
+        '200':
+          description: The move
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketMoveDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -14055,6 +14325,7 @@ components:
         type:
           type: string
           enum:
+          - none
           - set
           - change_pct
           - change_amount
@@ -14128,6 +14399,25 @@ components:
           - $ref: '#/components/schemas/Timestamp'
           - type: 'null'
           description: When new rates, closes and blocks start; null = now. Never in the past (§13.32).
+        overrides:
+          type: array
+          maxItems: 5000
+          description: Rates per table and destination that replace the action's result for those rows (Market moves "Update rates", §13.14). With action `none`, only these rows change.
+          items:
+            type: object
+            required: [rateTableId, mccmnc, rate]
+            additionalProperties: false
+            properties:
+              rateTableId:
+                $ref: "#/components/schemas/Id"
+              mccmnc:
+                type: string
+                pattern: "^[0-9]{3,6}$"
+              rate:
+                type: number
+                minimum: 0
+              effectiveFrom:
+                $ref: "#/components/schemas/Timestamp"
         respectNotice:
           type: boolean
           description: Move each increase to the end of the notice period of the clients using its table (§13.14).
@@ -14949,6 +15239,400 @@ components:
           additionalProperties:
             type: string
           description: 'Remembered column mapping: file header (lower case) -> field.'
+
+    MarketMoveState:
+      type: string
+      enum:
+      - open
+      - snoozed
+      - handled
+      - dismissed
+      - expired
+      description: Open; snoozed until a date; handled (clients updated or rerouted); dismissed with a note; expired (dates long past, never acted on).
+    MarketMoveRow:
+      type: object
+      required:
+      - id
+      - mccmnc
+      - country
+      - countryIso
+      - network
+      - direction
+      - avgChangePct
+      - movedCount
+      - topCount
+      - firstEffective
+      - lastEffective
+      - detectedAt
+      - oldCost
+      - newCost
+      - currency
+      - state
+      - urgent
+      - snoozedUntil
+      - affectedClients
+      - affectedTables
+      - volume7d
+      - autoApplied
+      - handledBy
+      - handledAt
+      - note
+      properties:
+        id: &id007
+          $ref: '#/components/schemas/Id'
+        mccmnc:
+          type: string
+        country: &id001
+          type: &id010
+          - string
+          - 'null'
+        countryIso: *id001
+        network: *id001
+        direction:
+          type: string
+          enum:
+          - up
+          - down
+        avgChangePct: &id006
+          type: number
+        movedCount: &id004
+          type: integer
+        topCount:
+          type: integer
+          description: Top vendors for the destination (Tier 1 plus the cheapest N).
+        firstEffective: &id002
+          $ref: '#/components/schemas/Timestamp'
+        lastEffective: *id002
+        detectedAt: *id002
+        oldCost: &id008
+          type: &id003
+          - number
+          - 'null'
+        newCost:
+          type: *id003
+          description: Cheapest top-vendor rate after the move, platform currency.
+        currency:
+          type: string
+        state:
+          $ref: '#/components/schemas/MarketMoveState'
+        urgent:
+          type: boolean
+          description: A large increase taking effect soon (settings).
+        snoozedUntil: &id005
+          oneOf: &id011
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        affectedClients: *id004
+        affectedTables: *id004
+        volume7d: *id004
+        autoApplied:
+          type: integer
+          description: Client tables re-priced by an auto-apply rule.
+        handledBy: *id001
+        handledAt: *id005
+        note: *id001
+    MarketMovePoint:
+      type: object
+      required:
+      - at
+      - rate
+      properties:
+        at: *id002
+        rate: *id006
+    MarketMoveVendor:
+      type: object
+      required:
+      - vendorTrunkId
+      - vendorTrunk
+      - vendor
+      - tier
+      - moved
+      - oldRate
+      - newRate
+      - changePct
+      - effectiveFrom
+      - series
+      properties:
+        vendorTrunkId: *id007
+        vendorTrunk:
+          type: string
+        vendor:
+          type: string
+        tier:
+          type: string
+        moved: &id009
+          type: boolean
+        oldRate: *id008
+        newRate: *id008
+        changePct: *id008
+        effectiveFrom: *id005
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketMovePoint'
+          description: Rate (platform currency) over the last 90 days and scheduled changes.
+    MarketMoveClient:
+      type: object
+      required:
+      - rateTableId
+      - table
+      - clients
+      - accountManager
+      - currency
+      - lineId
+      - sellRate
+      - marginNowPct
+      - marginNewPct
+      - messages7d
+      - noticeDays
+      - suggestedRate
+      - suggestedFrom
+      - belowNewCost
+      - autoRule
+      properties:
+        rateTableId: *id007
+        table:
+          type: string
+        clients:
+          type: string
+        accountManager: *id001
+        currency:
+          type: string
+        lineId: *id007
+        sellRate: *id006
+        marginNowPct:
+          type: *id003
+          description: Against the market cost before the move.
+        marginNewPct:
+          type: *id003
+          description: Against the new market cost.
+        messages7d: *id004
+        noticeDays: *id004
+        suggestedRate:
+          type: *id003
+          description: New cost plus the client's current margin, or the target margin when higher (table currency).
+        suggestedFrom:
+          $ref: '#/components/schemas/Timestamp'
+          description: Not before the move's last date nor the client's notice period.
+        belowNewCost: *id009
+        autoRule:
+          type: *id010
+          description: The auto-apply rule covering this client, if any.
+    MarketMoveDetail:
+      allOf:
+      - $ref: '#/components/schemas/MarketMoveRow'
+      - type: object
+        required:
+        - vendors
+        - clients
+        - log
+        properties:
+          vendors:
+            type: array
+            items:
+              $ref: '#/components/schemas/MarketMoveVendor'
+          clients:
+            type: array
+            items:
+              $ref: '#/components/schemas/MarketMoveClient'
+          log:
+            type: array
+            items:
+              $ref: '#/components/schemas/RnLogEntry'
+    MarketMovePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required:
+        - rows
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/MarketMoveRow'
+    MarketMoveAction:
+      type: object
+      additionalProperties: false
+      required:
+      - action
+      properties:
+        action:
+          type: string
+          enum:
+          - snooze
+          - dismiss
+          - handled
+          - reopen
+          - note
+        days:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: Snooze length; default 7.
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+          description: Required to dismiss.
+    MarketMoveSummary:
+      type: object
+      required:
+      - open
+      - urgent
+      - up
+      - down
+      - mine
+      properties:
+        open: *id004
+        urgent: *id004
+        up: *id004
+        down: *id004
+        mine:
+          type: integer
+          description: Open moves affecting the signed-in user's clients (account manager).
+    MarketMoveSettings:
+      type: object
+      required:
+      - cheapestN
+      - includeTier1
+      - windowDays
+      - minVendors
+      - minChangePct
+      - lookbackDays
+      - urgentChangePct
+      - urgentDays
+      - targetMarginPct
+      - digestHour
+      properties:
+        cheapestN:
+          type: integer
+          minimum: 1
+          maximum: 20
+        includeTier1: *id009
+        windowDays:
+          type: integer
+          minimum: 1
+          maximum: 30
+        minVendors:
+          type: integer
+          minimum: 2
+          maximum: 10
+        minChangePct:
+          type: number
+          minimum: 0.1
+          maximum: 100
+        lookbackDays:
+          type: integer
+          minimum: 7
+          maximum: 90
+          description: How far back changes are scanned; moves older than this expire.
+        urgentChangePct:
+          type: number
+          minimum: 0
+          maximum: 100
+        urgentDays:
+          type: integer
+          minimum: 0
+          maximum: 60
+        targetMarginPct:
+          type:
+          - number
+          - 'null'
+          minimum: -100
+          maximum: 100
+          description: Floor for suggested rates; null = keep each client's margin.
+        digestHour:
+          type: integer
+          minimum: 0
+          maximum: 23
+          description: Daily digest e-mail to account managers, UTC.
+        updatedBy:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        updatedAt:
+          oneOf: *id011
+          readOnly: true
+    MarketAutoRuleFields:
+      type: object
+      required:
+      - enterpriseId
+      - categoryId
+      - direction
+      - minMarginPct
+      - status
+      properties:
+        enterpriseId:
+          oneOf: &id012
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+          description: A client; or
+        categoryId:
+          oneOf: *id012
+          description: a product category (one of the two).
+        direction:
+          type: string
+          enum:
+          - increases
+          - both
+          description: Follow increases only (default) or decreases too.
+        minMarginPct:
+          type: number
+          minimum: -100
+          maximum: 100
+          description: Re-price when the margin at the new cost falls below this.
+        status:
+          $ref: '#/components/schemas/RecordStatus'
+    MarketAutoRuleInput:
+      allOf:
+      - $ref: '#/components/schemas/MarketAutoRuleFields'
+      unevaluatedProperties: false
+    MarketAutoRule:
+      allOf:
+      - $ref: '#/components/schemas/MarketAutoRuleFields'
+      - type: object
+        required:
+        - id
+        - label
+        - updatedBy
+        - updatedAt
+        properties:
+          id: *id007
+          label:
+            type: string
+          updatedBy: *id001
+          updatedAt: *id002
+    MarketAutoRuleList:
+      type: object
+      required:
+      - rules
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketAutoRule'
+    MarketScanResult:
+      type: object
+      required:
+      - created
+      - updated
+      - expired
+      - autoApplied
+      - tookMs
+      properties:
+        created: *id004
+        updated: *id004
+        expired: *id004
+        autoApplied: *id004
+        tookMs: *id004
+    SentCount:
+      type: object
+      required:
+      - sent
+      properties:
+        sent: *id004
 
     Destination:
       type: object
@@ -24289,7 +24973,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves]
 
     FilterOperator:
       type: string

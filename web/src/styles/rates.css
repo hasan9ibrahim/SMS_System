@@ -479,3 +479,36 @@
   display: grid;
   gap: 10px;
 }
+
+/* ---------- market moves (§13.14) ---------- */
+.mm-card,
+.mm-clients {
+  display: grid;
+  gap: 10px;
+}
+.mm-big {
+  font-size: 17px;
+}
+.mm-vendors td,
+.mm-vendors th {
+  white-space: nowrap;
+}
+.mm-table-wrap {
+  overflow: auto;
+  max-height: 340px;
+}
+.mm-rules {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.mm-num {
+  width: 64px;
+}
+.dash-mm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

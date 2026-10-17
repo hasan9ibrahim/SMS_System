@@ -42,7 +42,7 @@ export async function newRateTable(open: (id: number) => void) {
   if (created) open(created);
 }
 
-function AmFilter({ value, onChange }: { value: number | null; onChange: (id: number | null) => void }) {
+export function AmFilter({ value, onChange }: { value: number | null; onChange: (id: number | null) => void }) {
   const ref = useReference();
   return (
     <label className="toggle-inline">

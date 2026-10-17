@@ -3,6 +3,7 @@
 // are refreshed in the background after vendor rate changes and every few minutes, so lists
 // read them without recomputing 1.4 M rate lines.
 import { db } from "../db.js";
+import { scheduleMarketScan } from "./marketMoves.js";
 
 let timer: NodeJS.Timeout | null = null;
 let running: Promise<void> | null = null;
@@ -17,8 +18,12 @@ async function refresh() {
   }
 }
 
-/** Refresh soon; several calls in a row lead to one refresh. */
-export function scheduleBestBuyRefresh(delayMs = 1000): void {
+/**
+ * Refresh soon; several calls in a row lead to one refresh. A vendor rate change also schedules a
+ * market move scan (§13.14); the periodic refresh does not.
+ */
+export function scheduleBestBuyRefresh(delayMs = 1000, marketScan = true): void {
+  if (marketScan) scheduleMarketScan();
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     timer = null;
@@ -34,7 +39,7 @@ export async function bestBuySettled(): Promise<void> {
 
 /** Periodic refresh, so "valid now" in the view follows the clock (scheduled rates start). */
 export function startBestBuyRefresh(everyMs = 5 * 60_000): () => void {
-  const id = setInterval(() => scheduleBestBuyRefresh(0), everyMs);
+  const id = setInterval(() => scheduleBestBuyRefresh(0, false), everyMs);
   id.unref();
   return () => clearInterval(id);
 }

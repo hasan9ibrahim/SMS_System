@@ -2751,6 +2751,57 @@ export const listFields: Record<ListId, ListFields> = {
     ],
   },
 
+  // Market rate movements (§13.14)
+  market_moves: {
+    list: "market_moves",
+    defaultSort: [
+      { field: "urgent", dir: "desc" },
+      { field: "detectedAt", dir: "desc" },
+    ],
+    fields: [
+      field({ field: "id", label: "Move", type: "integer", defaultOperator: "eq", hidden: true }),
+      field({ field: "country", label: "Country", type: "text", defaultOperator: "like" }),
+      field({ field: "network", label: "Network", type: "text", defaultOperator: "like" }),
+      field({ field: "mccmnc", label: "MCCMNC", type: "text", defaultOperator: "like" }),
+      field({
+        field: "direction",
+        label: "Direction",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "up", label: "Up" },
+          { value: "down", label: "Down" },
+        ],
+      }),
+      field({ field: "avgChangePct", label: "Avg Change", type: "percent", defaultOperator: "gte" }),
+      field({ field: "movedCount", label: "Moved", type: "integer", defaultOperator: "gte" }),
+      field({ field: "topCount", label: "Top Vendors", type: "integer", defaultOperator: "gte", hidden: true }),
+      field({ field: "firstEffective", label: "From", type: "datetime", defaultOperator: "between" }),
+      field({ field: "lastEffective", label: "To", type: "datetime", defaultOperator: "between", hidden: true }),
+      field({ field: "newCost", label: "New Cost", type: "decimal", defaultOperator: "gte" }),
+      field({ field: "affectedClients", label: "Clients", type: "integer", defaultOperator: "gte" }),
+      field({ field: "volume7d", label: "Msgs 7d", type: "integer", defaultOperator: "gte" }),
+      field({ field: "urgent", label: "Urgent", type: "boolean", defaultOperator: "eq" }),
+      field({
+        field: "state",
+        label: "State",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "open", label: "Open" },
+          { value: "snoozed", label: "Snoozed" },
+          { value: "handled", label: "Handled" },
+          { value: "dismissed", label: "Dismissed" },
+          { value: "expired", label: "Expired" },
+        ],
+      }),
+      field({ field: "detectedAt", label: "Detected", type: "datetime", defaultOperator: "between" }),
+      field({ field: "handledBy", label: "Handled By", type: "text", defaultOperator: "like", hidden: true }),
+      field({ field: "autoApplied", label: "Auto-applied", type: "integer", defaultOperator: "gte", hidden: true }),
+      field({ field: "amUserId", label: "Account Manager", type: "integer", defaultOperator: "eq", hidden: true, sortable: false }),
+    ],
+  },
+
   // Admin (§11)
   departments: {
     list: "departments",

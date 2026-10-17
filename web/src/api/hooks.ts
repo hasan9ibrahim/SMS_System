@@ -146,6 +146,8 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/incidents/query", { body })) as Promise<ListPage<Row>>;
     case "rate_notifications":
       return unwrap(api.POST("/rate-notifications/query", { body })) as Promise<ListPage<Row>>;
+    case "market_moves":
+      return unwrap(api.POST("/market-moves/query", { body })) as Promise<ListPage<Row>>;
     case "rate_notification_lines":
       // Needs an rnId condition: the review view adds it.
       return unwrap(api.POST("/rate-notification-lines/query", { body })) as Promise<ListPage<Row>>;

@@ -1284,6 +1284,215 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/market-moves/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List market moves (server-side filter, sort and paging)
+     * @description Market moves (§13.14): destination, direction, average change, vendors moved, dates, affected clients, state.
+     *     The `amUserId` field keeps moves affecting that account manager's clients.
+     */
+    post: operations["queryMarketMoves"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Counts for the dashboard card (§13.14)
+     * @description Open, urgent, up, down and mine.
+     */
+    get: operations["getMarketMoveSummary"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Market move detection settings
+     * @description Defaults per §13.14.
+     */
+    get: operations["getMarketMoveSettings"];
+    /**
+     * Change market move settings
+     * @description The next scan uses them.
+     */
+    put: operations["updateMarketMoveSettings"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/scan": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Detect market moves now
+     * @description Runs the detection that otherwise runs every 15 minutes and after vendor rate changes (imports, RNs §13.13, edits).
+     */
+    post: operations["scanMarketMoves"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/digest": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send the daily digest now
+     * @description One e-mail per account manager listing new moves for their clients (normally sent daily at the digest hour).
+     */
+    post: operations["sendMarketMoveDigest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/auto-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Auto-apply rules (§13.14)
+     * @description Per client or category: follow market increases to keep a margin, with the contractual notice.
+     */
+    get: operations["listMarketAutoRules"];
+    put?: never;
+    /**
+     * Add an auto-apply rule
+     * @description Saved at once.
+     */
+    post: operations["createMarketAutoRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/auto-rules/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change an auto-apply rule
+     * @description Saved at once.
+     */
+    put: operations["updateMarketAutoRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/auto-rules/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) an auto-apply rule
+     * @description It is never removed (§13.29).
+     */
+    post: operations["archiveMarketAutoRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One move with vendors, affected clients and log
+     * @description The card and its client table.
+     */
+    get: operations["getMarketMove"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/{id}/action": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Snooze, dismiss, mark handled, reopen or add a note
+     * @description Every action is logged on the move with user and time.
+     */
+    post: operations["actOnMarketMove"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-lines/query": {
     parameters: {
       query?: never;
@@ -9122,6 +9331,7 @@ export type components = {
        * @enum {string}
        */
       type:
+        | "none"
         | "set"
         | "change_pct"
         | "change_amount"
@@ -9154,6 +9364,13 @@ export type components = {
       action: components["schemas"]["RateBulkAction"];
       /** @description When new rates, closes and blocks start; null = now. Never in the past (§13.32). */
       effectiveFrom?: components["schemas"]["Timestamp"] | null;
+      /** @description Rates per table and destination that replace the action's result for those rows (Market moves "Update rates", §13.14). With action `none`, only these rows change. */
+      overrides?: {
+        rateTableId: components["schemas"]["Id"];
+        mccmnc: string;
+        rate: number;
+        effectiveFrom?: components["schemas"]["Timestamp"];
+      }[];
       /** @description Move each increase to the end of the notice period of the clients using its table (§13.14). */
       respectNotice?: boolean;
     };
@@ -9483,6 +9700,157 @@ export type components = {
       mapping: {
         [key: string]: string;
       } | null;
+    };
+    /**
+     * @description Open; snoozed until a date; handled (clients updated or rerouted); dismissed with a note; expired (dates long past, never acted on).
+     * @enum {string}
+     */
+    MarketMoveState: "open" | "snoozed" | "handled" | "dismissed" | "expired";
+    MarketMoveRow: {
+      id: components["schemas"]["Id"];
+      mccmnc: string;
+      country: string | null;
+      countryIso: string | null;
+      network: string | null;
+      /** @enum {string} */
+      direction: "up" | "down";
+      avgChangePct: number;
+      movedCount: number;
+      /** @description Top vendors for the destination (Tier 1 plus the cheapest N). */
+      topCount: number;
+      firstEffective: components["schemas"]["Timestamp"];
+      lastEffective: components["schemas"]["Timestamp"];
+      detectedAt: components["schemas"]["Timestamp"];
+      oldCost: number | null;
+      /** @description Cheapest top-vendor rate after the move, platform currency. */
+      newCost: number | null;
+      currency: string;
+      state: components["schemas"]["MarketMoveState"];
+      /** @description A large increase taking effect soon (settings). */
+      urgent: boolean;
+      snoozedUntil: components["schemas"]["Timestamp"] | null;
+      affectedClients: number;
+      affectedTables: number;
+      volume7d: number;
+      /** @description Client tables re-priced by an auto-apply rule. */
+      autoApplied: number;
+      handledBy: string | null;
+      handledAt: components["schemas"]["Timestamp"] | null;
+      note: string | null;
+    };
+    MarketMovePoint: {
+      at: components["schemas"]["Timestamp"];
+      rate: number;
+    };
+    MarketMoveVendor: {
+      vendorTrunkId: components["schemas"]["Id"];
+      vendorTrunk: string;
+      vendor: string;
+      tier: string;
+      moved: boolean;
+      oldRate: number | null;
+      newRate: number | null;
+      changePct: number | null;
+      effectiveFrom: components["schemas"]["Timestamp"] | null;
+      /** @description Rate (platform currency) over the last 90 days and scheduled changes. */
+      series: components["schemas"]["MarketMovePoint"][];
+    };
+    MarketMoveClient: {
+      rateTableId: components["schemas"]["Id"];
+      table: string;
+      clients: string;
+      accountManager: string | null;
+      currency: string;
+      lineId: components["schemas"]["Id"];
+      sellRate: number;
+      /** @description Against the market cost before the move. */
+      marginNowPct: number | null;
+      /** @description Against the new market cost. */
+      marginNewPct: number | null;
+      messages7d: number;
+      noticeDays: number;
+      /** @description New cost plus the client's current margin, or the target margin when higher (table currency). */
+      suggestedRate: number | null;
+      /** @description Not before the move's last date nor the client's notice period. */
+      suggestedFrom: components["schemas"]["Timestamp"];
+      belowNewCost: boolean;
+      /** @description The auto-apply rule covering this client, if any. */
+      autoRule: string | null;
+    };
+    MarketMoveDetail: components["schemas"]["MarketMoveRow"] & {
+      vendors: components["schemas"]["MarketMoveVendor"][];
+      clients: components["schemas"]["MarketMoveClient"][];
+      log: components["schemas"]["RnLogEntry"][];
+    };
+    MarketMovePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["MarketMoveRow"][];
+    };
+    MarketMoveAction: {
+      /** @enum {string} */
+      action: "snooze" | "dismiss" | "handled" | "reopen" | "note";
+      /** @description Snooze length; default 7. */
+      days?: number;
+      /** @description Required to dismiss. */
+      note?: string | null;
+    };
+    MarketMoveSummary: {
+      open: number;
+      urgent: number;
+      up: number;
+      down: number;
+      /** @description Open moves affecting the signed-in user's clients (account manager). */
+      mine: number;
+    };
+    MarketMoveSettings: {
+      cheapestN: number;
+      includeTier1: boolean;
+      windowDays: number;
+      minVendors: number;
+      minChangePct: number;
+      /** @description How far back changes are scanned; moves older than this expire. */
+      lookbackDays: number;
+      urgentChangePct: number;
+      urgentDays: number;
+      /** @description Floor for suggested rates; null = keep each client's margin. */
+      targetMarginPct: number | null;
+      /** @description Daily digest e-mail to account managers, UTC. */
+      digestHour: number;
+      readonly updatedBy?: string | null;
+      readonly updatedAt?: components["schemas"]["Timestamp"] | null;
+    };
+    MarketAutoRuleFields: {
+      /** @description A client; or */
+      enterpriseId: components["schemas"]["Id"] | null;
+      /** @description a product category (one of the two). */
+      categoryId: components["schemas"]["Id"] | null;
+      /**
+       * @description Follow increases only (default) or decreases too.
+       * @enum {string}
+       */
+      direction: "increases" | "both";
+      /** @description Re-price when the margin at the new cost falls below this. */
+      minMarginPct: number;
+      status: components["schemas"]["RecordStatus"];
+    };
+    MarketAutoRuleInput: components["schemas"]["MarketAutoRuleFields"];
+    MarketAutoRule: components["schemas"]["MarketAutoRuleFields"] & {
+      id: components["schemas"]["Id"];
+      label: string;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    MarketAutoRuleList: {
+      rules: components["schemas"]["MarketAutoRule"][];
+    };
+    MarketScanResult: {
+      created: number;
+      updated: number;
+      expired: number;
+      autoApplied: number;
+      tookMs: number;
+    };
+    SentCount: {
+      sent: number;
     };
     Destination: {
       /** @description The MNC as the operator publishes it, when the code uses another form. */
@@ -13919,7 +14287,8 @@ export type components = {
       | "alert_rules"
       | "incidents"
       | "rate_notifications"
-      | "rate_notification_lines";
+      | "rate_notification_lines"
+      | "market_moves";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -16555,6 +16924,307 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["VendorRnSettings"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryMarketMoves: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of market moves */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketMovePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMarketMoveSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Counts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketMoveSummary"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMarketMoveSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketMoveSettings"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateMarketMoveSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketMoveSettings"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketMoveSettings"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  scanMarketMoves: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketScanResult"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendMarketMoveDigest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentCount"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listMarketAutoRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketAutoRuleList"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createMarketAutoRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketAutoRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketAutoRule"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateMarketAutoRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketAutoRuleInput"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketAutoRule"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveMarketAutoRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Archived */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketAutoRule"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMarketMove: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The move */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketMoveDetail"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  actOnMarketMove: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketMoveAction"];
+      };
+    };
+    responses: {
+      /** @description The move */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketMoveDetail"];
         };
       };
       400: components["responses"]["BadRequest"];

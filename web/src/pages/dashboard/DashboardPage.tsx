@@ -18,6 +18,7 @@ import type {
   TrunkTps,
 } from "@sms/contract";
 import { useMe, useUpdatePreferences } from "../../api/hooks";
+import { useMarketSummary } from "../../api/market";
 import { useReference } from "../../api/records";
 import { LiveSocket, socketUrl } from "../../live/socket";
 import { pageForPath } from "../../nav/registry";
@@ -315,6 +316,25 @@ function Counter({
   );
 }
 
+/** Compact card of open market moves (§13.14); opens Rates › Market moves. */
+function MarketMovesChip() {
+  const q = useMarketSummary();
+  const navigate = useTabNavigate();
+  const s = q.data;
+  if (!s) return null;
+  return (
+    <button
+      type="button"
+      className="btn btn-sm btn-ghost dash-mm"
+      title={`${s.up} up · ${s.down} down${s.mine ? ` · ${s.mine} for your clients` : ""}`}
+      onClick={() => navigate("/rates/market-moves")}
+    >
+      Market moves <strong className="num">{s.open.toLocaleString("en-US")}</strong>
+      {s.urgent > 0 && <span className="chip-mini tone-error">{s.urgent} urgent</span>}
+    </button>
+  );
+}
+
 function SummaryBar({
   summary: s,
   animate,
@@ -334,9 +354,12 @@ function SummaryBar({
       title="Today"
       className="dash-summary"
       extra={
-        <span className="muted small">
-          {tz} day · {cur}
-        </span>
+        <>
+          <MarketMovesChip />
+          <span className="muted small">
+            {tz} day · {cur}
+          </span>
+        </>
       }
     >
       <div className="dash-kpis">

@@ -229,7 +229,7 @@ export const PAGES: PageDef[] = [
     "/rates/market-moves",
     "trending",
     "§13.14",
-    "5",
+    "5.15",
     "Destinations where leading vendors moved their rates",
   ),
   p(

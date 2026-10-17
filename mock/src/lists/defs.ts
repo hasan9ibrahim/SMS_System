@@ -13,6 +13,7 @@ import {
 import { CURRENT_USER_ID } from "../api/session.js";
 import { alertRuleList, incidentList } from "./alertDefs.js";
 import { rnLineList, rnList } from "./rnDefs.js";
+import { marketMoveList } from "../api/marketMoves.js";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   Change,
@@ -2854,6 +2855,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   incidents: incidentList as ListDef<unknown>,
   rate_notifications: rnList as ListDef<unknown>,
   rate_notification_lines: rnLineList as ListDef<unknown>,
+  market_moves: marketMoveList as ListDef<unknown>,
   email_logs: emailLogList as ListDef<unknown>,
   firewall_rules: firewallRuleList as ListDef<unknown>,
   firewall_filters: firewallFilterList as ListDef<unknown>,

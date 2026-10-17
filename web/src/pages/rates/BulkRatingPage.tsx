@@ -6,7 +6,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import type { NoticeBreach, RateBulkAction, RateBulkPreview, RateBulkScope, RateTableRow } from "@sms/contract";
+import type {
+  MarketMoveDetail,
+  NoticeBreach,
+  RateBulkAction,
+  RateBulkPreview,
+  RateBulkScope,
+  RateTableRow,
+} from "@sms/contract";
+import { actOnMove, fetchMarketMove } from "../../api/market";
+import { moveLabel } from "./market/marketModel";
 import { fetchListPage } from "../../api/hooks";
 import { ApiError } from "../../api/client";
 import { previewRateBulk, useApplyRateBulk } from "../../api/records";
@@ -46,6 +55,7 @@ const ACTIONS: { value: RateBulkAction["type"]; label: string; valueLabel?: stri
   { value: "close", label: "Close lines" },
   { value: "block", label: "Block lines" },
   { value: "unblock", label: "Unblock lines" },
+  { value: "none", label: "Suggested rates only (market move)" },
 ];
 const SHOWS: { value: Show; label: string }[] = [
   { value: "all", label: "All" },
@@ -235,6 +245,39 @@ export function BulkRatingPage() {
   const [formula, setFormula] = useState("");
   const apply = useApplyRateBulk();
   const notifySaved = useNotifySaved();
+  // Opened from Market moves (§13.14): the chosen clients' suggested rates and dates.
+  const [move, setMove] = useState<MarketMoveDetail | null>(null);
+  const [overrides, setOverrides] = useState<NonNullable<RateBulkScope["overrides"]>>([]);
+
+  useEffect(() => {
+    const id = Number(new URLSearchParams(location.search).get("move")) || null;
+    if (!id) return;
+    fetchMarketMove(id)
+      .then((m) => {
+        const ov = m.clients
+          .filter((c) => initial.tables.includes(c.rateTableId) && c.suggestedRate !== null)
+          .map((c) => ({
+            rateTableId: c.rateTableId,
+            mccmnc: m.mccmnc,
+            rate: c.suggestedRate!,
+            effectiveFrom: c.suggestedFrom,
+          }));
+        setMove(m);
+        setOverrides(ov);
+        setType("none");
+        setMccmncs([m.mccmnc]);
+        void previewWith({
+          rateTableIds: initial.tables,
+          mccmncs: [m.mccmnc],
+          onlyExisting: true,
+          respectNotice: true,
+          effectiveFrom: null,
+          action: { type: "none" },
+          overrides: ov,
+        });
+      })
+      .catch((err: unknown) => toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opened again from the Rate Manager with another selection: take the new scope.
   useEffect(() => {
@@ -278,6 +321,7 @@ export function BulkRatingPage() {
       onlyExisting: !addMissing,
       respectNotice,
       effectiveFrom: from ? new Date(`${from}:00Z`).toISOString() : null,
+      ...(overrides.length ? { overrides } : {}),
       action: {
         type,
         value: needsValue ? v : null,
@@ -289,7 +333,9 @@ export function BulkRatingPage() {
 
   const runPreview = async () => {
     const body = scope();
-    if (!body) return;
+    if (body) await previewWith(body);
+  };
+  const previewWith = async (body: RateBulkScope) => {
     setLoading(true);
     try {
       setPreview(await previewRateBulk(body));
@@ -309,9 +355,14 @@ export function BulkRatingPage() {
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
       });
-      if (r.change)
+      if (r.change) {
         notifySaved(r.change, `Applied ${r.applied} change${r.applied === 1 ? "" : "s"} on ${r.tables} tables`);
-      else toast({ tone: "info", message: "Nothing changed" });
+        if (move)
+          void actOnMove(move.id, {
+            action: "handled",
+            note: `Rates updated on ${r.tables} client table${r.tables === 1 ? "" : "s"} (change #${r.change.id})`,
+          }).catch(() => undefined);
+      } else toast({ tone: "info", message: "Nothing changed" });
       setPreview(null);
       setEdits(noEdits());
     } catch (err) {
@@ -495,6 +546,16 @@ export function BulkRatingPage() {
           </Button>
         }
       />
+      {move && (
+        <div className="rn-banner">
+          Suggested rates from the market move on{" "}
+          <strong>
+            {move.country} · {move.network} ({move.mccmnc})
+          </strong>{" "}
+          {moveLabel(move)} for {overrides.length} client table{overrides.length === 1 ? "" : "s"}: review, adjust and
+          apply. The move is marked handled after applying.
+        </div>
+      )}
       <div className="bulk-setup">
         <section className="bulk-card" aria-label="Scope">
           <h2>1 · Scope</h2>

@@ -100,7 +100,7 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
     const a = body.action;
     const onlyExisting = body.onlyExisting ?? true;
     const errors: FieldError[] = [];
-    const needsValue = !["close", "block", "unblock"].includes(a.type);
+    const needsValue = !["close", "block", "unblock", "none"].includes(a.type);
     if (needsValue && (a.value === null || a.value === undefined))
       errors.push({ path: "/action/value", message: "required for this action" });
     if (a.type === "set" && (a.value ?? 0) < 0) errors.push({ path: "/action/value", message: "can't be negative" });
@@ -218,6 +218,10 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
 
     const round = a.round ?? 6;
     const fromBase = body.effectiveFrom ? Math.max(Date.parse(body.effectiveFrom), now) : now;
+    // Suggested rates per table and destination (Market moves "Update rates", §13.14).
+    const overrides = new Map(
+      (body.overrides ?? []).map((o) => [`${o.rateTableId}:${o.mccmnc}`, o] as const),
+    );
     const summary: RateBulkSummary = {
       tables: tables.size,
       destinations: mIds.length,
@@ -270,6 +274,11 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
           break;
       }
       if (newRate !== null) newRate = Math.max(0, Math.round(newRate * 10 ** round) / 10 ** round);
+      const override = b.senderId === null ? overrides.get(`${t.id}:${mccmnc}`) : undefined;
+      if (override && !["close", "block", "unblock"].includes(a.type)) {
+        newRate = Math.round(override.rate * 1e6) / 1e6;
+        note = null;
+      }
 
       let edit: RateBulkRow["edit"] = "none";
       let change: RateBulkRow["change"] = "skip";
@@ -286,7 +295,7 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
         else [edit, change] = ["set", newRate > cur ? "increase" : "decrease"];
       }
 
-      let from = fromBase;
+      let from = override?.effectiveFrom ? Math.max(Date.parse(override.effectiveFrom), now) : fromBase;
       let noticeBreach = false;
       let noticeAdjusted = false;
       if (change === "increase" && t.notice) {
