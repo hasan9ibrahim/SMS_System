@@ -220,11 +220,16 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
     vendors: new Map(),
     destinations: new Map(),
   };
-  const [{ rows: ct }, { rows: vt }, { rows: ents }, { rows: codes }] = await Promise.all([
+  // Only live trunks of live enterprises send traffic: an archived enterprise's trunks stay
+  // silent even if one was left active (§13.29).
+  const liveTrunks = (table: string) =>
     db().query(
-      "SELECT id, name, enterprise_id, tps FROM customer_trunks WHERE deleted_at IS NULL AND status = 'active'",
-    ),
-    db().query("SELECT id, name, enterprise_id, tps FROM vendor_trunks WHERE deleted_at IS NULL AND status = 'active'"),
+      `SELECT t.id, t.name, t.enterprise_id, t.tps FROM ${table} t JOIN enterprises e ON e.id = t.enterprise_id
+        WHERE t.deleted_at IS NULL AND t.status = 'active' AND e.deleted_at IS NULL`,
+    );
+  const [{ rows: ct }, { rows: vt }, { rows: ents }, { rows: codes }] = await Promise.all([
+    liveTrunks("customer_trunks"),
+    liveTrunks("vendor_trunks"),
     db().query("SELECT id, name FROM enterprises"),
     db().query(
       "SELECT m.mccmnc, m.network, co.name AS country FROM mccmnc m JOIN countries co ON co.id = m.country_id",

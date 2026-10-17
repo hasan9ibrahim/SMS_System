@@ -7,11 +7,16 @@ import type { LightMyRequestResponse } from "fastify";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
+import { deleteTestEnterprises } from "./testEnterprises.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
 const skip = ready ? false : "seeded database not available (npm run db:up && npm run seed:small)";
+const run = Date.now().toString(36);
 after(async () => {
+  // Test enterprises and their trunks must not stay active: the live simulator would send
+  // traffic for them and they would show on the dashboard and in incidents (§13.3, §13.4).
+  if (ready) await deleteTestEnterprises(`Test Enterprise ${run} %`);
   await app.close();
   await closeDb();
 });
@@ -36,7 +41,6 @@ async function ok(operationId: string, res: Promise<LightMyRequestResponse>, sta
   return r.statusCode === 204 ? null : r.json();
 }
 
-const run = Date.now().toString(36);
 const contact = (t: string) => ({ name: `${t} Person`, phone: "+100000000", emails: [`${t}@example.test`] });
 
 async function reference() {
