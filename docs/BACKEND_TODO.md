@@ -24,6 +24,7 @@ backend team knows exactly what to build. Newest first.
 
 ## Decisions
 
+- 2026-10-17, Translation rule match lists (§6.4): a rule's Sender ID List and Receiver ID List can be any number list type (Tag, Random or Sender ID Template). A template entry matches with each `{n}` as one digit. Decided by: Hasan Ibrahim.
 - 2026-10-17, Route map (§6.3): kept as built. Pick a customer trunk; every destination it sells with the rule and vendor today's routing picks, cost and margin. Decided by: Hasan Ibrahim.
 - 2026-10-17, QBR stats window (§6.3): the last 24 hours of EDRs, refreshed every 5 minutes. Decided by: Hasan Ibrahim.
 - 2026-10-17, MO reference book currency (§6.1): every amount of an entry (rate, vendor rate, setup and fixed charge) is in the **customer trunk's currency**: its first rate table's currency, else the enterprise's customer billing currency, else the platform currency. The entry stores no currency of its own. Decided by: Hasan Ibrahim.
@@ -114,7 +115,7 @@ What the Phoenix backend must match so the screens need no change:
 
 - **Schema (migration 012)**: `translation_rules` gains `continue_after` (Is Continue; a trunk's own setting overrides it), Not Match flags for MCCMNC, text and both lists, `sender_conversion_list_id` (the Random / Sender ID Template list; `sender_list_id` is now only the Sender ID List match), content rewrite columns, `insert_at` (copied to the targets on save). `dlr_status_map` becomes an ordered list of `{fromStatus, fromError, toStatus, toError}`; old `{"UNKNOWN": "UNDELIV"}` maps were converted. `number_list_entries` gains `deleted_at` (delete archives, undo restores) and values are unique per list among live rows; 84 seeded duplicates were archived.
 - **Engine (mock `routing/translate.ts`, same for the rule Test and the trunk Test)**: rules run in the trunk's order; a rule matches when every set condition holds (regex on sender, receiver and text, MCCMNC of the receiver by the "All" profile, a 3-digit code = the country; list membership; length guards; start / stop). A block ends the run; a matched rule set to Stop ends it too. A matching rule applies, in order: sender conversion, receiver conversion (the network is looked up again), TON / NPI, billing type, registered delivery, the first matching DLR conversion, content rewrite (Regex Index group or the whole match), then the MSG Template (`{text}` = the text so far). Random Number picks an entry; a template's `{n}` becomes one random digit each.
-- **Number list values**: Random = 3-20 digits; Sender ID Template = up to 11 characters once `{n}` counts as one digit; Tag = 1-64 characters. Match lists in a rule must be Tag lists; the conversion list must fit the conversion.
+- **Number list values**: Random = 3-20 digits; Sender ID Template = up to 11 characters once `{n}` counts as one digit; Tag = 1-64 characters. Any list type can be a rule's Sender / Receiver ID List (decided 2026-10-17); a Sender ID Template entry matches with each `{n}` as one digit (`SHOP{n}{n}` matches `SHOP42`). The conversion list must fit the conversion.
 - **Used by** counts live trunks reached through the targets; a trunk that switched the rule off is still listed (marked off). Editing a rule that touches more than one trunk asks for confirmation with the count. Duplicate to trunk makes an active copy that targets that trunk only and takes the original's place there (same position and Continue); the original is switched off on that trunk only and keeps running everywhere else. Undoing the duplicate archives the copy; the switch-off stays until changed on the trunk's Rules tab.
 - **Not built**: rule sets saved as templates (§13.2, optional).
 
@@ -165,4 +166,3 @@ What the Phoenix backend must match so the screens need no change:
 ## Open questions
 
 - **Translation conversion (§6.4)**: the mock reads the value as a prefix swap `from=to` (e.g. `00=+`). Is that how the current platform's "Translation" type works, or is it a regex replace?
-- **Match lists (§6.4)**: the mock lets only Tag lists be a rule's Sender / Receiver ID List. Should Random and Sender ID Template lists be allowed there too?

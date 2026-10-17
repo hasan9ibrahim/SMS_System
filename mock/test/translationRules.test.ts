@@ -8,7 +8,14 @@ import type { Change, TranslationRuleInput } from "@sms/contract";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { convert, rewriteText, runRules, type EngineContext, type EngineRule } from "../src/routing/translate.js";
+import {
+  convert,
+  entryMatches,
+  rewriteText,
+  runRules,
+  type EngineContext,
+  type EngineRule,
+} from "../src/routing/translate.js";
 import { entryProblem } from "../src/api/numberLists.js";
 
 const app = await buildServer({ socket: false });
@@ -153,6 +160,15 @@ describe("translation engine (§6.4)", () => {
       ctx,
     );
     assert.deepEqual([dlr.after.dlrStatus, dlr.after.dlrError], ["UNDELIV", "001"]);
+  });
+
+  test("match lists of any type; a template entry's {n} matches one digit", () => {
+    assert.ok(entryMatches("4479001", "4479001"));
+    assert.ok(entryMatches("SHOP{n}{n}", "SHOP42"));
+    assert.ok(!entryMatches("SHOP{n}{n}", "SHOP4"));
+    assert.ok(!entryMatches("A.B{n}", "AXB1"), "other characters are literal");
+    const res = runRules([{ rule: rule(1, { senderListId: 2, action: "block" }) }], { ...msg, sender: "BRAND07" }, ctx);
+    assert.equal(res.blocked, true);
   });
 
   test("number list values by type", () => {

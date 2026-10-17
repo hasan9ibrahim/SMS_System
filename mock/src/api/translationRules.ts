@@ -203,7 +203,7 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
       err("/contentRegexIndex", `the pattern has ${groups - 1} group${groups === 2 ? "" : "s"}`);
   }
 
-  // Lists: match lists are Tag lists, conversion lists fit the conversion.
+  // Lists: any type can be a match list (decided 2026-10-17); conversion lists fit the conversion.
   const listIds = [input.senderListId, input.receiverListId, input.senderConversionListId].filter(
     (x): x is number => x !== null,
   );
@@ -216,7 +216,6 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
     const v = input[f];
     if (v === null) continue;
     if (!typeOf.has(v)) err(`/${f}`, "unknown number list");
-    else if (typeOf.get(v) !== "tag") err(`/${f}`, "match lists are Tag lists");
   }
   if (input.senderConversionListId !== null) {
     const want = sc === "random_number" ? "random" : sc === "sender_id_template" ? "sender_id_template" : null;

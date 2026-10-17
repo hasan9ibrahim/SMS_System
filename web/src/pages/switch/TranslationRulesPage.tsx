@@ -50,6 +50,7 @@ import {
   conversionLabel,
   impliedDirection,
   inputFromDetail,
+  listTypeLabel,
   NPI_OPTIONS,
   RECEIVER_CONVERSIONS,
   ruleSummary,
@@ -77,7 +78,8 @@ function ListPick({
   form: FormApi<TranslationRuleInput>;
   path: "senderListId" | "receiverListId" | "senderConversionListId";
   label: string;
-  listType: NumberList["listType"];
+  /** Conversion lists are one type; match lists take any type (decided 2026-10-17). */
+  listType?: NumberList["listType"];
   hint?: string;
 }) {
   const value = form.get(path) as number | null;
@@ -93,8 +95,8 @@ function ListPick({
           value={value}
           onChange={(l) => form.set(path, l?.id ?? null)}
           labelOf={(l) => l.name}
-          detailOf={(l) => `${l.entries} entries`}
-          fixed={[{ field: "listType", op: "eq", value: listType }]}
+          detailOf={(l) => `${listType ? "" : `${listTypeLabel(l.listType)} · `}${l.entries} entries`}
+          fixed={listType ? [{ field: "listType", op: "eq", value: listType }] : undefined}
           placeholder="Any number list…"
         />
         <Button small variant="ghost" icon="plus" onClick={() => void newList()}>
@@ -507,11 +509,11 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             placeholder="bit\.ly"
           />
           <div className="cond-field">
-            <ListPick form={form} path="senderListId" label="Sender ID List" listType="tag" />
+            <ListPick form={form} path="senderListId" label="Sender ID List" />
             <Negate form={form} path="senderListNegate" />
           </div>
           <div className="cond-field">
-            <ListPick form={form} path="receiverListId" label="Receiver ID List" listType="tag" />
+            <ListPick form={form} path="receiverListId" label="Receiver ID List" />
             <Negate form={form} path="receiverListNegate" />
           </div>
           <div className="cond-field wide">

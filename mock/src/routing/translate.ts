@@ -63,9 +63,19 @@ function patternCheck(name: string, pattern: string | null, negate: boolean, val
   };
 }
 
+/** A list entry matches the value exactly; in a Sender ID Template entry each {n} stands for one digit. */
+export function entryMatches(entry: string, value: string): boolean {
+  if (!entry.includes("{n}")) return entry === value;
+  const re = entry
+    .split("{n}")
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[0-9]");
+  return new RegExp(`^${re}$`).test(value);
+}
+
 function listCheck(name: string, id: number | null, negate: boolean, value: string, ctx: EngineContext): Check | null {
   if (id === null) return null;
-  const hit = (ctx.lists.get(id) ?? []).includes(value);
+  const hit = (ctx.lists.get(id) ?? []).some((e) => entryMatches(e, value));
   return {
     condition: name,
     ok: hit !== negate,
