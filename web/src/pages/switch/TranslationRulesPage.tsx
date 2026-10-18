@@ -408,7 +408,7 @@ function ContentWordsEditor({
                   <input
                     type="checkbox"
                     aria-label="Match case"
-                    checked={!!w.matchCase}
+                    checked={w.matchCase !== false}
                     onChange={(e) => patch(i, { matchCase: e.target.checked })}
                   />
                 </td>
@@ -430,7 +430,7 @@ function ContentWordsEditor({
         small
         icon="plus"
         disabled={value.length >= 50}
-        onClick={() => onChange([...value, { find: "", replace: "", wholeWord: true, matchCase: false }])}
+        onClick={() => onChange([...value, { find: "", replace: "", wholeWord: true, matchCase: true }])}
       >
         Add word
       </Button>

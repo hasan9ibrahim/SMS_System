@@ -14086,7 +14086,13 @@ export type components = {
       bytes: number;
     };
     RouteSimulatorResult: {
-      /** @description Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as ingress translation left it, after routing; shows what the vendor would receive. Null when no vendor is chosen (blocked, no route). */
+      /** @description Vendors routing picked first whose own egress translation rules block the message; each is skipped and the next vendor tried (decided 2026-10-18). Empty when none was skipped or a vendor was tested directly. */
+      egressSkipped: {
+        vendorTrunkId: components["schemas"]["Id"];
+        vendorTrunk: string;
+        result: components["schemas"]["TrunkRulesTestResult"];
+      }[];
+      /** @description Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as ingress translation left it, after routing; shows what the vendor would receive. Null when no vendor is chosen (blocked, no route). A vendor whose rules block the message is skipped (egressSkipped). */
       vendorTranslation: {
         vendorTrunkId: components["schemas"]["Id"];
         vendorTrunk: string;

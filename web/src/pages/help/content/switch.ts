@@ -470,8 +470,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Match case",
-                what: "Only matches the exact capitals you typed.",
-                values: "Cleared by default (any case).",
+                what: 'Only matches the exact capitals you typed: with `code`, "Code", "cOde" and "CODE" are left alone. Clear it to match any mix of capitals.',
+                values: "Ticked by default.",
               },
             ],
           },

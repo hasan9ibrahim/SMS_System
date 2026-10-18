@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.60.0
+  version: 0.61.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18686,7 +18686,7 @@ components:
           description: Only whole words ("bit" does not touch "bitcoin"). Missing = true.
         matchCase:
           type: boolean
-          description: Upper and lower case must match. Missing = false.
+          description: Upper and lower case must match. Missing = true (on by default, team trial round 1).
 
     DlrMapEntry:
       type: object
@@ -23389,13 +23389,29 @@ components:
 
     RouteSimulatorResult:
       type: object
-      required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms, vendorTranslation]
+      required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms, vendorTranslation, egressSkipped]
       properties:
+        egressSkipped:
+          description: >-
+            Vendors routing picked first whose own egress translation rules block the message; each is skipped
+            and the next vendor tried (decided 2026-10-18). Empty when none was skipped or a vendor was tested directly.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [vendorTrunkId, vendorTrunk, result]
+            properties:
+              vendorTrunkId:
+                $ref: "#/components/schemas/Id"
+              vendorTrunk:
+                type: string
+              result:
+                $ref: "#/components/schemas/TrunkRulesTestResult"
         vendorTranslation:
           description: >-
             Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as
             ingress translation left it, after routing; shows what the vendor would receive. Null when no
-            vendor is chosen (blocked, no route).
+            vendor is chosen (blocked, no route). A vendor whose rules block the message is skipped (egressSkipped).
           oneOf:
             - type: object
               additionalProperties: false

@@ -1869,7 +1869,7 @@ export const topics: HelpTopic[] = [
               "**Translation**: the sender and receiver before → after the trunk's translation rules, each rule (changed the message, matched, no match, blocked) and the HLR rule.",
               "**Destination and rate**: the destination, the customer rate with its rate table, and the encoding.",
               "**Route**: the deciding rule and its outcome, the vendors tried (Vendor trunk, Level, Cost, Margin, Note), and **Rules tried** with the reason each one matched or not.",
-              "**Vendor translation**: the egress rules on the chosen vendor trunk, run after routing — the sender, receiver and text the vendor would actually receive, and each rule's result. Routing and the customer rate use the message before this step. A vendor rule that blocks makes the verdict red.",
+              "**Vendor translation**: the egress rules on the chosen vendor trunk, run after routing — the sender, receiver and text the vendor would actually receive, and each rule's result. Routing and the customer rate use the message before this step. A vendor whose own rule blocks the message is skipped and the next vendor is tried; the skipped vendors are listed under **Vendors skipped**. A block on the customer trunk rejects the message before routing.",
               "With several receivers or destinations, each result is headed by the number (if any), then **country · network** and the MCCMNC.",
               "**Test SMS**: a message ID and a receipt status (DELIVRD, UNDELIV, EXPIRED or REJECTD).",
               "The status bar counts how many of the messages would be routed.",

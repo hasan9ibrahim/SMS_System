@@ -24,6 +24,11 @@ export interface MessageContext {
   warmupSent: number;
   /** Entries of the number lists the rule uses. */
   listHas: (listId: number, value: string) => boolean;
+  /**
+   * Vendor trunks whose own egress translation rules block this message (§6.4, decided 2026-10-18):
+   * they are skipped like a vendor below margin, and the next vendor is tried.
+   */
+  egressBlocked?: ReadonlySet<number>;
 }
 
 /**
@@ -431,6 +436,9 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
       ? m.sellRate === null || m.sellRate <= 0 || (c.margin / m.sellRate) * 100 >= rule.margin
       : c.margin >= rule.margin);
   const marginText = `${rule.margin}${pct ? " %" : ""}`;
+  const usable = (c: RouteCandidate) => !m.egressBlocked?.has(c.vendorTrunkId) && marginOk(c);
+  const skipWhy = (c: RouteCandidate) =>
+    m.egressBlocked?.has(c.vendorTrunkId) ? "blocked by its vendor translation rule" : `margin below ${marginText}`;
 
   // 1. Number whitelist pinned to a vendor (§13.27).
   for (const w of rule.whitelists) {
@@ -494,8 +502,8 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
         bucket(m.receiver),
       ).map((r, i) => candidate(r.c.vendorTrunkId, i + 1, r.share !== null ? `${r.share}%` : null));
     } else candidates = pool.slice(0, 10).map((o, i) => candidate(o.vendorTrunkId, i + 1, null));
-    for (const c of candidates) if (!marginOk(c)) c.note = `margin below ${marginText}`;
-    const pick = candidates.find(marginOk);
+    for (const c of candidates) if (!usable(c)) c.note = skipWhy(c);
+    const pick = candidates.find(usable);
     return pick
       ? {
           ...base,
@@ -557,7 +565,7 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
         v.sharePct !== null && v.sharePct !== undefined ? `${v.sharePct}%` : null,
       );
       candidates.push(c);
-      if (marginOk(c)) {
+      if (usable(c)) {
         return {
           ...base,
           outcome: "route",
@@ -565,25 +573,25 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
           candidates,
         };
       }
-      c.note = `margin below ${marginText}`;
+      c.note = skipWhy(c);
       for (const bv of backupsOf(v.vendorTrunkId)) {
         const bc = candidate(bv.vendorTrunkId, level, `backup for ${c.name}${bv.sharePct ? ` (${bv.sharePct}%)` : ""}`);
         candidates.push(bc);
-        if (marginOk(bc))
+        if (usable(bc))
           return {
             ...base,
             outcome: "route",
             vendor: { vendorTrunkId: bc.vendorTrunkId, name: bc.name, level, decidedBy },
             candidates,
           };
-        bc.note = `${bc.note}; margin below ${marginText}`;
+        bc.note = `${bc.note}; ${skipWhy(bc)}`;
       }
     }
   }
   for (const v of backups) {
     const c = candidate(v.vendorTrunkId, v.level, "backup route");
     candidates.push(c);
-    if (marginOk(c))
+    if (usable(c))
       return {
         ...base,
         outcome: "route",

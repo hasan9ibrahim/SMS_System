@@ -168,8 +168,8 @@ export const fillContentTemplate = (template: string, original: string) =>
 
 /** Content rewrite: replace the Regex Index group (or the whole match), then the MSG Template. */
 /**
- * Words or phrases replaced as typed (no regex; team trial round 1). Whole words by default and any case
- * unless match case is on; removing a word also tidies the space it leaves.
+ * Words or phrases replaced as typed (no regex; team trial round 1). Whole words and exact case by default
+ * (match case off ignores case; team trial round 1); removing a word also tidies the space it leaves.
  */
 export function replaceWords(text: string, words: readonly ContentWordRule[] | null | undefined): string {
   let out = text;
@@ -178,7 +178,7 @@ export function replaceWords(text: string, words: readonly ContentWordRule[] | n
     const esc = w.find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // Unicode-aware word edges, so Arabic or accented words count as words too.
     const body = w.wholeWord === false ? esc : `(?<![\\p{L}\\p{N}_])${esc}(?![\\p{L}\\p{N}_])`;
-    const re = new RegExp(body, `gu${w.matchCase ? "" : "i"}`);
+    const re = new RegExp(body, `gu${w.matchCase === false ? "i" : ""}`);
     out = out.replace(re, () => w.replace);
     if (!w.replace)
       out = out

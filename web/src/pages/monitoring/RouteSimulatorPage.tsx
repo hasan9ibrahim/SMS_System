@@ -5,7 +5,7 @@
 // also sends it (simulated outcome in this phase). Team trial round 1: a vendor trunk can be tested
 // directly (instead of Service Type Routing), several receivers run at once, and the data coding and
 // TON / NPI follow the text and the addresses until changed by hand.
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { RouteSimulatorResult, TrunkListRow } from "@sms/contract";
 import { autoCoding, autoTonNpi, parseReceivers } from "./monitorModel";
 import { runRouteSimulator } from "../../api/observation";
@@ -124,6 +124,28 @@ function Result({ r }: { r: RouteSimulatorResult }) {
             <dd>{r.translation.hlr ? `${r.translation.hlr.ruleName} → ${r.translation.hlr.providerName}` : "none"}</dd>
           </dl>
         </section>
+        {r.egressSkipped.length > 0 && (
+          <section className="card">
+            <h3>Vendors skipped</h3>
+            <p className="muted small">
+              Their own vendor translation rules block this message, so the next vendor was tried.
+            </p>
+            <dl className="kv">
+              {r.egressSkipped.map((x) => (
+                <Fragment key={x.vendorTrunkId}>
+                  <dt>{x.vendorTrunk}</dt>
+                  <dd>
+                    <StatusDot tone="error" /> blocked by{" "}
+                    {x.result.steps
+                      .filter((st) => st.blocked)
+                      .map((st) => st.name)
+                      .join(", ") || "a rule"}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          </section>
+        )}
         {r.vendorTranslation && <VendorTranslation v={r.vendorTranslation} />}
         <section className="card">
           <h3>Destination and rate</h3>

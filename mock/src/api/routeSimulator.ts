@@ -55,7 +55,28 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       },
       listIdsOf(rules),
     );
-    const route = routeThrough(rules, m, await vendorOptions(pool, m.mccmnc, null));
+    const options = await vendorOptions(pool, m.mccmnc, null);
+    let route = routeThrough(rules, m, options);
+    // A vendor whose own egress rules block the message is skipped and the next vendor tried
+    // (decided 2026-10-18); a block on the customer trunk rejects the message before routing.
+    const egressSkipped: RouteSimulatorResult["egressSkipped"] = [];
+    if (!translation.blocked && !b.vendorTrunkId) {
+      const skip = new Set<number>();
+      for (let i = 0; i < 10 && route.decision?.vendor; i++) {
+        const v = route.decision.vendor;
+        const res = await runTrunkRules(pool, "vendor", v.vendorTrunkId, {
+          sender,
+          receiver,
+          text: translation.after.text,
+          senderTon: translation.after.senderTon,
+          senderNpi: translation.after.senderNpi,
+        });
+        if (!res?.blocked) break;
+        skip.add(v.vendorTrunkId);
+        egressSkipped.push({ vendorTrunkId: v.vendorTrunkId, vendorTrunk: v.name, result: res });
+        route = routeThrough(rules, { ...m, egressBlocked: skip }, options);
+      }
+    }
 
     let customerRate: RouteSimulatorResult["customerRate"] = null;
     if (m.mccmnc) {
@@ -178,6 +199,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       testSms,
       forcedVendor,
       vendorTranslation,
+      egressSkipped,
     };
   });
 }

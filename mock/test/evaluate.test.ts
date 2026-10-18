@@ -264,3 +264,14 @@ test("margin as an amount or a percentage of the sell rate, negative allowed (te
   assert.equal(lossy({ margin: -0.005 }), undefined);
   assert.equal(lossy({ margin: -25, marginType: "percent" }), 12, "−20 % is within −25 %");
 });
+
+test("a vendor whose own egress rules block the message is skipped for the next one (decided 2026-10-18)", () => {
+  const first = decide(rule(), msg(), options).vendor!.vendorTrunkId;
+  const other = first === 10 ? 11 : 10;
+  const next = decide(rule(), msg({ egressBlocked: new Set([first]) }), options);
+  assert.equal(next.outcome, "route");
+  assert.equal(next.vendor?.vendorTrunkId, other);
+  assert.match(next.candidates.find((c) => c.vendorTrunkId === first)!.note ?? "", /vendor translation/);
+  const none = decide(rule(), msg({ egressBlocked: new Set([10, 11]) }), options);
+  assert.equal(none.outcome, "no_vendor");
+});

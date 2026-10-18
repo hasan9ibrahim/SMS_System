@@ -486,8 +486,15 @@ test("content words: replace or remove words as typed (team trial round 1)", asy
     replaceWords("Your code is 1234. Call now!", [{ find: "now", replace: "" }]),
     "Your code is 1234. Call!",
   );
-  assert.equal(replaceWords("Bitcoin bit BIT", [{ find: "bit", replace: "piece" }]), "Bitcoin piece piece");
-  assert.equal(replaceWords("Bitcoin bit", [{ find: "bit", replace: "x", wholeWord: false }]), "xcoin x");
+  assert.equal(replaceWords("Bitcoin bit BIT", [{ find: "bit", replace: "piece" }]), "Bitcoin piece BIT");
+  assert.equal(
+    replaceWords("Bitcoin bit BIT", [{ find: "bit", replace: "piece", matchCase: false }]),
+    "Bitcoin piece piece",
+  );
+  assert.equal(
+    replaceWords("Bitcoin bit", [{ find: "bit", replace: "x", wholeWord: false, matchCase: false }]),
+    "xcoin x",
+  );
   assert.equal(replaceWords("Bit bit", [{ find: "bit", replace: "x", matchCase: true }]), "Bit x");
   assert.equal(
     replaceWords("Visit www.a.com (a.com)", [{ find: "a.com", replace: "b.org" }]),
