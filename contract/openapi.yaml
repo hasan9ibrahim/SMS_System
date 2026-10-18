@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.59.0
+  version: 0.60.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23389,8 +23389,25 @@ components:
 
     RouteSimulatorResult:
       type: object
-      required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms]
+      required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms, vendorTranslation]
       properties:
+        vendorTranslation:
+          description: >-
+            Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as
+            ingress translation left it, after routing; shows what the vendor would receive. Null when no
+            vendor is chosen (blocked, no route).
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [vendorTrunkId, vendorTrunk, result]
+              properties:
+                vendorTrunkId:
+                  $ref: "#/components/schemas/Id"
+                vendorTrunk:
+                  type: string
+                result:
+                  $ref: "#/components/schemas/TrunkRulesTestResult"
+            - type: "null"
         forcedVendor:
           description: The vendor trunk tested directly (vendorTrunkId), with its buy rate; null otherwise.
           oneOf:

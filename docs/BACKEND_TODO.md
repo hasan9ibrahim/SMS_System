@@ -348,6 +348,7 @@ What the Phoenix backend must match so the screens need no change:
 - **Home daily screens (§15.1, §13.18)**: contract v0.59.0 adds `GET /me/pages` (the signed-in user's pages of the last 30 days from page views: path, record name for enterprise and trunk records, views, last opened). Home shows Dashboard and Live analytics first, then the user's most used pages (views summed per page) and recently opened pages and records. *Backend*: same query on its page-view store.
 - **Record action bar (§15.1)**: list pages show the selected row's actions next to New: Clone, Delete/Restore and the page's main action (usually Edit) in sight, every other per-record action under More. Greyed with a hint until one row is selected or when an action does not apply; no Open button (double-click or Enter opens). Web only, no contract change. *Backend*: none.
 - **Route simulator headings (§6.3)**: with several receivers or destinations, each result heading shows country · network, then the MCCMNC (a number keeps the number in front). Web only, no contract change.
+- **Route simulator vendor translation (§6.3, §6.4, §13.2)**: contract v0.60.0 adds `vendorTranslation` to `RouteSimulatorResult` (vendor trunk, TrunkRulesTestResult): the chosen (or forced) vendor trunk's egress rules run on the message as ingress translation left it; a blocking egress rule sets `blocked`. Null when no vendor is chosen. *Backend*: same order in the switch — ingress → HLR → customer rate → route rule → vendor → egress → submit. Open: when an egress rule blocks, should the switch try the next vendor instead of rejecting? The simulator reports it as blocked.
 - **Billing time zones** are shown as `UTC±hh:mm · Zone`, sorted west to east, everywhere a time zone is picked. The stored value is still the IANA zone.
 
 ## Market move notes (build step 5.15, §13.14)
@@ -565,6 +566,7 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
+- Route simulator / switch (§6.4): when an egress (vendor-side) translation rule blocks a message, should the switch fall back to the next vendor, or reject it? The simulator shows it as blocked for now.
 - *Found while writing the help center (2026-10-18), where the screens and the spec differ:*
   - Route rules: when a rule has both a destination **pattern** and a destination **list**, the evaluator only checks the pattern. Should the pattern narrow the list (both must match) instead?
   - Route rules: Sender ID / Receiver ID **number lists** can't be negated (spec §6.3 says lists have Match / Not match too). Add the switch to lists?

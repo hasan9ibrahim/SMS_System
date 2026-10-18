@@ -124,6 +124,7 @@ function Result({ r }: { r: RouteSimulatorResult }) {
             <dd>{r.translation.hlr ? `${r.translation.hlr.ruleName} → ${r.translation.hlr.providerName}` : "none"}</dd>
           </dl>
         </section>
+        {r.vendorTranslation && <VendorTranslation v={r.vendorTranslation} />}
         <section className="card">
           <h3>Destination and rate</h3>
           <dl className="kv">
@@ -193,6 +194,57 @@ function Result({ r }: { r: RouteSimulatorResult }) {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Egress translation (§6.4, §13.2): what the chosen vendor trunk's rules do after routing. */
+function VendorTranslation({ v }: { v: NonNullable<RouteSimulatorResult["vendorTranslation"]> }) {
+  const { before, after, steps } = v.result;
+  const change = (a: string, b: string) => (
+    <>
+      {a || "—"}
+      {b !== a && (
+        <>
+          {" "}
+          → <strong>{b || "—"}</strong>
+        </>
+      )}
+    </>
+  );
+  return (
+    <section className="card">
+      <h3>Vendor translation · {v.vendorTrunk}</h3>
+      <dl className="kv">
+        <dt>Sender</dt>
+        <dd>{change(before.sender, after.sender)}</dd>
+        <dt>Receiver</dt>
+        <dd>{change(before.receiver, after.receiver)}</dd>
+        {after.text !== before.text && (
+          <>
+            <dt>Text</dt>
+            <dd>
+              <strong>{after.text}</strong>
+            </dd>
+          </>
+        )}
+        <dt>Rules</dt>
+        <dd>
+          {steps.length
+            ? steps.map((s) => (
+                <div key={s.ruleId} className="small">
+                  <StatusDot tone={s.blocked ? "error" : s.fired ? "accent" : "neutral"} /> {s.name}{" "}
+                  <span className="muted">
+                    {s.blocked ? "blocked" : s.fired ? "changed the message" : s.matched ? "matched" : "no match"}
+                  </span>
+                </div>
+              ))
+            : "none on this vendor trunk"}
+        </dd>
+      </dl>
+      <p className="muted small">
+        What the vendor receives. Routing and the customer rate use the message before this step.
+      </p>
+    </section>
   );
 }
 

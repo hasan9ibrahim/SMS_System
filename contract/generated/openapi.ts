@@ -14086,6 +14086,12 @@ export type components = {
       bytes: number;
     };
     RouteSimulatorResult: {
+      /** @description Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as ingress translation left it, after routing; shows what the vendor would receive. Null when no vendor is chosen (blocked, no route). */
+      vendorTranslation: {
+        vendorTrunkId: components["schemas"]["Id"];
+        vendorTrunk: string;
+        result: components["schemas"]["TrunkRulesTestResult"];
+      } | null;
       /** @description The vendor trunk tested directly (vendorTrunkId), with its buy rate; null otherwise. */
       forcedVendor?: {
         vendorTrunkId: components["schemas"]["Id"];

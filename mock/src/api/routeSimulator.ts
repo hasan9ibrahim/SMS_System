@@ -111,6 +111,22 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
     const vendorCost = cost === null ? null : { rate: cost, currency: PLATFORM_CURRENCY };
     const sell = customerRate?.platformRate ?? null;
     const marginPct = sell && cost !== null ? Math.round(((sell - cost) / sell) * 1000) / 10 : null;
+    // Egress translation (§6.4, §13.2): the chosen vendor trunk's rules run after routing, on the
+    // message as ingress translation left it; shows what the vendor would receive.
+    const egressId = forcedVendor ? forcedVendor.vendorTrunkId : (d?.vendor?.vendorTrunkId ?? null);
+    const egressName = forcedVendor ? forcedVendor.name : (d?.vendor?.name ?? "");
+    const egress =
+      egressId !== null && !translation.blocked
+        ? await runTrunkRules(pool, "vendor", egressId, {
+            sender,
+            receiver,
+            text: translation.after.text,
+            senderTon: translation.after.senderTon,
+            senderNpi: translation.after.senderNpi,
+          })
+        : null;
+    const vendorTranslation: RouteSimulatorResult["vendorTranslation"] =
+      egress && egressId !== null ? { vendorTrunkId: egressId, vendorTrunk: egressName, result: egress } : null;
     const blocked = translation.blocked
       ? "Blocked by a translation rule on the trunk"
       : !m.mccmnc
@@ -127,7 +143,9 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
                 ? `Blocked by route rule ${d.ruleId}`
                 : d.outcome === "no_vendor"
                   ? `Route rule ${d.ruleId} matched but no vendor qualifies`
-                  : null;
+                  : egress?.blocked
+                    ? `Blocked by a translation rule on vendor trunk ${egressName}`
+                    : null;
     let testSms: RouteSimulatorResult["testSms"] = null;
     if (b.testSms) {
       const messageId = Math.floor(Math.random() * 2 ** 48)
@@ -159,6 +177,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       blocked,
       testSms,
       forcedVendor,
+      vendorTranslation,
     };
   });
 }
