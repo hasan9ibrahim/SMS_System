@@ -17,7 +17,12 @@ import { db } from "../db.js";
 import { PLATFORM_DAY_START_SQL, platformDay } from "../platform.js";
 import { chRows } from "../edr.js";
 
-const TOTAL_TPS = Number(process.env.SIM_TOTAL_TPS ?? 1800);
+/**
+ * Platform volume. By default the stored EDRs' own rate over the last 7 days, so the live dashboard and
+ * alert popups agree with Live analytics and the reports on the same data (team trial round 1: a popup
+ * showed a margin 900 times the real one when the simulator assumed 1,800 TPS). SIM_TOTAL_TPS overrides it.
+ */
+const SIM_TOTAL_TPS = process.env.SIM_TOTAL_TPS ? Number(process.env.SIM_TOTAL_TPS) : null;
 const MINUTES = 120; // per-minute history kept for the movers (two 60-minute windows)
 const SLOT_S = 5; // chart history resolution
 const SLOTS = 3600 / SLOT_S; // 60 minutes of chart history
@@ -266,13 +271,17 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
   const cTotal = [...cBy.values()].reduce((s, x) => s + Number(x.n), 0) || 1;
   const vTotal = [...vBy.values()].reduce((s, x) => s + Number(x.n), 0) || 1;
   const ratio = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
+  const TOTAL_TPS = SIM_TOTAL_TPS ?? Math.max(0.01, (cStats ? cTotal : 0) / (7 * 86_400));
 
   const trunks: SimTrunk[] = ct.map((r) => {
     const s = cBy.get(Number(r.id));
     const n = s ? Number(s.n) : 0;
     const share = n / cTotal;
     const limit = Number(r.tps);
-    const base = s ? Math.min(limit * 0.85, Math.max(0.3, share * TOTAL_TPS)) : Math.min(limit * 0.5, rand(0.5, 4));
+    // Floors scale with the platform, so quiet trunks never add up to more than the platform itself.
+    const base = s
+      ? Math.min(limit * 0.85, Math.max(TOTAL_TPS / 6000, share * TOTAL_TPS))
+      : Math.min(limit * 0.5, (TOTAL_TPS / 2000) * rand(0.5, 4));
     const t: SimTrunk = {
       id: Number(r.id),
       name: r.name,
@@ -588,11 +597,13 @@ export function step(sim: Simulator, now = Date.now()) {
     extendSegments(t.segments, now + 60 * 60_000, true);
     const target = t.base * levelAt(t.segments, now);
     // Smooth random walk around the timeline, with rare bursts past the limit.
-    t.tps = target < 0.01 ? 0 : Math.max(0, t.tps * 0.6 + target * 0.4 + rand(-0.12, 0.12) * target);
-    // About one burst every 5 seconds across the platform, so queues and red limit bars show up.
-    if (target > 0 && Math.random() < 0.2 / sim.trunks.length) t.tps += t.limit * 0.6;
+    // Thresholds and bursts follow the trunk's own level, so the simulated money and alerts stay at the
+    // volume of the stored traffic (a quiet trunk sends a few messages an hour; team trial round 1).
+    t.tps = target <= t.base * 0.02 ? 0 : Math.max(0, t.tps * 0.6 + target * 0.4 + rand(-0.12, 0.12) * target);
+    // About one burst every 5 seconds across the platform: three times the trunk's usual level.
+    if (target > 0 && Math.random() < 0.2 / sim.trunks.length) t.tps += t.base * 3;
     total += t.tps;
-    quality(t, t.tps > 0.05, now);
+    quality(t, t.tps > 0.001, now);
     rollMinute(t, newMinute);
     if (newSlot) {
       t.slotSum = 0;
@@ -637,7 +648,7 @@ export function step(sim: Simulator, now = Date.now()) {
   // Vendors carry the total by their share, with their own noise.
   for (const v of sim.vendors) {
     v.tps = Math.max(0, v.tps * 0.6 + total * v.weight * 0.4 * rand(0.85, 1.15));
-    quality(v, v.tps > 0.05, now);
+    quality(v, v.tps > 0.001, now);
     rollMinute(v, newMinute);
     const msgs = v.tps * dt;
     if (msgs <= 0) continue;
@@ -683,8 +694,8 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 const pct = (a: number, b: number) => (b > 0 ? r1((a / b) * 100) : null);
 
 export function tickEvent(sim: Simulator, now = Date.now()): TpsTickEvent {
-  const customers = sim.trunks.filter((t) => t.tps > 0.05).sort((a, b) => b.tps - a.tps);
-  const vendors = sim.vendors.filter((v) => v.tps > 0.05).sort((a, b) => b.tps - a.tps);
+  const customers = sim.trunks.filter((t) => t.tps > 0.001).sort((a, b) => b.tps - a.tps);
+  const vendors = sim.vendors.filter((v) => v.tps > 0.001).sort((a, b) => b.tps - a.tps);
   const queue = (tps: number, limit: number) => (tps > limit ? Math.round((tps - limit) * 5) : 0);
   return {
     at: new Date(now).toISOString(),
@@ -692,13 +703,13 @@ export function tickEvent(sim: Simulator, now = Date.now()): TpsTickEvent {
     trunks: [
       ...customers.slice(0, 60).map((t) => ({
         trunk: { kind: "customer_trunk" as const, id: t.id, name: t.name },
-        tps: r1(t.tps),
+        tps: r2(t.tps),
         tpsLimit: t.limit,
         queueDepth: queue(t.tps, t.limit),
       })),
       ...vendors.slice(0, 40).map((v) => ({
         trunk: { kind: "vendor_trunk" as const, id: v.id, name: v.name },
-        tps: r1(v.tps),
+        tps: r2(v.tps),
         tpsLimit: v.limit,
         queueDepth: queue(v.tps, v.limit),
       })),
@@ -710,7 +721,7 @@ export function summaryEvent(sim: Simulator, now = Date.now()): DashboardSummary
   const t = sim.today;
   const tps = sim.trunks.reduce((s, x) => s + x.tps, 0);
   const online = (xs: { tps: number; enterpriseId: number }[]) =>
-    new Set(xs.filter((x) => x.tps > 0.05).map((x) => x.enterpriseId)).size;
+    new Set(xs.filter((x) => x.tps > 0.001).map((x) => x.enterpriseId)).size;
   const top = [...t.destinations.entries()]
     .filter(([code]) => code.length >= 5)
     .sort((a, b) => b[1].attempts - a[1].attempts)
@@ -727,7 +738,7 @@ export function summaryEvent(sim: Simulator, now = Date.now()): DashboardSummary
     marginPct: t.revenue > 0 ? r2(((t.revenue - t.cost) / t.revenue) * 100) : 0,
     asr: pct(t.submitted, t.attempts) ?? 0,
     dlr: pct(t.delivered, t.submitted) ?? 0,
-    tps: r1(tps),
+    tps: r2(tps),
     onlineCustomers: online(sim.trunks),
     onlineVendors: online(sim.vendors),
     topDestinations: top.map(([mccmnc, d]) => ({

@@ -114,7 +114,7 @@ function figures(a: Acc, compare: number): Row {
     tps: tpsNow === null ? null : r1(tpsNow),
     tpsBefore,
     changePct:
-      tpsNow !== null && tpsBefore !== null && tpsBefore > 0.05 ? r1(((tpsNow - tpsBefore) / tpsBefore) * 100) : null,
+      tpsNow !== null && tpsBefore !== null && tpsBefore > 0.001 ? r1(((tpsNow - tpsBefore) / tpsBefore) * 100) : null,
     sparkline,
   };
 }
@@ -193,8 +193,8 @@ export function analyticsSnapshot(sim: Simulator, p: AnalyticsParams, now = Date
   let rows = accs
     .filter((a) => match(a.name) || (a.parent !== null && match(a.parent)) || match(String(a.id)))
     .map((a) => figures(a, p.compareMinutes))
-    .filter((r) => r.attempts > 0 || (r.tps ?? 0) > 0.05);
-  if (p.onlyActive) rows = rows.filter((r) => (r.tps ?? 0) > 0.05);
+    .filter((r) => r.attempts > 0 || (r.tps ?? 0) > 0.001);
+  if (p.onlyActive) rows = rows.filter((r) => (r.tps ?? 0) > 0.001);
   const total = rows.length;
   const dir = p.dir === "asc" ? 1 : -1;
   rows.sort((a, b) => {
