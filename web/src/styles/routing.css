@@ -885,7 +885,7 @@ textarea.mono {
 }
 .bc-body {
   min-height: 180px;
-  max-height: min(340px, 40vh);
+  max-height: 340px;
   overflow: auto;
   padding: 8px 10px;
   outline: none;
