@@ -1,6 +1,6 @@
 // Route rule model for the Route Rules page (§6.3, §13.8, §13.9, §13.24, §13.27, §15.4):
 // the editable input from a record, and the condition chips of the Conditions section.
-import type { RouteRuleDetail, RouteRuleInput, RouteVendor } from "@sms/contract";
+import type { FilterCondition, RouteRuleDetail, RouteRuleInput, RouteVendor } from "@sms/contract";
 
 const INPUT_KEYS = [
   "name",
@@ -413,4 +413,10 @@ export function parsePattern(pattern: string): { kind: PatternKind; values: stri
     if (values && values.every((v, i) => v !== "" && escapeRe(v) === parts![i])) return { kind, values };
   }
   return { kind: "regex", values: [] };
+}
+
+/** Trunk pickers follow the rule's product categories (team trial round 1): only Promo trunks for a Promo rule. */
+export function categoryFilter(mode: string, ids: readonly number[]): FilterCondition[] {
+  if (mode === "all" || !ids.length) return [];
+  return [{ field: "categoryId", op: mode === "exclusive" ? "not_in" : "in", values: ids.map(String) }];
 }

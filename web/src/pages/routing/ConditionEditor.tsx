@@ -17,6 +17,7 @@ import { ListLookup } from "../../records/parts";
 import { Button, Modal } from "../../ui/primitives";
 import {
   buildPattern,
+  categoryFilter,
   CONDITION_LABELS,
   parsePattern,
   PATTERN_KINDS,
@@ -164,7 +165,8 @@ function Mode({
   allowAll?: boolean;
 }) {
   const modes: { value: MatchMode; label: string }[] = [
-    ...(allowAll ? [{ value: "all" as const, label: "Any" }] : []),
+    // "All" is every destination, including ones added to the master later (team trial round 1).
+    ...(allowAll ? [{ value: "all" as const, label: "All" }] : []),
     { value: "inclusive", label: "In the list" },
     { value: "exclusive", label: "Not in the list" },
   ];
@@ -313,7 +315,21 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
         form: (
           <>
             <Mode value={mode === "all" ? "inclusive" : mode} onChange={setMode} />
-            <TrunkPick kind="customer" value={trunks} onChange={setTrunks} />
+            {rule.categoryMode !== "all" && rule.categoryIds.length > 0 && (
+              <p className="muted small">
+                Showing the trunks {rule.categoryMode === "exclusive" ? "outside" : "of"} the rule's categories:{" "}
+                {rule.labels.categories
+                  .filter((c) => rule.categoryIds.includes(c.id))
+                  .map((c) => c.name)
+                  .join(", ")}
+              </p>
+            )}
+            <TrunkPick
+              kind="customer"
+              value={trunks}
+              onChange={setTrunks}
+              fixed={categoryFilter(rule.categoryMode, rule.categoryIds)}
+            />
           </>
         ),
         patch: () =>
@@ -352,7 +368,11 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
         form: (
           <>
             <Mode value={mode} onChange={setMode} allowAll />
-            {mode !== "all" && <DestinationPick value={codes} onChange={setCodes} />}
+            {mode === "all" ? (
+              <p className="muted small">Every destination, including ones added later. A pattern below narrows it.</p>
+            ) : (
+              <DestinationPick value={codes} onChange={setCodes} />
+            )}
             <label className="field">
               <span>MCCMNC pattern (regular expression)</span>
               <input
@@ -368,7 +388,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
         patch: () => {
           if (regexError(mccPattern)) return "Fix the pattern.";
           if (mode !== "all" && !codes.length) return "Choose at least one destination.";
-          if (mode === "all" && !mccPattern.trim()) return "Choose destinations or enter a pattern.";
           return { mccmncMode: mode, mccmncs: mode === "all" ? [] : codes, mccmncPattern: mccPattern.trim() || null };
         },
       };

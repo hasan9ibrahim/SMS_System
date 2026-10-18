@@ -8,7 +8,7 @@ import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
-import { backupProblems, ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
+import { backupProblems, categoryFilter, ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
 
 type Draft = Pick<
   RouteRuleInput,
@@ -580,7 +580,12 @@ export function VendorsSection({
                     <option value="exclusive">All but these</option>
                   </select>
                   {d.vendorTrunkMode !== "all" && (
-                    <TrunkPick kind="vendor" value={scopeTrunks} onChange={setScopeTrunks} />
+                    <TrunkPick
+                      kind="vendor"
+                      value={scopeTrunks}
+                      onChange={setScopeTrunks}
+                      fixed={categoryFilter(d.vendorCategoryMode ?? "all", d.vendorCategoryIds ?? [])}
+                    />
                   )}
                 </div>
               </div>

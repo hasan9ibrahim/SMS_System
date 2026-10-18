@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { RouteRuleDetail } from "@sms/contract";
 import {
   buildPattern,
+  categoryFilter,
   parsePattern,
   vendorSwitches,
   backupProblems,
@@ -205,4 +206,11 @@ test("value lists become patterns and back; other regex stays regex (team trial 
     assert.deepEqual(parsePattern(p), { kind, values: vals });
     assert.ok(vals.every((v) => new RegExp(p, "i").test(kind === "is" ? v : `x ${v} y`)));
   }
+});
+
+test("trunk pickers follow the rule's categories (team trial round 1)", () => {
+  assert.deepEqual(categoryFilter("all", [1]), []);
+  assert.deepEqual(categoryFilter("inclusive", []), []);
+  assert.deepEqual(categoryFilter("inclusive", [2, 5]), [{ field: "categoryId", op: "in", values: ["2", "5"] }]);
+  assert.deepEqual(categoryFilter("exclusive", [2]), [{ field: "categoryId", op: "not_in", values: ["2"] }]);
 });

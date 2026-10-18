@@ -80,13 +80,17 @@ export function TrunkPick({
   kind,
   value,
   onChange,
+  fixed,
 }: {
   kind: "customer" | "vendor";
   value: Picked<number>[];
   onChange: (next: Picked<number>[]) => void;
+  /** e.g. only the trunks of the rule's product categories (team trial round 1). */
+  fixed?: FilterCondition[];
 }) {
   return (
     <MultiPick<TrunkListRow, number>
+      fixed={fixed}
       list={kind === "customer" ? "customer_trunks" : "vendor_trunks"}
       value={value}
       onChange={onChange}
