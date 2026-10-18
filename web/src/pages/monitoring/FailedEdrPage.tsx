@@ -80,6 +80,19 @@ export function FailedEdrPage() {
       list="failed_edrs"
       page={page}
       title="Failed EDR Search"
+      rowActions={(r) => [
+        {
+          label: "Repush…",
+          icon: "send",
+          main: true,
+          onSelect: () => void ask<void>((d) => <RepushDialog ids={[r.uuid]} eligible={1} done={() => d()} />),
+        },
+        {
+          label: "Copy Msg ID",
+          icon: "copy",
+          onSelect: () => void window.navigator.clipboard?.writeText(r.customerMsgId),
+        },
+      ]}
       // Rejected messages can be re-sent on a vendor trunk (team trial round 1).
       selection={{
         summary: (_rows, ids) => `${ids.size} selected`,

@@ -37,6 +37,9 @@ export function RepushRequestsPage() {
       page={page}
       noSelection
       historyScope={null}
+      rowActions={(r) => [
+        { label: "View EDRs", icon: "search", main: true, onSelect: () => navigate(repushEdrsPath(r.id)) },
+      ]}
       columns={{
         id: { width: 90 },
         edrCount: {

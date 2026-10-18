@@ -2,12 +2,15 @@
 // Download and Trouble Ticket. Saves are undoable (§13.10); delete archives (§13.29).
 import { useState } from "react";
 import type { EdrTemplateRow } from "@sms/contract";
-import { useListFields } from "../../api/hooks";
+import { useListFields, useMe } from "../../api/hooks";
 import { useSaveEdrTemplate } from "../../api/observation";
+import { useRestore } from "../../api/records";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ask } from "../../ui/feedback";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
+import { ask, toast } from "../../ui/feedback";
+import { problemText } from "../routing/dialogs";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
 
 const page = pageForPath("/monitoring/edr-templates")!;
@@ -113,6 +116,11 @@ const openDialog = (row: EdrTemplateRow | null) => ask<void>((d) => <TemplateDia
 export function EdrTemplatesPage() {
   const fields = useListFields("edrs");
   const label = new Map((fields.data?.fields ?? []).map((f) => [f.field, f.label]));
+  const { data: me } = useMe();
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("edr_template");
+  const notifySaved = useNotifySaved();
+  const isAdmin = isAdminUser(me?.permissions);
   return (
     <ListScreen<EdrTemplateRow>
       list="edr_templates"
@@ -129,6 +137,35 @@ export function EdrTemplatesPage() {
       }}
       rowClass={(r) => (r.archivedAt ? "row-muted" : undefined)}
       onOpen={(r) => !r.archivedAt && void openDialog(r)}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted templates cannot be edited" : undefined,
+          onSelect: () => void openDialog(r),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored EDR template ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("edr_template", r.id, `EDR template ${r.name}`),
+            },
+      ]}
       detail={(r) => ({
         title: (
           <>

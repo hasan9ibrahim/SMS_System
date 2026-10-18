@@ -116,6 +116,24 @@ export function SignalingPage() {
         updatedAt: { width: 170, render: (r) => fmtWhen(r.updatedAt) },
         startedBy: { width: 140, render: (r) => r.startedBy ?? muted("—") },
       }}
+      rowActions={(r) => [
+        {
+          label: "Download",
+          icon: "download",
+          main: true,
+          disabled: r.status === "failed",
+          hint: r.status === "failed" ? "The capture failed: no file" : undefined,
+          onSelect: () => download(r.id),
+        },
+        {
+          label: "Stop",
+          icon: "pause",
+          main: true,
+          disabled: r.status !== "running",
+          hint: r.status === "running" ? "Stop this capture" : "Only running captures can be stopped",
+          onSelect: () => stop.mutate(r.id, { onError: (e) => toast({ tone: "error", message: problemText(e) }) }),
+        },
+      ]}
       trailing={{
         header: "Action",
         width: 110,

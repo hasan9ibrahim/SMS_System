@@ -7,12 +7,15 @@
 import { useState } from "react";
 import type { AlertRuleInput, AlertRuleRow, AlertRuleTest, DepartmentRow, UserRow } from "@sms/contract";
 import { useAllRows } from "../../../api/admin";
+import { useMe } from "../../../api/hooks";
+import { useRestore } from "../../../api/records";
 import { testAlertRule, useCloneAlertRule, useSaveAlertRule, useSetAlertRuleStatus } from "../../../api/alerts";
 import { emptyState, encodeState } from "../../../grid/filterModel";
 import { FormField, NumberField, SelectField, TextField, useForm, type FormApi } from "../../../form/form";
 import { HistoryList, useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
+import { isAdminUser, useDeleteRecord } from "../../../records/parts";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
@@ -450,57 +453,58 @@ function RuleDialog({ row, done }: { row: AlertRuleRow | null; done: () => void 
 
 const openDialog = (row: AlertRuleRow | null) => ask<void>((d) => <RuleDialog row={row} done={() => d()} />);
 
-function RuleActions({ r }: { r: AlertRuleRow }) {
+/** Enable / Disable, Clone and Incidents of one rule: the detail panel and the record actions share them. */
+function useRuleHandlers() {
   const status = useSetAlertRuleStatus();
   const clone = useCloneAlertRule();
   const notifySaved = useNotifySaved();
   const navigate = useTabNavigate();
+  return {
+    statusPending: status.isPending,
+    toggle: (r: AlertRuleRow) =>
+      status.mutate(
+        { id: r.id, status: r.status === "active" ? "inactive" : "active" },
+        {
+          onSuccess: (x) =>
+            x.change && notifySaved(x.change, `${x.record.status === "active" ? "Enabled" : "Disabled"} ${r.name}`),
+          onError: (e) => toast({ tone: "error", message: problemText(e) }),
+        },
+      ),
+    clone: (r: AlertRuleRow) => {
+      const name = window.prompt("Name of the copy", `${r.name} (copy)`);
+      if (name?.trim())
+        clone.mutate(
+          { id: r.id, name: name.trim() },
+          {
+            onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}`),
+            onError: (e) => toast({ tone: "error", message: problemText(e) }),
+          },
+        );
+    },
+    incidents: (r: AlertRuleRow) =>
+      navigate(
+        `/monitoring/incidents?g=${encodeState({ ...emptyState(), columns: { ruleName: { field: "ruleName", op: "eq", value: r.name } } })}`,
+      ),
+  };
+}
+
+function RuleActions({ r }: { r: AlertRuleRow }) {
+  const h = useRuleHandlers();
   if (r.archivedAt) return <RecordActions kind="alert_rule" id={r.id} name={r.name} archived />;
   return (
     <>
       <Button
         small
         icon={r.status === "active" ? "minus" : "check"}
-        disabled={status.isPending}
-        onClick={() =>
-          status.mutate(
-            { id: r.id, status: r.status === "active" ? "inactive" : "active" },
-            {
-              onSuccess: (x) =>
-                x.change && notifySaved(x.change, `${x.record.status === "active" ? "Enabled" : "Disabled"} ${r.name}`),
-              onError: (e) => toast({ tone: "error", message: problemText(e) }),
-            },
-          )
-        }
+        disabled={h.statusPending}
+        onClick={() => h.toggle(r)}
       >
         {r.status === "active" ? "Disable" : "Enable"}
       </Button>
-      <Button
-        small
-        icon="copy"
-        onClick={() => {
-          const name = window.prompt("Name of the copy", `${r.name} (copy)`);
-          if (name?.trim())
-            clone.mutate(
-              { id: r.id, name: name.trim() },
-              {
-                onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}`),
-                onError: (e) => toast({ tone: "error", message: problemText(e) }),
-              },
-            );
-        }}
-      >
+      <Button small icon="copy" onClick={() => h.clone(r)}>
         Clone
       </Button>
-      <Button
-        small
-        icon="alert"
-        onClick={() =>
-          navigate(
-            `/monitoring/incidents?g=${encodeState({ ...emptyState(), columns: { ruleName: { field: "ruleName", op: "eq", value: r.name } } })}`,
-          )
-        }
-      >
+      <Button small icon="alert" onClick={() => h.incidents(r)}>
         Incidents
       </Button>
       <RecordActions kind="alert_rule" id={r.id} name={r.name} archived={false} onEdit={() => void openDialog(r)} />
@@ -509,6 +513,12 @@ function RuleActions({ r }: { r: AlertRuleRow }) {
 }
 
 export function AlertRulesPage() {
+  const h = useRuleHandlers();
+  const { data: me } = useMe();
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("alert_rule");
+  const notifySaved = useNotifySaved();
+  const isAdmin = isAdminUser(me?.permissions);
   return (
     <ListScreen<AlertRuleRow>
       list="alert_rules"
@@ -537,6 +547,40 @@ export function AlertRulesPage() {
       }}
       rowClass={(r) => (r.archivedAt ? "row-muted" : r.status === "inactive" ? "row-muted" : undefined)}
       onOpen={(r) => !r.archivedAt && void openDialog(r)}
+      rowActions={(r) => {
+        const gone = r.archivedAt ? "Deleted rule" : undefined;
+        return [
+          { label: "Edit", icon: "file", main: true, disabled: !!gone, hint: gone, onSelect: () => void openDialog(r) },
+          { label: "Clone", icon: "copy", disabled: !!gone, hint: gone, onSelect: () => h.clone(r) },
+          {
+            label: r.status === "active" ? "Disable" : "Enable",
+            icon: r.status === "active" ? "minus" : "check",
+            disabled: !!gone || h.statusPending,
+            hint: gone,
+            onSelect: () => h.toggle(r),
+          },
+          { label: "Incidents", icon: "alert", onSelect: () => h.incidents(r) },
+          "separator",
+          r.archivedAt
+            ? {
+                label: "Restore",
+                icon: "undo",
+                disabled: !isAdmin || restore.isPending,
+                hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+                onSelect: () =>
+                  restore.mutate(r.id, {
+                    onSuccess: (res) => res.change && notifySaved(res.change, `Restored ${r.name}`),
+                    onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                  }),
+              }
+            : {
+                label: "Delete",
+                icon: "trash",
+                danger: true,
+                onSelect: () => void deleteOne("alert_rule", r.id, r.name),
+              },
+        ];
+      }}
       detail={(r) => ({
         title: (
           <>

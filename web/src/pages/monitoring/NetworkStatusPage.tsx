@@ -202,6 +202,29 @@ export function NetworkStatusPage() {
         },
         since: { width: 170, render: (r) => fmtWhen(r.since) },
       }}
+      rowActions={(r) => [
+        {
+          label: "Start",
+          icon: "play",
+          main: true,
+          disabled: r.status === "online",
+          hint: r.status === "online" ? "Already online" : vendor ? "Bind to the vendor" : "Accept binds again",
+          onSelect: () => void act(r, "start"),
+        },
+        {
+          label: "Stop…",
+          icon: "pause",
+          main: true,
+          disabled: r.status !== "online",
+          hint:
+            r.status !== "online"
+              ? "Only online trunks can be stopped"
+              : vendor
+                ? "Unbind from the vendor"
+                : "Close the customer's sessions",
+          onSelect: () => void act(r, "stop"),
+        },
+      ]}
       trailing={{
         header: "Action",
         width: 90,

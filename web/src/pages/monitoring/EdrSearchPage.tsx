@@ -571,6 +571,20 @@ export function EdrSearchPage() {
           ),
         },
       }}
+      rowActions={(r) => [
+        { label: "Trouble Ticket…", icon: "mail", main: true, onSelect: () => void openTicket([r]) },
+        {
+          label: "Repush…",
+          icon: "send",
+          main: true,
+          disabled: !r.isFinalAttempt || r.msgStatus === "DELIVRD",
+          hint:
+            !r.isFinalAttempt || r.msgStatus === "DELIVRD"
+              ? "Only final attempts that were not delivered can be re-sent"
+              : "Re-send this EDR on a vendor trunk",
+          onSelect: () => void openRepush([r]),
+        },
+      ]}
       selection={{
         summary: (_rows, ids) => `${ids.size} EDR${ids.size === 1 ? "" : "s"} selected`,
         bulk: (ids, clear) => [

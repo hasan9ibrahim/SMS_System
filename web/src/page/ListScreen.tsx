@@ -345,7 +345,7 @@ function RecordActionBar<Row extends { id: number }>({
   const why = multi ? "Select one row (Bulk edit acts on several)" : "Select a row first";
   // In sight: Clone, Delete and the page's main action (marked `main`, else the first other one);
   // everything else goes under More (team trial round 1).
-  const isClone = (it: MenuItem) => /^(clone|duplicate|copy)\b/i.test(it.label);
+  const isClone = (it: MenuItem) => /^(clone|duplicate)\b/i.test(it.label);
   const isDelete = (it: MenuItem) => it.danger === true || /^(delete|archive|restore)\b/i.test(it.label);
   const clone = items.filter(isClone).slice(0, 1);
   const del = items.filter(isDelete).slice(0, 1);

@@ -148,6 +148,15 @@ export function IncidentsPage() {
   const location = useLocation();
   const selectId = Number(new URLSearchParams(location.search).get("incident")) || null;
   useLiveRefresh();
+  const ack = useAcknowledge();
+  const snooze = useSnooze();
+  const navigate = useTabNavigate();
+  const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
+  const SNOOZE = [
+    { span: "15m", label: "Snooze 15 min" },
+    { span: "1h", label: "Snooze 1 hour" },
+    { span: "tomorrow", label: "Snooze to tomorrow" },
+  ] as const;
   return (
     <ListScreen<IncidentRow>
       list="incidents"
@@ -181,6 +190,32 @@ export function IncidentsPage() {
         peakValue: { width: 90, align: "right", render: (r) => <span className="num">{num(r.peakValue)}</span> },
         acknowledgedBy: { width: 140, render: (r) => r.acknowledgedBy ?? <span className="muted">—</span> },
       }}
+      rowActions={(r) => [
+        {
+          label: "Acknowledge",
+          icon: "check",
+          main: true,
+          disabled: r.state !== "open" || ack.isPending,
+          hint: r.state === "open" ? undefined : `Already ${STATE[r.state].toLowerCase()}`,
+          onSelect: () => ack.mutate({ id: r.id }, { onError: fail }),
+        },
+        ...SNOOZE.map((o) => ({
+          label: o.label,
+          icon: "clock" as const,
+          disabled: r.state === "recovered" || snooze.isPending,
+          hint: r.state === "recovered" ? "Already recovered" : undefined,
+          onSelect: () =>
+            snooze.mutate(
+              { id: r.id, span: o.span },
+              { onSuccess: () => toast({ tone: "good", message: "Snoozed" }), onError: fail },
+            ),
+        })),
+        {
+          label: "Open in Analytics",
+          icon: "chart",
+          onSelect: () => navigate(analyticsFor(r.entityKind, r.entityName)),
+        },
+      ]}
       rowClass={(r) => (r.state === "recovered" ? undefined : r.severity === "critical" ? "row-alert" : undefined)}
       detail={(r) => ({
         title: (

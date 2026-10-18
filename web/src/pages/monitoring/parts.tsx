@@ -239,6 +239,26 @@ export function DownloadsList({
         },
         requestedBy: { width: 130, render: (r) => r.requestedBy ?? muted("—") },
       }}
+      rowActions={(r) => [
+        {
+          label: "Download",
+          icon: "download",
+          main: true,
+          disabled: r.status !== "success",
+          hint: r.status === "success" ? undefined : "The file is ready once the request succeeds",
+          onSelect: () => download(r.id),
+        },
+        {
+          label: "Cancel",
+          icon: "x",
+          disabled: r.status !== "pending" && r.status !== "inprogress",
+          hint:
+            r.status === "pending" || r.status === "inprogress"
+              ? "Stop this request"
+              : "Only pending or running requests can be cancelled",
+          onSelect: () => stop(r.id),
+        },
+      ]}
       trailing={{
         header: "Action",
         width: 110,
