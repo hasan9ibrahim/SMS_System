@@ -34,6 +34,7 @@ import { resolvePeriod, previousWindow, type Window } from "../reports/period.js
 import type { ListDef } from "../lists/engine.js";
 import { runList } from "../lists/engine.js";
 import { listFields } from "../lists/fields.js";
+import { customerTrunkList, enterpriseList, vendorTrunkList } from "../lists/defs.js";
 import { checkListQuery } from "../lists/validate.js";
 import { currentViewer } from "../visibility/context.js";
 import { restricts, type Viewer } from "../visibility/policy.js";
@@ -885,6 +886,58 @@ export function getOnlineUsers(_request: FastifyRequest, reply: FastifyReply) {
 }
 
 /** The signed-in user opened a page (an administrator previewing someone still counts as themselves). */
+/** Record paths whose names Home shows instead of an ID (team trial round 1). */
+const RECORD_PATHS: { re: RegExp; def: () => ListDef<{ id: number; name: string }> }[] = [
+  { re: /^\/enterprises\/(\d+)$/, def: () => enterpriseList as unknown as ListDef<{ id: number; name: string }> },
+  {
+    re: /^\/enterprises\/customer-trunks\/(\d+)$/,
+    def: () => customerTrunkList as unknown as ListDef<{ id: number; name: string }>,
+  },
+  {
+    re: /^\/enterprises\/vendor-trunks\/(\d+)$/,
+    def: () => vendorTrunkList as unknown as ListDef<{ id: number; name: string }>,
+  },
+];
+
+/** The signed-in user's pages of the last 30 days, last opened first, for Home (team trial round 1). */
+export function getMyPages(_request: FastifyRequest, reply: FastifyReply) {
+  return withDb(reply, async (pool) => {
+    const { rows } = await pool.query<{ path: string; views: number; last_at: Date }>(
+      `SELECT path, count(*)::int AS views, max(at) AS last_at FROM page_views
+        WHERE user_id = $1 AND at > now() - interval '30 days'
+        GROUP BY path ORDER BY last_at DESC LIMIT 50`,
+      [CURRENT_USER_ID],
+    );
+    // Record names through their lists, so a masked enterprise stays masked (§13.17).
+    const titles = new Map<string, string>();
+    for (const { re, def } of RECORD_PATHS) {
+      const ids = rows
+        .map((r) => re.exec(r.path)?.[1])
+        .filter((x): x is string => !!x)
+        .map(Number);
+      if (!ids.length) continue;
+      const page = await runList(pool, def(), {
+        limit: ids.length,
+        withTotal: false,
+        filter: { logic: "and", conditions: [{ field: "id", op: "in", values: ids }] },
+      });
+      for (const r of rows) {
+        const id = Number(re.exec(r.path)?.[1]);
+        const hit = page.rows.find((x) => x.id === id);
+        if (hit) titles.set(r.path, hit.name);
+      }
+    }
+    return {
+      pages: rows.map((r) => ({
+        path: r.path,
+        title: titles.get(r.path) ?? null,
+        views: r.views,
+        lastAt: r.last_at.toISOString(),
+      })),
+    };
+  });
+}
+
 export function recordPageView(request: FastifyRequest, reply: FastifyReply) {
   const { path } = request.body as PageViewInput;
   return withDb(reply, async (pool) => {

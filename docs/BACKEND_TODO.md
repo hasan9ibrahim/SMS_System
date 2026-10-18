@@ -345,6 +345,7 @@ What the Phoenix backend must match so the screens need no change:
 - **Bulk rating default action (§13.11)**: the Action now starts on **Set a fixed rate** (was Change by %); from a market move it still starts on Suggested rates only. No contract change.
 - **System clock in the top bar (§15.1)**: the server's time (synced from the health check, like the status bar), shown in the platform time zone and ticking every second, with the date next to it (weekday on wide screens; full date and UTC in its tooltip). On screens under 1500 px the search box shrinks to its icon and Ctrl K so the whole menu still fits. No contract change.
 - **LCR profile form (§13.23)**: the vendor trunk scope shows trunk names, not IDs.
+- **Home daily screens (§15.1, §13.18)**: contract v0.59.0 adds `GET /me/pages` (the signed-in user's pages of the last 30 days from page views: path, record name for enterprise and trunk records, views, last opened). Home shows Dashboard and Live analytics first, then the user's most used pages (views summed per page) and recently opened pages and records. *Backend*: same query on its page-view store.
 - **Billing time zones** are shown as `UTC±hh:mm · Zone`, sorted west to east, everywhere a time zone is picked. The stored value is still the IANA zone.
 
 ## Market move notes (build step 5.15, §13.14)

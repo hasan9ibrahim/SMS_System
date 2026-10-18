@@ -64,6 +64,16 @@ export async function downloadTeamCsv(q: TeamReportQuery): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+/** The signed-in user's pages of the last 30 days, for Home's most used and recent (team trial round 1). */
+export function useMyPages() {
+  return useQuery({
+    queryKey: ["me", "pages"],
+    queryFn: () => unwrap(api.GET("/me/pages")),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
 /** Pages opened, for pages most used and the current page (§13.18). Fire and forget. */
 export function recordPageView(path: string): void {
   void api.POST("/me/page-views", { body: { path } }).catch(() => undefined);

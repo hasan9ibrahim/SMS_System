@@ -170,6 +170,18 @@ describe("Team report (§13.18)", { skip }, () => {
     assert.equal(o.active, o.users.filter((u: { active: boolean }) => u.active).length);
     const { rows } = await db().query("SELECT path FROM page_views WHERE user_id = 1 ORDER BY at DESC LIMIT 1");
     assert.equal(rows[0].path, "/reports/team");
+    // Home's most used and recent (team trial round 1): last opened first, with counts and record names.
+    const mine = await ok("getMyPages", call("GET", "/me/pages"));
+    assert.equal(mine.pages[0].path, "/reports/team");
+    assert.ok(mine.pages[0].views >= 1);
+    assert.ok(mine.pages.length <= 50);
+    const { rows: ent } = await db().query(
+      "SELECT id, name FROM enterprises WHERE deleted_at IS NULL ORDER BY id LIMIT 1",
+    );
+    await ok("recordPageView", call("POST", "/me/page-views", { path: `/enterprises/${ent[0].id}` }), 204);
+    const again = await ok("getMyPages", call("GET", "/me/pages"));
+    assert.equal(again.pages[0].path, `/enterprises/${ent[0].id}`);
+    assert.equal(again.pages[0].title, ent[0].name);
   });
 
   test("visibility hides money the viewer's policy hides (§13.17)", async () => {

@@ -17,6 +17,7 @@ export const GATE_OPEN = new Set([
   "saveWorkspace",
   "updatePreferences",
   "recordPageView",
+  "getMyPages",
 ]);
 
 let cache: { blocked: boolean; at: number } | null = null;

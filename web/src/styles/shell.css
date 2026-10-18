@@ -1277,8 +1277,48 @@ a.btn {
   flex-direction: column;
   flex: 1;
 }
-.home-list svg {
+.home-list svg,
+.home-pinned svg {
   color: var(--color-accent);
+}
+/* Dashboard and Live analytics: two large buttons on top (team trial round 1). */
+.home-pinned {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.home-pinned button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--accent-softer);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-pinned button:hover {
+  background: var(--accent-soft);
+}
+.home-pinned button > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.home-sub {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.home-meta {
+  white-space: nowrap;
 }
 .tips {
   margin: 0;

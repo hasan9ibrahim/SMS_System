@@ -1,45 +1,75 @@
-// Home tab (pinned, §15.1): where the daily screens are, and what each build step brings.
+// Home tab (pinned, §15.1): Dashboard and Live analytics first, then the user's most used and recent pages.
 import { useMe } from "../api/hooks";
 import { HOME, PAGES, SECTIONS } from "../nav/registry";
 import { PageHeader } from "../page/PageHeader";
 import { usePageStatus, useTabNavigate } from "../shell/tabContext";
 import { Icon } from "../ui/Icon";
+import { useMyPages } from "../api/team";
+import { ago, homeEntries, type HomeEntry } from "./homeModel";
 
-const DAILY = ["enterprises", "rate-manager", "route-rules", "rate-lookup", "enterprise-report", "dashboard"];
+function EntryButton({ entry, open, meta }: { entry: HomeEntry; open: OpenFn; meta?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => open(entry.path, e)}
+      onAuxClick={(e) => e.button === 1 && open(entry.path, e)}
+    >
+      <Icon name={entry.page.icon} />
+      <span>
+        <strong>{entry.label}</strong>
+        <span className="muted small">{entry.path === entry.page.path ? entry.page.summary : entry.page.label}</span>
+      </span>
+      {meta && <span className="muted small home-meta">{meta}</span>}
+    </button>
+  );
+}
+
+type OpenFn = (path: string, e: React.MouseEvent) => void;
 
 export function HomePage() {
   const { data: me } = useMe();
+  const mine = useMyPages();
   const navigate = useTabNavigate();
   usePageStatus({ rows: `${PAGES.length} pages in ${SECTIONS.length} menus` });
-  const open = (path: string, e: React.MouseEvent) =>
+  const open: OpenFn = (path, e) =>
     navigate(path, e.ctrlKey || e.metaKey || e.button === 1 ? { forceNew: true } : { newTab: true });
+  const { pinned, mostUsed, fromHistory, recent } = homeEntries(mine.data?.pages ?? []);
   return (
     <div className="page home">
       <PageHeader page={HOME} title={me ? `Welcome, ${me.displayName.split(" ")[0]}` : "Welcome"} />
       <div className="home-body">
         <section className="card">
           <h2>Daily screens</h2>
+          {/* Dashboard and Live analytics always first (team trial round 1). */}
+          <div className="home-pinned">
+            {pinned.map((entry) => (
+              <EntryButton key={entry.path} entry={entry} open={open} />
+            ))}
+          </div>
+          <h3 className="home-sub">{fromHistory ? "Most used by you" : "Most used"}</h3>
           <ul className="home-list">
-            {DAILY.map((key) => {
-              const pg = PAGES.find((p) => p.key === key)!;
-              return (
-                <li key={key}>
-                  <button
-                    type="button"
-                    onClick={(e) => open(pg.path, e)}
-                    onAuxClick={(e) => e.button === 1 && open(pg.path, e)}
-                  >
-                    <Icon name={pg.icon} />
-                    <span>
-                      <strong>{pg.label}</strong>
-                      <span className="muted small">{pg.summary}</span>
-                    </span>
-                    <span className="tag">{pg.step === "3" ? "ready" : `step ${pg.step}`}</span>
-                  </button>
-                </li>
-              );
-            })}
+            {mostUsed.map((entry) => (
+              <li key={entry.path}>
+                <EntryButton
+                  entry={entry}
+                  open={open}
+                  meta={entry.views ? `${entry.views.toLocaleString("en-US")}× in 30 days` : undefined}
+                />
+              </li>
+            ))}
           </ul>
+          <h3 className="home-sub">Recently opened</h3>
+          {recent.length ? (
+            <ul className="home-list">
+              {recent.map((entry) => (
+                <li key={entry.path}>
+                  <EntryButton entry={entry} open={open} meta={entry.lastAt ? ago(entry.lastAt) : undefined} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted small">Pages and records you open show here.</p>
+          )}
         </section>
         <section className="card">
           <h2>Working with the app</h2>

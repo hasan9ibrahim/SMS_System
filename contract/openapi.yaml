@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.58.0
+  version: 0.59.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -12546,6 +12546,26 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /me/pages:
+    get:
+      tags:
+      - system
+      operationId: getMyPages
+      summary: The signed-in user's pages, for Home
+      description: 'Pages and records the user opened in the last 30 days, with how often and when last (team trial round 1).
+        Home shows the most used and the recent ones from it.'
+      responses:
+        '200':
+          description: Pages opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyPages'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /me/page-views:
     post:
       tags:
@@ -27802,6 +27822,27 @@ components:
           - department
           - team
           - self
+    MyPages:
+      type: object
+      required: [pages]
+      properties:
+        pages:
+          type: array
+          description: Up to 50 paths, last opened first.
+          items:
+            type: object
+            required: [path, title, views, lastAt]
+            properties:
+              path:
+                type: string
+              title:
+                type: [string, "null"]
+                description: The record's name for record paths (enterprise, trunk), null for pages.
+              views:
+                type: integer
+                description: Times opened in the last 30 days.
+              lastAt:
+                $ref: "#/components/schemas/Timestamp"
     PageViewInput:
       type: object
       additionalProperties: false

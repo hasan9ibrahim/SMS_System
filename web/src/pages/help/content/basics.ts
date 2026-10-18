@@ -1566,7 +1566,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "**Daily screens** — Enterprises, Rate manager, Route rules, Rate lookup, Enterprise report and Dashboard, each with a one-line description. The tag on the right says **ready** or which build step delivers it.",
+              "**Daily screens** — **Dashboard** and **Live analytics** always on top, then **Most used by you** (your most opened pages in the last 30 days, with how many times) and **Recently opened** (the pages and records you opened last, newest first, with how long ago). Until you have a history, Most used shows Enterprises, Rate manager, Route rules, Rate lookup and Enterprise report.",
               "**Working with the app** — short tips: Ctrl K, opening and closing tabs, dragging tabs out, typing column filters, saved views and Ctrl Z.",
               "The status bar shows how many pages and menus the platform has.",
             ],

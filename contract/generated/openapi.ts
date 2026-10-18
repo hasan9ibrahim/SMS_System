@@ -8603,6 +8603,26 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/me/pages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The signed-in user's pages, for Home
+     * @description Pages and records the user opened in the last 30 days, with how often and when last (team trial round 1). Home shows the most used and the recent ones from it.
+     */
+    get: operations["getMyPages"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/me/page-views": {
     parameters: {
       query?: never;
@@ -15807,6 +15827,17 @@ export type components = {
       active: number;
       /** @enum {string} */
       scope: "all" | "department" | "team" | "self";
+    };
+    MyPages: {
+      /** @description Up to 50 paths, last opened first. */
+      pages: {
+        path: string;
+        /** @description The record's name for record paths (enterprise, trunk), null for pages. */
+        title: string | null;
+        /** @description Times opened in the last 30 days. */
+        views: number;
+        lastAt: components["schemas"]["Timestamp"];
+      }[];
     };
     PageViewInput: {
       path: string;
@@ -30047,6 +30078,28 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OnlineUsers"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMyPages: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Pages opened */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MyPages"];
         };
       };
       401: components["responses"]["Unauthorized"];

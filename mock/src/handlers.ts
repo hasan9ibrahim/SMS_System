@@ -194,6 +194,7 @@ import {
   getTeamMember,
   getTeamTargets,
   queryTeamTimeline,
+  getMyPages,
   recordPageView,
   runTeamReport,
   updateTeamTargets,
@@ -674,6 +675,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   updateTeamTargets,
   getOnlineUsers,
   recordPageView,
+  getMyPages,
 
   // Cleanup Center (§13.19, §13.20)
   queryCleanupFindings,
