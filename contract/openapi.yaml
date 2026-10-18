@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.57.0
+  version: 0.58.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -26411,6 +26411,9 @@ components:
         required:
         - id
         - ruleCount
+        - ruleNames
+        - vendorScope
+        - vendorScopeNames
         - updatedBy
         - updatedAt
         - archivedAt
@@ -26419,6 +26422,19 @@ components:
           ruleCount:
             type: integer
             description: Route rules of type Least cost using it.
+          ruleNames:
+            type: array
+            description: Those route rules by name for the hover list (up to 100; team trial round 1).
+            items:
+              type: string
+          vendorScope:
+            type: string
+            description: Which vendor trunks the profile may use, e.g. "All vendors", "3 vendors", "All but 2".
+          vendorScopeNames:
+            type: array
+            description: The listed vendor trunks by name for the hover list (up to 100); empty for All vendors.
+            items:
+              type: string
           updatedBy:
             type:
             - string

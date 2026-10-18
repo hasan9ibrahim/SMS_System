@@ -2911,6 +2911,7 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "maxRate", label: "Max Rate", type: "decimal", defaultOperator: "lte", hidden: true }),
       field({ field: "qualityWeighted", label: "Quality-weighted", type: "boolean", defaultOperator: "eq" }),
       field({ field: "ruleCount", label: "Rules", type: "integer", defaultOperator: "gte" }),
+      field({ field: "vendorScope", label: "Vendor scope", type: "text", defaultOperator: "like", sortable: false }),
       field({ field: "description", label: "Description", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
       field({ field: "updatedAt", label: "Updated", type: "datetime", defaultOperator: "between" }),

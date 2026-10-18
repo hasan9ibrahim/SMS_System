@@ -15258,6 +15258,12 @@ export type components = {
       id: components["schemas"]["Id"];
       /** @description Route rules of type Least cost using it. */
       ruleCount: number;
+      /** @description Those route rules by name for the hover list (up to 100; team trial round 1). */
+      ruleNames: string[];
+      /** @description Which vendor trunks the profile may use, e.g. "All vendors", "3 vendors", "All but 2". */
+      vendorScope: string;
+      /** @description The listed vendor trunks by name for the hover list (up to 100); empty for All vendors. */
+      vendorScopeNames: string[];
       updatedBy: string | null;
       updatedAt: components["schemas"]["Timestamp"];
       archivedAt: components["schemas"]["Timestamp"] | null;

@@ -129,6 +129,44 @@ describe("LCR profiles, table and rules (§13.23)", { skip }, () => {
     assert.equal(page.rows[0].id, created.record.id);
   });
 
+  test("profile rows carry rule names and the vendor scope for the hover lists", async () => {
+    const { rows } = await db().query(
+      "SELECT id, name FROM vendor_trunks WHERE deleted_at IS NULL ORDER BY name LIMIT 2",
+    );
+    const created = await ok(
+      "createLcrProfile",
+      call(
+        "POST",
+        "/lcr-profiles",
+        profileInput({
+          name: `LCR scope ${run}`,
+          vendorTrunkMode: "inclusive",
+          vendorTrunkIds: rows.map((r) => Number(r.id)),
+        }),
+      ),
+      201,
+    );
+    cleanup.push(() => call("POST", `/lcr-profiles/${created.record.id}/archive`, {}));
+    assert.equal(created.record.vendorScope, "2 vendors");
+    assert.deepEqual(
+      created.record.vendorScopeNames,
+      rows.map((r) => r.name),
+    );
+    assert.deepEqual(created.record.ruleNames, []);
+    const page = await ok(
+      "queryLcrProfiles",
+      call("POST", "/lcr-profiles/query", {
+        filter: { logic: "and", conditions: [{ field: "vendorScope", op: "like", value: `%${rows[0].name}%` }] },
+      }),
+    );
+    assert.ok(
+      page.rows.some((r: { id: number }) => r.id === created.record.id),
+      "filters on the vendor names",
+    );
+    for (const r of page.rows as { ruleCount: number; ruleNames: string[] }[])
+      assert.equal(r.ruleNames.length, Math.min(100, r.ruleCount));
+  });
+
   test("LCR table: ranking, profile, point in time, what-if", async () => {
     const r = await call("POST", "/lcr/table", { mccmnc: "99999" });
     assert.equal(r.statusCode, 400);

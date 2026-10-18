@@ -1334,7 +1334,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A profile is a named set of LCR rules that Least cost route rules can use. The list shows Name, Status, Vendors Used, Split, Min DLR, Quality-weighted (Score or Cost), Rules (how many route rules use it), Updated By and Updated. Click **New profile**, or double-click a profile to edit it. Profile changes have Undo and History.",
+            text: "A profile is a named set of LCR rules that Least cost route rules can use. The list shows Name, Status, Vendors Used, Split, Min DLR, Quality-weighted (Score or Cost), Rules (how many route rules use it; point at the number to see them by name), Vendor scope (**All vendors**, **N vendors** or **All but N**; point at it to see the vendor trunks), Updated By and Updated. On the LCR table, point at the client changes under the Margin change card to see every client trunk whose vendor would change. Click **New profile**, or double-click a profile to edit it. Profile changes have Undo and History.",
           },
           {
             kind: "fields",

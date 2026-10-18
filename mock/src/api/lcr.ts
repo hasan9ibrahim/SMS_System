@@ -40,9 +40,18 @@ const badInput = (reply: FastifyReply, errors: FieldError[]) =>
 
 // ---------------------------------------------------------------- profiles
 
+/** Names of the vendor trunks a profile lists, for its scope cell and hover list (team trial round 1). */
+const SCOPE_NAMES = `ARRAY(SELECT vt.name FROM unnest(p.vendor_trunk_ids) x(id) JOIN vendor_trunks vt ON vt.id = x.id
+    ORDER BY vt.name LIMIT 100)`;
 const PROFILE_SELECT = `p.*, u.username AS updated_by,
-  (SELECT count(*)::int FROM route_rules r WHERE r.lcr_profile_id = p.id AND r.deleted_at IS NULL) AS rule_count`;
+  (SELECT count(*)::int FROM route_rules r WHERE r.lcr_profile_id = p.id AND r.deleted_at IS NULL) AS rule_count,
+  ARRAY(SELECT r.name FROM route_rules r WHERE r.lcr_profile_id = p.id AND r.deleted_at IS NULL
+         ORDER BY r.priority, r.name LIMIT 100) AS rule_names,
+  ${SCOPE_NAMES} AS scope_names`;
 const PROFILE_FROM = "lcr_profiles p LEFT JOIN users u ON u.id = p.updated_by_id";
+
+const scopeLabel = (mode: string, n: number) =>
+  mode === "all" ? "All vendors" : mode === "exclusive" ? `All but ${n}` : `${n} vendor${n === 1 ? "" : "s"}`;
 
 function mapProfileRow(r: Record<string, unknown>): LcrProfileRow {
   return {
@@ -52,6 +61,9 @@ function mapProfileRow(r: Record<string, unknown>): LcrProfileRow {
     description: (r.description as string | null) ?? null,
     status: r.status as LcrProfileRow["status"],
     ruleCount: Number(r.rule_count ?? 0),
+    ruleNames: (r.rule_names as string[] | null) ?? [],
+    vendorScope: scopeLabel(r.vendor_trunk_mode as string, ((r.vendor_trunk_ids as unknown[] | null) ?? []).length),
+    vendorScopeNames: r.vendor_trunk_mode === "all" ? [] : ((r.scope_names as string[] | null) ?? []),
     updatedBy: (r.updated_by as string | null) ?? null,
     updatedAt: iso(r.updated_at)!,
     archivedAt: iso(r.deleted_at),
@@ -75,6 +87,10 @@ export const lcrProfileList: ListDef<LcrProfileRow> = {
     qualityWeighted: { sql: "p.quality_weighted" },
     ruleCount: {
       sql: "(SELECT count(*)::int FROM route_rules r WHERE r.lcr_profile_id = p.id AND r.deleted_at IS NULL)",
+    },
+    // Filters on the vendor names ("All vendors" matches profiles without a list).
+    vendorScope: {
+      sql: `(CASE WHEN p.vendor_trunk_mode = 'all' THEN 'All vendors' ELSE array_to_string(${SCOPE_NAMES}, ', ') END)`,
     },
     description: { sql: "p.description" },
     updatedBy: { sql: "u.username" },
