@@ -3,12 +3,14 @@
 // (every 5 minutes, or Check now) and e-mails when it starts firing. Saves are undoable (§13.10).
 import { useState } from "react";
 import type { EmailTemplateRow, TrafficAlertInput, TrafficAlertRow, TrunkListRow } from "@sms/contract";
+import { useMe } from "../../../api/hooks";
+import { useRestore } from "../../../api/records";
 import { useCheckTrafficAlert, useCloneTrafficAlert, useSaveTrafficAlert } from "../../../api/switchTools";
 import { FormField, NumberField, Section, SelectField, TextField, useForm } from "../../../form/form";
 import { HistoryList, useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
-import { ListLookup } from "../../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../../records/parts";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
@@ -308,6 +310,14 @@ function AlertDetail({ r, onSelect }: { r: TrafficAlertRow; onSelect: (id: numbe
 
 export function TrafficAlertsPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
+  const check = useCheckTrafficAlert();
+  const clone = useCloneTrafficAlert();
+  const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("traffic_alert");
+  const deleted = (r: TrafficAlertRow) => (r.archivedAt ? "The alert is deleted" : undefined);
   return (
     <ListScreen<TrafficAlertRow>
       list="traffic_alerts"
@@ -315,6 +325,67 @@ export function TrafficAlertsPage() {
       selectId={selectId}
       noSelection
       historyScope={{ entityTypes: ["traffic_alert"] }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: deleted(r),
+          onSelect: () => void openEditor(r),
+        },
+        {
+          label: "Check now",
+          icon: "refresh",
+          main: true,
+          disabled: !!r.archivedAt || check.isPending,
+          hint: deleted(r),
+          onSelect: () =>
+            check.mutate(r.id, {
+              onSuccess: (x) =>
+                toast({
+                  tone: x.state === "firing" ? "error" : "info",
+                  message: `${ALERT_STATE[x.state].label}${x.breaches.length ? `: ${x.breaches.join("; ")}` : ""}${
+                    x.emailed.length ? ` · e-mailed ${x.emailed.join(", ")}` : ""
+                  }`,
+                }),
+              onError: (e) => toast({ tone: "error", message: problemText(e) }),
+            }),
+        },
+        {
+          label: "Clone",
+          icon: "copy",
+          disabled: !!r.archivedAt || clone.isPending,
+          hint: deleted(r),
+          onSelect: () =>
+            clone.mutate(r.id, {
+              onSuccess: (x) => {
+                if (x.change) notifySaved(x.change, `Cloned as ${x.record.name}`);
+                setSelectId(x.record.id);
+              },
+              onError: (e) => toast({ tone: "error", message: problemText(e) }),
+            }),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored traffic alert ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("traffic_alert", r.id, `traffic alert ${r.name}`),
+            },
+      ]}
       primary={{ label: "Add", icon: "plus", onClick: () => void openEditor(null).then((id) => id && setSelectId(id)) }}
       columns={{
         id: { width: 80 },

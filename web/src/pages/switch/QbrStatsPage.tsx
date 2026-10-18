@@ -127,6 +127,13 @@ export function QbrStatsPage() {
   const navigate = useTabNavigate();
   const side: Side = new URLSearchParams(location.search).get("side") === "customer" ? "customer" : "vendor";
   const setSide = (s: Side) => navigate(`/switch/qbr-stats?side=${s}`, { replace: true });
+  const clear = useClearQbrOverride();
+  const notifySaved = useNotifySaved();
+  const clearOverride = (row: QbrStat) =>
+    clear.mutate(row.id, {
+      onSuccess: (r) => r.change && notifySaved(r.change, `Override cleared: ${row.trunk} · ${row.mccmnc}`),
+      onError: (e) => toast({ tone: "error", message: problemText(e) }),
+    });
   const withSide = (body: ListQuery): ListQuery => ({
     ...body,
     filter: {
@@ -143,6 +150,23 @@ export function QbrStatsPage() {
       queryScope={side}
       fetchPage={(body) => fetchListPage<QbrStat>("qbr_stats", withSide(body))}
       historyScope={{ entityTypes: ["qbr_stat"] }}
+      rowActions={(r) => [
+        {
+          label: "Override…",
+          icon: "file",
+          main: true,
+          disabled: r.side !== "vendor",
+          hint: r.side === "vendor" ? undefined : "Only vendor stats can be set by hand",
+          onSelect: () => void openOverride(r),
+        },
+        {
+          label: "Clear override",
+          icon: "undo",
+          disabled: r.side !== "vendor" || !r.overridden || clear.isPending,
+          hint: r.overridden ? undefined : "No manual override on this stat",
+          onSelect: () => clearOverride(r),
+        },
+      ]}
       primary={
         side === "vendor"
           ? { label: "Add vendor stat", icon: "plus", onClick: () => void openOverride(null) }

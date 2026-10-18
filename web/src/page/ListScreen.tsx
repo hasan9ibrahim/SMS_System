@@ -556,20 +556,18 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 {primary.label}
               </Button>
             )}
-            {!noSelection && (
-              <RecordActionBar<Row>
-                target={
-                  selected.size === 1
-                    ? (rows.find((r) => selected.has(r.id)) ?? null)
-                    : selected.size === 0
-                      ? activeRow
-                      : null
-                }
-                multi={selected.size > 1}
-                template={rows[0] ?? null}
-                {...(rowActions ? { rowActions } : {})}
-              />
-            )}
+            <RecordActionBar<Row>
+              target={
+                selected.size === 1
+                  ? (rows.find((r) => selected.has(r.id)) ?? null)
+                  : selected.size === 0
+                    ? activeRow
+                    : null
+              }
+              multi={selected.size > 1}
+              template={rows[0] ?? null}
+              {...(rowActions ? { rowActions } : {})}
+            />
           </>
         }
       />

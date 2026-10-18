@@ -3,12 +3,14 @@
 // test box shows which rule a message meets. Saves are undoable (§13.10).
 import { useState } from "react";
 import type { Destination, SmsVoiceRuleInput, SmsVoiceRuleRow, SmsVoiceTestResult } from "@sms/contract";
+import { useMe } from "../../../api/hooks";
+import { useRestore } from "../../../api/records";
 import { testSmsVoice, useSaveSmsVoiceRule } from "../../../api/switchTools";
 import { FormField, NumberField, SelectField, TextField, useForm } from "../../../form/form";
 import { HistoryList, useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
-import { ListLookup } from "../../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../../records/parts";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
@@ -138,12 +140,46 @@ function TestBox() {
 }
 
 export function SmsToVoicePage() {
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("sms_voice_rule");
+  const notifySaved = useNotifySaved();
   return (
     <ListScreen<SmsVoiceRuleRow>
       list="sms_voice_rules"
       page={page}
       noSelection
       historyScope={{ entityTypes: ["sms_voice_rule"] }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted rules cannot be edited" : undefined,
+          onSelect: () => void openDialog(r),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored SMS to voice rule ${r.id}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("sms_voice_rule", r.id, `SMS to voice rule ${r.id}`),
+            },
+      ]}
       above={<TestBox />}
       primary={{ label: "Add", icon: "plus", onClick: () => void openDialog(null) }}
       columns={{

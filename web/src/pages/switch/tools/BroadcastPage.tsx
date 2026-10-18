@@ -272,6 +272,9 @@ export function BroadcastPage() {
       page={page}
       noSelection
       historyScope={null}
+      rowActions={() => [
+        { label: "Email logs", icon: "mail", main: true, onSelect: () => navigate("/switch/email-logs") },
+      ]}
       primary={{ label: "New broadcast", icon: "megaphone", onClick: () => void openCompose() }}
       columns={{
         subject: { width: 300, render: (r) => <strong>{r.subject}</strong> },

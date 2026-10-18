@@ -13,13 +13,14 @@ import type {
   HlrPolicyTestResult,
   HlrProviderRow,
 } from "@sms/contract";
-import { fetchListPage } from "../../../api/hooks";
+import { fetchListPage, useMe } from "../../../api/hooks";
+import { useRestore } from "../../../api/records";
 import { testHlrPolicy, useHlrPolicy, useSaveHlrPolicy } from "../../../api/hlr";
 import { Section, SelectField, TextField, useForm } from "../../../form/form";
 import { HistoryList, useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
-import { ListLookup } from "../../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../../records/parts";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { fmtWhen, RecordActions } from "../../reference/shared";
@@ -479,6 +480,11 @@ function PolicyTest({ id }: { id: number }) {
 
 export function PoliciesView() {
   const [selectId, setSelectId] = useState<number | null>(null);
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("hlr_policy");
+  const notifySaved = useNotifySaved();
   return (
     <ListScreen<HlrPolicyRow>
       list="hlr_policies"
@@ -486,6 +492,35 @@ export function PoliciesView() {
       title="HLR · Policies"
       selectId={selectId}
       historyScope={{ entityTypes: ["hlr_policy"] }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted policies cannot be edited" : undefined,
+          onSelect: () => void openEditor(r.id).then((id) => id && setSelectId(id)),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored policy ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("hlr_policy", r.id, `policy ${r.name}`),
+            },
+      ]}
       primary={{
         label: "Add policy",
         icon: "plus",

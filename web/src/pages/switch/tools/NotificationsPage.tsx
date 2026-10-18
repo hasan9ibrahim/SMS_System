@@ -156,7 +156,9 @@ function TechInfoDialog({ ids, done }: { ids: number[]; done: () => void }) {
           <span className="muted small">{preview.isError ? problemText(preview.error) : "Preparing the e-mail…"}</span>
         )}
       </div>
-      <p className="muted small">The e-mail includes the SMPP password in plain text (team decision); check the recipients before sending.</p>
+      <p className="muted small">
+        The e-mail includes the SMPP password in plain text (team decision); check the recipients before sending.
+      </p>
     </Modal>
   );
 }
@@ -209,6 +211,12 @@ export function NotificationsPage() {
       page={page}
       historyScope={null}
       initialState={{ visible: ["enterpriseName", "name", "category", "protocol", "tps", "status"] }}
+      rowActions={(r) => [
+        { label: "Send Rate…", icon: "mail", main: true, onSelect: () => void openSendRate([r.id]) },
+        { label: "Send Tech Info…", icon: "send", onSelect: () => void openTechInfo([r.id]) },
+        { label: "View Rate (Excel)", icon: "download", onSelect: () => viewRate(r.id, "excel") },
+        { label: "View Rate (CSV)", icon: "download", onSelect: () => viewRate(r.id, "csv") },
+      ]}
       columns={{
         enterpriseName: { width: 240, render: (r) => <strong>{r.enterpriseName}</strong> },
         name: { width: 220 },

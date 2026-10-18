@@ -12,15 +12,15 @@ import type {
   ListQuery,
 } from "@sms/contract";
 import { useQuery } from "@tanstack/react-query";
-import { fetchListPage } from "../../../api/hooks";
+import { fetchListPage, useMe } from "../../../api/hooks";
 import { useDeleteHlrRates, useHlrProvider, useSaveHlrProvider, useSetHlrRate } from "../../../api/hlr";
 import { downloadCsv } from "../../../api/masterData";
-import { usePlatformCurrency, useReference } from "../../../api/records";
+import { usePlatformCurrency, useReference, useRestore } from "../../../api/records";
 import { FormField, NumberField, Section, SelectField, TextArea, TextField, useForm } from "../../../form/form";
 import { HistoryList, useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
-import { ListLookup } from "../../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../../records/parts";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { fmtWhen, openImport, RecordActions, RecordDialog } from "../../reference/shared";
@@ -412,6 +412,25 @@ function Prices({ id }: { id: number }) {
       historyScope={{ entityTypes: ["hlr_provider_rate"] }}
       queryScope={id}
       fetchPage={(body) => fetchListPage<HlrProviderRate>("hlr_provider_rates", withProvider(body))}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: archived,
+          hint: archived ? "The provider is deleted" : undefined,
+          onSelect: () => void edit(r),
+        },
+        "separator",
+        {
+          label: "Delete",
+          icon: "trash",
+          danger: true,
+          disabled: archived || del.isPending,
+          hint: archived ? "The provider is deleted" : "Remove this price (the default rate applies)",
+          onSelect: () => remove([r.id]),
+        },
+      ]}
       primary={{ label: "Set price", icon: "plus", disabled: archived, onClick: () => void edit(null) }}
       actions={
         <>
@@ -518,9 +537,14 @@ function Prices({ id }: { id: number }) {
 // ---------------------------------------------------------------- view
 
 export function ProvidersView() {
-  const { providerId } = useHlrNav();
+  const { providerId, go } = useHlrNav();
   const currency = usePlatformCurrency();
   const [selectId, setSelectId] = useState<number | null>(null);
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("hlr_provider");
+  const notifySaved = useNotifySaved();
   if (providerId !== null) return <Prices id={providerId} />;
   return (
     <ListScreen<HlrProviderRow>
@@ -529,6 +553,42 @@ export function ProvidersView() {
       title="HLR · Providers"
       selectId={selectId}
       historyScope={{ entityTypes: ["hlr_provider", "hlr_provider_rate"] }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted providers cannot be edited" : undefined,
+          onSelect: () => void openEditor(r.id),
+        },
+        {
+          label: `Prices (${r.rates})`,
+          icon: "list",
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "The provider is deleted" : undefined,
+          onSelect: () => go("providers", `&provider=${r.id}`),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored provider ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("hlr_provider", r.id, `provider ${r.name}`),
+            },
+      ]}
       primary={{
         label: "Add provider",
         icon: "plus",

@@ -10,7 +10,8 @@ import type {
   FirewallRuleRow,
   ListQuery,
 } from "@sms/contract";
-import { fetchListPage } from "../../../api/hooks";
+import { fetchListPage, useMe } from "../../../api/hooks";
+import { useRestore } from "../../../api/records";
 import {
   checkFirewallIp,
   useAddFirewallRule,
@@ -21,7 +22,7 @@ import { NumberField, SelectField, TextField, useForm } from "../../../form/form
 import { HistoryList, useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
-import { ListLookup } from "../../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../../records/parts";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, StatusDot } from "../../../ui/primitives";
@@ -161,6 +162,10 @@ function AddBar({ list }: { list: "banned" | "trusted" }) {
 function RulesView({ list }: { list: "banned" | "trusted" }) {
   const remove = useRemoveFirewallRule();
   const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("firewall_rule");
   const withList = (body: ListQuery): ListQuery => ({
     ...body,
     filter: {
@@ -178,6 +183,39 @@ function RulesView({ list }: { list: "banned" | "trusted" }) {
       fetchPage={(body) => fetchListPage<FirewallRuleRow>("firewall_rules", withList(body))}
       noSelection
       historyScope={{ entityTypes: ["firewall_rule"] }}
+      rowActions={(r) => [
+        {
+          label: "Remove",
+          icon: "x",
+          main: true,
+          disabled: !!r.archivedAt || remove.isPending,
+          hint: r.archivedAt ? "Already removed" : `Remove ${r.ip} from the list`,
+          onSelect: () =>
+            remove.mutate(r.id, {
+              onSuccess: (x) => x.change && notifySaved(x.change, `Removed ${r.ip}`),
+              onError: (err) => toast({ tone: "error", message: problemText(err) }),
+            }),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored ${r.ip}`),
+                  onError: (err) => toast({ tone: "error", message: problemText(err) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("firewall_rule", r.id, r.ip),
+            },
+      ]}
       above={
         <div className="fw-above">
           <div className="rm-trunk">
@@ -343,6 +381,7 @@ function FiltersView() {
       title="Firewall · Filter"
       noSelection
       historyScope={{ entityTypes: ["firewall_filter"] }}
+      rowActions={(r) => [{ label: "Edit", icon: "file", main: true, onSelect: () => void open(r) }]}
       above={
         <div className="rm-trunk">
           <Tabs />

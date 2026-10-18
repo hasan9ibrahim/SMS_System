@@ -13,11 +13,13 @@ import type {
   TrunkListRow,
 } from "@sms/contract";
 import { useHlrRule, useHlrRuleUsedBy, useSaveHlrRule } from "../../../api/hlr";
+import { useMe } from "../../../api/hooks";
+import { useRestore } from "../../../api/records";
 import { FormField, Section, SelectField, TextField, useForm } from "../../../form/form";
 import { HistoryList, useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
-import { ListLookup } from "../../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../../records/parts";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../../ui/feedback";
 import { HoverList } from "../../../ui/HoverList";
@@ -347,6 +349,11 @@ function UsedBy({ id }: { id: number }) {
 
 export function RulesView() {
   const [selectId, setSelectId] = useState<number | null>(null);
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("hlr_rule");
+  const notifySaved = useNotifySaved();
   return (
     <ListScreen<HlrRuleRow>
       list="hlr_rules"
@@ -354,6 +361,35 @@ export function RulesView() {
       title="HLR · Rules"
       selectId={selectId}
       historyScope={{ entityTypes: ["hlr_rule"] }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted rules cannot be edited" : undefined,
+          onSelect: () => void openEditor(r.id).then((id) => id && setSelectId(id)),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored rule ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("hlr_rule", r.id, `rule ${r.name}`),
+            },
+      ]}
       actions={<CleanupBadge kinds={["hlr_rule_unassigned"]} />}
       primary={{
         label: "Add rule",
