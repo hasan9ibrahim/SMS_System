@@ -65,11 +65,11 @@ export function AmFilter({ value, onChange }: { value: number | null; onChange: 
   );
 }
 
-type Kind = "customer" | "vendor" | "all";
+type Kind = "customer" | "vendor";
+// No "All": the switch is Customer or Vendor (team trial round 1).
 const KINDS: { value: Kind; label: string }[] = [
   { value: "customer", label: "Customer" },
   { value: "vendor", label: "Vendor" },
-  { value: "all", label: "All" },
 ];
 
 /**
@@ -79,7 +79,8 @@ const KINDS: { value: Kind; label: string }[] = [
 function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
   const c = state.columns.kind;
   const list = c?.values ?? (c?.value !== undefined ? [c.value] : []);
-  const kind: Kind = list.length === 1 ? (list[0] as Kind) : "all";
+  // Neither is lit when the Type filter was cleared or set to both from the filter bar.
+  const kind: Kind | null = list.length === 1 ? (list[0] as Kind) : null;
   return (
     <div className="segmented" role="group" aria-label="Rate table type">
       {KINDS.map((k) => (
@@ -89,10 +90,7 @@ function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridS
           className={kind === k.value ? "on" : ""}
           aria-pressed={kind === k.value}
           onClick={() => {
-            const columns = { ...state.columns };
-            if (k.value === "all") delete columns.kind;
-            else columns.kind = { field: "kind", op: "in", values: [k.value] };
-            setState({ ...state, columns });
+            setState({ ...state, columns: { ...state.columns, kind: { field: "kind", op: "in", values: [k.value] } } });
           }}
         >
           {k.label}
