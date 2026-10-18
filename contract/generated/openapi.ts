@@ -16497,8 +16497,14 @@ export type components = {
       customerTrunkCount: number;
       /** @description Destinations by name, e.g. "Australia · Optus (50502), Australia · Telstra (50501) +3", "Romania (whole country)", "All", or the pattern (team trial round 1). */
       destinationLabel: string;
+      /** @description Every destination by name for the hover list (up to 100), e.g. "France · Orange (20801)" or "Romania (whole country)" (team trial round 1). */
+      destinationNames: string[];
+      /** @description Number of MCCMNC codes the rule lists (0 for All or a pattern). */
+      destinationCount: number;
       /** @description e.g. "Kite_DIR 60 · Orbit_DIR 40", "LCR · 6 vendors", "—" for block. */
       vendorsLabel: string;
+      /** @description Every vendor of the rule for the hover list, e.g. "Kite_DIR (60%)", "L2 · Orbit_DIR", "Backup · Sky_HQ" (team trial round 1). */
+      vendorNames: string[];
       /** @description Messages in the traffic window; null without the EDR store. */
       messages: number | null;
       /** @description Delivery-attempt success %. */

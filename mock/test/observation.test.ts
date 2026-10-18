@@ -168,6 +168,28 @@ describe("§9 EDR search", { skip }, () => {
       call("POST", "/edrs/query", { limit: 1, filter: { logic: "and", conditions: [DAY] } }),
     );
     assert.equal(notTrunk.total + byTrunk.total, all.total, "eq and neq split the window");
+    // MCCMNC by name (team trial round 1): a country name finds that country's codes.
+    const code = page.rows.find((r) => r.customerMccmnc)!.customerMccmnc!;
+    const { rows: named } = await db().query<{ country: string }>(
+      "SELECT co.name AS country FROM mccmnc m JOIN countries co ON co.id = m.country_id WHERE m.mccmnc = $1",
+      [code],
+    );
+    const byCountry = await ok<EdrPage>(
+      "queryEdrs",
+      call("POST", "/edrs/query", {
+        limit: 50,
+        filter: {
+          logic: "and",
+          conditions: [DAY, { field: "customerMccmnc", op: "like", value: `${named[0]!.country}%` }],
+        },
+      }),
+    );
+    const { rows: codes } = await db().query<{ mccmnc: string }>(
+      "SELECT m.mccmnc FROM mccmnc m JOIN countries co ON co.id = m.country_id WHERE co.name ILIKE $1",
+      [`${named[0]!.country}%`],
+    );
+    const own = new Set(codes.map((c) => c.mccmnc));
+    assert.ok(byCountry.total > 0 && byCountry.rows.every((r) => own.has(r.customerMccmnc!)));
     const sorted = await ok<EdrPage>(
       "queryEdrs",
       call("POST", "/edrs/query", {

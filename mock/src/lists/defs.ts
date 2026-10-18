@@ -76,6 +76,7 @@ import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
 import { PRESETS } from "../reports/presets.js";
 import type { ListDef } from "./engine.js";
+import { isNameValue, mccmncByNameSql } from "./mccmncNames.js";
 import { byEnterprise, enterpriseLabel, hide, lit, maskName, vis, visCol } from "../visibility/sql.js";
 
 // AM visibility (§13.17): names masked and values hidden for viewers who do not own the row.
@@ -970,15 +971,32 @@ const ruleDestinationNames = `ARRAY(
             JOIN mccmnc m ON m.mccmnc = u.c AND m.deleted_at IS NULL
             JOIN countries co ON co.id = m.country_id
            GROUP BY m.mcc, co.name) x
-   ORDER BY x.o LIMIT 4)`;
+   ORDER BY x.o LIMIT 100)`;
 
-/** First two destinations by name, then "+N" (more when only the first four countries were read). */
+/** A rule's destinations by name, one per line, for the hover list (whole countries kept as one line). */
+function ruleDestinationList(codes: string[], names: unknown): string[] {
+  const groups = (names as string[] | null) ?? [];
+  if (!groups.length) return codes;
+  return groups.flatMap((n) => (n.endsWith("(whole country)") ? [n] : n.split(", ")));
+}
+
+/** First two destinations by name, then "+N" (more when only the first 100 countries were read). */
 function destinationSummary(codes: string[], names: unknown): string {
   const groups = (names as string[] | null) ?? [];
-  if (!groups.length) return codes.slice(0, 3).join(", ") + (codes.length > 3 ? ` +${codes.length - 3}` : "");
-  const list = groups.flatMap((n) => (n.endsWith("(whole country)") ? [n] : n.split(", ")));
+  const list = ruleDestinationList(codes, names);
   const rest = list.length - 2;
-  return list.slice(0, 2).join(", ") + (rest > 0 ? ` +${rest}${groups.length >= 4 ? "…" : ""}` : "");
+  return list.slice(0, 2).join(", ") + (rest > 0 ? ` +${rest}${groups.length >= 100 ? "…" : ""}` : "");
+}
+
+/** Every vendor for the hover list: share on percentage splits, the level when there are several, backups last. */
+function vendorList(all: { n: string; s: number | null; l: number; b: boolean }[], hunt: string): string[] {
+  const levels = new Set(all.filter((v) => !v.b).map((v) => v.l));
+  const main = all
+    .filter((v) => !v.b)
+    .map(
+      (v) => `${levels.size > 1 ? `L${v.l} · ` : ""}${v.n}${hunt === "percentage" && v.s != null ? ` (${v.s}%)` : ""}`,
+    );
+  return [...main, ...all.filter((v) => v.b).map((v) => `Backup · ${v.n}`)];
 }
 
 export const routeRuleList: ListDef<RouteRuleRow> = {
@@ -1019,6 +1037,12 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
       where: (op, c, p) => {
         if (op === "empty") return "(r.mccmnc_mode = 'all')";
         if (op === "not_empty") return "(r.mccmnc_mode <> 'all')";
+        // Names work too: "France" finds rules on any French code, "Orange" on Orange networks.
+        if (isNameValue(c.value)) {
+          const raw = String(c.value);
+          const names = mccmncByNameSql(p(op === "eq" ? raw.replace(/[%_\\]/g, "\\$&") : raw));
+          return `(r.mccmncs && ARRAY${names})`;
+        }
         const v = p(String(c.value ?? "").replace(/[%_]/g, ""));
         return op === "eq"
           ? `(${v} = ANY(r.mccmncs))`
@@ -1077,9 +1101,8 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     const first = names.slice(0, 2).join(", ") + (count > 2 ? ` +${count - 2}` : "");
     const mode = r.customer_trunk_mode as string;
     const codes = (r.mccmncs as string[]) ?? [];
-    const vendors = ((r.vendors as { n: string; s: number | null; l: number; b: boolean }[] | null) ?? []).filter(
-      (v) => !v.b,
-    );
+    const allVendors = (r.vendors as { n: string; s: number | null; l: number; b: boolean }[] | null) ?? [];
+    const vendors = allVendors.filter((v) => !v.b);
     const level1 = vendors.filter((v) => v.l === (vendors[0]?.l ?? 1));
     const type = r.route_type as RouteRuleRow["routeType"];
     const hunt = r.hunt_policy as string;
@@ -1117,7 +1140,11 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
           : r.mccmnc_pattern
             ? `/${String(r.mccmnc_pattern)}/`
             : (r.mccmnc_mode === "exclusive" ? "All but " : "") + (destinationSummary(codes, r.dest_names) || "—"),
+      destinationNames:
+        r.mccmnc_mode === "all" || r.mccmnc_pattern ? [] : ruleDestinationList(codes, r.dest_names).slice(0, 100),
+      destinationCount: r.mccmnc_mode === "all" || r.mccmnc_pattern ? 0 : codes.length,
       vendorsLabel,
+      vendorNames: type === "block" ? [] : vendorList(allVendors, hunt),
       messages: (r.messages as number | null) ?? null,
       asr: r.asr == null ? null : Number(r.asr),
       dlr: r.dlr == null ? null : Number(r.dlr),

@@ -366,15 +366,15 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Customer trunks",
-                what: 'The first trunks the rule matches, then "+N" for the rest. Hover to see the whole list. Filter: contains.',
+                what: 'The first trunks the rule matches (in bold), then "+N" for the rest. Point at the cell to see every trunk in a small window. Filter: contains.',
               },
               {
                 name: "Destination",
-                what: "The destinations by name: Country · Network (MCCMNC). Filter: starts with (for example `505%` for Australia), equals, empty or not empty.",
+                what: 'The destinations by name (in bold): Country · Network (MCCMNC), then "+N". Point at the cell to see every destination. Filter: type a country, a network or a code, for example `France`, `Orange` or `208`; also equals, empty or not empty.',
               },
               {
                 name: "Vendors",
-                what: 'The vendor split, for example "Kite_DIR 60 · Orbit_DIR 40", or the least cost or quality pool. Click it to edit the level 1 split in place. Shows — for Block rules. Filter: contains (vendor name).',
+                what: 'The vendor split in bold, for example "Kite_DIR 60 · Orbit_DIR 40", or the least cost or quality pool. Point at it to see every vendor with its share, level and backups; click it to edit the level 1 split in place. Shows — for Block rules. Filter: contains (vendor name).',
               },
               {
                 name: "24h",

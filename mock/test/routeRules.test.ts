@@ -89,6 +89,29 @@ describe("route rules grid (§15.4)", { skip }, () => {
     if (busiest.rows[0].messages !== null) assert.ok(week.rows[0].messages >= busiest.rows[0].messages);
     const au = await query({ ...and({ field: "destination", op: "like", value: "505%" }), limit: 500 });
     assert.ok(au.rows.every((r: { destinationLabel: string }) => /505|Australia|All but/.test(r.destinationLabel)));
+    // Names work as well as codes (team trial round 1): "australia" finds the same rules as 505.
+    const byName = await query({ ...and({ field: "destination", op: "like", value: "australia%" }), limit: 500 });
+    assert.ok(byName.total > 0);
+    assert.ok(
+      byName.total >=
+        au.total - au.rows.filter((r: { destinationLabel: string }) => /All but/.test(r.destinationLabel)).length,
+    );
+    assert.ok(
+      byName.rows.every((r: { destinationNames: string[] }) =>
+        r.destinationNames.some((n) => n.startsWith("Australia")),
+      ),
+    );
+    // Hover lists: every destination and vendor of the row.
+    for (const r of byName.rows as {
+      destinationNames: string[];
+      destinationCount: number;
+      vendorNames: string[];
+      routeType: string;
+    }[]) {
+      assert.ok(r.destinationNames.length <= 100 && r.destinationNames.length > 0);
+      assert.ok(r.destinationCount >= 1);
+      if (r.routeType === "block") assert.deepEqual(r.vendorNames, []);
+    }
     const off = await query({ ...and({ field: "status", op: "in", values: ["inactive"] }), limit: 500 });
     assert.ok(off.rows.every((r: { status: string }) => r.status === "inactive"));
     const bad = await call("POST", "/route-rules/query", and({ field: "window", op: "eq", value: "2h" }));

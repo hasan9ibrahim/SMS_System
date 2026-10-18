@@ -2,6 +2,7 @@
 // screenshot's layout and form exactly (§15.4): header links and actions, grid columns with
 // a filter under each, the detail panel (Conditions / Vendors / Traffic / History / Test)
 // with condition chips and the 24h trend on the right, and the status bar shortcuts.
+import { HoverList } from "../../ui/HoverList";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RouteRuleDetail, RouteRuleRow, TrafficWindow } from "@sms/contract";
@@ -83,18 +84,20 @@ function VendorsCell({ row, onMore }: { row: RouteRuleRow; onMore: () => void })
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        ref={anchor}
-        type="button"
-        className={`cell-edit${open ? " editing" : ""}`}
-        title="Edit the vendor split"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-      >
-        {row.vendorsLabel}
-      </button>
+      <HoverList items={row.vendorNames} disabled={open}>
+        <button
+          ref={anchor}
+          type="button"
+          className={`cell-edit rr-strong${open ? " editing" : ""}`}
+          title={row.vendorNames.length > 1 ? undefined : "Edit the vendor split"}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+        >
+          {row.vendorsLabel}
+        </button>
+      </HoverList>
       <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} className="split-pop">
         <VendorSplitEditor
           row={row}
@@ -109,23 +112,37 @@ function VendorsCell({ row, onMore }: { row: RouteRuleRow; onMore: () => void })
   );
 }
 
+/** First trunks with a muted "+N"; pointing at the cell lists them all (team trial round 1). */
 function TrunksCell({ row }: { row: RouteRuleRow }) {
   const m = /^(.*?)( \+\d+)$/.exec(row.customerTrunksLabel);
-  const more = row.customerTrunkCount - row.customerTrunkNames.length;
-  const title = row.customerTrunkNames.length
-    ? row.customerTrunkNames.join("\n") + (more > 0 ? `\n… and ${more} more` : "")
-    : undefined;
+  const exclusive = row.customerTrunksLabel.startsWith("All but");
   return (
-    <span title={title}>
-      {m ? (
-        <>
-          {m[1]}
-          <span className="muted">{m[2]}</span>
-        </>
-      ) : (
-        row.customerTrunksLabel
-      )}
-    </span>
+    <HoverList
+      items={row.customerTrunkNames}
+      more={row.customerTrunkCount - row.customerTrunkNames.length}
+      heading={exclusive ? "All trunks except:" : undefined}
+    >
+      <span className="rr-strong rr-label">
+        <span className="rr-main">{m ? m[1] : row.customerTrunksLabel}</span>
+        {m && <span className="muted">{m[2]}</span>}
+      </span>
+    </HoverList>
+  );
+}
+
+function DestinationCell({ row }: { row: RouteRuleRow }) {
+  const m = /^(.*?)( \+\d+…?)$/.exec(row.destinationLabel);
+  return (
+    <HoverList
+      items={row.destinationNames}
+      more={row.destinationCount > row.destinationNames.length ? row.destinationCount - row.destinationNames.length : 0}
+      heading={row.destinationLabel.startsWith("All but") ? "All destinations except:" : undefined}
+    >
+      <span className="rr-strong num rr-label">
+        <span className="rr-main">{m ? m[1] : row.destinationLabel}</span>
+        {m && <span className="muted">{m[2]}</span>}
+      </span>
+    </HoverList>
   );
 }
 
@@ -237,8 +254,8 @@ export function RouteRulesPage() {
       category: { width: 90, render: (r: RouteRuleRow) => <span className="muted">{r.categoryLabel}</span> },
       customerTrunks: { width: 240, render: (r: RouteRuleRow) => <TrunksCell row={r} /> },
       destination: {
-        width: 150,
-        render: (r: RouteRuleRow) => <span className="muted num">{r.destinationLabel}</span>,
+        width: 220,
+        render: (r: RouteRuleRow) => <DestinationCell row={r} />,
       },
       vendors: {
         width: 250,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.52.0
+  version: 0.53.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -29334,7 +29334,7 @@ components:
 
     RouteRuleRow:
       type: object
-      required: [id, name, priority, routeType, status, categoryLabel, customerTrunksLabel, customerTrunkNames, customerTrunkCount, destinationLabel, vendorsLabel, messages, asr, dlr, dlrTarget, dlrTargetSource, margin, startsAt, stopsAt, groupName, updatedBy, updatedAt, archived]
+      required: [id, name, priority, routeType, status, categoryLabel, customerTrunksLabel, customerTrunkNames, customerTrunkCount, destinationLabel, destinationNames, destinationCount, vendorsLabel, vendorNames, messages, asr, dlr, dlrTarget, dlrTargetSource, margin, startsAt, stopsAt, groupName, updatedBy, updatedAt, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -29363,9 +29363,22 @@ components:
         destinationLabel:
           type: string
           description: Destinations by name, e.g. "Australia · Optus (50502), Australia · Telstra (50501) +3", "Romania (whole country)", "All", or the pattern (team trial round 1).
+        destinationNames:
+          type: array
+          description: Every destination by name for the hover list (up to 100), e.g. "France · Orange (20801)" or "Romania (whole country)" (team trial round 1).
+          items:
+            type: string
+        destinationCount:
+          type: integer
+          description: Number of MCCMNC codes the rule lists (0 for All or a pattern).
         vendorsLabel:
           type: string
           description: e.g. "Kite_DIR 60 · Orbit_DIR 40", "LCR · 6 vendors", "—" for block.
+        vendorNames:
+          type: array
+          description: Every vendor of the rule for the hover list, e.g. "Kite_DIR (60%)", "L2 · Orbit_DIR", "Backup · Sky_HQ" (team trial round 1).
+          items:
+            type: string
         messages:
           type: [integer, "null"]
           description: Messages in the traffic window; null without the EDR store.

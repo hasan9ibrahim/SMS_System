@@ -1258,3 +1258,58 @@ textarea.mono {
 .vf-backup .lookup {
   min-width: 200px;
 }
+
+/* Route rules: customer trunks, destinations and vendors in bold, with a hover list (team trial round 1). */
+.rr-strong {
+  font-weight: 600;
+}
+.rr-strong .muted {
+  font-weight: 400;
+}
+.hover-list-target {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+/* The first names shrink with an ellipsis; the muted "+N" always shows. */
+.rr-label {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+.rr-main {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rr-label .muted {
+  flex: none;
+  margin-left: 0.3em;
+}
+/* A long vendor split ends with an ellipsis instead of being cut at the start. */
+.hover-list-target > .cell-edit {
+  display: block;
+  min-width: 0;
+}
+.hover-list {
+  padding: 6px 0;
+  max-width: 420px;
+}
+.hover-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px;
+  max-height: 340px;
+  overflow: auto;
+}
+.hover-list li {
+  padding: 2px 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hover-list-head,
+.hover-list-more {
+  padding: 2px 12px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}

@@ -1,6 +1,7 @@
 // Server-side list engine (CLAUDE.md rule 3, spec §13.25, §14.2): turns a ListQuery
 // (filter tree with AND/OR groups, quick search, sort, cursor) into parameterised SQL
 // against the seeded PostgreSQL data. Every list endpoint is a ListDef plus this engine.
+import { isNameValue, mccmncByNameSql } from "./mccmncNames.js";
 import type pg from "pg";
 import type {
   FieldDescriptor,
@@ -92,6 +93,13 @@ class Params {
 function conditionSql(c: FilterCondition, field: FieldDescriptor, col: ColumnSql, p: Params["add"]): string {
   if (col.where) return col.where(c.op, c, p);
   const x = col.sql;
+  // MCCMNC columns: "France", "Orange" or "France · Orange" find the codes by name.
+  if (field.type === "mccmnc" && ["like", "not_like", "eq", "neq"].includes(c.op) && isNameValue(c.value)) {
+    const text = String(c.value);
+    const pattern = p(c.op === "like" || c.op === "not_like" ? text : text.replace(/[%_\\]/g, "\\$&"));
+    const hit = `(${x})::text IN ${mccmncByNameSql(pattern)}`;
+    return c.op === "like" || c.op === "eq" ? hit : `(${x} IS NULL OR NOT ${hit})`;
+  }
   const numeric = NUMERIC.has(field.type);
   const time = TIME.has(field.type);
   // Integer fields compare as bigint so ID filters use their indexes (a numeric cast doesn't).

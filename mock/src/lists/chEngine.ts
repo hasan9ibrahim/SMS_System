@@ -2,6 +2,7 @@
 // grammar as engine.ts, compiled to ClickHouse SQL. EDRs carry IDs only, so filters on enterprise,
 // trunk and provider names run on PostgreSQL first and apply as ID lists; sorting by a name uses
 // transform() over the names. Values are inlined as escaped literals.
+import { isNameValue, mccmncByNameSql } from "./mccmncNames.js";
 import type {
   FieldDescriptor,
   FilterCondition,
@@ -260,8 +261,26 @@ async function searchSql(pool: pg.Pool, def: ChListDef<unknown>, search: string)
   return parts.length ? `(${parts.join(" OR ")})` : "1";
 }
 
+/** MCCMNC columns filtered by a name ("Nigeria", "MTN") become the list of codes it names. */
+async function mccmncNames(pool: pg.Pool, def: ChListDef<unknown>, group: FilterGroup): Promise<FilterGroup> {
+  const byName = new Map(def.fields.fields.map((f) => [f.field, f]));
+  const map = async (node: FilterGroup | FilterCondition): Promise<FilterGroup | FilterCondition> => {
+    if ("logic" in node) return { ...node, conditions: await Promise.all(node.conditions.map(map)) };
+    const c = node as FilterCondition;
+    if (byName.get(c.field)?.type !== "mccmnc" || def.columns[c.field]?.names || def.columns[c.field]?.where) return c;
+    if (!["like", "not_like", "eq", "neq"].includes(c.op) || !isNameValue(c.value)) return c;
+    const text = String(c.value);
+    const pattern = c.op === "like" || c.op === "not_like" ? text : text.replace(/[%_\\]/g, "\\$&");
+    const { rows } = await pool.query<{ mccmnc: string }>(`SELECT mccmnc FROM ${mccmncByNameSql("$1")} x`, [pattern]);
+    const codes = rows.map((r) => r.mccmnc);
+    return { field: c.field, op: NEGATED[c.op] ? "not_in" : "in", values: codes.length ? codes : ["\u0000none"] };
+  };
+  return (await map(group)) as FilterGroup;
+}
+
 /** WHERE clause (without the keyword) for a query; names are resolved on PostgreSQL first. */
 export async function chWhere(pool: pg.Pool, def: ChListDef<unknown>, query: Pick<ListQuery, "filter" | "search">) {
+  if (query.filter) query = { ...query, filter: await mccmncNames(pool, def, query.filter) };
   const byName = new Map(def.fields.fields.map((f) => [f.field, f]));
   const resolved: Resolved = new Map();
   if (query.filter) await resolveNames(pool, def, query.filter, resolved);
