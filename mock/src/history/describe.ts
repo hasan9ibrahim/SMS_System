@@ -4,6 +4,7 @@
 // like shown by name and list fields split into what was added and removed.
 import type pg from "pg";
 import type { Change } from "@sms/contract";
+import { RECORD_TYPE_LABELS } from "../lists/fields.js";
 
 /** Record type → table with a name (users are first + last name). */
 const ENTITY_TABLE: Record<string, { table: string; name: string }> = {
@@ -172,7 +173,9 @@ const VERB: Record<string, string> = {
 
 /** "Edited route rule “NG MTN”: Route type static → block; Vendors +1 −2". */
 export function summarize(c: Change, entityNames: string[], fields: FieldText[]): string {
-  const type = c.entityType.replace(/_/g, " ");
+  // "MCCMNC code", "route rule": the record type's label, lower case unless it starts with an acronym.
+  const label = RECORD_TYPE_LABELS[c.entityType] ?? c.entityType.replace(/_/g, " ");
+  const type = /^[A-Z][a-z]/.test(label) ? label[0]!.toLowerCase() + label.slice(1) : label;
   const plural = /s$/.test(type) ? type : /[^aeiou]y$/.test(type) ? `${type.slice(0, -1)}ies` : `${type}s`;
   const n = c.entityIds.length;
   const who =

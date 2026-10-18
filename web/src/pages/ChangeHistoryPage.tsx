@@ -4,7 +4,7 @@
 // "My changes" (?mine=1) is the same page filtered to the signed-in user.
 import { useLocation } from "react-router";
 import type { Change } from "@sms/contract";
-import { useMe } from "../api/hooks";
+import { useListFields, useMe } from "../api/hooks";
 import { pageForPath } from "../nav/registry";
 import { describeDiff, useUndo } from "../history/undo";
 import { ListScreen } from "../page/ListScreen";
@@ -24,6 +24,10 @@ function recordName(c: Change, id: number): string {
 export function ChangeHistoryPage() {
   const { data: me } = useMe();
   const undo = useUndo();
+  // Record type labels from the field catalogue ("Reconciliation rule", not recon_rule).
+  const fields = useListFields("changes");
+  const typeLabel = (t: string) =>
+    fields.data?.fields.find((f) => f.field === "entityType")?.enumValues?.find((v) => v.value === t)?.label ?? t;
   const mine = new URLSearchParams(useLocation().search).get("mine") === "1";
   const canUndoOthers = !!me && (me.permissions.includes("*") || me.permissions.includes("undo_others"));
   const undoable = (c: Change) =>
@@ -44,8 +48,9 @@ export function ChangeHistoryPage() {
           width: 100,
           render: (c) => <span className={`tag${c.changeType === "undo" ? " tag-accent" : ""}`}>{c.changeType}</span>,
         },
+        entityType: { width: 190 },
         entityId: {
-          width: 150,
+          width: 110,
           render: (c) =>
             c.entityIds.length > 3
               ? `${c.entityIds.slice(0, 3).join(", ")} +${c.entityIds.length - 3}`
@@ -133,7 +138,7 @@ export function ChangeHistoryPage() {
             content: (
               <dl className="kv">
                 <dt>Record type</dt>
-                <dd>{c.entityType}</dd>
+                <dd>{typeLabel(c.entityType)}</dd>
                 <dt>Records</dt>
                 <dd>
                   {c.entityIds

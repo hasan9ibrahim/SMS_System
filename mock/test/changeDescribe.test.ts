@@ -1,8 +1,10 @@
 // Readable change history (§13.10, team trial round 1): names instead of ids, labels, added / removed.
-import { test } from "node:test";
+import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import type { Change } from "@sms/contract";
 import { describeChanges, describeField, fieldLabel, type Names } from "../src/history/describe.js";
+import { RECORD_TYPE_LABELS } from "../src/lists/fields.js";
+import { closeDb, db, dbReady } from "../src/db.js";
 
 const names: Names = new Map([
   ["route_rule", new Map([[7, "NG MTN"]])],
@@ -77,4 +79,29 @@ test("the summary names the record and the fields changed", () => {
     names,
   );
   assert.equal(bulk!.summary, "Deleted 2 visibility policies");
+});
+
+test("record types read as labels in the summary (team trial round 1)", () => {
+  const [c] = describeChanges(
+    [
+      change({
+        entityType: "destination",
+        entityIds: [5],
+        diff: [{ entityId: 5, field: "dlrTargetPct", before: 1, after: 2 }],
+      }),
+    ],
+    names,
+  );
+  assert.equal(c!.summary, "Edited MCCMNC code #5: DLR target % 1 → 2");
+  const [r] = describeChanges([change({ entityType: "recon_rule", entityIds: [1, 2], changeType: "delete" })], names);
+  assert.equal(r!.summary, "Deleted 2 reconciliation rules");
+});
+
+const ready = await dbReady();
+after(() => closeDb());
+
+test("every record type in the change history has a label", { skip: ready ? false : "no database" }, async () => {
+  const { rows } = await db().query<{ t: string }>("SELECT DISTINCT entity_type AS t FROM changes");
+  const missing = rows.map((r) => r.t).filter((t) => !RECORD_TYPE_LABELS[t]);
+  assert.deepEqual(missing, [], "add a label to RECORD_TYPE_LABELS in src/lists/fields.ts");
 });
