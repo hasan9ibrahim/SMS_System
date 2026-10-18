@@ -40,7 +40,7 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
   margin: r.margin,
   qbrFormula: r.qbrFormula,
   qbrWeights: r.qbrWeights ?? null,
-  percentagePerCustomerTrunk: r.percentagePerCustomerTrunk ?? false,
+  percentagePerCustomerTrunk: r.percentagePerCustomerTrunk ?? true,
   skipVendorAtTpsPct: r.skipVendorAtTpsPct,
   lcrProfileId: r.lcrProfileId ?? null,
   threshold: r.threshold,

@@ -16324,7 +16324,7 @@ export type components = {
       routeType?: "block" | "static" | "dynamic" | "qbr";
       /** @enum {string} */
       huntPolicy?: "top_down" | "round_robin" | "percentage";
-      /** @description Percentage split only (team trial round 1, "Consider customer trunk in percentage"): each customer trunk's own traffic is split by the shares, so every customer gets e.g. 80 / 20. Off (or missing): the shares apply to the rule's total traffic, so one customer may land mostly on one vendor as long as the total is 80 / 20. */
+      /** @description Percentage split only (team trial round 1, "Consider customer trunk in percentage"): each customer trunk's own traffic is split by the shares, so every customer gets e.g. 80 / 20. On by default (team trial round 1); missing means on. Off: the shares apply to the rule's total traffic, so one customer may land mostly on one vendor as long as the total is 80 / 20. */
       percentagePerCustomerTrunk?: boolean;
       /**
        * @deprecated

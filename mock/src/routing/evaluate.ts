@@ -525,9 +525,11 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
       ).map((x) => x.v);
       decidedBy = "qbr";
     } else if (rule.huntPolicy === "percentage") {
-      // Per customer trunk: each trunk's own traffic follows the shares (the backend keeps one split counter
+      // Per customer trunk: each trunk's own traffic follows the shares (on unless switched off; the backend keeps one split counter
       // per rule and customer trunk instead of one per rule; team trial round 1).
-      const b = bucket(rule.percentagePerCustomerTrunk ? `${m.customerTrunkId ?? 0}:${m.receiver}` : m.receiver);
+      const b = bucket(
+        rule.percentagePerCustomerTrunk !== false ? `${m.customerTrunkId ?? 0}:${m.receiver}` : m.receiver,
+      );
       let acc = 0;
       const hit = at.find((v) => (acc += v.sharePct ?? 0) > b) ?? at[0];
       ordered = hit ? [hit, ...at.filter((v) => v !== hit)] : at;

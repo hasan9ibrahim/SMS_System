@@ -283,7 +283,7 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     routeType: "static",
     huntPolicy: "top_down",
     enableBackupRoutes: false,
-    percentagePerCustomerTrunk: false,
+    percentagePerCustomerTrunk: true,
     vendorCategoryMode: "all",
     vendorCategoryIds: [],
     vendorTrunkMode: "all",

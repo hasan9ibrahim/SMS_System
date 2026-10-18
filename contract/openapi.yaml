@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.42.0
+  version: 0.43.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -29101,8 +29101,9 @@ components:
           type: boolean
           description: >-
             Percentage split only (team trial round 1, "Consider customer trunk in percentage"): each customer trunk's
-            own traffic is split by the shares, so every customer gets e.g. 80 / 20. Off (or missing): the shares apply
-            to the rule's total traffic, so one customer may land mostly on one vendor as long as the total is 80 / 20.
+            own traffic is split by the shares, so every customer gets e.g. 80 / 20. On by default (team trial round 1);
+            missing means on. Off: the shares apply to the rule's total traffic, so one customer may land mostly on one
+            vendor as long as the total is 80 / 20.
         enableBackupRoutes:
           type: boolean
           deprecated: true

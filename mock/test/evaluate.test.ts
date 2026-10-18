@@ -45,6 +45,7 @@ const rule = (over: Record<string, unknown> = {}) =>
     routeType: "static",
     huntPolicy: "percentage",
     margin: 0,
+    percentagePerCustomerTrunk: false,
     vendors: [
       {
         level: 1,
