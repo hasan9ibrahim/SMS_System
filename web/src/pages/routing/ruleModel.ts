@@ -420,3 +420,18 @@ export function categoryFilter(mode: string, ids: readonly number[]): FilterCond
   if (mode === "all" || !ids.length) return [];
   return [{ field: "categoryId", op: mode === "exclusive" ? "not_in" : "in", values: ids.map(String) }];
 }
+
+/**
+ * Margin as typed (team trial round 1): "0.002" is an amount in the platform currency, "5%" a percentage
+ * of the sell rate; a minus sign makes either negative. Null when it is not a number.
+ */
+export function parseMargin(text: string): { value: number; type: "amount" | "percent" } | null {
+  const t = text.trim().replace(",", ".");
+  const m = t.match(/^([+-−]?)\s*(\d+(?:\.\d+)?|\.\d+)\s*(%?)$/);
+  if (!m) return t === "" ? { value: 0, type: "amount" } : null;
+  const value = Number(m[2]) * (m[1] === "-" || m[1] === "−" ? -1 : 1);
+  return { value, type: m[3] ? "percent" : "amount" };
+}
+
+export const formatMargin = (value: number | null | undefined, type: string | null | undefined) =>
+  value === null || value === undefined ? "" : `${value}${type === "percent" ? "%" : ""}`;

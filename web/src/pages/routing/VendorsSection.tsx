@@ -8,7 +8,8 @@ import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
-import { backupProblems, categoryFilter, ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
+import { MarginInput } from "./MarginInput";
+import { backupProblems, categoryFilter, formatMargin, ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
 
 type Draft = Pick<
   RouteRuleInput,
@@ -17,6 +18,7 @@ type Draft = Pick<
   | "enableBackupRoutes"
   | "maxRouteLevel"
   | "margin"
+  | "marginType"
   | "qbrFormula"
   | "qbrWeights"
   | "percentagePerCustomerTrunk"
@@ -38,6 +40,7 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
   enableBackupRoutes: r.enableBackupRoutes,
   maxRouteLevel: r.maxRouteLevel,
   margin: r.margin,
+  marginType: r.marginType ?? "amount",
   qbrFormula: r.qbrFormula,
   qbrWeights: r.qbrWeights ?? null,
   percentagePerCustomerTrunk: r.percentagePerCustomerTrunk ?? true,
@@ -92,7 +95,7 @@ export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (
         )}
         {rule.routeType !== "block" && <span className="muted">max level {rule.maxRouteLevel}</span>}
         {rule.routeType !== "block" && rule.margin !== null && rule.margin !== undefined && (
-          <span className="muted">min margin {rule.margin}</span>
+          <span className="muted">min margin {formatMargin(rule.margin, rule.marginType)}</span>
         )}
         <span className="fb-spacer" />
         {onEdit ? (
@@ -177,6 +180,7 @@ export function VendorsSection({
   const [error, setError] = useState<string | null>(null);
   const dirty = JSON.stringify(d) !== JSON.stringify(initial);
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
+  const [marginOk, setMarginOk] = useState(true);
   const setVendor = (i: number, patch: Partial<RouteVendor>) =>
     set({ vendors: d.vendors!.map((v, j) => (j === i ? { ...v, ...patch } : v)) });
   const setWhitelist = (i: number, patch: Partial<RouteWhitelist>) =>
@@ -202,6 +206,7 @@ export function VendorsSection({
     if (vendors.some((v) => !v.vendorTrunkId)) return setError("Choose a vendor trunk on every row.");
     if (whitelists.some((w) => !w.vendorTrunkId || (!w.numbers.length && !w.numberListId)))
       return setError("Each whitelist needs a vendor and numbers or a number list.");
+    if (!marginOk) return setError("Minimum margin: a number, with % for a percentage.");
     setError(await onSave({ ...d, vendorTrunkIds: scopeTrunks.map((t) => t.key) }));
   };
 
@@ -655,16 +660,13 @@ export function VendorsSection({
           <fieldset className="vf-group">
             <legend>Limits</legend>
             <div className="fgrid cols-4">
-              <label className="field">
-                <span>Minimum margin (flat)</span>
-                <input
-                  type="number"
-                  step={0.0001}
-                  value={d.margin}
-                  onChange={(e) => set({ margin: Number(e.target.value) || 0 })}
-                />
-                <small className="muted">Vendors leaving less are skipped</small>
-              </label>
+              <MarginInput
+                label="Minimum margin"
+                value={d.margin}
+                type={d.marginType}
+                onValid={setMarginOk}
+                onChange={(m) => set({ margin: m.value ?? 0, marginType: m.type })}
+              />
               <label className="field">
                 <span>Skip vendor at % of its TPS</span>
                 <input

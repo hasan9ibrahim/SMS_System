@@ -198,7 +198,8 @@ describe("bulk rating apply (§13.11 Step 5, §13.10)", { skip }, () => {
     const { rows } = await db().query(
       `SELECT rt.id FROM rate_tables rt WHERE rt.kind = 'customer' AND rt.deleted_at IS NULL AND NOT ${NO_NOTICE}
           AND EXISTS (SELECT 1 FROM rate_lines l WHERE l.rate_table_id = rt.id AND l.valid_to IS NULL AND l.valid_from <= now())
-        ORDER BY rt.id LIMIT 1`,
+        -- Not the lowest id: other test files edit the first tables at the same time.
+        ORDER BY md5(rt.id::text) LIMIT 1`,
     );
     const id = rows[0].id;
     const body = { rateTableIds: [id], action: { type: "change_pct", value: 10 } };

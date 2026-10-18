@@ -846,6 +846,17 @@ export function sendNoticeBreach(reply: FastifyReply, breaches: Breach[]) {
     });
 }
 
+/**
+ * Two saves on the same lines at once: the database refuses overlapping validity (rate_lines_no_overlap).
+ * The later save is told to reload instead of failing with a server error.
+ */
+export const OVERLAP = Symbol("overlap");
+export const isOverlap = (err: unknown) => (err as { code?: string }).code === "23P01";
+export const overlapProblem = (reply: FastifyReply) =>
+  sendProblem(reply, 400, "These rates changed while you were saving; reload, review and save again", {
+    errors: [{ path: "/items", message: "another save changed the same lines at the same time" }],
+  });
+
 export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   const body = request.body as RateLineChanges;
@@ -900,8 +911,10 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
       return { change, applied: body.items.length - skipped };
     }).catch((err) => {
       if (err instanceof NoticeBreachError) return null;
+      if (isOverlap(err)) return OVERLAP;
       throw err;
     });
+    if (result === OVERLAP) return overlapProblem(reply);
     if (result === null)
       return sendNoticeBreach(
         reply,

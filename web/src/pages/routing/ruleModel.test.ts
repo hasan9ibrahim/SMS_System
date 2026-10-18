@@ -4,6 +4,8 @@ import type { RouteRuleDetail } from "@sms/contract";
 import {
   buildPattern,
   categoryFilter,
+  formatMargin,
+  parseMargin,
   parsePattern,
   vendorSwitches,
   backupProblems,
@@ -213,4 +215,16 @@ test("trunk pickers follow the rule's categories (team trial round 1)", () => {
   assert.deepEqual(categoryFilter("inclusive", []), []);
   assert.deepEqual(categoryFilter("inclusive", [2, 5]), [{ field: "categoryId", op: "in", values: ["2", "5"] }]);
   assert.deepEqual(categoryFilter("exclusive", [2]), [{ field: "categoryId", op: "not_in", values: ["2"] }]);
+});
+
+test("margin as typed: amount, percent, negative (team trial round 1)", () => {
+  assert.deepEqual(parseMargin("0.002"), { value: 0.002, type: "amount" });
+  assert.deepEqual(parseMargin("5%"), { value: 5, type: "percent" });
+  assert.deepEqual(parseMargin(" -3.5 % "), { value: -3.5, type: "percent" });
+  assert.deepEqual(parseMargin("-0,001"), { value: -0.001, type: "amount" });
+  assert.deepEqual(parseMargin(""), { value: 0, type: "amount" });
+  assert.equal(parseMargin("abc"), null);
+  assert.equal(parseMargin("5%%"), null);
+  assert.equal(formatMargin(-2, "percent"), "-2%");
+  assert.equal(formatMargin(0.003, "amount"), "0.003");
 });

@@ -16377,6 +16377,11 @@ export type components = {
       /** @description Margin (Flat) - vendors leaving less are skipped. */
       margin?: number;
       /**
+       * @description How margin is read (team trial round 1): amount = per message in the platform currency, percent = (sell − cost) / sell × 100. Either may be negative. Missing = amount.
+       * @enum {string}
+       */
+      marginType?: "amount" | "percent";
+      /**
        * @deprecated
        * @description No effect; qbrWeights decides the Quality ranking (team trial round 1).
        */

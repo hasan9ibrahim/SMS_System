@@ -26,6 +26,7 @@ import {
 } from "./ruleModel";
 import { Icon } from "../../ui/Icon";
 import { DestinationPick, TrunkPick, type Picked } from "./pickers";
+import { MarginInput } from "./MarginInput";
 
 const OPS: { value: CompareOp; label: string }[] = [
   { value: ">", label: ">" },
@@ -560,20 +561,12 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                   />
                 </>
               )}
-              <Num
+              <MarginInput
                 label="And margin at least"
+                optional
                 value={revenue.minMargin}
-                step={0.001}
-                onChange={(v) => setRevenue({ ...revenue, minMargin: v })}
-              />
-              <Select
-                label="Margin unit"
-                value={revenue.minMarginUnit ?? "amount"}
-                options={[
-                  { value: "amount", label: "Amount" },
-                  { value: "percent", label: "Percent" },
-                ]}
-                onChange={(minMarginUnit) => setRevenue({ ...revenue, minMarginUnit })}
+                type={revenue.minMarginUnit}
+                onChange={(m) => setRevenue({ ...revenue, minMargin: m.value, minMarginUnit: m.type })}
               />
             </div>
             <p className="muted small">Revenue in the base currency, from the customer rate at send time (§13.9).</p>

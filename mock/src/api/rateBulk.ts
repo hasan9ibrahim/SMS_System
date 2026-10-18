@@ -18,6 +18,9 @@ import { chRows } from "../edr.js";
 import { sendProblem } from "../problem.js";
 import { scheduleBestBuyRefresh } from "./bestbuy.js";
 import {
+  isOverlap,
+  OVERLAP,
+  overlapProblem,
   applyLineEdits,
   checkLineEdits,
   noticePeriods,
@@ -493,8 +496,10 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
       return { change, applied, tables: changed.length };
     }).catch((err) => {
       if (err instanceof NoticeBreachError) return null;
+      if (isOverlap(err)) return OVERLAP;
       throw err;
     });
+    if (result === OVERLAP) return overlapProblem(reply);
     if (result === null) return sendNoticeBreach(reply, breaches);
     if (result.change && [...tables.values()].some((t) => t.kind === "vendor")) scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).

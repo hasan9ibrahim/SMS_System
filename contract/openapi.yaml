@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.51.0
+  version: 0.52.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -29201,6 +29201,12 @@ components:
         margin:
           type: number
           description: Margin (Flat) - vendors leaving less are skipped.
+        marginType:
+          type: string
+          enum: [amount, percent]
+          description: >-
+            How margin is read (team trial round 1): amount = per message in the platform currency, percent =
+            (sell − cost) / sell × 100. Either may be negative. Missing = amount.
         qbrFormula:
           type: [string, "null"]
           maxLength: 500

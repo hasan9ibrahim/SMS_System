@@ -103,6 +103,7 @@ type Rule = Pick<
   | "routeType"
   | "huntPolicy"
   | "margin"
+  | "marginType"
   | "vendors"
   | "qbrWeights"
   | "percentagePerCustomerTrunk"
@@ -419,8 +420,17 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
       note,
     };
   };
-  /** Vendors leaving less than the rule's margin are skipped (§6.3 Margin). */
-  const marginOk = (c: RouteCandidate) => c.margin === null || c.margin >= rule.margin;
+  /**
+   * Vendors leaving less than the rule's margin are skipped (§6.3 Margin): an amount per message, or a
+   * percentage of the sell rate (team trial round 1); either may be negative.
+   */
+  const pct = rule.marginType === "percent";
+  const marginOk = (c: RouteCandidate) =>
+    c.margin === null ||
+    (pct
+      ? m.sellRate === null || m.sellRate <= 0 || (c.margin / m.sellRate) * 100 >= rule.margin
+      : c.margin >= rule.margin);
+  const marginText = `${rule.margin}${pct ? " %" : ""}`;
 
   // 1. Number whitelist pinned to a vendor (§13.27).
   for (const w of rule.whitelists) {
@@ -484,7 +494,7 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
         bucket(m.receiver),
       ).map((r, i) => candidate(r.c.vendorTrunkId, i + 1, r.share !== null ? `${r.share}%` : null));
     } else candidates = pool.slice(0, 10).map((o, i) => candidate(o.vendorTrunkId, i + 1, null));
-    for (const c of candidates) if (!marginOk(c)) c.note = `margin below ${rule.margin}`;
+    for (const c of candidates) if (!marginOk(c)) c.note = `margin below ${marginText}`;
     const pick = candidates.find(marginOk);
     return pick
       ? {
@@ -555,7 +565,7 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
           candidates,
         };
       }
-      c.note = `margin below ${rule.margin}`;
+      c.note = `margin below ${marginText}`;
       for (const bv of backupsOf(v.vendorTrunkId)) {
         const bc = candidate(bv.vendorTrunkId, level, `backup for ${c.name}${bv.sharePct ? ` (${bv.sharePct}%)` : ""}`);
         candidates.push(bc);
@@ -566,7 +576,7 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
             vendor: { vendorTrunkId: bc.vendorTrunkId, name: bc.name, level, decidedBy },
             candidates,
           };
-        bc.note = `${bc.note}; margin below ${rule.margin}`;
+        bc.note = `${bc.note}; margin below ${marginText}`;
       }
     }
   }

@@ -246,3 +246,21 @@ test("split per customer trunk: each trunk's traffic follows the shares on its o
   const share = receivers.filter((r) => pick(on, 2, r) === 10).length / receivers.length;
   assert.ok(share > 0.45 && share < 0.75, `about 60 %, got ${share}`);
 });
+
+test("margin as an amount or a percentage of the sell rate, negative allowed (team trial round 1)", () => {
+  // Sell 0.05; Vega leaves 0.025 (50 %), Kite 0.02 (40 %), Orbit 0.018 (36 %).
+  const dyn = (over: Record<string, unknown>) =>
+    decide(rule({ routeType: "dynamic", vendors: [], ...over }), msg(), options);
+  assert.equal(dyn({ margin: 45, marginType: "percent" }).vendor?.vendorTrunkId, 12, "Vega leaves 50 %");
+  assert.equal(dyn({ margin: 55, marginType: "percent" }).outcome, "no_vendor");
+  assert.match(dyn({ margin: 55, marginType: "percent" }).candidates[0]!.note ?? "", /margin below 55 %/);
+  const loss = new Map(options);
+  loss.set(12, { vendorTrunkId: 12, name: "Vega_HQ", cost: 0.06, dlr: 80, categoryId: 1 });
+  loss.set(10, { vendorTrunkId: 10, name: "Kite_DIR", cost: 0.07, dlr: 95, categoryId: 1 });
+  loss.set(11, { vendorTrunkId: 11, name: "Orbit_DIR", cost: 0.08, dlr: 97, categoryId: 1 });
+  const lossy = (over: Record<string, unknown>) =>
+    decide(rule({ routeType: "dynamic", vendors: [], ...over }), msg(), loss).vendor?.vendorTrunkId;
+  assert.equal(lossy({ margin: -0.015 }), 12, "an amount may be negative: −0.01 is allowed");
+  assert.equal(lossy({ margin: -0.005 }), undefined);
+  assert.equal(lossy({ margin: -25, marginType: "percent" }), 12, "−20 % is within −25 %");
+});
