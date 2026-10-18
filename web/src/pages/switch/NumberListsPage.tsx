@@ -7,14 +7,15 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router";
 import type { ListQuery, NumberList, NumberListEntry, NumberListInput } from "@sms/contract";
-import { fetchListPage } from "../../api/hooks";
+import { fetchListPage, useMe } from "../../api/hooks";
 import { downloadCsv } from "../../api/masterData";
 import { useAddEntries, useDeleteEntries, useSaveNumberList } from "../../api/switchRules";
 import { FormField, SelectField, TextField, useForm } from "../../form/form";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { useDeleteRecord } from "../../records/parts";
+import { useRestore } from "../../api/records";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
 import { HoverList } from "../../ui/HoverList";
@@ -154,6 +155,10 @@ export function NumberListsPage() {
 
 function Lists({ open }: { open: (id: number) => void }) {
   const deleteOne = useDeleteRecord();
+  const { data: me } = useMe();
+  const restore = useRestore("number_list");
+  const notifySaved = useNotifySaved();
+  const isAdmin = isAdminUser(me?.permissions);
   const addList = async () => {
     const saved = await ask<NumberList>((done) => <NumberListDialog row={null} done={done} />);
     if (saved) open(saved.id);
@@ -164,15 +169,34 @@ function Lists({ open }: { open: (id: number) => void }) {
       page={page}
       historyScope={{ entityTypes: ["number_list", "number_list_entry"] }}
       rowActions={(r) => [
-        { label: "Open entries", icon: "list", disabled: !!r.archivedAt, onSelect: () => open(r.id) },
-        "separator",
+        // Double-click or Enter opens the entries; Edit is the list's name/type dialog (§6.4).
         {
-          label: "Delete…",
-          icon: "trash",
-          danger: true,
+          label: "Edit",
+          icon: "file",
+          main: true,
           disabled: !!r.archivedAt,
-          onSelect: () => void deleteOne("number_list", r.id, r.name),
+          hint: r.archivedAt ? "Deleted list" : undefined,
+          onSelect: () => void ask<NumberList>((done) => <NumberListDialog row={r} done={done} />),
         },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored number list ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("number_list", r.id, `number list ${r.name}`),
+            },
       ]}
       primary={{ label: "Add list", icon: "plus", onClick: () => void addList() }}
       columns={{
@@ -312,6 +336,16 @@ function Entries({ id, back }: { id: number; back: () => void }) {
       historyScope={{ entityTypes: ["number_list_entry"] }}
       queryScope={id}
       fetchPage={(body) => fetchListPage<NumberListEntry>("number_list_entries", withList(body))}
+      rowActions={(r) => [
+        {
+          label: "Delete",
+          icon: "trash",
+          danger: true,
+          disabled: archived,
+          hint: archived ? "The list is deleted" : undefined,
+          onSelect: () => remove([r.id]),
+        },
+      ]}
       primary={{
         label: "Add",
         icon: "plus",

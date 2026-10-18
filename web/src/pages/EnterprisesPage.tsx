@@ -4,8 +4,13 @@ import { HoverList } from "../ui/HoverList";
 import type { Enterprise } from "@sms/contract";
 import { pageForPath } from "../nav/registry";
 import { ListScreen } from "../page/ListScreen";
-import { useDeleteRecord } from "../records/parts";
+import { useMe } from "../api/hooks";
+import { useRestore } from "../api/records";
+import { useNotifySaved } from "../history/undo";
+import { isAdminUser, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
+import { toast } from "../ui/feedback";
+import { problemText } from "./routing/dialogs";
 
 const page = pageForPath("/enterprises")!;
 const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Reciprocal" } as const;
@@ -22,25 +27,42 @@ function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[
 export function EnterprisesPage() {
   const navigate = useTabNavigate();
   const deleteOne = useDeleteRecord();
+  const { data: me } = useMe();
+  const restore = useRestore("enterprise");
+  const notifySaved = useNotifySaved();
+  const restoreOne = (id: number, name: string) =>
+    restore.mutate(id, {
+      onSuccess: (r) => r.change && notifySaved(r.change, `Restored ${name}`),
+      onError: (e) => toast({ tone: "error", message: problemText(e) }),
+    });
   return (
     <ListScreen<Enterprise>
       list="enterprises"
       page={page}
       historyScope={{ entityTypes: ["enterprise"] }}
       rowActions={(r) => [
+        // The enterprise record tab is its editor (§5).
         {
-          label: "Open",
-          icon: "external",
+          label: "Edit",
+          icon: "file",
+          main: true,
           onSelect: () => navigate(`/enterprises/${r.id}`, { newTab: true, title: `Enterprise · ${r.name}` }),
         },
         "separator",
-        {
-          label: "Delete…",
-          icon: "trash",
-          danger: true,
-          disabled: !!r.archivedAt,
-          onSelect: () => void deleteOne("enterprise", r.id, r.name),
-        },
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdminUser(me?.permissions) || restore.isPending,
+              hint: isAdminUser(me?.permissions) ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () => restoreOne(r.id, r.name),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("enterprise", r.id, r.name),
+            },
       ]}
       primary={{
         label: "New enterprise",

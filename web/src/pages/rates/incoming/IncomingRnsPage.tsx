@@ -460,12 +460,69 @@ function RnSummary({ r }: { r: RnRow }) {
 
 function RnQueue() {
   const open = useOpenRn();
+  const decide = useDecideRn();
+  const recheck = useRecheckRn();
+  const notifySaved = useNotifySaved();
   useTabTitle(page.label);
+  // Accept all / Reject all pending lines, as in the review header (§13.32).
+  const decideAll = async (r: RnRow, kind: "accept" | "reject") => {
+    let reason: string | null = null;
+    if (kind === "reject") {
+      reason = await ask<string>((done) => <ReasonDialog count={r.lines} done={done} />);
+      if (!reason) return;
+    }
+    decide.mutate(
+      { id: r.id, kind, body: reason ? { reason } : {} },
+      {
+        onSuccess: (res) => {
+          if (res.change) notifySaved(res.change, `Accepted ${res.applied} line${res.applied === 1 ? "" : "s"}`);
+          else
+            toast({
+              tone: "good",
+              message: `${kind === "accept" ? "Accepted" : "Rejected"} ${res.applied} line${res.applied === 1 ? "" : "s"}`,
+            });
+        },
+        onError: fail,
+      },
+    );
+  };
+  const notPending = (r: RnRow) => (decidable(r.status) ? undefined : `${STATUS[r.status].label}: nothing to decide`);
   return (
     <ListScreen<RnRow>
       list="rate_notifications"
       page={page}
       noSelection
+      rowActions={(r) => [
+        {
+          label: "Accept all",
+          icon: "check",
+          main: true,
+          disabled: !decidable(r.status) || decide.isPending,
+          hint: notPending(r) ?? "Accept all pending lines",
+          onSelect: () => void decideAll(r, "accept"),
+        },
+        {
+          label: "Reject…",
+          icon: "x",
+          disabled: !decidable(r.status) || decide.isPending,
+          hint: notPending(r) ?? "Reject all pending lines",
+          onSelect: () => void decideAll(r, "reject"),
+        },
+        {
+          label: "Re-check",
+          icon: "refresh",
+          disabled: !r.rateTableId || recheck.isPending,
+          hint: r.rateTableId ? undefined : "No vendor trunk matched yet",
+          onSelect: () => recheck.mutate(r.id, { onError: fail }),
+        },
+        {
+          label: "Download file",
+          icon: "download",
+          disabled: !r.fileName,
+          hint: r.fileName ?? "No file (e-mail body only)",
+          onSelect: () => window.location.assign(rnFileUrl(r.id)),
+        },
+      ]}
       historyScope={{ entityTypes: ["rate_table"] }}
       primary={{
         label: "Add RN",

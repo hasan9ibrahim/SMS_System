@@ -457,12 +457,67 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
 
 export function MarketMovesPage() {
   const scan = useScanMoves();
+  const act = useActOnMove();
+  // The Move card's actions, per row (§13.14).
+  const run = async (r: MarketMoveRow, action: "dismiss" | "handled" | "note" | "reopen" | "snooze", days?: number) => {
+    let note: string | null = null;
+    if (action === "dismiss" || action === "handled" || action === "note") {
+      note = await ask<string>((done) => (
+        <NoteDialog
+          title={{ dismiss: "Dismiss this move", handled: "Mark handled", note: "Add a note" }[action]}
+          required={action !== "handled"}
+          done={done}
+        />
+      ));
+      if (note === null) return;
+    }
+    act.mutate(
+      { id: r.id, body: { action, ...(days ? { days } : {}), ...(note ? { note } : {}) } },
+      { onSuccess: () => toast({ tone: "good", message: "Saved on the move" }), onError: fail },
+    );
+  };
   return (
     <ListScreen<MarketMoveRow>
       list="market_moves"
       page={page}
       noSelection
       historyScope={null}
+      rowActions={(r) => {
+        const open = r.state === "open";
+        const closed = open ? undefined : `${STATE_LABEL[r.state]}: reopen it first`;
+        return [
+          {
+            label: "Mark handled…",
+            icon: "check",
+            main: true,
+            disabled: !open || act.isPending,
+            hint: closed,
+            onSelect: () => void run(r, "handled"),
+          },
+          {
+            label: "Dismiss…",
+            icon: "x",
+            disabled: !open || act.isPending,
+            hint: closed,
+            onSelect: () => void run(r, "dismiss"),
+          },
+          ...[1, 7, 30].map((days) => ({
+            label: `Snooze ${days} day${days === 1 ? "" : "s"}`,
+            icon: "clock" as const,
+            disabled: !open || act.isPending,
+            hint: closed,
+            onSelect: () => void run(r, "snooze", days),
+          })),
+          {
+            label: "Reopen",
+            icon: "undo",
+            disabled: open || act.isPending,
+            hint: open ? "Already open" : undefined,
+            onSelect: () => void run(r, "reopen"),
+          },
+          { label: "Add note…", icon: "file", disabled: act.isPending, onSelect: () => void run(r, "note") },
+        ];
+      }}
       initialState={{ columns: { state: { field: "state", op: "in", values: ["open"] } } }}
       primary={{
         label: scan.isPending ? "Scanning…" : "Scan now",

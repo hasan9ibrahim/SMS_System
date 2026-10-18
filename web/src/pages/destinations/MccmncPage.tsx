@@ -6,14 +6,15 @@
 // unless a network has its own.
 import { useState } from "react";
 import type { Country, Destination, DestinationInput } from "@sms/contract";
+import { useMe } from "../../api/hooks";
 import { downloadCsv, useSaveDestination } from "../../api/masterData";
-import { useSetDlrTarget } from "../../api/records";
+import { useRestore, useSetDlrTarget } from "../../api/records";
 import { FormField, TextField, useForm } from "../../form/form";
 import { toListQuery } from "../../grid/filterModel";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
@@ -182,6 +183,11 @@ const importCodes = () =>
   });
 
 export function MccmncPage() {
+  const deleteOne = useDeleteRecord();
+  const { data: me } = useMe();
+  const restore = useRestore("destination");
+  const notifySaved = useNotifySaved();
+  const isAdmin = isAdminUser(me?.permissions);
   return (
     <ListScreen<Destination>
       list="destinations"
@@ -189,6 +195,35 @@ export function MccmncPage() {
       title="MCCMNC codes"
       historyScope={{ entityTypes: ["destination"] }}
       primary={{ label: "Add code", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted code" : undefined,
+          onSelect: () => void openDialog(r),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored MCCMNC ${r.mccmnc}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("destination", r.id, `MCCMNC ${r.mccmnc}`),
+            },
+      ]}
       actions={
         <Button icon="upload" onClick={() => void importCodes()}>
           Import

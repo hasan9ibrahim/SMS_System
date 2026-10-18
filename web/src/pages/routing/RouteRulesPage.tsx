@@ -7,12 +7,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RouteRuleDetail, RouteRuleRow, TrafficWindow } from "@sms/contract";
 import { api, unwrap } from "../../api/client";
+import { useMe } from "../../api/hooks";
+import { useRestore } from "../../api/records";
 import { useBulkRouteRules, useCloneRouteRule, exportRouteRules, useRouteRule } from "../../api/routing";
 import { toListQuery } from "../../grid/filterModel";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen, useGridUrlState, type DetailContent } from "../../page/ListScreen";
-import { useDeleteRecord } from "../../records/parts";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Button, Modal, Popover, StatusDot } from "../../ui/primitives";
 import { formatPct } from "../rates/format";
@@ -153,6 +155,9 @@ export function RouteRulesPage() {
   const clone = useCloneRouteRule();
   const notifySaved = useNotifySaved();
   const deleteRecord = useDeleteRecord();
+  const { data: me } = useMe();
+  const restore = useRestore("route_rule");
+  const isAdmin = isAdminUser(me?.permissions);
   const ccy = usePlatformCurrency();
   const [selectId, setSelectId] = useState<number | null>(null);
   const sectionState = useState<string | null>(null);
@@ -376,6 +381,64 @@ export function RouteRulesPage() {
       detail={detail}
       selectId={selectId}
       section={sectionState}
+      // The rule's own actions: E edit, D duplicate, the vendor popup, on/off, delete (§6.3, §13.29).
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: r.archived,
+          hint: r.archived ? "Restore the rule to edit it" : undefined,
+          onSelect: () => void edit(r),
+        },
+        {
+          label: "Clone",
+          icon: "copy",
+          disabled: r.archived || clone.isPending,
+          hint: r.archived ? "Deleted rule" : "A copy, turned off",
+          onSelect: () => duplicate(r),
+        },
+        {
+          label: "Edit vendors…",
+          icon: "shuffle",
+          disabled: r.archived || r.routeType === "block",
+          hint: r.archived ? "Deleted rule" : r.routeType === "block" ? "A block rule has no vendors" : undefined,
+          onSelect: () => void ask<void>((d) => <VendorsDialog id={r.id} done={() => d()} />),
+        },
+        r.status === "active"
+          ? {
+              label: "Turn off",
+              icon: "x",
+              disabled: r.archived,
+              onSelect: () => runBulk([r.id], "disable", "Turned off"),
+            }
+          : {
+              label: "Turn on",
+              icon: "check",
+              disabled: r.archived,
+              hint: r.archived ? "Deleted rule" : undefined,
+              onSelect: () => runBulk([r.id], "enable", "Turned on"),
+            },
+        "separator",
+        r.archived
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored rule #${r.id}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteRecord("route_rule", r.id, `rule #${r.id}`),
+            },
+      ]}
       selection={{
         summary: (rows, ids) => {
           const msgs = rows.reduce((sum, r) => sum + (ids.has(r.id) ? (r.messages ?? 0) : 0), 0);

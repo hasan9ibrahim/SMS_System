@@ -65,6 +65,17 @@ export function RouteMapPage() {
       idleMessage="Choose a customer trunk above to see its route for every destination."
       queryScope={trunk}
       fetchPage={(body) => fetchListPage<RouteMapRow>("route_map", withTrunk(body))}
+      // Read-only: the one record action is the deciding rule, like the Rule link (§6.3).
+      rowActions={(r) => [
+        {
+          label: "Show rule",
+          icon: "route",
+          main: true,
+          disabled: !r.ruleId,
+          hint: r.ruleId ? undefined : "No rule routes this destination",
+          onSelect: () => r.ruleId && openRule(r.ruleId, r.ruleName!),
+        },
+      ]}
       above={
         <div className="rm-trunk">
           <span className="muted">Customer trunk</span>

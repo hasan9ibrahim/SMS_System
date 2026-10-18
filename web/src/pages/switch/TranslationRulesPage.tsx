@@ -3,7 +3,7 @@
 // field of the old /digitrule/add page and the Applies To block, so a rule runs on its trunks as
 // soon as it is saved: no group, no second trip to the trunk. Editing a shared rule confirms with
 // the number of trunks it touches; "Duplicate to trunk" makes a variant for one partner.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   ContentWordRule,
   DlrMapEntry,
@@ -36,7 +36,9 @@ import {
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup, useDeleteRecord } from "../../records/parts";
+import { useMe } from "../../api/hooks";
+import { useRestore } from "../../api/records";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { HoverList } from "../../ui/HoverList";
@@ -842,6 +844,26 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
 const openEditor = (detail: TranslationRuleDetail | null) =>
   ask<number>((done) => <RuleEditor detail={detail} done={done} />);
 
+/** Loads the rule (the detail panel's query) before a dialog opened from the list's record actions. */
+function WithRule({
+  id,
+  done,
+  render,
+}: {
+  id: number;
+  done: (id: number | null) => void;
+  render: (d: TranslationRuleDetail) => ReactNode;
+}) {
+  const q = useTranslationRule(id);
+  useEffect(() => {
+    if (!q.isError) return;
+    toast({ tone: "error", message: problemText(q.error) });
+    done(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.isError]);
+  return q.data ? <>{render(q.data)}</> : null;
+}
+
 // ---------------------------------------------------------------- detail panel
 
 function DuplicateDialog({ rule, done }: { rule: TranslationRuleDetail; done: (id: number | null) => void }) {
@@ -1047,6 +1069,11 @@ function MccmncCell({ row }: { row: TranslationRuleRow }) {
 export function TranslationRulesPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
   const deleteOne = useDeleteRecord();
+  const clone = useCloneTranslationRule();
+  const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const restore = useRestore("translation_rule");
+  const isAdmin = isAdminUser(me?.permissions);
   return (
     <ListScreen<TranslationRuleRow>
       list="translation_rules"
@@ -1054,15 +1081,65 @@ export function TranslationRulesPage() {
       selectId={selectId}
       historyScope={{ entityTypes: ["translation_rule"] }}
       rowActions={(r) => [
+        // The same Edit / Clone / Duplicate to trunk as the Rule tab of the detail panel (§13.2).
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted rule" : undefined,
+          onSelect: () =>
+            void ask<number>((done) => (
+              <WithRule id={r.id} done={done} render={(d) => <RuleEditor detail={d} done={done} />} />
+            )).then((id) => id && setSelectId(id)),
+        },
+        {
+          label: "Clone",
+          icon: "copy",
+          disabled: !!r.archivedAt || clone.isPending,
+          hint: r.archivedAt ? "Deleted rule" : undefined,
+          onSelect: () =>
+            clone.mutate(
+              { id: r.id, body: {} },
+              {
+                onSuccess: (res) => {
+                  if (res.change) notifySaved(res.change, `Cloned to ${res.record.name} (inactive)`);
+                  setSelectId(res.record.id);
+                },
+                onError: (e) => toast({ tone: "error", message: problemText(e) }),
+              },
+            ),
+        },
+        {
+          label: "Duplicate to trunk…",
+          icon: "copy",
+          disabled: !!r.archivedAt || r.usedBy === 0,
+          hint: r.archivedAt ? "Deleted rule" : r.usedBy === 0 ? "The rule runs on no trunk" : undefined,
+          onSelect: () =>
+            void ask<number>((done) => (
+              <WithRule id={r.id} done={done} render={(d) => <DuplicateDialog rule={d} done={done} />} />
+            )).then((id) => id && setSelectId(id)),
+        },
         { label: "Show details", icon: "eye", onSelect: () => setSelectId(r.id) },
         "separator",
-        {
-          label: "Delete…",
-          icon: "trash",
-          danger: true,
-          disabled: !!r.archivedAt,
-          onSelect: () => void deleteOne("translation_rule", r.id, `rule ${r.name}`),
-        },
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored rule ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("translation_rule", r.id, `rule ${r.name}`),
+            },
       ]}
       actions={<CleanupBadge kinds={["translation_rule_unassigned"]} />}
       primary={{

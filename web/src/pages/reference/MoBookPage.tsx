@@ -5,13 +5,15 @@
 // (archive), restore, import with a dry run, export.
 import { useState } from "react";
 import type { Destination, MoNumber, MoNumberInput, TrunkListRow } from "@sms/contract";
+import { useMe } from "../../api/hooks";
 import { downloadCsv, useSaveMoNumber } from "../../api/masterData";
+import { useRestore } from "../../api/records";
 import { FormField, NumberField, ReadOnly, TextField, useForm } from "../../form/form";
 import { toListQuery } from "../../grid/filterModel";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
@@ -135,12 +137,46 @@ const importBook = () =>
   });
 
 export function MoBookPage() {
+  const deleteOne = useDeleteRecord();
+  const { data: me } = useMe();
+  const restore = useRestore("mo_number");
+  const notifySaved = useNotifySaved();
+  const isAdmin = isAdminUser(me?.permissions);
   return (
     <ListScreen<MoNumber>
       list="mo_numbers"
       page={page}
       historyScope={{ entityTypes: ["mo_number"] }}
       primary={{ label: "Add MO number", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted entry" : undefined,
+          onSelect: () => void openDialog(r),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored MO number ${label(r)}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("mo_number", r.id, `MO number ${label(r)}`),
+            },
+      ]}
       actions={
         <Button icon="upload" onClick={() => void importBook()}>
           Import

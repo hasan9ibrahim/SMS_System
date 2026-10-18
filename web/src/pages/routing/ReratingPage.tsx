@@ -3,7 +3,7 @@
 // approves or declines (maker-checker). An approved request is processed in the background
 // (In Queue, In Process, Completed) and posts a Reprocess credit or debit note per enterprise
 // unless "Don't add credit/debit note" is ticked. EDRs keep their billed amounts (§13.29).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   Enterprise,
   RateTableRow,
@@ -310,6 +310,18 @@ function RequestDialog({ row, done }: { row: ReratingDetail | null; done: () => 
 const openRequest = (row: ReratingDetail | null) =>
   ask<void>((done) => <RequestDialog row={row} done={() => done()} />);
 
+/** Edit from the row menu: loads the request (the detail panel's query) first. */
+function EditById({ id, done }: { id: number; done: () => void }) {
+  const q = useRerating(id);
+  useEffect(() => {
+    if (!q.isError) return;
+    toast({ tone: "error", message: problemText(q.error) });
+    done();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.isError]);
+  return q.data ? <RequestDialog row={q.data} done={done} /> : null;
+}
+
 function DeclineDialog({ id, done }: { id: number; done: () => void }) {
   const decide = useDecideRerating();
   const [reason, setReason] = useState("");
@@ -443,11 +455,45 @@ function RequestDetail({ id }: { id: number }) {
 }
 
 export function ReratingPage() {
+  const decide = useDecideRerating();
+  const notMine = "Another user approves or declines (maker-checker)";
   return (
     <ListScreen<ReratingRequest>
       list="rerating_requests"
       page={page}
       noSelection
+      // The detail panel's Edit, Approve and Decline, per row (§6.3).
+      rowActions={(r) => [
+        {
+          label: "Approve",
+          icon: "check",
+          main: true,
+          disabled: !r.canDecide || decide.isPending,
+          hint: r.canDecide ? undefined : r.requestStatus === "pending_approval" ? notMine : "Already decided",
+          onSelect: () =>
+            decide.mutate(
+              { id: r.id, approve: true },
+              {
+                onSuccess: () => toast({ tone: "good", message: `Re-rating #${r.id} approved and queued` }),
+                onError: (e) => toast({ tone: "error", message: problemText(e) }),
+              },
+            ),
+        },
+        {
+          label: "Decline…",
+          icon: "x",
+          disabled: !r.canDecide,
+          hint: r.canDecide ? undefined : r.requestStatus === "pending_approval" ? notMine : "Already decided",
+          onSelect: () => void ask<void>((done) => <DeclineDialog id={r.id} done={() => done()} />),
+        },
+        {
+          label: "Edit",
+          icon: "file",
+          disabled: !r.canEdit,
+          hint: r.canEdit ? undefined : "Only the requester can edit a pending request",
+          onSelect: () => void ask<void>((done) => <EditById id={r.id} done={() => done()} />),
+        },
+      ]}
       // Requests are a maker-checker workflow, not undone: their history is on the Change history page.
       primary={{ label: "Request re-rating", icon: "plus", onClick: () => void openRequest(null) }}
       columns={{

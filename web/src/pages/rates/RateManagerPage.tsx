@@ -6,13 +6,16 @@ import { HoverList } from "../../ui/HoverList";
 import { useLocation } from "react-router";
 import type { RateTableRow } from "@sms/contract";
 import type { GridState } from "../../grid/filterModel";
-import { useReference } from "../../api/records";
+import { useMe } from "../../api/hooks";
+import { useReference, useRestore } from "../../api/records";
+import { useNotifySaved } from "../../history/undo";
 import { formatMoney, formatPct } from "./format";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { useTabNavigate } from "../../shell/tabContext";
-import { useDeleteRecord } from "../../records/parts";
-import { ask } from "../../ui/feedback";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
+import { ask, toast } from "../../ui/feedback";
+import { problemText } from "../routing/dialogs";
 import { Icon } from "../../ui/Icon";
 import { scopeUrl } from "./bulkModel";
 import { NewRateTableDialog } from "./dialogs";
@@ -105,6 +108,10 @@ function FullList() {
   const open = useOpenTable();
   const navigate = useTabNavigate();
   const deleteOne = useDeleteRecord();
+  const { data: me } = useMe();
+  const restore = useRestore("rate_table");
+  const notifySaved = useNotifySaved();
+  const isAdmin = isAdminUser(me?.permissions);
   // The first two names in bold, then "+N"; pointing at the cell lists them all (team trial round 1).
   const names = (list: string[], total: number) =>
     list.length ? (
@@ -123,22 +130,39 @@ function FullList() {
       page={page}
       historyScope={{ entityTypes: ["rate_table"] }}
       rowActions={(r) => [
-        { label: "Open", icon: "chevronRight", onSelect: () => open(r.id, { name: r.name }) },
-        { label: "Open in new tab", icon: "external", onSelect: () => open(r.id, { newTab: true, name: r.name }) },
+        // Editing the rates opens the table beside the list (§13.12).
+        { label: "Edit", icon: "file", main: true, onSelect: () => open(r.id, { name: r.name }) },
+        {
+          label: "Edit in new tab",
+          icon: "external",
+          onSelect: () => open(r.id, { newTab: true, name: r.name }),
+        },
         {
           label: "Bulk rating…",
           icon: "layers",
           disabled: r.kind !== "customer" || r.archived,
+          hint: r.archived ? "Deleted table" : r.kind !== "customer" ? "Customer tables only" : undefined,
           onSelect: () => navigate(scopeUrl({ tables: [r.id] }), { newTab: true, title: "Bulk rating" }),
         },
         "separator",
-        {
-          label: "Delete…",
-          icon: "trash",
-          danger: true,
-          disabled: r.archived,
-          onSelect: () => void deleteOne("rate_table", r.id, r.name),
-        },
+        r.archived
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("rate_table", r.id, r.name),
+            },
       ]}
       // Several clients' tables at once open the bulk rating workspace (§13.11, §13.12).
       selection={{

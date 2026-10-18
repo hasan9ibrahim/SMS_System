@@ -6,8 +6,13 @@ import type { TrunkListRow } from "@sms/contract";
 import type { TrunkKind } from "../api/records";
 import { pageForPath } from "../nav/registry";
 import { ListScreen } from "../page/ListScreen";
-import { useBulkDelete, useDeleteRecord } from "../records/parts";
+import { useMe } from "../api/hooks";
+import { useRestore } from "../api/records";
+import { useNotifySaved } from "../history/undo";
+import { isAdminUser, useBulkDelete, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
+import { toast } from "../ui/feedback";
+import { problemText } from "./routing/dialogs";
 
 const LABEL = { customer: "Customer trunk", vendor: "Vendor trunk" } as const;
 
@@ -24,6 +29,14 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
     });
   const deleteOne = useDeleteRecord();
   const deleteMany = useBulkDelete();
+  const { data: me } = useMe();
+  const restore = useRestore(kind);
+  const notifySaved = useNotifySaved();
+  const restoreOne = (id: number, name: string) =>
+    restore.mutate(id, {
+      onSuccess: (r) => r.change && notifySaved(r.change, `Restored ${name}`),
+      onError: (e) => toast({ tone: "error", message: problemText(e) }),
+    });
   return (
     <ListScreen<TrunkListRow>
       key={kind}
@@ -36,16 +49,24 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
           navigate(`/enterprises/${kind}-trunks/new`, { newTab: true, title: `New ${LABEL[kind].toLowerCase()}` }),
       }}
       rowActions={(r) => [
-        { label: "Open", icon: "external", onSelect: () => open(r.id, r.name) },
-        { label: "Clone…", icon: "copy", disabled: r.archived, onSelect: () => clone(r.id, r.name) },
+        // The trunk record tab is its editor (§5.4, §5.5).
+        { label: "Edit", icon: "file", main: true, onSelect: () => open(r.id, r.name) },
+        { label: "Clone", icon: "copy", disabled: r.archived, onSelect: () => clone(r.id, r.name) },
         "separator",
-        {
-          label: "Delete…",
-          icon: "trash",
-          danger: true,
-          disabled: r.archived,
-          onSelect: () => void deleteOne(kind, r.id, r.name),
-        },
+        r.archived
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdminUser(me?.permissions) || restore.isPending,
+              hint: isAdminUser(me?.permissions) ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () => restoreOne(r.id, r.name),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne(kind, r.id, r.name),
+            },
       ]}
       selection={{
         bulk: (ids, clear, rows) => [

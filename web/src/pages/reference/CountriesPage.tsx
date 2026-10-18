@@ -87,6 +87,16 @@ export function CountriesPage() {
       page={page}
       historyScope={{ entityTypes: ["country"] }}
       primary={{ label: "Add country", icon: "plus", onClick: () => void openDialog(null) }}
+      // Countries are not deleted (they hold the MCCMNC codes): Edit and the codes link.
+      rowActions={(r) => [
+        { label: "Edit", icon: "file", main: true, onSelect: () => void openDialog(r) },
+        {
+          label: "MCCMNC codes",
+          icon: "globe",
+          onSelect: () =>
+            navigate(`/rates/mccmnc?g=${countryFilter(r.name)}`, { newTab: true, title: `MCCMNC · ${r.name}` }),
+        },
+      ]}
       onExport={(s) =>
         void downloadCsv("/countries/export", toListQuery(s)).catch((e) =>
           toast({ tone: "error", message: problemText(e) }),

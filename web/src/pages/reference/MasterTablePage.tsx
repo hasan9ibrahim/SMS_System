@@ -7,13 +7,14 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router";
 import type { Destination, DialCode, DialCodeInput, DialCodeProfile, ListQuery } from "@sms/contract";
-import { fetchListPage } from "../../api/hooks";
+import { fetchListPage, useMe } from "../../api/hooks";
+import { useRestore } from "../../api/records";
 import { downloadCsv, useDeleteDialCodes, useSaveDialCode, useSaveProfile } from "../../api/masterData";
 import { FormField, TextField, useForm } from "../../form/form";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup, useDeleteRecord } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
@@ -144,6 +145,11 @@ export function MasterTablePage() {
 }
 
 function ProfileList({ open }: { open: (id: number) => void }) {
+  const deleteOne = useDeleteRecord();
+  const { data: me } = useMe();
+  const restore = useRestore("dial_code_profile");
+  const notifySaved = useNotifySaved();
+  const isAdmin = isAdminUser(me?.permissions);
   const addProfile = async () => {
     const id = await ask<number>((done) => <ProfileDialog row={null} done={done} />);
     if (id) open(id);
@@ -154,6 +160,38 @@ function ProfileList({ open }: { open: (id: number) => void }) {
       page={page}
       historyScope={{ entityTypes: ["dial_code_profile", "dial_code"] }}
       primary={{ label: "Add profile", icon: "plus", onClick: () => void addProfile() }}
+      // Double-click or Enter opens the dial codes; the default profile is not renamed or deleted (§6.1).
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: r.isDefault || !!r.archivedAt,
+          hint: r.isDefault ? "The default profile cannot be renamed" : r.archivedAt ? "Deleted profile" : undefined,
+          onSelect: () => void ask<number>((done) => <ProfileDialog row={r} done={done} />),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !isAdmin || restore.isPending,
+              hint: isAdmin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored profile ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              disabled: r.isDefault,
+              hint: r.isDefault ? "The default profile cannot be deleted" : undefined,
+              onSelect: () => void deleteOne("dial_code_profile", r.id, `profile ${r.name}`),
+            },
+      ]}
       columns={{
         name: {
           width: 240,
@@ -313,6 +351,10 @@ function ProfileCodes({ id, back }: { id: number; back: () => void }) {
         network: { width: 280 },
       }}
       onOpen={(r) => void edit(r)}
+      rowActions={(r) => [
+        { label: "Edit", icon: "file", main: true, onSelect: () => void edit(r) },
+        { label: "Delete", icon: "trash", danger: true, onSelect: () => remove([r.id]) },
+      ]}
       selection={{
         summary: (_rows, ids) => `${ids.size} selected`,
         bulk: (ids, clear) => [

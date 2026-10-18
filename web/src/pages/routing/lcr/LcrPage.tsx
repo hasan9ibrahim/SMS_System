@@ -876,6 +876,7 @@ function ProfilesView() {
       noSelection
       historyScope={{ entityTypes: ["lcr_profile"] }}
       primary={{ label: "New profile", onClick: () => edit(null) }}
+      rowActions={(r) => [{ label: "Edit", icon: "file", main: true, onSelect: () => edit(r.id) }]}
       columns={{
         name: { width: 240, render: (r) => <strong>{r.name}</strong> },
         status: {
@@ -984,6 +985,17 @@ function ChangesView() {
       above={<ViewSwitch />}
       noSelection
       historyScope={null}
+      // Read-only: the one row action is the linked market move, like the link in the row.
+      rowActions={(r) => [
+        {
+          label: "Market move",
+          icon: "trending",
+          main: true,
+          disabled: !r.marketMoveId,
+          hint: r.marketMoveId ? `Market move #${r.marketMoveId}` : "No market move linked",
+          onSelect: () => navigate("/rates/market-moves", { newTab: true }),
+        },
+      ]}
       actions={
         <Button icon="bell" onClick={() => void ask<null>((done) => <AlertSettingsDialog done={done} />)}>
           Alert settings
