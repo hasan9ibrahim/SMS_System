@@ -9511,6 +9511,72 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rate-lookup/side/options": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Rate Lookup side by side: the filter choices of one side (team trial round 1, §13.16)
+     * @description Everything the side's check lists offer: product categories, the side's trunks (customer or vendor),
+     *     countries and MCCMNC codes of the master. Countries and codes come with the number of rate tables of
+     *     the side that price them now, so empty ones can be told apart.
+     */
+    get: operations["rateLookupSideOptions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lookup/side": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Rate Lookup side by side: destinations of one side with rate ranges, paged
+     * @description One row per destination code that the side's rate tables price at `asOf` (default now), after the
+     *     side's filters: how many rate tables, the lowest and highest rate (in the table currency when all
+     *     tables share it) and in the platform currency (Sys). Blocked lines and sender-ID lines are left out.
+     *     A country-level line ("all networks") is its own row. Paged with `limit` and `cursor`; sorted by
+     *     country and code unless `sort` says otherwise.
+     */
+    post: operations["rateLookupSide"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rate-lookup/side/lines": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Rate Lookup side by side: the rate tables pricing one destination (expanded row)
+     * @description Every rate table of the side with a line for `mccmnc` after the side's filters, cheapest first.
+     */
+    post: operations["rateLookupSideLines"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-lookups": {
     parameters: {
       query?: never;
@@ -16771,6 +16837,153 @@ export type components = {
       asOf?: components["schemas"]["Timestamp"];
       /** @description Use the sender-ID line where a table has one (§6.2). */
       senderId?: string;
+    };
+    /**
+     * @description Customer (sell) or vendor (buy) rate tables.
+     * @enum {string}
+     */
+    LookupSide: "customer" | "vendor";
+    LookupSideOptions: {
+      side: components["schemas"]["LookupSide"];
+      categories: {
+        id: number;
+        name: string;
+      }[];
+      /** @description Live trunks of the side (archived ones never show), by name. */
+      trunks: {
+        id: number;
+        name: string;
+        enterpriseName: string;
+        active: boolean;
+      }[];
+      countries: {
+        mcc: string;
+        name: string;
+        iso: string;
+        /** @description Rate tables of the side pricing a code of the country now. */
+        tables: number;
+      }[];
+      codes: {
+        mccmnc: string;
+        mcc: string;
+        network: string;
+        allNetworks: boolean;
+        tables: number;
+      }[];
+    };
+    LookupSideFilters: {
+      side: components["schemas"]["LookupSide"];
+      /** @description Empty or missing = every category. */
+      categoryIds?: number[];
+      /** @description Customer trunks (tables linked to them) or vendor trunks. Empty = all. */
+      trunkIds?: number[];
+      /** @description Countries by MCC. Empty = all. */
+      mccs?: string[];
+      /** @description Destination codes. Empty = all codes of the chosen countries. */
+      mccmncs?: string[];
+      /** @description Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25). */
+      search?: string;
+      /** @description Include inactive trunks. */
+      includeInactive?: boolean;
+      asOf?: components["schemas"]["Timestamp"];
+    };
+    /** @description The side's filters (as LookupSideFilters) plus paging and sort. */
+    LookupSideRequest: {
+      side: components["schemas"]["LookupSide"];
+      /** @description Empty or missing = every category. */
+      categoryIds?: number[];
+      /** @description Customer trunks (tables linked to them) or vendor trunks. Empty = all. */
+      trunkIds?: number[];
+      /** @description Countries by MCC. Empty = all. */
+      mccs?: string[];
+      /** @description Destination codes. Empty = all codes of the chosen countries. */
+      mccmncs?: string[];
+      /** @description Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25). */
+      search?: string;
+      /** @description Include inactive trunks. */
+      includeInactive?: boolean;
+      asOf?: components["schemas"]["Timestamp"];
+      /** @default 100 */
+      limit: number;
+      cursor?: string | null;
+      /**
+       * @default destination
+       * @enum {string}
+       */
+      sort: "destination" | "tables" | "minSys" | "maxSys";
+      /**
+       * @default asc
+       * @enum {string}
+       */
+      dir: "asc" | "desc";
+    };
+    LookupSideRow: {
+      mccmnc: string;
+      mcc: string;
+      country: string;
+      countryIso: string;
+      network: string;
+      allNetworks: boolean;
+      /** @description Rate tables with a line for the code. */
+      tables: number;
+      /** @description Lowest rate in the table currency; null when the tables use several currencies. */
+      minRate: number | null;
+      maxRate: number | null;
+      /** @description The tables' currency when they all share one. */
+      currency: string | null;
+      /** @description Lowest rate in the platform currency. */
+      minSys: number;
+      maxSys: number;
+    };
+    LookupSidePage: {
+      rows: components["schemas"]["LookupSideRow"][];
+      /** @description Destinations after the filters. */
+      total: number;
+      nextCursor: string | null;
+      platformCurrency: string;
+    };
+    /** @description The side's filters (as LookupSideFilters) and the destination to expand. */
+    LookupSideLinesRequest: {
+      side: components["schemas"]["LookupSide"];
+      /** @description Empty or missing = every category. */
+      categoryIds?: number[];
+      /** @description Customer trunks (tables linked to them) or vendor trunks. Empty = all. */
+      trunkIds?: number[];
+      /** @description Countries by MCC. Empty = all. */
+      mccs?: string[];
+      /** @description Destination codes. Empty = all codes of the chosen countries. */
+      mccmncs?: string[];
+      /** @description Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25). */
+      search?: string;
+      /** @description Include inactive trunks. */
+      includeInactive?: boolean;
+      asOf?: components["schemas"]["Timestamp"];
+      mccmnc: string;
+    };
+    LookupSideLine: {
+      rateTableId: number;
+      rateTableName: string;
+      category: string | null;
+      /** @description The trunks using the table (one vendor trunk, or the customer trunks linked to it). */
+      trunks: {
+        id: number;
+        name: string;
+        enterpriseName: string;
+      }[];
+      rate: number;
+      currency: string;
+      /** @description The rate in the platform currency. */
+      sysRate: number;
+      effectiveFrom: components["schemas"]["Timestamp"];
+      /** @description The next scheduled rate, if any (§13.12). */
+      nextRate: number | null;
+      /** Format: date-time */
+      nextFrom: string | null;
+    };
+    LookupSideLines: {
+      mccmnc: string;
+      lines: components["schemas"]["LookupSideLine"][];
+      platformCurrency: string;
     };
     /** @description One rate line as the lookup shows it. */
     LookupRate: {
@@ -31038,6 +31251,85 @@ export interface operations {
         };
         content: {
           "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  rateLookupSideOptions: {
+    parameters: {
+      query: {
+        side: components["schemas"]["LookupSide"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The choices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LookupSideOptions"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  rateLookupSide: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LookupSideRequest"];
+      };
+    };
+    responses: {
+      /** @description One page of destinations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LookupSidePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  rateLookupSideLines: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LookupSideLinesRequest"];
+      };
+    };
+    responses: {
+      /** @description The tables */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LookupSideLines"];
         };
       };
       400: components["responses"]["BadRequest"];

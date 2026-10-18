@@ -79,7 +79,7 @@ Start with the screens the team uses every day (build order 4), then the rest.
 | Enterprises | Enterprises, Customer trunks, Vendor trunks | Open a partner, edit billing, add a trunk; delete one and look at the dependency check |
 | Rates | Rate manager | Open a vendor table, change rates, upload a file, look at history and best buy |
 | Routing | Route rules | Filter by destination, open a rule's Conditions / Vendors / Traffic / History / Test; hover the volumes |
-| Routing | Rate lookup | Look up a country or MCCMNC; compare vendors and client rates |
+| Routing | Rate lookup | Side by side: filter customer and vendor rates separately (category, trunk, country, MCCMNC), open a destination to see its tables; One destination for margins |
 | Reports | Enterprise report | Run a customer and a vendor report for last month; export |
 | Dashboard | Dashboard, Live analytics | Watch the live figures; acknowledge an alert pop-up |
 | Rates | Incoming RNs, Market moves, Bulk rating | Review an RN against live traffic; re-price several clients at once |

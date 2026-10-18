@@ -250,6 +250,7 @@ import {
   restoreRateTable,
   updateRateTable,
 } from "./api/rates.js";
+import { rateLookupSide, rateLookupSideLines, rateLookupSideOptions } from "./api/rateLookupSide.js";
 import {
   createSavedLookup,
   deleteSavedLookup,
@@ -734,6 +735,9 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   lookupRates,
   rateLookupMatrix,
   exportRateLookupMatrix,
+  rateLookupSideOptions,
+  rateLookupSide,
+  rateLookupSideLines,
   listSavedLookups,
   createSavedLookup,
   updateSavedLookup,

@@ -267,3 +267,61 @@ describe("advanced lookup (§13.16)", { skip }, () => {
     assert.equal(gone.statusCode, 404);
   });
 });
+
+describe("side by side (team trial round 1)", { skip }, () => {
+  test("options, destinations with ranges, paging, filters and expanded tables, fast at volume", async () => {
+    const opts = await ok("rateLookupSideOptions", call("GET", "/rate-lookup/side/options?side=vendor"));
+    assert.ok(opts.trunks.length > 0 && opts.countries.length > 0 && opts.codes.length > 0);
+    const t0 = performance.now();
+    const all = await ok("rateLookupSide", call("POST", "/rate-lookup/side", { side: "vendor", limit: 50 }));
+    assert.ok(performance.now() - t0 < 1500, "first page under the budget at full volume");
+    assert.equal(all.rows.length, Math.min(50, all.total));
+    for (const r of all.rows) assert.ok(r.tables > 0 && r.minSys <= r.maxSys);
+    if (all.nextCursor) {
+      const next = await ok(
+        "rateLookupSide",
+        call("POST", "/rate-lookup/side", { side: "vendor", limit: 50, cursor: all.nextCursor }),
+      );
+      assert.notEqual(next.rows[0]?.mccmnc, all.rows[0]?.mccmnc, "the next page moves on");
+    }
+    const row = all.rows.find((r: { allNetworks: boolean }) => !r.allNetworks) ?? all.rows[0];
+    const one = await ok(
+      "rateLookupSide",
+      call("POST", "/rate-lookup/side", { side: "vendor", mccs: [row.mcc], search: row.network.slice(0, 4) }),
+    );
+    assert.ok(
+      one.rows.every((r: { mcc: string }) => r.mcc === row.mcc),
+      "country filter",
+    );
+    const lines = await ok(
+      "rateLookupSideLines",
+      call("POST", "/rate-lookup/side/lines", { side: "vendor", mccmnc: row.mccmnc }),
+    );
+    assert.equal(lines.lines.length, row.tables, "one line per table the row counted");
+    const sys = lines.lines.map((l: { sysRate: number }) => l.sysRate);
+    assert.deepEqual(
+      sys,
+      [...sys].sort((a, b) => a - b),
+      "cheapest first",
+    );
+    assert.ok(Math.abs(sys[0] - row.minSys) < 1e-5 && Math.abs(sys.at(-1) - row.maxSys) < 1e-5, "range matches");
+    const trunk = lines.lines[0].trunks[0].id;
+    const byTrunk = await ok(
+      "rateLookupSide",
+      call("POST", "/rate-lookup/side", { side: "vendor", trunkIds: [trunk], mccmncs: [row.mccmnc] }),
+    );
+    assert.equal(byTrunk.rows[0]?.tables, 1, "trunk filter");
+    const cust = await ok(
+      "rateLookupSide",
+      call("POST", "/rate-lookup/side", { side: "customer", sort: "tables", dir: "desc", limit: 5 }),
+    );
+    const counts = cust.rows.map((r: { tables: number }) => r.tables);
+    assert.deepEqual(
+      counts,
+      [...counts].sort((a, b) => b - a),
+      "sorted by tables",
+    );
+    const bad = await call("POST", "/rate-lookup/side", { side: "both" });
+    assert.equal(bad.statusCode, 400);
+  });
+});

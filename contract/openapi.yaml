@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.34.0
+  version: 0.35.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -13827,6 +13827,92 @@ paths:
             text/csv:
               schema:
                 type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookup/side/options:
+    get:
+      tags: [rates]
+      operationId: rateLookupSideOptions
+      summary: "Rate Lookup side by side: the filter choices of one side (team trial round 1, §13.16)"
+      description: |
+        Everything the side's check lists offer: product categories, the side's trunks (customer or vendor),
+        countries and MCCMNC codes of the master. Countries and codes come with the number of rate tables of
+        the side that price them now, so empty ones can be told apart.
+      parameters:
+        - name: side
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/LookupSide"
+      responses:
+        "200":
+          description: The choices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupSideOptions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookup/side:
+    post:
+      tags: [rates]
+      operationId: rateLookupSide
+      summary: "Rate Lookup side by side: destinations of one side with rate ranges, paged"
+      description: |
+        One row per destination code that the side's rate tables price at `asOf` (default now), after the
+        side's filters: how many rate tables, the lowest and highest rate (in the table currency when all
+        tables share it) and in the platform currency (Sys). Blocked lines and sender-ID lines are left out.
+        A country-level line ("all networks") is its own row. Paged with `limit` and `cursor`; sorted by
+        country and code unless `sort` says otherwise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LookupSideRequest"
+      responses:
+        "200":
+          description: One page of destinations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupSidePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rate-lookup/side/lines:
+    post:
+      tags: [rates]
+      operationId: rateLookupSideLines
+      summary: "Rate Lookup side by side: the rate tables pricing one destination (expanded row)"
+      description: Every rate table of the side with a line for `mccmnc` after the side's filters, cheapest first.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LookupSideLinesRequest"
+      responses:
+        "200":
+          description: The tables
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupSideLines"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -29733,6 +29819,283 @@ components:
           type: string
           maxLength: 20
           description: Use the sender-ID line where a table has one (§6.2).
+
+    LookupSide:
+      type: string
+      enum: [customer, vendor]
+      description: Customer (sell) or vendor (buy) rate tables.
+
+    LookupSideOptions:
+      type: object
+      additionalProperties: false
+      required: [side, categories, trunks, countries, codes]
+      properties:
+        side:
+          $ref: "#/components/schemas/LookupSide"
+        categories:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+        trunks:
+          type: array
+          description: Live trunks of the side (archived ones never show), by name.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, enterpriseName, active]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              enterpriseName: { type: string }
+              active: { type: boolean }
+        countries:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [mcc, name, iso, tables]
+            properties:
+              mcc: { type: string }
+              name: { type: string }
+              iso: { type: string }
+              tables:
+                type: integer
+                description: Rate tables of the side pricing a code of the country now.
+        codes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [mccmnc, mcc, network, allNetworks, tables]
+            properties:
+              mccmnc: { type: string }
+              mcc: { type: string }
+              network: { type: string }
+              allNetworks: { type: boolean }
+              tables: { type: integer }
+
+    LookupSideFilters:
+      type: object
+      additionalProperties: false
+      required: [side]
+      properties:
+        side:
+          $ref: "#/components/schemas/LookupSide"
+        categoryIds:
+          type: array
+          maxItems: 500
+          items: { type: integer }
+          description: Empty or missing = every category.
+        trunkIds:
+          type: array
+          maxItems: 5000
+          items: { type: integer }
+          description: Customer trunks (tables linked to them) or vendor trunks. Empty = all.
+        mccs:
+          type: array
+          maxItems: 1000
+          items: { type: string, pattern: "^[0-9]{3}$" }
+          description: Countries by MCC. Empty = all.
+        mccmncs:
+          type: array
+          maxItems: 10000
+          items: { type: string, pattern: "^[0-9]{3,6}$" }
+          description: Destination codes. Empty = all codes of the chosen countries.
+        search:
+          type: string
+          maxLength: 100
+          description: Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25).
+        includeInactive:
+          type: boolean
+          description: Include inactive trunks.
+        asOf:
+          $ref: "#/components/schemas/Timestamp"
+
+    LookupSideRequest:
+      type: object
+      additionalProperties: false
+      required: [side]
+      description: The side's filters (as LookupSideFilters) plus paging and sort.
+      properties:
+        side:
+          $ref: "#/components/schemas/LookupSide"
+        categoryIds:
+          type: array
+          maxItems: 500
+          items: { type: integer }
+          description: Empty or missing = every category.
+        trunkIds:
+          type: array
+          maxItems: 5000
+          items: { type: integer }
+          description: Customer trunks (tables linked to them) or vendor trunks. Empty = all.
+        mccs:
+          type: array
+          maxItems: 1000
+          items: { type: string, pattern: "^[0-9]{3}$" }
+          description: Countries by MCC. Empty = all.
+        mccmncs:
+          type: array
+          maxItems: 10000
+          items: { type: string, pattern: "^[0-9]{3,6}$" }
+          description: Destination codes. Empty = all codes of the chosen countries.
+        search:
+          type: string
+          maxLength: 100
+          description: Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25).
+        includeInactive:
+          type: boolean
+          description: Include inactive trunks.
+        asOf:
+          $ref: "#/components/schemas/Timestamp"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+        cursor:
+          type: [string, "null"]
+        sort:
+          type: string
+          enum: [destination, tables, minSys, maxSys]
+          default: destination
+        dir:
+          type: string
+          enum: [asc, desc]
+          default: asc
+
+    LookupSideRow:
+      type: object
+      additionalProperties: false
+      required: [mccmnc, mcc, country, countryIso, network, allNetworks, tables, minRate, maxRate, currency, minSys, maxSys]
+      properties:
+        mccmnc: { type: string }
+        mcc: { type: string }
+        country: { type: string }
+        countryIso: { type: string }
+        network: { type: string }
+        allNetworks: { type: boolean }
+        tables:
+          type: integer
+          description: Rate tables with a line for the code.
+        minRate:
+          type: [number, "null"]
+          description: Lowest rate in the table currency; null when the tables use several currencies.
+        maxRate: { type: [number, "null"] }
+        currency:
+          type: [string, "null"]
+          description: The tables' currency when they all share one.
+        minSys:
+          type: number
+          description: Lowest rate in the platform currency.
+        maxSys: { type: number }
+
+    LookupSidePage:
+      type: object
+      additionalProperties: false
+      required: [rows, total, nextCursor, platformCurrency]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/LookupSideRow"
+        total:
+          type: integer
+          description: Destinations after the filters.
+        nextCursor:
+          type: [string, "null"]
+        platformCurrency: { type: string }
+
+    LookupSideLinesRequest:
+      type: object
+      additionalProperties: false
+      required: [side, mccmnc]
+      description: The side's filters (as LookupSideFilters) and the destination to expand.
+      properties:
+        side:
+          $ref: "#/components/schemas/LookupSide"
+        categoryIds:
+          type: array
+          maxItems: 500
+          items: { type: integer }
+          description: Empty or missing = every category.
+        trunkIds:
+          type: array
+          maxItems: 5000
+          items: { type: integer }
+          description: Customer trunks (tables linked to them) or vendor trunks. Empty = all.
+        mccs:
+          type: array
+          maxItems: 1000
+          items: { type: string, pattern: "^[0-9]{3}$" }
+          description: Countries by MCC. Empty = all.
+        mccmncs:
+          type: array
+          maxItems: 10000
+          items: { type: string, pattern: "^[0-9]{3,6}$" }
+          description: Destination codes. Empty = all codes of the chosen countries.
+        search:
+          type: string
+          maxLength: 100
+          description: Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25).
+        includeInactive:
+          type: boolean
+          description: Include inactive trunks.
+        asOf:
+          $ref: "#/components/schemas/Timestamp"
+        mccmnc:
+          type: string
+          pattern: "^[0-9]{3,6}$"
+
+    LookupSideLine:
+      type: object
+      additionalProperties: false
+      required: [rateTableId, rateTableName, category, trunks, rate, currency, sysRate, effectiveFrom, nextRate, nextFrom]
+      properties:
+        rateTableId: { type: integer }
+        rateTableName: { type: string }
+        category: { type: [string, "null"] }
+        trunks:
+          type: array
+          description: The trunks using the table (one vendor trunk, or the customer trunks linked to it).
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, enterpriseName]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              enterpriseName: { type: string }
+        rate: { type: number }
+        currency: { type: string }
+        sysRate:
+          type: number
+          description: The rate in the platform currency.
+        effectiveFrom:
+          $ref: "#/components/schemas/Timestamp"
+        nextRate:
+          type: [number, "null"]
+          description: The next scheduled rate, if any (§13.12).
+        nextFrom:
+          type: [string, "null"]
+          format: date-time
+
+    LookupSideLines:
+      type: object
+      additionalProperties: false
+      required: [mccmnc, lines, platformCurrency]
+      properties:
+        mccmnc: { type: string }
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/LookupSideLine"
+        platformCurrency: { type: string }
 
     LookupRate:
       type: object
