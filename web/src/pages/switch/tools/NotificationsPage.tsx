@@ -156,7 +156,7 @@ function TechInfoDialog({ ids, done }: { ids: number[]; done: () => void }) {
           <span className="muted small">{preview.isError ? problemText(preview.error) : "Preparing the e-mail…"}</span>
         )}
       </div>
-      <p className="muted small">The password is never sent by e-mail; share it separately.</p>
+      <p className="muted small">The e-mail includes the SMPP password in plain text (team decision); check the recipients before sending.</p>
     </Modal>
   );
 }
