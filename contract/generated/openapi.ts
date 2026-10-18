@@ -10173,6 +10173,8 @@ export type components = {
       bindType: string;
       /** @description Translation rules running on the trunk (replaces "Translation Rule Group", §13.2). */
       rulesCount: number;
+      /** @description The translation rules running on the trunk, by name, for the hover list (up to 100; team trial round 1). */
+      ruleNames: string[];
       updatedBy: string | null;
       updatedAt: components["schemas"]["Timestamp"];
       archived: boolean;
@@ -16904,6 +16906,14 @@ export type components = {
       businessCompanyName?: string;
       /** @description ISO 3166-1 alpha-2. */
       country?: string | null;
+      /** @description Live customer trunks of the enterprise (list rows; team trial round 1). */
+      customerTrunkCount?: number;
+      /** @description Their names for the hover list (up to 100). */
+      customerTrunkNames?: string[];
+      /** @description Live vendor trunks of the enterprise (list rows). */
+      vendorTrunkCount?: number;
+      /** @description Their names for the hover list (up to 100). */
+      vendorTrunkNames?: string[];
       /** @description Set when the enterprise is archived (§13.29); archived rows show only with the "archived" filter. */
       archivedAt?: components["schemas"]["Timestamp"] | null;
     } & components["schemas"]["Audit"];

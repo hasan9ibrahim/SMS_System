@@ -98,6 +98,10 @@ export const topics: HelpTopic[] = [
               },
               { name: "Account Manager", what: "The AM who owns the partner today. Shows a dash when none is set." },
               {
+                name: "Customer trunks / Vendor trunks",
+                what: "How many live trunks the enterprise has on each side, in bold. Point at a number to see the trunks by name. Sort or filter on them like any number (for example `>2`).",
+              },
+              {
                 name: "Hidden columns",
                 what: "Country, Updated By, Updated Time and the internal ID columns can be turned on from the columns menu.",
               },
@@ -780,7 +784,10 @@ export const topics: HelpTopic[] = [
               { name: "TPS", what: "TPS (messages per second) allowed per session." },
               { name: "Status", what: "Active or Inactive." },
               { name: "Bind Type", what: "TX (send only), RX (receive only), TR (both) or AUTO." },
-              { name: "Rules", what: "How many translation and HLR rules run on the trunk." },
+              {
+                name: "Rules",
+                what: "How many translation rules run on the trunk, in bold. Point at the number to see them by name.",
+              },
               { name: "Hidden columns", what: "Updated By and Updated Time can be turned on from the columns menu." },
             ],
           },
@@ -926,7 +933,10 @@ export const topics: HelpTopic[] = [
               { name: "TPS", what: "TPS (messages per second) we send per session." },
               { name: "Status", what: "Active or Inactive." },
               { name: "Bind Type", what: "TX, RX or TR." },
-              { name: "Rules", what: "How many translation rules run on the trunk." },
+              {
+                name: "Rules",
+                what: "How many translation rules run on the trunk, in bold. Point at the number to see them by name.",
+              },
               {
                 name: "Hidden columns",
                 what: "Host, Updated By and Updated Time can be turned on from the columns menu.",

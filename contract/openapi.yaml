@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.55.0
+  version: 0.56.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -15195,7 +15195,7 @@ components:
 
     TrunkListRow:
       type: object
-      required: [id, enterpriseId, enterpriseName, name, username, categoryId, category, currency, protocol, tps, status, bindType, rulesCount, updatedBy, updatedAt, archived]
+      required: [id, enterpriseId, enterpriseName, name, username, categoryId, category, currency, protocol, tps, status, bindType, rulesCount, ruleNames, updatedBy, updatedAt, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -15229,6 +15229,11 @@ components:
         rulesCount:
           type: integer
           description: Translation rules running on the trunk (replaces "Translation Rule Group", §13.2).
+        ruleNames:
+          type: array
+          description: The translation rules running on the trunk, by name, for the hover list (up to 100; team trial round 1).
+          items:
+            type: string
         updatedBy:
           type: [string, "null"]
         updatedAt:
@@ -29960,6 +29965,22 @@ components:
             country:
               type: [string, "null"]
               description: ISO 3166-1 alpha-2.
+            customerTrunkCount:
+              type: integer
+              description: Live customer trunks of the enterprise (list rows; team trial round 1).
+            customerTrunkNames:
+              type: array
+              description: Their names for the hover list (up to 100).
+              items:
+                type: string
+            vendorTrunkCount:
+              type: integer
+              description: Live vendor trunks of the enterprise (list rows).
+            vendorTrunkNames:
+              type: array
+              description: Their names for the hover list (up to 100).
+              items:
+                type: string
             archivedAt:
               description: Set when the enterprise is archived (§13.29); archived rows show only with the "archived" filter.
               oneOf:

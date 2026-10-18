@@ -96,6 +96,13 @@ const ymd = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : 
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
 const fullName = (alias: string) => `(${alias}.first_name || ' ' || ${alias}.last_name)`;
 
+/** An enterprise's live trunks of one kind: count, and names for the hover list (team trial round 1). */
+const entTrunkCount = (table: string) =>
+  `(SELECT count(*)::int FROM ${table} x WHERE x.enterprise_id = e.id AND x.deleted_at IS NULL)`;
+const entTrunkNames = (table: string, name: string, alias: string) =>
+  `ARRAY(SELECT ${name} FROM ${table} ${alias} WHERE ${alias}.enterprise_id = e.id AND ${alias}.deleted_at IS NULL
+    ORDER BY ${alias}.name LIMIT 100)`;
+
 export const enterpriseList: ListDef<Enterprise> = {
   fields: listFields.enterprises,
   from: `enterprises e
@@ -118,6 +125,8 @@ export const enterpriseList: ListDef<Enterprise> = {
     accountManager: { sql: fullName("am") },
     accountManagerId: { sql: "e.account_manager_id" },
     country: { sql: "co.iso" },
+    customerTrunkCount: { sql: entTrunkCount("customer_trunks") },
+    vendorTrunkCount: { sql: entTrunkCount("vendor_trunks") },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "e.updated_at" },
     archived: { sql: "(e.deleted_at IS NOT NULL)" },
@@ -126,6 +135,9 @@ export const enterpriseList: ListDef<Enterprise> = {
   idSql: "e.id",
   select: `e.id, e.name, e.alias, e.type, e.tier, e.status, e.business_company_id, bc.name AS business_company_name,
     e.account_manager_id, ${fullName("am")} AS account_manager_name, co.iso AS country,
+    ${entTrunkCount("customer_trunks")} AS customer_trunk_count, ${entTrunkCount("vendor_trunks")} AS vendor_trunk_count,
+    ${entTrunkNames("customer_trunks", vis(trunkMask("t", "Customer trunk")), "t")} AS customer_trunk_names,
+    ${entTrunkNames("vendor_trunks", vis(trunkMask("vt", "Vendor trunk")), "vt")} AS vendor_trunk_names,
     cb.username AS created_by, e.inserted_at, ub.username AS updated_by, e.updated_at, e.deleted_at AS archived_at`,
   mapRow: (r) => ({
     id: r.id as number,
@@ -139,6 +151,10 @@ export const enterpriseList: ListDef<Enterprise> = {
     accountManagerId: r.account_manager_id as number,
     accountManagerName: (r.account_manager_name as string | null) ?? null,
     country: (r.country as string | null) ?? null,
+    customerTrunkCount: Number(r.customer_trunk_count),
+    customerTrunkNames: (r.customer_trunk_names as string[]) ?? [],
+    vendorTrunkCount: Number(r.vendor_trunk_count),
+    vendorTrunkNames: (r.vendor_trunk_names as string[]) ?? [],
     createdBy: (r.created_by as string | null) ?? null,
     createdAt: iso(r.inserted_at),
     updatedBy: (r.updated_by as string | null) ?? "system",
@@ -151,6 +167,16 @@ export const enterpriseList: ListDef<Enterprise> = {
  * Translation rules that run on trunk `t` (§13.2): reached through a target on the trunk,
  * its enterprise, its category or all trunks of the kind, active, and not switched off here.
  */
+/** The same rules by name, for the hover list (team trial round 1). */
+const ruleNamesSql = (kind: "customer" | "vendor") => `ARRAY(SELECT DISTINCT r.name
+    FROM translation_rule_targets tg JOIN translation_rules r ON r.id = tg.translation_rule_id
+   WHERE tg.trunk_kind = '${kind}' AND r.deleted_at IS NULL AND r.status = 'active'
+     AND (tg.target_type = 'all' OR (tg.target_type = 'trunk' AND tg.target_id = t.id)
+          OR (tg.target_type = 'enterprise' AND tg.target_id = t.enterprise_id)
+          OR (tg.target_type = 'category' AND tg.target_id = t.product_category_id))
+     AND NOT EXISTS (SELECT 1 FROM translation_rule_trunk_settings s
+                      WHERE s.translation_rule_id = r.id AND s.trunk_kind = '${kind}' AND s.trunk_id = t.id AND NOT s.enabled)
+   ORDER BY r.name LIMIT 100)`;
 const rulesCountSql = (kind: "customer" | "vendor") => `(SELECT count(DISTINCT r.id)::int
     FROM translation_rule_targets tg JOIN translation_rules r ON r.id = tg.translation_rule_id
    WHERE tg.trunk_kind = '${kind}' AND r.deleted_at IS NULL AND r.status = 'active'
@@ -208,7 +234,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
     search: ["name", "username", "enterpriseName"],
     idSql: "t.id",
     select: `t.id, t.enterprise_id, e.name AS enterprise_name, t.name, t.username, t.product_category_id, pc.name AS category,
-      ${trunkCurrencySql(kind, "t")} AS currency, t.protocol, t.tps, t.status, t.bind_type, ${rulesCountSql(kind)} AS rules_count, ub.username AS updated_by,
+      ${trunkCurrencySql(kind, "t")} AS currency, t.protocol, t.tps, t.status, t.bind_type, ${rulesCountSql(kind)} AS rules_count, ${ruleNamesSql(kind)} AS rule_names, ub.username AS updated_by,
       t.updated_at, t.deleted_at`,
     mapRow: (r) => ({
       id: r.id as number,
@@ -224,6 +250,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
       status: r.status as TrunkListRow["status"],
       bindType: r.bind_type as string,
       rulesCount: r.rules_count as number,
+      ruleNames: (r.rule_names as string[]) ?? [],
       updatedBy: (r.updated_by as string | null) ?? null,
       updatedAt: iso(r.updated_at)!,
       archived: r.deleted_at != null,

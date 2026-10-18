@@ -108,6 +108,31 @@ describe("lists (§13.25)", { skip }, () => {
     check("queryEnterprises", badRe);
   });
 
+  test("enterprise and trunk rows carry names for the hover lists", async () => {
+    const ent = await call("POST", "/enterprises/query", {
+      limit: 50,
+      sort: [{ field: "customerTrunkCount", dir: "desc" }],
+    });
+    check("queryEnterprises", ent);
+    const rows = ent.json().rows as {
+      customerTrunkCount: number;
+      customerTrunkNames: string[];
+      vendorTrunkCount: number;
+      vendorTrunkNames: string[];
+    }[];
+    assert.ok(rows[0]!.customerTrunkCount >= rows[1]!.customerTrunkCount, "sorts by the count");
+    for (const r of rows) {
+      assert.equal(r.customerTrunkNames.length, Math.min(100, r.customerTrunkCount));
+      assert.equal(r.vendorTrunkNames.length, Math.min(100, r.vendorTrunkCount));
+    }
+    for (const list of ["customer-trunks", "vendor-trunks"]) {
+      const res = await call("POST", `/${list}/query`, { limit: 50 });
+      assert.equal(res.statusCode, 200);
+      for (const r of res.json().rows as { rulesCount: number; ruleNames: string[] }[])
+        assert.equal(r.ruleNames.length, Math.min(100, r.rulesCount));
+    }
+  });
+
   test("users and change history", async () => {
     const users = await call("POST", "/users/query", { search: "a", limit: 10 });
     assert.equal(users.statusCode, 200);

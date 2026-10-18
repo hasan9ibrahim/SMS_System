@@ -44,6 +44,8 @@ import {
   type FieldSpec,
 } from "./records.js";
 import { maskEnterpriseDetail, refuseMasked } from "../visibility/records.js";
+import { currentViewer } from "../visibility/context.js";
+import { resolveSql } from "../visibility/sql.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -124,8 +126,9 @@ async function applyDueHandovers(db: Db, id: number) {
 
 export async function loadEnterprise(db: Db, id: number): Promise<EnterpriseDetail | null> {
   await applyDueHandovers(db, id);
+  // The list's select names trunks through visibility rules; resolve them for this viewer (§13.17).
   const { rows } = await db.query(
-    `SELECT ${enterpriseList.select}, ${selectSpecs("e", SPECS)}, du.username AS deleted_by,
+    `SELECT ${resolveSql(enterpriseList.select, await currentViewer())}, ${selectSpecs("e", SPECS)}, du.username AS deleted_by,
             (SELECT count(*)::int FROM customer_trunks t WHERE t.enterprise_id = e.id AND t.deleted_at IS NULL) AS ct_count,
             (SELECT count(*)::int FROM vendor_trunks t WHERE t.enterprise_id = e.id AND t.deleted_at IS NULL) AS vt_count
        FROM ${enterpriseList.from} LEFT JOIN users du ON du.id = e.deleted_by_id

@@ -1,6 +1,7 @@
 // Customer and vendor trunk lists (§5.4, §5.5) on the standard grid; a row opens the trunk
 // record in its own tab. "Show deleted" lists archived trunks greyed out (§13.29). Clone and delete
 // work from the list too, per row (⋯) or on a selection (team trial round 1).
+import { HoverList } from "../ui/HoverList";
 import type { TrunkListRow } from "@sms/contract";
 import type { TrunkKind } from "../api/records";
 import { pageForPath } from "../nav/registry";
@@ -70,6 +71,19 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
       columns={{
         name: { width: 220, render: (r) => <strong>{r.name}</strong> },
         enterpriseName: { width: 220 },
+        // Pointing at the count lists the translation rules running on the trunk (team trial round 1).
+        rulesCount: {
+          width: 90,
+          align: "right",
+          render: (r) =>
+            r.rulesCount ? (
+              <HoverList items={r.ruleNames} more={r.rulesCount - r.ruleNames.length} heading="Rules running">
+                <span className="rr-strong num">{r.rulesCount}</span>
+              </HoverList>
+            ) : (
+              <span className="muted">—</span>
+            ),
+        },
       }}
       onOpen={(row, e) => open(row.id, row.name, e.ctrlKey || e.metaKey)}
       detail={(r) => ({

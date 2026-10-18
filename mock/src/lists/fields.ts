@@ -262,6 +262,8 @@ export const listFields: Record<ListId, ListFields> = {
         hidden: true,
       }),
       field({ field: "country", label: "Country", type: "text", defaultOperator: "eq", hidden: true }),
+      field({ field: "customerTrunkCount", label: "Customer trunks", type: "integer", defaultOperator: "gte" }),
+      field({ field: "vendorTrunkCount", label: "Vendor trunks", type: "integer", defaultOperator: "gte" }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
       ARCHIVED,

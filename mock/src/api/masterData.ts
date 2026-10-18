@@ -46,6 +46,8 @@ import { archiveGate } from "./enterprises.js";
 import { dependencies, isAdmin, isUniqueViolation, recordChange, type DiffEntry } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { currentViewer } from "../visibility/context.js";
+import { resolveSql } from "../visibility/sql.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -53,7 +55,9 @@ type Params = { id: number };
 /** One record by id through its list definition, archived ones included. */
 export async function load<Row>(db: Db, def: ListDef<Row>, id: number): Promise<Row | null> {
   const from = typeof def.from === "function" ? def.from({} as ListQuery) : def.from;
-  const { rows } = await db.query(`SELECT ${def.select} FROM ${from} WHERE ${def.idSql} = $1`, [id]);
+  // Selects may name records through visibility rules; resolve them for this viewer (§13.17).
+  const select = resolveSql(def.select, await currentViewer());
+  const { rows } = await db.query(`SELECT ${select} FROM ${from} WHERE ${def.idSql} = $1`, [id]);
   return rows[0] ? def.mapRow(rows[0]) : null;
 }
 

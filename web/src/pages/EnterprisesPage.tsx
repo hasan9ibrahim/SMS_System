@@ -1,5 +1,6 @@
 // Enterprise list (§5) on the standard grid. A row opens the enterprise record in its own
 // tab (General, Docs, Billing, trunks, account managers, History).
+import { HoverList } from "../ui/HoverList";
 import type { Enterprise } from "@sms/contract";
 import { pageForPath } from "../nav/registry";
 import { ListScreen } from "../page/ListScreen";
@@ -8,6 +9,15 @@ import { useTabNavigate } from "../shell/tabContext";
 
 const page = pageForPath("/enterprises")!;
 const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Reciprocal" } as const;
+
+function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[] }) {
+  if (!count) return <span className="muted">—</span>;
+  return (
+    <HoverList items={names} more={count - names.length}>
+      <span className="rr-strong num">{count}</span>
+    </HoverList>
+  );
+}
 
 export function EnterprisesPage() {
   const navigate = useTabNavigate();
@@ -40,6 +50,17 @@ export function EnterprisesPage() {
         name: { width: 240, render: (r) => <strong>{r.name}</strong> },
         accountManager: { render: (r) => r.accountManagerName ?? "—" },
         businessCompany: { render: (r) => r.businessCompanyName },
+        // Pointing at a count lists the trunks by name (team trial round 1).
+        customerTrunkCount: {
+          width: 140,
+          align: "right",
+          render: (r) => <TrunkCount count={r.customerTrunkCount} names={r.customerTrunkNames} />,
+        },
+        vendorTrunkCount: {
+          width: 120,
+          align: "right",
+          render: (r) => <TrunkCount count={r.vendorTrunkCount} names={r.vendorTrunkNames} />,
+        },
       }}
       onOpen={(row, e) =>
         navigate(`/enterprises/${row.id}`, {
