@@ -1,13 +1,15 @@
 // Sales report (§13.15): how clients and destinations grow. The Master Report preset per customer
 // and destination with the previous period, plus growing, declining, new and stopped clients for
-// the same period, filtered by account manager, country, category and the change threshold.
-import { useState } from "react";
+// the same period, filtered by account manager, countries (several), category and the change threshold.
+import { useMemo, useState } from "react";
 import type { SalesMover, UserSummary } from "@sms/contract";
 import { useSalesInsights } from "../../api/masterReports";
 import { usePlatformCurrency } from "../../api/records";
 import { pageForPath } from "../../nav/registry";
 import { ListLookup } from "../../records/parts";
 import { problemText } from "../routing/dialogs";
+import { useDestinationTree } from "../rates/DestinationTree";
+import { CheckListButton, type CheckItem } from "../../ui/CheckList";
 import type { Settings } from "./masterModel";
 import { ReportScreen, type ReportPreset } from "./ReportScreen";
 
@@ -74,7 +76,13 @@ function MoverList({
 function SalesPanel({ settings }: { settings: Settings }) {
   const ccy = usePlatformCurrency();
   const [amId, setAmId] = useState<number | null>(null);
-  const [country, setCountry] = useState("");
+  const [countries, setCountries] = useState<string[]>([]);
+  const { tree } = useDestinationTree();
+  // Countries by ISO, several at once with select all on the filtered ones (team trial round 1).
+  const countryItems = useMemo(
+    () => tree.map((c): CheckItem<string> => ({ value: c.iso, label: c.name, detail: `${c.iso} · ${c.mcc}` })),
+    [tree],
+  );
   const [threshold, setThreshold] = useState(20);
   const q = useSalesInsights({
     period: settings.period,
@@ -82,7 +90,7 @@ function SalesPanel({ settings }: { settings: Settings }) {
     to: settings.to ?? null,
     timezone: settings.timezone,
     accountManagerId: amId,
-    country: /^[A-Z]{2}$/.test(country) ? country : null,
+    ...(countries.length ? { countries } : {}),
     productCategoryId: null,
     thresholdPct: threshold,
   });
@@ -99,15 +107,16 @@ function SalesPanel({ settings }: { settings: Settings }) {
             placeholder="All account managers"
           />
         </div>
-        <label className="small">
-          Country
-          <input
-            value={country}
-            maxLength={2}
-            placeholder="ISO, e.g. NG"
-            onChange={(e) => setCountry(e.target.value.toUpperCase())}
+        <div className="field small">
+          <span>Country</span>
+          <CheckListButton
+            title="Country"
+            items={countryItems}
+            selected={countries}
+            onChange={setCountries}
+            allLabel="All countries"
           />
-        </label>
+        </div>
         <label className="small">
           Growth / decline threshold %
           <input

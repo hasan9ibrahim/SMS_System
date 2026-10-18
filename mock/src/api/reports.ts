@@ -217,10 +217,12 @@ export function salesInsights(request: FastifyRequest, reply: FastifyReply) {
       const factor = await sysToPlatformFactor();
       const t = (d: Date) => `toDateTime64(${lit(iso(d).replace("T", " ").replace("Z", ""))}, 3, 'UTC')`;
       const cur = `start_time >= ${t(w.from)}`;
+      // Several countries (team trial round 1); the single `country` of older clients joins them.
+      const countries = [...new Set([...(b.countries ?? []), ...(b.country ? [b.country] : [])])];
       const where = [
         `start_time >= ${t(p.from)} AND start_time < ${t(w.to)}`,
         b.accountManagerId ? `c_am_user_id = ${Number(b.accountManagerId)}` : "1",
-        b.country ? `c_country_iso = ${lit(b.country)}` : "1",
+        countries.length ? `c_country_iso IN (${countries.map(lit).join(", ")})` : "1",
         b.productCategoryId ? `product_category_id = ${Number(b.productCategoryId)}` : "1",
       ].join(" AND ");
       const rows = await chQuery<Record<string, string>>(

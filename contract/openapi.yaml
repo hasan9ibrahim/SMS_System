@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.43.0
+  version: 0.44.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23643,6 +23643,16 @@ components:
         country:
           type: [string, "null"]
           pattern: "^[A-Z]{2}$"
+          deprecated: true
+          description: One country (ISO). Use `countries`; kept for older clients and combined with it.
+        countries:
+          type: array
+          maxItems: 300
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[A-Z]{2}$"
+          description: Countries (ISO) to include; empty or missing means every country (team trial round 1).
         productCategoryId:
           oneOf:
             - $ref: "#/components/schemas/Id"

@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-18 | Sales report | Contract v0.44.0: `SalesInsightsInput.countries` (ISO list, several countries at once); the single `country` is deprecated and joins the list. The GUI picks countries in a check list with select all on the filtered ones | §13.15 | Team trial round 1 | Mock done |
 | 2026-10-18 | Route rules | Contract v0.43.0: `percentagePerCustomerTrunk` is now on by default (missing means on); existing rules switched on. Backend: per (rule, customer trunk) split counters unless the rule turns it off. Migration `041_split_per_customer_default.sql` | §6.3 | Team trial round 1 | Mock done |
 | 2026-10-18 | Failed EDR Search | No contract change: selected failed EDRs can be repushed to a vendor with the existing `/edrs/repush` (failed EDRs are final attempts, never DELIVRD) | §13.23 | Team trial round 1 | Mock done |
 | 2026-10-18 | Route rules | Contract v0.42.0: `percentagePerCustomerTrunk` ("Consider customer trunk in percentage", default off): with a percentage split, each customer trunk's own traffic follows the shares instead of the rule's total. Backend: keep one split counter per (rule, customer trunk) when on, one per rule when off. Migration `040_split_per_customer.sql`. The GUI shows "Split per customer trunk" under Percentage split | §6.3 | Team trial round 1 | Mock done |

@@ -14266,7 +14266,13 @@ export type components = {
       to?: components["schemas"]["Timestamp"] | null;
       timezone: string;
       accountManagerId?: components["schemas"]["Id"] | null;
+      /**
+       * @deprecated
+       * @description One country (ISO). Use `countries`; kept for older clients and combined with it.
+       */
       country?: string | null;
+      /** @description Countries (ISO) to include; empty or missing means every country (team trial round 1). */
+      countries?: string[];
       productCategoryId?: components["schemas"]["Id"] | null;
       /** @default 20 */
       thresholdPct: number;
