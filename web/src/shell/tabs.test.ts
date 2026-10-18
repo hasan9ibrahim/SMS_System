@@ -2,12 +2,15 @@
 // duplicated, pinned tabs stay left, closing picks a neighbour, split view follows tabs.
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { HOME_TAB_ID, toWorkspace, useTabs } from "./tabs";
+import { HOME_TAB_ID, canGoBack, toWorkspace, useTabs } from "./tabs";
 
 const s = () => useTabs.getState();
 const paths = () => s().tabs.map((t) => t.path);
 
-beforeEach(() => s().hydrate(1, { tabs: [], activeTabId: null }));
+beforeEach(() => {
+  useTabs.setState({ back: {} });
+  s().hydrate(1, { tabs: [], activeTabId: null });
+});
 
 test("opening pages: new tab from Home, focus an open page, keep its filters", () => {
   s().open("/enterprises", { newTab: true });
@@ -81,4 +84,19 @@ test("the saved workspace leaves Home out and restores in order", () => {
   s().hydrate(1, ws);
   assert.deepEqual(paths(), ["/", "/b", "/a"]);
   assert.equal(s().activeId, b);
+});
+
+test("Back: previous page in the tab (filters kept), then the tab it was opened from (trial round 1)", () => {
+  const first = s().open("/enterprises", { newTab: true });
+  s().setPath(first, "/enterprises?g=abc");
+  s().setPath(first, "/enterprises?g=abd");
+  s().setPath(first, "/rates");
+  const second = s().open("/routing/rules", { newTab: true });
+  assert.equal(s().goBack(second), true, "back to the opener tab");
+  assert.equal(s().activeId, first);
+  assert.equal(s().goBack(first), true);
+  assert.equal(s().tabs.find((t) => t.id === first)!.path, "/enterprises?g=abd", "filter changes are not steps");
+  assert.equal(canGoBack(s(), first), true, "Home opened it");
+  s().close(first);
+  assert.equal(canGoBack(s(), second), false, "opener closed");
 });

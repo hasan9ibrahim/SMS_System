@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.33.0
+  version: 0.34.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14239,6 +14239,14 @@ components:
           type: integer
           enum: [5, 15, 60]
           description: Length of the live TPS chart.
+        refreshSeconds:
+          type: integer
+          enum: [0, 1, 5, 10, 30, 60]
+          default: 1
+          description: >-
+            How often the summary, movers, top lists and TPS table refresh (team trial round 1). 1 = live
+            (every second; movers and top lists every 5 s), 0 = paused. Sent as the live:dashboard join
+            parameter `refreshSeconds` (paused joins with 60 and stops showing updates).
         hiddenPanels:
           type: array
           items:
@@ -24057,7 +24065,10 @@ components:
           enum:
           - 'off'
           - email
-          description: OTP verification at login, on top of 2FA (TOTP).
+          - authenticator
+          description: >-
+            OTP verification at login (§13.28, team trial round 1): a code by e-mail, or from an authenticator
+            app such as Google Authenticator (the user enrols with the QR 2FA set-up first).
         language:
           type: string
           enum:

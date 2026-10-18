@@ -49,10 +49,13 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       status: u.status!,
     })),
   });
-  const commercial = new Map<string, string[]>();
-  for (const c of contacts)
-    if (c.contact_type === "commercial")
-      commercial.set(c.enterprise_id!, [...(commercial.get(c.enterprise_id!) ?? []), ...pgArray(c.emails ?? "")]);
+  // Every contact type (team trial round 1), keyed "type:enterprise".
+  const contactMap = new Map<string, string[]>();
+  for (const c of contacts) {
+    const k = `${c.contact_type}:${c.enterprise_id}`;
+    contactMap.set(k, [...(contactMap.get(k) ?? []), ...pgArray(c.emails ?? "")]);
+  }
+  const emailsOf = (type: string, id: string) => (contactMap.get(`${type}:${id}`) ?? []).join(";");
   out.push({
     entity: "enterprises",
     rows: enterprises.map((e) => ({
@@ -67,7 +70,10 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       country: e.country_id ? (countries.get(e.country_id)?.iso ?? "") : "",
       vatNumber: e.vat_number ?? "",
       address: e.address_line1 ?? "",
-      emails: (commercial.get(e.id!) ?? []).join(";"),
+      emails: emailsOf("commercial", e.id!),
+      technicalEmails: emailsOf("technical", e.id!),
+      ratesEmails: emailsOf("rates", e.id!),
+      financeEmails: emailsOf("finance", e.id!),
     })),
   });
   const trunk = (t: Row) => ({

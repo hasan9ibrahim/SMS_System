@@ -1,8 +1,42 @@
 // Page header (§15.1): title, the sibling pages of the same section as small links (current
 // highlighted), actions on the right with the main action as the one filled button (§15.3).
-import type { ReactNode } from "react";
+import { useContext, useEffect, type ReactNode } from "react";
 import { pagesOf, type PageDef } from "../nav/registry";
-import { useTabNavigate } from "../shell/tabContext";
+import { TabContext, useTabNavigate } from "../shell/tabContext";
+import { canGoBack, useTabs } from "../shell/tabs";
+import { Icon } from "../ui/Icon";
+
+/**
+ * Back to the page opened before in this tab, or to the tab this one was opened from (team trial
+ * round 1). Alt+Left does the same on the active tab.
+ */
+function BackButton() {
+  const ctx = useContext(TabContext);
+  const id = ctx?.tab.id;
+  const enabled = useTabs((s) => (id && !ctx?.popout ? canGoBack(s, id) : false));
+  const active = !!ctx?.active && !ctx.popout;
+  useEffect(() => {
+    if (!active || !id) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === "ArrowLeft" && useTabs.getState().goBack(id)) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, id]);
+  if (!id || ctx?.popout) return null;
+  return (
+    <button
+      type="button"
+      className="icon-btn page-back"
+      title="Back to the previous page (Alt+←)"
+      aria-label="Back"
+      disabled={!enabled}
+      onClick={() => useTabs.getState().goBack(id)}
+    >
+      <Icon name="arrowLeft" />
+    </button>
+  );
+}
 
 export function PageHeader({
   page,
@@ -20,6 +54,7 @@ export function PageHeader({
   const siblings = page.key === "home" ? [] : pagesOf(page.section);
   return (
     <div className="page-header">
+      <BackButton />
       {heading ?? <h1>{title ?? page.label}</h1>}
       {siblings.length > 1 && (
         <nav className="siblings" aria-label={`${page.label} and related pages`}>

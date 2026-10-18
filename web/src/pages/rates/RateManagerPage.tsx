@@ -4,6 +4,7 @@
 // (?table=ID), so links from trunks, rules and alerts open it directly.
 import { useLocation } from "react-router";
 import type { RateTableRow } from "@sms/contract";
+import type { GridState } from "../../grid/filterModel";
 import { useReference } from "../../api/records";
 import { formatMoney, formatPct } from "./format";
 import { pageForPath } from "../../nav/registry";
@@ -63,6 +64,43 @@ export function AmFilter({ value, onChange }: { value: number | null; onChange: 
   );
 }
 
+type Kind = "customer" | "vendor" | "all";
+const KINDS: { value: Kind; label: string }[] = [
+  { value: "customer", label: "Customer" },
+  { value: "vendor", label: "Vendor" },
+  { value: "all", label: "All" },
+];
+
+/**
+ * Customer (sell) tables by default; vendor tables are also shown in each vendor trunk (team trial
+ * round 1). The switch sets the Type column filter, so it travels in the URL like any filter.
+ */
+function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
+  const c = state.columns.kind;
+  const list = c?.values ?? (c?.value !== undefined ? [c.value] : []);
+  const kind: Kind = list.length === 1 ? (list[0] as Kind) : "all";
+  return (
+    <div className="segmented" role="group" aria-label="Rate table type">
+      {KINDS.map((k) => (
+        <button
+          key={k.value}
+          type="button"
+          className={kind === k.value ? "on" : ""}
+          aria-pressed={kind === k.value}
+          onClick={() => {
+            const columns = { ...state.columns };
+            if (k.value === "all") delete columns.kind;
+            else columns.kind = { field: "kind", op: "in", values: [k.value] };
+            setState({ ...state, columns });
+          }}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FullList() {
   const open = useOpenTable();
   const navigate = useTabNavigate();
@@ -95,18 +133,22 @@ function FullList() {
         ],
       }}
       primary={{ label: "New rate table", onClick: () => void newRateTable((id) => open(id)) }}
+      initialState={{ columns: { kind: { field: "kind", op: "in", values: ["customer"] } } }}
       toolbar={(state, setState) => {
         const c = state.columns.accountManagerId;
         return (
-          <AmFilter
-            value={c ? Number(c.value) : null}
-            onChange={(id) => {
-              const columns = { ...state.columns };
-              if (id === null) delete columns.accountManagerId;
-              else columns.accountManagerId = { field: "accountManagerId", op: "eq", value: id };
-              setState({ ...state, columns });
-            }}
-          />
+          <>
+            <KindSwitch state={state} setState={setState} />
+            <AmFilter
+              value={c ? Number(c.value) : null}
+              onChange={(id) => {
+                const columns = { ...state.columns };
+                if (id === null) delete columns.accountManagerId;
+                else columns.accountManagerId = { field: "accountManagerId", op: "eq", value: id };
+                setState({ ...state, columns });
+              }}
+            />
+          </>
         );
       }}
       columns={{

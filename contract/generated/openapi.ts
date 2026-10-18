@@ -9694,6 +9694,12 @@ export type components = {
        * @enum {integer}
        */
       chartMinutes: 5 | 15 | 60;
+      /**
+       * @description How often the summary, movers, top lists and TPS table refresh (team trial round 1). 1 = live (every second; movers and top lists every 5 s), 0 = paused. Sent as the live:dashboard join parameter `refreshSeconds` (paused joins with 60 and stops showing updates).
+       * @default 1
+       * @enum {integer}
+       */
+      refreshSeconds: 0 | 1 | 5 | 10 | 30 | 60;
       hiddenPanels: ("summary" | "movers" | "chart" | "tps" | "tops" | "destinations")[];
     };
     /** @description One open page tab (§13.5). Per-tab page state (filters, scroll) stays in the browser. */
@@ -14404,10 +14410,10 @@ export type components = {
       status: components["schemas"]["RecordStatus"];
       allowMultipleLogin: boolean;
       /**
-       * @description OTP verification at login, on top of 2FA (TOTP).
+       * @description OTP verification at login (§13.28, team trial round 1): a code by e-mail, or from an authenticator app such as Google Authenticator (the user enrols with the QR 2FA set-up first).
        * @enum {string}
        */
-      otpMethod: "off" | "email";
+      otpMethod: "off" | "email" | "authenticator";
       /** @enum {string} */
       language: "en";
       address1: string;

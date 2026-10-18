@@ -531,3 +531,23 @@
   flex: 1;
   min-height: 280px;
 }
+
+/* User form roles (team trial round 1): three checkboxes in one row, aligned with the inputs. */
+.ff.user-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.user-roles-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  min-height: 32px;
+}
+.user-roles-row .ff.check {
+  margin: 0;
+  padding: 0;
+  justify-content: flex-start;
+  align-items: flex-start;
+}

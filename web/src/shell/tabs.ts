@@ -66,6 +66,25 @@ interface TabsState {
   detach: (id: string) => Tab | undefined;
   /** Adds a tab coming back from a window (drag back or Dock button). */
   dock: (tab: WorkspaceTab, atIndex?: number) => void;
+  /** Per tab: the pages opened before in it, and the tab it was opened from (Back, trial round 1). */
+  back: Record<string, { paths: string[]; opener?: string }>;
+  /** Back to the previous page of the tab, or to the tab it was opened from. False when there is none. */
+  goBack: (id: string) => boolean;
+}
+
+const BACK_DEPTH = 30;
+const pathname = (p: string) => p.split("?")[0];
+/** Remembers the page a tab leaves; filter changes on the same page are not steps. */
+function pushBack(back: TabsState["back"], id: string, from: string, to: string): TabsState["back"] {
+  if (pathname(from) === pathname(to)) return back;
+  const cur = back[id] ?? { paths: [] };
+  return { ...back, [id]: { ...cur, paths: [...cur.paths, from].slice(-BACK_DEPTH) } };
+}
+
+/** Whether Back has somewhere to go for this tab. */
+export function canGoBack(state: Pick<TabsState, "back" | "tabs">, id: string): boolean {
+  const b = state.back[id];
+  return !!b && (b.paths.length > 0 || (!!b.opener && state.tabs.some((t) => t.id === b.opener)));
 }
 
 /** Pinned tabs stay left of the others, Home first. */
@@ -79,6 +98,7 @@ export const useTabs = create<TabsState>((set, get) => ({
   activeId: HOME_TAB_ID,
   splitId: null,
   userId: null,
+  back: {},
 
   hydrate: (userId, ws) => {
     const restored = (ws?.tabs ?? [])
@@ -108,6 +128,7 @@ export const useTabs = create<TabsState>((set, get) => ({
     if (!opts.newTab && !opts.forceNew && active && !active.pinned) {
       set({
         tabs: tabs.map((t) => (t.id === active.id ? { ...t, path, title: opts.title ?? defaultTitle(path) } : t)),
+        back: pushBack(get().back, active.id, active.path, path),
       });
       return active.id;
     }
@@ -121,7 +142,11 @@ export const useTabs = create<TabsState>((set, get) => ({
     };
     const at = Math.max(tabs.findIndex((t) => t.id === activeId) + 1, tabs.filter((t) => t.pinned).length);
     const next = [...tabs.slice(0, at), tab, ...tabs.slice(at)];
-    set({ tabs: ordered(next), activeId: opts.background ? activeId : tab.id });
+    set({
+      tabs: ordered(next),
+      activeId: opts.background ? activeId : tab.id,
+      back: { ...get().back, [tab.id]: { paths: [], opener: activeId } },
+    });
     return tab.id;
   },
 
@@ -188,6 +213,8 @@ export const useTabs = create<TabsState>((set, get) => ({
   },
 
   setPath: (id, path) => {
+    const from = get().tabs.find((t) => t.id === id)?.path;
+    if (from !== undefined && from !== path) set({ back: pushBack(get().back, id, from, path) });
     set({
       tabs: get().tabs.map((t) => {
         if (t.id !== id || t.path === path) return t;
@@ -196,6 +223,27 @@ export const useTabs = create<TabsState>((set, get) => ({
         return { ...t, path, title: samePage ? t.title : defaultTitle(path) };
       }),
     });
+  },
+  goBack: (id) => {
+    const b = get().back[id];
+    if (!b) return false;
+    const prev = b.paths.at(-1);
+    if (prev !== undefined) {
+      set({
+        back: { ...get().back, [id]: { ...b, paths: b.paths.slice(0, -1) } },
+        tabs: get().tabs.map((t) => {
+          if (t.id !== id) return t;
+          const samePage = pageForPath(t.path) === pageForPath(prev);
+          return { ...t, path: prev, title: samePage ? t.title : defaultTitle(prev) };
+        }),
+      });
+      return true;
+    }
+    if (b.opener && get().tabs.some((t) => t.id === b.opener)) {
+      get().activate(b.opener);
+      return true;
+    }
+    return false;
   },
   setTitle: (id, title) =>
     set({ tabs: get().tabs.map((t) => (t.id === id && t.title !== title ? { ...t, title } : t)) }),

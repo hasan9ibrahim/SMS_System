@@ -29,7 +29,7 @@ const money = (v: number | null | undefined, ccy?: string) =>
 const pct = (v: number | null | undefined) => (v == null ? "—" : `${v.toFixed(1)}%`);
 const ROLE: Record<TeamRole, string> = {
   account_manager: "AM",
-  team_lead: "Team lead",
+  team_lead: "Director / Head",
   department_manager: "Dept manager",
   admin: "Admin",
 };

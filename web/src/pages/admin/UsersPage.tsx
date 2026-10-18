@@ -146,7 +146,7 @@ function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
         label="Business Company"
         options={(ref.data?.businessCompanies ?? []).map((b) => ({ value: b.id, label: b.name }))}
       />
-      <FormField label="Team lead / manager" error={form.error("managerId")}>
+      <FormField label="Reports to (Director / Head)" error={form.error("managerId")}>
         <ListLookup<UserRow>
           list="users"
           value={v.managerId}
@@ -184,8 +184,14 @@ function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
         required
         options={[
           { value: "off", label: "Off" },
-          { value: "email", label: "Email" },
+          { value: "email", label: "Code by e-mail" },
+          { value: "authenticator", label: "Authenticator app (Google Authenticator)" },
         ]}
+        hint={
+          v.otpMethod === "authenticator" && !row?.totpEnabled
+            ? "Enrol the app with Enable QR 2FA after saving"
+            : undefined
+        }
       />
       <SelectField
         form={form}
@@ -194,10 +200,14 @@ function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
         required
         options={[{ value: "en", label: "English" }]}
       />
-      <div className="ff wide check-row">
-        <CheckField form={form} path="isAccountManager" label="Account Manager" />
-        <CheckField form={form} path="isTeamLead" label="Team Lead" />
-        <CheckField form={form} path="allowMultipleLogin" label="Allow multiple login" />
+      {/* Roles in one row next to Language (team trial round 1: aligned; Team lead renamed Director / Head). */}
+      <div className="ff user-roles">
+        <span className="ff-label">Roles and access</span>
+        <div className="user-roles-row">
+          <CheckField form={form} path="isAccountManager" label="Account manager" />
+          <CheckField form={form} path="isTeamLead" label="Director / Head" />
+          <CheckField form={form} path="allowMultipleLogin" label="Allow multiple logins" />
+        </div>
       </div>
       <TextField form={form} path="address1" label="Address 1" required maxLength={200} />
       <TextField form={form} path="address2" label="Address 2" maxLength={200} />
@@ -451,10 +461,10 @@ export function UsersPage() {
                   ["Phone", r.phone],
                   [
                     "User type",
-                    `${USER_TYPE[r.userType]}${r.isAccountManager ? " · Account Manager" : ""}${r.isTeamLead ? " · Team Lead" : ""}`,
+                    `${USER_TYPE[r.userType]}${r.isAccountManager ? " · Account Manager" : ""}${r.isTeamLead ? " · Director / Head" : ""}`,
                   ],
                   ["Business company", r.businessCompany],
-                  ["Team lead / manager", r.manager],
+                  ["Reports to", r.manager],
                   [
                     "Address",
                     [r.address1, r.address2, r.city, r.state, r.zip, r.countryIso].filter(Boolean).join(", "),

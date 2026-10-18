@@ -186,11 +186,15 @@ export interface AnalyticsSnapshotEvent {
   };
 }
 /**
- * Client to server: the phx_join payload for topic live:dashboard. Window and threshold of the traffic movers panel (§13.3); the user's saved dashboard preferences. To change them, leave and join again.
+ * Client to server: the phx_join payload for topic live:dashboard. Window and threshold of the traffic movers panel (§13.3); the user's saved dashboard preferences. To change them, leave and join again. refreshSeconds sets how often summary, movers and tops are pushed (team trial round 1).
  */
 export interface DashboardJoinParams {
   windowMinutes?: 5 | 15 | 30 | 60;
   thresholdPct?: number;
+  /**
+   * Push period in seconds: summary every refreshSeconds, movers and tops every max(5, refreshSeconds).
+   */
+  refreshSeconds?: 1 | 5 | 10 | 30 | 60;
 }
 /**
  * Topic live:dashboard, event "movers". Traffic movers panel (§13.3 item 2), pushed every 5 s: clients that started sending, increased or decreased by more than the threshold, or stopped, comparing the last window with the window before. Window and threshold come from the join parameters (dashboard.join.json).

@@ -40,7 +40,13 @@ import { useOnlineUsers } from "../../api/team";
 
 const page = pageForPath("/dashboard")!;
 
-const DEFAULTS: DashboardSettings = { windowMinutes: 15, thresholdPct: 30, chartMinutes: 15, hiddenPanels: [] };
+const DEFAULTS: DashboardSettings = {
+  windowMinutes: 15,
+  thresholdPct: 30,
+  chartMinutes: 15,
+  refreshSeconds: 1,
+  hiddenPanels: [],
+};
 type Panel = DashboardSettings["hiddenPanels"][number];
 const PANELS: { key: Panel; label: string }[] = [
   { key: "summary", label: "Today's summary" },
@@ -49,6 +55,16 @@ const PANELS: { key: Panel; label: string }[] = [
   { key: "tps", label: "TPS per trunk" },
   { key: "tops", label: "Top clients and vendors" },
   { key: "destinations", label: "Top destinations" },
+];
+
+/** Refresh periods of the summary, movers, top lists and TPS table (team trial round 1). */
+const REFRESH: { value: number; label: string }[] = [
+  { value: 1, label: "Live (1 s)" },
+  { value: 5, label: "Every 5 s" },
+  { value: 10, label: "Every 10 s" },
+  { value: 30, label: "Every 30 s" },
+  { value: 60, label: "Every minute" },
+  { value: 0, label: "Paused" },
 ];
 
 const int = (v: number) => Math.round(v).toLocaleString("en-US");
@@ -68,8 +84,16 @@ interface Feed {
   chart: ChartBuffer | null;
 }
 
-/** Two sockets: live:tps once, live:dashboard re-joined when the movers params change. */
-function useDashboardFeed(windowMinutes: number, thresholdPct: number): Feed {
+/**
+ * Two sockets: live:tps once, live:dashboard re-joined when the movers params or the refresh period
+ * change. The refresh period (team trial round 1) sets the server's push period; the TPS table follows
+ * it too (the chart stays live). Paused keeps the figures shown when it was paused.
+ */
+function useDashboardFeed(windowMinutes: number, thresholdPct: number, refreshSeconds: number): Feed {
+  const paused = refreshSeconds === 0;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const lastTick = useRef(0);
   const [feed, setFeed] = useState<Feed>({
     connected: false,
     summary: null,
@@ -86,13 +110,19 @@ function useDashboardFeed(windowMinutes: number, thresholdPct: number): Feed {
         setFeed((f) => ({ ...f, chart: bufferFromHistory(payload as unknown as TpsHistoryEvent) }));
       if (event === "tick") {
         const tick = payload as unknown as TpsTickEvent;
-        setFeed((f) => ({ ...f, tick, chart: f.chart && appendTick(f.chart, tick) }));
+        const now = Date.now();
+        const showTick = !pausedRef.current && now - lastTick.current >= refreshRef.current * 1000 - 200;
+        if (showTick) lastTick.current = now;
+        setFeed((f) => ({ ...f, tick: showTick ? tick : f.tick, chart: f.chart && appendTick(f.chart, tick) }));
       }
     });
     s.connect();
     return () => s.close();
   }, []);
+  const refreshRef = useRef(refreshSeconds);
+  refreshRef.current = refreshSeconds;
   useEffect(() => {
+    if (paused) return;
     const s = new LiveSocket(socketUrl());
     s.subscribe(
       "live:dashboard",
@@ -101,11 +131,11 @@ function useDashboardFeed(windowMinutes: number, thresholdPct: number): Feed {
         if (event === "movers") setFeed((f) => ({ ...f, movers: payload as unknown as DashboardMoversEvent }));
         if (event === "tops") setFeed((f) => ({ ...f, tops: payload as unknown as DashboardTopsEvent }));
       },
-      { windowMinutes, thresholdPct },
+      { windowMinutes, thresholdPct, refreshSeconds },
     );
     s.connect();
     return () => s.close();
-  }, [windowMinutes, thresholdPct]);
+  }, [windowMinutes, thresholdPct, refreshSeconds, paused]);
   return feed;
 }
 
@@ -143,7 +173,8 @@ export function DashboardPage() {
   const saved = me?.preferences.dashboard ?? DEFAULTS;
   const animate = me?.preferences.animations !== false;
   const navigate = useTabNavigate();
-  const feed = useDashboardFeed(saved.windowMinutes, saved.thresholdPct);
+  const refreshSeconds = saved.refreshSeconds ?? 1;
+  const feed = useDashboardFeed(saved.windowMinutes, saved.thresholdPct, refreshSeconds);
   const hidden = new Set(saved.hiddenPanels);
   const save = (patch: Partial<DashboardSettings>) => prefs.mutate({ dashboard: { ...saved, ...patch } });
   const open = (target: PartyRef | { mccmnc: string }, title: string) =>
@@ -176,6 +207,21 @@ export function DashboardPage() {
                 ))}
               </select>
             </label>
+            <label className="dash-control">
+              Refresh
+              <select
+                value={refreshSeconds}
+                onChange={(e) =>
+                  save({ refreshSeconds: Number(e.target.value) as NonNullable<DashboardSettings["refreshSeconds"]> })
+                }
+              >
+                {REFRESH.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <ThresholdInput value={saved.thresholdPct} onChange={(thresholdPct) => save({ thresholdPct })} />
             <PanelsMenu
               hidden={hidden}
@@ -185,8 +231,8 @@ export function DashboardPage() {
                 })
               }
             />
-            <span className={`dash-live${feed.connected ? " on" : ""}`} role="status">
-              <span className="dot" /> {feed.connected ? "Live" : "Offline"}
+            <span className={`dash-live${feed.connected && refreshSeconds ? " on" : ""}`} role="status">
+              <span className="dot" /> {!feed.connected ? "Offline" : refreshSeconds ? "Live" : "Paused"}
             </span>
           </>
         }

@@ -5,14 +5,15 @@ import type pg from "pg";
 import type { AlertSoundPrefs, CurrentUser, DashboardSettings, PreferencesUpdate, Workspace } from "@sms/contract";
 import { db, withDb } from "../db.js";
 
-/** Live dashboard defaults (§13.3): 15-minute window, ±30 %, 15-minute chart, every panel. */
 /** Alert sounds (§13.6): one per severity, Critical repeats until acknowledged. */
 export const DEFAULT_ALERT_SOUNDS: AlertSoundPrefs = { mute: false, info: "ping", warning: "chime", critical: "siren" };
 
+/** Live dashboard defaults (§13.3): 15-minute window, ±30 %, 15-minute chart, live refresh, every panel. */
 export const DEFAULT_DASHBOARD: DashboardSettings = {
   windowMinutes: 15,
   thresholdPct: 30,
   chartMinutes: 15,
+  refreshSeconds: 1,
   hiddenPanels: [],
 };
 

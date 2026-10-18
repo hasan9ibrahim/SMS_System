@@ -30,7 +30,7 @@ type Frame = [string | null, string | null, string, string, Record<string, unkno
 interface Client {
   socket: WebSocket;
   topics: Map<string, string | null>; // topic -> join_ref
-  movers: { windowMinutes: number; thresholdPct: number };
+  movers: { windowMinutes: number; thresholdPct: number; refreshSeconds: number };
   analytics: AnalyticsParams | null;
 }
 
@@ -76,10 +76,16 @@ function tick() {
   step(sim, now);
   ticks++;
   push("live:tps", "tick", tickEvent(sim, now));
-  push("live:dashboard", "summary", summaryEvent(sim, now));
-  if (ticks % 5 === 0) {
-    push("live:dashboard", "tops", topsEvent(sim, now));
-    for (const c of clients) if (c.topics.has("live:dashboard")) moversFor(sim, c, now);
+  // Each dashboard client at its own refresh period (team trial round 1).
+  const summary = summaryEvent(sim, now);
+  let tops: ReturnType<typeof topsEvent> | null = null;
+  for (const c of clients) {
+    if (!c.topics.has("live:dashboard")) continue;
+    if (ticks % c.movers.refreshSeconds === 0) send(c, "live:dashboard", "summary", summary);
+    if (ticks % Math.max(5, c.movers.refreshSeconds) === 0) {
+      send(c, "live:dashboard", "tops", (tops ??= topsEvent(sim, now)));
+      moversFor(sim, c, now);
+    }
   }
   for (const c of clients)
     if (c.analytics && c.topics.has("live:analytics") && ticks % c.analytics.intervalSeconds === 0)
@@ -103,14 +109,16 @@ export function startLive() {
   void getSimulator();
 }
 
-/** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes and 30 %. */
+/** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes, 30 % and every second. */
 function moverParams(p: Record<string, unknown>): Client["movers"] | null {
   const w = p.windowMinutes ?? 15;
   const th = p.thresholdPct ?? 30;
-  const extra = Object.keys(p).filter((k) => k !== "windowMinutes" && k !== "thresholdPct");
+  const r = p.refreshSeconds ?? 1;
+  const extra = Object.keys(p).filter((k) => !["windowMinutes", "thresholdPct", "refreshSeconds"].includes(k));
   if (extra.length || ![5, 15, 30, 60].includes(w as number)) return null;
+  if (![1, 5, 10, 30, 60].includes(r as number)) return null;
   if (typeof th !== "number" || th < 5 || th > 500) return null;
-  return { windowMinutes: w as number, thresholdPct: th };
+  return { windowMinutes: w as number, thresholdPct: th, refreshSeconds: r as number };
 }
 
 const KNOWN_TOPICS = (topic: string) =>
@@ -122,7 +130,7 @@ export async function registerSocket(app: FastifyInstance) {
     const client: Client = {
       socket,
       topics: new Map(),
-      movers: { windowMinutes: 15, thresholdPct: 30 },
+      movers: { windowMinutes: 15, thresholdPct: 30, refreshSeconds: 1 },
       analytics: null,
     };
     clients.add(client);

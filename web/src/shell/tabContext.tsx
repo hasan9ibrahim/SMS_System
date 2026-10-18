@@ -12,7 +12,7 @@ interface TabContextValue {
   popout: boolean;
 }
 
-const TabContext = createContext<TabContextValue | null>(null);
+export const TabContext = createContext<TabContextValue | null>(null);
 
 export function TabProvider({ value, children }: { value: TabContextValue; children: ReactNode }) {
   return <TabContext.Provider value={value}>{children}</TabContext.Provider>;

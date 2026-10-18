@@ -2486,7 +2486,7 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "passwordDaysLeft", label: "Days Left", type: "integer", defaultOperator: "lte" }),
       field({ field: "totpEnabled", label: "2FA", type: "boolean", defaultOperator: "eq" }),
       field({ field: "isAccountManager", label: "Account Manager", type: "boolean", defaultOperator: "eq" }),
-      field({ field: "isTeamLead", label: "Team Lead", type: "boolean", defaultOperator: "eq", hidden: true }),
+      field({ field: "isTeamLead", label: "Director / Head", type: "boolean", defaultOperator: "eq", hidden: true }),
       field({ field: "manager", label: "Team Lead / Manager", type: "text", defaultOperator: "like", hidden: true }),
       field({
         field: "businessCompany",

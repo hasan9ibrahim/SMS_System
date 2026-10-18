@@ -59,11 +59,19 @@ export interface ImportSettings {
 const MAX_ISSUES = 500;
 const NONE = new Map<string, number>();
 const lower = (s: string) => s.trim().toLowerCase();
+/** A field with several values: separated by ; or , (team trial round 1: "IP1,IP2"). */
 const list = (s: string | undefined) =>
   (s ?? "")
-    .split(";")
+    .split(/[;,\n]/)
     .map((x) => x.trim())
     .filter(Boolean);
+/** Import field → enterprise contact type (§5, team trial round 1: all four types, not only commercial). */
+export const CONTACT_FIELDS = [
+  ["emails", "commercial"],
+  ["technicalEmails", "technical"],
+  ["ratesEmails", "rates"],
+  ["financeEmails", "finance"],
+] as const;
 const yes = (s: string | undefined) => /^(yes|y|true|1)$/i.test(s ?? "");
 const num = (s: string | undefined) => (s == null || s.trim() === "" ? null : Number(s.replace(/,/g, "")));
 
@@ -417,7 +425,10 @@ function planEnterprises(p: Planner, raws: Raw[]): PlanRow[] {
       country_id: country,
       vat_number: r.vatNumber?.trim() || null,
     };
-    pr.extra = { currency: company.currency, emails: list(r.emails) };
+    pr.extra = {
+      currency: company.currency,
+      contacts: Object.fromEntries(CONTACT_FIELDS.map(([field, type]) => [type, list(r[field])])),
+    };
   });
   out.forEach((r, i) => r.action !== "error" && p.index("enterprises", i, r.externalId, lower(String(r.values.name))));
   return out;
@@ -1038,12 +1049,12 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
                VALUES ($1, $2, $3, 1, 'postpaid', $4)`,
               [id, side, r.extra.currency, userId],
             );
-          const emails = r.extra.emails as string[];
-          if (emails.length)
-            await c.query(
-              "INSERT INTO enterprise_contacts (enterprise_id, contact_type, emails) VALUES ($1, 'commercial', $2)",
-              [id, emails],
-            );
+          for (const [type, emails] of Object.entries(r.extra.contacts as Record<string, string[]>))
+            if (emails.length)
+              await c.query(
+                "INSERT INTO enterprise_contacts (enterprise_id, contact_type, emails) VALUES ($1, $2, $3)",
+                [id, type, emails],
+              );
           break;
         }
         case "customer_trunks":
