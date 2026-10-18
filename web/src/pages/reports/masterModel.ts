@@ -11,6 +11,9 @@ import type {
 import { emptyState, encodeState, type GridState } from "../../grid/filterModel";
 
 export const DIMENSIONS: ReportDimension[] = [
+  "second",
+  "minute",
+  "quarterHour",
   "date",
   "hour",
   "week",
@@ -23,6 +26,7 @@ export const DIMENSIONS: ReportDimension[] = [
   "vendorIp",
   "country",
   "destination",
+  "vendorCountry",
   "vendorDestination",
   "productCategory",
   "senderId",
