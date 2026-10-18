@@ -19,6 +19,7 @@ type Draft = Pick<
   | "margin"
   | "qbrFormula"
   | "qbrWeights"
+  | "percentagePerCustomerTrunk"
   | "skipVendorAtTpsPct"
   | "lcrProfileId"
   | "threshold"
@@ -39,6 +40,7 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
   margin: r.margin,
   qbrFormula: r.qbrFormula,
   qbrWeights: r.qbrWeights ?? null,
+  percentagePerCustomerTrunk: r.percentagePerCustomerTrunk ?? false,
   skipVendorAtTpsPct: r.skipVendorAtTpsPct,
   lcrProfileId: r.lcrProfileId ?? null,
   threshold: r.threshold,
@@ -82,7 +84,12 @@ export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (
         <span>
           <span className={`dot dot-${type.tone}`} /> <strong>{type.label}</strong>
         </span>
-        {rule.routeType !== "block" && <span className="muted">{hunt}</span>}
+        {rule.routeType !== "block" && (
+          <span className="muted">
+            {hunt}
+            {rule.huntPolicy === "percentage" && rule.percentagePerCustomerTrunk ? ", per customer trunk" : ""}
+          </span>
+        )}
         {rule.routeType !== "block" && <span className="muted">max level {rule.maxRouteLevel}</span>}
         {rule.routeType !== "block" && rule.margin !== null && rule.margin !== undefined && (
           <span className="muted">min margin {rule.margin}</span>
@@ -238,6 +245,19 @@ export function VendorsSection({
                 onChange={(e) => set({ maxRouteLevel: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })}
               />
             </label>
+            {d.huntPolicy === "percentage" && (
+              <label
+                className="toggle-inline"
+                title="On: every customer trunk's own traffic is split by the shares. Off: the shares apply to the rule's total traffic."
+              >
+                <input
+                  type="checkbox"
+                  checked={!!d.percentagePerCustomerTrunk}
+                  onChange={(e) => set({ percentagePerCustomerTrunk: e.target.checked })}
+                />
+                Split per customer trunk
+              </label>
+            )}
             {/* The rule-level "Backup routes" switch had no effect and was removed (team trial round 1);
                 a vendor ticked Backup is used only when every other vendor is rejected. */}
           </>

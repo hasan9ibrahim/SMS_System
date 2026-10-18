@@ -228,3 +228,17 @@ test("QBR weights per rule: cost-only weights pick the cheapest (team trial roun
   assert.deepEqual(byQbr([good, cheap], { asr: 0, dlr: 0, delay: 0, cost: 100 }), [cheap, good]);
   assert.deepEqual(byQbr([cheap, good], null), [good, cheap]);
 });
+
+test("split per customer trunk: each trunk's traffic follows the shares on its own (team trial round 1)", () => {
+  const pick = (over: Record<string, unknown>, trunk: number, receiver: string) =>
+    decide(rule({ customerTrunkMode: "all", ...over }), msg({ customerTrunkId: trunk, receiver }), options).vendor
+      ?.vendorTrunkId;
+  const receivers = Array.from({ length: 200 }, (_, i) => `4477009${String(i).padStart(5, "0")}`);
+  // Off: the customer trunk makes no difference.
+  assert.ok(receivers.every((r) => pick({}, 1, r) !== undefined && pick({}, 1, r) === pick({}, 2, r)));
+  // On: the same number can go another way for another trunk, and each trunk still keeps about 60 / 40.
+  const on = { percentagePerCustomerTrunk: true };
+  assert.ok(receivers.some((r) => pick(on, 1, r) !== pick(on, 2, r)));
+  const share = receivers.filter((r) => pick(on, 2, r) === 10).length / receivers.length;
+  assert.ok(share > 0.45 && share < 0.75, `about 60 %, got ${share}`);
+});
