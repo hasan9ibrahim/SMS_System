@@ -237,9 +237,14 @@ describe("§13.15 Master Report", { skip }, () => {
         Q({ groupBy: ["hour"], metrics: ["attempts"], timezone: "Etc/GMT-3", limit: 30 }),
       ),
     );
+    // "Yesterday" counts from the latest EDR (the fake data ends when it was generated), in GMT+3.
+    const [latest] = (await chRows<{ t: string }>("SELECT toString(max(start_time)) AS t FROM edr"))!;
+    const plus3Day = new Date(Date.parse(`${latest!.t.replace(" ", "T")}Z`) + 3 * 3_600_000 - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     assert.ok(
-      plus3.rows.every((r) => String(r.dims.hour!.id).startsWith("2026-10-16")),
-      "yesterday in GMT+3 is 2026-10-16",
+      plus3.rows.every((r) => String(r.dims.hour!.id).startsWith(plus3Day)),
+      `yesterday in GMT+3 is ${plus3Day}`,
     );
     const csv = await call("POST", "/reports/master/export", {
       fileType: "csv",

@@ -150,6 +150,9 @@ export async function generateAdmin(world: World, rng: Rng, sink: TableSink, pro
   const plan: string[] = [];
   plan.push("Admin", "Admin", "Admin");
   for (let i = 0; i < 4; i++) plan.push("Management"); // one manager per department
+  // The slot of the former Support manager (NOC and Support merged) stays, as NOC staff, so the random
+  // draws, and with them every generated name (user 1 is the demo admin Daniel Khoury), stay the same.
+  plan.push("NOC");
   for (let i = 0; i < profile.accountManagers; i++) plan.push("Sales");
   const rest = ["NOC", "NOC", "NOC", "NOC", "Rates", "Rates", "Billing", "Billing", "Sales"];
   while (plan.length < profile.users) plan.push(rng.pick(rest));
