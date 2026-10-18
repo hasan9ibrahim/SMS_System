@@ -1,7 +1,7 @@
 // Security settings (build step 5.21, §13.28): the policy (never off, floors kept, undoable), the Users list
 // and the password rules following it, the overview, the reminder job (once per day mark and password, no
-// password or link in the e-mail), my password status and the gate that leaves only the Change Password
-// screen. Every response is checked against the contract. Needs the seeded database.
+// password or link in the e-mail) and my password status. The gate that leaves only the Change Password
+// screen is in passwordGate.test.ts, signed in as another user. Every response is checked against the contract. Needs the seeded database.
 import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { LightMyRequestResponse } from "fastify";
@@ -153,7 +153,10 @@ describe("security settings", { skip }, () => {
       "SELECT days_mark FROM password_reminders WHERE user_kind = 'staff' AND user_id = $1",
       [u.id],
     );
-    assert.ok(marks.some((m) => m.days_mark === 3), JSON.stringify(marks));
+    assert.ok(
+      marks.some((m) => m.days_mark === 3),
+      JSON.stringify(marks),
+    );
     const { rows: mail } = await db().query(
       `SELECT subject, body FROM email_logs WHERE email_type = 'password_reminder' AND to_addresses[1] =
          (SELECT email FROM users WHERE id = $1) ORDER BY id DESC LIMIT 1`,
@@ -171,26 +174,5 @@ describe("security settings", { skip }, () => {
     const me = await ok("getMyPasswordStatus", call("GET", "/me/password-status"));
     assert.equal(me.blocked, false);
     assert.equal(me.state === "ok" || me.state === "expiring", true);
-  });
-
-  test("an expired or must-change password leaves only the Change Password screen", async () => {
-    cleanup.push(async () => {
-      await db().query("UPDATE users SET must_change_password = false WHERE id = 1");
-      invalidateGate();
-    });
-    await db().query("UPDATE users SET must_change_password = true WHERE id = 1");
-    invalidateGate();
-    const blocked = await call("GET", "/security/overview");
-    assert.equal(blocked.statusCode, 403);
-    assert.equal(blocked.json().code, "password_change_required");
-    const status = await ok("getMyPasswordStatus", call("GET", "/me/password-status"));
-    assert.equal(status.blocked, true);
-    assert.equal(status.state, "must_change");
-    assert.equal(status.banner, true);
-    await ok("getCurrentUser", call("GET", "/me"));
-    await ok("checkPassword", call("POST", "/password-check", { password: "a-long-new-password-1", userId: 1 }));
-    await db().query("UPDATE users SET must_change_password = false WHERE id = 1");
-    invalidateGate();
-    await ok("getSecurityOverview", call("GET", "/security/overview"));
   });
 });

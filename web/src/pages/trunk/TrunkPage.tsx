@@ -28,6 +28,7 @@ import {
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
+import { RateTableView } from "../rates/RateTableView";
 import { RulesTab } from "./RulesTab";
 import {
   CustomerTrunkFields,
@@ -38,7 +39,7 @@ import {
   type TrunkForm,
 } from "./TrunkForms";
 
-const SECTIONS = ["general", "rules", "history"] as const;
+const SECTIONS = ["general", "rates", "rules", "history"] as const;
 const LABEL = { customer: "Customer trunk", vendor: "Vendor trunk" } as const;
 
 function GeneralSection({
@@ -280,6 +281,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
       <SectionTabs
         tabs={[
           { key: "general", label: "General" },
+          ...(kind === "vendor" ? [{ key: "rates", label: "Rates", disabled: !t?.ownRateTableId }] : []),
           { key: "rules", label: "Rules", disabled: !t },
           { key: "history", label: "History", disabled: !t },
         ]}
@@ -297,6 +299,12 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
               slot={section === "general" ? slot : null}
               onDirty={onGeneral}
             />
+          </div>
+        )}
+        {/* The vendor trunk's own buy rates, edited here as in Rate manager (team trial round 1). */}
+        {t && kind === "vendor" && t.ownRateTableId && visited.has("rates") && (
+          <div hidden={section !== "rates"} className="trunk-rates">
+            <RateTableView id={t.ownRateTableId} embedded />
           </div>
         )}
         {t && visited.has("rules") && (

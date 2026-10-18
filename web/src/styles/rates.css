@@ -541,3 +541,14 @@
   margin-right: auto;
   font-weight: 500;
 }
+
+/* A vendor trunk's Rates tab (team trial round 1): the rate table view inside the record. */
+.trunk-rates:not([hidden]) {
+  display: flex;
+  height: calc(100vh - 250px);
+  min-height: 480px;
+}
+.trunk-rates .rate-detail {
+  flex: 1;
+  min-width: 0;
+}

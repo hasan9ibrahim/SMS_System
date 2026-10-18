@@ -142,6 +142,7 @@ export function NumberListsPage() {
 }
 
 function Lists({ open }: { open: (id: number) => void }) {
+  const deleteOne = useDeleteRecord();
   const addList = async () => {
     const saved = await ask<NumberList>((done) => <NumberListDialog row={null} done={done} />);
     if (saved) open(saved.id);
@@ -151,6 +152,17 @@ function Lists({ open }: { open: (id: number) => void }) {
       list="number_lists"
       page={page}
       historyScope={{ entityTypes: ["number_list", "number_list_entry"] }}
+      rowActions={(r) => [
+        { label: "Open entries", icon: "list", disabled: !!r.archivedAt, onSelect: () => open(r.id) },
+        "separator",
+        {
+          label: "Delete…",
+          icon: "trash",
+          danger: true,
+          disabled: !!r.archivedAt,
+          onSelect: () => void deleteOne("number_list", r.id, r.name),
+        },
+      ]}
       primary={{ label: "Add list", icon: "plus", onClick: () => void addList() }}
       columns={{
         id: { width: 90 },

@@ -3,6 +3,7 @@
 import type { Enterprise } from "@sms/contract";
 import { pageForPath } from "../nav/registry";
 import { ListScreen } from "../page/ListScreen";
+import { useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
 
 const page = pageForPath("/enterprises")!;
@@ -10,11 +11,27 @@ const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Recipr
 
 export function EnterprisesPage() {
   const navigate = useTabNavigate();
+  const deleteOne = useDeleteRecord();
   return (
     <ListScreen<Enterprise>
       list="enterprises"
       page={page}
       historyScope={{ entityTypes: ["enterprise"] }}
+      rowActions={(r) => [
+        {
+          label: "Open",
+          icon: "external",
+          onSelect: () => navigate(`/enterprises/${r.id}`, { newTab: true, title: `Enterprise · ${r.name}` }),
+        },
+        "separator",
+        {
+          label: "Delete…",
+          icon: "trash",
+          danger: true,
+          disabled: !!r.archivedAt,
+          onSelect: () => void deleteOne("enterprise", r.id, r.name),
+        },
+      ]}
       primary={{
         label: "New enterprise",
         onClick: () => navigate("/enterprises/new", { newTab: true, title: "New enterprise" }),

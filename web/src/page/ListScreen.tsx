@@ -9,7 +9,9 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { useLocation } from "react-router";
 import type { ListId, ListQuery } from "@sms/contract";
@@ -46,6 +48,8 @@ export interface ListScreenProps<Row extends { id: number }> {
   title?: string;
   columns?: Partial<Record<string, ColumnOverride<Row>>>;
   trailing?: { header: string; width: number; render: (row: Row) => ReactNode };
+  /** A "⋯" menu at the end of each row: act on a record without opening it (team trial round 1). */
+  rowActions?: (row: Row) => (MenuItem | "separator")[];
   detail?: (row: Row) => DetailContent;
   onOpen?: (row: Row, e: MouseEvent | KeyboardEvent) => void;
   /** Records this page edits; enables the header Undo and History buttons (§13.10). */
@@ -63,7 +67,8 @@ export interface ListScreenProps<Row extends { id: number }> {
   /** Selection summary and the Bulk edit menu (§13.11). */
   selection?: {
     summary?: (rows: Row[], ids: ReadonlySet<number>) => ReactNode;
-    bulk?: (ids: number[], clear: () => void) => (MenuItem | "separator")[];
+    /** Actions on the selection; `rows` are the selected rows loaded on screen. */
+    bulk?: (ids: number[], clear: () => void, rows: Row[]) => (MenuItem | "separator")[];
   };
   /** Page shortcuts on the grid (e.g. E edit, D duplicate); return true when handled. */
   onKey?: (key: string, row: Row | null) => boolean;
@@ -168,20 +173,96 @@ export function ShowDeleted({ state, onChange }: { state: GridState; onChange: (
   );
 }
 
+/**
+ * Height of the detail panel, dragged with the bar above it and remembered per list in this browser
+ * (team trial round 1: "the bottom window can be stretched or pulled"). Null = the default share.
+ */
+function useDetailHeight(list: string): [number | null, (h: number | null) => void] {
+  const key = `sms.detailHeight.${list}`;
+  const [h, setH] = useState<number | null>(() => {
+    try {
+      const v = Number(localStorage.getItem(key));
+      return v > 0 ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const set = (v: number | null) => {
+    setH(v);
+    try {
+      if (v === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, String(Math.round(v)));
+    } catch {
+      // Private mode: the height lasts for this page only.
+    }
+  };
+  return [h, set];
+}
+
+const DETAIL_MIN = 140;
+
+/** The drag bar between the grid and the detail panel; double-click switches between tall and default. */
+function DetailSplitter({
+  height,
+  onChange,
+  container,
+}: {
+  height: number | null;
+  onChange: (h: number | null) => void;
+  container: RefObject<HTMLDivElement | null>;
+}) {
+  const max = () => Math.max(DETAIL_MIN, (container.current?.clientHeight ?? 600) - 120);
+  const start = (e: PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const panel = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null;
+    const startY = e.clientY;
+    const startH = panel?.offsetHeight ?? height ?? 260;
+    const move = (ev: globalThis.PointerEvent) =>
+      onChange(Math.min(max(), Math.max(DETAIL_MIN, startH + startY - ev.clientY)));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing-rows");
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    document.body.classList.add("resizing-rows");
+  };
+  return (
+    <div
+      className="detail-splitter"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize the details (double-click: tall or default)"
+      title="Drag to resize · double-click: tall or default"
+      tabIndex={0}
+      onPointerDown={start}
+      onDoubleClick={() => onChange(height !== null && height > max() * 0.6 ? null : max())}
+      onKeyDown={(e) => {
+        const cur = height ?? (e.currentTarget.nextElementSibling as HTMLElement | null)?.offsetHeight ?? 260;
+        if (e.key === "ArrowUp") onChange(Math.min(max(), cur + 40));
+        if (e.key === "ArrowDown") onChange(Math.max(DETAIL_MIN, cur - 40));
+      }}
+    />
+  );
+}
+
 function DetailPanel({
   content,
   onClose,
   section,
   setSection,
+  height,
 }: {
   content: DetailContent;
   onClose: () => void;
   section: string | null;
   setSection: (key: string) => void;
+  height: number | null;
 }) {
   const current = content.sections.find((s) => s.key === section) ?? content.sections[0];
   return (
-    <section className="detail" aria-label="Details">
+    <section className="detail" aria-label="Details" style={height ? { flex: `0 0 ${height}px` } : undefined}>
       <nav className="detail-nav">
         {content.sections.map((s) => (
           <button
@@ -210,13 +291,41 @@ function DetailPanel({
   );
 }
 
+/** The "⋯" button of a row; the items are built when it opens. */
+function RowMenu({ items }: { items: () => (MenuItem | "separator")[] }) {
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className="icon-btn"
+        aria-label="Actions"
+        title="Actions"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        <Icon name="more" size={15} />
+      </button>
+      <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} align="end">
+        {open && <Menu items={items()} onClose={() => setOpen(false)} />}
+      </Popover>
+    </>
+  );
+}
+
 export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Row>) {
   const {
     list,
     page,
     title,
     columns,
-    trailing,
+    trailing: trailingProp,
+    rowActions,
     detail,
     onOpen,
     historyScope = null,
@@ -237,6 +346,20 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     idleMessage,
     noSelection,
   } = props;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [detailHeight, setDetailHeight] = useDetailHeight(list);
+  const trailing = rowActions
+    ? {
+        header: trailingProp?.header ?? "",
+        width: (trailingProp?.width ?? 0) + 40,
+        render: (row: Row) => (
+          <span className="row-actions">
+            {trailingProp?.render(row)}
+            <RowMenu items={() => rowActions(row)} />
+          </span>
+        ),
+      }
+    : trailingProp;
   const { active } = useTab();
   const fields = useListFields(list);
   const [state, setState] = useGridUrlState(initialState);
@@ -450,7 +573,11 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             </button>
             <Popover anchor={bulkRef} open={bulkOpen} onClose={() => setBulkOpen(false)} align="end">
               <Menu
-                items={selection.bulk([...selected], () => setSelected(new Set()))}
+                items={selection.bulk(
+                  [...selected],
+                  () => setSelected(new Set()),
+                  rows.filter((r) => selected.has(r.id)),
+                )}
                 onClose={() => setBulkOpen(false)}
               />
             </Popover>
@@ -467,7 +594,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
         )}
         <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
       </div>
-      <div className={`list-body${detail && activeRow ? " with-detail" : ""}`}>
+      <div className={`list-body${detail && activeRow ? " with-detail" : ""}`} ref={bodyRef}>
         {fields.data ? (
           <DataGrid<Row>
             list={list}
@@ -493,6 +620,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
         ) : (
           <div className="grid-message muted">Loading…</div>
         )}
+        {detail && activeRow && <DetailSplitter height={detailHeight} onChange={setDetailHeight} container={bodyRef} />}
         {detail && activeRow && (
           <DetailPanel
             key={activeRow.id}
@@ -500,6 +628,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             section={section}
             setSection={setSection}
             onClose={() => setActiveRow(null)}
+            height={detailHeight}
           />
         )}
       </div>

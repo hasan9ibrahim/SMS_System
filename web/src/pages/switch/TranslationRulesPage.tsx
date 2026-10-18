@@ -35,7 +35,7 @@ import {
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
+import { ListLookup, useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Button, Modal } from "../../ui/primitives";
@@ -917,12 +917,24 @@ function RuleDetail({ row, select }: { row: TranslationRuleRow; select: (id: num
 
 export function TranslationRulesPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
+  const deleteOne = useDeleteRecord();
   return (
     <ListScreen<TranslationRuleRow>
       list="translation_rules"
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["translation_rule"] }}
+      rowActions={(r) => [
+        { label: "Show details", icon: "eye", onSelect: () => setSelectId(r.id) },
+        "separator",
+        {
+          label: "Delete…",
+          icon: "trash",
+          danger: true,
+          disabled: !!r.archivedAt,
+          onSelect: () => void deleteOne("translation_rule", r.id, `rule ${r.name}`),
+        },
+      ]}
       actions={<CleanupBadge kinds={["translation_rule_unassigned"]} />}
       primary={{
         label: "Add rule",

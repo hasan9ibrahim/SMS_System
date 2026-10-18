@@ -1361,3 +1361,43 @@ a.btn {
   cursor: pointer;
   user-select: none;
 }
+
+/* Row "⋯" actions (team trial round 1). */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dep-list.bulk-del {
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* Detail panel drag bar (team trial round 1). */
+.detail-splitter {
+  flex: none;
+  height: 8px;
+  margin: -6px 0;
+  cursor: row-resize;
+  position: relative;
+  z-index: 2;
+}
+.detail-splitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 44px;
+  height: 4px;
+  margin-left: -22px;
+  border-radius: 2px;
+  background: var(--color-border);
+}
+.detail-splitter:hover::after,
+.detail-splitter:focus-visible::after {
+  background: var(--color-accent);
+}
+body.resizing-rows {
+  cursor: row-resize;
+  user-select: none;
+}

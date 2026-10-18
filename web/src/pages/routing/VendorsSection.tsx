@@ -8,7 +8,7 @@ import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
-import { ROUTE_TYPES, shareProblems } from "./ruleModel";
+import { ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
 
 type Draft = Pick<
   RouteRuleInput,
@@ -51,14 +51,89 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
 
 const numOrNull = (v: string) => (v === "" ? null : Number(v));
 
+/** Read-only vendors of a rule for the detail panel; editing opens the popup. */
+export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (() => void) | null }) {
+  const name = (id: number) => rule.labels.vendorTrunks.find((v) => v.id === id)?.name ?? `#${id}`;
+  const type = routeTypeOf(rule.routeType);
+  const vendors = [...(rule.vendors ?? [])].sort(
+    (a, b) => a.level - b.level || Number(a.isBackup) - Number(b.isBackup),
+  );
+  const hunt = { top_down: "Top down (by level)", round_robin: "Round robin", percentage: "Percentage split" }[
+    rule.huntPolicy ?? "top_down"
+  ];
+  return (
+    <div className="vendors-view">
+      <div className="vv-head">
+        <span>
+          <span className={`dot dot-${type.tone}`} /> <strong>{type.label}</strong>
+        </span>
+        {rule.routeType !== "block" && <span className="muted">{hunt}</span>}
+        {rule.routeType !== "block" && <span className="muted">max level {rule.maxRouteLevel}</span>}
+        {rule.routeType !== "block" && rule.margin !== null && rule.margin !== undefined && (
+          <span className="muted">min margin {rule.margin}</span>
+        )}
+        <span className="fb-spacer" />
+        {onEdit ? (
+          <Button icon="route" onClick={onEdit}>
+            Edit vendors…
+          </Button>
+        ) : (
+          <span className="muted">Restore the rule to edit its vendors.</span>
+        )}
+      </div>
+      {rule.routeType === "block" ? (
+        <p className="muted">This rule blocks the traffic; it has no vendors.</p>
+      ) : vendors.length === 0 ? (
+        <p className="muted">
+          {rule.routeType === "static"
+            ? "No vendors yet."
+            : `Vendors are picked by ${type.label.toLowerCase()} from ${(rule.vendorTrunkIds ?? []).length || "all"} vendor trunks.`}
+        </p>
+      ) : (
+        <table className="vf-table vv-table">
+          <thead>
+            <tr>
+              <th>Level</th>
+              <th>Vendor trunk</th>
+              <th className="num">Share</th>
+              <th>Backup</th>
+              <th>Warm-up</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vendors.map((v, i) => (
+              <tr key={i} className={v.isBackup ? "muted" : ""}>
+                <td className="num">{v.level}</td>
+                <td className="strong">{name(v.vendorTrunkId)}</td>
+                <td className="num">{v.sharePct === null || v.sharePct === undefined ? "—" : `${v.sharePct}%`}</td>
+                <td>{v.isBackup ? "Backup" : ""}</td>
+                <td>{v.warmupCount ? `${v.warmupCount} per ${v.warmupPer ?? "day"}` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {(rule.whitelists ?? []).length > 0 && (
+        <p className="muted small">
+          {(rule.whitelists ?? []).length} number whitelist{(rule.whitelists ?? []).length === 1 ? "" : "s"} (see Edit
+          vendors)
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function VendorsSection({
   rule,
   saving,
   onSave,
+  onCancel,
 }: {
   rule: RouteRuleDetail;
   saving: boolean;
   onSave: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
+  /** In the popup: Cancel closes it. */
+  onCancel?: () => void;
 }) {
   const ref = useReference();
   const initial = useMemo(() => draftOf(rule), [rule]);
@@ -521,9 +596,13 @@ export function VendorsSection({
       <div className="vf-save">
         {error && <span className="error-text">{error}</span>}
         <span className="fb-spacer" />
-        <Button disabled={!dirty || saving} onClick={() => (setD(initial), setError(null))}>
-          Revert
-        </Button>
+        {onCancel ? (
+          <Button onClick={onCancel}>Cancel</Button>
+        ) : (
+          <Button disabled={!dirty || saving} onClick={() => (setD(initial), setError(null))}>
+            Revert
+          </Button>
+        )}
         <Button icon="save" disabled={!dirty || saving} onClick={() => void save()}>
           Save vendors
         </Button>

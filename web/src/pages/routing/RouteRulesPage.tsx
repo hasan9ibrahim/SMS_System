@@ -13,14 +13,14 @@ import { pageForPath } from "../../nav/registry";
 import { ListScreen, useGridUrlState, type DetailContent } from "../../page/ListScreen";
 import { useDeleteRecord } from "../../records/parts";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
-import { Button, Popover, StatusDot } from "../../ui/primitives";
+import { Button, Modal, Popover, StatusDot } from "../../ui/primitives";
 import { formatPct } from "../rates/format";
 import { AddCondition, ConditionsSection, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
 import { BulkDialog, RuleDialog, VendorSplitEditor, problemText } from "./dialogs";
 import { compact, routeTypeOf } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
 import { TrafficAside, TrafficHover, TrafficSection, money, usePlatformCurrency } from "./Traffic";
-import { VendorsSection } from "./VendorsSection";
+import { VendorsSection, VendorsView } from "./VendorsSection";
 import { CleanupBadge } from "../admin/cleanup/CleanupBadge";
 
 const page = pageForPath("/routing/rules")!;
@@ -36,13 +36,41 @@ const dlrTitle = (r: RouteRuleRow) =>
 
 const SHORTCUTS = "↑↓ move · Space select · E edit · D duplicate · Ctrl+Z undo";
 
-function VendorsSectionFor({ id }: { id: number }) {
+/** The vendor editor in a wide popup showing everything without scrolling (team trial round 1). */
+function VendorsDialog({ id, done }: { id: number; done: () => void }) {
   const rule = useRouteRule(id);
   const { save, saving } = useSaver(rule.data);
+  return (
+    <Modal title={`Vendors · ${rule.data?.name ?? `rule #${id}`}`} width={1180} onClose={done}>
+      {!rule.data ? (
+        <p className="muted">Loading…</p>
+      ) : (
+        <VendorsSection
+          key={rule.data.updatedAt}
+          rule={rule.data}
+          saving={saving}
+          onSave={async (patch) => {
+            const error = await save(patch);
+            if (!error) done();
+            return error;
+          }}
+          onCancel={done}
+        />
+      )}
+    </Modal>
+  );
+}
+
+/** Vendors are viewed in the panel and edited in the popup (team trial round 1). */
+function VendorsSectionFor({ id }: { id: number }) {
+  const rule = useRouteRule(id);
   if (!rule.data) return <p className="muted">Loading…</p>;
-  if (rule.data.archived) return <p className="muted">Restore the rule to edit its vendors.</p>;
-  // Keyed by the change time, so a save or undo elsewhere reloads the form.
-  return <VendorsSection key={rule.data.updatedAt} rule={rule.data} saving={saving} onSave={save} />;
+  return (
+    <VendorsView
+      rule={rule.data}
+      onEdit={rule.data.archived ? null : () => void ask<void>((d) => <VendorsDialog id={id} done={() => d()} />)}
+    />
+  );
 }
 
 function TestSectionFor({ id }: { id: number }) {

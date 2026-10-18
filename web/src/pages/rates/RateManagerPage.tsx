@@ -10,6 +10,7 @@ import { formatMoney, formatPct } from "./format";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { useTabNavigate } from "../../shell/tabContext";
+import { useDeleteRecord } from "../../records/parts";
 import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { scopeUrl } from "./bulkModel";
@@ -104,6 +105,7 @@ function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridS
 function FullList() {
   const open = useOpenTable();
   const navigate = useTabNavigate();
+  const deleteOne = useDeleteRecord();
   const names = (list: string[], more: number) =>
     list.length ? (
       <span title={list.join(", ")}>
@@ -118,6 +120,24 @@ function FullList() {
       list="rate_tables"
       page={page}
       historyScope={{ entityTypes: ["rate_table"] }}
+      rowActions={(r) => [
+        { label: "Open", icon: "chevronRight", onSelect: () => open(r.id, { name: r.name }) },
+        { label: "Open in new tab", icon: "external", onSelect: () => open(r.id, { newTab: true, name: r.name }) },
+        {
+          label: "Bulk rating…",
+          icon: "layers",
+          disabled: r.kind !== "customer" || r.archived,
+          onSelect: () => navigate(scopeUrl({ tables: [r.id] }), { newTab: true, title: "Bulk rating" }),
+        },
+        "separator",
+        {
+          label: "Delete…",
+          icon: "trash",
+          danger: true,
+          disabled: r.archived,
+          onSelect: () => void deleteOne("rate_table", r.id, r.name),
+        },
+      ]}
       // Several clients' tables at once open the bulk rating workspace (§13.11, §13.12).
       selection={{
         summary: (_rows, ids) => `${ids.size} table${ids.size === 1 ? "" : "s"} selected`,

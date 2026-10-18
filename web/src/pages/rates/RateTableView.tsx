@@ -297,7 +297,8 @@ function MoreMenu({ t, onRename }: { t: RateTableDetail; onRename: () => void })
   );
 }
 
-export function RateTableView({ id }: { id: number }) {
+/** `embedded`: shown inside another record (a vendor trunk's Rates tab), so there is no close button. */
+export function RateTableView({ id, embedded = false }: { id: number; embedded?: boolean }) {
   const q = useRateTable(id);
   const t = q.data;
   const [view, setView] = useView();
@@ -321,7 +322,8 @@ export function RateTableView({ id }: { id: number }) {
   }, []);
   const editable = !!t && !t.archived && view !== "closed";
 
-  useTabTitle(t ? `Rates · ${t.name}` : undefined);
+  // Inside a vendor trunk the tab keeps the trunk's title.
+  useTabTitle(t && !embedded ? `Rates · ${t.name}` : undefined);
   useTabDirty(pending.size > 0);
   usePageStatus({
     rows: t
@@ -376,6 +378,7 @@ export function RateTableView({ id }: { id: number }) {
       senderId: { width: 100 },
       rate: {
         width: 110,
+        ...(t?.kind === "vendor" ? { label: "Buy Rate" } : {}),
         render: (r) => {
           const p = pending.get(r.id);
           if (editing === r.id)
@@ -581,9 +584,11 @@ export function RateTableView({ id }: { id: number }) {
           <a className="btn" href={rateExportUrl(t.id, view === "log" ? "current" : view)} download>
             <Icon name="download" size={15} /> Export
           </a>
-          <Button icon="send" disabled title="Sending rate sheets arrives with rate notices (§13.13)">
-            Send to client
-          </Button>
+          {t.kind === "customer" && (
+            <Button icon="send" disabled title="Rate notifications go out on save with Send RN (team trial round 1)">
+              Send to client
+            </Button>
+          )}
           <Button icon="history" onClick={() => setView("log")}>
             History
           </Button>
@@ -596,15 +601,21 @@ export function RateTableView({ id }: { id: number }) {
           >
             Add rates
           </Button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Close the table"
-            title="Back to the full list"
-            onClick={() => openTable(null)}
-          >
-            <Icon name="x" />
-          </button>
+          {embedded ? (
+            <Button icon="external" onClick={() => openTable(t.id, { newTab: true, name: t.name })}>
+              Rate manager
+            </Button>
+          ) : (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Close the table"
+              title="Back to the full list"
+              onClick={() => openTable(null)}
+            >
+              <Icon name="x" />
+            </button>
+          )}
         </div>
       </div>
       <ArchivedBanner kind="rate_table" id={t.id} archived={t.archived} what="rate table" />

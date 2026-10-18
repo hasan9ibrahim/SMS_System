@@ -522,3 +522,15 @@
 .fgrid > p.wide {
   grid-column: 1 / -1;
 }
+
+/* The enterprise picker inside a form (new trunk) reads like the other inputs, not like a page title
+   (team trial round 1). */
+.fgrid .record-picker {
+  min-width: 0;
+  max-width: none;
+  flex: none;
+}
+.fgrid .record-picker > button {
+  font-size: inherit;
+  font-weight: 400;
+}
