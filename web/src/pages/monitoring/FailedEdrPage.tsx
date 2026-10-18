@@ -6,6 +6,7 @@ import { fetchListPage, type ListPage } from "../../api/hooks";
 import type { GridState } from "../../grid/filterModel";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
+import { RepushDialog } from "./EdrSearchPage";
 import { ask } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { fmtSeconds, timeBounds, timeCondition, uuidKey } from "./monitorModel";
@@ -79,7 +80,21 @@ export function FailedEdrPage() {
       list="failed_edrs"
       page={page}
       title="Failed EDR Search"
-      noSelection
+      // Rejected messages can be re-sent on a vendor trunk (team trial round 1).
+      selection={{
+        summary: (_rows, ids) => `${ids.size} selected`,
+        bulk: (_ids, clear, rows) => [
+          {
+            label: `Repush ${rows.length} to a vendor…`,
+            icon: "send",
+            disabled: !rows.length,
+            onSelect: () =>
+              void ask<void>((d) => (
+                <RepushDialog ids={rows.map((r) => r.uuid)} eligible={rows.length} done={() => d()} />
+              )).then(clear),
+          },
+        ],
+      }}
       historyScope={null}
       fetchPage={fetchFailed}
       above={tabs}

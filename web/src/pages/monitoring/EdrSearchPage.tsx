@@ -364,14 +364,14 @@ function TroubleTicketDialog({ rows, done }: { rows: EdrGridRow[]; done: () => v
   );
 }
 
-function RepushDialog({ rows, done }: { rows: EdrGridRow[]; done: () => void }) {
+/** Re-send EDRs on a vendor trunk; also used by Failed EDR Search (team trial round 1). */
+export function RepushDialog({ ids, eligible, done }: { ids: string[]; eligible: number; done: () => void }) {
   const [vendorTrunkId, setVendorTrunkId] = useState<number | null>(null);
   const repush = useRepush();
   const navigate = useTabNavigate();
-  const eligible = rows.filter((r) => r.isFinalAttempt && r.msgStatus !== "DELIVRD").length;
   return (
     <Modal
-      title={`EDR Repush · ${rows.length} EDR${rows.length === 1 ? "" : "s"}`}
+      title={`EDR Repush · ${ids.length} EDR${ids.length === 1 ? "" : "s"}`}
       width={520}
       onClose={done}
       footer={
@@ -383,7 +383,7 @@ function RepushDialog({ rows, done }: { rows: EdrGridRow[]; done: () => void }) 
             disabled={!vendorTrunkId || repush.isPending}
             onClick={() =>
               repush.mutate(
-                { edrIds: rows.map((r) => r.uuid), vendorTrunkId: vendorTrunkId! },
+                { edrIds: ids, vendorTrunkId: vendorTrunkId! },
                 {
                   onSuccess: (r) => {
                     toast({
@@ -418,7 +418,7 @@ function RepushDialog({ rows, done }: { rows: EdrGridRow[]; done: () => void }) 
         />
       </div>
       <p className="muted small">
-        {eligible} of {rows.length} can be re-sent: only final attempts that were not delivered. Each becomes a new
+        {eligible} of {ids.length} can be re-sent: only final attempts that were not delivered. Each becomes a new
         attempt on this trunk, marked with the repush request.
       </p>
     </Modal>
@@ -426,7 +426,14 @@ function RepushDialog({ rows, done }: { rows: EdrGridRow[]; done: () => void }) 
 }
 
 const openTicket = (rows: EdrGridRow[]) => ask<void>((d) => <TroubleTicketDialog rows={rows} done={() => d()} />);
-const openRepush = (rows: EdrGridRow[]) => ask<void>((d) => <RepushDialog rows={rows} done={() => d()} />);
+const openRepush = (rows: EdrGridRow[]) =>
+  ask<void>((d) => (
+    <RepushDialog
+      ids={rows.map((r) => r.uuid)}
+      eligible={rows.filter((r) => r.isFinalAttempt && r.msgStatus !== "DELIVRD").length}
+      done={() => d()}
+    />
+  ));
 const openDownload = (state: GridState) =>
   ask<void>((d) => <RequestDialog kind="edr" state={state} done={() => d()} />);
 
