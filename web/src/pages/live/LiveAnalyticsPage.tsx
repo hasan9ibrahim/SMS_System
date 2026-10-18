@@ -5,7 +5,7 @@
 // as the vendor reports it, Margin, Revenue, Cost, Delivered, Reported, average rates, delay and HLR.
 // DLR and ASR cells turn amber or red below their thresholds, a negative margin red. While the period
 // includes today, a live:analytics push (WebSocket) refreshes the open levels at the chosen interval.
-// Each row opens its CDRs in a window, exports them, or opens EDR Search.
+// Each row opens its EDRs in a window, exports them, or opens EDR Search.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -208,14 +208,14 @@ function useLiveTick(seconds: number, enabled: boolean): number {
   return tick;
 }
 
-function CdrWindow({ title, state, done }: { title: string; state: GridState; done: () => void }) {
+function EdrWindow({ title, state, done }: { title: string; state: GridState; done: () => void }) {
   const fields = useListFields("edrs");
   const navigate = useTabNavigate();
   const [grid, setGrid] = useState<GridState>(state);
   const [active, setActive] = useState<number | null>(null);
   return (
     <Modal
-      title={`CDRs · ${title}`}
+      title={`EDRs · ${title}`}
       width={1240}
       onClose={done}
       footer={
@@ -376,10 +376,10 @@ function Level({
                 <button
                   type="button"
                   className="la-act"
-                  title="CDRs of this row in a window, with export"
+                  title="EDRs of this row in a window, with export"
                   onClick={() =>
                     void ask<void>((d) => (
-                      <CdrWindow
+                      <EdrWindow
                         title={rowChain.map((c) => c.row.dims[c.dims[0]!]?.label).join(" › ")}
                         state={edrGridState(rowChain, window.from, window.to)}
                         done={() => d()}
@@ -387,13 +387,13 @@ function Level({
                     ))
                   }
                 >
-                  CDRs
+                  EDRs
                 </button>
                 <button
                   type="button"
                   className="la-act"
-                  title="Export this row's CDRs (CSV or Excel)"
-                  aria-label={`Export CDRs of ${label}`}
+                  title="Export this row's EDRs (CSV or Excel)"
+                  aria-label={`Export EDRs of ${label}`}
                   onClick={() =>
                     void ask<void>((d) => (
                       <RequestDialog
@@ -506,7 +506,7 @@ export function LiveAnalyticsPage() {
     rows: total.data
       ? `${total.data.total.toLocaleString("en-US")} ${levelLabel(settings.levels[0]!).toLowerCase()}s`
       : "",
-    shortcuts: "+ opens the next level · CDRs opens the messages of a row · times in UTC",
+    shortcuts: "+ opens the next level · EDRs opens the messages of a row · times in UTC",
   });
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
   const setRange = (k: Parameters<typeof presetRange>[0]) => setDraft({ ...draft, ...presetRange(k, reportToday) });
@@ -576,26 +576,34 @@ export function LiveAnalyticsPage() {
               Last month
             </button>
           </div>
-          <label className="field">
-            <span>Each day from</span>
-            <select value={draft.hourFrom} onChange={(e) => setDraft({ ...draft, hourFrom: Number(e.target.value) })}>
-              {HOURS.map((h) => (
-                <option key={h} value={h}>
-                  {String(h).padStart(2, "0")}:00
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>to</span>
-            <select value={draft.hourTo} onChange={(e) => setDraft({ ...draft, hourTo: Number(e.target.value) })}>
-              {HOURS.map((h) => (
-                <option key={h} value={h}>
-                  {String(h).padStart(2, "0")}:59
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="field">
+            <span>Each day</span>
+            <span className="la-hours">
+              <select
+                aria-label="Each day from"
+                value={draft.hourFrom}
+                onChange={(e) => setDraft({ ...draft, hourFrom: Number(e.target.value) })}
+              >
+                {HOURS.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+              –
+              <select
+                aria-label="Each day to"
+                value={draft.hourTo}
+                onChange={(e) => setDraft({ ...draft, hourTo: Number(e.target.value) })}
+              >
+                {HOURS.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}:59
+                  </option>
+                ))}
+              </select>
+            </span>
+          </div>
         </div>
         <div className="la-levels">
           <span className="muted small">Levels</span>
@@ -663,13 +671,22 @@ export function LiveAnalyticsPage() {
           </colgroup>
           <thead>
             <tr>
-              <th>{settings.levels.map(levelLabel).join(" › ")}</th>
+              <th className="la-th-name" title={settings.levels.map(levelLabel).join(" › ")}>
+                <span className="la-h1">{levelLabel(settings.levels[0]!)}</span>
+                <span className="la-h2">
+                  {settings.levels.length > 1 ? `› ${settings.levels.slice(1).map(levelLabel).join(" › ")}` : "\u00a0"}
+                </span>
+              </th>
               {COLUMNS.map((c) => (
                 <th key={c.metric} className="num" title={c.title}>
-                  {c.label}
+                  <span className="la-h1">{c.label}</span>
+                  <span className="la-h2">{c.sub ?? "\u00a0"}</span>
                 </th>
               ))}
-              <th>CDRs</th>
+              <th>
+                <span className="la-h1">EDRs</span>
+                <span className="la-h2">{"\u00a0"}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -695,7 +712,7 @@ export function LiveAnalyticsPage() {
                   className="la-act"
                   onClick={() =>
                     void ask<void>((d) => (
-                      <CdrWindow
+                      <EdrWindow
                         title="All traffic"
                         state={edrGridState([], window.from, window.to)}
                         done={() => d()}
@@ -703,7 +720,7 @@ export function LiveAnalyticsPage() {
                     ))
                   }
                 >
-                  CDRs
+                  EDRs
                 </button>
               </td>
             </tr>

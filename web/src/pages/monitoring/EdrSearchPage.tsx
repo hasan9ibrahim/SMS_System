@@ -28,6 +28,7 @@ import {
   type EdrGridRow,
 } from "./monitorModel";
 import { RequestDialog } from "./parts";
+import { DestinationTree } from "../rates/DestinationTree";
 
 const page = pageForPath("/monitoring/edr")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -44,6 +45,31 @@ export const fetchEdrs = (body: ListQuery): Promise<ListPage<EdrGridRow>> =>
 const uuidsOf = (ids: number[]) => ids.map((id) => seen.get(id)).filter((r): r is EdrGridRow => !!r);
 
 // ---------------------------------------------------------------- filter row
+
+/** Destinations of the search, picked in the country / network tree with select all (team trial round 1). */
+function DestinationsDialog({ initial, done }: { initial: string[]; done: (codes: string[] | null) => void }) {
+  const [picked, setPicked] = useState<string[]>(initial);
+  return (
+    <Modal
+      title="Destinations"
+      width={620}
+      onClose={() => done(null)}
+      footer={
+        <>
+          <span className="muted small fb-spacer">
+            {picked.length ? `${picked.length} network${picked.length === 1 ? "" : "s"}` : "All destinations"}
+          </span>
+          <Button onClick={() => done(null)}>Cancel</Button>
+          <Button variant="primary" onClick={() => done(picked)}>
+            Apply
+          </Button>
+        </>
+      }
+    >
+      <DestinationTree selected={picked} onChange={setPicked} height={380} />
+    </Modal>
+  );
+}
 
 function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
   const templates = useEdrTemplates();
@@ -97,6 +123,34 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
         />
         Final
       </label>
+      <input
+        key={`n${ids("dnid")}`}
+        className="edr-ids"
+        defaultValue={ids("dnid")}
+        placeholder="Numbers, comma separated"
+        aria-label="Receiver numbers"
+        title="Receiver numbers, exact (the quick search also takes several numbers or a customer name)"
+        onBlur={(e) => e.target.value !== ids("dnid") && setIds("dnid", e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && setIds("dnid", e.currentTarget.value)}
+      />
+      <Button
+        small
+        icon="globe"
+        className={state.columns.customerMccmnc ? "active" : ""}
+        onClick={async () => {
+          const c = state.columns.customerMccmnc;
+          const current = c?.values?.map(String) ?? (c?.value !== undefined ? [String(c.value)] : []);
+          const codes = await ask<string[]>((d) => <DestinationsDialog initial={current} done={d} />);
+          if (codes === null) return;
+          set("customerMccmnc", codes.length ? { field: "customerMccmnc", op: "in", values: codes } : null);
+        }}
+      >
+        {(() => {
+          const c = state.columns.customerMccmnc;
+          const n = c?.values?.length ?? (c?.value !== undefined ? 1 : 0);
+          return n ? `Destinations (${n})` : "Destinations";
+        })()}
+      </Button>
       <input
         key={`c${ids("customerMsgId")}`}
         className="edr-ids"

@@ -279,7 +279,8 @@ describe("visibility policies (§13.17)", { skip }, () => {
       "contacts",
     ];
     const body = Object.fromEntries(keys.filter((k) => k in full).map((k) => [k, full[k]]));
-    const vatBefore = (await db().query("SELECT vat_number FROM enterprises WHERE id = $1", [other])).rows[0].vat_number;
+    const vatBefore = (await db().query("SELECT vat_number FROM enterprises WHERE id = $1", [other])).rows[0]
+      .vat_number;
     const put = await call("PUT", `/enterprises/${other}`, { ...body, vatNumber: "REFUSED-EDIT" }, AM);
     assert.equal(put.statusCode, 403);
     check("updateEnterprise", put);

@@ -13987,10 +13987,11 @@ export type components = {
     SignalingCapturePage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["SignalingCaptureRow"][];
     };
+    /** @description Give a receiver number, or only a destination (mccmnc): the simulator then builds a test number from the network's dial code (team trial round 1). One of the two is needed. */
     RouteSimulatorInput: {
       customerTrunkId: components["schemas"]["Id"];
       senderId?: string;
-      receiver: string;
+      receiver?: string;
       /** @description Overrides the destination found from the number. */
       mccmnc?: string | null;
       sourceTon: number;

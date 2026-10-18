@@ -1035,7 +1035,19 @@ textarea.mono {
   display: grid;
   grid-template-columns: repeat(4, minmax(150px, 1fr));
   gap: 10px 14px;
-  align-items: end;
+  /* Top-aligned so a hint under one field never shifts the inputs of its row (team trial round 1). */
+  align-items: start;
+}
+.rs-form > .field > span:first-child {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.rs-form .segmented button {
+  padding: 1px 8px;
+  font-size: 12px;
 }
 .rs-trunk,
 .rs-text {
@@ -1050,6 +1062,7 @@ textarea.mono {
 }
 .rs-actions {
   grid-column: span 2;
+  align-self: end;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1195,4 +1208,22 @@ textarea.mono {
 .pick-with-list > :first-child {
   flex: 1;
   min-width: 0;
+}
+/* Simulator destinations: the search box sits where the receivers box is; the chosen ones list below. */
+.rs-receivers .multi-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rs-receivers .multi-pick > input {
+  order: 1;
+}
+.rs-receivers .multi-pick > .pick-list {
+  order: 2;
+}
+.rs-receivers .multi-pick > .chips {
+  order: 3;
+}
+.rs-receivers .multi-pick > .chips > .muted {
+  display: none;
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.38.0
+  version: 0.39.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23194,7 +23194,10 @@ components:
     RouteSimulatorInput:
       type: object
       additionalProperties: false
-      required: [customerTrunkId, receiver, sourceTon, sourceNpi, destTon, destNpi, dataCoding]
+      required: [customerTrunkId, sourceTon, sourceNpi, destTon, destNpi, dataCoding]
+      description: >-
+        Give a receiver number, or only a destination (mccmnc): the simulator then builds a test number from the
+        network's dial code (team trial round 1). One of the two is needed.
       properties:
         customerTrunkId:
           $ref: "#/components/schemas/Id"

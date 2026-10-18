@@ -360,7 +360,8 @@ export function archiveTransaction(request: FastifyRequest, reply: FastifyReply)
       table: "transactions",
       entityType: "transaction",
       archive: true,
-      note: gate.note ?? `Deleted TX-${id} ${(before.amount ?? 0).toFixed(2)} ${before.currency} (${before.enterprise})`,
+      note:
+        gate.note ?? `Deleted TX-${id} ${(before.amount ?? 0).toFixed(2)} ${before.currency} (${before.enterprise})`,
     });
     if ("reply" in r) return r.reply;
     return { record: await loadTransaction(pool, id), change: r.change };

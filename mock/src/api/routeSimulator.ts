@@ -21,15 +21,28 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       [b.customerTrunkId],
     );
     if (!tr[0]) return badInput(reply, [{ path: "/customerTrunkId", message: "unknown customer trunk" }]);
+    // Only a destination picked: a test number from the network's longest dial code (team trial round 1).
+    let receiverIn = b.receiver ?? "";
+    if (!receiverIn) {
+      if (!b.mccmnc) return badInput(reply, [{ path: "/receiver", message: "give a receiver or a destination" }]);
+      const { rows: dc } = await pool.query(
+        `SELECT d.prefix FROM dial_codes d JOIN mccmnc m ON m.id = d.mccmnc_id
+          WHERE m.mccmnc = $1 AND d.deleted_at IS NULL AND d.profile = 'All' ORDER BY length(d.prefix) DESC LIMIT 1`,
+        [b.mccmnc],
+      );
+      if (!dc[0]) return badInput(reply, [{ path: "/mccmnc", message: "no dial code for this destination" }]);
+      const prefix = String(dc[0].prefix);
+      receiverIn = prefix + "1234567890123".slice(0, Math.max(4, 12 - prefix.length));
+    }
     const translation = (await runTrunkRules(pool, "customer", b.customerTrunkId, {
       sender: b.senderId ?? "",
-      receiver: b.receiver,
+      receiver: receiverIn,
       text: b.text ?? "",
       senderTon: b.sourceTon,
       senderNpi: b.sourceNpi,
     }))!;
     const sender = translation.after.sender;
-    const receiver = translation.after.receiver.replace(/\D/g, "") || b.receiver;
+    const receiver = translation.after.receiver.replace(/\D/g, "") || receiverIn;
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(
       pool,

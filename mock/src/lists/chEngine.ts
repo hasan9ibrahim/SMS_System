@@ -46,6 +46,10 @@ export interface ChListDef<Row> {
   baseWhere?: string;
   columns: Record<string, ChColumn>;
   search: string[];
+  /** Columns a pasted list of numbers matches exactly (sender, receiver). */
+  searchNumbers?: string[];
+  /** Name columns the quick search also matches by name (customer, vendor). */
+  searchNames?: string[];
   idSql: string;
   mapRow: (row: Record<string, unknown>, names: NameMaps) => Row;
 }
@@ -222,6 +226,40 @@ function groupSql(
   return `(${parts.join(group.logic === "or" ? " OR " : " AND ")})`;
 }
 
+/**
+ * Quick search (team trial round 1). Several items separated by commas match any of them: a number
+ * (5+ digits) matches a sender or receiver exactly, any other text matches the search columns as before
+ * and, for lists with `searchNames`, the names of those columns (e.g. "acme" finds Acme's EDRs). One item
+ * keeps the contains-match on the search columns.
+ */
+async function searchSql(pool: pg.Pool, def: ChListDef<unknown>, search: string): Promise<string> {
+  const items = search
+    .split(/[,;\n]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, 500);
+  const many = items.length > 1;
+  const parts: string[] = [];
+  for (const item of items) {
+    const digits = item.replace(/[\s+()-]/g, "");
+    if (many && /^\d{5,20}$/.test(digits) && def.searchNumbers?.length) {
+      parts.push(`(${def.searchNumbers.map((f) => `${def.columns[f]!.sql} = ${lit(digits)}`).join(" OR ")})`);
+      continue;
+    }
+    const p = lit(searchPattern(item));
+    const or = def.search.map((f) => `toString(${def.columns[f]!.sql}) ILIKE ${p}`);
+    for (const key of def.searchNames ?? []) {
+      const col = def.columns[key];
+      const field = def.fields.fields.find((f) => f.field === key);
+      if (!col?.names || !field || /^\d+$/.test(item)) continue;
+      const ids = await idsMatching(pool, col.names, { field: key, op: "like", value: item }, field);
+      if (ids.length) or.push(`${col.names.idSql} IN (${ids.slice(0, 5000).join(",")})`);
+    }
+    parts.push(`(${or.join(" OR ")})`);
+  }
+  return parts.length ? `(${parts.join(" OR ")})` : "1";
+}
+
 /** WHERE clause (without the keyword) for a query; names are resolved on PostgreSQL first. */
 export async function chWhere(pool: pg.Pool, def: ChListDef<unknown>, query: Pick<ListQuery, "filter" | "search">) {
   const byName = new Map(def.fields.fields.map((f) => [f.field, f]));
@@ -230,10 +268,7 @@ export async function chWhere(pool: pg.Pool, def: ChListDef<unknown>, query: Pic
   const where: string[] = [];
   if (def.baseWhere) where.push(def.baseWhere);
   if (query.filter) where.push(groupSql(query.filter, def, byName, resolved));
-  if (query.search?.trim()) {
-    const p = lit(searchPattern(query.search.trim()));
-    where.push(`(${def.search.map((f) => `toString(${def.columns[f]!.sql}) ILIKE ${p}`).join(" OR ")})`);
-  }
+  if (query.search?.trim()) where.push(await searchSql(pool, def, query.search.trim()));
   return where.length ? where.join(" AND ") : "1";
 }
 

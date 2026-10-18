@@ -444,3 +444,56 @@
 .la-detail .la-row {
   cursor: pointer;
 }
+
+/* Live analytics alignment (team trial round 1): two even header lines, chips as tall as the inputs. */
+.la-grid th .la-h1,
+.la-grid th .la-h2 {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.la-grid th .la-h2 {
+  font-weight: 500;
+  font-size: 11.5px;
+}
+.la-presets {
+  padding-bottom: 0;
+}
+.la-presets .la-chip {
+  height: 32px;
+  padding: 0 10px;
+}
+.la-hours {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.la-page .page-actions {
+  align-items: center;
+}
+.la-page .page-actions .field.inline > span {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.la-grid th {
+  font-size: 11.5px;
+}
+.la-grid td {
+  font-size: 12.5px;
+}
+.la-col-name {
+  width: 13%;
+}
+.la-hours select {
+  height: 32px;
+}
+.la-grid th {
+  padding: 6px 3px;
+}
+.la-col-name {
+  width: 11.5%;
+}
+.la-grid th .la-h1 {
+  text-overflow: clip;
+}

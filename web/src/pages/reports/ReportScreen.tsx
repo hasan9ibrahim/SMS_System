@@ -37,6 +37,7 @@ import {
   isDimension,
   LOWER_IS_BETTER,
   PERIODS,
+  periodWindow,
   splitVisible,
   TIMEZONES,
   visibleOf,
@@ -198,43 +199,86 @@ function GroupBy({
   );
 }
 
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
 function SettingsBar({ settings, set }: { settings: Settings; set: (s: Settings) => void }) {
+  const win = periodWindow(settings);
   return (
     <div className="rp-settings rp-master-settings">
+      {/* Like the Enterprise report (team trial round 1): From / To always shown, quick periods as chips,
+          and an hour range applied to every day of the period. */}
       <label className="small">
-        Period
+        From
+        <input
+          type="datetime-local"
+          value={toLocal(win.from)}
+          onChange={(e) =>
+            e.target.value && set({ ...settings, period: "custom", from: fromLocal(e.target.value), to: win.to })
+          }
+        />
+      </label>
+      <label className="small">
+        to
+        <input
+          type="datetime-local"
+          value={toLocal(win.to)}
+          onChange={(e) =>
+            e.target.value && set({ ...settings, period: "custom", from: win.from, to: fromLocal(e.target.value) })
+          }
+        />
+      </label>
+      <span className="muted small">UTC</span>
+      <div className="rp-quick" role="group" aria-label="Quick periods">
+        {PERIODS.filter((p) => p.value !== "custom").map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            className={`btn btn-ghost btn-sm${settings.period === p.value ? " on" : ""}`}
+            aria-pressed={settings.period === p.value}
+            onClick={() => set({ ...settings, period: p.value, from: null, to: null })}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <label className="small" title="Only these hours, every day of the period (wraps past midnight)">
+        Each day
         <select
-          value={settings.period}
-          onChange={(e) => set({ ...settings, period: e.target.value as Settings["period"] })}
+          value={settings.hourFrom ?? 0}
+          onChange={(e) => {
+            const hourFrom = Number(e.target.value);
+            const hourTo = settings.hourTo ?? 23;
+            set({
+              ...settings,
+              ...(hourFrom === 0 && hourTo === 23 ? { hourFrom: null, hourTo: null } : { hourFrom, hourTo }),
+            });
+          }}
         >
-          {PERIODS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
+          {HOURS.map((h) => (
+            <option key={h} value={h}>
+              {String(h).padStart(2, "0")}:00
+            </option>
+          ))}
+        </select>
+        –
+        <select
+          value={settings.hourTo ?? 23}
+          onChange={(e) => {
+            const hourTo = Number(e.target.value);
+            const hourFrom = settings.hourFrom ?? 0;
+            set({
+              ...settings,
+              ...(hourFrom === 0 && hourTo === 23 ? { hourFrom: null, hourTo: null } : { hourFrom, hourTo }),
+            });
+          }}
+        >
+          {HOURS.map((h) => (
+            <option key={h} value={h}>
+              {String(h).padStart(2, "0")}:59
             </option>
           ))}
         </select>
       </label>
-      {settings.period === "custom" && (
-        <>
-          <label className="small">
-            From *
-            <input
-              type="datetime-local"
-              value={toLocal(settings.from)}
-              onChange={(e) => set({ ...settings, from: fromLocal(e.target.value) })}
-            />
-          </label>
-          <label className="small">
-            To *
-            <input
-              type="datetime-local"
-              value={toLocal(settings.to)}
-              onChange={(e) => set({ ...settings, to: fromLocal(e.target.value) })}
-            />
-          </label>
-          <span className="muted small">UTC</span>
-        </>
-      )}
       <label className="small">
         Timezone
         <select value={settings.timezone} onChange={(e) => set({ ...settings, timezone: e.target.value })}>

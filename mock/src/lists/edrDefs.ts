@@ -144,6 +144,8 @@ export const edrList: ChListDef<EdrRow> = {
   table: "edr",
   columns: EDR_COLUMNS,
   search: ["senderId", "dnid", "customerMsgId", "vendorMsgId"],
+  searchNumbers: ["senderId", "dnid"],
+  searchNames: ["customerEnterprise", "customerTrunk", "vendorEnterprise", "vendorTrunk"],
   idSql: "edr_id",
   mapRow: (r, names) => edrValues(edrFields.fields, EDR_COLUMNS, r, names) as unknown as EdrRow,
 };
@@ -158,6 +160,8 @@ export const failedEdrList: ChListDef<FailedEdrRow> = {
   baseWhere: "v_trunk_id = 0 AND is_submit_success = 0",
   columns: FAILED_COLUMNS,
   search: ["senderId", "dnid", "customerMsgId", "customerIp"],
+  searchNumbers: ["senderId", "dnid"],
+  searchNames: ["customerEnterprise", "customerTrunk"],
   idSql: "edr_id",
   mapRow: (r, names) => edrValues(failedFields.fields, FAILED_COLUMNS, r, names) as unknown as FailedEdrRow,
 };

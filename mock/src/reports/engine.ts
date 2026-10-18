@@ -327,7 +327,6 @@ function metricDef(seconds: number): ChListDef<unknown> {
   };
 }
 
-
 /** Every day of the period, only hourFrom..hourTo (inclusive, report time zone; wraps past midnight). */
 export function hourSql(q: Pick<MasterReportQuery, "hourFrom" | "hourTo">, tz: string): string {
   const from = q.hourFrom ?? null;
@@ -347,7 +346,13 @@ const NAMED_TEXT: Partial<Record<string, "country" | "mccmnc" | "mcc">> = {
   vendorCountry: "mcc",
 };
 const likeToRegex = (pattern: string) =>
-  new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`, "i");
+  new RegExp(
+    `^${pattern
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/%/g, ".*")
+      .replace(/_/g, ".")}$`,
+    "i",
+  );
 
 export async function namedToCodes(pool: pg.Pool, group: FilterGroup): Promise<FilterGroup> {
   const lk = await loadLookups(pool);
@@ -359,7 +364,9 @@ export async function namedToCodes(pool: pg.Pool, group: FilterGroup): Promise<F
     const re = node.op === "like" || node.op === "not_like" ? likeToRegex(text) : null;
     const labels = kind === "country" ? lk.country : kind === "mcc" ? lk.mcc : lk.mccmnc;
     const hit = (code: string, label: string) =>
-      re ? re.test(code) || re.test(label) || re.test(`${label} (${code})`) : code.toLowerCase() === text.toLowerCase() || label.toLowerCase() === text.toLowerCase();
+      re
+        ? re.test(code) || re.test(label) || re.test(`${label} (${code})`)
+        : code.toLowerCase() === text.toLowerCase() || label.toLowerCase() === text.toLowerCase();
     const codes = [...labels.entries()].filter(([code, label]) => hit(code, label)).map(([code]) => code);
     const negated = node.op === "not_like" || node.op === "neq";
     return { field: node.field, op: negated ? "not_in" : "in", values: codes.length ? codes : ["\u0000none"] };

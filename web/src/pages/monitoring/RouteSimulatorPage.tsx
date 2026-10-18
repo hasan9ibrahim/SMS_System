@@ -16,6 +16,7 @@ import { usePageStatus } from "../../shell/tabContext";
 import { toast } from "../../ui/feedback";
 import { Button, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
+import { DestinationPick } from "../routing/pickers";
 import { messageEncoding, msgStatusTone, needsUcs2 } from "./monitorModel";
 
 const page = pageForPath("/routing/simulator")!;
@@ -199,6 +200,9 @@ export function RouteSimulatorPage() {
   const [trunkId, setTrunkId] = useState<number | null>(null);
   const [sender, setSender] = useState("INFO");
   const [receivers, setReceivers] = useState("447700900123");
+  // Send to numbers, or just pick destinations: a test number is made from each network's dial code.
+  const [mode, setMode] = useState<"numbers" | "destinations">("numbers");
+  const [dests, setDests] = useState<string[]>([]);
   const [mccmnc, setMccmnc] = useState("");
   const [srcTon, setSrcTon] = useState(5);
   const [srcNpi, setSrcNpi] = useState(0);
@@ -218,6 +222,10 @@ export function RouteSimulatorPage() {
     shortcuts: "Enter runs",
   });
   const list = parseReceivers(receivers);
+  const runs =
+    mode === "numbers"
+      ? list.map((r) => ({ key: r, receiver: r, mccmnc: null }))
+      : dests.map((d) => ({ key: d, receiver: null, mccmnc: d }));
   // Auto values: coding from the text, TON / NPI from the sender and the first receiver.
   const autoSrc = autoTonNpi(sender);
   const autoDst = autoTonNpi(list[0] ?? "");
@@ -227,29 +235,34 @@ export function RouteSimulatorPage() {
   const enc = messageEncoding(text, effCoding);
   const go = async () => {
     if (!trunkId) return toast({ tone: "warning", message: "Choose the customer trunk" });
-    if (!list.length) return toast({ tone: "warning", message: "Enter at least one receiver" });
-    if (list.length > 20) return toast({ tone: "warning", message: "At most 20 receivers at once" });
+    if (!runs.length)
+      return toast({
+        tone: "warning",
+        message: mode === "numbers" ? "Enter at least one receiver" : "Pick at least one destination",
+      });
+    if (runs.length > 20) return toast({ tone: "warning", message: "At most 20 at once" });
     setBusy(true);
     const out: typeof results = [];
-    for (const receiver of list) {
+    for (const run of runs) {
+      const receiver = run.receiver ?? "";
       try {
         const r = await runRouteSimulator({
           customerTrunkId: trunkId,
           senderId: sender,
-          receiver,
-          mccmnc: mccmnc.trim() || null,
+          ...(run.receiver ? { receiver: run.receiver } : {}),
+          mccmnc: run.mccmnc ?? (mccmnc.trim() || null),
           sourceTon: effSrc.ton,
           sourceNpi: effSrc.npi,
-          destTon: touched.dst ? dstTon : autoTonNpi(receiver).ton,
-          destNpi: touched.dst ? dstNpi : autoTonNpi(receiver).npi,
+          destTon: touched.dst ? dstTon : autoTonNpi(receiver || "447000000000").ton,
+          destNpi: touched.dst ? dstNpi : autoTonNpi(receiver || "447000000000").npi,
           vendorTrunkId: vendorId,
           text,
           dataCoding: effCoding,
           testSms,
         });
-        out.push({ receiver, r });
+        out.push({ receiver: run.key, r });
       } catch (e) {
-        out.push({ receiver, r: null, error: problemText(e) });
+        out.push({ receiver: run.key, r: null, error: problemText(e) });
       }
       setResults([...out]);
     }
@@ -300,18 +313,44 @@ export function RouteSimulatorPage() {
           <span>Sender ID</span>
           <input value={sender} maxLength={20} onChange={(e) => setSender(e.target.value)} />
         </label>
-        <label className="field rs-receivers">
-          <span>Receiver IDs *</span>
-          <input
-            value={receivers}
-            maxLength={400}
-            placeholder="447700900123, 33612345678"
-            onChange={(e) => setReceivers(e.target.value)}
-          />
-          <span className="muted small">
-            {list.length > 1 ? `${list.length} receivers` : "Comma-separated, up to 20"}
+        <div className="field rs-receivers">
+          <span>
+            Send to *
+            <span className="segmented" role="radiogroup" aria-label="Send to">
+              {(["numbers", "destinations"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === m}
+                  className={mode === m ? "on" : ""}
+                  onClick={() => setMode(m)}
+                >
+                  {m === "numbers" ? "Numbers" : "Destination"}
+                </button>
+              ))}
+            </span>
           </span>
-        </label>
+          {mode === "numbers" ? (
+            <input
+              value={receivers}
+              maxLength={400}
+              placeholder="447700900123, 33612345678"
+              aria-label="Receiver IDs"
+              title="Comma-separated, up to 20"
+              onChange={(e) => setReceivers(e.target.value)}
+            />
+          ) : (
+            <DestinationPick value={dests} onChange={setDests} />
+          )}
+          <span className="muted small">
+            {mode === "numbers"
+              ? list.length > 1
+                ? `${list.length} receivers`
+                : "Comma-separated, up to 20"
+              : "Country or network; a test number is made from its dial code"}
+          </span>
+        </div>
         <label className="field">
           <span>MCCMNC</span>
           <input
@@ -393,7 +432,7 @@ export function RouteSimulatorPage() {
             </button>
           )}
           <Button type="submit" variant="primary" icon="play" disabled={busy}>
-            Go{list.length > 1 ? ` (${list.length})` : ""}
+            Go{runs.length > 1 ? ` (${runs.length})` : ""}
           </Button>
         </div>
       </form>

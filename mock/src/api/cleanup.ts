@@ -1236,7 +1236,8 @@ export function checkDuplicate(request: FastifyRequest, reply: FastifyReply) {
           (x.senderPattern ?? null) === (r.senderPattern ?? null) &&
           (x.receiverPattern ?? null) === (r.receiverPattern ?? null);
         if (!same) continue;
-        const sameVendors = x.routeType === (r.routeType ?? "static") && vendors(x.vendors) === vendors(r.vendors ?? []);
+        const sameVendors =
+          x.routeType === (r.routeType ?? "static") && vendors(x.vendors) === vendors(r.vendors ?? []);
         matches.push({
           id: x.id,
           name: x.name,

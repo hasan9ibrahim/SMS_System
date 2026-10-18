@@ -31,35 +31,39 @@ export type Fmt = "int" | "pct" | "money" | "rate" | "sec";
 export interface Column {
   metric: ReportMetric;
   label: string;
+  /** Second header line (side or unit), so every header is two even lines (team trial round 1). */
+  sub?: string;
   title: string;
   fmt: Fmt;
 }
-/** Every column of the old platform's Analytics Report, plus Attempts and the two DLRs. */
+/**
+ * The old platform's Analytics Report columns, plus Attempts and the two DLRs. Success (the same as
+ * Submitted) and Reported were dropped at the team's request (trial round 1).
+ */
 export const COLUMNS: Column[] = [
   { metric: "attempts", label: "Attempts", title: "Messages received from customers", fmt: "int" },
-  { metric: "successful", label: "Success", title: "Accepted (submit_sm_resp OK to the customer)", fmt: "int" },
-  { metric: "submitted", label: "Submitted", title: "Sent to a vendor", fmt: "int" },
-  { metric: "billableCustomer", label: "Billable (C)", title: "Billable to the customer", fmt: "int" },
-  { metric: "billableVendor", label: "Billable (V)", title: "Billable by the vendor", fmt: "int" },
-  { metric: "asr", label: "ASR %", title: "Accepted / attempts", fmt: "pct" },
+  { metric: "submitted", label: "Submitted", sub: "to vendor", title: "Sent to a vendor", fmt: "int" },
+  { metric: "billableCustomer", label: "Billable", sub: "(C)", title: "Billable to the customer", fmt: "int" },
+  { metric: "billableVendor", label: "Billable", sub: "(V)", title: "Billable by the vendor", fmt: "int" },
+  { metric: "asr", label: "ASR", sub: "%", title: "Accepted / attempts", fmt: "pct" },
   {
     metric: "dlrCustomer",
-    label: "DLR (c) %",
+    label: "DLR (c)",
+    sub: "%",
     title: "Delivered as reported to the customer (the receipts we send)",
     fmt: "pct",
   },
-  { metric: "dlrVendor", label: "DLR (v) %", title: "Delivered as reported by the vendor", fmt: "pct" },
+  { metric: "dlrVendor", label: "DLR (v)", sub: "%", title: "Delivered as reported by the vendor", fmt: "pct" },
   { metric: "margin", label: "Margin", title: "Revenue − cost (platform currency)", fmt: "money" },
   { metric: "revenue", label: "Revenue", title: "Customer charges (platform currency)", fmt: "money" },
   { metric: "cost", label: "Cost", title: "Vendor charges (platform currency)", fmt: "money" },
   { metric: "delivered", label: "Delivered", title: "Delivery receipts DELIVRD from vendors", fmt: "int" },
-  { metric: "reportedVendor", label: "Reported", title: "Any final receipt from the vendor", fmt: "int" },
-  { metric: "avgRateCustomer", label: "Rate (C)", title: "Average customer rate per message", fmt: "rate" },
-  { metric: "avgRateVendor", label: "Rate (V)", title: "Average vendor rate per message", fmt: "rate" },
-  { metric: "deliveryDelayS", label: "Delay s", title: "Average delivery delay in seconds", fmt: "sec" },
+  { metric: "avgRateCustomer", label: "Rate", sub: "(C)", title: "Average customer rate per message", fmt: "rate" },
+  { metric: "avgRateVendor", label: "Rate", sub: "(V)", title: "Average vendor rate per message", fmt: "rate" },
+  { metric: "deliveryDelayS", label: "Delay", sub: "sec", title: "Average delivery delay in seconds", fmt: "sec" },
   { metric: "hlrTotal", label: "HLR", title: "HLR lookups", fmt: "int" },
-  { metric: "hlrPorted", label: "HLR ported", title: "Lookups that found the number ported", fmt: "int" },
-  { metric: "hlrCost", label: "HLR cost", title: "HLR cost (platform currency)", fmt: "money" },
+  { metric: "hlrPorted", label: "HLR", sub: "ported", title: "Lookups that found the number ported", fmt: "int" },
+  { metric: "hlrCost", label: "HLR", sub: "cost", title: "HLR cost (platform currency)", fmt: "money" },
 ];
 export const METRICS = COLUMNS.map((c) => c.metric);
 
@@ -70,8 +74,11 @@ export function fmt(v: number | null | undefined, kind: Fmt): string {
       return Math.round(v).toLocaleString("en-US");
     case "pct":
       return v.toFixed(2);
-    case "money":
-      return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    case "money": {
+      // Whole units from 1,000 up, so every column fits without scrolling (team trial round 1).
+      const d = Math.abs(v) >= 1000 ? 0 : 2;
+      return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+    }
     case "rate":
       return v.toFixed(5);
     case "sec":

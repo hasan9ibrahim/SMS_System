@@ -50,7 +50,10 @@ export function splitVisible(visible: string[]): { groupBy: ReportDimension[]; m
 }
 export const visibleOf = (s: Pick<MasterReportSettings, "groupBy" | "metrics">) => [...s.groupBy, ...s.metrics];
 
-export type Settings = Pick<MasterReportSettings, "period" | "from" | "to" | "timezone" | "msgType" | "compare">;
+export type Settings = Pick<
+  MasterReportSettings,
+  "period" | "from" | "to" | "timezone" | "msgType" | "compare" | "hourFrom" | "hourTo"
+>;
 export const defaultSettings = (s?: Partial<MasterReportSettings>): Settings => ({
   period: s?.period ?? "yesterday",
   from: s?.from ?? null,
@@ -58,6 +61,8 @@ export const defaultSettings = (s?: Partial<MasterReportSettings>): Settings => 
   timezone: s?.timezone ?? "UTC",
   msgType: s?.msgType ?? null,
   compare: s?.compare ?? "none",
+  hourFrom: s?.hourFrom ?? null,
+  hourTo: s?.hourTo ?? null,
 });
 export const encodeSettings = (s: Settings) => btoa(JSON.stringify(s)).replace(/=+$/, "");
 export function decodeSettings(raw: string | null, fallback: Settings): Settings {
@@ -204,6 +209,42 @@ export const PERIODS: { value: ReportPeriod; label: string }[] = [
   { value: "last_month", label: "Last month" },
   { value: "custom", label: "Custom" },
 ];
+
+/**
+ * The window a period stands for, in UTC, to show in the From / To boxes (team trial round 1). A custom
+ * period is its own from / to; the server works the presets out in the report's time zone.
+ */
+export function periodWindow(
+  s: Pick<Settings, "period" | "from" | "to">,
+  now = new Date(),
+): { from: string | null; to: string | null } {
+  if (s.period === "custom") return { from: s.from ?? null, to: s.to ?? null };
+  const DAY = 86_400_000;
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const monday = today - ((new Date(today).getUTCDay() + 6) % 7) * DAY;
+  const month = (offset: number) => Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1);
+  const iso = (ms: number) => new Date(ms).toISOString();
+  switch (s.period) {
+    case "today":
+      return { from: iso(today), to: iso(today + DAY) };
+    case "yesterday":
+      return { from: iso(today - DAY), to: iso(today) };
+    case "last_24_hours":
+      return { from: iso(now.getTime() - DAY), to: iso(now.getTime()) };
+    case "last_7_days":
+      return { from: iso(today - 6 * DAY), to: iso(today + DAY) };
+    case "this_week":
+      return { from: iso(monday), to: iso(monday + 7 * DAY) };
+    case "last_week":
+      return { from: iso(monday - 7 * DAY), to: iso(monday) };
+    case "this_month":
+      return { from: iso(month(0)), to: iso(month(1)) };
+    case "last_month":
+      return { from: iso(month(-1)), to: iso(month(0)) };
+    default:
+      return { from: null, to: null };
+  }
+}
 
 /** The 31 zones of the §10 Timezone picker: whole hours as Etc/GMT (sign reversed), plus the half-hour zones. */
 export const TIMEZONES: { value: string; label: string }[] = [
