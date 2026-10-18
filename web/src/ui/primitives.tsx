@@ -120,6 +120,8 @@ export interface MenuItem {
   hint?: string;
   disabled?: boolean;
   danger?: boolean;
+  /** The page's main record action: shown in the action bar next to Clone and Delete, not under More. */
+  main?: boolean;
   onSelect: () => void;
 }
 

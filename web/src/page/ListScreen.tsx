@@ -318,6 +318,82 @@ function RowMenu({ items }: { items: () => (MenuItem | "separator")[] }) {
   );
 }
 
+/**
+ * Record actions next to New (team trial round 1): Clone, Delete and the page's main action in sight,
+ * the rest under More; greyed while nothing (or more than one row) is selected or when the action does
+ * not apply. A double-click or Enter on a row opens it; the "⋯" row menu offers the same actions.
+ */
+function RecordActionBar<Row extends { id: number }>({
+  target,
+  multi,
+  template,
+  rowActions,
+}: {
+  target: Row | null;
+  multi: boolean;
+  template: Row | null;
+  rowActions?: (row: Row) => (MenuItem | "separator")[];
+}) {
+  // Labels come from the selected row, or from any loaded row while nothing is selected.
+  const items = (rowActions && (target ?? template) ? rowActions((target ?? template)!) : [])
+    .filter((it): it is MenuItem => it !== "separator")
+    // Opening is a double-click or Enter on the row, so Open is left out of the bar.
+    .filter((it) => !/^open\b/i.test(it.label));
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  if (!items.length) return null;
+  const why = multi ? "Select one row (Bulk edit acts on several)" : "Select a row first";
+  // In sight: Clone, Delete and the page's main action (marked `main`, else the first other one);
+  // everything else goes under More (team trial round 1).
+  const isClone = (it: MenuItem) => /^(clone|duplicate|copy)\b/i.test(it.label);
+  const isDelete = (it: MenuItem) => it.danger === true || /^(delete|archive|restore)\b/i.test(it.label);
+  const clone = items.filter(isClone).slice(0, 1);
+  const del = items.filter(isDelete).slice(0, 1);
+  const others = items.filter((it) => !clone.includes(it) && !del.includes(it));
+  const main = others.filter((it) => it.main).slice(0, 2);
+  if (!main.length && others[0]) main.push(others[0]);
+  const rest = others.filter((it) => !main.includes(it));
+  const button = (it: MenuItem) => (
+    <button
+      key={it.label}
+      type="button"
+      className={`ra-btn${it.danger ? " danger" : ""}`}
+      disabled={!target || it.disabled}
+      title={!target ? why : (it.hint ?? it.label)}
+      onClick={() => target && !it.disabled && it.onSelect()}
+    >
+      {it.icon && <Icon name={it.icon} size={13} />}
+      <span>{it.label.replace(/…$/, "")}</span>
+    </button>
+  );
+  return (
+    <span className="record-actions" role="group" aria-label="Actions on the selected row">
+      {clone.map(button)}
+      {del.map(button)}
+      {main.map(button)}
+      {rest.length > 0 && (
+        <>
+          <button
+            ref={moreRef}
+            type="button"
+            className="ra-btn"
+            disabled={!target}
+            title={target ? "More actions" : why}
+            aria-haspopup="menu"
+            onClick={() => setMoreOpen((o) => !o)}
+          >
+            <span>More</span>
+            <Icon name="chevronDown" size={12} />
+          </button>
+          <Popover anchor={moreRef} open={moreOpen && !!target} onClose={() => setMoreOpen(false)} align="end">
+            <Menu items={rest} onClose={() => setMoreOpen(false)} />
+          </Popover>
+        </>
+      )}
+    </span>
+  );
+}
+
 export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Row>) {
   const {
     list,
@@ -479,6 +555,20 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               >
                 {primary.label}
               </Button>
+            )}
+            {!noSelection && (
+              <RecordActionBar<Row>
+                target={
+                  selected.size === 1
+                    ? (rows.find((r) => selected.has(r.id)) ?? null)
+                    : selected.size === 0
+                      ? activeRow
+                      : null
+                }
+                multi={selected.size > 1}
+                template={rows[0] ?? null}
+                {...(rowActions ? { rowActions } : {})}
+              />
             )}
           </>
         }

@@ -762,6 +762,58 @@ a.btn {
   color: var(--color-accent);
   font-weight: 600;
 }
+/* Actions on the selected row, next to New (team trial round 1): one joined, quiet group. */
+.record-actions {
+  display: inline-flex;
+  align-items: stretch;
+  height: 30px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  overflow: hidden;
+}
+.ra-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 0;
+  border-left: var(--border-width) solid var(--color-border);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ra-btn:first-child {
+  border-left: 0;
+}
+.ra-btn svg {
+  color: var(--color-text-secondary);
+}
+.ra-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+.ra-btn:disabled {
+  color: var(--color-text-secondary);
+  opacity: 0.45;
+  cursor: default;
+}
+.ra-btn.danger:not(:disabled),
+.ra-btn.danger:not(:disabled) svg {
+  color: var(--color-error);
+}
+/* Narrow screens: icons only, the label stays in the tooltip. */
+@media (max-width: 1400px) {
+  .ra-btn > span {
+    display: none;
+  }
+  .ra-btn:has(> svg:only-child),
+  .ra-btn {
+    padding: 0 8px;
+  }
+}
 .page-actions {
   margin-left: auto;
   display: flex;
