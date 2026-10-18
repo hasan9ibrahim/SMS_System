@@ -16,6 +16,9 @@ export function SystemClock() {
   const fmt = (opts: Intl.DateTimeFormatOptions, zone = tz) =>
     new Intl.DateTimeFormat("en-GB", { timeZone: zone, ...opts }).format(at);
   const time = fmt({ hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  // The date in the platform time zone too, so it turns over at the platform's midnight.
+  const weekday = fmt({ weekday: "short" });
+  const date = fmt({ day: "numeric", month: "short" });
   const utc = fmt({ hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }, "UTC");
   return (
     <span
@@ -26,6 +29,10 @@ export function SystemClock() {
           : `System time (${tz})${tz === "UTC" ? "" : ` · UTC ${utc}`} · ${fmt({ dateStyle: "full" })}`
       }
     >
+      <span className="top-clock-date">
+        <span className="top-clock-weekday">{weekday} </span>
+        {date}
+      </span>
       <span className="num">{time}</span>
       <span className="top-clock-tz">{tz === "UTC" ? "UTC" : tz.split("/").pop()!.replace(/_/g, " ")}</span>
     </span>

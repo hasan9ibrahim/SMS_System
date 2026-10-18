@@ -372,7 +372,7 @@ a.btn {
   border-color: color-mix(in srgb, #ffffff 18%, transparent);
 }
 /* Narrower screens: the search shrinks to its icon and shortcut so the whole menu fits. */
-@media (max-width: 1500px) {
+@media (max-width: 1700px) {
   .jump {
     min-width: 0;
   }
@@ -385,7 +385,14 @@ a.btn {
   .menu-top {
     padding: 0 7px;
   }
-  .top-clock-tz {
+  .top-clock-tz,
+  .top-clock-weekday {
+    display: none;
+  }
+}
+/* Under 1400 px the logo mark alone leaves room for the full menu and the date. */
+@media (max-width: 1400px) {
+  .logo > span:not(.logo-mark) {
     display: none;
   }
 }
@@ -410,6 +417,10 @@ a.btn {
 }
 .top-clock .num {
   font-variant-numeric: tabular-nums;
+}
+.top-clock-date {
+  color: var(--menu-text);
+  font-weight: 500;
 }
 .top-clock-tz {
   color: var(--menu-text-dim);
