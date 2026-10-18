@@ -184,7 +184,7 @@ export const topics: HelpTopic[] = [
     group: "Getting started",
     summary:
       "Every page uses the same layout: top menu bar, tab strip, page header, filter chips, grid, detail panel and status bar.",
-    keywords: ["screen", "layout", "header", "status bar", "detail panel", "toolbar", "menu bar", "back button"],
+    keywords: ["screen", "layout", "header", "status bar", "detail panel", "toolbar", "menu bar", "back button", "action bar", "clone", "delete", "more"],
     sections: [
       {
         id: "overview",
@@ -234,6 +234,25 @@ export const topics: HelpTopic[] = [
               "**Page title** — on record pages it can be a picker to switch to another record.",
               "**Sibling links** — the other pages of the same menu as small links; the current one is highlighted. Ctrl-click or middle-click opens one in a new tab.",
               "**Actions** on the right — usually **Undo**, **History**, **Export** and the page's main action. The main action (for example **Add rule**) is the only filled, coloured button on the page.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "action-bar",
+        title: "Record action bar (next to New)",
+        blocks: [
+          {
+            kind: "text",
+            text: "On list pages a small group of buttons sits right after the page's **New** button. It acts on the row you selected: **Clone**, **Delete** (or **Restore** for an archived row) and the page's main record action, such as **Edit**. Every other action for that record is under **More ▾**.",
+          },
+          {
+            kind: "list",
+            items: [
+              "The buttons are **greyed** until you click or tick one row. A greyed action that does not apply to the selected row shows why when you hover it (for example a wrong status or a missing permission).",
+              "With several rows ticked the bar is greyed too; use the bulk actions bar for several rows.",
+              "There is no Open button: **double-click** a row (or press **Enter**) to open it.",
+              "On narrow screens the buttons show only their icons; hover one to see its name.",
             ],
           },
         ],
