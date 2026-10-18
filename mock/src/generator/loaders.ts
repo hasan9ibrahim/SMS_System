@@ -45,6 +45,7 @@ export const TABLE_ORDER = [
   "number_lists",
   "number_list_entries",
   "route_rule_groups",
+  "lcr_profiles",
   "route_rules",
   "route_rule_vendors",
   "route_rule_whitelists",

@@ -10,6 +10,7 @@ import { WeightedPicker, type Rng } from "./rng.js";
 import { json, type TableSink } from "./sink.js";
 import { syllableWord } from "./names.js";
 import { usersOf } from "./admin.js";
+import { generateLcrProfiles, lcrProfileFor } from "./lcrProfiles.js";
 import {
   DAY,
   rulesForTrunk,
@@ -28,6 +29,7 @@ import type { Profile } from "./profiles.js";
 
 export async function generateRules(world: World, rng: Rng, sink: TableSink, profile: Profile): Promise<void> {
   await generateNumberLists(world, rng, sink, profile);
+  await generateLcrProfiles(world, sink); // §13.23: fixed samples, no random draws
   await generateRouteRules(world, rng, sink, profile);
   await generateTranslationRules(world, rng, sink, profile);
   await generateHlr(world, rng, sink, profile);
@@ -248,6 +250,7 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       vendor_category_ids: r.vendorCategoryIds,
       vendor_trunk_mode: "all",
       vendor_trunk_ids: [],
+      lcr_profile_id: r.routeType === "dynamic" ? lcrProfileFor(world, r.id, r.categoryIds) : null,
       max_route_level: Math.max(1, ...r.vendors.map((v) => v.level)),
       margin: r.margin,
       qbr_formula: r.routeType === "qbr" ? "ASR*0.4 + DLR*0.5 - ADD*0.1" : null,
