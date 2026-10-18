@@ -438,7 +438,19 @@ export function RouteSimulatorPage() {
       </form>
       {results.map((x) => (
         <section key={x.receiver} className="rs-one" aria-label={`Result for ${x.receiver}`}>
-          {results.length > 1 && <h2 className="rs-receiver">{x.receiver}</h2>}
+          {results.length > 1 && (
+            <h2 className="rs-receiver">
+              {x.r && x.r.destination ? (
+                // Country and network first, then the MCCMNC (team trial round 1); a number keeps its number in front.
+                <>
+                  {x.r.mccmnc === x.receiver ? "" : `${x.receiver} · `}
+                  {x.r.destination} <span className="num muted">{x.r.mccmnc}</span>
+                </>
+              ) : (
+                x.receiver
+              )}
+            </h2>
+          )}
           {x.r ? <Result r={x.r} /> : <p className="error-text">{x.error}</p>}
         </section>
       ))}
