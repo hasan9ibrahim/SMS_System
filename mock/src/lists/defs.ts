@@ -1299,6 +1299,23 @@ const appliesToSql = `COALESCE((SELECT string_agg(CASE WHEN g.target_type = 'all
       ORDER BY g.trunk_kind, array_position(ARRAY['all','category','enterprise','trunk'], g.target_type))
     FROM (SELECT target_type, trunk_kind, count(*) AS n FROM translation_rule_targets
            WHERE translation_rule_id = tr.id GROUP BY target_type, trunk_kind) g), 'Not assigned')`;
+/** A translation rule's MCCMNC codes by name, in order (team trial round 1). */
+const trMccmncNames = `ARRAY(SELECT co.name || ' · ' || CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END
+      || ' (' || m.mccmnc || ')'
+    FROM unnest(tr.mccmncs) WITH ORDINALITY u(c, o) JOIN mccmnc m ON m.mccmnc = u.c AND m.deleted_at IS NULL
+    JOIN countries co ON co.id = m.country_id ORDER BY u.o LIMIT 100)`;
+/** Every target by name for the hover list: "Customer trunk · X", "Vendor enterprise · Y", "All customer trunks". */
+const trTargetNames = `ARRAY(SELECT CASE trt.target_type
+      WHEN 'all' THEN 'All ' || trt.trunk_kind || ' trunks'
+      WHEN 'trunk' THEN initcap(trt.trunk_kind) || ' trunk · ' || COALESCE(CASE WHEN trt.trunk_kind = 'customer'
+        THEN (SELECT ${ruleTrunkName} FROM customer_trunks t WHERE t.id = trt.target_id)
+        ELSE (SELECT ${ruleVendorName} FROM vendor_trunks vt WHERE vt.id = trt.target_id) END, '#' || trt.target_id)
+      WHEN 'enterprise' THEN initcap(trt.trunk_kind) || ' enterprise · '
+        || COALESCE((SELECT ${vis(enterpriseMask("e"))} FROM enterprises e WHERE e.id = trt.target_id), '#' || trt.target_id)
+      ELSE initcap(trt.trunk_kind) || ' category · '
+        || COALESCE((SELECT pc.name FROM product_categories pc WHERE pc.id = trt.target_id), '#' || trt.target_id) END
+    FROM translation_rule_targets trt WHERE trt.translation_rule_id = tr.id
+    ORDER BY trt.trunk_kind, array_position(ARRAY['all','category','enterprise','trunk'], trt.target_type), 1 LIMIT 100)`;
 const trConversionValue = `CASE WHEN tr.sender_conversion IN ('random_number','sender_id_template') THEN cl.name
     ELSE tr.sender_conversion_value END`;
 
@@ -1316,7 +1333,21 @@ export const translationRuleList: ListDef<TranslationRuleRow> = {
     continueAfter: { sql: "tr.continue_after" },
     senderPattern: { sql: "tr.sender_pattern" },
     receiverPattern: { sql: "tr.receiver_pattern" },
-    mccmncs: { sql: "array_to_string(tr.mccmncs, ',')" },
+    // Codes or names: "208" finds rules listing 208…, "France" or "Orange" rules listing a matching code.
+    mccmncs: {
+      sql: "array_to_string(tr.mccmncs, ',')",
+      where: (op, c, p) => {
+        const text = String(c.value ?? "");
+        if (op === "empty") return "(cardinality(tr.mccmncs) = 0)";
+        if (op === "not_empty") return "(cardinality(tr.mccmncs) > 0)";
+        const hit = isNameValue(text)
+          ? `(tr.mccmncs && ARRAY${mccmncByNameSql(p(text))})`
+          : op === "eq" || op === "neq"
+            ? `(${p(text)} = ANY(tr.mccmncs))`
+            : `(EXISTS (SELECT 1 FROM unnest(tr.mccmncs) m WHERE m ILIKE ${p(text)}))`;
+        return op === "not_like" || op === "neq" ? `(NOT ${hit})` : hit;
+      },
+    },
     contentPattern: { sql: "tr.content_pattern" },
     senderConversion: { sql: "tr.sender_conversion" },
     senderConversionValue: { sql: trConversionValue },
@@ -1331,7 +1362,9 @@ export const translationRuleList: ListDef<TranslationRuleRow> = {
   idSql: "tr.id",
   select: `tr.id, tr.name, tr.direction, tr.action, tr.continue_after, tr.sender_pattern, tr.receiver_pattern, tr.mccmncs,
     tr.content_pattern, tr.sender_conversion, ${trConversionValue} AS sender_conversion_value, tr.status,
-    ${appliesToSql} AS applies_to, ${translationUsedBySql("tr")} AS used_by, ub.username AS updated_by, tr.updated_at,
+    ${appliesToSql} AS applies_to, ${trTargetNames} AS target_names, ${trMccmncNames} AS mccmnc_names,
+    (SELECT count(*)::int FROM translation_rule_targets x WHERE x.translation_rule_id = tr.id) AS target_count,
+    ${translationUsedBySql("tr")} AS used_by, ub.username AS updated_by, tr.updated_at,
     tr.deleted_at`,
   mapRow: (r) => ({
     id: r.id as number,
@@ -1342,11 +1375,14 @@ export const translationRuleList: ListDef<TranslationRuleRow> = {
     senderPattern: (r.sender_pattern as string | null) ?? null,
     receiverPattern: (r.receiver_pattern as string | null) ?? null,
     mccmncs: (r.mccmncs as string[]) ?? [],
+    mccmncNames: (r.mccmnc_names as string[]) ?? [],
     contentPattern: (r.content_pattern as string | null) ?? null,
     senderConversion: (r.sender_conversion as string | null) ?? null,
     senderConversionValue: (r.sender_conversion_value as string | null) ?? null,
     status: r.status as TranslationRuleRow["status"],
     appliesTo: r.applies_to as string,
+    appliesToNames: (r.target_names as string[]) ?? [],
+    appliesToCount: Number(r.target_count),
     usedBy: Number(r.used_by),
     updatedBy: (r.updated_by as string | null) ?? null,
     updatedAt: iso(r.updated_at)!,
@@ -1508,6 +1544,8 @@ export const hlrRuleList: ListDef<HlrRuleRow> = {
     dnidPattern: r.dnid_pattern as string,
     status: r.status as HlrRuleRow["status"],
     appliesTo: r.applies_to as string,
+    appliesToNames: (r.target_names as string[]) ?? [],
+    appliesToCount: Number(r.target_count),
     usedBy: Number(r.used_by),
     updatedBy: (r.updated_by as string | null) ?? null,
     updatedAt: iso(r.updated_at)!,

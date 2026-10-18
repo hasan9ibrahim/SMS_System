@@ -381,6 +381,36 @@ describe("translation rules API", { skip }, () => {
     assert.ok(archived.archivedAt, "undoing the create archives the rule");
   });
 
+  test("rows carry names for the hover lists; MCCMNC filters by name or code", async () => {
+    const page = await ok("queryTranslationRules", call("POST", "/translation-rules/query", { limit: 500 }));
+    for (const r of page.rows as {
+      mccmncs: string[];
+      mccmncNames: string[];
+      appliesTo: string;
+      appliesToNames: string[];
+      appliesToCount: number;
+    }[]) {
+      assert.ok(r.mccmncNames.length <= Math.min(100, r.mccmncs.length));
+      assert.equal(r.appliesToNames.length, Math.min(100, r.appliesToCount));
+      if (r.appliesTo === "Not assigned") assert.equal(r.appliesToCount, 0);
+    }
+    const withCodes = (page.rows as { mccmncs: string[]; mccmncNames: string[] }[]).find((r) => r.mccmncNames.length);
+    assert.ok(withCodes, "some rule lists destinations");
+    const country = withCodes!.mccmncNames[0]!.split(" · ")[0]!;
+    const like = (value: string) =>
+      ok(
+        "queryTranslationRules",
+        call("POST", "/translation-rules/query", {
+          limit: 500,
+          filter: { logic: "and", conditions: [{ field: "mccmncs", op: "like", value }] },
+        }),
+      );
+    const byName = await like(`${country}%`);
+    assert.ok(byName.rows.some((r: { id: number }) => r.id === (withCodes as unknown as { id: number }).id));
+    const byCode = await like(`${withCodes!.mccmncs[0]}%`);
+    assert.ok(byCode.total > 0);
+  });
+
   test("duplicate to trunk replaces the original on that trunk only", async () => {
     const page = await ok(
       "queryTranslationRules",

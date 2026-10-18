@@ -11899,6 +11899,8 @@ export type components = {
       senderPattern: string | null;
       receiverPattern: string | null;
       mccmncs: string[];
+      /** @description The MCCMNC codes by name for the cell and its hover list (up to 100), e.g. "France · Orange (20801)" (team trial round 1). */
+      mccmncNames: string[];
       contentPattern: string | null;
       senderConversion: string | null;
       /** @description The value, or the number list's name for random_number / sender_id_template. */
@@ -11906,6 +11908,10 @@ export type components = {
       status: components["schemas"]["RecordStatus"];
       /** @description Summary of the targets, e.g. "3 customer trunks, 1 enterprise". */
       appliesTo: string;
+      /** @description Every target by name for the hover list (up to 100), e.g. "Customer trunk · ACME_OTP", "Vendor enterprise · Kite", "All customer trunks" (team trial round 1). */
+      appliesToNames: string[];
+      /** @description Number of targets. */
+      appliesToCount: number;
       usedBy: number;
       updatedBy: string | null;
       updatedAt: components["schemas"]["Timestamp"];

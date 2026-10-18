@@ -39,6 +39,7 @@ import { ListScreen } from "../../page/ListScreen";
 import { ListLookup, useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
+import { HoverList } from "../../ui/HoverList";
 import { Button, Modal } from "../../ui/primitives";
 import { fmtWhen, RecordActions } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
@@ -1029,6 +1030,20 @@ function RuleDetail({ row, select }: { row: TranslationRuleRow; select: (id: num
 
 // ---------------------------------------------------------------- page
 
+/** Destinations by name, the first two then "+N"; pointing at the cell lists them all (team trial round 1). */
+function MccmncCell({ row }: { row: TranslationRuleRow }) {
+  const names = row.mccmncNames.length ? row.mccmncNames : row.mccmncs;
+  const rest = row.mccmncs.length - 2;
+  return (
+    <HoverList items={names} more={Math.max(0, row.mccmncs.length - names.length)}>
+      <span className="rr-strong rr-label num">
+        <span className="rr-main">{names.slice(0, 2).join(", ")}</span>
+        {rest > 0 && <span className="muted">+{rest}</span>}
+      </span>
+    </HoverList>
+  );
+}
+
 export function TranslationRulesPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
   const deleteOne = useDeleteRecord();
@@ -1073,8 +1088,8 @@ export function TranslationRulesPage() {
           render: (r) => (r.receiverPattern ? <code>{r.receiverPattern}</code> : muted("—")),
         },
         mccmncs: {
-          width: 110,
-          render: (r) => (r.mccmncs.length ? <span className="num">{r.mccmncs.join(", ")}</span> : muted("—")),
+          width: 220,
+          render: (r) => (r.mccmncs.length ? <MccmncCell row={r} /> : muted("—")),
         },
         contentPattern: {
           width: 140,
@@ -1092,7 +1107,15 @@ export function TranslationRulesPage() {
         appliesTo: {
           width: 200,
           render: (r) =>
-            r.appliesTo === "Not assigned" ? <span className="tone-warning">Not assigned</span> : r.appliesTo,
+            r.appliesTo === "Not assigned" ? (
+              <span className="tone-warning">Not assigned</span>
+            ) : (
+              <HoverList items={r.appliesToNames} more={r.appliesToCount - r.appliesToNames.length}>
+                <span className="rr-strong rr-label">
+                  <span className="rr-main">{r.appliesTo}</span>
+                </span>
+              </HoverList>
+            ),
         },
         usedBy: { width: 90, align: "right" },
         updatedBy: { width: 140, render: (r) => r.updatedBy ?? muted("—") },

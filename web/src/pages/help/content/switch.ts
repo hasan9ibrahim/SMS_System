@@ -84,7 +84,10 @@ export const topics: HelpTopic[] = [
               },
               { name: "Sender ID", what: "The Sender ID pattern the rule matches, if any." },
               { name: "DNID", what: "The receiver pattern the rule matches, if any." },
-              { name: "MCCMNC", what: "The networks or countries the rule is limited to." },
+              {
+                name: "MCCMNC",
+                what: "The networks the rule is limited to, by name in bold: the first two, then “+N”. Point at the cell to see them all. Filter: a country, a network or a code, for example `France`, `Orange` or `208`.",
+              },
               { name: "Message Text", what: "The text pattern the rule matches, if any." },
               {
                 name: "Sender ID Conversion Type",
@@ -97,7 +100,7 @@ export const topics: HelpTopic[] = [
               { name: "Status", what: "Active, or grey Inactive. Inactive rows are dimmed and never run." },
               {
                 name: "Applies To",
-                what: "A summary of the targets, for example “3 customer trunks, 1 enterprise”. **Not assigned** in amber means the rule runs nowhere.",
+                what: "A summary of the targets in bold, for example “3 customer trunks, 1 enterprise”. Point at it to see every trunk, enterprise and category by name. **Not assigned** in amber means the rule runs nowhere.",
               },
               { name: "Used by", what: "How many live trunks the rule actually reaches through its targets." },
               { name: "Updated By", what: "Who saved the rule last." },

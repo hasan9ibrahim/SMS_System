@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.53.0
+  version: 0.54.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18887,7 +18887,7 @@ components:
 
     TranslationRuleRow:
       type: object
-      required: [id, name, direction, action, continueAfter, senderPattern, receiverPattern, mccmncs, contentPattern, senderConversion, senderConversionValue, status, appliesTo, usedBy, updatedBy, updatedAt, archivedAt]
+      required: [id, name, direction, action, continueAfter, senderPattern, receiverPattern, mccmncs, mccmncNames, contentPattern, senderConversion, senderConversionValue, status, appliesTo, appliesToNames, appliesToCount, usedBy, updatedBy, updatedAt, archivedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -18909,6 +18909,11 @@ components:
           type: array
           items:
             type: string
+        mccmncNames:
+          type: array
+          description: The MCCMNC codes by name for the cell and its hover list (up to 100), e.g. "France · Orange (20801)" (team trial round 1).
+          items:
+            type: string
         contentPattern:
           type: [string, "null"]
         senderConversion:
@@ -18921,6 +18926,14 @@ components:
         appliesTo:
           type: string
           description: Summary of the targets, e.g. "3 customer trunks, 1 enterprise".
+        appliesToNames:
+          type: array
+          description: Every target by name for the hover list (up to 100), e.g. "Customer trunk · ACME_OTP", "Vendor enterprise · Kite", "All customer trunks" (team trial round 1).
+          items:
+            type: string
+        appliesToCount:
+          type: integer
+          description: Number of targets.
         usedBy:
           type: integer
         updatedBy:
