@@ -608,7 +608,11 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             <Negate form={form} path="receiverListNegate" />
           </div>
           <div className="cond-field wide">
-            <FormField label="MCCMNC" error={form.error("mccmncs")} hint="A 3-digit MCC means the whole country">
+            <FormField
+              label="MCCMNC"
+              error={form.error("mccmncs")}
+              hint="A 3-digit MCC is only the country’s All networks entry; tick the country to cover every network"
+            >
               <div className="pick-with-list">
                 <DestinationPick value={v.mccmncs} onChange={(c) => form.set("mccmncs", c)} />
                 <Button
