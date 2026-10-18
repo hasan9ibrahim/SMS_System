@@ -201,6 +201,7 @@ async function fakeSim(dlr: number): Promise<Simulator> {
       day: "2026-10-17",
       attempts: 0,
       submitted: 0,
+      sent: 0,
       delivered: 0,
       revenue: 0,
       cost: 0,

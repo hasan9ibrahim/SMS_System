@@ -412,11 +412,11 @@ const seconds = (w: Window) => Math.max(1, Math.round((w.to.getTime() - w.from.g
 
 /**
  * Latest EDR time: "now" for relative periods in this phase. Cached for a few seconds only: the live
- * simulator writes EDRs every 5 s, so Live analytics must see them (team trial round 1).
+ * simulator writes EDRs every second, so Live analytics must see them (team trial round 1).
  */
 let latest: { at: number; t: number } | null = null;
 export async function reportNow(): Promise<number> {
-  if (latest && Date.now() - latest.at < 5_000) return latest.t;
+  if (latest && Date.now() - latest.at < 1_000) return latest.t;
   const r = await chQuery<{ t: string }>("SELECT toString(max(start_time)) AS t FROM edr");
   // The minute after the latest EDR, so the last messages fall inside "today".
   const t = r[0]?.t ? Math.ceil((Date.parse(`${r[0].t.replace(" ", "T")}Z`) + 1) / 60_000) * 60_000 : Date.now();

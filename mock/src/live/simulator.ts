@@ -47,6 +47,16 @@ export interface SimTrunk {
   tps: number;
   revenue: number; // per message, platform currency
   cost: number;
+  /** Share of its messages sent to a vendor (the rest is rejected before routing). */
+  sentShare: number;
+  /** Sending rate (messages per second) and the part of a message built up but not sent yet. */
+  rate?: number;
+  owed?: number;
+  /**
+   * Messages sent but not yet written to the EDR store (live EDRs), by outcome: delivered, accepted but
+   * not delivered, refused by the vendor, not sent to a vendor.
+   */
+  pending?: [number, number, number, number];
   asr: number | null;
   dlr: number | null;
   segments: Segment[];
@@ -72,6 +82,8 @@ export interface SimTrunk {
 
 export interface SimVendor {
   id: number;
+  /** Smoothed messages per second (online, ordering); `tps` is the messages of the last second. */
+  rate?: number;
   name: string;
   enterpriseId: number;
   enterpriseName: string;
@@ -120,7 +132,10 @@ const DIP_PER_SECOND = Number(process.env.SIM_DIP_PER_DAY ?? 1) / 86_400;
 interface DayTotals {
   day: string;
   attempts: number;
+  /** Messages accepted by a vendor (ASR, DLR). */
   submitted: number;
+  /** Messages sent to a vendor, accepted or not: "Submitted" on the dashboard, as in the reports. */
+  sent: number;
   delivered: number;
   revenue: number;
   cost: number;
@@ -218,6 +233,7 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
     day: platformDay(now),
     attempts: 0,
     submitted: 0,
+    sent: 0,
     delivered: 0,
     revenue: 0,
     cost: 0,
@@ -244,18 +260,18 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
   const entName = new Map(ents.map((e) => [Number(e.id), e.name as string]));
   const codeName = new Map(codes.map((c) => [c.mccmnc as string, [c.country as string, c.network as string] as const]));
   const f = await sysToPlatformFactor();
-  type Stat = { id: number; n: string; rev: number; cost: number; ok: string; dl: string };
+  type Stat = { id: number; n: string; rev: number; cost: number; ok: string; dl: string; sent: string };
   const stats = (col: string) =>
     chRows<Stat>(
       `SELECT ${col} AS id, count() AS n, toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
-              countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl
+              countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl, countIf(v_trunk_id > 0) AS sent
          FROM edr WHERE submit_time > (SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY AND ${col} > 0 GROUP BY id`,
       15_000,
     );
   const day = (col: string) =>
     chRows<Stat & { name?: string }>(
       `SELECT ${col} AS id, count() AS n, toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
-              countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl
+              countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl, countIf(v_trunk_id > 0) AS sent
          FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
       15_000,
     );
@@ -290,6 +306,7 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
       limit,
       base,
       tps: 0,
+      sentShare: s && n ? Number(s.sent) / n : 0.98,
       revenue: s && n ? s.rev / n : 0.03,
       cost: s && n ? s.cost / n : 0.024,
       asr: s ? ratio(Number(s.ok), n) : null,
@@ -350,6 +367,7 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
     const n = Number(s.n);
     today.attempts += n;
     today.submitted += Number(s.ok);
+    today.sent += Number(s.sent);
     today.delivered += Number(s.dl);
     today.revenue += s.rev;
     today.cost += s.cost;
@@ -442,8 +460,8 @@ function seedHistory(sim: Simulator, now: number) {
   sim.slotIndex = SLOTS - 1; // the newest seeded slot; the next step moves on
   // Live values start at the seeded level, not at zero, so the chart has no dip after a restart.
   let total = 0;
-  for (const t of sim.trunks) total += t.tps = t.base * levelAt(t.segments, now);
-  for (const v of sim.vendors) v.tps = total * v.weight;
+  for (const t of sim.trunks) total += t.rate = t.base * levelAt(t.segments, now);
+  for (const v of sim.vendors) v.rate = total * v.weight;
   // Vendor minute history follows the customers' total by share.
   for (let i = 0; i < MINUTES; i++) {
     const sum = sim.trunks.reduce((acc, t) => acc + (t.minutes[i] ?? 0), 0);
@@ -529,6 +547,7 @@ export async function createSimulator(): Promise<Simulator> {
         limit: [50, 100, 200, 500][i % 4]!,
         base: rand(5, 60),
         tps: 0,
+        sentShare: 0.98,
         revenue: 0.03,
         cost: 0.024,
         asr: 95,
@@ -560,6 +579,7 @@ export async function createSimulator(): Promise<Simulator> {
         day: platformDay(now),
         attempts: 0,
         submitted: 0,
+        sent: 0,
         delivered: 0,
         revenue: 0,
         cost: 0,
@@ -583,7 +603,16 @@ export function step(sim: Simulator, now = Date.now()) {
   const prevSlot = Math.floor(sim.lastTick / (SLOT_S * 1000));
   sim.lastTick = now;
   if (platformDay(now) !== sim.today.day) {
-    sim.today = { ...sim.today, day: platformDay(now), attempts: 0, submitted: 0, delivered: 0, revenue: 0, cost: 0 };
+    sim.today = {
+      ...sim.today,
+      day: platformDay(now),
+      attempts: 0,
+      submitted: 0,
+      sent: 0,
+      delivered: 0,
+      revenue: 0,
+      cost: 0,
+    };
     sim.today.clients = new Map();
     sim.today.vendors = new Map();
     sim.today.destinations = new Map();
@@ -592,18 +621,27 @@ export function step(sim: Simulator, now = Date.now()) {
   const newMinute = Math.floor(now / 60_000) !== prevMinute;
   const newSlot = Math.floor(now / (SLOT_S * 1000)) !== prevSlot;
   if (newSlot) sim.slotIndex = (sim.slotIndex + 1) % SLOTS;
+  // SMS are whole (team trial round 1): each trunk has a sending rate, and sends the whole messages it
+  // has built up this second; `tps` is the messages it sent in the last second.
   let total = 0;
+  const sent: { t: SimTrunk; n: number }[] = [];
   for (const t of sim.trunks) {
     extendSegments(t.segments, now + 60 * 60_000, true);
     const target = t.base * levelAt(t.segments, now);
     // Smooth random walk around the timeline, with rare bursts past the limit.
     // Thresholds and bursts follow the trunk's own level, so the simulated money and alerts stay at the
     // volume of the stored traffic (a quiet trunk sends a few messages an hour; team trial round 1).
-    t.tps = target <= t.base * 0.02 ? 0 : Math.max(0, t.tps * 0.6 + target * 0.4 + rand(-0.12, 0.12) * target);
+    const prev = t.rate ?? t.tps;
+    let rate = target <= t.base * 0.02 ? 0 : Math.max(0, prev * 0.6 + target * 0.4 + rand(-0.12, 0.12) * target);
     // About one burst every 5 seconds across the platform: three times the trunk's usual level.
-    if (target > 0 && Math.random() < 0.2 / sim.trunks.length) t.tps += t.base * 3;
-    total += t.tps;
-    quality(t, t.tps > 0.001, now);
+    if (target > 0 && Math.random() < 0.2 / sim.trunks.length) rate += t.base * 3;
+    t.rate = rate;
+    t.owed = (t.owed ?? 0) + rate * dt;
+    const n = Math.floor(t.owed);
+    t.owed -= n;
+    t.tps = n;
+    total += n;
+    quality(t, rate > 0.001, now);
     rollMinute(t, newMinute);
     if (newSlot) {
       t.slotSum = 0;
@@ -612,52 +650,88 @@ export function step(sim: Simulator, now = Date.now()) {
     t.slotSum += t.tps;
     t.slotN += 1;
     t.slots[sim.slotIndex] = t.slotSum / t.slotN;
+    if (n === 0) continue;
+    sent.push({ t, n });
 
-    // Today's money and counts, as messages accrue.
-    const msgs = t.tps * dt;
-    if (msgs > 0) {
-      const asr = (t.asrNow ?? 95) / 100;
-      const dlr = (t.dlrNow ?? 85) / 100;
-      t.day.attempts += msgs;
-      t.day.submitted += msgs * asr;
-      t.day.delivered += msgs * asr * dlr;
-      t.day.revenue += msgs * t.revenue;
-      t.day.cost += msgs * t.cost;
-      const today = sim.today;
-      today.attempts += msgs;
-      today.submitted += msgs * asr;
-      today.delivered += msgs * asr * dlr;
-      today.revenue += msgs * t.revenue;
-      today.cost += msgs * t.cost;
-      const c = today.clients.get(t.enterpriseId) ?? {
-        name: t.enterpriseName,
-        attempts: 0,
-        money: 0,
-        margin: 0,
-        successful: 0,
-        delivered: 0,
-      };
-      c.attempts += msgs;
-      c.money += msgs * t.revenue;
-      c.margin += msgs * (t.revenue - t.cost);
-      c.successful += msgs * asr;
-      c.delivered += msgs * asr * dlr;
-      today.clients.set(t.enterpriseId, c);
+    // Today's money and counts, message by message.
+    const asr = (t.asrNow ?? 95) / 100;
+    const dlr = (t.dlrNow ?? 85) / 100;
+    // Sent to a vendor but refused, beyond the ones accepted (the share stays at least the ASR).
+    const refused = asr < 1 ? Math.max(0, t.sentShare - asr) / (1 - asr) : 0;
+    let ok = 0;
+    let dl = 0;
+    let toVendor = 0;
+    const pending = (t.pending ??= [0, 0, 0, 0]);
+    for (let k = 0; k < n; k++) {
+      if (Math.random() < asr) {
+        ok++;
+        toVendor++;
+        if (Math.random() < dlr) {
+          dl++;
+          pending[0]++;
+        } else pending[1]++;
+      } else if (Math.random() < refused) {
+        toVendor++;
+        pending[2]++;
+      } else pending[3]++;
     }
+    t.day.attempts += n;
+    t.day.submitted += ok;
+    t.day.delivered += dl;
+    t.day.revenue += n * t.revenue;
+    t.day.cost += n * t.cost;
+    const today = sim.today;
+    today.attempts += n;
+    today.submitted += ok;
+    today.sent += toVendor;
+    today.delivered += dl;
+    today.revenue += n * t.revenue;
+    today.cost += n * t.cost;
+    const c = today.clients.get(t.enterpriseId) ?? {
+      name: t.enterpriseName,
+      attempts: 0,
+      money: 0,
+      margin: 0,
+      successful: 0,
+      delivered: 0,
+    };
+    c.attempts += n;
+    c.money += n * t.revenue;
+    c.margin += n * (t.revenue - t.cost);
+    c.successful += ok;
+    c.delivered += dl;
+    today.clients.set(t.enterpriseId, c);
   }
-  // Vendors carry the total by their share, with their own noise.
+  // Each message goes to one vendor, picked by the vendors' shares.
+  const weights = sim.vendors.map((v) => v.weight);
+  const wSum = weights.reduce((a, w) => a + w, 0);
+  const toVendor = new Map<SimVendor, number>();
+  if (wSum > 0)
+    for (let k = 0; k < total; k++) {
+      let r = Math.random() * wSum;
+      const v = sim.vendors.find((_, i) => (r -= weights[i]!) <= 0) ?? sim.vendors[0]!;
+      toVendor.set(v, (toVendor.get(v) ?? 0) + 1);
+    }
   for (const v of sim.vendors) {
-    v.tps = Math.max(0, v.tps * 0.6 + total * v.weight * 0.4 * rand(0.85, 1.15));
-    quality(v, v.tps > 0.001, now);
+    const n = toVendor.get(v) ?? 0;
+    v.tps = n;
+    v.rate = (v.rate ?? 0) * 0.8 + n * 0.2;
+    quality(v, v.rate > 0.001, now);
     rollMinute(v, newMinute);
-    const msgs = v.tps * dt;
-    if (msgs <= 0) continue;
+    if (n === 0) continue;
     const vAsr = (v.asrNow ?? 95) / 100;
     const vDlr = (v.dlrNow ?? 85) / 100;
-    v.day.attempts += msgs;
-    v.day.submitted += msgs * vAsr;
-    v.day.delivered += msgs * vAsr * vDlr;
-    v.day.cost += msgs * v.cost;
+    let ok = 0;
+    let dl = 0;
+    for (let k = 0; k < n; k++)
+      if (Math.random() < vAsr) {
+        ok++;
+        if (Math.random() < vDlr) dl++;
+      }
+    v.day.attempts += n;
+    v.day.submitted += ok;
+    v.day.delivered += dl;
+    v.day.cost += n * v.cost;
     const p = sim.today.vendors.get(v.enterpriseId) ?? {
       name: v.enterpriseName,
       attempts: 0,
@@ -666,24 +740,30 @@ export function step(sim: Simulator, now = Date.now()) {
       successful: 0,
       delivered: 0,
     };
-    p.attempts += msgs;
-    p.money += msgs * v.cost;
-    p.successful += msgs * vAsr;
-    p.delivered += msgs * vAsr * vDlr;
+    p.attempts += n;
+    p.money += n * v.cost;
+    p.successful += ok;
+    p.delivered += dl;
     sim.today.vendors.set(v.enterpriseId, p);
   }
-  // Destinations keep today's mix.
-  const destTotal = [...sim.today.destinations.values()].reduce((s, d) => s + d.attempts, 0);
-  if (destTotal > 0 && total > 0) {
-    const grow = (total * dt) / destTotal;
-    for (const d of sim.today.destinations.values()) {
-      d.attempts += d.attempts * grow;
-      d.revenue += d.revenue * grow;
-      d.margin += d.margin * grow;
-      d.successful += d.successful * grow;
-      d.delivered += d.delivered * grow;
+  // Each message goes to one destination, picked by today's mix.
+  const dests = [...sim.today.destinations.values()];
+  const dSum = dests.reduce((a, d) => a + d.attempts, 0);
+  if (dSum > 0)
+    for (let k = 0; k < total; k++) {
+      let r = Math.random() * dSum;
+      const d = dests.find((x) => (r -= x.attempts) <= 0) ?? dests[0]!;
+      const per = d.attempts > 0 ? 1 / d.attempts : 0;
+      const okP = d.successful * per;
+      const dlP = d.successful > 0 ? d.delivered / d.successful : 0;
+      d.revenue += d.revenue * per;
+      d.margin += d.margin * per;
+      d.attempts += 1;
+      if (Math.random() < okP) {
+        d.successful += 1;
+        if (Math.random() < dlP) d.delivered += 1;
+      }
     }
-  }
   return total;
 }
 
@@ -694,8 +774,13 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 const pct = (a: number, b: number) => (b > 0 ? r1((a / b) * 100) : null);
 
 export function tickEvent(sim: Simulator, now = Date.now()): TpsTickEvent {
-  const customers = sim.trunks.filter((t) => t.tps > 0.001).sort((a, b) => b.tps - a.tps);
-  const vendors = sim.vendors.filter((v) => v.tps > 0.001).sort((a, b) => b.tps - a.tps);
+  // Sending now (by rate); the TPS shown is the whole messages of the last second.
+  const customers = sim.trunks
+    .filter((t) => (t.rate ?? 0) > 0.001)
+    .sort((a, b) => b.tps - a.tps || (b.rate ?? 0) - (a.rate ?? 0));
+  const vendors = sim.vendors
+    .filter((v) => (v.rate ?? 0) > 0.001)
+    .sort((a, b) => b.tps - a.tps || (b.rate ?? 0) - (a.rate ?? 0));
   const queue = (tps: number, limit: number) => (tps > limit ? Math.round((tps - limit) * 5) : 0);
   return {
     at: new Date(now).toISOString(),
@@ -720,8 +805,8 @@ export function tickEvent(sim: Simulator, now = Date.now()): TpsTickEvent {
 export function summaryEvent(sim: Simulator, now = Date.now()): DashboardSummaryEvent {
   const t = sim.today;
   const tps = sim.trunks.reduce((s, x) => s + x.tps, 0);
-  const online = (xs: { tps: number; enterpriseId: number }[]) =>
-    new Set(xs.filter((x) => x.tps > 0.001).map((x) => x.enterpriseId)).size;
+  const online = (xs: { rate?: number; enterpriseId: number }[]) =>
+    new Set(xs.filter((x) => (x.rate ?? 0) > 0.001).map((x) => x.enterpriseId)).size;
   const top = [...t.destinations.entries()]
     .filter(([code]) => code.length >= 5)
     .sort((a, b) => b[1].attempts - a[1].attempts)
@@ -730,7 +815,8 @@ export function summaryEvent(sim: Simulator, now = Date.now()): DashboardSummary
     at: new Date(now).toISOString(),
     currency: PLATFORM_CURRENCY,
     attempts: Math.round(t.attempts),
-    submitted: Math.round(t.submitted),
+    // "Submitted" as in the reports and Live analytics: sent to a vendor (team trial round 1).
+    submitted: Math.round(t.sent),
     delivered: Math.round(t.delivered),
     revenue: r2(t.revenue),
     cost: r2(t.cost),
@@ -841,7 +927,7 @@ export function computeMovers(
 export function historyEvent(sim: Simulator, now = Date.now()): TpsHistoryEvent {
   const order = (i: number) => (sim.slotIndex + 1 + i) % SLOTS; // oldest first
   const total = Array.from({ length: SLOTS }, (_, i) => r1(sim.trunks.reduce((s, t) => s + t.slots[order(i)]!, 0)));
-  const top = [...sim.trunks].sort((a, b) => b.tps - a.tps).slice(0, 10);
+  const top = [...sim.trunks].sort((a, b) => (b.rate ?? b.tps) - (a.rate ?? a.tps)).slice(0, 10);
   return {
     at: new Date(now).toISOString(),
     stepSeconds: SLOT_S,
