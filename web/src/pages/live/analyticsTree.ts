@@ -31,7 +31,7 @@ export const levelLabel = (d: ReportDimension) => LEVELS.find((l) => l.value ===
 /** What a row's "+" offers: every level not already used by the row or the rows above it. */
 export const levelOptions = (used: readonly ReportDimension[]) => LEVELS.filter((l) => !used.includes(l.value));
 
-export type Fmt = "int" | "pct" | "money" | "rate" | "sec";
+export type Fmt = "int" | "pct" | "money" | "rate" | "sec" | "tps";
 export interface Column {
   metric: ReportMetric;
   /** The whole header on one line, side and unit included ("Billable (C)", "ASR %"; team trial round 1). */
@@ -64,7 +64,8 @@ export const COLUMNS: Column[] = [
   { metric: "avgRateVendor", label: "Rate (V)", title: "Average vendor rate per message", fmt: "rate" },
   { metric: "deliveryDelayS", label: "Delay sec", title: "Average delivery delay in seconds", fmt: "sec" },
   { metric: "hlrTotal", label: "HLR", title: "HLR lookups", fmt: "int" },
-  { metric: "hlrPorted", label: "HLR ported", title: "Lookups that found the number ported", fmt: "int" },
+  // Live TPS replaced HLR ported (team trial round 1): messages per second over the last minute up to now.
+  { metric: "tpsNow", label: "TPS", title: "Live TPS: messages per second over the last minute", fmt: "tps" },
   { metric: "hlrCost", label: "HLR cost", title: "HLR cost (platform currency)", fmt: "money" },
 ];
 export const METRICS = COLUMNS.map((c) => c.metric);
@@ -84,6 +85,7 @@ export function fmt(v: number | null | undefined, kind: Fmt): string {
     case "rate":
       return v.toFixed(5);
     case "sec":
+    case "tps":
       return v.toFixed(2);
   }
 }

@@ -285,7 +285,7 @@ export function fmtMetric(m: string, v: number | null | undefined): string {
   if (["revenue", "cost", "margin", "revenueBase", "costBase", "hlrCost"].includes(m))
     return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (["asr", "dlrCustomer", "dlrVendor", "marginPct"].includes(m)) return `${v.toFixed(1)} %`;
-  if (m === "tpsAvg" || m === "tpsPeak" || m === "deliveryDelayS") return v.toFixed(m === "deliveryDelayS" ? 1 : 2);
+  if (m === "tpsAvg" || m === "tpsPeak" || m === "tpsNow" || m === "deliveryDelayS") return v.toFixed(m === "deliveryDelayS" ? 1 : 2);
   return v.toLocaleString("en-US");
 }
 /** Higher is worse for these (the delta arrow turns red when they go up). */

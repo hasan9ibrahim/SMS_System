@@ -14139,7 +14139,7 @@ export type components = {
       | "errorCode"
       | "deliveryStatus";
     /**
-     * @description Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency.
+     * @description Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency. tpsNow is the live TPS: messages per second over the last minute up to now, null when the period does not include now (team trial round 1); like tpsPeak it is not sortable or filterable.
      * @enum {string}
      */
     ReportMetric:
@@ -14174,7 +14174,8 @@ export type components = {
       | "reroutes"
       | "moCount"
       | "tpsAvg"
-      | "tpsPeak";
+      | "tpsPeak"
+      | "tpsNow";
     /**
      * @description Relative periods resolve in the report's time zone; custom uses from / to.
      * @enum {string}

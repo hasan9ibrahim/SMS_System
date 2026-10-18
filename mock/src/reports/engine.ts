@@ -205,8 +205,8 @@ export type Base = Record<(typeof BASE_COLUMNS)[number], number>;
 const ratio = (num: string, den: string, scale: number, digits: number) =>
   `if((${den}) = 0, NULL, round((${num}) / (${den}) * ${scale}, ${digits}))`;
 
-/** Metrics from the base sums (ClickHouse, so they can be filtered and sorted). tpsPeak is added per page. */
-export const METRIC_SQL = (seconds: number): Record<Exclude<ReportMetric, "tpsPeak">, string> => ({
+/** Metrics from the base sums (ClickHouse, so they can be filtered and sorted). tpsPeak and tpsNow are added per page. */
+export const METRIC_SQL = (seconds: number): Record<Exclude<ReportMetric, "tpsPeak" | "tpsNow">, string> => ({
   attempts: "attempts",
   successful: "successful",
   submitted: "submitted",
@@ -489,9 +489,11 @@ export async function runMasterReport(
       .join(", ")} FROM (${grouped(w, extra)})`;
   const metricWhere = split.metrics ? await chWhere(pool, metricDef(secs), { filter: split.metrics }) : "1";
   const sort = (
-    q.sort?.length ? q.sort : [{ field: q.metrics.find((m) => m !== "tpsPeak") ?? "attempts", dir: "desc" as const }]
+    q.sort?.length
+      ? q.sort
+      : [{ field: q.metrics.find((m) => m !== "tpsPeak" && m !== "tpsNow") ?? "attempts", dir: "desc" as const }]
   )
-    .filter((s) => s.field !== "tpsPeak")
+    .filter((s) => s.field !== "tpsPeak" && s.field !== "tpsNow")
     .map((s) => `${s.field in DIMS ? `d_${s.field}` : s.field} ${s.dir === "desc" ? "DESC" : "ASC"}`);
   sort.push(...q.groupBy.map((d) => `d_${d} ASC`));
   const limit = opts.all ? 100_000 : (q.limit ?? 200);
@@ -523,12 +525,24 @@ export async function runMasterReport(
       : "0";
   const prevWindow = q.compare && q.compare !== "none" ? previousWindow(window, q.compare) : null;
   const wantPeak = q.metrics.includes("tpsPeak");
+  // Live TPS (team trial round 1): the last minute up to now, when the period includes now. "Now" is the
+  // latest EDR in this phase (the fake data ends when it was generated); the backend uses its live counters.
+  const nowMs = q.metrics.includes("tpsNow") ? await reportNow() : null;
+  const nowWindow =
+    nowMs !== null && window.from.getTime() <= nowMs && nowMs <= window.to.getTime()
+      ? { from: new Date(nowMs - 60_000), to: new Date(nowMs + 1) }
+      : null;
+  const nowSql = (rs: Record<string, unknown>[] | null) =>
+    `SELECT ${rs ? q.groupBy.map((d) => `d_${d}`).join(", ") + ", " : ""}count() AS n FROM (
+       SELECT ${dimIds.join(", ")} FROM edr
+        WHERE ${tw(nowWindow!)} AND ${typeWhere} AND ${dimWhere} AND ${rs ? tupleIn(rs) : "1"})
+     ${rs ? `GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}` : ""}`;
   const peakSql = (w: Window, rs: Record<string, unknown>[] | null) =>
     `SELECT ${rs ? q.groupBy.map((d) => `d_${d}`).join(", ") + ", " : ""}max(n) AS peak FROM (
        SELECT ${dimIds.join(", ")}, toStartOfMinute(start_time) AS minute, count() AS n FROM edr
         WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${rs ? tupleIn(rs) : "1"}
         GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}, minute)${rs ? ` GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}` : ""}`;
-  const [prevRows, prevTotals, peaks, peakTotal] = await Promise.all([
+  const [prevRows, prevTotals, peaks, peakTotal, nows, nowTotal] = await Promise.all([
     prevWindow && rowsRaw.length
       ? chQuery<Record<string, unknown>>(withMetrics(prevWindow, tupleIn(rowsRaw)))
       : Promise.resolve([]),
@@ -537,9 +551,16 @@ export async function runMasterReport(
       : Promise.resolve(null),
     wantPeak && rowsRaw.length ? chQuery<Record<string, unknown>>(peakSql(window, rowsRaw)) : Promise.resolve([]),
     wantPeak ? chQuery<{ peak: string }>(peakSql(window, null)) : Promise.resolve(null),
+    nowWindow && rowsRaw.length ? chQuery<Record<string, unknown>>(nowSql(rowsRaw)) : Promise.resolve([]),
+    nowWindow ? chQuery<{ n: string }>(nowSql(null)) : Promise.resolve(null),
   ]);
   const prevByKey = new Map(prevRows.map((r) => [keyOf(r), r]));
   const peakByKey = new Map(peaks.map((r) => [keyOf(r), Number(r.peak)]));
+  const nowByKey = new Map(nows.map((r) => [keyOf(r), Number(r.n)]));
+  const tps = (n: number) => Math.round((n / 60) * 100) / 100;
+  // In the live minute a group with no messages runs at 0; outside the period's "now" there is no live TPS.
+  const tpsNowOf = (key: string | null) =>
+    nowWindow ? tps(key === null ? Number(nowTotal?.[0]?.n ?? 0) : (nowByKey.get(key) ?? 0)) : null;
 
   // Labels
   const names = new Map<ReportDimension, Map<number, string>>();
@@ -564,7 +585,12 @@ export async function runMasterReport(
   const pick = (r: Record<string, unknown>, extra: Record<string, number | null> = {}) => {
     const out: Record<string, number | null> = {};
     for (const m of q.metrics)
-      out[m] = m === "tpsPeak" ? (extra.tpsPeak ?? null) : r[m] === null || r[m] === undefined ? null : Number(r[m]);
+      out[m] =
+        m === "tpsPeak" || m === "tpsNow"
+          ? (extra[m] ?? null)
+          : r[m] === null || r[m] === undefined
+            ? null
+            : Number(r[m]);
     return out;
   };
   const rows: MasterReportRow[] = rowsRaw.map((r) => {
@@ -584,14 +610,18 @@ export async function runMasterReport(
           ];
         }),
       ),
-      metrics: pick(r, { tpsPeak: peakByKey.has(key) ? Math.round((peakByKey.get(key)! / 60) * 100) / 100 : null }),
+      metrics: pick(r, {
+        tpsPeak: peakByKey.has(key) ? tps(peakByKey.get(key)!) : null,
+        tpsNow: tpsNowOf(key),
+      }),
       previous: prevWindow ? (prev ? pick(prev) : Object.fromEntries(q.metrics.map((m) => [m, null]))) : null,
     };
   });
   const toBase = (r: Record<string, unknown> | undefined) =>
     Object.fromEntries(BASE_COLUMNS.map((c) => [c, Number(r?.[`t_${c}`] ?? 0)])) as Base;
   const totalMetrics = metricsFromBase(toBase(totals[0]), secs);
-  if (wantPeak) totalMetrics.tpsPeak = peakTotal?.[0] ? Math.round((Number(peakTotal[0].peak) / 60) * 100) / 100 : null;
+  if (wantPeak) totalMetrics.tpsPeak = peakTotal?.[0] ? tps(Number(peakTotal[0].peak)) : null;
+  if (q.metrics.includes("tpsNow")) totalMetrics.tpsNow = tpsNowOf(null);
   const only = (m: Record<string, number | null>) => Object.fromEntries(q.metrics.map((k) => [k, m[k] ?? null]));
   return {
     window,

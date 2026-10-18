@@ -73,7 +73,12 @@ function checkReport(q: MasterReportQuery): FieldError[] {
   const split = splitFilter(q.filter);
   if (split.error) errors.push({ path: "/filter", message: split.error });
   for (const [i, s] of (q.sort ?? []).entries())
-    if (!q.groupBy.includes(s.field as never) && !q.metrics.includes(s.field as never) && s.field !== "tpsPeak")
+    if (
+      !q.groupBy.includes(s.field as never) &&
+      !q.metrics.includes(s.field as never) &&
+      s.field !== "tpsPeak" &&
+      s.field !== "tpsNow"
+    )
       errors.push({ path: `/sort/${i}/field`, message: "sort by a group-by field or a chosen metric" });
   return errors;
 }

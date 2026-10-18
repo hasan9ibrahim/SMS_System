@@ -77,5 +77,6 @@ test("a row's + offers every level not used above it; headers are one line (team
   assert.ok(opts.includes("vendor") && opts.includes("senderId") && opts.includes("hour"));
   assert.equal(levelOptions([]).length, opts.length + 2);
   assert.equal(COLUMNS.find((c) => c.metric === "submitted")?.label, "Submitted");
-  assert.equal(COLUMNS.find((c) => c.metric === "hlrPorted")?.label, "HLR ported");
+  assert.equal(COLUMNS.find((c) => c.metric === "tpsNow")?.label, "TPS");
+  assert.ok(!COLUMNS.some((c) => c.metric === "hlrPorted"), "TPS replaced HLR ported");
 });

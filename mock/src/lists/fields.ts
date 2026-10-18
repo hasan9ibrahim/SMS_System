@@ -2177,6 +2177,7 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "moCount", label: "MO Count", type: "integer", defaultOperator: "gte" }),
       field({ field: "tpsAvg", label: "TPS (avg)", type: "decimal", defaultOperator: "gte" }),
       field({ field: "tpsPeak", label: "TPS (peak)", type: "decimal", defaultOperator: "gte", sortable: false }),
+      field({ field: "tpsNow", label: "TPS (now)", type: "decimal", defaultOperator: "gte", sortable: false }),
     ],
   },
 

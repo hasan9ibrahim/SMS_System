@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.48.0
+  version: 0.49.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23449,8 +23449,8 @@ components:
 
     ReportMetric:
       type: string
-      description: "Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency."
-      enum: [attempts, successful, submitted, delivered, failedSubmits, billableCustomer, billableVendor, reportedCustomer, reportedVendor, asr, dlrCustomer, dlrVendor, deliveryDelayS, revenue, cost, margin, marginPct, avgRateCustomer, avgRateVendor, costAvg, revenueBase, costBase, hlrCached, hlrLive, hlrTotal, hlrAccomplished, hlrPorted, hlrCost, reroutes, moCount, tpsAvg, tpsPeak]
+      description: "Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency. tpsNow is the live TPS: messages per second over the last minute up to now, null when the period does not include now (team trial round 1); like tpsPeak it is not sortable or filterable."
+      enum: [attempts, successful, submitted, delivered, failedSubmits, billableCustomer, billableVendor, reportedCustomer, reportedVendor, asr, dlrCustomer, dlrVendor, deliveryDelayS, revenue, cost, margin, marginPct, avgRateCustomer, avgRateVendor, costAvg, revenueBase, costBase, hlrCached, hlrLive, hlrTotal, hlrAccomplished, hlrPorted, hlrCost, reroutes, moCount, tpsAvg, tpsPeak, tpsNow]
 
     ReportPeriod:
       type: string

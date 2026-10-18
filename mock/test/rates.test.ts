@@ -245,7 +245,9 @@ describe("rate edits (§13.12, §13.10)", { skip }, () => {
     await undo(blocked.change.id);
 
     const { rows: free } = await db().query(
-      `SELECT m.mccmnc FROM mccmnc m WHERE NOT EXISTS (SELECT 1 FROM rate_lines l WHERE l.rate_table_id = $1 AND l.mccmnc_id = m.id) LIMIT 1`,
+      // A live code (other tests leave archived test codes behind) the table does not price yet.
+      `SELECT m.mccmnc FROM mccmnc m WHERE m.deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM rate_lines l WHERE l.rate_table_id = $1 AND l.mccmnc_id = m.id) LIMIT 1`,
       [id],
     );
     const added = await ok(

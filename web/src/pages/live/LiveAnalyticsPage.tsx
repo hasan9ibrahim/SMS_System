@@ -10,7 +10,7 @@
 // search box; changes apply at once (no Search button) and Pause stops the live refresh (team trial round 1).
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FilterCondition, ListQuery, MasterReportRow, ReportDimension } from "@sms/contract";
 import { useListFields } from "../../api/hooks";
 import { runMasterReport } from "../../api/masterReports";
@@ -49,6 +49,10 @@ const page = pageForPath("/live/analytics")!;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const REFRESH = [
   { value: 0, label: "Off" },
+  // Down to 1 s, which the team calls live (team trial round 1).
+  { value: 1, label: "1 s (live)" },
+  { value: 2, label: "2 s" },
+  { value: 5, label: "5 s" },
   { value: 15, label: "15 s" },
   { value: 30, label: "30 s" },
   { value: 60, label: "1 min" },
@@ -195,10 +199,14 @@ function DetailPanel({
   );
 }
 
-/** Pushes on live:analytics pace the refresh; at most one per chosen interval. */
+/**
+ * Pushes on live:analytics pace the refresh; at most one per chosen interval, and none while the previous
+ * refresh is still loading (so a 1 s refresh never piles up queries).
+ */
 function useLiveTick(seconds: number, enabled: boolean): number {
   const [tick, setTick] = useState(0);
   const last = useRef(0);
+  const client = useQueryClient();
   useEffect(() => {
     if (!enabled || !seconds) return;
     const s = new LiveSocket(socketUrl());
@@ -207,16 +215,20 @@ function useLiveTick(seconds: number, enabled: boolean): number {
       (event) => {
         if (event !== "snapshot") return;
         const now = Date.now();
-        if (now - last.current >= seconds * 1000) {
+        const busy =
+          client.isFetching({ queryKey: ["analytics-level"] }) + client.isFetching({ queryKey: ["analytics-total"] }) >
+          0;
+        if (!busy && now - last.current >= seconds * 1000 - 100) {
           last.current = now;
           setTick((t) => t + 1);
         }
       },
-      { groupBy: "customer", intervalSeconds: 15, limit: 1 },
+      // The push comes every 1, 5 or 15 s; the fastest one at or under the chosen interval.
+      { groupBy: "customer", intervalSeconds: seconds < 5 ? 1 : seconds < 15 ? 5 : 15, limit: 1 },
     );
     s.connect();
     return () => s.close();
-  }, [seconds, enabled]);
+  }, [seconds, enabled, client]);
   return tick;
 }
 
