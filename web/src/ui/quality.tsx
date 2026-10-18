@@ -36,3 +36,9 @@ export function QualityPct({
     </span>
   );
 }
+
+/** Report metric keys that are ASR or DLR percentages (coloured by value in report grids). */
+export const QUALITY_METRICS: ReadonlySet<string> = new Set(["asr", "dlr", "dlrCustomer", "dlrVendor"]);
+/** qualityClass for a report metric, or "" when the metric is not ASR/DLR. */
+export const metricQualityClass = (metric: string, v: number | null | undefined) =>
+  QUALITY_METRICS.has(metric) ? qualityClass(v) : "";

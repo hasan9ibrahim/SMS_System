@@ -8,6 +8,7 @@ import { usePlatformCurrency } from "../../api/records";
 import { useRouteTraffic } from "../../api/routing";
 import { Chart, useChartColors } from "../../ui/Chart";
 import { Popover } from "../../ui/primitives";
+import { qualityClass } from "../../ui/quality";
 import { formatMoney, formatPct } from "../rates/format";
 import { compact, vendorSwitches } from "./ruleModel";
 
@@ -220,8 +221,8 @@ function FiguresTable({
             </td>
             <td className="num">{r.messages.toLocaleString("en-US")}</td>
             <td className="num">{formatPct(r.sharePct)}</td>
-            <td className="num">{formatPct(r.asr)}</td>
-            <td className="num">{formatPct(r.dlr)}</td>
+            <td className={`num ${qualityClass(r.asr)}`}>{formatPct(r.asr)}</td>
+            <td className={`num ${qualityClass(r.dlr)}`}>{formatPct(r.dlr)}</td>
             <td className={`num${r.margin < 0 ? " tone-error" : ""}`}>{money(r.margin, ccy)}</td>
           </tr>
         ))}
@@ -260,11 +261,11 @@ export function TrafficSection({ ruleId }: { ruleId: number }) {
             </div>
             <div>
               <dt>ASR</dt>
-              <dd className="num">{formatPct(d.total.asr)}</dd>
+              <dd className={`num ${qualityClass(d.total.asr)}`}>{formatPct(d.total.asr)}</dd>
             </div>
             <div>
               <dt>DLR</dt>
-              <dd className="num">{formatPct(d.total.dlr)}</dd>
+              <dd className={`num ${qualityClass(d.total.dlr)}`}>{formatPct(d.total.dlr)}</dd>
             </div>
             <div>
               <dt>Margin</dt>

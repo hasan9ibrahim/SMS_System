@@ -13,6 +13,7 @@ import { ListScreen } from "../../../page/ListScreen";
 import { isAdminUser, ListLookup, useDeleteRecord } from "../../../records/parts";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
+import { qualityClass } from "../../../ui/quality";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen, RecordActions } from "../../reference/shared";
 import { ALERT_STATE, alertInput, blankAlert, parseEmails } from "./toolsModel";
@@ -200,12 +201,15 @@ const openEditor = (row: TrafficAlertRow | null) => ask<number>((d) => <AlertEdi
 function Values({ r }: { r: TrafficAlertRow }) {
   const v = r.lastValues;
   if (!v) return muted("not checked yet");
-  const cell = (label: string, value: number | null, thr: number | null, unit: string, low = true) => {
+  // ASR and DLR are coloured by value (§13.4); a value past its alert threshold is always red.
+  const cell = (label: string, value: number | null, thr: number | null, unit: string, low = true, quality = false) => {
     const bad = value !== null && thr !== null && (low ? value <= thr : value >= thr);
     return (
       <div>
         <span className="muted small">{label}</span>
-        <strong className={`num${bad ? " tone-error" : ""}`}>{value === null ? "—" : `${value}${unit}`}</strong>
+        <strong className={`num ${bad ? "tone-error" : quality ? qualityClass(value) : ""}`}>
+          {value === null ? "—" : `${value}${unit}`}
+        </strong>
         <span className="muted small">{thr === null ? "not checked" : `${low ? "≤" : "≥"} ${thr}${unit} alerts`}</span>
       </div>
     );
@@ -217,8 +221,8 @@ function Values({ r }: { r: TrafficAlertRow }) {
         <strong className="num">{v.messages.toLocaleString("en-US")}</strong>
         <span className="muted small">needs ≥ {r.sampleCount}</span>
       </div>
-      {cell("ASR", v.asr, r.asrThreshold, " %")}
-      {cell("DLR", v.dlr, r.dlrThreshold, " %")}
+      {cell("ASR", v.asr, r.asrThreshold, " %", true, true)}
+      {cell("DLR", v.dlr, r.dlrThreshold, " %", true, true)}
       {cell("Margin", v.marginPct, r.marginThreshold, " %")}
       {cell("Delivery delay", v.delaySeconds, r.delayThreshold, " s", false)}
     </div>

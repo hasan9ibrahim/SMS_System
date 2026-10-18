@@ -25,6 +25,7 @@ import {
   KEY_FIELDS,
   quickPeriod,
 } from "./reportModel";
+import { metricQualityClass } from "../../ui/quality";
 import { tzLabel } from "../../ui/timezones";
 
 const page = pageForPath("/reports/enterprise")!;
@@ -78,6 +79,10 @@ function metricText(field: string, v: unknown): string {
   if (field === "deliveryDelayS") return v === null || v === undefined ? "—" : `${Number(v).toFixed(1)} s`;
   return v === null || v === undefined ? "—" : String(v);
 }
+
+/** ASR / DLR coloured by value (§13.4); other metrics get no class. */
+const qualityOf = (field: string, v: unknown) =>
+  metricQualityClass(field, v === null || v === undefined ? null : Number(v));
 
 type Names = Record<string, Picked<number>[]>;
 
@@ -271,7 +276,7 @@ function Totals({ data, visible, ccy }: { data: EnterpriseReportPage | null; vis
         <span key={m} className="rp-total">
           <span className="muted small">{labelOf(m, ccy)}</span>
           <span
-            className={`num strong${m === "margin" && Number(t[m]) < 0 ? " tone-error" : ""}`}
+            className={`num strong${m === "margin" && Number(t[m]) < 0 ? " tone-error" : ""} ${qualityOf(m, t[m])}`}
             title={t[m] === null && PARTNER_MONEY.has(m) ? "Rows are in several currencies; see each row" : undefined}
           >
             {metricText(m, t[m])}
@@ -387,7 +392,11 @@ export function EnterpriseReportPage() {
         ...(platform ? { label: labelOf(m, ccy) } : {}),
         render: (r: ReportRow) => {
           const v = (r as unknown as Record<string, unknown>)[m];
-          return <span className={m === "margin" && Number(v) < 0 ? "tone-error strong" : ""}>{metricText(m, v)}</span>;
+          return (
+            <span className={m === "margin" && Number(v) < 0 ? "tone-error strong" : qualityOf(m, v)}>
+              {metricText(m, v)}
+            </span>
+          );
         },
       };
     }

@@ -27,6 +27,7 @@ import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { Chart, useChartColors } from "../../ui/Chart";
 import { Icon } from "../../ui/Icon";
 import { Popover } from "../../ui/primitives";
+import { qualityClass } from "../../ui/quality";
 import {
   analyticsPath,
   appendTick,
@@ -343,6 +344,7 @@ function Counter({
   value,
   format,
   tone,
+  valueClass,
   animate,
   sub,
 }: {
@@ -350,6 +352,8 @@ function Counter({
   value: number | undefined;
   format: (v: number) => string;
   tone?: "good" | "warn" | "bad";
+  /** Extra class on the value, e.g. the ASR/DLR quality colour (§13.4). */
+  valueClass?: string;
   animate: boolean;
   sub?: string;
 }) {
@@ -357,7 +361,7 @@ function Counter({
   return (
     <div className={`dash-kpi${tone ? ` ${tone}` : ""}`}>
       <span className="label">{label}</span>
-      <span className="value">{value === undefined ? "—" : format(shown)}</span>
+      <span className={`value ${valueClass ?? ""}`}>{value === undefined ? "—" : format(shown)}</span>
       {sub && <span className="sub">{sub}</span>}
     </div>
   );
@@ -438,8 +442,6 @@ function SummaryBar({
   const cur = s?.currency ?? "EUR";
   // Today is the day in the platform time zone (decision 2026-10-16).
   const tz = useReference().data?.platformTimezone ?? "UTC";
-  const ratioTone = (v: number | undefined, good: number, warn: number) =>
-    v === undefined ? undefined : v >= good ? undefined : v >= warn ? "warn" : "bad";
   return (
     <Section
       title="Today"
@@ -472,14 +474,14 @@ function SummaryBar({
           label="ASR"
           value={s?.asr}
           format={(v) => `${v.toFixed(1)}%`}
-          tone={ratioTone(s?.asr, 80, 60)}
+          valueClass={qualityClass(s?.asr)}
           animate={animate}
         />
         <Counter
           label="DLR"
           value={s?.dlr}
           format={(v) => `${v.toFixed(1)}%`}
-          tone={ratioTone(s?.dlr, 70, 50)}
+          valueClass={qualityClass(s?.dlr)}
           animate={animate}
         />
         <Counter label="TPS now" value={s?.tps} format={(v) => dec(v)} animate={animate} />
@@ -615,7 +617,8 @@ function MoverItem({ row, kind, isNew, onOpen }: { row: MoverRow; kind: MoverKin
         </span>
         {change ?? <span className="chg muted">—</span>}
         <span className="ratios num muted">
-          {pct(row.asr)} · {pct(row.dlr)}
+          <span className={qualityClass(row.asr)}>{pct(row.asr)}</span> ·{" "}
+          <span className={qualityClass(row.dlr)}>{pct(row.dlr)}</span>
         </span>
       </button>
     </li>
@@ -885,8 +888,8 @@ function TopParties({ tops, onOpen }: { tops: DashboardTopsEvent | null; onOpen:
                     <span className="r num">{int(r.attempts)}</span>
                     <span className="r num">{money(r.money, cur)}</span>
                     <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
-                    <span className="r num">{pct(r.asr)}</span>
-                    <span className="r num">{pct(r.dlr)}</span>
+                    <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
+                    <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
                   </button>
                 )}
               />
@@ -939,8 +942,8 @@ function TopDestinations({ tops, onOpen }: { tops: DashboardTopsEvent | null; on
               <span className="r num">{int(r.attempts)}</span>
               <span className="r num">{money(r.revenue, cur)}</span>
               <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
-              <span className="r num">{pct(r.asr)}</span>
-              <span className="r num">{pct(r.dlr)}</span>
+              <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
+              <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
             </button>
           )}
         />

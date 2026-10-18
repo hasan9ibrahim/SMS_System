@@ -16,6 +16,7 @@ import { ListLookup } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
+import { qualityClass } from "../../ui/quality";
 import { problemText } from "../routing/dialogs";
 import { RecordDialog } from "../reference/shared";
 import { destLabel } from "../rates/DestinationTree";
@@ -204,8 +205,16 @@ export function QbrStatsPage() {
           align: "right",
           render: (r) => <span className="num">{r.attempts.toLocaleString("en-US")}</span>,
         },
-        asr: { width: 90, align: "right", render: (r) => <span className="num">{pct(r.asr)}</span> },
-        dlr: { width: 90, align: "right", render: (r) => <span className="num">{pct(r.dlr)}</span> },
+        asr: {
+          width: 90,
+          align: "right",
+          render: (r) => <span className={`num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>,
+        },
+        dlr: {
+          width: 90,
+          align: "right",
+          render: (r) => <span className={`num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>,
+        },
         addSeconds: { width: 90, align: "right", render: (r) => <span className="num">{secs(r.addSeconds)}</span> },
         overridden: {
           width: 100,
@@ -251,8 +260,8 @@ export function QbrStatsPage() {
                 <tbody>
                   <tr>
                     <td>Traffic, 24 h ({r.attempts.toLocaleString("en-US")} attempts)</td>
-                    <td className="r num">{pct(r.trafficAsr)}</td>
-                    <td className="r num">{pct(r.trafficDlr)}</td>
+                    <td className={`r num ${qualityClass(r.trafficAsr)}`}>{pct(r.trafficAsr)}</td>
+                    <td className={`r num ${qualityClass(r.trafficDlr)}`}>{pct(r.trafficDlr)}</td>
                     <td className="r num">{secs(r.trafficAddSeconds)}</td>
                   </tr>
                   <tr className="strong">
@@ -260,8 +269,8 @@ export function QbrStatsPage() {
                       Used by QBR routing
                       {r.overridden && <span className="muted"> (override by {r.updatedBy ?? "—"})</span>}
                     </td>
-                    <td className="r num">{pct(r.asr)}</td>
-                    <td className="r num">{pct(r.dlr)}</td>
+                    <td className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</td>
+                    <td className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</td>
                     <td className="r num">{secs(r.addSeconds)}</td>
                   </tr>
                 </tbody>

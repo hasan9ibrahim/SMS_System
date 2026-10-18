@@ -13,6 +13,7 @@ import { ListScreen } from "../../../page/ListScreen";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { toast } from "../../../ui/feedback";
 import { Button, StatusDot } from "../../../ui/primitives";
+import { metricQualityClass } from "../../../ui/quality";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
 import { Kv } from "../../admin/parts";
@@ -27,6 +28,10 @@ const stateCell = (s: IncidentRow["state"]) => (
   </span>
 );
 const num = (v: number | null) => (v === null ? "—" : Math.round(v * 100) / 100);
+/** An incident value; ASR and DLR values are coloured by value (§13.4). */
+const valueCell = (r: IncidentRow, v: number | null) => (
+  <span className={`num ${metricQualityClass(r.metric, v)}`}>{num(v)}</span>
+);
 
 function IncidentDetailView({ r }: { r: IncidentRow }) {
   const detail = useIncident(r.id);
@@ -77,7 +82,12 @@ function IncidentDetailView({ r }: { r: IncidentRow }) {
         items={[
           ["What happened", r.message],
           ["Rule", `${r.ruleName}${d ? ` – ${d.conditionLabel}` : ""}`],
-          ["Now / baseline / peak", `${num(r.currentValue)} / ${num(r.baselineValue)} / ${num(r.peakValue)}`],
+          [
+            "Now / baseline / peak",
+            <>
+              {valueCell(r, r.currentValue)} / {valueCell(r, r.baselineValue)} / {valueCell(r, r.peakValue)}
+            </>,
+          ],
           ["Started", fmtWhen(r.startedAt)],
           ["Ended", r.endedAt ? fmtWhen(r.endedAt) : "still open"],
           ["Duration", duration(r.durationSeconds)],
@@ -187,7 +197,7 @@ export function IncidentsPage() {
         entityName: { width: 200 },
         metric: { width: 90, render: (r) => METRIC_SHORT[r.metric] },
         message: { width: 420 },
-        peakValue: { width: 90, align: "right", render: (r) => <span className="num">{num(r.peakValue)}</span> },
+        peakValue: { width: 90, align: "right", render: (r) => valueCell(r, r.peakValue) },
         acknowledgedBy: { width: 140, render: (r) => r.acknowledgedBy ?? <span className="muted">—</span> },
       }}
       rowActions={(r) => [

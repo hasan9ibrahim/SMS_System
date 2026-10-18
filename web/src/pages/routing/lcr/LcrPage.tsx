@@ -36,6 +36,7 @@ import { ListLookup } from "../../../records/parts";
 import { usePageStatus, useTabNavigate } from "../../../shell/tabContext";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
+import { QualityPct } from "../../../ui/quality";
 import { VirtualTable, type VColumn } from "../../lookup/VirtualTable";
 import { scopeUrl } from "../../rates/bulkModel";
 import { formatPct, formatRate, shortDate } from "../../rates/format";
@@ -235,8 +236,8 @@ function TableView() {
           <span className="muted">—</span>
         ),
     },
-    { key: "asr", header: "ASR", width: 64, align: "right", render: (r) => num(r.asr) },
-    { key: "dlr", header: "DLR", width: 64, align: "right", render: (r) => num(r.dlr) },
+    { key: "asr", header: "ASR", width: 64, align: "right", render: (r) => <QualityPct value={r.asr} suffix="" /> },
+    { key: "dlr", header: "DLR", width: 64, align: "right", render: (r) => <QualityPct value={r.dlr} suffix="" /> },
     { key: "delay", header: "Delay s", width: 70, align: "right", render: (r) => num(r.delayS) },
     {
       key: "tps",

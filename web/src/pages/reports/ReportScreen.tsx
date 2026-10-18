@@ -23,6 +23,7 @@ import { useTabNavigate } from "../../shell/tabContext";
 import { Chart, useChartColors } from "../../ui/Chart";
 import { ask, toast } from "../../ui/feedback";
 import { Button, Modal, Popover } from "../../ui/primitives";
+import { metricQualityClass } from "../../ui/quality";
 import { problemText } from "../routing/dialogs";
 import {
   decodeSettings,
@@ -338,7 +339,9 @@ function Totals({
       {metrics.map((m) => (
         <span key={m} className="rp-total">
           <span className="muted small">{labels.get(m) ?? m}</span>{" "}
-          <strong className="num">{fmtMetric(m, page.totals.metrics[m])}</strong>{" "}
+          <strong className={`num ${metricQualityClass(m, page.totals.metrics[m])}`}>
+            {fmtMetric(m, page.totals.metrics[m])}
+          </strong>{" "}
           {page.totals.previous && <Delta metric={m} cur={page.totals.metrics[m]} prev={page.totals.previous[m]} />}
         </span>
       ))}
@@ -587,7 +590,7 @@ export function ReportScreen({
         render: (r: FlatRow) => {
           const v = r.row.metrics[m];
           return (
-            <span className={`num${m === "margin" && (v ?? 0) < 0 ? " tone-error" : ""}`}>
+            <span className={`num${m === "margin" && (v ?? 0) < 0 ? " tone-error" : ""} ${metricQualityClass(m, v)}`}>
               {fmtMetric(m, v)} {r.row.previous && <Delta metric={m} cur={v} prev={r.row.previous[m]} />}
             </span>
           );
@@ -708,7 +711,7 @@ export function ReportScreen({
                   <div key={m} className="kv-pair">
                     <dt>{labels.get(m) ?? m}</dt>
                     <dd className="num">
-                      {fmtMetric(m, r.row.metrics[m])}
+                      <span className={metricQualityClass(m, r.row.metrics[m])}>{fmtMetric(m, r.row.metrics[m])}</span>
                       {r.row.previous && (
                         <>
                           {" "}

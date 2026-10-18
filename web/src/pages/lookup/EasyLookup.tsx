@@ -10,6 +10,7 @@ import { useTabNavigate } from "../../shell/tabContext";
 import { toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button, StatusDot } from "../../ui/primitives";
+import { QualityPct } from "../../ui/quality";
 import { count, money, signed, toDelimited } from "./lookupModel";
 import { VirtualTable, type VColumn } from "./VirtualTable";
 
@@ -173,14 +174,14 @@ export function EasyLookup({
         header: "ASR",
         width: 58,
         align: "right",
-        render: (v) => (v.asr24h === null ? "—" : `${v.asr24h}%`),
+        render: (v) => <QualityPct value={v.asr24h}>{`${v.asr24h}%`}</QualityPct>,
       },
       {
         key: "dlr",
         header: "DLR",
         width: 58,
         align: "right",
-        render: (v) => (v.dlr24h === null ? "—" : `${v.dlr24h}%`),
+        render: (v) => <QualityPct value={v.dlr24h}>{`${v.dlr24h}%`}</QualityPct>,
       },
       {
         key: "routed",

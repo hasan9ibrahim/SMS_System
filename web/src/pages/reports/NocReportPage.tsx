@@ -5,6 +5,7 @@ import { useNocInsights } from "../../api/masterReports";
 import { pageForPath } from "../../nav/registry";
 import { useTabNavigate } from "../../shell/tabContext";
 import { StatusDot } from "../../ui/primitives";
+import { qualityClass } from "../../ui/quality";
 import { problemText } from "../routing/dialogs";
 import type { Settings } from "./masterModel";
 import { ReportScreen, type ReportPreset } from "./ReportScreen";
@@ -92,8 +93,8 @@ function NocPanel({ settings }: { settings: Settings }) {
               <tr key={v.vendorTrunkId}>
                 <td className="small">{v.vendorTrunk}</td>
                 <td className="small num">{v.attempts.toLocaleString("en-US")}</td>
-                <td className={`small num${(v.asr ?? 100) < 75 ? " tone-error" : ""}`}>{v.asr ?? "—"}</td>
-                <td className={`small num${(v.dlr ?? 100) < 70 ? " tone-error" : ""}`}>{v.dlr ?? "—"}</td>
+                <td className={`small num ${qualityClass(v.asr)}`}>{v.asr ?? "—"}</td>
+                <td className={`small num ${qualityClass(v.dlr)}`}>{v.dlr ?? "—"}</td>
                 <td className={`small num${(v.deliveryDelayS ?? 0) > 20 ? " tone-warning" : ""}`}>
                   {v.deliveryDelayS ?? "—"}
                 </td>

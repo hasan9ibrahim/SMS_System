@@ -17,6 +17,7 @@ import { ListScreen, useGridUrlState, type DetailContent } from "../../page/List
 import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Button, Modal, Popover, StatusDot } from "../../ui/primitives";
+import { qualityClass, qualityTone } from "../../ui/quality";
 import { formatPct } from "../rates/format";
 import { AddCondition, ConditionsSection, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
 import { BulkDialog, RuleDialog, VendorSplitEditor, problemText } from "./dialogs";
@@ -29,8 +30,18 @@ import { CleanupBadge } from "../admin/cleanup/CleanupBadge";
 const page = pageForPath("/routing/rules")!;
 
 /**
- * DLR shows amber below the rule's target (§15.4; decided 2026-10-16): its own target, else
- * its destinations' (set on the MCCMNC codes page). No target = no colour.
+ * DLR is coloured by value like every ASR/DLR (§13.4); below the rule's target (§15.4) a value
+ * that would be green shows amber instead, and the value is bold.
+ */
+function dlrClass(r: RouteRuleRow) {
+  const below = r.dlr !== null && r.dlrTarget !== null && r.dlr < r.dlrTarget;
+  const tone = below && qualityTone(r.dlr) === "good" ? "tone-warning" : qualityClass(r.dlr);
+  return below ? `${tone} strong` : tone;
+}
+
+/**
+ * The DLR target behind the hint (§15.4; decided 2026-10-16): the rule's own target, else
+ * its destinations' (set on the MCCMNC codes page). No target = colour by value only.
  */
 const dlrTitle = (r: RouteRuleRow) =>
   r.dlrTarget === null
@@ -291,14 +302,11 @@ export function RouteRulesPage() {
             </TrafficHover>
           ),
       },
-      asr: { width: 70, render: (r: RouteRuleRow) => formatPct(r.asr) },
+      asr: { width: 70, render: (r: RouteRuleRow) => <span className={qualityClass(r.asr)}>{formatPct(r.asr)}</span> },
       dlr: {
         width: 70,
         render: (r: RouteRuleRow) => (
-          <span
-            className={r.dlr !== null && r.dlrTarget !== null && r.dlr < r.dlrTarget ? "tone-warning strong" : ""}
-            title={dlrTitle(r)}
-          >
+          <span className={dlrClass(r)} title={dlrTitle(r)}>
             {formatPct(r.dlr)}
           </span>
         ),
