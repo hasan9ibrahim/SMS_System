@@ -251,7 +251,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
       byCode.set(code, l);
     }
   }
-  const sortRules = (a: RouteRule, b: RouteRule) => a.priority - b.priority || a.id - b.id;
+  const sortRules = (a: RouteRule, b: RouteRule) => b.priority - a.priority || a.id - b.id;
   const rulesFor = new Map<string, RouteRule[]>();
   const candidatesFor = (m: Mccmnc) => {
     let l = rulesFor.get(m.code);

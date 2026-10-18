@@ -295,11 +295,13 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
     }
   };
 
-  const base = (name: string, priority: number, routeType: RouteRule["routeType"]): RouteRule => {
+  // Drawn as "low first" and stored flipped (101 - drawn): the highest priority is tried first
+  // (team trial round 1); the RNG stream and the routing order stay the same.
+  const base = (name: string, drawn: number, routeType: RouteRule["routeType"]): RouteRule => {
     const r: RouteRule = {
       id: ruleId++,
       name,
-      priority,
+      priority: 101 - drawn,
       status: "active",
       startsAt: world.historyStart + rng.int(0, 200) * DAY,
       stopsAt: world.anchor + 10 * 365 * DAY,

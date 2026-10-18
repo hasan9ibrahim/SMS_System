@@ -160,7 +160,7 @@ describe("Cleanup Center (§13.19, §13.20)", { skip }, () => {
     const r = await ok("applyCleanup", call("POST", "/cleanup/apply", { findingIds: [conflict.id, unassigned.id] }));
     assert.equal(r.applied, 2);
     const { rows: p2 } = await db().query("SELECT priority FROM route_rules WHERE id = $1", [conflict.entityIds[1]]);
-    assert.equal(p2[0].priority, p[0].priority + 1);
+    assert.equal(p2[0].priority, p[0].priority - 1);
     const { rows: tr } = await db().query("SELECT deleted_at FROM translation_rules WHERE id = $1", [
       unassigned.entityIds[0],
     ]);

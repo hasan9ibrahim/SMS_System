@@ -140,7 +140,7 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
             }
           />
           <small className="muted">
-            1–100, low first{maxPriority < 100 ? "; 98–100 only by an administrator" : ""}
+            1–100, 100 tried first{maxPriority < 100 ? "; 98–100 only by an administrator" : ""}
           </small>
         </label>
       </div>
@@ -321,7 +321,7 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
       )}
       {kind === "shift_priority" && (
         <label className="field">
-          <span>Shift by (negative = earlier)</span>
+          <span>Shift by (positive = earlier)</span>
           <input
             autoFocus
             type="number"

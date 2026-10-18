@@ -133,7 +133,7 @@ async function ruleRows(c: Db): Promise<RuleRow[]> {
        LEFT JOIN route_rule_traffic t30 ON t30.route_rule_id = r.id AND t30.time_window = '30d'
        LEFT JOIN route_rule_traffic t7 ON t7.route_rule_id = r.id AND t7.time_window = '7d'
       WHERE r.deleted_at IS NULL AND r.status = 'active'
-      ORDER BY r.priority, r.id`,
+      ORDER BY r.priority DESC, r.id`,
   );
   return rows.map((r) => ({
     id: Number(r.id),
@@ -220,10 +220,10 @@ async function routeRuleFindings(c: Db, s: CleanupSettings): Promise<Draft[]> {
     if (g.length < 2) continue;
     for (let i = 1; i < g.length; i++) {
       const b = g[i]!;
-      // Same priority: whichever comes first decides. Lower priority: shadowed when the earlier rule stops.
+      // Same priority: whichever comes first decides. Lower priority (tried later): shadowed when the earlier rule stops.
       const a =
         g.slice(0, i).find((x) => x.priority === b.priority && x.route !== b.route) ??
-        g.slice(0, i).find((x) => !x.cont && x.priority < b.priority && x.route !== b.route);
+        g.slice(0, i).find((x) => !x.cont && x.priority > b.priority && x.route !== b.route);
       if (!a) continue;
       if (a.priority === b.priority)
         out.push({
@@ -236,7 +236,7 @@ async function routeRuleFindings(c: Db, s: CleanupSettings): Promise<Draft[]> {
           why: `"${a.name}" and "${b.name}" match the same messages; which one wins depends only on their IDs.`,
           suggestion: "reorder",
           actions: ["reorder", "review"],
-          impact: `Moves "${b.name}" to priority ${b.priority + 1} — routing result unchanged, the order becomes explicit`,
+          impact: `Moves "${b.name}" to priority ${b.priority - 1} — routing result unchanged, the order becomes explicit`,
           messages30d: a.m30 + b.m30,
         });
       else
@@ -932,7 +932,7 @@ async function planOf(c: Db, f: CleanupFinding, action: CleanupAction): Promise<
           id: b,
           field: "priority",
           before: Number(rows[0].priority),
-          after: Number(rows[0].priority) + 1,
+          after: Number(rows[0].priority) - 1,
         },
       ];
     }
@@ -1008,7 +1008,7 @@ function rulesAfter(rules: RuleCore[], steps: Step[]): RuleCore[] {
     }
     out.push(x);
   }
-  return out.sort((a, b) => a.priority - b.priority || a.id - b.id);
+  return out.sort((a, b) => b.priority - a.priority || a.id - b.id);
 }
 
 async function stepsFor(c: Db, sel: CleanupSelection) {

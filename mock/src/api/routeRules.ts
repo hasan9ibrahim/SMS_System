@@ -1040,9 +1040,9 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
-/** Every live rule in evaluation order (priority, then ID), with vendors and whitelists. */
+/** Every live rule in evaluation order (highest priority first, then ID; team trial round 1), with vendors and whitelists. */
 export async function loadRulesInOrder(db: Db): Promise<RuleCore[]> {
-  const { rows } = await db.query(`${ruleSelect} WHERE r.deleted_at IS NULL ORDER BY r.priority, r.id`);
+  const { rows } = await db.query(`${ruleSelect} WHERE r.deleted_at IS NULL ORDER BY r.priority DESC, r.id`);
   const ids = rows.map((r) => r.id as number);
   const [{ vendors, whitelists }, profiles] = await Promise.all([vendorsOf(db, ids), loadLcrProfiles(db)]);
   // Least cost rules carry their LCR profile for the evaluator (§13.23).

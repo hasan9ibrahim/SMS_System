@@ -40,7 +40,7 @@ export const topics: HelpTopic[] = [
               "The customer trunk's translation rules run first (they may change the sender or receiver, or block the message). See [[translation-rules|Translation rules]].",
               "The destination is found from the receiver number (the longest matching dial code gives the MCCMNC, the mobile network code). An HLR lookup can replace it with the real network of a ported number.",
               "The customer rate for that destination is found on the trunk's rate tables. No rate means the message is rejected.",
-              "The route rules are tried in order: lowest priority number first, then lowest rule ID.",
+              "The route rules are tried in order: highest priority number first (100 before 1), then lowest rule ID.",
               "The first rule that matches picks the vendor (or blocks). If it finds no usable vendor, its **Continue routing** setting says whether to try more rules.",
             ],
           },
@@ -53,7 +53,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "**Priority** is a number from 1 to 100. Low numbers are tried first. Two rules with the same priority are tried in rule ID order.",
+              "**Priority** is a number from 1 to 100. High numbers are tried first (100 before 1). Two rules with the same priority are tried in rule ID order.",
               "A rule must be **on** and inside its **Time** window (start and stop, in UTC). A rule that is off or outside its time never matches.",
               "Each condition is one chip on the rule (Trunk, Category, Destination, Sender, Receiver, Content, TPS, Revenue/msg, HLR ported). Conditions the rule does not set are ignored.",
               "**all must match** (the default): every condition must pass. **any one matches**: one passing condition is enough. Click the words next to the rule title to switch.",
@@ -355,7 +355,7 @@ export const topics: HelpTopic[] = [
               { name: "Checkbox", what: "Selects the row for Bulk edit. The header box selects all loaded rows." },
               { name: "ID", what: "The rule number. Filter: equals." },
               { name: "Rule", what: "The rule name. Filter: contains, with `%` and `_` wildcards." },
-              { name: "Pri", what: "Priority, 1–100. Low numbers are tried first. Filter: a range (from – to)." },
+              { name: "Pri", what: "Priority, 1–100. High numbers are tried first; the grid opens sorted that way. Filter: a range (from – to)." },
               {
                 name: "Type",
                 what: "A coloured dot and the route type: Static (grey), Least cost (blue), Quality (green) or Block (red). Filter: pick from the list.",
@@ -425,7 +425,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Priority",
-                what: "Required. The evaluation order: low numbers are tried first.",
+                what: "Required. The evaluation order: high numbers are tried first (100 before 1).",
                 values: "1–100. Default 97. Only an administrator can set 98, 99 or 100.",
               },
               {
@@ -1027,7 +1027,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Shift priority…",
                 what: "Moves all selected rules earlier or later by the same amount.",
-                values: "Shift by (negative = earlier), e.g. `-10`. Results stay between 1 and 100.",
+                values: "Shift by (positive = earlier), e.g. `10`. Results stay between 1 and 100.",
               },
               {
                 name: "Replace vendor…",

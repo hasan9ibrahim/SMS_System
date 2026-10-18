@@ -406,7 +406,8 @@ describe("rule Test and Route Simulator", { skip }, () => {
     const priorities = sim.tried.map((t: { priority: number }) => t.priority);
     assert.deepEqual(
       priorities,
-      [...priorities].sort((a: number, b: number) => a - b),
+      // Highest priority first (team trial round 1).
+      [...priorities].sort((a: number, b: number) => b - a),
     );
     const bad = await call("POST", "/route-rules/simulate", { receiver: "61400000009", customerTrunkId: 99999999 });
     assert.equal(bad.statusCode, 400);

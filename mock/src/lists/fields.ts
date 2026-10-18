@@ -2405,7 +2405,7 @@ export const listFields: Record<ListId, ListFields> = {
   route_rules: {
     list: "route_rules",
     defaultSort: [
-      { field: "priority", dir: "asc" },
+      { field: "priority", dir: "desc" },
       { field: "id", dir: "asc" },
     ],
     fields: [

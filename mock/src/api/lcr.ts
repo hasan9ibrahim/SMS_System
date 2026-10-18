@@ -46,7 +46,7 @@ const SCOPE_NAMES = `ARRAY(SELECT vt.name FROM unnest(p.vendor_trunk_ids) x(id) 
 const PROFILE_SELECT = `p.*, u.username AS updated_by,
   (SELECT count(*)::int FROM route_rules r WHERE r.lcr_profile_id = p.id AND r.deleted_at IS NULL) AS rule_count,
   ARRAY(SELECT r.name FROM route_rules r WHERE r.lcr_profile_id = p.id AND r.deleted_at IS NULL
-         ORDER BY r.priority, r.name LIMIT 100) AS rule_names,
+         ORDER BY r.priority DESC, r.name LIMIT 100) AS rule_names,
   ${SCOPE_NAMES} AS scope_names`;
 const PROFILE_FROM = "lcr_profiles p LEFT JOIN users u ON u.id = p.updated_by_id";
 
@@ -178,7 +178,7 @@ const profiles = records<LcrProfileInput, LcrProfileRow>({
   nameOf: (b) => b.name,
   deps: async (c, id) => {
     const { rows } = await c.query(
-      "SELECT id, name FROM route_rules WHERE lcr_profile_id = $1 AND deleted_at IS NULL ORDER BY priority, id LIMIT 50",
+      "SELECT id, name FROM route_rules WHERE lcr_profile_id = $1 AND deleted_at IS NULL ORDER BY priority DESC, id LIMIT 50",
       [id],
     );
     return dependencies([
