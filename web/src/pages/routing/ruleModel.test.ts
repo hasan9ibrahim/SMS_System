@@ -93,7 +93,7 @@ test("condition chips read as in the screenshot (§15.4)", () => {
   ]);
 });
 
-test("whole countries, exclusive lists, accumulated revenue and HLR action", () => {
+test("destinations by name, exclusive lists, accumulated revenue and HLR action", () => {
   const chips = conditionChips(
     rule({
       customerTrunkMode: "exclusive",
@@ -103,10 +103,11 @@ test("whole countries, exclusive lists, accumulated revenue and HLR action", () 
       tps: null,
     }),
     NOW,
+    (codes) => codes.map((c) => (c === "505" ? "Australia · All networks (505)" : c)).join(", "),
   );
   const text = chips.map((c) => `${c.field}|${c.op}|${c.value}`);
   assert.ok(text.includes("Trunk|not in|Lumen_OTP, Lumen_OTP2"));
-  assert.ok(text.includes("Destination|in|505 · all"));
+  assert.ok(text.includes("Destination|in|Australia · All networks (505)"), "names first (team trial round 1)");
   assert.ok(text.includes("Revenue today|between|10.000 – 20.000 per rule"));
   assert.ok(text.includes("HLR action||Default · all trunks"), "the policy is shown by name");
 });

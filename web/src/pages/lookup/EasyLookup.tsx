@@ -407,7 +407,7 @@ export function EasyLookup({
                   onClick={() => pick(d)}
                 >
                   <span>{destLabel(d)}</span>
-                  <span className="muted num">{d.allNetworks ? `${d.mccmnc} · all` : d.mccmnc}</span>
+                  <span className="muted num">{d.mccmnc}</span>
                 </button>
               ))}
             </div>
@@ -461,9 +461,7 @@ export function EasyLookup({
       {r && (
         <div className="lk-dest">
           <h2>{destLabel(r.destination)}</h2>
-          <span className="tag num">
-            {r.destination.allNetworks ? `${r.destination.mccmnc} · all` : r.destination.mccmnc}
-          </span>
+          <span className="tag num">{r.destination.mccmnc}</span>
           {number && (
             <span className="muted small">
               {number.resolvedBy === "hlr"

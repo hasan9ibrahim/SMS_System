@@ -380,18 +380,8 @@ export async function runEnterpriseReport(
   const where: string[] = [];
   if (p.msgType) where.push(`msg_type = ${lit(p.msgType)}`);
   if (p.accountManagerIds?.length) where.push(`${s}_am_user_id IN (${ids(p.accountManagerIds)})`);
-  if (p.mccmncs?.length) {
-    const nets = p.mccmncs.filter((c) => c.length > 3);
-    const ccs = p.mccmncs.filter((c) => c.length === 3);
-    where.push(
-      `(${[
-        nets.length ? `c_mccmnc IN (${nets.map(lit).join(",")})` : "",
-        ccs.length ? `c_mcc IN (${ccs.map(lit).join(",")})` : "",
-      ]
-        .filter(Boolean)
-        .join(" OR ")})`,
-    );
-  }
+  // Exact codes: a 3-digit code is the country's All networks entry, not the whole country (team trial round 1).
+  if (p.mccmncs?.length) where.push(`c_mccmnc IN (${p.mccmncs.map(lit).join(",")})`);
   const aggs = baseAggregates(side, factor);
   const parts = groups.map((g) => {
     const tz = lit(g.timezone);

@@ -34,5 +34,5 @@ export function importSummary(r: ImportResult): string {
 export const canApply = (r: ImportResult | null) =>
   !!r && r.errors.length === 0 && r.added + r.updated + r.archived > 0;
 
-/** The code an MCC + MNC pair makes, as the grid shows it ("262 · all" for a country). */
-export const codeLabel = (mcc: string, mnc: string) => (mnc === "" ? `${mcc} · all` : `${mcc}${mnc}`);
+/** The code an MCC + MNC pair makes ("262" alone is the country's All networks default entry). */
+export const codeLabel = (mcc: string, mnc: string) => `${mcc}${mnc}`;

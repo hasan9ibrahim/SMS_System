@@ -80,6 +80,21 @@ async function generateNumberLists(world: World, rng: Rng, sink: TableSink, prof
 }
 
 /** Vendor trunks that have an open rate for a destination code at the anchor time. */
+/**
+ * Rules stored in the database list every code of a whole country (its networks and its All networks
+ * entry): a 3-digit code alone means the All networks entry only (team trial round 1). Inside the
+ * generator a 3-digit code still stands for the whole country.
+ */
+export function expandCountries(world: World, codes: string[]): string[] {
+  if (!codes.some((c) => c.length === 3)) return codes;
+  const out = new Set<string>();
+  for (const c of codes) {
+    if (c.length !== 3) out.add(c);
+    else for (const m of world.mccmnc) if (m.mcc === c) out.add(m.code);
+  }
+  return [...out];
+}
+
 export function buildCoverage(world: World): Map<string, number[]> {
   const cover = new Map<string, number[]>();
   for (const v of world.vendorTrunks) {
@@ -204,7 +219,7 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       customer_trunk_mode: r.customerTrunkMode,
       customer_trunk_ids: r.customerTrunkIds,
       mccmnc_mode: r.mccmncs.length ? "inclusive" : "all",
-      mccmncs: r.mccmncs,
+      mccmncs: expandCountries(world, r.mccmncs),
       mccmnc_pattern: null,
       dlr_target_pct: fakeRuleTarget(r.id),
       sender_pattern: r.senderPattern,
@@ -527,7 +542,8 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
       sender_pattern_negate: false,
       receiver_pattern: null,
       receiver_pattern_negate: false,
-      mccmncs: c.allNetworksId && rng.chance(0.3) ? [world.mccmncById.get(c.allNetworksId)!.mcc] : [],
+      mccmncs:
+        c.allNetworksId && rng.chance(0.3) ? expandCountries(world, [world.mccmncById.get(c.allNetworksId)!.mcc]) : [],
       content_pattern: null,
       sender_list_id: null,
       receiver_list_id: null,

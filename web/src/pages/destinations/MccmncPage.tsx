@@ -205,7 +205,7 @@ export function MccmncPage() {
         originalMnc: { width: 110, render: (r) => <span className="num">{r.originalMnc ?? ""}</span> },
         mccmnc: {
           width: 100,
-          render: (r) => <span className="num strong">{r.allNetworks ? `${r.mccmnc} · all` : r.mccmnc}</span>,
+          render: (r) => <span className="num strong">{r.mccmnc}</span>,
         },
         countryIso: { width: 60 },
         country: { width: 200 },
@@ -221,7 +221,7 @@ export function MccmncPage() {
       detail={(r) => ({
         title: (
           <>
-            <strong className="num">{r.allNetworks ? `${r.mccmnc} · all` : r.mccmnc}</strong>
+            <strong className="num">{r.mccmnc}</strong>
             <span className="muted">
               {r.country} · {r.allNetworks ? "All networks" : r.network}
             </span>

@@ -1,7 +1,7 @@
 // Rating destination tree (team trial round 1): search narrows networks, whole countries become countries.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fromRuleCodes, splitByCountry, toRuleCodes, treeRows, type TreeCountry } from "./DestinationTree";
+import { codeChips, fromRuleCodes, splitByCountry, toRuleCodes, treeRows, type TreeCountry } from "./DestinationTree";
 
 const tree: TreeCountry[] = [
   {
@@ -36,8 +36,16 @@ test("whole countries go in as countries, the rest as codes", () => {
   assert.deepEqual(splitByCountry(tree, ["50501"]), { countries: [], mccmncs: ["50501"] });
 });
 
-test("rule codes: a whole country is its MCC and opens back into all its codes", () => {
-  assert.deepEqual(toRuleCodes(tree, ["505", "50501", "50502", "23410"]), ["505", "234"]);
+test("rule codes stay exact: the MCC is only the All networks row (team trial round 1)", () => {
+  assert.deepEqual(toRuleCodes(tree, ["505", "50501", "50502", "23410"]), ["505", "50501", "50502", "23410"]);
   assert.deepEqual(toRuleCodes(tree, ["50501"]), ["50501"]);
-  assert.deepEqual(fromRuleCodes(tree, ["505"]).sort(), ["505", "50501", "50502"]);
+  assert.deepEqual(fromRuleCodes(tree, ["505"]), ["505"]);
+});
+
+test("chips by name; a country with every code picked is one chip", () => {
+  assert.deepEqual(
+    codeChips(tree, ["50501", "505", "50502", "23410"]).map((c) => c.label),
+    ["Australia (whole country)", "United Kingdom · O2 (23410)"],
+  );
+  assert.equal(codeChips(tree, ["505"])[0]!.label, "Australia · All networks (505)");
 });

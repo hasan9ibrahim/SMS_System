@@ -956,6 +956,31 @@ const trunkNamesSql = `(SELECT string_agg(${ruleTrunkName}, ', ') FROM customer_
 const vendorNamesSql = `(SELECT string_agg(${ruleVendorName}, ', ') FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
    WHERE v.route_rule_id = r.id)`;
 
+/**
+ * A rule's destinations by name (team trial round 1): "Country · Network (MCCMNC)", and a country whose
+ * every code is listed as "Country (whole country)". A 3-digit code is only the All networks entry.
+ */
+const ruleDestinationNames = `ARRAY(
+  SELECT CASE WHEN x.n = x.total AND x.total > 1 THEN x.country || ' (whole country)' ELSE x.parts END
+    FROM (SELECT min(u.o) AS o, co.name AS country, count(*) AS n,
+                 (SELECT count(*) FROM mccmnc y WHERE y.mcc = m.mcc AND y.deleted_at IS NULL) AS total,
+                 string_agg(co.name || ' · ' || CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END
+                            || ' (' || m.mccmnc || ')', ', ' ORDER BY u.o) AS parts
+            FROM unnest(r.mccmncs) WITH ORDINALITY u(c, o)
+            JOIN mccmnc m ON m.mccmnc = u.c AND m.deleted_at IS NULL
+            JOIN countries co ON co.id = m.country_id
+           GROUP BY m.mcc, co.name) x
+   ORDER BY x.o LIMIT 4)`;
+
+/** First two destinations by name, then "+N" (more when only the first four countries were read). */
+function destinationSummary(codes: string[], names: unknown): string {
+  const groups = (names as string[] | null) ?? [];
+  if (!groups.length) return codes.slice(0, 3).join(", ") + (codes.length > 3 ? ` +${codes.length - 3}` : "");
+  const list = groups.flatMap((n) => (n.endsWith("(whole country)") ? [n] : n.split(", ")));
+  const rest = list.length - 2;
+  return list.slice(0, 2).join(", ") + (rest > 0 ? ` +${rest}${groups.length >= 4 ? "…" : ""}` : "");
+}
+
 export const routeRuleList: ListDef<RouteRuleRow> = {
   fields: listFields.route_rules,
   // The window is one of five fixed values (checked in trafficWindow), so it is inlined.
@@ -987,7 +1012,8 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
       },
     },
     customerTrunks: { sql: `(CASE WHEN r.customer_trunk_mode = 'all' THEN 'All trunks' ELSE ${trunkNamesSql} END)` },
-    // "505" finds rules on 505 and its networks (50501…), and rules on 50501 find 505.
+    // "505" finds rules on 505 (All networks) and its networks (50501…); "50501" finds rules on 50501 only
+    // (a 3-digit code is the All networks entry, not the whole country; team trial round 1).
     destination: {
       sql: "array_to_string(r.mccmncs, ',')",
       where: (op, c, p) => {
@@ -996,7 +1022,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
         const v = p(String(c.value ?? "").replace(/[%_]/g, ""));
         return op === "eq"
           ? `(${v} = ANY(r.mccmncs))`
-          : `(EXISTS (SELECT 1 FROM unnest(r.mccmncs) m WHERE m LIKE ${v} || '%' OR ${v} LIKE m || '%'))`;
+          : `(EXISTS (SELECT 1 FROM unnest(r.mccmncs) m WHERE m LIKE ${v} || '%'))`;
       },
     },
     vendors: { sql: vendorNamesSql },
@@ -1044,7 +1070,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
                      ORDER BY v.level, v.share_pct DESC NULLS LAST, v.id)
        FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id WHERE v.route_rule_id = r.id) AS vendors,
     tr.messages, tr.asr, tr.dlr, ${dlrTargetSql} AS dlr_target, r.dlr_target_pct, tr.margin, r.starts_at, r.stops_at, g.name AS group_name, ub.username AS updated_by,
-    r.updated_at, r.deleted_at`,
+    r.updated_at, r.deleted_at, ${ruleDestinationNames} AS dest_names`,
   mapRow: (r) => {
     const names = (r.trunk_names as string[]) ?? [];
     const count = r.trunk_count as number;
@@ -1090,11 +1116,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
           ? "All"
           : r.mccmnc_pattern
             ? `/${String(r.mccmnc_pattern)}/`
-            : (r.mccmnc_mode === "exclusive" ? "All but " : "") +
-              (codes
-                .slice(0, 3)
-                .map((c) => (c.length === 3 ? `${c} · all` : c))
-                .join(", ") + (codes.length > 3 ? ` +${codes.length - 3}` : "") || "—"),
+            : (r.mccmnc_mode === "exclusive" ? "All but " : "") + (destinationSummary(codes, r.dest_names) || "—"),
       vendorsLabel,
       messages: (r.messages as number | null) ?? null,
       asr: r.asr == null ? null : Number(r.asr),

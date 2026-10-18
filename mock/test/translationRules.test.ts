@@ -140,7 +140,7 @@ describe("translation engine (§6.4)", () => {
     const res = runRules(
       [
         { rule: rule(1, { receiverPattern: "^00", receiverConversion: "left_strip", receiverConversionValue: "2" }) },
-        { rule: rule(2, { mccmncs: ["234"], senderListId: 1, destTon: 1, destNpi: 1 }) },
+        { rule: rule(2, { mccmncs: ["234", "23415"], senderListId: 1, destTon: 1, destNpi: 1 }) },
         { rule: rule(3, { senderPattern: "^44", senderPatternNegate: true, action: "block" }) },
         {
           rule: rule(4, { senderConversion: "sender_id_template", senderConversionListId: 2 }),

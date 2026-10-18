@@ -18,6 +18,7 @@ import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { RecordDialog } from "../reference/shared";
+import { destLabel } from "../rates/DestinationTree";
 
 const page = pageForPath("/switch/qbr-stats")!;
 type Side = QbrStat["side"];
@@ -75,7 +76,7 @@ function OverrideDialog({ row, done }: { row: QbrStat | null; done: () => void }
           list="destinations"
           value={destinationId}
           onChange={(d) => setDest(d?.id ?? null)}
-          labelOf={(d) => `${d.allNetworks ? `${d.mccmnc} · all` : d.mccmnc} ${d.country} · ${d.network}`}
+          labelOf={(d) => destLabel(d.country, d.network, d.allNetworks, d.mccmnc)}
           placeholder="Country, network or MCCMNC…"
           disabled={!!row}
         />

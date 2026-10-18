@@ -1,10 +1,13 @@
 // Multi-value pickers for route rule conditions: customer and vendor trunks, and the
-// destination picker (§13.21: a 3-digit code is the whole country, "505 · all").
-import { useState } from "react";
+// destination picker (§13.21): names first ("Afghanistan · AWCC (41201)"), a tree to tick whole
+// countries or single networks; a 3-digit code is only the country's All networks default entry,
+// never the whole country (team trial round 1).
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Destination, FilterCondition, ListId, TrunkListRow } from "@sms/contract";
+import type { FilterCondition, ListId, TrunkListRow } from "@sms/contract";
 import { fetchListPage } from "../../api/hooks";
 import { Icon } from "../../ui/Icon";
+import { codeChips, DestinationTree, useDestinationTree } from "../rates/DestinationTree";
 
 export interface Picked<K extends string | number> {
   key: K;
@@ -94,21 +97,38 @@ export function TrunkPick({
   );
 }
 
-/** MCCMNC codes; a whole-country row picks the 3-digit MCC (§13.21). */
+const CHIPS_SHOWN = 12;
+
+/** MCCMNC codes, exact: a whole country is all its codes ticked in the tree (§13.21). */
 export function DestinationPick({ value, onChange }: { value: string[]; onChange: (codes: string[]) => void }) {
+  const { tree } = useDestinationTree();
+  const chips = useMemo(() => codeChips(tree, value), [tree, value]);
+  const [all, setAll] = useState(false);
+  const shown = all ? chips : chips.slice(0, CHIPS_SHOWN);
   return (
-    <MultiPick<Destination, string>
-      list="destinations"
-      value={value.map((c) => ({ key: c, label: c.length === 3 ? `${c} · all` : c }))}
-      onChange={(next) => onChange(next.map((p) => p.key))}
-      toPicked={(d) =>
-        d.allNetworks || d.mccmnc.length === 3
-          ? { key: d.mcc, label: `${d.mcc} · all` }
-          : { key: d.mccmnc, label: d.mccmnc }
-      }
-      detailOf={(d) => `${d.country} · ${d.allNetworks ? "all networks" : d.network}`}
-      placeholder="Country, network or MCCMNC…"
-    />
+    <div className="multi-pick dest-pick">
+      <div className="chips">
+        {shown.map((c) => (
+          <span key={c.key} className="chip" title={c.codes.length > 1 ? c.codes.join(", ") : undefined}>
+            {c.label}
+            <button
+              type="button"
+              aria-label={`Remove ${c.label}`}
+              onClick={() => onChange(value.filter((v) => !c.codes.includes(v)))}
+            >
+              <Icon name="x" size={11} />
+            </button>
+          </span>
+        ))}
+        {chips.length > CHIPS_SHOWN && (
+          <button type="button" className="link small" onClick={() => setAll((v) => !v)}>
+            {all ? "Show fewer" : `+${chips.length - CHIPS_SHOWN} more`}
+          </button>
+        )}
+        {value.length === 0 && <span className="muted small">Nothing chosen yet.</span>}
+      </div>
+      <DestinationTree selected={value} onChange={onChange} height={240} />
+    </div>
   );
 }
 

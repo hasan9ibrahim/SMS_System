@@ -81,7 +81,7 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
   const { rows: raw } = await db.query(
     `SELECT mccmnc, sender_id, rate, COALESCE(stated_valid_from, valid_from) AS eff_from, valid_to, is_blocked
        FROM rate_lines WHERE rate_table_id = $1
-        AND ($2::text[] = '{}' OR mccmnc = ANY($2) OR left(mccmnc, 3) = ANY($2) OR mccmnc = ANY($3))
+        AND ($2::text[] = '{}' OR mccmnc = ANY($2) OR mccmnc = ANY($3))
       ORDER BY eff_from`,
     [input.rateTableId, codes, codes.map((c) => c.slice(0, 3))],
   );
@@ -110,7 +110,8 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
     `${p}_enterprise_id IN (${input.enterpriseIds.map(Number).join(",")})`,
     `submit_time >= toDateTime64('${input.startDate} 00:00:00', 3)`,
     `submit_time < toDateTime64('${input.endDate} 00:00:00', 3) + INTERVAL 1 DAY`,
-    ...(codes.length ? [`(${codeCol} IN (${list(codes)}) OR substring(${codeCol}, 1, 3) IN (${list(codes)}))`] : []),
+    // Exact codes: a 3-digit code is the All networks entry, not the whole country (team trial round 1).
+    ...(codes.length ? [`${codeCol} IN (${list(codes)})`] : []),
     ...(input.senderId ? [`src_addr = '${input.senderId.replace(/'/g, "")}'`] : []),
   ];
   const groups = await chRows<{

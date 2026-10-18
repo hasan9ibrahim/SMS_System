@@ -88,7 +88,7 @@ describe("route rules grid (§15.4)", { skip }, () => {
     });
     if (busiest.rows[0].messages !== null) assert.ok(week.rows[0].messages >= busiest.rows[0].messages);
     const au = await query({ ...and({ field: "destination", op: "like", value: "505%" }), limit: 500 });
-    assert.ok(au.rows.every((r: { destinationLabel: string }) => /505|All but/.test(r.destinationLabel)));
+    assert.ok(au.rows.every((r: { destinationLabel: string }) => /505|Australia|All but/.test(r.destinationLabel)));
     const off = await query({ ...and({ field: "status", op: "in", values: ["inactive"] }), limit: 500 });
     assert.ok(off.rows.every((r: { status: string }) => r.status === "inactive"));
     const bad = await call("POST", "/route-rules/query", and({ field: "window", op: "eq", value: "2h" }));
@@ -319,10 +319,18 @@ describe("rule Test and Route Simulator", { skip }, () => {
       "SELECT d.prefix FROM dial_codes d JOIN mccmnc m ON m.id = d.mccmnc_id WHERE m.mcc = '505' ORDER BY length(d.prefix) DESC LIMIT 1",
     );
     const number = `${rows[0].prefix}0000001`.slice(0, 11);
+    // The whole country is every code of it; "505" alone is only its All networks entry (team trial round 1).
+    const au = await db().query(
+      "SELECT array_agg(mccmnc) AS codes FROM mccmnc WHERE mcc = '505' AND deleted_at IS NULL",
+    );
     const created = (
       await ok(
         "createRouteRule",
-        call("POST", "/route-rules", ruleInput(f, { name: `Test ${run}`, tps: null, revenue: null })),
+        call(
+          "POST",
+          "/route-rules",
+          ruleInput(f, { name: `Test ${run}`, tps: null, revenue: null, mccmncs: au.rows[0].codes }),
+        ),
         201,
       )
     ).record;
@@ -352,7 +360,7 @@ describe("rule Test and Route Simulator", { skip }, () => {
       await ok(
         "updateRouteRule",
         call("PUT", `/route-rules/${created.id}`, {
-          ...ruleInput(f, { name: `Test ${run}`, tps: null, revenue: null }),
+          ...ruleInput(f, { name: `Test ${run}`, tps: null, revenue: null, mccmncs: au.rows[0].codes }),
           whitelists: [{ vendorTrunkId: f.vendors[1], numbers: [number] }],
         }),
       )

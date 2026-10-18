@@ -26,6 +26,7 @@ import { fmtWhen, RecordActions } from "../../reference/shared";
 import { problemText } from "../../routing/dialogs";
 import { ViewSwitch } from "./HlrPage";
 import { blankEntry, blankPolicy, entrySummary, hoursText, LIVE, policyInput, sortEntries } from "./hlrModel";
+import { destLabel } from "../../rates/DestinationTree";
 
 const page = pageForPath("/switch/hlr")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -139,7 +140,9 @@ function EntriesEditor({
                         list="destinations"
                         value={null}
                         onChange={(d) => d && patch(i, { code: d.allNetworks ? d.mcc : d.mccmnc })}
-                        labelOf={(d) => `${d.allNetworks ? `${d.mcc} · all` : d.mccmnc} ${d.country} · ${d.network}`}
+                        labelOf={(d) =>
+                          destLabel(d.country, d.network, d.allNetworks, d.allNetworks ? d.mcc : d.mccmnc)
+                        }
                         placeholder={e.code ? "Change…" : "Country or network…"}
                       />
                     </div>

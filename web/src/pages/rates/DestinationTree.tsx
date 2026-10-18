@@ -70,28 +70,64 @@ export function splitByCountry(
   return { countries, mccmncs };
 }
 
-/** Rule MCCMNC lists: a whole country is its 3-digit MCC (§6.4), the rest are network codes. */
+/**
+ * Rule MCCMNC lists keep the exact codes ticked. A 3-digit code is the country's "All networks" default
+ * entry only, never the whole country; a whole country is all its codes (team trial round 1).
+ */
 export function toRuleCodes(tree: TreeCountry[], selected: readonly string[]): string[] {
-  const sel = new Set(selected);
-  const out: string[] = [];
-  for (const c of tree) {
-    const picked = c.codes.filter((x) => sel.has(x.mccmnc));
-    if (!picked.length) continue;
-    if (picked.length === c.codes.length) out.push(c.mcc);
-    else out.push(...picked.map((x) => x.mccmnc));
+  const known = new Set(tree.flatMap((c) => c.codes.map((x) => x.mccmnc)));
+  return [...new Set(selected)].filter((c) => known.has(c) || !tree.length);
+}
+
+/** The other way: codes stay as they are (an MCC is just the All networks row). */
+export function fromRuleCodes(_tree: TreeCountry[], codes: readonly string[]): string[] {
+  return [...new Set(codes)];
+}
+
+/** "Afghanistan · AWCC (41201)"; the country-level code reads "Afghanistan · All networks (412)" (§13.21). */
+export const destLabel = (country: string, network: string, allNetworks: boolean, code: string) =>
+  `${country} · ${allNetworks ? "All networks" : network} (${code})`;
+
+export interface CodeChip {
+  key: string;
+  label: string;
+  /** The codes the chip stands for (all of a country when the whole country is picked). */
+  codes: string[];
+}
+
+/** Picked codes as chips by name, in the order picked; a country with every code picked is one chip. */
+export function codeChips(tree: TreeCountry[], codes: readonly string[]): CodeChip[] {
+  const byCode = new Map<string, { country: TreeCountry; code: TreeCountry["codes"][number] }>();
+  for (const c of tree) for (const x of c.codes) byCode.set(x.mccmnc, { country: c, code: x });
+  const sel = new Set(codes);
+  const done = new Set<string>();
+  const out: CodeChip[] = [];
+  for (const code of codes) {
+    const hit = byCode.get(code);
+    if (!hit) {
+      out.push({ key: code, label: code, codes: [code] });
+      continue;
+    }
+    const c = hit.country;
+    if (done.has(c.mcc)) continue;
+    if (c.codes.length > 1 && c.codes.every((x) => sel.has(x.mccmnc))) {
+      done.add(c.mcc);
+      out.push({ key: `country:${c.mcc}`, label: `${c.name} (whole country)`, codes: c.codes.map((x) => x.mccmnc) });
+    } else
+      out.push({ key: code, label: destLabel(c.name, hit.code.network, hit.code.allNetworks, code), codes: [code] });
   }
   return out;
 }
 
-/** The other way: an MCC opens into all its codes, so the tree shows the country ticked. */
-export function fromRuleCodes(tree: TreeCountry[], codes: readonly string[]): string[] {
-  const out = new Set<string>();
-  for (const code of codes) {
-    const country = code.length === 3 ? tree.find((c) => c.mcc === code) : undefined;
-    if (country) country.codes.forEach((x) => out.add(x.mccmnc));
-    else out.add(code);
-  }
-  return [...out];
+/** Chips as one line: the first `max` by name, then "+N". */
+export function codesText(tree: TreeCountry[], codes: readonly string[], max = 3): string {
+  const chips = codeChips(tree, codes);
+  return (
+    chips
+      .slice(0, max)
+      .map((c) => c.label)
+      .join(", ") + (chips.length > max ? ` +${chips.length - max}` : "")
+  );
 }
 
 export function useDestinationTree() {
@@ -270,7 +306,8 @@ export function RuleCodesDialog({ initial, done }: { initial: string[]; done: (c
       footer={
         <>
           <span className="muted small fb-spacer">
-            {codes.length} code{codes.length === 1 ? "" : "s"} (a whole country is its MCC)
+            {codes.length} code{codes.length === 1 ? "" : "s"} (a whole country is all its codes; the All networks row
+            is only the country default)
           </span>
           <Button onClick={() => done(null)}>Cancel</Button>
           <Button variant="primary" disabled={!tree.length} onClick={() => done(codes)}>

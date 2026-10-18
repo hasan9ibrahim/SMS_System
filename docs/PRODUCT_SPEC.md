@@ -1520,7 +1520,7 @@ Unlike other pages, the Route Rules page follows the screenshots above in layout
 | Type | Coloured dot plus Static, Dynamic (least cost), QBR (quality) or Block | list |
 | Category | Customer category, for example Direct, Promo, OTP, WHS, All | list |
 | Customer trunks | First trunks plus "+N"; hover lists all | contains |
-| Destination | MCCMNC or country, "505 · all" for a whole country; uses the destination picker (§13.21) | starts with |
+| Destination | Country · Network (MCCMNC) names, a whole country as "Country (whole country)"; the 3-digit All networks code is only the country default entry, not the whole country (decided in team trial round 1); uses the destination picker (§13.21) | starts with |
 | Vendors | Vendor split, for example "Kite\_DIR 60 · Orbit\_DIR 40", or "LCR · 6 vendors"; editable in place | vendor |
 | 24h | Volume; hover shows the per-customer breakdown with selectable time frame (§13.27) | ≥ |
 | ASR | Delivery-attempt success % | ≥ |

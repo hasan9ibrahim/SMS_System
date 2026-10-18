@@ -19,6 +19,7 @@ import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { fmtWhen, openImport, RecordActions, RecordDialog } from "./shared";
+import { destLabel } from "../rates/DestinationTree";
 
 const page = pageForPath("/rates/master-table")!;
 
@@ -115,7 +116,7 @@ function DialCodeDialog({ profile, row, done }: { profile: DialCodeProfile; row:
           list="destinations"
           value={form.values.destinationId || null}
           onChange={(d) => form.set("destinationId", d?.id ?? 0)}
-          labelOf={(d) => `${d.allNetworks ? `${d.mccmnc} · all` : d.mccmnc} ${d.country} · ${d.network}`}
+          labelOf={(d) => destLabel(d.country, d.network, d.allNetworks, d.mccmnc)}
           detailOf={(d) => `+${d.dialCode}`}
           placeholder="Country, network or MCCMNC…"
           clearable={false}

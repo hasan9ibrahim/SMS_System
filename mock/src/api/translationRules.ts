@@ -237,7 +237,7 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
   if (input.mccmncs.length) {
     const { rows } = await db.query(
       `SELECT c FROM unnest($1::text[]) AS c
-        WHERE NOT EXISTS (SELECT 1 FROM mccmnc m WHERE m.deleted_at IS NULL AND (m.mccmnc = c OR (length(c) = 3 AND m.mcc = c)))`,
+        WHERE NOT EXISTS (SELECT 1 FROM mccmnc m WHERE m.deleted_at IS NULL AND m.mccmnc = c)`,
       [input.mccmncs],
     );
     if (rows.length) err("/mccmncs", `unknown code${rows.length > 1 ? "s" : ""} ${rows.map((r) => r.c).join(", ")}`);

@@ -137,7 +137,12 @@ export function timeText(startsAt: string, stopsAt: string, now = Date.now()): s
 }
 
 /** The conditions a rule sets, as chips "field op value" (§15.4). */
-export function conditionChips(rule: RouteRuleDetail, now = Date.now()): Chip[] {
+export function conditionChips(
+  rule: RouteRuleDetail,
+  now = Date.now(),
+  /** Codes by name ("Country · Network (code)"; team trial round 1); codes as they are without it. */
+  destinationText?: (codes: string[]) => string,
+): Chip[] {
   const l = rule.labels;
   const chips: Chip[] = [];
   if (rule.customerTrunkMode !== "all")
@@ -158,10 +163,9 @@ export function conditionChips(rule: RouteRuleDetail, now = Date.now()): Chip[] 
     const parts = [
       ...(rule.mccmncMode !== "all"
         ? [
-            rule.mccmncs
-              .slice(0, 6)
-              .map((c) => (c.length === 3 ? `${c} · all` : c))
-              .join(", ") + (rule.mccmncs.length > 6 ? ` +${rule.mccmncs.length - 6}` : ""),
+            destinationText
+              ? destinationText(rule.mccmncs)
+              : rule.mccmncs.slice(0, 6).join(", ") + (rule.mccmncs.length > 6 ? ` +${rule.mccmncs.length - 6}` : ""),
           ]
         : []),
       ...(rule.mccmncPattern ? [`/${rule.mccmncPattern}/`] : []),

@@ -9436,7 +9436,7 @@ export type paths = {
      * Rate Lookup: find destinations as you type (§13.16)
      * @description `q` is a country, network, MCCMNC, dial code or a full phone number. A number is resolved
      *     to its network by the longest dial-code prefix, or by a (simulated) HLR lookup with
-     *     `live=true`. Country matches list the country-level code ("505 · all") first.
+     *     `live=true`. Country matches list the country-level All networks code (e.g. 505) first.
      */
     get: operations["resolveLookupDestinations"];
     put?: never;
@@ -11461,7 +11461,7 @@ export type components = {
       rateTableId: components["schemas"]["Id"];
       /** @enum {string} */
       reason: "rate_correction";
-      /** @description Limit to these codes (a 3-digit code = the whole country); empty = all. */
+      /** @description Limit to these exact codes (a 3-digit code is only the All networks entry; team trial round 1); empty = all. */
       mccmncs: string[];
       senderId: string | null;
       /** @description "Don't add credit/debit note to transaction": compute only. */
@@ -12220,7 +12220,7 @@ export type components = {
     };
     /** @description One destination of a policy (§13.24). */
     HlrPolicyEntry: {
-      /** @description MCCMNC code, or a 3-digit MCC for the whole country; null = every other destination. */
+      /** @description MCCMNC code; the country's All networks code (3 digits) is the default for its networks without their own entry; null = every other destination. */
       code: string | null;
       /**
        * @description ordered: try the providers in order, the next on error or timeout; auto: the cheapest provider meeting minSuccessPct first, then the others by price.
@@ -16320,7 +16320,7 @@ export type components = {
       customerTrunkMode?: components["schemas"]["MatchMode"];
       customerTrunkIds?: components["schemas"]["Id"][];
       mccmncMode?: components["schemas"]["MatchMode"];
-      /** @description Codes; a 3-digit code is the whole country (§13.21). */
+      /** @description Exact codes; a 3-digit code is only the country's All networks default entry, a whole country is all its codes (team trial round 1, §13.21). */
       mccmncs?: string[];
       /** @description Dynamic regular expression on the MCCMNC (§13.21). */
       mccmncPattern?: string | null;
@@ -16472,7 +16472,7 @@ export type components = {
       /** @description Up to 30 names for the hover list. */
       customerTrunkNames: string[];
       customerTrunkCount: number;
-      /** @description e.g. "505 · all", "50501, 50502", "All", or the pattern. */
+      /** @description Destinations by name, e.g. "Australia · Optus (50502), Australia · Telstra (50501) +3", "Romania (whole country)", "All", or the pattern (team trial round 1). */
       destinationLabel: string;
       /** @description e.g. "Kite_DIR 60 · Orbit_DIR 40", "LCR · 6 vendors", "—" for block. */
       vendorsLabel: string;
@@ -16868,7 +16868,7 @@ export type components = {
       rows: components["schemas"]["Enterprise"][];
     };
     LookupDestination: {
-      /** @description A 3-digit code is the whole country (§13.21). */
+      /** @description Exact codes; a 3-digit code is only the country's All networks default entry, a whole country is all its codes (team trial round 1, §13.21). */
       mccmnc: string;
       mcc: string;
       country: string;
@@ -17259,7 +17259,7 @@ export type components = {
       groupBy?: components["schemas"]["ReportGroup"][];
       enterpriseIds?: components["schemas"]["Id"][];
       trunkIds?: components["schemas"]["Id"][];
-      /** @description A 3-digit code is the whole country (§13.21). */
+      /** @description Exact codes; a 3-digit code is only the country's All networks default entry, a whole country is all its codes (team trial round 1, §13.21). */
       mccmncs?: string[];
       /** @description Account manager at send time (§13.30). */
       accountManagerIds?: components["schemas"]["Id"][];

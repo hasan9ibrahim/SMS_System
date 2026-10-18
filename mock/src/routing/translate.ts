@@ -105,7 +105,8 @@ export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext
     rule.mccmncs.length
       ? (() => {
           const code = s.mccmnc;
-          const hit = code !== null && rule.mccmncs.some((c) => (c.length === 3 ? code.startsWith(c) : code === c));
+          // Exact codes: a 3-digit code is the "All networks" entry only (team trial round 1).
+          const hit = code !== null && rule.mccmncs.includes(code);
           return {
             condition: "MCCMNC",
             ok: hit !== rule.mccmncNegate,

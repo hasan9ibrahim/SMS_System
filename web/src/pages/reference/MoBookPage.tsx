@@ -16,6 +16,7 @@ import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { fmtWhen, openImport, RecordActions, RecordDialog } from "./shared";
+import { destLabel } from "../rates/DestinationTree";
 
 const page = pageForPath("/rates/mo-book")!;
 
@@ -106,7 +107,7 @@ function MoDialog({ row, done }: { row: MoNumber | null; done: () => void }) {
           list="destinations"
           value={v.destinationId}
           onChange={(d) => form.set("destinationId", d?.id ?? null)}
-          labelOf={(d) => `${d.allNetworks ? `${d.mccmnc} · all` : d.mccmnc} ${d.country} · ${d.network}`}
+          labelOf={(d) => destLabel(d.country, d.network, d.allNetworks, d.mccmnc)}
           placeholder="None"
         />
       </FormField>

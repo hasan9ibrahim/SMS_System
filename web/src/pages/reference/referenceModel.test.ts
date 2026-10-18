@@ -35,6 +35,6 @@ test("templates start with the columns the server needs; codes show All networks
   assert.match(TEMPLATES.destinations, /^mcc,mnc,original_mnc,country,network\n/);
   assert.match(TEMPLATES.dial_codes, /^prefix,mccmnc\n/);
   assert.match(TEMPLATES.mo_numbers, /^customer_trunk,number,keyword,rate/);
-  assert.equal(codeLabel("262", ""), "262 · all");
+  assert.equal(codeLabel("262", ""), "262");
   assert.equal(codeLabel("262", "01"), "26201");
 });

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.46.0
+  version: 0.47.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -13719,7 +13719,7 @@ paths:
       description: |
         `q` is a country, network, MCCMNC, dial code or a full phone number. A number is resolved
         to its network by the longest dial-code prefix, or by a (simulated) HLR lookup with
-        `live=true`. Country matches list the country-level code ("505 · all") first.
+        `live=true`. Country matches list the country-level All networks code (e.g. 505) first.
       parameters:
         - name: q
           in: query
@@ -18165,7 +18165,7 @@ components:
         mccmncs:
           type: array
           maxItems: 500
-          description: Limit to these codes (a 3-digit code = the whole country); empty = all.
+          description: Limit to these exact codes (a 3-digit code is only the All networks entry; team trial round 1); empty = all.
           items:
             type: string
             pattern: "^[0-9]{3,6}$"
@@ -19565,7 +19565,7 @@ components:
         code:
           type: [string, "null"]
           pattern: "^[0-9]{3,6}$"
-          description: MCCMNC code, or a 3-digit MCC for the whole country; null = every other destination.
+          description: MCCMNC code; the country's All networks code (3 digits) is the default for its networks without their own entry; null = every other destination.
         mode:
           type: string
           enum: [ordered, auto]
@@ -29086,7 +29086,7 @@ components:
           $ref: "#/components/schemas/MatchMode"
         mccmncs:
           type: array
-          description: Codes; a 3-digit code is the whole country (§13.21).
+          description: Exact codes; a 3-digit code is only the country's All networks default entry, a whole country is all its codes (team trial round 1, §13.21).
           items:
             type: string
             pattern: "^[0-9]{3,6}$"
@@ -29321,7 +29321,7 @@ components:
           type: integer
         destinationLabel:
           type: string
-          description: e.g. "505 · all", "50501, 50502", "All", or the pattern.
+          description: Destinations by name, e.g. "Australia · Optus (50502), Australia · Telstra (50501) +3", "Romania (whole country)", "All", or the pattern (team trial round 1).
         vendorsLabel:
           type: string
           description: e.g. "Kite_DIR 60 · Orbit_DIR 40", "LCR · 6 vendors", "—" for block.
@@ -29900,7 +29900,7 @@ components:
       properties:
         mccmnc:
           type: string
-          description: A 3-digit code is the whole country (§13.21).
+          description: Exact codes; a 3-digit code is only the country's All networks default entry, a whole country is all its codes (team trial round 1, §13.21).
         mcc:
           type: string
         country:
@@ -30706,7 +30706,7 @@ components:
         mccmncs:
           type: array
           maxItems: 2000
-          description: A 3-digit code is the whole country (§13.21).
+          description: Exact codes; a 3-digit code is only the country's All networks default entry, a whole country is all its codes (team trial round 1, §13.21).
           items:
             type: string
             pattern: "^[0-9]{3,6}$"

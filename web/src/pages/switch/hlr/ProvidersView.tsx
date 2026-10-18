@@ -27,6 +27,7 @@ import { fmtWhen, openImport, RecordActions, RecordDialog } from "../../referenc
 import { problemText } from "../../routing/dialogs";
 import { useHlrNav, ViewSwitch } from "./HlrPage";
 import { blankProvider, LIVE, MAPPING_FIELDS, PROVIDER_TYPES, providerInput, providerTypeLabel } from "./hlrModel";
+import { destLabel } from "../../rates/DestinationTree";
 
 const page = pageForPath("/switch/hlr")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -328,13 +329,13 @@ function RateDialog({
           required
           wide
           error={form.error("destinationId")}
-          hint="An “all networks” code prices the whole country"
+          hint="The country’s All networks code is the default price for networks without their own"
         >
           <ListLookup<Destination>
             list="destinations"
             value={form.values.destinationId || null}
             onChange={(d) => form.set("destinationId", d?.id ?? 0)}
-            labelOf={(d) => `${d.allNetworks ? `${d.mcc} · all` : d.mccmnc} ${d.country} · ${d.network}`}
+            labelOf={(d) => destLabel(d.country, d.network, d.allNetworks, d.allNetworks ? d.mcc : d.mccmnc)}
             placeholder="Country, network or MCCMNC…"
             clearable={false}
           />

@@ -183,7 +183,7 @@ export interface RouteRule {
   categoryIds: number[]; // empty = all
   customerTrunkMode: "all" | "inclusive" | "exclusive";
   customerTrunkIds: number[];
-  mccmncs: string[]; // empty = all; 3-digit = whole country
+  mccmncs: string[]; // empty = all; 3-digit = whole country here, expanded to its codes when stored
   senderPattern: string | null;
   senderPatternNegate: boolean;
   routeType: "block" | "static" | "dynamic" | "qbr";

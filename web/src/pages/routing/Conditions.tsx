@@ -19,6 +19,7 @@ import {
   type ConditionKey,
 } from "./ruleModel";
 import { DuplicateWarning } from "../admin/cleanup/DuplicateWarning";
+import { codesText, useDestinationTree } from "../rates/DestinationTree";
 
 /** Saves a patch of the rule as one change; resolves with an error text or null. */
 export function useRuleSaver(rule: RouteRuleDetail | undefined) {
@@ -112,10 +113,11 @@ export function ConditionsSection({ id }: { id: number }) {
   const rule = useRouteRule(id);
   const { save, saving } = useRuleSaver(rule.data);
   const [editing, setEditing] = useState<ConditionKey | null>(null);
+  const { tree } = useDestinationTree();
   const r = rule.data;
   if (rule.isError) return <p className="error-text">{(rule.error as Error).message}</p>;
   if (!r) return <p className="muted">Loading…</p>;
-  const chips = conditionChips(r);
+  const chips = conditionChips(r, Date.now(), (codes) => codesText(tree, codes, 4));
   const locked = !!r.archived;
   return (
     <>

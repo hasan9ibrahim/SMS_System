@@ -922,7 +922,7 @@ async function checkPolicy(db: Db, input: HlrPolicyInput, exceptId: number): Pro
   if (codes.length) {
     const { rows } = await db.query(
       `SELECT c FROM unnest($1::text[]) AS c WHERE NOT EXISTS (SELECT 1 FROM mccmnc m WHERE m.deleted_at IS NULL
-          AND (m.mccmnc = c OR (length(c) = 3 AND m.mcc = c)))`,
+          AND m.mccmnc = c)`,
       [codes],
     );
     for (const r of rows)

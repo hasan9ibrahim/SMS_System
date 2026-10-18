@@ -29,7 +29,7 @@ const rule = (over: Record<string, unknown> = {}) =>
     customerTrunkMode: "inclusive",
     customerTrunkIds: [7],
     mccmncMode: "inclusive",
-    mccmncs: ["505"],
+    mccmncs: ["505", "50501"],
     mccmncPattern: null,
     senderPattern: "^(TEST|DEMO)",
     senderPatternNegate: true,
@@ -98,12 +98,15 @@ const options = new Map<number, VendorOption>([
   [12, { vendorTrunkId: 12, name: "Vega_HQ", cost: 0.025, dlr: 80, categoryId: 1 }],
 ]);
 
-test("comparisons, tolerance for = and a country code covering its networks", () => {
+test("comparisons, tolerance for = and a 3-digit code meaning only All networks", () => {
   assert.ok(compare(">", 51, 50, null));
   assert.ok(compare("=", 52, 50, null, 5), "within ±5 %");
   assert.ok(!compare("=", 53, 50, null, 5));
   assert.ok(compare("between", 75, 50, 100));
-  assert.ok(destinationHit(["505"], "50501"));
+  // A 3-digit code is the country's All networks entry, not the whole country (team trial round 1).
+  assert.ok(!destinationHit(["505"], "50501"));
+  assert.ok(destinationHit(["505"], "505"));
+  assert.ok(destinationHit(["505", "50501"], "50501"));
   assert.ok(!destinationHit(["50502"], "50501"));
 });
 

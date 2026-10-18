@@ -144,12 +144,15 @@ export function compare(
 /** Mode check for a list condition (all / inclusive / exclusive). */
 const inMode = (mode: string, hit: boolean) => (mode === "all" ? true : mode === "inclusive" ? hit : !hit);
 
-/** A 3-digit code covers every network of the country (§6.1 All networks). */
+/**
+ * Exact codes only: a 3-digit code is the country's "All networks" default entry (§6.1), not the whole
+ * country (decided in team trial round 1); a whole country is all its codes ticked.
+ */
 export const destinationHit = (codes: string[], mccmnc: string) => {
   // A code list as a set, built once per array (rules route thousands of destinations).
   let set = codeSets.get(codes);
   if (!set) codeSets.set(codes, (set = new Set(codes)));
-  return set.has(mccmnc) || set.has(mccmnc.slice(0, 3));
+  return set.has(mccmnc);
 };
 const codeSets = new WeakMap<string[], Set<string>>();
 
@@ -609,11 +612,7 @@ function destIndex(rules: Rule[]) {
 
 export function rulesForDestination<R extends Rule>(rules: R[], mccmnc: string, now: number): R[] {
   const ix = destIndex(rules);
-  const hits = [
-    ...ix.general,
-    ...(ix.byCode.get(mccmnc) ?? []),
-    ...(mccmnc.length > 3 ? (ix.byCode.get(mccmnc.slice(0, 3)) ?? []) : []),
-  ];
+  const hits = [...ix.general, ...(ix.byCode.get(mccmnc) ?? [])];
   return [...new Set(hits)]
     .sort((a, b) => a - b)
     .map((i) => rules[i]!)
