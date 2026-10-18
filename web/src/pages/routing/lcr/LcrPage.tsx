@@ -4,6 +4,7 @@
 // - Client view: a client's or account manager's sell rates against the LCR positions.
 // - Profiles: named rule sets reused by Least cost route rules.
 // - Changes: top vendor changes and cheapest cost moves, with the alert settings.
+import { IdChips } from "../../monitoring/alerts/parts";
 import { HoverList } from "../../../ui/HoverList";
 import { useMemo, useState } from "react";
 import { useLocation } from "react-router";
@@ -740,28 +741,13 @@ function ProfileDialog({ id, done }: { id: number | null; done: (v: boolean | nu
         {p.vendorTrunkMode !== "all" && (
           <div className="field rn-span">
             <span>{p.vendorTrunkMode === "inclusive" ? "Only" : "Never"} these vendor trunks</span>
-            <div className="id-chips">
-              {p.vendorTrunkIds.map((vt) => (
-                <span key={vt} className="chip">
-                  #{vt}
-                  <button
-                    type="button"
-                    aria-label="Remove"
-                    onClick={() => setP({ vendorTrunkIds: p.vendorTrunkIds.filter((x) => x !== vt) })}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <ListLookup<{ id: number; name: string }>
-                list="vendor_trunks"
-                value={null}
-                exclude={p.vendorTrunkIds}
-                onChange={(r) => r && setP({ vendorTrunkIds: [...p.vendorTrunkIds, r.id] })}
-                labelOf={(r) => `${r.name} (#${r.id})`}
-                placeholder="Add a vendor trunk…"
-              />
-            </div>
+            {/* Vendor trunks by name, not ID (team trial round 1). */}
+            <IdChips
+              list="vendor_trunks"
+              ids={p.vendorTrunkIds}
+              onChange={(ids) => setP({ vendorTrunkIds: ids })}
+              placeholder="Add a vendor trunk…"
+            />
             {problems.vendorTrunkIds && <small className="tone-error">{problems.vendorTrunkIds}</small>}
           </div>
         )}
