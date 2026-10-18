@@ -12,7 +12,7 @@ import { closeDb, db, dbReady } from "../src/db.js";
 import { chRows } from "../src/edr.js";
 import { chIso } from "../src/lists/chEngine.js";
 import { describeFilter, startEdrDownloads } from "../src/api/edrDownloads.js";
-import { buildPcap, diagnose, validIpFilter } from "../src/api/network.js";
+import { buildPcap, diagnose, syncBinds, validIpFilter } from "../src/api/network.js";
 import { listFields } from "../src/lists/fields.js";
 import { causeName, messageEncoding } from "../src/smpp.js";
 
@@ -360,6 +360,8 @@ describe("§9 downloads", { skip }, () => {
 
 describe("§9 network status, captures, simulator, diagnosis", { skip }, () => {
   test("stop and start trunks; sessions follow", async () => {
+    // Bind rows are filled in the background when a server starts; after a fresh seed wait for them.
+    await syncBinds(db());
     const page = await ok<NetworkBindPage>(
       "queryNetworkBinds",
       call("POST", "/network-binds/query", {
