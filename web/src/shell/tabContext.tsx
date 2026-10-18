@@ -24,13 +24,18 @@ export function useTab(): TabContextValue {
   return ctx;
 }
 
-/** Navigate this tab (replace = no history entry, used for filter changes). */
+/**
+ * Navigate this tab (replace = no history entry, used for filter changes). Dialogs render outside any
+ * tab; from there a link opens in a new tab.
+ */
 export function useTabNavigate() {
-  const { tab, popout } = useTab();
+  const ctx = useContext(TabContext);
+  const tab = ctx?.tab ?? null;
+  const popout = ctx?.popout ?? false;
   return useMemo(
     () =>
       (to: string, opts: { replace?: boolean } & OpenOptions = {}) => {
-        if (opts.newTab || opts.forceNew) {
+        if (opts.newTab || opts.forceNew || !tab) {
           useTabs.getState().open(to, opts);
           return;
         }
@@ -40,7 +45,7 @@ export function useTabNavigate() {
         }
         useTabs.getState().setPath(tab.id, to);
       },
-    [tab.id, popout],
+    [tab, popout],
   );
 }
 

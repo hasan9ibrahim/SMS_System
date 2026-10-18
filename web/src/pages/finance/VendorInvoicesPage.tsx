@@ -57,6 +57,7 @@ import {
   vendorInvoiceInput,
   zonedTime,
 } from "./invoiceModel";
+import { tzOptions } from "../../ui/timezones";
 
 const page = pageForPath("/finance/vendor-invoices")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -210,7 +211,7 @@ function VendorInvoiceEditor({
             form={form}
             path="timezone"
             label="Timezone"
-            options={(ref?.timezones ?? ["UTC"]).map((z) => ({ value: z, label: z }))}
+            options={tzOptions(ref?.timezones ?? ["UTC"])}
             placeholder="Partner's billing time zone"
             hint="Our figures are cut at midnight here (§13.31)"
           />

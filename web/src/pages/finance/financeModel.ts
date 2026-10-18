@@ -35,7 +35,8 @@ export function blankTransaction(side: "customer" | "vendor" = "customer", today
     paymentType: side === "customer" ? "credit" : "debit",
     paymentDate: today.toISOString().slice(0, 10),
     amount: 0,
-    currency: "USD",
+    // The system default currency is the euro (team trial 2026-10-18).
+    currency: "EUR",
     description: null,
     sendConfirmation: false,
     includeInSoa: true,

@@ -349,7 +349,7 @@ export function createTrunk(kind: TrunkKind) {
             // Every vendor trunk owns exactly one buy table (§13.12), in the vendor billing currency.
             await c.query(
               `INSERT INTO rate_tables (kind, name, product_category_id, currency, vendor_trunk_id, created_by_id, updated_by_id)
-               VALUES ('vendor', $1, $2, COALESCE((SELECT currency FROM enterprise_billing WHERE enterprise_id = $3 AND side = 'vendor'), 'USD'), $4, $5, $5)`,
+               VALUES ('vendor', $1, $2, COALESCE((SELECT currency FROM enterprise_billing WHERE enterprise_id = $3 AND side = 'vendor'), 'EUR'), $4, $5, $5)`,
               [values.name, values.categoryId, input.enterpriseId, id, me.id],
             );
           }

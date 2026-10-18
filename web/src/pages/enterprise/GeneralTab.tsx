@@ -19,6 +19,7 @@ import { useTabNavigate } from "../../shell/tabContext";
 import { Button } from "../../ui/primitives";
 import { HeaderAction, type SectionProps } from "../../records/parts";
 import { DuplicateWarning } from "../admin/cleanup/DuplicateWarning";
+import { tzOptions } from "../../ui/timezones";
 
 const CONTACTS = [
   ["commercial", "Commercial"],
@@ -300,7 +301,7 @@ export function GeneralTab({
             path="billingTimezone"
             label="Billing time zone"
             required
-            options={(ref.data?.timezones ?? ["UTC"]).map((z) => ({ value: z, label: z }))}
+            options={tzOptions(ref.data?.timezones ?? ["UTC"])}
             hint="Day and month totals are cut at midnight in this zone (§13.31)"
           />
           <NumberField

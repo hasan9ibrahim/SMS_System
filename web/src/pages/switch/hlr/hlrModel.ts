@@ -52,7 +52,7 @@ export function blankProvider(): HlrProviderInput {
     password: null,
     extraHeaders: null,
     postData: null,
-    currency: "USD",
+    currency: "EUR",
     defaultRate: 0.002,
     cacheDays: 1,
     timeoutMs: 1500,

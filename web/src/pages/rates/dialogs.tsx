@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Destination, ListQuery, RateLineEdit, RateTableDetail, TrunkListRow } from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { fetchListPage } from "../../api/hooks";
-import { useChangeRateLines, useReference, useSaveRateTable } from "../../api/records";
+import { usePlatformCurrency, useChangeRateLines, useReference, useSaveRateTable } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
 import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
@@ -23,7 +23,7 @@ export function NewRateTableDialog({ done }: { done: (id: number | null) => void
   const notifySaved = useNotifySaved();
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState(usePlatformCurrency());
   const [description, setDescription] = useState("");
   const [copy, setCopy] = useState(false);
   const [vendorTrunkId, setVendorTrunkId] = useState<number | null>(null);

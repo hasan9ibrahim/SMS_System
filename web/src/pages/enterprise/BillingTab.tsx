@@ -26,6 +26,7 @@ import { useNotifySaved } from "../../history/undo";
 import { Button } from "../../ui/primitives";
 import { HeaderAction, type SectionProps } from "../../records/parts";
 import { balanceWords } from "../finance/financeModel";
+import { tzOptions } from "../../ui/timezones";
 
 type Side = "customer" | "vendor";
 interface Form {
@@ -94,7 +95,7 @@ function SideSection({
             disabled={!!enterprise.archived}
             onClick={() =>
               form.set(side, {
-                currency: bc?.baseCurrency ?? "USD",
+                currency: bc?.baseCurrency ?? "EUR",
                 billingCycleId: ref.data?.billingCycles[0]?.id ?? 1,
                 timezone: enterprise.billingTimezone,
                 billingType: side === "customer" ? "postpaid" : null,
@@ -142,7 +143,7 @@ function SideSection({
         path={p("timezone")}
         label="Time zone"
         required
-        options={(ref.data?.timezones ?? ["UTC"]).map((z) => ({ value: z, label: z }))}
+        options={tzOptions(ref.data?.timezones ?? ["UTC"])}
       />
       {side === "customer" && (
         <SelectField

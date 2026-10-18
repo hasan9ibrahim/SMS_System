@@ -44,7 +44,8 @@ let tierCache: { at: number; tiers: Map<number, { tier: string; limit: number }>
 export async function vendorTiers(db: Db): Promise<Map<number, { tier: string; limit: number }>> {
   if (tierCache && Date.now() - tierCache.at < 60_000) return tierCache.tiers;
   const { rows } = await db.query(
-    "SELECT vt.id, e.tier, vt.tps FROM vendor_trunks vt JOIN enterprises e ON e.id = vt.enterprise_id",
+    // tps is per session (team trial 2026-10-18): the trunk can carry tps × max_connections.
+    "SELECT vt.id, e.tier, vt.tps * vt.max_connections AS tps FROM vendor_trunks vt JOIN enterprises e ON e.id = vt.enterprise_id",
   );
   tierCache = {
     at: Date.now(),

@@ -30,7 +30,7 @@ interface Dim {
   id: (tz: string) => string;
   names?: NameSource;
   /** PostgreSQL lookup for text keys (country, MCCMNC). */
-  lookup?: "country" | "mccmnc";
+  lookup?: "country" | "mccmnc" | "mcc";
   label?: (id: string) => string;
   /** Filter column on the EDR store. */
   filter: (tz: string) => ChColumn;
@@ -38,6 +38,19 @@ interface Dim {
 
 const tzl = (tz: string) => lit(tz);
 export const DIMS: Record<ReportDimension, Dim> = {
+  // Second, minute and 15-minute buckets (Live analytics detail, team trial 2026-10-18).
+  second: {
+    id: (tz) => `formatDateTime(start_time, '%Y-%m-%d %H:%i:%S', ${tzl(tz)})`,
+    filter: (tz) => ({ sql: `formatDateTime(start_time, '%Y-%m-%d %H:%i:%S', ${tzl(tz)})` }),
+  },
+  minute: {
+    id: (tz) => `formatDateTime(start_time, '%Y-%m-%d %H:%i', ${tzl(tz)})`,
+    filter: (tz) => ({ sql: `formatDateTime(start_time, '%Y-%m-%d %H:%i', ${tzl(tz)})` }),
+  },
+  quarterHour: {
+    id: (tz) => `formatDateTime(toStartOfFifteenMinutes(start_time), '%Y-%m-%d %H:%i', ${tzl(tz)})`,
+    filter: (tz) => ({ sql: `formatDateTime(toStartOfFifteenMinutes(start_time), '%Y-%m-%d %H:%i', ${tzl(tz)})` }),
+  },
   date: {
     id: (tz) => `toString(toDate(start_time, ${tzl(tz)}))`,
     filter: (tz) => ({ sql: `toString(toDate(start_time, ${tzl(tz)}))` }),
@@ -71,6 +84,12 @@ export const DIMS: Record<ReportDimension, Dim> = {
   vendorIp: { id: () => "if(v_trunk_id = 0, '', IPv4NumToString(v_ip))", filter: () => EDR_COLUMNS.vendorIp! },
   country: { id: () => "c_country_iso", lookup: "country", filter: () => EDR_COLUMNS.country! },
   destination: { id: () => "c_mccmnc", lookup: "mccmnc", filter: () => EDR_COLUMNS.customerMccmnc! },
+  // The country of the MCCMNC sent to the vendor (its MCC).
+  vendorCountry: {
+    id: () => "if(v_trunk_id = 0, '', substring(v_mccmnc, 1, 3))",
+    lookup: "mcc",
+    filter: () => ({ sql: "if(v_trunk_id = 0, '', substring(v_mccmnc, 1, 3))" }),
+  },
   vendorDestination: {
     id: () => "if(v_trunk_id = 0, '', v_mccmnc)",
     lookup: "mccmnc",
@@ -308,6 +327,46 @@ function metricDef(seconds: number): ChListDef<unknown> {
   };
 }
 
+
+/** Every day of the period, only hourFrom..hourTo (inclusive, report time zone; wraps past midnight). */
+export function hourSql(q: Pick<MasterReportQuery, "hourFrom" | "hourTo">, tz: string): string {
+  const from = q.hourFrom ?? null;
+  const to = q.hourTo ?? null;
+  if (from === null && to === null) return "1";
+  const f = from ?? 0;
+  const t = to ?? 23;
+  const h = `toHour(start_time, ${tzl(tz)})`;
+  return f <= t ? `${h} BETWEEN ${f} AND ${t}` : `(${h} >= ${f} OR ${h} <= ${t})`;
+}
+
+/** Fields whose codes users know by name: a text condition becomes the list of codes it names. */
+const NAMED_TEXT: Partial<Record<string, "country" | "mccmnc" | "mcc">> = {
+  country: "country",
+  destination: "mccmnc",
+  vendorDestination: "mccmnc",
+  vendorCountry: "mcc",
+};
+const likeToRegex = (pattern: string) =>
+  new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`, "i");
+
+export async function namedToCodes(pool: pg.Pool, group: FilterGroup): Promise<FilterGroup> {
+  const lk = await loadLookups(pool);
+  const map = (node: FilterGroup | FilterCondition): FilterGroup | FilterCondition => {
+    if ("logic" in node) return { ...node, conditions: node.conditions.map(map) };
+    const kind = NAMED_TEXT[node.field];
+    if (!kind || !["like", "not_like", "eq", "neq"].includes(node.op)) return node;
+    const text = String(node.value ?? "");
+    const re = node.op === "like" || node.op === "not_like" ? likeToRegex(text) : null;
+    const labels = kind === "country" ? lk.country : kind === "mcc" ? lk.mcc : lk.mccmnc;
+    const hit = (code: string, label: string) =>
+      re ? re.test(code) || re.test(label) || re.test(`${label} (${code})`) : code.toLowerCase() === text.toLowerCase() || label.toLowerCase() === text.toLowerCase();
+    const codes = [...labels.entries()].filter(([code, label]) => hit(code, label)).map(([code]) => code);
+    const negated = node.op === "not_like" || node.op === "neq";
+    return { field: node.field, op: negated ? "not_in" : "in", values: codes.length ? codes : ["\u0000none"] };
+  };
+  return map(group) as FilterGroup;
+}
+
 // ---------------------------------------------------------------- run
 
 export interface ReportResult {
@@ -350,7 +409,12 @@ export function windowOf(
 }
 
 /** Country and MCCMNC labels from PostgreSQL. */
-let lookups: { at: number; country: Map<string, string>; mccmnc: Map<string, string> } | null = null;
+let lookups: {
+  at: number;
+  country: Map<string, string>;
+  mccmnc: Map<string, string>;
+  mcc: Map<string, string>;
+} | null = null;
 async function loadLookups(pool: pg.Pool) {
   if (lookups && Date.now() - lookups.at < 300_000) return lookups;
   const [c, m] = await Promise.all([
@@ -365,6 +429,7 @@ async function loadLookups(pool: pg.Pool) {
     mccmnc: new Map(
       m.rows.map((r) => [String(r.mccmnc), `${r.country} · ${r.is_all_networks ? "All networks" : r.network}`]),
     ),
+    mcc: new Map(m.rows.map((r) => [String(r.mccmnc).slice(0, 3), String(r.country)])),
   };
   return lookups;
 }
@@ -377,6 +442,10 @@ export async function runMasterReport(
 ): Promise<ReportResult> {
   const tz = q.timezone;
   const split = splitFilter(q.filter);
+  // Country and destination filters accept names as well as codes ("Nigeria", "MTN", "621").
+  if (split.dims) split.dims = await namedToCodes(pool, split.dims);
+  const hours = hourSql(q, tz);
+  const tw = (w: Window) => `${timeWhere(w)} AND ${hours}`;
   const factor = await sysToPlatformFactor();
   const secs = seconds(window);
   const msql = METRIC_SQL(secs);
@@ -384,7 +453,7 @@ export async function runMasterReport(
   const dimWhere = split.dims ? await chWhere(pool, dimDef(tz), { filter: split.dims }) : "1";
   const typeWhere = q.msgType ? `msg_type = ${lit(q.msgType)}` : "1";
   const grouped = (w: Window, extra = "1") =>
-    `SELECT ${dimIds.join(", ")}, ${baseSums(factor)} FROM edr WHERE ${timeWhere(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
+    `SELECT ${dimIds.join(", ")}, ${baseSums(factor)} FROM edr WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
       GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}`;
   const withMetrics = (w: Window, extra = "1") =>
     `SELECT *, ${Object.entries(msql)
@@ -429,7 +498,7 @@ export async function runMasterReport(
   const peakSql = (w: Window, rs: Record<string, unknown>[] | null) =>
     `SELECT ${rs ? q.groupBy.map((d) => `d_${d}`).join(", ") + ", " : ""}max(n) AS peak FROM (
        SELECT ${dimIds.join(", ")}, toStartOfMinute(start_time) AS minute, count() AS n FROM edr
-        WHERE ${timeWhere(w)} AND ${typeWhere} AND ${dimWhere} AND ${rs ? tupleIn(rs) : "1"}
+        WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${rs ? tupleIn(rs) : "1"}
         GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}, minute)${rs ? ` GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}` : ""}`;
   const [prevRows, prevTotals, peaks, peakTotal] = await Promise.all([
     prevWindow && rowsRaw.length
@@ -454,6 +523,7 @@ export async function runMasterReport(
     if (dim.names)
       return Number(id) ? (names.get(d)!.get(Number(id)) ?? `#${s}`) : d.startsWith("vendor") ? "not routed" : "—";
     if (dim.lookup === "country") return s ? `${lk!.country.get(s) ?? s} (${s})` : "unknown";
+    if (dim.lookup === "mcc") return s ? `${lk!.mcc.get(s) ?? "Unknown country"} (${s})` : "not routed";
     if (dim.lookup === "mccmnc")
       return s
         ? `${lk!.mccmnc.get(s) ?? "Unknown network"} (${s})`

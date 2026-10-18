@@ -13989,10 +13989,13 @@ export type components = {
       durationMs: number;
     };
     /**
-     * @description Master Report group-by fields (§13.15). destination = customer MCCMNC (country · network).
+     * @description Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor.
      * @enum {string}
      */
     ReportDimension:
+      | "second"
+      | "minute"
+      | "quarterHour"
       | "date"
       | "hour"
       | "week"
@@ -14005,6 +14008,7 @@ export type components = {
       | "vendorIp"
       | "country"
       | "destination"
+      | "vendorCountry"
       | "vendorDestination"
       | "productCategory"
       | "senderId"
@@ -14088,6 +14092,10 @@ export type components = {
        * @enum {string}
        */
       compare: "none" | "previous_period" | "previous_week";
+      /** @description Every day of the period, only from this hour (in the report's time zone; team trial 2026-10-18). With hourTo, e.g. 9 to 17 = 09:00-17:59 each day; hourFrom > hourTo wraps past midnight. */
+      hourFrom?: number | null;
+      /** @description Every day of the period, up to and including this hour. */
+      hourTo?: number | null;
       filter?: components["schemas"]["FilterGroup"];
     };
     MasterReportQuery: components["schemas"]["MasterReportSettings"] & {

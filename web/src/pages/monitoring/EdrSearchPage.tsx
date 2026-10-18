@@ -35,7 +35,7 @@ const muted = (v: string) => <span className="muted">{v}</span>;
 const seen = new Map<number, EdrGridRow>();
 const TICKET_COLUMNS = ["submitTime", "customerMsgId", "vendorMsgId", "senderId", "dnid", "msgStatus", "deliveryError"];
 
-const fetchEdrs = (body: ListQuery): Promise<ListPage<EdrGridRow>> =>
+export const fetchEdrs = (body: ListQuery): Promise<ListPage<EdrGridRow>> =>
   fetchListPage<EdrRow>("edrs", body).then((p) => {
     const rows = p.rows.map(toGridRow);
     for (const r of rows) seen.set(r.id, r);

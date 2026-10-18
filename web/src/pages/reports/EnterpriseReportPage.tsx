@@ -25,6 +25,7 @@ import {
   KEY_FIELDS,
   quickPeriod,
 } from "./reportModel";
+import { tzLabel } from "../../ui/timezones";
 
 const page = pageForPath("/reports/enterprise")!;
 
@@ -278,8 +279,8 @@ function Totals({ data, visible, ccy }: { data: EnterpriseReportPage | null; vis
         </span>
       ))}
       <span className="fb-spacer" />
-      <span className="muted small" title={zones.map((z) => `${z.timezone}: ${z.enterprises} enterprises`).join("\n")}>
-        Cut in {zones.length === 1 ? zones[0]!.timezone : `${zones.length} time zones`}
+      <span className="muted small" title={zones.map((z) => `${tzLabel(z.timezone)}: ${z.enterprises} enterprises`).join("\n")}>
+        Cut in {zones.length === 1 ? tzLabel(zones[0]!.timezone) : `${zones.length} time zones`}
       </span>
     </div>
   );

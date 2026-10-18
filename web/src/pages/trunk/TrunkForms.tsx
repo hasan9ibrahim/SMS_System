@@ -17,6 +17,7 @@ import {
 import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
+import { tzOptions } from "../../ui/timezones";
 
 export type TrunkForm = (CustomerTrunkInput | VendorTrunkInput) & { password?: string };
 
@@ -80,12 +81,13 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     status: "active" as const,
     username: "",
     password: "",
-    maxConnections: 1,
+    // Defaults agreed in the team trial (2026-10-18): 2 sessions, 50 TPS each, 10K overflow buffer.
+    maxConnections: 2,
     port: 2775,
     systemType: null,
     sslType: "none" as const,
-    tps: kind === "customer" ? 50 : 100,
-    overflowBuffer: 0,
+    tps: 50,
+    overflowBuffer: 10_000,
     billingTimezone: null,
   };
   if (kind === "customer")
@@ -237,7 +239,7 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         path="billingTimezone"
         label="Billing time zone"
         placeholder="The enterprise's"
-        options={(ref.data?.timezones ?? ["UTC"]).map((z) => ({ value: z, label: z }))}
+        options={tzOptions(ref.data?.timezones ?? ["UTC"])}
         hint="Day and month totals in the Enterprise report are cut at midnight here (§13.31)"
       />
     </>
@@ -361,7 +363,7 @@ export function CustomerTrunkFields({
             { value: "same_ip", label: "Any session from the same IP" },
             { value: "same_trunk", label: "Any session of the trunk" },
           ]}
-          hint="Where receipts go when the submitting session is gone"
+          hint="Receipts go at once on the session and IP the message came from; this decides only where they go if that session is gone"
         />
         <NumberField
           form={form}
@@ -411,7 +413,16 @@ export function CustomerTrunkFields({
         )}
       </Section>
       <Section title="Capacity and limits" note="§13.26">
-        <NumberField form={form} path="tps" label="TPS" required min={1} max={100000} step={1} />
+        <NumberField
+          form={form}
+          path="tps"
+          label="TPS per session"
+          required
+          min={1}
+          max={100000}
+          step={1}
+          hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
+        />
         <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
         <span />
         <NumberField
@@ -540,7 +551,16 @@ export function VendorTrunkFields({
         <SelectField form={form} path="dlrTimeoutStat" label="Status on receipt timeout" required options={DLR_STATS} />
       </Section>
       <Section title="Capacity and limits" note="§13.26">
-        <NumberField form={form} path="tps" label="TPS" required min={1} max={100000} step={1} />
+        <NumberField
+          form={form}
+          path="tps"
+          label="TPS per session"
+          required
+          min={1}
+          max={100000}
+          step={1}
+          hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
+        />
         <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
         <span />
         <NumberField

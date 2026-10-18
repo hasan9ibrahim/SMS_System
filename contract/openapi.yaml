@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.32.0
+  version: 0.33.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23259,8 +23259,8 @@ components:
     # ------------------------------------------------------------- Reports (§10, §13.15)
     ReportDimension:
       type: string
-      description: "Master Report group-by fields (§13.15). destination = customer MCCMNC (country · network)."
-      enum: [date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorDestination, productCategory, senderId, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
+      description: "Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor."
+      enum: [second, minute, quarterHour, date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorCountry, vendorDestination, productCategory, senderId, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
 
     ReportMetric:
       type: string
@@ -23314,6 +23314,16 @@ components:
           type: string
           enum: [none, previous_period, previous_week]
           default: none
+        hourFrom:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 23
+          description: "Every day of the period, only from this hour (in the report's time zone; team trial 2026-10-18). With hourTo, e.g. 9 to 17 = 09:00-17:59 each day; hourFrom > hourTo wraps past midnight."
+        hourTo:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 23
+          description: "Every day of the period, up to and including this hour."
         filter:
           $ref: "#/components/schemas/FilterGroup"
 

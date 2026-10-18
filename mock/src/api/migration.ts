@@ -138,7 +138,7 @@ const EXAMPLES: Record<MigrationImportEntity, Record<string, string>> = {
     externalId: "RT-5001",
     name: "EXAMPLE_DIRECT USD",
     kind: "vendor",
-    currency: "USD",
+    currency: "EUR",
     category: "DIRECT",
     vendorTrunk: "EXAMPLE_DIRECT",
     customerTrunks: "",
@@ -164,7 +164,7 @@ const EXAMPLES: Record<MigrationImportEntity, Record<string, string>> = {
     enterprise: "Example Messaging Ltd",
     side: "customer",
     amount: "-1250.00",
-    currency: "USD",
+    currency: "EUR",
     date: new Date().toISOString().slice(0, 10),
   },
 };

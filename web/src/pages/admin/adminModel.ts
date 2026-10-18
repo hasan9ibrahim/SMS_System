@@ -132,7 +132,7 @@ export function blankCompany(): BusinessCompanyInput {
   return {
     name: "",
     description: null,
-    baseCurrency: "USD",
+    baseCurrency: "EUR",
     tpsLimit: null,
     website: null,
     smppHost: null,

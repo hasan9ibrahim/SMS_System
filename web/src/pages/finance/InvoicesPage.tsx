@@ -34,6 +34,7 @@ import { problemText } from "../routing/dialogs";
 import { balanceWords, money } from "./financeModel";
 import { blankRequest, JOB_STATUS, PAYMENT_STATUS, requestInput } from "./invoiceModel";
 import { soaLink } from "./soaModel";
+import { tzOptions } from "../../ui/timezones";
 
 const page = pageForPath("/finance/invoices")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -189,7 +190,7 @@ function GenerateDialog({ done }: { done: (rows: InvoiceRequestRow[] | null) => 
             form={form}
             path="timezone"
             label="Timezone"
-            options={(ref?.timezones ?? ["UTC"]).map((z) => ({ value: z, label: z }))}
+            options={tzOptions(ref?.timezones ?? ["UTC"])}
             placeholder="Each enterprise's billing time zone"
             hint="Usage days are cut at midnight here (§13.31)"
           />

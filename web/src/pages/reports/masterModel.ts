@@ -8,7 +8,7 @@ import type {
   ReportMetric,
   ReportPeriod,
 } from "@sms/contract";
-import { emptyState, encodeState } from "../../grid/filterModel";
+import { emptyState, encodeState, type GridState } from "../../grid/filterModel";
 
 export const DIMENSIONS: ReportDimension[] = [
   "date",
@@ -150,27 +150,47 @@ const INTEGER_EDR = new Set([
   "hlrProviderId",
 ]);
 
-/** EDR Search for the messages behind a row, in the report window (UTC hours for an hour row). */
-export function edrSearchPath(row: MasterReportRow, groupBy: ReportDimension[], from: string, to: string): string {
+/**
+ * EDR Search filters for the messages behind a row, in the report window (UTC hours for an hour or
+ * 15-minute row). A drill-down row passes its whole chain (parents first).
+ */
+export function edrGridState(
+  chain: { row: MasterReportRow; dims: ReportDimension[] }[],
+  from: string,
+  to: string,
+): GridState {
   const columns: Record<string, FilterCondition> = {};
   let start = from;
   let end = to;
-  for (const d of groupBy) {
-    const id = row.dims[d]!.id;
-    if (d === "hour" && typeof id === "string" && id.length >= 13 && from.endsWith("Z")) {
-      // hour ids are in the report's time zone; only exact in UTC
-      start = `${id.slice(0, 10)}T${id.slice(11, 13)}:00:00.000Z`;
-      end = new Date(Date.parse(start) + 3_600_000).toISOString();
-      continue;
+  for (const { row, dims } of chain)
+    for (const d of dims) {
+      const id = row.dims[d]!.id;
+      const timeSpan = { hour: 3_600_000, quarterHour: 900_000, minute: 60_000, second: 1000 }[d as string] ?? 0;
+      if (timeSpan && typeof id === "string" && id.length >= 13 && from.endsWith("Z")) {
+        // time ids are in the report's time zone; only exact in UTC ("YYYY-MM-DD HH:MM[:SS]")
+        const hms = id.slice(11);
+        start = `${id.slice(0, 10)}T${hms.length >= 8 ? hms.slice(0, 8) : `${hms.slice(0, 5)}:00`}.000Z`;
+        end = new Date(Date.parse(start) + timeSpan).toISOString();
+        continue;
+      }
+      if (d === "date" && typeof id === "string") {
+        start = `${id}T00:00:00.000Z`;
+        end = new Date(Date.parse(start) + 86_400_000).toISOString();
+        continue;
+      }
+      const field = EDR_FIELD[d];
+      if (!field || id === null) continue;
+      if (field === "causeCode" || field === "msgStatus" || field === "type")
+        columns[field] = { field, op: "in", values: [String(id)] };
+      else columns[field] = { field, op: "eq", value: INTEGER_EDR.has(field) ? Number(id) : String(id) };
     }
-    const field = EDR_FIELD[d];
-    if (!field || id === null) continue;
-    if (field === "causeCode" || field === "msgStatus" || field === "type")
-      columns[field] = { field, op: "in", values: [String(id)] };
-    else columns[field] = { field, op: "eq", value: INTEGER_EDR.has(field) ? Number(id) : String(id) };
-  }
   columns.startTime = { field: "startTime", op: "between", values: [start, end] };
-  return `/monitoring/edr?g=${encodeState({ ...emptyState(), columns })}`;
+  return { ...emptyState(), columns };
+}
+
+/** EDR Search for the messages behind a row, in the report window (UTC hours for an hour row). */
+export function edrSearchPath(row: MasterReportRow, groupBy: ReportDimension[], from: string, to: string): string {
+  return `/monitoring/edr?g=${encodeState(edrGridState([{ row, dims: groupBy }], from, to))}`;
 }
 
 export const PERIODS: { value: ReportPeriod; label: string }[] = [
