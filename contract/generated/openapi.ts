@@ -16554,6 +16554,11 @@ export type components = {
         at: components["schemas"]["Timestamp"];
         messages: number;
         margin: number;
+        /** @description Messages per vendor trunk in this bucket, so the Traffic tab shows which vendor was routing at each point (team trial round 1). Vendors outside the window's top 10 add up under vendorTrunkId -1; vendorTrunkId 0 is traffic no vendor took (rejected or not routed). */
+        vendors?: {
+          vendorTrunkId: number;
+          messages: number;
+        }[];
       }[];
     };
     /** @description A sample message for the rule Test and the Route Simulator. */

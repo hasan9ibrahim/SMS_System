@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.45.0
+  version: 0.46.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -29485,6 +29485,20 @@ components:
                 type: integer
               margin:
                 type: number
+              vendors:
+                type: array
+                description: >-
+                  Messages per vendor trunk in this bucket, so the Traffic tab shows which vendor was routing at each
+                  point (team trial round 1). Vendors outside the window's top 10 add up under vendorTrunkId -1;
+                  vendorTrunkId 0 is traffic no vendor took (rejected or not routed).
+                items:
+                  type: object
+                  required: [vendorTrunkId, messages]
+                  properties:
+                    vendorTrunkId:
+                      type: integer
+                    messages:
+                      type: integer
 
     RouteTestRequest:
       type: object

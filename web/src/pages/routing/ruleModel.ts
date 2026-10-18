@@ -318,3 +318,34 @@ export function compact(n: number | null | undefined): string {
   if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
 }
+
+/** One time bucket of a rule's traffic per vendor trunk (team trial round 1). */
+export interface VendorBucket {
+  at: string;
+  messages: number;
+  vendors?: { vendorTrunkId: number; messages: number }[];
+}
+
+/**
+ * When the main vendor (the one carrying the most messages) changed over the window: the first bucket,
+ * then every bucket where another vendor took over. Buckets without traffic are skipped.
+ */
+export function vendorSwitches(
+  series: readonly VendorBucket[],
+): { at: string; vendorTrunkId: number; sharePct: number; untilAt: string | null }[] {
+  const out: { at: string; vendorTrunkId: number; sharePct: number; untilAt: string | null }[] = [];
+  for (const b of series) {
+    const top = [...(b.vendors ?? [])].sort((x, y) => y.messages - x.messages)[0];
+    if (!top || !b.messages) continue;
+    const last = out[out.length - 1];
+    if (last?.vendorTrunkId === top.vendorTrunkId) continue;
+    if (last) last.untilAt = b.at;
+    out.push({
+      at: b.at,
+      vendorTrunkId: top.vendorTrunkId,
+      sharePct: Math.round((top.messages / b.messages) * 1000) / 10,
+      untilAt: null,
+    });
+  }
+  return out;
+}

@@ -128,6 +128,22 @@ export async function ruleTraffic(ruleId: number, window: TrafficWindow): Promis
     ),
   ]);
   if (!total || !byC || !byV || !series) return empty;
+  // Which vendor carried the traffic in each bucket (team trial round 1): the window's top 10 vendors,
+  // the rest as -1 ("other vendors").
+  const top = byV.slice(0, 10).map((r) => Number(r.id));
+  const perVendor =
+    (await chRows<{ at: string; id: number; n: string }>(
+      `SELECT toString(${w.bucket}(submit_time)) AS at,
+              if(v_trunk_id IN (${top.length ? top.join(",") : "0"}) OR v_trunk_id = 0, v_trunk_id, -1) AS id,
+              count() AS n
+         FROM edr WHERE ${where} GROUP BY at, id`,
+    )) ?? [];
+  const vendorsAt = new Map<string, { vendorTrunkId: number; messages: number }[]>();
+  for (const r of perVendor) {
+    const list = vendorsAt.get(r.at) ?? [];
+    list.push({ vendorTrunkId: Number(r.id), messages: Number(r.n) });
+    vendorsAt.set(r.at, list);
+  }
   const t = figures(total[0] ?? { n: 0, asr: null, dlr: null, margin: 0 });
   const names = async (table: string, ids: number[]) => {
     if (!ids.length) return new Map<number, { name: string; enterprise: string }>();
@@ -168,6 +184,11 @@ export async function ruleTraffic(ruleId: number, window: TrafficWindow): Promis
       sharePct: share(r.n),
       ...figures(r),
     })),
-    series: series.map((r) => ({ at: toIso(r.at), messages: Number(r.n), margin: Number(r.margin) })),
+    series: series.map((r) => ({
+      at: toIso(r.at),
+      messages: Number(r.n),
+      margin: Number(r.margin),
+      vendors: (vendorsAt.get(r.at) ?? []).sort((a, b) => b.messages - a.messages),
+    })),
   };
 }

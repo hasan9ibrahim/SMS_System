@@ -1,6 +1,7 @@
 // Route rule traffic (§13.27, §15.4): the Traffic section (volume, ASR, DLR and margin over
 // time, per customer and vendor), the right-side 24h trend, and the hover breakdown on
-// the 24h column with a selectable time frame.
+// the 24h column with a selectable time frame. "Vendors over time" shows which vendor carried the
+// traffic in each bucket and when the main vendor changed (team trial round 1).
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { RouteTraffic, TrafficWindow } from "@sms/contract";
 import { usePlatformCurrency } from "../../api/records";
@@ -8,7 +9,7 @@ import { useRouteTraffic } from "../../api/routing";
 import { Chart, useChartColors } from "../../ui/Chart";
 import { Popover } from "../../ui/primitives";
 import { formatMoney, formatPct } from "../rates/format";
-import { compact } from "./ruleModel";
+import { compact, vendorSwitches } from "./ruleModel";
 
 export const WINDOWS: TrafficWindow[] = ["15m", "1h", "24h", "7d", "30d"];
 
@@ -95,6 +96,90 @@ function TrafficChart({ data, ccy }: { data: RouteTraffic; ccy: string }) {
   );
   return <Chart option={option} height={170} label="Messages and margin over time" />;
 }
+
+const vendorLabel = (id: number, names: ReadonlyMap<number, string>) =>
+  id === 0 ? "Not routed" : id === -1 ? "Other vendors" : (names.get(id) ?? `Trunk ${id}`);
+
+function VendorTimeline({ data }: { data: RouteTraffic }) {
+  const c = useChartColors();
+  const names = useMemo(() => new Map(data.byVendor.map((v) => [v.vendorTrunkId, v.name])), [data]);
+  // Vendors in the window's order (most messages first), then "other" and "not routed".
+  const ids = useMemo(() => {
+    const seen = new Set(data.series.flatMap((p) => (p.vendors ?? []).map((v) => v.vendorTrunkId)));
+    const ordered = data.byVendor.map((v) => v.vendorTrunkId).filter((id) => id > 0 && seen.has(id));
+    return [...ordered, ...[-1, 0].filter((id) => seen.has(id))];
+  }, [data]);
+  const switches = useMemo(() => vendorSwitches(data.series), [data]);
+  const option = useMemo(
+    () => ({
+      animation: false,
+      grid: { left: 48, right: 16, top: 26, bottom: 24 },
+      legend: { top: 0, right: 0, type: "scroll", textStyle: { color: c.secondary, fontSize: 11 }, itemHeight: 8 },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        backgroundColor: c.panel,
+        borderColor: c.border,
+        textStyle: { color: c.text, fontSize: 12 },
+      },
+      xAxis: {
+        type: "category",
+        data: data.series.map((p) => bucketLabel(p.at, data.window)),
+        axisLine: { lineStyle: { color: c.border } },
+        axisLabel: { color: c.secondary, fontSize: 11 },
+      },
+      yAxis: {
+        type: "value",
+        splitLine: { lineStyle: { color: c.border } },
+        axisLabel: { color: c.secondary, fontSize: 11, formatter: (v: number) => compact(v) },
+      },
+      // Colour carries meaning only: vendors in shades of the accent, other vendors grey, not routed red.
+      series: ids.map((id, i) => ({
+        name: vendorLabel(id, names),
+        type: "bar",
+        stack: "vendors",
+        barMaxWidth: 14,
+        data: data.series.map((p) => p.vendors?.find((v) => v.vendorTrunkId === id)?.messages ?? 0),
+        itemStyle: {
+          color: id === 0 ? c.error : id === -1 ? c.secondary : c.accent,
+          opacity: id > 0 ? Math.max(0.25, 1 - i * 0.16) : 0.8,
+        },
+      })),
+    }),
+    [data, c, ids, names],
+  );
+  return (
+    <div className="vendor-timeline">
+      <div className="aside-label">Vendors over time</div>
+      <Chart option={option} height={150} label="Messages per vendor over time" />
+      {switches.length > 0 && (
+        <table className="mini-table">
+          <thead>
+            <tr>
+              <th>From</th>
+              <th>Until</th>
+              <th>Main vendor</th>
+              <th className="num">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {switches.map((x) => (
+              <tr key={x.at}>
+                <td>{fmtAt(x.at, data.window)}</td>
+                <td>{x.untilAt ? fmtAt(x.untilAt, data.window) : "now"}</td>
+                <td className={x.vendorTrunkId === 0 ? "tone-error" : ""}>{vendorLabel(x.vendorTrunkId, names)}</td>
+                <td className="num">{formatPct(x.sharePct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+const fmtAt = (at: string, w: TrafficWindow) =>
+  w === "7d" || w === "30d" ? at.slice(0, 10) : `${at.slice(5, 10)} ${at.slice(11, 16)}`;
 
 function FiguresTable({
   title,
@@ -194,6 +279,7 @@ export function TrafficSection({ ruleId }: { ruleId: number }) {
       {d?.available && (
         <>
           <TrafficChart data={d} ccy={ccy} />
+          <VendorTimeline data={d} />
           <div className="traffic-tables">
             <FiguresTable
               title="Customer trunk"

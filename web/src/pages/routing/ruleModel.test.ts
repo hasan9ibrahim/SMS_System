@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { RouteRuleDetail } from "@sms/contract";
 import {
+  vendorSwitches,
   backupProblems,
   clearCondition,
   compact,
@@ -158,4 +159,27 @@ test("a vendor's own backups: all chosen, shares add up to 100 when several (tea
     "Choose every backup of #7.",
     "Backups of #7 add up to 90%, not 100%.",
   ]);
+});
+
+test("vendor switches: the main vendor per bucket, listed when it changes (team trial round 1)", () => {
+  const b = (at: string, ...v: [number, number][]) => ({
+    at,
+    messages: v.reduce((n, [, m]) => n + m, 0),
+    vendors: v.map(([vendorTrunkId, messages]) => ({ vendorTrunkId, messages })),
+  });
+  const s = vendorSwitches([
+    b("10:00", [1, 90], [2, 10]),
+    b("11:00", [1, 80], [2, 20]),
+    { at: "12:00", messages: 0, vendors: [] },
+    b("13:00", [2, 70], [1, 30]),
+    b("14:00", [1, 100]),
+  ]);
+  assert.deepEqual(
+    s.map((x) => [x.at, x.vendorTrunkId, x.sharePct, x.untilAt]),
+    [
+      ["10:00", 1, 90, "13:00"],
+      ["13:00", 2, 70, "14:00"],
+      ["14:00", 1, 100, null],
+    ],
+  );
 });
