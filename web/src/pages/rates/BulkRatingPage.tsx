@@ -241,7 +241,8 @@ export function BulkRatingPage() {
   const [tables, setTables] = useState(initial.tables);
   const [mccmncs, setMccmncs] = useState(initial.mccmncs);
   const [countries, setCountries] = useState(initial.countries);
-  const [type, setType] = useState<RateBulkAction["type"]>("change_pct");
+  // Fixed rate is the usual job, so it is the default (team trial round 1).
+  const [type, setType] = useState<RateBulkAction["type"]>("set");
   const [value, setValue] = useState("");
   const [costSource, setCostSource] = useState<"best_buy" | "vendor_trunk">("best_buy");
   const [vendorTrunkId, setVendorTrunkId] = useState<number | null>(null);

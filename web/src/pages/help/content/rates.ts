@@ -1296,7 +1296,7 @@ export const topics: HelpTopic[] = [
                 name: "Action",
                 what: "What to do to every line in scope.",
                 values:
-                  "**Set a fixed rate**; **Change by %**; **Change by amount**; **Cost + margin %**; **Cost + amount**; **Close lines**; **Block lines**; **Unblock lines**; **Suggested rates only (market move)**.",
+                  "**Set a fixed rate** (the default); **Change by %**; **Change by amount**; **Cost + margin %**; **Cost + amount**; **Close lines**; **Block lines**; **Unblock lines**; **Suggested rates only (market move)**. Opened from a market move, it starts on **Suggested rates only**.",
               },
               {
                 name: "Value",
