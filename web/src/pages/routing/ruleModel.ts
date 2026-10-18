@@ -185,11 +185,14 @@ export function conditionChips(
   ) => {
     const list = listId ? nameOf(l.numberLists, listId) : "";
     if (!p && !list) return;
+    // A pattern built from a value list reads as that list ("is one of BANK, OTP"; team trial round 1).
+    const parsed = p ? parsePattern(p) : null;
+    const listed = parsed && parsed.kind !== "regex";
     chips.push({
       key,
       field: CONDITION_LABELS[key],
-      op: negate ? "not" : "matches",
-      value: [p, list && `list ${list}`].filter(Boolean).join(" · "),
+      op: listed ? `${negate ? "not " : ""}${PATTERN_KINDS[parsed.kind]}` : negate ? "not" : "matches",
+      value: [listed ? parsed.values.join(", ") : p, list && `list ${list}`].filter(Boolean).join(" · "),
     });
   };
   pattern("sender", rule.senderPattern, rule.senderPatternNegate, rule.senderListId);
@@ -352,4 +355,62 @@ export function vendorSwitches(
     });
   }
   return out;
+}
+
+/**
+ * Sender, receiver and content conditions without regex (team trial round 1): a list of values that
+ * becomes the pattern the rule stores (the contract and the switch keep one regex). "Is one of" =
+ * ^(?:A|B)$, "starts with" = ^(?:A|B), "contains" = (?:A|B); matching is case-insensitive in the switch.
+ */
+export type PatternKind = "is" | "starts" | "contains" | "regex";
+export const PATTERN_KINDS: Record<PatternKind, string> = {
+  is: "is one of",
+  starts: "starts with",
+  contains: "contains",
+  regex: "matches",
+};
+
+const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+export function buildPattern(kind: Exclude<PatternKind, "regex">, values: readonly string[]): string | null {
+  const vs = [...new Set(values.map((v) => v.trim()).filter(Boolean))];
+  if (!vs.length) return null;
+  const body = `(?:${vs.map(escapeRe).join("|")})`;
+  return kind === "is" ? `^${body}$` : kind === "starts" ? `^${body}` : body;
+}
+
+/** Splits on | that are not escaped. */
+function alternatives(body: string): string[] | null {
+  const out: string[] = [];
+  let cur = "";
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]!;
+    if (ch === "\\") {
+      cur += ch + (body[i + 1] ?? "");
+      i++;
+    } else if (ch === "|") {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/** A pattern back into its value list when it has one of the built shapes; anything else is regex. */
+export function parsePattern(pattern: string): { kind: PatternKind; values: string[] } {
+  const shapes: [PatternKind, RegExp][] = [
+    ["is", /^\^\(\?:(.*)\)\$$/s],
+    ["starts", /^\^\(\?:(.*)\)$/s],
+    ["contains", /^\(\?:(.*)\)$/s],
+  ];
+  for (const [kind, re] of shapes) {
+    const m = pattern.match(re);
+    if (!m) continue;
+    const parts = alternatives(m[1]!);
+    const values = parts?.map((p) => p.replace(/\\(.)/g, "$1"));
+    // Only plain text: every value escapes back to exactly what was stored.
+    if (values && values.every((v, i) => v !== "" && escapeRe(v) === parts![i])) return { kind, values };
+  }
+  return { kind: "regex", values: [] };
 }

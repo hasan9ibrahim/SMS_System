@@ -1454,3 +1454,21 @@ body.resizing-rows {
 .ch-delta {
   margin-top: 4px;
 }
+
+/* Route rule value lists for Sender ID, receiver and content (team trial round 1). */
+.pattern-builder .segmented {
+  align-self: flex-start;
+}
+.pattern-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pattern-add {
+  display: flex;
+  gap: 6px;
+}
+.pattern-add input {
+  flex: 1;
+}

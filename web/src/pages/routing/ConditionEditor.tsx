@@ -15,7 +15,15 @@ import type {
 import { useReference } from "../../api/records";
 import { ListLookup } from "../../records/parts";
 import { Button, Modal } from "../../ui/primitives";
-import { CONDITION_LABELS, type ConditionKey } from "./ruleModel";
+import {
+  buildPattern,
+  CONDITION_LABELS,
+  parsePattern,
+  PATTERN_KINDS,
+  type ConditionKey,
+  type PatternKind,
+} from "./ruleModel";
+import { Icon } from "../../ui/Icon";
 import { DestinationPick, TrunkPick, type Picked } from "./pickers";
 
 const OPS: { value: CompareOp; label: string }[] = [
@@ -43,6 +51,107 @@ function regexError(p: string): string | null {
   } catch (e) {
     return (e as Error).message;
   }
+}
+
+/**
+ * Values instead of a regex (team trial round 1): type a Sender ID, receiver or phrase and press + (or
+ * Enter); "Regex" keeps the free pattern for anything else.
+ */
+function PatternBuilder({
+  field,
+  kinds,
+  kind,
+  setKind,
+  values,
+  setValues,
+  pattern,
+  setPattern,
+}: {
+  field: ConditionKey;
+  kinds: PatternKind[];
+  kind: PatternKind;
+  setKind: (k: PatternKind) => void;
+  values: string[];
+  setValues: (v: string[]) => void;
+  pattern: string;
+  setPattern: (p: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  // Sender IDs and numbers can be pasted as a list; content phrases keep their commas.
+  const add = () => {
+    const parts = (field === "content" ? draft.split(/\n/) : draft.split(/[\n,;]/)).map((x) => x.trim());
+    const next = [...values, ...parts.filter((x) => x && !values.includes(x))];
+    if (next.length !== values.length) setValues(next);
+    setDraft("");
+  };
+  const noun = field === "content" ? "word or phrase" : field === "sender" ? "Sender ID" : "receiver number";
+  return (
+    <div className="pattern-builder">
+      <div className="segmented small" role="radiogroup" aria-label={`${CONDITION_LABELS[field]} match`}>
+        {kinds.map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={kind === k}
+            className={kind === k ? "on" : ""}
+            onClick={() => setKind(k)}
+          >
+            {k === "regex" ? "Regex" : PATTERN_KINDS[k][0]!.toUpperCase() + PATTERN_KINDS[k].slice(1)}
+          </button>
+        ))}
+      </div>
+      {kind === "regex" ? (
+        <label className="field">
+          <span>{CONDITION_LABELS[field]} pattern (regular expression)</span>
+          <input
+            autoFocus
+            value={pattern}
+            maxLength={200}
+            placeholder={field === "content" ? "e.g. code|otp" : "e.g. ^(TEST|DEMO)"}
+            onChange={(e) => setPattern(e.target.value)}
+          />
+          {regexError(pattern) && <small className="error-text">{regexError(pattern)}</small>}
+        </label>
+      ) : (
+        <>
+          <div className="chips">
+            {values.map((v) => (
+              <span key={v} className="chip">
+                {v}
+                <button
+                  type="button"
+                  aria-label={`Remove ${v}`}
+                  onClick={() => setValues(values.filter((x) => x !== v))}
+                >
+                  <Icon name="x" size={11} />
+                </button>
+              </span>
+            ))}
+            {values.length === 0 && <span className="muted small">Nothing added yet.</span>}
+          </div>
+          <div className="pattern-add">
+            <input
+              autoFocus
+              value={draft}
+              maxLength={200}
+              placeholder={`Type a ${noun} and press + or Enter`}
+              aria-label={`Add a ${noun}`}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  add();
+                }
+              }}
+            />
+            <Button small icon="plus" onClick={add} disabled={!draft.trim()} aria-label={`Add ${noun}`} />
+          </div>
+          <small className="muted">Upper and lower case match alike.</small>
+        </>
+      )}
+    </div>
+  );
 }
 
 function Mode({
@@ -174,6 +283,13 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   const [mccPattern, setMccPattern] = useState(rule.mccmncPattern ?? "");
   const pat = key === "sender" || key === "receiver" || key === "content" ? key : "sender";
   const [pattern, setPattern] = useState(rule[`${pat}Pattern`] ?? "");
+  // A stored pattern opens as its value list when it was built from one (team trial round 1).
+  const kinds: PatternKind[] = key === "content" ? ["contains", "starts", "regex"] : ["is", "starts", "regex"];
+  const initial = pattern ? parsePattern(pattern) : { kind: kinds[0]!, values: [] as string[] };
+  const [patternKind, setPatternKind] = useState<PatternKind>(
+    kinds.includes(initial.kind) ? initial.kind : pattern ? "regex" : kinds[0]!,
+  );
+  const [patternValues, setPatternValues] = useState<string[]>(kinds.includes(initial.kind) ? initial.values : []);
   const [negate, setNegate] = useState(rule[`${pat}PatternNegate`]);
   const [listId, setListId] = useState<number | null>(
     key === "sender" ? rule.senderListId : key === "receiver" ? rule.receiverListId : null,
@@ -264,17 +380,21 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
         form: (
           <>
             <Negate value={negate} onChange={setNegate} />
-            <label className="field">
-              <span>{CONDITION_LABELS[key]} pattern (regular expression)</span>
-              <input
-                autoFocus
-                value={pattern}
-                maxLength={200}
-                placeholder={key === "content" ? "e.g. (?i)code|otp" : "e.g. ^(TEST|DEMO)"}
-                onChange={(e) => setPattern(e.target.value)}
-              />
-              {regexError(pattern) && <small className="error-text">{regexError(pattern)}</small>}
-            </label>
+            <PatternBuilder
+              field={key}
+              kinds={kinds}
+              kind={patternKind}
+              setKind={(k) => {
+                // Switching to Regex keeps what the list stood for, so it can be fine-tuned.
+                if (k === "regex" && patternKind !== "regex")
+                  setPattern(buildPattern(patternKind, patternValues) ?? pattern);
+                setPatternKind(k);
+              }}
+              values={patternValues}
+              setValues={setPatternValues}
+              pattern={pattern}
+              setPattern={setPattern}
+            />
             {key !== "content" && (
               <label className="field">
                 <span>{key === "sender" ? "Sender ID list" : "Receiver ID list"}</span>
@@ -294,9 +414,13 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
           </>
         ),
         patch: () => {
-          if (regexError(pattern)) return "Fix the pattern.";
-          if (!pattern.trim() && !listId) return "Enter a pattern or choose a list.";
-          const p = { [`${key}Pattern`]: pattern.trim() || null, [`${key}PatternNegate`]: negate };
+          const built = patternKind === "regex" ? pattern.trim() || null : buildPattern(patternKind, patternValues);
+          if (patternKind === "regex" && regexError(pattern)) return "Fix the pattern.";
+          if (!built && !listId)
+            return patternKind === "regex"
+              ? "Enter a pattern or choose a list."
+              : "Add at least one value or choose a list.";
+          const p = { [`${key}Pattern`]: built, [`${key}PatternNegate`]: negate };
           return key === "content" ? p : { ...p, [`${key}ListId`]: listId };
         },
       };

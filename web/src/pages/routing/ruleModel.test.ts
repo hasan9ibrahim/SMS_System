@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { RouteRuleDetail } from "@sms/contract";
 import {
+  buildPattern,
+  parsePattern,
   vendorSwitches,
   backupProblems,
   clearCondition,
@@ -183,4 +185,24 @@ test("vendor switches: the main vendor per bucket, listed when it changes (team 
       ["14:00", 1, 100, null],
     ],
   );
+});
+
+test("value lists become patterns and back; other regex stays regex (team trial round 1)", () => {
+  assert.equal(buildPattern("is", ["BANK", "OTP", " "]), "^(?:BANK|OTP)$");
+  assert.equal(buildPattern("starts", ["4479"]), "^(?:4479)");
+  assert.equal(buildPattern("contains", ["your code", "a.b (x)"]), "(?:your code|a\\.b \\(x\\))");
+  assert.equal(buildPattern("is", []), null);
+  assert.deepEqual(parsePattern("^(?:BANK|OTP)$"), { kind: "is", values: ["BANK", "OTP"] });
+  assert.deepEqual(parsePattern("(?:your code|a\\.b \\(x\\))"), { kind: "contains", values: ["your code", "a.b (x)"] });
+  assert.deepEqual(parsePattern("^(?:4479)"), { kind: "starts", values: ["4479"] });
+  assert.equal(parsePattern("^(TEST|DEMO)").kind, "regex");
+  assert.equal(parsePattern("^(?:A.*)$").kind, "regex", "a regex inside the shape stays regex");
+  for (const [kind, vals] of [
+    ["is", ["Brand+1", "x|y"]],
+    ["contains", ["50% off", "[promo]"]],
+  ] as const) {
+    const p = buildPattern(kind, vals)!;
+    assert.deepEqual(parsePattern(p), { kind, values: vals });
+    assert.ok(vals.every((v) => new RegExp(p, "i").test(kind === "is" ? v : `x ${v} y`)));
+  }
 });
