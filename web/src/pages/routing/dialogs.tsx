@@ -13,10 +13,15 @@ import { ApiError } from "../../api/client";
 import { useReference } from "../../api/records";
 import { useBulkRouteRules, useRouteRule, useSaveRouteRule } from "../../api/routing";
 import { useNotifySaved } from "../../history/undo";
-import { ListLookup } from "../../records/parts";
+import { useMe } from "../../api/hooks";
+import { isAdminUser, ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
 import { ROUTE_TYPES, shareProblems, toInput } from "./ruleModel";
+
+/** New rules start at 97; 98–100 are kept for administrators (team trial round 1). */
+export const DEFAULT_PRIORITY = 97;
+const useMaxPriority = () => (isAdminUser(useMe().data?.permissions) ? 100 : DEFAULT_PRIORITY);
 
 export const problemText = (e: unknown) => {
   if (!(e instanceof ApiError)) return String(e);
@@ -42,6 +47,7 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
   const ref = useReference();
   const save = useSaveRouteRule();
   const notifySaved = useNotifySaved();
+  const maxPriority = useMaxPriority();
   const [g, setG] = useState<General>(
     rule
       ? {
@@ -57,7 +63,7 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
         }
       : {
           name: "",
-          priority: 50,
+          priority: DEFAULT_PRIORITY,
           // A new rule starts off: with no conditions yet it would match all traffic.
           status: "inactive",
           routeType: "static",
@@ -107,7 +113,13 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
           <span>
             Name<span className="req">*</span>
           </span>
-          <input autoFocus value={g.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} />
+          <input
+            autoFocus
+            value={g.name}
+            maxLength={120}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => set({ name: e.target.value })}
+          />
         </label>
         <label className="field">
           <span>
@@ -116,11 +128,20 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
           <input
             type="number"
             min={1}
-            max={100}
+            max={Math.max(maxPriority, rule?.priority ?? 0)}
             value={g.priority}
-            onChange={(e) => set({ priority: Math.max(1, Math.min(100, Number(e.target.value) || 1)) })}
+            onChange={(e) =>
+              set({
+                priority: Math.max(
+                  1,
+                  Math.min(Math.max(maxPriority, rule?.priority ?? 0), Number(e.target.value) || 1),
+                ),
+              })
+            }
           />
-          <small className="muted">1–100, low first</small>
+          <small className="muted">
+            1–100, low first{maxPriority < 100 ? "; 98–100 only by an administrator" : ""}
+          </small>
         </label>
       </div>
       {!rule && (
@@ -234,7 +255,8 @@ type BulkKind = "set_priority" | "shift_priority" | "replace_vendor" | "set_lcr_
 export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[]; done: (ok: boolean) => void }) {
   const bulk = useBulkRouteRules();
   const notifySaved = useNotifySaved();
-  const [priority, setPriority] = useState(50);
+  const maxPriority = useMaxPriority();
+  const [priority, setPriority] = useState(DEFAULT_PRIORITY);
   const [shift, setShift] = useState(10);
   const [from, setFrom] = useState<number | null>(null);
   const [to, setTo] = useState<number | null>(null);
@@ -286,14 +308,14 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
     >
       {kind === "set_priority" && (
         <label className="field">
-          <span>New priority (1–100)</span>
+          <span>New priority (1–{maxPriority})</span>
           <input
             autoFocus
             type="number"
             min={1}
-            max={100}
+            max={maxPriority}
             value={priority}
-            onChange={(e) => setPriority(Number(e.target.value))}
+            onChange={(e) => setPriority(Math.max(1, Math.min(maxPriority, Number(e.target.value) || 1)))}
           />
         </label>
       )}

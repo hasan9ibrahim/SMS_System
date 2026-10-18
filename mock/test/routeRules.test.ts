@@ -98,7 +98,7 @@ describe("route rules grid (§15.4)", { skip }, () => {
     );
     assert.ok(
       byName.rows.every((r: { destinationNames: string[] }) =>
-        r.destinationNames.some((n) => n.startsWith("Australia")),
+        r.destinationNames.some((n) => /^\d+-Australia-/.test(n)),
       ),
     );
     // Hover lists: every destination and vendor of the row.

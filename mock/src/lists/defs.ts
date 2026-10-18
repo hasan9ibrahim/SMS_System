@@ -993,32 +993,39 @@ const vendorNamesSql = `(SELECT string_agg(${ruleVendorName}, ', ') FROM route_r
    WHERE v.route_rule_id = r.id)`;
 
 /**
- * A rule's destinations by name (team trial round 1): "Country · Network (MCCMNC)", and a country whose
- * every code is listed as "Country (whole country)". A 3-digit code is only the All networks entry.
+ * A rule's destinations per country (team trial round 1): the country, whether every code of it is listed,
+ * and its codes as "MCCMNC-Country-Network", joined by chr(31). A 3-digit code is only the All networks entry.
  */
 const ruleDestinationNames = `ARRAY(
-  SELECT CASE WHEN x.n = x.total AND x.total > 1 THEN x.country || ' (whole country)' ELSE x.parts END
+  SELECT x.country || chr(31) || (x.n = x.total AND x.total > 1)::text || chr(31) || x.parts
     FROM (SELECT min(u.o) AS o, co.name AS country, count(*) AS n,
                  (SELECT count(*) FROM mccmnc y WHERE y.mcc = m.mcc AND y.deleted_at IS NULL) AS total,
-                 string_agg(co.name || ' · ' || CASE WHEN m.is_all_networks THEN 'All networks' ELSE m.network END
-                            || ' (' || m.mccmnc || ')', ', ' ORDER BY u.o) AS parts
+                 string_agg(m.mccmnc || '-' || co.name || '-' || CASE WHEN m.is_all_networks THEN 'All Networks' ELSE m.network END,
+                            chr(31) ORDER BY u.o) AS parts
             FROM unnest(r.mccmncs) WITH ORDINALITY u(c, o)
             JOIN mccmnc m ON m.mccmnc = u.c AND m.deleted_at IS NULL
             JOIN countries co ON co.id = m.country_id
            GROUP BY m.mcc, co.name) x
    ORDER BY x.o LIMIT 100)`;
 
-/** A rule's destinations by name, one per line, for the hover list (whole countries kept as one line). */
-function ruleDestinationList(codes: string[], names: unknown): string[] {
-  const groups = (names as string[] | null) ?? [];
-  if (!groups.length) return codes;
-  return groups.flatMap((n) => (n.endsWith("(whole country)") ? [n] : n.split(", ")));
+/** Per country: its name, whether every code of it is picked, and each code as "MCCMNC-Country-Network". */
+function destinationGroups(names: unknown): { country: string; whole: boolean; parts: string[] }[] {
+  return ((names as string[] | null) ?? []).map((g) => {
+    const [country, whole, ...parts] = g.split("\x1f");
+    return { country: country!, whole: whole === "true", parts };
+  });
 }
 
-/** First two destinations by name, then "+N" (more when only the first 100 countries were read). */
+/** A rule's destinations for the hover list: every code, one per line as "MCCMNC-Country-Network" (team trial round 1). */
+function ruleDestinationList(codes: string[], names: unknown): string[] {
+  const groups = destinationGroups(names);
+  return groups.length ? groups.flatMap((g) => g.parts) : codes;
+}
+
 function destinationSummary(codes: string[], names: unknown): string {
-  const groups = (names as string[] | null) ?? [];
-  const list = ruleDestinationList(codes, names);
+  const groups = destinationGroups(names);
+  // The cell keeps a whole country as one entry; the hover list shows every code.
+  const list = groups.length ? groups.flatMap((g) => (g.whole ? [`${g.country} (whole country)`] : g.parts)) : codes;
   const rest = list.length - 2;
   return list.slice(0, 2).join(", ") + (rest > 0 ? ` +${rest}${groups.length >= 100 ? "…" : ""}` : "");
 }

@@ -426,7 +426,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Priority",
                 what: "Required. The evaluation order: low numbers are tried first.",
-                values: "1–100. Default 50.",
+                values: "1–100. Default 97. Only an administrator can set 98, 99 or 100.",
               },
               {
                 name: "Route type",
@@ -967,7 +967,8 @@ export const topics: HelpTopic[] = [
             title: "Duplicate a rule",
             items: [
               "Select the rule in the grid.",
-              'Press **D**. A copy named "… (copy)" is added, switched off, with the same conditions and vendors.',
+              'Press **D** or click **Clone** next to New rule. A copy named "… (copy)" is added, switched off, with the same conditions and vendors.',
+              "The copy's settings open straight away with the name selected: type the new name and save.",
               "Change what differs and turn it on.",
             ],
           },

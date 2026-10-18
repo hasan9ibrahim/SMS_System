@@ -197,6 +197,8 @@ export function RouteRulesPage() {
       onSuccess: (r) => {
         if (r.change) notifySaved(r.change, `Duplicated as #${r.record.id} (off)`);
         showRule(r.record.id);
+        // The copy opens in the editor right away so it can be renamed (team trial round 1).
+        void ask<number>((done) => <RuleDialog rule={r.record} done={done} />);
       },
       onError: (e) => toast({ tone: "error", message: problemText(e) }),
     });
@@ -339,6 +341,8 @@ export function RouteRulesPage() {
 
   return (
     <ListScreen<RouteRuleRow>
+      // Double-click or Enter edits the rule (team trial round 1).
+      onOpen={(row) => void edit(row)}
       list="route_rules"
       page={page}
       historyScope={{ entityTypes: ["route_rule"] }}

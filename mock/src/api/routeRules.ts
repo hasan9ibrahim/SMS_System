@@ -249,12 +249,20 @@ export async function loadRule(db: Db, id: number): Promise<RouteRuleDetail | nu
 
 // ---------------------------------------------------------------- input
 
+/** New rules start at 97; priorities 98–100 are kept for administrators (team trial round 1). */
+const DEFAULT_PRIORITY = 97;
+const ADMIN_PRIORITY = 98;
+const adminOnly = (priority: number): FieldError => ({
+  path: "/priority",
+  message: `Priorities ${ADMIN_PRIORITY}–100 can only be set by an administrator (got ${priority})`,
+});
+
 /** A full record from a (possibly partial) input: defaults for a new rule, the old values on edit. */
 function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
   const now = Date.now();
   const defaults: Omit<RuleCore, "id"> = {
     name: "",
-    priority: 50,
+    priority: DEFAULT_PRIORITY,
     status: "active",
     startsAt: new Date(now).toISOString(),
     stopsAt: new Date(now + 10 * 365 * 86_400_000).toISOString(),
@@ -580,6 +588,7 @@ export function createRouteRule(request: FastifyRequest, reply: FastifyReply) {
     const me = await getCurrentUser();
     const rule = complete(input, null);
     const errors = await checkRule(pool, rule);
+    if (rule.priority >= ADMIN_PRIORITY && !isAdmin(me)) errors.push(adminOnly(rule.priority));
     if (errors.length) return badInput(reply, errors);
     const { id, change } = await inTransaction(pool, async (c) => {
       const id = await insertRule(c, rule, me.id);
@@ -607,6 +616,8 @@ export function updateRouteRule(request: FastifyRequest, reply: FastifyReply) {
     if (before.archived) return sendProblem(reply, 400, "This rule is archived; restore it before editing");
     const after = complete(input, before);
     const errors = await checkRule(pool, after);
+    if (after.priority !== before.priority && after.priority >= ADMIN_PRIORITY && !isAdmin(me))
+      errors.push(adminOnly(after.priority));
     if (errors.length) return badInput(reply, errors);
     const diff = diffPaths(id, before, after, FIELD_PATHS);
     if (diff.length === 0) return { record: before, change: null };
@@ -633,7 +644,13 @@ export function cloneRouteRule(request: FastifyRequest, reply: FastifyReply) {
     const me = await getCurrentUser();
     const src = await loadRule(pool, id);
     if (!src) return notFound(reply, id);
-    const copy: RuleCore = { ...src, name: `${src.name} (copy)`.slice(0, 120), status: "inactive" };
+    const copy: RuleCore = {
+      ...src,
+      name: `${src.name} (copy)`.slice(0, 120),
+      status: "inactive",
+      // A copy made by someone who is not an administrator stays below the reserved priorities.
+      priority: isAdmin(me) ? src.priority : Math.min(src.priority, DEFAULT_PRIORITY),
+    };
     const { newId, change } = await inTransaction(pool, async (c) => {
       const newId = await insertRule(c, copy, me.id);
       const change = await recordChange(c, {
@@ -756,6 +773,8 @@ export function bulkRouteRules(request: FastifyRequest, reply: FastifyReply) {
     if (body.action === "set_priority" && body.priority === undefined)
       errors.push({ path: "/priority", message: "required" });
     if (body.action === "shift_priority" && !body.shift) errors.push({ path: "/shift", message: "required" });
+    if (body.action === "set_priority" && (body.priority ?? 0) >= ADMIN_PRIORITY && !isAdmin(me))
+      errors.push(adminOnly(body.priority!));
     if (body.action === "replace_vendor") {
       if (!body.fromVendorTrunkId) errors.push({ path: "/fromVendorTrunkId", message: "required" });
       if (!body.toVendorTrunkId) errors.push({ path: "/toVendorTrunkId", message: "required" });
@@ -801,7 +820,9 @@ export function bulkRouteRules(request: FastifyRequest, reply: FastifyReply) {
       if (body.action === "set_priority" && r.priority !== body.priority)
         diff.push({ entity_id: id, field: "priority", before: r.priority, after: body.priority });
       if (body.action === "shift_priority") {
-        const next = Math.min(100, Math.max(1, r.priority + body.shift!));
+        // Not an administrator: a shift never raises a rule into the reserved priorities.
+        const top = isAdmin(me) ? 100 : Math.max(DEFAULT_PRIORITY, r.priority);
+        const next = Math.min(top, Math.max(1, r.priority + body.shift!));
         if (next !== r.priority) diff.push({ entity_id: id, field: "priority", before: r.priority, after: next });
       }
       if (body.action === "archive") diff.push({ entity_id: id, field: "archived", before: false, after: true });

@@ -349,6 +349,7 @@ What the Phoenix backend must match so the screens need no change:
 - **Record action bar (§15.1)**: list pages show the selected row's actions next to New: Clone, Delete/Restore and the page's main action (usually Edit) in sight, every other per-record action under More. Greyed with a hint until one row is selected or when an action does not apply; no Open button (double-click or Enter opens). Web only, no contract change. *Backend*: none.
 - **Route simulator headings (§6.3)**: with several receivers or destinations, each result heading shows country · network, then the MCCMNC (a number keeps the number in front). Web only, no contract change.
 - **Route simulator vendor translation (§6.3, §6.4, §13.2)**: contract v0.60.0 adds `vendorTranslation` to `RouteSimulatorResult` (vendor trunk, TrunkRulesTestResult): the chosen (or forced) vendor trunk's egress rules run on the message as ingress translation left it; a blocking egress rule sets `blocked`. Null when no vendor is chosen. *Backend*: same order in the switch — ingress → HLR → customer rate → route rule → vendor → egress → submit. Open: when an egress rule blocks, should the switch try the next vendor instead of rejecting? The simulator reports it as blocked.
+- **Route rules: priority, hover, double-click, clone (§6.3, §13.8)**: new rules default to priority 97; 98–100 only by an administrator (create, edit, bulk set refused with a field error; bulk shift never raises a non-admin past 97; a non-admin's clone is capped at 97). The destination hover lists every code as "MCCMNC-Country-Network" (the cell still shows "Country (whole country)"). Double-click or Enter edits the rule; a clone opens in the editor with the name selected. No contract change. *Backend*: same priority check on save.
 - **Billing time zones** are shown as `UTC±hh:mm · Zone`, sorted west to east, everywhere a time zone is picked. The stored value is still the IANA zone.
 
 ## Market move notes (build step 5.15, §13.14)
@@ -566,6 +567,7 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
+- Route rules (§6.3): the screens evaluate priority **low first** (1 before 100). With 98–100 reserved for administrators, should high numbers win instead (100 tried first)? Waiting for the team's answer.
 - Route simulator / switch (§6.4): when an egress (vendor-side) translation rule blocks a message, should the switch fall back to the next vendor, or reject it? The simulator shows it as blocked for now.
 - *Found while writing the help center (2026-10-18), where the screens and the spec differ:*
   - Route rules: when a rule has both a destination **pattern** and a destination **list**, the evaluator only checks the pattern. Should the pattern narrow the list (both must match) instead?
