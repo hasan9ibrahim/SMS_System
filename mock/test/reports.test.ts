@@ -144,6 +144,34 @@ describe("§13.15 Master Report", { skip }, () => {
     assert.ok(p1.rows[0]!.metrics.attempts! >= p1.rows[9]!.metrics.attempts!, "default sort: first metric, descending");
   });
 
+  test("live screens label and filter enterprises by alias (team trial round 1)", async () => {
+    const byAlias = await ok<MasterReportPage>(
+      "runMasterReport",
+      call("POST", "/reports/master", Q({ groupBy: ["customer"], limit: 1, enterpriseLabel: "alias" })),
+    );
+    const top = byAlias.rows[0]!;
+    const { rows } = await db().query("SELECT name, alias FROM enterprises WHERE id = $1", [top.dims.customer!.id]);
+    assert.equal(top.dims.customer!.label, rows[0].alias || rows[0].name);
+    const byName = await ok<MasterReportPage>(
+      "runMasterReport",
+      call("POST", "/reports/master", Q({ groupBy: ["customer"], limit: 1 })),
+    );
+    assert.equal(byName.rows[0]!.dims.customer!.label, rows[0].name, "the Master Report keeps full names");
+    const drilled = await ok<MasterReportPage>(
+      "runMasterReport",
+      call(
+        "POST",
+        "/reports/master",
+        Q({
+          groupBy: ["customer"],
+          enterpriseLabel: "alias",
+          filter: { logic: "and", conditions: [{ field: "customer", op: "eq", value: top.dims.customer!.label }] },
+        }),
+      ),
+    );
+    assert.equal(drilled.totals.metrics.attempts, top.metrics.attempts, "a drill-down by alias finds the same traffic");
+  });
+
   test("field filters before grouping, thresholds after, sorting, compare", async () => {
     const r = await ok<MasterReportPage>(
       "runMasterReport",

@@ -24,6 +24,7 @@ const PATHS = {
   refresh: "M20 11a8 8 0 00-14-5L4 8M4 4v4h4M4 13a8 8 0 0014 5l2-2M20 20v-4h-4",
   search: "M11 4a7 7 0 100 14 7 7 0 000-14zM20 20l-4-4",
   play: "M7 4l13 8-13 8z",
+  pause: "M8 5v14M16 5v14",
   minus: "M5 12h14",
   shuffle: "M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3",
   radar: "M12 3a9 9 0 109 9M12 7a5 5 0 105 5M12 12l7-7",

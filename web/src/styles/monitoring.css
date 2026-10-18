@@ -497,3 +497,92 @@
 .la-grid th .la-h1 {
   text-overflow: clip;
 }
+
+/* Live analytics, team trial round 1 (second pass): controls on one line at one height, one-line column
+   titles, a "+" menu per row and a search box on every breakdown. */
+.la-bar .field,
+.la-page .page-actions .field {
+  margin-bottom: 0;
+}
+.la-range {
+  align-items: flex-end;
+}
+.la-range input[type="date"],
+.la-range select,
+.la-presets .la-chip,
+.la-page .page-actions select,
+.la-page .page-actions .btn {
+  height: 32px;
+  box-sizing: border-box;
+}
+.la-page .page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.la-page .page-actions .field.inline {
+  height: 32px;
+}
+.la-live {
+  height: 32px;
+}
+.la-grid th,
+.la-grid th.num {
+  white-space: normal;
+  vertical-align: bottom;
+  text-overflow: clip;
+}
+.la-grid th.la-th-name {
+  padding: 4px 6px;
+}
+.la-row-search {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+.la-search-row td {
+  background: color-mix(in srgb, var(--color-text-secondary) 6%, var(--color-panel));
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.la-by {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.la-menu {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+/* Live analytics colours (team trial round 1): only ASR, DLRs and margin are bold and coloured. */
+.la-grid td.num {
+  font-weight: 400;
+}
+.la-grid td.num.la-strong {
+  font-weight: 700;
+}
+.la-grid td.la-good {
+  color: var(--color-good);
+}
+.la-grid td.la-warn {
+  background: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  color: #1d1d1d;
+}
+.la-grid td.la-bad {
+  background: var(--color-error);
+  color: #1d1d1d;
+}
+.la-total td.num {
+  font-weight: 400;
+}
+.la-total td.num.la-strong {
+  font-weight: 700;
+}

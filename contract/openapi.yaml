@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.47.0
+  version: 0.48.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23529,6 +23529,12 @@ components:
               default: 200
             cursor:
               type: [string, "null"]
+            enterpriseLabel:
+              type: string
+              enum: [name, alias]
+              description: >-
+                How customer and vendor enterprises are labelled and matched in filters: their full name
+                (missing = name) or their alias, as the live screens show them (team trial round 1).
       unevaluatedProperties: false
 
     MasterReportExportInput:

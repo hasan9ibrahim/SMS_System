@@ -14218,6 +14218,11 @@ export type components = {
       /** @default 200 */
       limit: number;
       cursor?: string | null;
+      /**
+       * @description How customer and vendor enterprises are labelled and matched in filters: their full name (missing = name) or their alias, as the live screens show them (team trial round 1).
+       * @enum {string}
+       */
+      enterpriseLabel?: "name" | "alias";
     };
     MasterReportExportInput: {
       query: components["schemas"]["MasterReportQuery"];

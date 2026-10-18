@@ -1,11 +1,13 @@
 // Live Analytics (§13.4), redesigned in the team trial (2026-10-18) after the old platform's Analytics
-// Report: a calendar period with an hour range applied to every day, drill-down levels (Customer →
-// Customer trunk → Destination → 15 minutes …), a total row, and every column on screen without side
+// Report: a calendar period with an hour range applied to every day, a total row whose "+" breaks it
+// down by any level, and a "+" on every row to break it down further by any level not used above it
+// (Customer → Customer trunk → Destination → 15 minutes …), and every column on screen without side
 // scrolling: Attempts, Success, Submitted, Billable (C/V), ASR, DLR (c) as the customer sees it, DLR (v)
 // as the vendor reports it, Margin, Revenue, Cost, Delivered, Reported, average rates, delay and HLR.
 // DLR and ASR cells turn amber or red below their thresholds, a negative margin red. While the period
 // includes today, a live:analytics push (WebSocket) refreshes the open levels at the chosen interval.
-// Each row opens its EDRs in a window, exports them, or opens EDR Search.
+// Each row opens its EDRs in a window, exports them, or opens EDR Search. Every breakdown has its own
+// search box; changes apply at once (no Search button) and Pause stops the live refresh (team trial round 1).
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -20,7 +22,7 @@ import { PageHeader } from "../../page/PageHeader";
 import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
-import { Button, Modal } from "../../ui/primitives";
+import { Button, Menu, Modal, Popover } from "../../ui/primitives";
 import { fetchEdrs } from "../monitoring/EdrSearchPage";
 import { RequestDialog } from "../monitoring/parts";
 import { edrGridState } from "../reports/masterModel";
@@ -34,11 +36,12 @@ import {
   DETAIL,
   detailQuery,
   includesToday,
-  LEVELS,
   levelLabel,
+  levelOptions,
   levelQuery,
   presetRange,
   rangeProblem,
+  TONED,
   type Settings,
 } from "./analyticsTree";
 
@@ -60,6 +63,15 @@ const BY: Record<string, ReportDimension> = {
   destination: "destination",
   country: "country",
 };
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
 
 type Chain = { row: MasterReportRow; dims: ReportDimension[] }[];
 interface Detail {
@@ -268,7 +280,7 @@ function Cells({ metrics }: { metrics: Record<string, number | null> }) {
         const v = metrics[c.metric];
         const t = cellTone(c.metric, v);
         return (
-          <td key={c.metric} className={`num${t ? ` la-${t}` : ""}`}>
+          <td key={c.metric} className={`num${TONED.has(c.metric) ? " la-strong" : ""}${t ? ` la-${t}` : ""}`}>
             {fmt(v, c.fmt)}
           </td>
         );
@@ -277,9 +289,54 @@ function Cells({ metrics }: { metrics: Record<string, number | null> }) {
   );
 }
 
+/** The "+" of a row: a menu of the levels not used above it; "−" closes the breakdown (team trial round 1). */
+function ExpandButton({
+  name,
+  open,
+  used,
+  onPick,
+  onClose,
+}: {
+  name: string;
+  open: ReportDimension | null;
+  used: readonly ReportDimension[];
+  onPick: (d: ReportDimension) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [menu, setMenu] = useState(false);
+  const options = levelOptions(used);
+  if (!open && !options.length) return <span className="la-toggle-gap" />;
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        className="la-toggle"
+        aria-label={open ? `Close the breakdown of ${name}` : `Break down ${name}`}
+        aria-expanded={!!open}
+        aria-haspopup={open ? undefined : "menu"}
+        title={open ? `Close (by ${levelLabel(open).toLowerCase()})` : "Break down by…"}
+        onClick={() => (open ? onClose() : setMenu((v) => !v))}
+      >
+        <Icon name={open ? "minus" : "plus"} size={11} />
+      </button>
+      <Popover anchor={ref} open={menu} onClose={() => setMenu(false)}>
+        <div className="la-menu">
+          <Menu
+            onClose={() => setMenu(false)}
+            items={options.map((o) => ({ label: o.label, onSelect: () => onPick(o.value) }))}
+          />
+        </div>
+      </Popover>
+    </>
+  );
+}
+
 function Level({
   settings,
-  depth,
+  dim,
+  used,
   parents,
   chain,
   tick,
@@ -289,49 +346,82 @@ function Level({
   selected,
 }: {
   settings: Settings;
-  depth: number;
+  /** This breakdown's level; `used` holds it and the levels above, which the rows' "+" leave out. */
+  dim: ReportDimension;
+  used: ReportDimension[];
   parents: FilterCondition[];
   chain: Chain;
   tick: number;
-  search: string;
+  /** The top breakdown's search (in the column header); a nested breakdown has its own search row. */
+  search?: string;
   window: { from: string; to: string };
   onDetail: (d: Detail) => void;
   selected: string | null;
 }) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  // Row key → the level it is broken down by.
+  const [open, setOpen] = useState<Map<string, ReportDimension>>(new Map());
   const [limit, setLimit] = useState(100);
-  const dim = settings.levels[depth]!;
-  const conds =
-    depth === 0 && search.trim()
-      ? [...parents, { field: dim, op: "like" as const, value: `%${search.trim()}%` }]
-      : parents;
+  const [own, setOwn] = useState("");
+  const typed = useDebounced((search ?? own).trim(), 300);
+  const depth = chain.length;
+  const conds = typed ? [...parents, { field: dim, op: "like" as const, value: `%${typed}%` }] : parents;
   const q = useQuery({
-    queryKey: ["analytics-level", settings, depth, conds, limit, tick],
-    queryFn: () => runMasterReport(levelQuery(settings, depth, conds, limit)),
+    queryKey: ["analytics-level", settings, dim, conds, limit, tick],
+    queryFn: () => runMasterReport(levelQuery(settings, dim, conds, limit)),
     placeholderData: keepPreviousData,
   });
-  const indent = { paddingLeft: 8 + depth * 18 };
+  const indent = { paddingLeft: 8 + (depth + 1) * 18 };
+  const setRow = (key: string, d: ReportDimension | null) =>
+    setOpen((m) => {
+      const n = new Map(m);
+      if (d) n.set(key, d);
+      else n.delete(key);
+      return n;
+    });
+  // Every breakdown under a row searches its own rows, like the old platform (team trial round 1).
+  const searchRow =
+    search === undefined ? (
+      <tr className="la-search-row">
+        <td className="la-name" style={indent}>
+          <span className="la-toggle-gap" />
+          <input
+            className="la-row-search"
+            placeholder={`Search ${levelLabel(dim).toLowerCase()}…`}
+            aria-label={`Search ${levelLabel(dim).toLowerCase()} of ${chain.map((c) => c.row.dims[c.dims[0]!]?.label).join(" › ")}`}
+            value={own}
+            onChange={(e) => setOwn(e.target.value)}
+          />
+        </td>
+        <td colSpan={COLUMNS.length + 1} />
+      </tr>
+    ) : null;
   if (q.isError)
     return (
-      <tr>
-        <td colSpan={COLUMNS.length + 2} className="tone-error" style={indent}>
-          {problemText(q.error)}
-        </td>
-      </tr>
+      <>
+        {searchRow}
+        <tr>
+          <td colSpan={COLUMNS.length + 2} className="tone-error" style={indent}>
+            {problemText(q.error)}
+          </td>
+        </tr>
+      </>
     );
   if (!q.data)
     return (
-      <tr>
-        <td colSpan={COLUMNS.length + 2} className="muted" style={indent}>
-          Loading {levelLabel(dim).toLowerCase()}…
-        </td>
-      </tr>
+      <>
+        {searchRow}
+        <tr>
+          <td colSpan={COLUMNS.length + 2} className="muted" style={indent}>
+            Loading {levelLabel(dim).toLowerCase()}…
+          </td>
+        </tr>
+      </>
     );
-  const hasNext = depth + 1 < settings.levels.length;
   return (
     <>
+      {searchRow}
       {q.data.rows.map((r) => {
-        const isOpen = open.has(r.key);
+        const next = open.get(r.key) ?? null;
         const label = r.dims[dim]?.label ?? r.key;
         const rowChain = [...chain, { row: r, dims: [dim] }];
         return (
@@ -349,26 +439,13 @@ function Level({
               }
             >
               <td className="la-name" style={indent} title={`${levelLabel(dim)}: ${label}`}>
-                {hasNext ? (
-                  <button
-                    type="button"
-                    className="la-toggle"
-                    aria-label={isOpen ? `Close ${label}` : `Open ${label}`}
-                    aria-expanded={isOpen}
-                    onClick={() =>
-                      setOpen((s) => {
-                        const n = new Set(s);
-                        if (n.has(r.key)) n.delete(r.key);
-                        else n.add(r.key);
-                        return n;
-                      })
-                    }
-                  >
-                    <Icon name={isOpen ? "minus" : "plus"} size={11} />
-                  </button>
-                ) : (
-                  <span className="la-toggle-gap" />
-                )}
+                <ExpandButton
+                  name={label}
+                  open={next}
+                  used={used}
+                  onPick={(d) => setRow(r.key, d)}
+                  onClose={() => setRow(r.key, null)}
+                />
                 <span className="la-label">{label}</span>
               </td>
               <Cells metrics={r.metrics} />
@@ -408,14 +485,14 @@ function Level({
                 </button>
               </td>
             </tr>
-            {isOpen && hasNext && (
+            {next && (
               <Level
                 settings={settings}
-                depth={depth + 1}
+                dim={next}
+                used={[...used, next]}
                 parents={childConditions(parents, r, dim)}
                 chain={rowChain}
                 tick={tick}
-                search=""
                 window={window}
                 onDetail={onDetail}
                 selected={selected}
@@ -437,7 +514,7 @@ function Level({
       {q.data.rows.length === 0 && (
         <tr>
           <td colSpan={COLUMNS.length + 2} className="muted" style={indent}>
-            No traffic.
+            {typed ? "Nothing matches." : "No traffic."}
           </td>
         </tr>
       )}
@@ -449,12 +526,9 @@ export function LiveAnalyticsPage() {
   const location = useLocation();
   const url = new URLSearchParams(location.search);
   const first = BY[url.get("by") ?? ""] ?? "customer";
-  const [draft, setDraft] = useState<Settings>(() => ({
-    ...presetRange("today"),
-    hourFrom: 0,
-    hourTo: 23,
-    levels: first === "customer" ? ["customer", "customerTrunk", "destination"] : [first, "quarterHour"],
-  }));
+  const [draft, setDraft] = useState<Settings>(() => ({ ...presetRange("today"), hourFrom: 0, hourTo: 23 }));
+  // How the total row is broken down (its "+"); opens by customer, or by the Dashboard link's ?by=.
+  const [top, setTop] = useState<ReportDimension | null>(first);
   const [settings, setSettings] = useState<Settings>(draft);
   // "Today" is the server's report day: the latest day with traffic (the fake data stops when it was
   // generated). Presets count from it, and the page opens on it.
@@ -485,8 +559,15 @@ export function LiveAnalyticsPage() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailBy, setDetailBy] = useState<ReportDimension>("minute");
   const live = includesToday(settings, reportToday);
-  const tick = useLiveTick(refresh, live);
+  // Pause stops the live refresh without losing the chosen interval (team trial round 1).
+  const [paused, setPaused] = useState(false);
+  const running = live && !!refresh && !paused;
+  const tick = useLiveTick(refresh, live && !paused);
   const problem = rangeProblem(draft);
+  // No Search button: every change of period or hours applies at once while it is valid (team trial round 1).
+  useEffect(() => {
+    if (!rangeProblem(draft)) setSettings(draft);
+  }, [draft]);
   const window = useMemo(
     () =>
       settings.at
@@ -499,18 +580,14 @@ export function LiveAnalyticsPage() {
   );
   const total = useQuery({
     queryKey: ["analytics-total", settings, tick],
-    queryFn: () => runMasterReport({ ...levelQuery(settings, 0, []), limit: 1 }),
+    queryFn: () => runMasterReport({ ...levelQuery(settings, top ?? "customer", []), limit: 1 }),
     placeholderData: keepPreviousData,
   });
   usePageStatus({
-    rows: total.data
-      ? `${total.data.total.toLocaleString("en-US")} ${levelLabel(settings.levels[0]!).toLowerCase()}s`
-      : "",
-    shortcuts: "+ opens the next level · EDRs opens the messages of a row · times in UTC",
+    rows: total.data && top ? `${total.data.total.toLocaleString("en-US")} × ${levelLabel(top).toLowerCase()}` : "",
+    shortcuts: "+ breaks a row down by any level · EDRs opens the messages of a row · times in UTC",
   });
-  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
   const setRange = (k: Parameters<typeof presetRange>[0]) => setDraft({ ...draft, ...presetRange(k, reportToday) });
-  const unused = LEVELS.filter((l) => !draft.levels.includes(l.value));
   return (
     <div className="page la-page">
       <PageHeader
@@ -518,10 +595,10 @@ export function LiveAnalyticsPage() {
         actions={
           <>
             <span
-              className={`la-live${live && refresh ? " on" : ""}`}
-              title="Refreshes while the period includes today"
+              className={`la-live${running ? " on" : ""}`}
+              title={live ? "Refreshes while the period includes today" : "The period is over, so nothing changes"}
             >
-              <span className="la-live-dot" /> {live && refresh ? "Live" : "Paused"}
+              <span className="la-live-dot" /> {running ? "Live" : live ? "Paused" : "Not live"}
             </span>
             <label className="field inline">
               <span>Refresh</span>
@@ -535,13 +612,14 @@ export function LiveAnalyticsPage() {
             </label>
             <Button
               variant="primary"
-              icon="search"
-              disabled={!!problem || !dirty}
-              title={problem ?? undefined}
-              onClick={() => setSettings(draft)}
+              icon={paused ? "play" : "pause"}
+              disabled={!live || !refresh}
+              title={!live ? "The period does not include today" : undefined}
+              onClick={() => setPaused((p) => !p)}
             >
-              Search
+              {paused ? "Resume" : "Pause"}
             </Button>
+            {problem && <span className="tone-error small">{problem}</span>}
           </>
         }
       />
@@ -605,46 +683,6 @@ export function LiveAnalyticsPage() {
             </span>
           </div>
         </div>
-        <div className="la-levels">
-          <span className="muted small">Levels</span>
-          {draft.levels.map((l, i) => (
-            <span key={l} className="la-level">
-              {i > 0 && <span className="muted">›</span>}
-              <span className="la-chip on">
-                {levelLabel(l)}
-                <button
-                  type="button"
-                  aria-label={`Remove ${levelLabel(l)}`}
-                  onClick={() => setDraft({ ...draft, levels: draft.levels.filter((x) => x !== l) })}
-                >
-                  <Icon name="x" size={10} />
-                </button>
-              </span>
-            </span>
-          ))}
-          {draft.levels.length < 5 && (
-            <select
-              aria-label="Add a level"
-              value=""
-              onChange={(e) =>
-                e.target.value && setDraft({ ...draft, levels: [...draft.levels, e.target.value as ReportDimension] })
-              }
-            >
-              <option value="">+ Add level…</option>
-              {unused.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <input
-            className="la-search"
-            placeholder={`Search ${levelLabel(settings.levels[0]!).toLowerCase()}…`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
       </div>
       {settings.at && (
         <div className="la-at" role="status">
@@ -671,22 +709,25 @@ export function LiveAnalyticsPage() {
           </colgroup>
           <thead>
             <tr>
-              <th className="la-th-name" title={settings.levels.map(levelLabel).join(" › ")}>
-                <span className="la-h1">{levelLabel(settings.levels[0]!)}</span>
-                <span className="la-h2">
-                  {settings.levels.length > 1 ? `› ${settings.levels.slice(1).map(levelLabel).join(" › ")}` : "\u00a0"}
-                </span>
+              <th className="la-th-name" title="Use + on a row to break it down by any level">
+                {top ? (
+                  <input
+                    className="la-row-search"
+                    placeholder={`Search ${levelLabel(top).toLowerCase()}…`}
+                    aria-label={`Search ${levelLabel(top).toLowerCase()}`}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                ) : (
+                  "Total"
+                )}
               </th>
               {COLUMNS.map((c) => (
                 <th key={c.metric} className="num" title={c.title}>
-                  <span className="la-h1">{c.label}</span>
-                  <span className="la-h2">{c.sub ?? "\u00a0"}</span>
+                  {c.label}
                 </th>
               ))}
-              <th>
-                <span className="la-h1">EDRs</span>
-                <span className="la-h2">{"\u00a0"}</span>
-              </th>
+              <th>EDRs</th>
             </tr>
           </thead>
           <tbody>
@@ -696,8 +737,9 @@ export function LiveAnalyticsPage() {
               onDoubleClick={() => setDetail({ key: "", title: "All traffic", conditions: [], chain: [] })}
             >
               <td className="la-name">
-                <span className="la-toggle-gap" />
-                Total
+                <ExpandButton name="the total" open={top} used={[]} onPick={setTop} onClose={() => setTop(null)} />
+                <span className="la-label">Total</span>
+                {top && <span className="la-by">by {levelLabel(top).toLowerCase()}</span>}
               </td>
               {total.data ? (
                 <Cells metrics={total.data.totals.metrics} />
@@ -724,17 +766,21 @@ export function LiveAnalyticsPage() {
                 </button>
               </td>
             </tr>
-            <Level
-              settings={settings}
-              depth={0}
-              parents={[]}
-              chain={[]}
-              tick={tick}
-              search={search}
-              window={window}
-              onDetail={setDetail}
-              selected={detail?.key ?? null}
-            />
+            {top && (
+              <Level
+                key={top}
+                settings={settings}
+                dim={top}
+                used={[top]}
+                parents={[]}
+                chain={[]}
+                tick={tick}
+                search={search}
+                window={window}
+                onDetail={setDetail}
+                selected={detail?.key ?? null}
+              />
+            )}
           </tbody>
         </table>
       </div>

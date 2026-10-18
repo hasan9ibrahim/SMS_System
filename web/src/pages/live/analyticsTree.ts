@@ -1,7 +1,8 @@
-// Live analytics as a drill-down table (§13.4, redesigned in the team trial 2026-10-18): a total row,
-// then rows by the first level (e.g. Customer); each row opens into the next level (e.g. Customer trunk,
-// Destination, 15 minutes …). Every level is a Master Report query on the server (CLAUDE.md rule 3)
-// filtered on the row's parents, over a calendar period and, each day, an hour range.
+// Live analytics as a drill-down table (§13.4, redesigned in the team trial 2026-10-18): a total row whose
+// "+" breaks it down by any level (e.g. Customer), and every row's "+" breaks that row down further by any
+// level not already used above it (team trial round 1: no levels to set up front). Every breakdown is a
+// Master Report query on the server (CLAUDE.md rule 3) filtered on the row's parents, over a calendar
+// period and, each day, an hour range.
 import type { FilterCondition, MasterReportQuery, MasterReportRow, ReportDimension, ReportMetric } from "@sms/contract";
 import { drillConditions } from "../reports/masterModel";
 
@@ -27,12 +28,14 @@ export const LEVELS: { value: ReportDimension; label: string; time?: boolean }[]
 const TIME = new Set<ReportDimension>(["quarterHour", "hour", "date", "week", "month"]);
 export const levelLabel = (d: ReportDimension) => LEVELS.find((l) => l.value === d)?.label ?? d;
 
+/** What a row's "+" offers: every level not already used by the row or the rows above it. */
+export const levelOptions = (used: readonly ReportDimension[]) => LEVELS.filter((l) => !used.includes(l.value));
+
 export type Fmt = "int" | "pct" | "money" | "rate" | "sec";
 export interface Column {
   metric: ReportMetric;
+  /** The whole header on one line, side and unit included ("Billable (C)", "ASR %"; team trial round 1). */
   label: string;
-  /** Second header line (side or unit), so every header is two even lines (team trial round 1). */
-  sub?: string;
   title: string;
   fmt: Fmt;
 }
@@ -42,28 +45,27 @@ export interface Column {
  */
 export const COLUMNS: Column[] = [
   { metric: "attempts", label: "Attempts", title: "Messages received from customers", fmt: "int" },
-  { metric: "submitted", label: "Submitted", sub: "to vendor", title: "Sent to a vendor", fmt: "int" },
-  { metric: "billableCustomer", label: "Billable", sub: "(C)", title: "Billable to the customer", fmt: "int" },
-  { metric: "billableVendor", label: "Billable", sub: "(V)", title: "Billable by the vendor", fmt: "int" },
-  { metric: "asr", label: "ASR", sub: "%", title: "Accepted / attempts", fmt: "pct" },
+  { metric: "submitted", label: "Submitted", title: "Sent to a vendor", fmt: "int" },
+  { metric: "billableCustomer", label: "Billable (C)", title: "Billable to the customer", fmt: "int" },
+  { metric: "billableVendor", label: "Billable (V)", title: "Billable by the vendor", fmt: "int" },
+  { metric: "asr", label: "ASR %", title: "Accepted / attempts", fmt: "pct" },
   {
     metric: "dlrCustomer",
-    label: "DLR (c)",
-    sub: "%",
+    label: "DLR (c) %",
     title: "Delivered as reported to the customer (the receipts we send)",
     fmt: "pct",
   },
-  { metric: "dlrVendor", label: "DLR (v)", sub: "%", title: "Delivered as reported by the vendor", fmt: "pct" },
+  { metric: "dlrVendor", label: "DLR (v) %", title: "Delivered as reported by the vendor", fmt: "pct" },
   { metric: "margin", label: "Margin", title: "Revenue − cost (platform currency)", fmt: "money" },
   { metric: "revenue", label: "Revenue", title: "Customer charges (platform currency)", fmt: "money" },
   { metric: "cost", label: "Cost", title: "Vendor charges (platform currency)", fmt: "money" },
   { metric: "delivered", label: "Delivered", title: "Delivery receipts DELIVRD from vendors", fmt: "int" },
-  { metric: "avgRateCustomer", label: "Rate", sub: "(C)", title: "Average customer rate per message", fmt: "rate" },
-  { metric: "avgRateVendor", label: "Rate", sub: "(V)", title: "Average vendor rate per message", fmt: "rate" },
-  { metric: "deliveryDelayS", label: "Delay", sub: "sec", title: "Average delivery delay in seconds", fmt: "sec" },
+  { metric: "avgRateCustomer", label: "Rate (C)", title: "Average customer rate per message", fmt: "rate" },
+  { metric: "avgRateVendor", label: "Rate (V)", title: "Average vendor rate per message", fmt: "rate" },
+  { metric: "deliveryDelayS", label: "Delay sec", title: "Average delivery delay in seconds", fmt: "sec" },
   { metric: "hlrTotal", label: "HLR", title: "HLR lookups", fmt: "int" },
-  { metric: "hlrPorted", label: "HLR", sub: "ported", title: "Lookups that found the number ported", fmt: "int" },
-  { metric: "hlrCost", label: "HLR", sub: "cost", title: "HLR cost (platform currency)", fmt: "money" },
+  { metric: "hlrPorted", label: "HLR ported", title: "Lookups that found the number ported", fmt: "int" },
+  { metric: "hlrCost", label: "HLR cost", title: "HLR cost (platform currency)", fmt: "money" },
 ];
 export const METRICS = COLUMNS.map((c) => c.metric);
 
@@ -86,12 +88,18 @@ export function fmt(v: number | null | undefined, kind: Fmt): string {
   }
 }
 
-/** Cell highlight: DLR and ASR amber or red below their thresholds, a negative margin red. */
-export function cellTone(metric: ReportMetric, v: number | null | undefined): "" | "warn" | "bad" {
+/** The columns shown bold and coloured; the rest stay plain (team trial round 1). */
+export const TONED = new Set<ReportMetric>(["asr", "dlrCustomer", "dlrVendor", "margin"]);
+
+/**
+ * Cell colour (team trial round 1): ASR and both DLRs green from 80 %, black on orange from 60 % to
+ * 80 %, black on red below 60 %; margin green when positive, black on red when negative.
+ */
+export function cellTone(metric: ReportMetric, v: number | null | undefined): "" | "good" | "warn" | "bad" {
   if (v === null || v === undefined) return "";
-  if (metric === "dlrCustomer" || metric === "dlrVendor") return v < 60 ? "bad" : v < 80 ? "warn" : "";
-  if (metric === "asr") return v < 75 ? "bad" : v < 90 ? "warn" : "";
-  if (metric === "margin") return v < 0 ? "bad" : "";
+  if (metric === "asr" || metric === "dlrCustomer" || metric === "dlrVendor")
+    return v >= 80 ? "good" : v >= 60 ? "warn" : "bad";
+  if (metric === "margin") return v > 0 ? "good" : v < 0 ? "bad" : "";
   return "";
 }
 
@@ -104,7 +112,6 @@ export interface Settings {
   /** Each day, these hours only (inclusive). */
   hourFrom: number;
   hourTo: number;
-  levels: ReportDimension[];
   /** One time bucket picked in the detail panel: the top table shows only that moment. */
   at?: { from: string; to: string; label: string } | null;
 }
@@ -137,19 +144,25 @@ export function rangeProblem(s: Settings): string | null {
   if (!s.fromDate || !s.toDate) return "Pick the From and To days";
   if (s.toDate < s.fromDate) return "To must be on or after From";
   if (Date.parse(s.toDate) - Date.parse(s.fromDate) > 400 * 86_400_000) return "At most 400 days";
-  if (!s.levels.length) return "Pick at least one level";
   return null;
 }
 
 // ---------------------------------------------------------------- queries
 
-/** One level's query: its rows filtered on the parents' groups. */
-export function levelQuery(s: Settings, depth: number, parents: FilterCondition[], limit = 100): MasterReportQuery {
+/** One breakdown's query: rows by `dim`, filtered on the parents' groups. */
+export function levelQuery(
+  s: Settings,
+  dim: ReportDimension,
+  parents: FilterCondition[],
+  limit = 100,
+): MasterReportQuery {
   const to = s.at ? s.at.to : new Date(Date.parse(`${s.toDate}T00:00:00Z`) + 86_400_000).toISOString();
   const allHours = !!s.at || (s.hourFrom === 0 && s.hourTo === 23);
   return {
-    groupBy: [s.levels[depth]!],
+    groupBy: [dim],
     metrics: METRICS,
+    // Live screens show enterprises by alias (team trial round 1).
+    enterpriseLabel: "alias",
     timezone: "UTC",
     period: "custom",
     from: s.at ? s.at.from : `${s.fromDate}T00:00:00.000Z`,
@@ -160,8 +173,8 @@ export function levelQuery(s: Settings, depth: number, parents: FilterCondition[
     // Time levels read in time order; the others busiest first.
     sort: [
       {
-        field: TIME.has(s.levels[depth]!) ? s.levels[depth]! : "attempts",
-        dir: TIME.has(s.levels[depth]!) ? "asc" : "desc",
+        field: TIME.has(dim) ? dim : "attempts",
+        dir: TIME.has(dim) ? "asc" : "desc",
       },
     ],
     limit,
@@ -192,7 +205,7 @@ export function detailQuery(
   conditions: FilterCondition[],
   limit = 500,
 ): MasterReportQuery {
-  const q = levelQuery({ ...s, levels: [by] }, 0, conditions, limit);
+  const q = levelQuery(s, by, conditions, limit);
   return { ...q, sort: [{ field: by, dir: "desc" }] };
 }
 

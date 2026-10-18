@@ -23,6 +23,12 @@ import { causeName } from "../smpp.js";
 import { MAX_DAYS, previousWindow, resolvePeriod, type Window } from "./period.js";
 
 const ENTERPRISES: NameSource = { table: "enterprises e", name: "e.name", id: "e.id" };
+/** The live screens label enterprises by alias (team trial round 1); the name stands in for an empty alias. */
+const ENTERPRISE_ALIASES: NameSource = {
+  table: "enterprises e",
+  name: "COALESCE(NULLIF(e.alias, ''), e.name)",
+  id: "e.id",
+};
 const named = (src: NameSource, idSql: string): ChColumn => ({ sql: idSql, names: { ...src, idSql } });
 
 interface Dim {
@@ -305,11 +311,25 @@ export function splitFilter(filter: FilterGroup | undefined): {
   return { dims: { logic: "and", conditions: dims }, metrics: { logic: "and", conditions: metrics }, error: null };
 }
 
-function dimDef(tz: string): ChListDef<unknown> {
+/** The group-by fields of a query: by alias, customer and vendor are labelled and filtered on enterprise aliases. */
+export function dimsFor(q: Pick<MasterReportQuery, "enterpriseLabel">): Record<ReportDimension, Dim> {
+  if (q.enterpriseLabel !== "alias") return DIMS;
+  return {
+    ...DIMS,
+    customer: {
+      ...DIMS.customer,
+      names: ENTERPRISE_ALIASES,
+      filter: () => named(ENTERPRISE_ALIASES, "c_enterprise_id"),
+    },
+    vendor: { ...DIMS.vendor, names: ENTERPRISE_ALIASES, filter: () => named(ENTERPRISE_ALIASES, "v_enterprise_id") },
+  };
+}
+
+function dimDef(tz: string, dims: Record<ReportDimension, Dim> = DIMS): ChListDef<unknown> {
   return {
     fields: { list: "master_report", defaultSort: [], fields: fields.filter((f) => f.field in DIMS) },
     table: "edr",
-    columns: Object.fromEntries(Object.entries(DIMS).map(([k, d]) => [k, d.filter(tz)])),
+    columns: Object.fromEntries(Object.entries(dims).map(([k, d]) => [k, d.filter(tz)])),
     search: [],
     idSql: "edr_id",
     mapRow: (r) => r,
@@ -457,7 +477,8 @@ export async function runMasterReport(
   const secs = seconds(window);
   const msql = METRIC_SQL(secs);
   const dimIds = q.groupBy.map((d) => `${DIMS[d].id(tz)} AS d_${d}`);
-  const dimWhere = split.dims ? await chWhere(pool, dimDef(tz), { filter: split.dims }) : "1";
+  const D = dimsFor(q);
+  const dimWhere = split.dims ? await chWhere(pool, dimDef(tz, D), { filter: split.dims }) : "1";
   const typeWhere = q.msgType ? `msg_type = ${lit(q.msgType)}` : "1";
   const grouped = (w: Window, extra = "1") =>
     `SELECT ${dimIds.join(", ")}, ${baseSums(factor)} FROM edr WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
@@ -522,7 +543,7 @@ export async function runMasterReport(
 
   // Labels
   const names = new Map<ReportDimension, Map<number, string>>();
-  for (const d of q.groupBy) if (DIMS[d].names) names.set(d, await namesOf(pool, DIMS[d].names!));
+  for (const d of q.groupBy) if (D[d].names) names.set(d, await namesOf(pool, D[d].names!));
   const lk = q.groupBy.some((d) => DIMS[d].lookup) ? await loadLookups(pool) : null;
   const label = (d: ReportDimension, id: unknown): string => {
     const dim = DIMS[d];

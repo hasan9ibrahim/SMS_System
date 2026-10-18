@@ -230,7 +230,8 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
   const [{ rows: ct }, { rows: vt }, { rows: ents }, { rows: codes }] = await Promise.all([
     liveTrunks("customer_trunks"),
     liveTrunks("vendor_trunks"),
-    db().query("SELECT id, name FROM enterprises"),
+    // Live screens show enterprises by alias (team trial round 1); the name when the alias is empty.
+    db().query("SELECT id, COALESCE(NULLIF(alias, ''), name) AS name FROM enterprises"),
     db().query(
       "SELECT m.mccmnc, m.network, co.name AS country FROM mccmnc m JOIN countries co ON co.id = m.country_id",
     ),
