@@ -233,6 +233,11 @@ export const topics: HelpTopic[] = [
                 values: "Regex, up to 500 characters. Example: `^[A-Z]+$` (letters only), `^TEST`.",
               },
               {
+                name: "Match case (next to Sender ID)",
+                what: 'Ticked: the Sender ID pattern and the Sender ID List must match the exact capitals (`BANK` does not match "Bank"). Cleared: any mix of capitals matches, and the rule summary shows **(any case)**. Receiver and text conditions are not affected.',
+                values: "Ticked by default.",
+              },
+              {
                 name: "Receiver ID (regex)",
                 what: "A pattern the receiver number must match.",
                 values: "Regex. Example: `^00` (starts with 00), `^4477`.",
@@ -244,7 +249,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Sender ID List",
-                what: "The Sender ID must be (or, with Not Match, must not be) one of the entries in a number list. Any list type can be used. **New list** creates a list without leaving the form.",
+                what: "The Sender ID must be (or, with Not Match, must not be) one of the entries in a number list. Any list type can be used. **New list** creates a list without leaving the form. Capitals count unless Match case is cleared.",
                 values:
                   "Pick a list from [[number-lists]]. In a Sender ID Template entry each `{n}` stands for one digit.",
               },

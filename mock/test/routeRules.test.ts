@@ -379,6 +379,32 @@ describe("rule Test and Route Simulator", { skip }, () => {
     );
     assert.equal(blockedSender.outcome, "not_matched");
     assert.equal(blockedSender.checks.find((c: { ok: boolean }) => !c.ok).condition, "Sender");
+    // Match case (team trial round 1): on by default, so "test1" is not TEST and passes the Not Match pattern.
+    assert.equal(created.senderMatchCase, true);
+    const lower = () =>
+      ok(
+        "testRouteRule",
+        call("POST", `/route-rules/${created.id}/test`, {
+          receiver: number,
+          customerTrunkId: f.trunk,
+          sender: "test1",
+        }),
+      );
+    assert.equal((await lower()).matched, true);
+    const anyCase = await ok(
+      "updateRouteRule",
+      call("PUT", `/route-rules/${created.id}`, {
+        ...ruleInput(f, { name: `Test ${run}`, tps: null, revenue: null, mccmncs: au.rows[0].codes }),
+        senderMatchCase: false,
+      }),
+    );
+    assert.deepEqual(
+      anyCase.change.diff.map((d: { field: string }) => d.field),
+      ["senderMatchCase"],
+    );
+    assert.equal((await lower()).outcome, "not_matched", "any case: test1 is TEST");
+    await undo(anyCase.change.id);
+    assert.equal((await ok("getRouteRule", call("GET", `/route-rules/${created.id}`))).senderMatchCase, true);
     const pinned = (
       await ok(
         "updateRouteRule",

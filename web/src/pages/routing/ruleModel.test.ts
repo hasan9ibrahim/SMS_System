@@ -41,6 +41,7 @@ const rule = (over: Partial<RouteRuleDetail> = {}): RouteRuleDetail => ({
   mccmncPattern: null,
   senderPattern: "^(TEST|DEMO)",
   senderPatternNegate: true,
+  senderMatchCase: true,
   receiverPattern: null,
   receiverPatternNegate: false,
   contentPattern: null,
@@ -96,6 +97,14 @@ test("condition chips read as in the screenshot (§15.4)", () => {
     "Revenue/msg ≥ 0.040",
     "Time always",
   ]);
+});
+
+test("a sender condition with Match case off reads 'any case' (team trial round 1)", () => {
+  const sender = (over: Partial<RouteRuleDetail>) => conditionChips(rule(over), NOW).find((c) => c.key === "sender")!;
+  assert.equal(sender({}).value, "^(TEST|DEMO)");
+  assert.equal(sender({ senderMatchCase: false }).value, "^(TEST|DEMO) · any case");
+  assert.equal(clearCondition("sender", rule({ senderMatchCase: false })).senderMatchCase, true);
+  assert.equal(toInput(rule({ senderMatchCase: false })).senderMatchCase, false);
 });
 
 test("destinations by name, exclusive lists, accumulated revenue and HLR action", () => {

@@ -58,7 +58,7 @@ export const topics: HelpTopic[] = [
               "Each condition is one chip on the rule (Trunk, Category, Destination, Sender, Receiver, Content, TPS, Revenue/msg, HLR ported). Conditions the rule does not set are ignored.",
               "**all must match** (the default): every condition must pass. **any one matches**: one passing condition is enough. Click the words next to the rule title to switch.",
               "A rule with no conditions at all matches every message. That is why a new rule starts off.",
-              "Text conditions (sender, receiver, content and the MCCMNC pattern) ignore upper and lower case.",
+              "Sender conditions match the exact capitals unless the rule's **Match case** box is cleared (then any case matches). Receiver, content and the MCCMNC pattern ignore upper and lower case.",
               "A destination list matches exact codes only. A 3-digit code is the country's All networks entry, not the whole country. To cover a whole country, tick all its networks, or use **All**.",
             ],
           },
@@ -355,7 +355,10 @@ export const topics: HelpTopic[] = [
               { name: "Checkbox", what: "Selects the row for Bulk edit. The header box selects all loaded rows." },
               { name: "ID", what: "The rule number. Filter: equals." },
               { name: "Rule", what: "The rule name. Filter: contains, with `%` and `_` wildcards." },
-              { name: "Pri", what: "Priority, 1–100. High numbers are tried first; the grid opens sorted that way. Filter: a range (from – to)." },
+              {
+                name: "Pri",
+                what: "Priority, 1–100. High numbers are tried first; the grid opens sorted that way. Filter: a range (from – to).",
+              },
               {
                 name: "Type",
                 what: "A coloured dot and the route type: Static (grey), Least cost (blue), Quality (green) or Block (red). Filter: pick from the list.",
@@ -551,6 +554,11 @@ export const topics: HelpTopic[] = [
                 what: "Match messages whose value fits, or messages whose value does not fit.",
               },
               {
+                name: "Match case",
+                what: 'Sender only. Ticked: the Sender ID values, the regex and the Sender ID list must match the exact capitals (`BANK` does not match "Bank"). Cleared: any mix of capitals matches, and the chip shows **any case**.',
+                values: "Ticked by default.",
+              },
+              {
                 name: "Is one of",
                 what: "Sender and Receiver. The whole value must be one of the values you add.",
                 values: "e.g. Sender is one of `BANK`, `OTP`.",
@@ -573,7 +581,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Type a … and press + or Enter",
                 what: "Adds a value. Sender IDs and numbers can be pasted as a list separated by commas, semicolons or new lines; content phrases are split by new lines only, so they keep their commas. Click a value's × to remove it.",
-                values: "Upper and lower case match alike.",
+                values:
+                  "Sender: capitals count while Match case is ticked. Receiver and content: upper and lower case match alike.",
               },
               {
                 name: "Sender ID list / Receiver ID list",

@@ -22,8 +22,11 @@ export interface MessageContext {
   accumulatedRevenue: number | null;
   hlrPorted: boolean | null;
   warmupSent: number;
-  /** Entries of the number lists the rule uses. */
-  listHas: (listId: number, value: string) => boolean;
+  /**
+   * Entries of the number lists the rule uses. `ignoreCase` = compare lower-cased (a sender list with Match case
+   * off, team trial round 1); otherwise the entry must equal the value exactly.
+   */
+  listHas: (listId: number, value: string, ignoreCase?: boolean) => boolean;
   /**
    * Vendor trunks whose own egress translation rules block this message (§6.4, decided 2026-10-18):
    * they are skipped like a vendor below margin, and the next vendor is tried.
@@ -96,6 +99,7 @@ type Rule = Pick<
   | "mccmncPattern"
   | "senderPattern"
   | "senderPatternNegate"
+  | "senderMatchCase"
   | "receiverPattern"
   | "receiverPatternNegate"
   | "contentPattern"
@@ -163,19 +167,24 @@ export const destinationHit = (codes: string[], mccmnc: string) => {
 const codeSets = new WeakMap<string[], Set<string>>();
 
 const compiled = new Map<string, RegExp | null>();
-function regex(pattern: string, value: string): boolean {
-  let re = compiled.get(pattern);
+/** Case-insensitive unless `matchCase` (Sender conditions with Match case on, team trial round 1). */
+function regex(pattern: string, value: string, matchCase = false): boolean {
+  const key = matchCase ? `c:${pattern}` : `i:${pattern}`;
+  let re = compiled.get(key);
   if (re === undefined) {
     try {
-      re = new RegExp(pattern, "i");
+      re = new RegExp(pattern, matchCase ? "" : "i");
     } catch {
       re = null;
     }
     if (compiled.size > 5000) compiled.clear();
-    compiled.set(pattern, re);
+    compiled.set(key, re);
   }
   return re ? re.test(value) : false;
 }
+
+/** Match case for the Sender conditions (§6.3, team trial round 1): on unless switched off. */
+const senderCase = (rule: Pick<Rule, "senderMatchCase">) => rule.senderMatchCase !== false;
 
 const liveTimes = new WeakMap<object, [number, number]>();
 /** A rule's start and stop as epoch ms, parsed once per rule object. */
@@ -220,7 +229,7 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
     set = true;
   }
   if (rule.senderPattern) {
-    ok = regex(rule.senderPattern, m.sender) !== rule.senderPatternNegate;
+    ok = regex(rule.senderPattern, m.sender, senderCase(rule)) !== rule.senderPatternNegate;
     if (all !== ok) return ok;
     set = true;
   }
@@ -235,7 +244,7 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
     set = true;
   }
   if (rule.senderListId) {
-    ok = m.listHas(rule.senderListId, m.sender);
+    ok = m.listHas(rule.senderListId, m.sender, !senderCase(rule));
     if (all !== ok) return ok;
     set = true;
   }
@@ -329,17 +338,23 @@ export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { 
     }
     add("Destination", true, ok, detail);
   }
-  const pattern = (name: string, p: string | null, negate: boolean, value: string) => {
+  const pattern = (name: string, p: string | null, negate: boolean, value: string, matchCase = false, note = "") => {
     if (!p) return;
-    const hit = regex(p, value);
-    add(name, true, negate ? !hit : hit, `"${value}" ${hit ? "matches" : "doesn't match"} ${negate ? "not " : ""}${p}`);
+    const hit = regex(p, value, matchCase);
+    add(
+      name,
+      true,
+      negate ? !hit : hit,
+      `"${value}" ${hit ? "matches" : "doesn't match"} ${negate ? "not " : ""}${p}${note}`,
+    );
   };
-  pattern("Sender", rule.senderPattern, rule.senderPatternNegate, m.sender);
+  const anyCase = senderCase(rule) ? "" : " (any case)";
+  pattern("Sender", rule.senderPattern, rule.senderPatternNegate, m.sender, senderCase(rule), anyCase);
   pattern("Receiver", rule.receiverPattern, rule.receiverPatternNegate, m.receiver);
   pattern("Content", rule.contentPattern, rule.contentPatternNegate, m.content);
   if (rule.senderListId) {
-    const hit = m.listHas(rule.senderListId, m.sender);
-    add("Sender list", true, hit, hit ? "sender is in the list" : "sender isn't in the list");
+    const hit = m.listHas(rule.senderListId, m.sender, !senderCase(rule));
+    add("Sender list", true, hit, `${hit ? "sender is in the list" : "sender isn't in the list"}${anyCase}`);
   }
   if (rule.receiverListId) {
     const hit = m.listHas(rule.receiverListId, m.receiver);

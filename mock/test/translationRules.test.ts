@@ -190,6 +190,42 @@ describe("translation engine (§6.4)", () => {
     assert.equal(res.blocked, true);
   });
 
+  test("Match case for the Sender ID conditions: exact capitals when on, any case when off (team trial round 1)", () => {
+    const lists: EngineContext = { ...ctx, lists: new Map([[3, ["BANK", "SHOP{n}"]]]) };
+    const blocked = (over: Partial<EngineRule>, sender: string) =>
+      runRules([{ rule: rule(1, { action: "block", ...over }) }], { ...msg, sender }, lists).blocked;
+    // Pattern
+    assert.equal(blocked({ senderPattern: "^BANK$" }, "BANK"), true);
+    assert.equal(blocked({ senderPattern: "^BANK$" }, "Bank"), false, "on by default");
+    assert.equal(blocked({ senderPattern: "^BANK$", senderMatchCase: true }, "Bank"), false);
+    assert.equal(blocked({ senderPattern: "^BANK$", senderMatchCase: false }, "Bank"), true);
+    assert.equal(
+      blocked({ senderPattern: "^BANK$", senderPatternNegate: true, senderMatchCase: false }, "bank"),
+      false,
+    );
+    // List, plain and template entries
+    assert.equal(blocked({ senderListId: 3 }, "bank"), false);
+    assert.equal(blocked({ senderListId: 3, senderMatchCase: false }, "bank"), true);
+    assert.equal(blocked({ senderListId: 3 }, "shop1"), false);
+    assert.equal(blocked({ senderListId: 3, senderMatchCase: false }, "shop1"), true);
+    assert.ok(entryMatches("BANK", "Bank", false) && !entryMatches("BANK", "Bank"));
+    // Receiver and content patterns keep their behaviour (exact case).
+    assert.equal(
+      runRules(
+        [{ rule: rule(1, { action: "block", senderMatchCase: false, contentPattern: "CODE" }) }],
+        { ...msg, sender: "x" },
+        lists,
+      ).blocked,
+      false,
+    );
+    const steps = runRules(
+      [{ rule: rule(1, { senderPattern: "^BANK$", senderMatchCase: false }) }],
+      { ...msg, sender: "bank" },
+      lists,
+    ).steps;
+    assert.match(steps[0]!.checks[0]!.detail, /any case/);
+  });
+
   test("number list values by type", () => {
     assert.equal(entryProblem("random", "447900123"), null);
     assert.ok(entryProblem("random", "44A"));
@@ -316,6 +352,7 @@ describe("translation rules API", { skip }, () => {
     const created = await ok("createTranslationRule", call("POST", "/translation-rules", input), 201);
     const id = created.record.id as number;
     assert.equal(created.record.usedBy, 1);
+    assert.equal(created.record.senderMatchCase, true, "missing in the input = Match case on");
     const usedBy = await ok("getTranslationRuleUsedBy", call("GET", `/translation-rules/${id}/used-by`));
     assert.equal(usedBy.trunks[0].id, t1);
 
@@ -384,6 +421,38 @@ describe("translation rules API", { skip }, () => {
     await undo(created.change);
     const archived = await ok("getTranslationRule", call("GET", `/translation-rules/${id}`));
     assert.ok(archived.archivedAt, "undoing the create archives the rule");
+  });
+
+  test("Sender ID Match case: saved, tested, undone (team trial round 1)", async () => {
+    const input: TranslationRuleInput = {
+      ...BLANK,
+      name: `Block BANK ${run}`,
+      action: "block",
+      senderPattern: "^BANK$",
+      targets: [],
+    };
+    const created = await ok("createTranslationRule", call("POST", "/translation-rules", input), 201);
+    const id = created.record.id as number;
+    const test = (sender: string) =>
+      ok(
+        "testTranslationRule",
+        call("POST", `/translation-rules/${id}/test`, { message: { sender, receiver: "447123456", text: "hi" } }),
+      );
+    assert.equal((await test("Bank")).blocked, false, "exact capitals by default");
+    const edited = await ok(
+      "updateTranslationRule",
+      call("PUT", `/translation-rules/${id}`, { ...input, senderMatchCase: false }),
+    );
+    assert.deepEqual(
+      edited.change.diff.map((d: { field: string }) => d.field),
+      ["senderMatchCase"],
+    );
+    assert.equal(edited.record.senderMatchCase, false);
+    assert.equal((await test("Bank")).blocked, true, "any case");
+    await undo(edited.change);
+    const restored = await ok("getTranslationRule", call("GET", `/translation-rules/${id}`));
+    assert.equal(restored.senderMatchCase, true);
+    await undo(created.change);
   });
 
   test("rows carry names for the hover lists; MCCMNC filters by name or code", async () => {

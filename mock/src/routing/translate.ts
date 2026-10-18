@@ -54,35 +54,56 @@ export function initialState(m: TestMessage, ctx: EngineContext): MessageState {
   };
 }
 
-function patternCheck(name: string, pattern: string | null, negate: boolean, value: string): Check | null {
+/** `matchCase` false = any case (the Sender ID conditions with Match case off, team trial round 1). */
+function patternCheck(
+  name: string,
+  pattern: string | null,
+  negate: boolean,
+  value: string,
+  matchCase = true,
+): Check | null {
   if (!pattern) return null;
-  const re = compile(pattern);
+  const re = compile(pattern, matchCase ? "" : "i");
   if (!re) return { condition: name, ok: false, detail: `invalid pattern ${pattern}` };
   const hit = re.test(value);
   return {
     condition: name,
     ok: hit !== negate,
-    detail: `${JSON.stringify(value)} ${hit ? "matches" : "does not match"} ${negate ? "not " : ""}${pattern}`,
+    detail: `${JSON.stringify(value)} ${hit ? "matches" : "does not match"} ${negate ? "not " : ""}${pattern}${
+      matchCase ? "" : " (any case)"
+    }`,
   };
 }
 
-/** A list entry matches the value exactly; in a Sender ID Template entry each {n} stands for one digit. */
-export function entryMatches(entry: string, value: string): boolean {
-  if (!entry.includes("{n}")) return entry === value;
+/**
+ * A list entry matches the value exactly; in a Sender ID Template entry each {n} stands for one digit.
+ * `matchCase` false compares any case (Sender ID list with Match case off, team trial round 1).
+ */
+export function entryMatches(entry: string, value: string, matchCase = true): boolean {
+  if (!entry.includes("{n}")) return matchCase ? entry === value : entry.toLowerCase() === value.toLowerCase();
   const re = entry
     .split("{n}")
     .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("[0-9]");
-  return new RegExp(`^${re}$`).test(value);
+  return new RegExp(`^${re}$`, matchCase ? "" : "i").test(value);
 }
 
-function listCheck(name: string, id: number | null, negate: boolean, value: string, ctx: EngineContext): Check | null {
+function listCheck(
+  name: string,
+  id: number | null,
+  negate: boolean,
+  value: string,
+  ctx: EngineContext,
+  matchCase = true,
+): Check | null {
   if (id === null) return null;
-  const hit = (ctx.lists.get(id) ?? []).some((e) => entryMatches(e, value));
+  const hit = (ctx.lists.get(id) ?? []).some((e) => entryMatches(e, value, matchCase));
   return {
     condition: name,
     ok: hit !== negate,
-    detail: `${JSON.stringify(value)} is ${hit ? "" : "not "}in list #${id}${negate ? " (Not Match)" : ""}`,
+    detail: `${JSON.stringify(value)} is ${hit ? "" : "not "}in list #${id}${negate ? " (Not Match)" : ""}${
+      matchCase ? "" : " (any case)"
+    }`,
   };
 }
 
@@ -94,6 +115,8 @@ function lengthCheck(name: string, value: string, min: number, max: number): Che
 
 /** The conditions of one rule on the current state. */
 export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext): Check[] {
+  // Match case for the Sender ID conditions: on unless switched off (team trial round 1).
+  const senderCase = rule.senderMatchCase !== false;
   const checks: (Check | null)[] = [
     rule.startsAt && new Date(rule.startsAt) > ctx.now
       ? { condition: "Start time", ok: false, detail: `starts ${rule.startsAt}` }
@@ -101,7 +124,7 @@ export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext
     rule.stopsAt && new Date(rule.stopsAt) <= ctx.now
       ? { condition: "Stop time", ok: false, detail: `stopped ${rule.stopsAt}` }
       : null,
-    patternCheck("Sender ID", rule.senderPattern, rule.senderPatternNegate, s.sender),
+    patternCheck("Sender ID", rule.senderPattern, rule.senderPatternNegate, s.sender, senderCase),
     patternCheck("Receiver ID", rule.receiverPattern, rule.receiverPatternNegate, s.receiver),
     rule.mccmncs.length
       ? (() => {
@@ -118,7 +141,7 @@ export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext
         })()
       : null,
     patternCheck("Message Body Text", rule.contentPattern, rule.contentPatternNegate, s.text),
-    listCheck("Sender ID List", rule.senderListId, rule.senderListNegate, s.sender, ctx),
+    listCheck("Sender ID List", rule.senderListId, rule.senderListNegate, s.sender, ctx, senderCase),
     listCheck("Receiver ID List", rule.receiverListId, rule.receiverListNegate, s.receiver, ctx),
     lengthCheck("Sender ID length", s.sender, rule.senderMinLength, rule.senderMaxLength),
     lengthCheck("Receiver ID length", s.receiver, rule.receiverMinLength, rule.receiverMaxLength),

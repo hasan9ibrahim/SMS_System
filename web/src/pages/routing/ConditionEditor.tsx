@@ -68,6 +68,7 @@ function PatternBuilder({
   setValues,
   pattern,
   setPattern,
+  matchCase,
 }: {
   field: ConditionKey;
   kinds: PatternKind[];
@@ -77,6 +78,8 @@ function PatternBuilder({
   setValues: (v: string[]) => void;
   pattern: string;
   setPattern: (p: string) => void;
+  /** Sender only: Match case (team trial round 1); receiver and content always ignore case. */
+  matchCase?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   // Sender IDs and numbers can be pasted as a list; content phrases keep their commas.
@@ -149,7 +152,9 @@ function PatternBuilder({
             />
             <Button small icon="plus" onClick={add} disabled={!draft.trim()} aria-label={`Add ${noun}`} />
           </div>
-          <small className="muted">Upper and lower case match alike.</small>
+          <small className="muted">
+            {matchCase ? "Capitals must match exactly." : "Upper and lower case match alike."}
+          </small>
         </>
       )}
     </div>
@@ -294,6 +299,8 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   );
   const [patternValues, setPatternValues] = useState<string[]>(kinds.includes(initial.kind) ? initial.values : []);
   const [negate, setNegate] = useState(rule[`${pat}PatternNegate`]);
+  // Match case for the Sender conditions, on unless switched off (team trial round 1).
+  const [matchCase, setMatchCase] = useState(rule.senderMatchCase !== false);
   const [listId, setListId] = useState<number | null>(
     key === "sender" ? rule.senderListId : key === "receiver" ? rule.receiverListId : null,
   );
@@ -399,7 +406,18 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
       return {
         form: (
           <>
-            <Negate value={negate} onChange={setNegate} />
+            <div className="cond-head">
+              <Negate value={negate} onChange={setNegate} />
+              {key === "sender" && (
+                <label
+                  className="toggle-inline"
+                  title="On: the Sender ID values, pattern and list must match the exact capitals. Off: any case."
+                >
+                  <input type="checkbox" checked={matchCase} onChange={(e) => setMatchCase(e.target.checked)} />
+                  Match case
+                </label>
+              )}
+            </div>
             <PatternBuilder
               field={key}
               kinds={kinds}
@@ -414,6 +432,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
               setValues={setPatternValues}
               pattern={pattern}
               setPattern={setPattern}
+              matchCase={key === "sender" && matchCase}
             />
             {key !== "content" && (
               <label className="field">
@@ -441,6 +460,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
               ? "Enter a pattern or choose a list."
               : "Add at least one value or choose a list.";
           const p = { [`${key}Pattern`]: built, [`${key}PatternNegate`]: negate };
+          if (key === "sender") return { ...p, senderListId: listId, senderMatchCase: matchCase };
           return key === "content" ? p : { ...p, [`${key}ListId`]: listId };
         },
       };

@@ -666,7 +666,7 @@ async function reachingRules(db: Db, k: KindDef, which: "translation" | "hlr", t
           `SELECT r.id, r.name, r.status, tg.target_type, tg.insert_at, s.position, s.enabled,
                   COALESCE(s.continue_after, r.continue_after) AS continue_after,
                   concat_ws(' · ', r.action,
-                    CASE WHEN r.sender_pattern IS NOT NULL THEN 'sender ' || CASE WHEN r.sender_pattern_negate THEN 'not ' ELSE '' END || r.sender_pattern END,
+                    CASE WHEN r.sender_pattern IS NOT NULL THEN 'sender ' || CASE WHEN r.sender_pattern_negate THEN 'not ' ELSE '' END || r.sender_pattern || CASE WHEN r.sender_match_case THEN '' ELSE ' (any case)' END END,
                     CASE WHEN r.receiver_pattern IS NOT NULL THEN 'receiver ' || CASE WHEN r.receiver_pattern_negate THEN 'not ' ELSE '' END || r.receiver_pattern END,
                     CASE WHEN r.sender_conversion IS NOT NULL THEN 'sender ' || replace(r.sender_conversion, '_', ' ') || COALESCE(' ' || r.sender_conversion_value, '') END,
                     CASE WHEN r.receiver_conversion IS NOT NULL THEN 'receiver ' || replace(r.receiver_conversion, '_', ' ') || COALESCE(' ' || r.receiver_conversion_value, '') END

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.61.0
+  version: 0.62.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18736,6 +18736,12 @@ components:
           description: Regular expression on the sender ID.
         senderPatternNegate:
           type: boolean
+        senderMatchCase:
+          type: boolean
+          description: >-
+            Match case for the Sender ID conditions (team trial round 1): on, the Sender ID pattern and the Sender ID
+            list entries must match the exact capitals ("BANK" does not match "Bank"); off, any case matches. Records
+            always carry it; missing in an input means on.
         receiverPattern:
           type: [string, "null"]
           maxLength: 200
@@ -18910,7 +18916,7 @@ components:
             archivedAt:
               type: [string, "null"]
               format: date-time
-      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
+      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
 
     TranslationRuleSaved:
       type: object
@@ -29263,6 +29269,14 @@ components:
           maxLength: 200
         senderPatternNegate:
           type: boolean
+        senderMatchCase:
+          type: boolean
+          description: >-
+            Match case for every Sender condition (team trial round 1): on, the sender pattern (including the
+            is one of / starts with / contains values built into it) and the sender list entries must match the exact
+            capitals ("BANK" does not match "Bank"); off, any case matches. Receiver and content conditions are not
+            affected. Records always carry it; missing in the input of a new rule means on (an edit keeps the stored
+            value, like the other fields).
         receiverPattern:
           type: [string, "null"]
           maxLength: 200
@@ -29409,7 +29423,7 @@ components:
           type: string
 
     RouteRuleDetail:
-      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, lcrProfileId, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
+      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, lcrProfileId, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
       allOf:
         - $ref: "#/components/schemas/RouteRuleFields"
         - type: object

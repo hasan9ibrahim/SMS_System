@@ -22,6 +22,7 @@ const INPUT_KEYS = [
   "mccmncPattern",
   "senderPattern",
   "senderPatternNegate",
+  "senderMatchCase",
   "receiverPattern",
   "receiverPatternNegate",
   "contentPattern",
@@ -182,6 +183,7 @@ export function conditionChips(
     p: string | null,
     negate: boolean,
     listId?: number | null,
+    anyCase = false,
   ) => {
     const list = listId ? nameOf(l.numberLists, listId) : "";
     if (!p && !list) return;
@@ -192,10 +194,13 @@ export function conditionChips(
       key,
       field: CONDITION_LABELS[key],
       op: listed ? `${negate ? "not " : ""}${PATTERN_KINDS[parsed.kind]}` : negate ? "not" : "matches",
-      value: [listed ? parsed.values.join(", ") : p, list && `list ${list}`].filter(Boolean).join(" · "),
+      value: [listed ? parsed.values.join(", ") : p, list && `list ${list}`, anyCase && "any case"]
+        .filter(Boolean)
+        .join(" · "),
     });
   };
-  pattern("sender", rule.senderPattern, rule.senderPatternNegate, rule.senderListId);
+  // Sender conditions match the exact capitals unless Match case is off (team trial round 1).
+  pattern("sender", rule.senderPattern, rule.senderPatternNegate, rule.senderListId, rule.senderMatchCase === false);
   pattern("receiver", rule.receiverPattern, rule.receiverPatternNegate, rule.receiverListId);
   pattern("content", rule.contentPattern, rule.contentPatternNegate);
   if (rule.tps) {
@@ -252,7 +257,7 @@ export function clearCondition(key: ConditionKey, rule: RouteRuleDetail): Partia
     case "destination":
       return { mccmncMode: "all", mccmncs: [], mccmncPattern: null };
     case "sender":
-      return { senderPattern: null, senderPatternNegate: false, senderListId: null };
+      return { senderPattern: null, senderPatternNegate: false, senderListId: null, senderMatchCase: true };
     case "receiver":
       return { receiverPattern: null, receiverPatternNegate: false, receiverListId: null };
     case "content":
@@ -360,7 +365,8 @@ export function vendorSwitches(
 /**
  * Sender, receiver and content conditions without regex (team trial round 1): a list of values that
  * becomes the pattern the rule stores (the contract and the switch keep one regex). "Is one of" =
- * ^(?:A|B)$, "starts with" = ^(?:A|B), "contains" = (?:A|B); matching is case-insensitive in the switch.
+ * ^(?:A|B)$, "starts with" = ^(?:A|B), "contains" = (?:A|B). Receiver and content ignore case in the switch;
+ * sender conditions match the exact capitals unless the rule's Match case is off (team trial round 1).
  */
 export type PatternKind = "is" | "starts" | "contains" | "regex";
 export const PATTERN_KINDS: Record<PatternKind, string> = {

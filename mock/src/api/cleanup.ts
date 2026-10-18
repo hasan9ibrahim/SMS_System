@@ -101,7 +101,7 @@ const COND_SQL = (withTrunks: boolean) => `concat_ws('|', r.status, r.match_mode
   (SELECT array_agg(x ORDER BY x) FROM unnest(r.category_ids) x)::text, r.customer_trunk_mode,
   ${withTrunks ? "(SELECT array_agg(x ORDER BY x) FROM unnest(r.customer_trunk_ids) x)::text" : "''"},
   r.mccmnc_mode, (SELECT array_agg(x ORDER BY x) FROM unnest(r.mccmncs) x)::text, r.mccmnc_pattern,
-  r.sender_pattern, r.sender_pattern_negate, r.receiver_pattern, r.receiver_pattern_negate, r.content_pattern,
+  r.sender_pattern, r.sender_pattern_negate, r.sender_match_case, r.receiver_pattern, r.receiver_pattern_negate, r.content_pattern,
   r.content_pattern_negate, r.sender_list_id, r.receiver_list_id, r.tps_condition::text, r.revenue_condition::text,
   r.starts_at, r.stops_at, r.route_rule_group_id, r.hlr_action, r.hlr_ported, r.deny_multipart)`;
 const ROUTE_SQL = `concat_ws('|', r.route_type, r.hunt_policy, r.enable_backup_routes, r.vendor_category_mode,

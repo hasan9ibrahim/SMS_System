@@ -72,6 +72,7 @@ const SCALARS: FieldSpec[] = [
   { api: "mccmncPattern", col: "mccmnc_pattern" },
   { api: "senderPattern", col: "sender_pattern" },
   { api: "senderPatternNegate", col: "sender_pattern_negate" },
+  { api: "senderMatchCase", col: "sender_match_case" },
   { api: "receiverPattern", col: "receiver_pattern" },
   { api: "receiverPatternNegate", col: "receiver_pattern_negate" },
   { api: "contentPattern", col: "content_pattern" },
@@ -280,6 +281,7 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     mccmncPattern: null,
     senderPattern: null,
     senderPatternNegate: false,
+    senderMatchCase: true,
     receiverPattern: null,
     receiverPatternNegate: false,
     contentPattern: null,
@@ -933,13 +935,15 @@ export async function messageContext(db: Db, input: RouteTestRequest, listIds: n
     }
   }
   const values = [input.sender ?? "", input.receiver];
+  // Lower-cased too, for sender lists with Match case off (team trial round 1).
   const { rows: entries } = listIds.length
     ? await db.query(
-        "SELECT number_list_id, value FROM number_list_entries WHERE number_list_id = ANY($1) AND value = ANY($2)",
-        [listIds, values],
+        "SELECT number_list_id, value FROM number_list_entries WHERE number_list_id = ANY($1) AND lower(value) = ANY($2)",
+        [listIds, values.map((v) => v.toLowerCase())],
       )
     : { rows: [] as { number_list_id: number; value: string }[] };
   const hits = new Set(entries.map((e) => `${e.number_list_id}:${e.value}`));
+  const lowerHits = new Set(entries.map((e) => `${e.number_list_id}:${e.value.toLowerCase()}`));
   return {
     now: Date.now(),
     customerTrunkId: input.customerTrunkId ?? null,
@@ -954,7 +958,8 @@ export async function messageContext(db: Db, input: RouteTestRequest, listIds: n
     accumulatedRevenue: input.accumulatedRevenue ?? null,
     hlrPorted: input.hlrPorted ?? null,
     warmupSent: input.warmupSent ?? 0,
-    listHas: (listId, value) => hits.has(`${listId}:${value}`),
+    listHas: (listId, value, ignoreCase) =>
+      ignoreCase ? lowerHits.has(`${listId}:${value.toLowerCase()}`) : hits.has(`${listId}:${value}`),
   };
 }
 

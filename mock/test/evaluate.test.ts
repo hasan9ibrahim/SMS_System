@@ -33,6 +33,7 @@ const rule = (over: Record<string, unknown> = {}) =>
     mccmncPattern: null,
     senderPattern: "^(TEST|DEMO)",
     senderPatternNegate: true,
+    senderMatchCase: true,
     receiverPattern: null,
     receiverPatternNegate: false,
     contentPattern: null,
@@ -274,4 +275,37 @@ test("a vendor whose own egress rules block the message is skipped for the next 
   assert.match(next.candidates.find((c) => c.vendorTrunkId === first)!.note ?? "", /vendor translation/);
   const none = decide(rule(), msg({ egressBlocked: new Set([10, 11]) }), options);
   assert.equal(none.outcome, "no_vendor");
+});
+
+test("Match case for every Sender condition: exact capitals when on, any case when off (team trial round 1)", () => {
+  const on = (over: Record<string, unknown>, m: Partial<MessageContext>) => {
+    const r = rule({ senderPatternNegate: false, ...over });
+    const got = decide(r, msg(m), options).matched;
+    assert.equal(quickMatch(r, msg(m)), got, "quickMatch agrees with the checks");
+    return got;
+  };
+  // Pattern (also the "is one of" / "starts with" / "contains" values built into it).
+  assert.equal(on({ senderPattern: "^(?:BANK)$" }, { sender: "BANK" }), true);
+  assert.equal(on({ senderPattern: "^(?:BANK)$" }, { sender: "Bank" }), false, "on by default: capitals count");
+  assert.equal(on({ senderPattern: "^(?:BANK)$", senderMatchCase: false }, { sender: "Bank" }), true);
+  assert.equal(on({ senderPattern: "^(?:BANK)$", senderMatchCase: undefined }, { sender: "Bank" }), false);
+  assert.equal(on({ senderPattern: "(?:otp)", senderMatchCase: false }, { sender: "MyOTP" }), true);
+  assert.equal(on({ senderPattern: "(?:otp)" }, { sender: "MyOTP" }), false);
+  // Not Match with any case: "bank" is still BANK.
+  assert.equal(
+    on({ senderPattern: "^BANK$", senderPatternNegate: true, senderMatchCase: false }, { sender: "bank" }),
+    false,
+  );
+  // Sender list: entries compared exactly, or lower-cased with Match case off.
+  const entries = new Set(["BANK"]);
+  const listHas = (_id: number, v: string, ignoreCase?: boolean) =>
+    ignoreCase ? [...entries].some((e) => e.toLowerCase() === v.toLowerCase()) : entries.has(v);
+  const list = { senderPattern: null, senderListId: 5 };
+  assert.equal(on(list, { sender: "BANK", listHas }), true);
+  assert.equal(on(list, { sender: "Bank", listHas }), false);
+  assert.equal(on({ ...list, senderMatchCase: false }, { sender: "Bank", listHas }), true);
+  const checks = conditionChecks(rule({ ...list, senderMatchCase: false }), msg({ sender: "Bank", listHas }));
+  assert.match(checks.find((c) => c.condition === "Sender list")!.detail, /any case/);
+  // Receiver and content conditions keep ignoring case.
+  assert.equal(on({ senderPattern: null, contentPattern: "CODE" }, { content: "code 1234" }), true);
 });

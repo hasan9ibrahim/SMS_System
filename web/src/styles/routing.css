@@ -496,6 +496,13 @@
 .cond-field .negate {
   margin-bottom: 6px;
 }
+.cond-field.with-case {
+  grid-template-columns: 1fr auto auto;
+}
+.cond-field .match-case {
+  margin-bottom: 10px;
+  white-space: nowrap;
+}
 .pick-with-new {
   display: flex;
   gap: 6px;

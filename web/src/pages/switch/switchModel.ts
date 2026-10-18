@@ -99,6 +99,7 @@ export function blankRule(): TranslationRuleInput {
     continueAfter: true,
     senderPattern: null,
     senderPatternNegate: false,
+    senderMatchCase: true,
     receiverPattern: null,
     receiverPatternNegate: false,
     mccmncs: [],
@@ -165,6 +166,7 @@ export function toSave(v: TranslationRuleInput): TranslationRuleInput {
     contentReplacement: v.contentRegex ? (v.contentReplacement ?? "") : null,
     // Blank rows are left out (team trial round 1).
     contentWords: (v.contentWords ?? []).filter((w) => w.find.trim() !== ""),
+    senderMatchCase: v.senderMatchCase !== false,
   };
 }
 
@@ -182,13 +184,15 @@ export function impliedDirection(v: Pick<TranslationRuleInput, "direction" | "ta
 /** One line: what the rule matches and does, for the detail panel and confirmations. */
 export function ruleSummary(v: TranslationRuleInput): string {
   const not = (n: boolean) => (n ? "not " : "");
+  // Sender ID conditions match the exact capitals unless Match case is off (team trial round 1).
+  const anyCase = v.senderMatchCase === false ? " (any case)" : "";
   const when = [
-    v.senderPattern && `sender ${not(v.senderPatternNegate)}~ ${v.senderPattern}`,
+    v.senderPattern && `sender ${not(v.senderPatternNegate)}~ ${v.senderPattern}${anyCase}`,
     v.receiverPattern && `receiver ${not(v.receiverPatternNegate)}~ ${v.receiverPattern}`,
     v.mccmncs.length &&
       `MCCMNC ${not(v.mccmncNegate)}in ${v.mccmncs.slice(0, 3).join(", ")}${v.mccmncs.length > 3 ? "…" : ""}`,
     v.contentPattern && `text ${not(v.contentPatternNegate)}~ ${v.contentPattern}`,
-    v.senderListId && `sender ${not(v.senderListNegate)}in list #${v.senderListId}`,
+    v.senderListId && `sender ${not(v.senderListNegate)}in list #${v.senderListId}${anyCase}`,
     v.receiverListId && `receiver ${not(v.receiverListNegate)}in list #${v.receiverListId}`,
   ].filter(Boolean);
   const does =

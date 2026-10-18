@@ -1631,3 +1631,10 @@ body.resizing-rows {
 .pattern-add input {
   flex: 1;
 }
+/* Match / Not match with the Sender Match case box beside it (team trial round 1). */
+.cond-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}

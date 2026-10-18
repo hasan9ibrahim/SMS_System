@@ -11709,7 +11709,7 @@ export type components = {
       replace: string;
       /** @description Only whole words ("bit" does not touch "bitcoin"). Missing = true. */
       wholeWord?: boolean;
-      /** @description Upper and lower case must match. Missing = false. */
+      /** @description Upper and lower case must match. Missing = true (on by default, team trial round 1). */
       matchCase?: boolean;
     };
     /** @description DLR Status & Error Code Convert (§6.4) - the vendor's stat (and error) as the customer gets it. */
@@ -11736,6 +11736,8 @@ export type components = {
       /** @description Regular expression on the sender ID. */
       senderPattern?: string | null;
       senderPatternNegate?: boolean;
+      /** @description Match case for the Sender ID conditions (team trial round 1): on, the Sender ID pattern and the Sender ID list entries must match the exact capitals ("BANK" does not match "Bank"); off, any case matches. Records always carry it; missing in an input means on. */
+      senderMatchCase?: boolean;
       receiverPattern?: string | null;
       receiverPatternNegate?: boolean;
       mccmncs?: string[];
@@ -11866,6 +11868,7 @@ export type components = {
       | "continueAfter"
       | "senderPattern"
       | "senderPatternNegate"
+      | "senderMatchCase"
       | "receiverPattern"
       | "receiverPatternNegate"
       | "mccmncs"
@@ -16411,6 +16414,8 @@ export type components = {
       mccmncPattern?: string | null;
       senderPattern?: string | null;
       senderPatternNegate?: boolean;
+      /** @description Match case for every Sender condition (team trial round 1): on, the sender pattern (including the is one of / starts with / contains values built into it) and the sender list entries must match the exact capitals ("BANK" does not match "Bank"); off, any case matches. Receiver and content conditions are not affected. Records always carry it; missing in the input of a new rule means on (an edit keeps the stored value, like the other fields). */
+      senderMatchCase?: boolean;
       receiverPattern?: string | null;
       receiverPatternNegate?: boolean;
       contentPattern?: string | null;
@@ -16503,6 +16508,7 @@ export type components = {
       | "mccmncPattern"
       | "senderPattern"
       | "senderPatternNegate"
+      | "senderMatchCase"
       | "receiverPattern"
       | "receiverPatternNegate"
       | "contentPattern"

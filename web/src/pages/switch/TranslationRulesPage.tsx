@@ -146,18 +146,42 @@ function PatternField({
   negate,
   label,
   placeholder,
+  matchCase,
 }: {
   form: FormApi<TranslationRuleInput>;
   path: "senderPattern" | "receiverPattern" | "contentPattern";
   negate: keyof TranslationRuleInput;
   label: string;
   placeholder: string;
+  /** Sender ID only: the Match case box (team trial round 1). */
+  matchCase?: boolean;
 }) {
   return (
-    <div className="cond-field">
+    <div className={matchCase ? "cond-field with-case" : "cond-field"}>
       <TextField form={form} path={path} label={label} placeholder={placeholder} maxLength={500} />
       <Negate form={form} path={negate} />
+      {matchCase && <MatchCase form={form} />}
     </div>
+  );
+}
+
+/**
+ * Match case for the Sender ID conditions (team trial round 1): on (the default), the Sender ID pattern and
+ * list must match the exact capitals; off, any case matches.
+ */
+function MatchCase({ form }: { form: FormApi<TranslationRuleInput> }) {
+  return (
+    <label
+      className="toggle-inline match-case"
+      title="On: the Sender ID pattern and Sender ID List must match the exact capitals. Off: any case."
+    >
+      <input
+        type="checkbox"
+        checked={form.get("senderMatchCase") !== false}
+        onChange={(e) => form.set("senderMatchCase", e.target.checked)}
+      />
+      Match case
+    </label>
   );
 }
 
@@ -587,6 +611,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             negate="senderPatternNegate"
             label="Sender ID (regex)"
             placeholder="^[A-Z]+$"
+            matchCase
           />
           <PatternField
             form={form}
@@ -603,7 +628,12 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             placeholder="bit\.ly"
           />
           <div className="cond-field">
-            <ListPick form={form} path="senderListId" label="Sender ID List" />
+            <ListPick
+              form={form}
+              path="senderListId"
+              label="Sender ID List"
+              hint={v.senderMatchCase === false ? "Any case (Match case is off)" : "Exact capitals (Match case is on)"}
+            />
             <Negate form={form} path="senderListNegate" />
           </div>
           <div className="cond-field">

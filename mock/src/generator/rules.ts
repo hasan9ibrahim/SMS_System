@@ -226,6 +226,7 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       dlr_target_pct: fakeRuleTarget(r.id),
       sender_pattern: r.senderPattern,
       sender_pattern_negate: r.senderPatternNegate,
+      sender_match_case: true, // fixed, no RNG draw (team trial round 1)
       receiver_pattern: null,
       receiver_pattern_negate: false,
       content_pattern: extra.content_pattern ?? null,
@@ -545,6 +546,7 @@ async function generateTranslationRules(world: World, rng: Rng, sink: TableSink,
       status: rng.chance(0.07) ? "inactive" : "active",
       sender_pattern: null,
       sender_pattern_negate: false,
+      sender_match_case: true, // fixed, no RNG draw (team trial round 1)
       receiver_pattern: null,
       receiver_pattern_negate: false,
       mccmncs:

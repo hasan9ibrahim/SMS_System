@@ -42,6 +42,7 @@ const COLUMNS: [keyof Fields, string][] = [
   ["continueAfter", "continue_after"],
   ["senderPattern", "sender_pattern"],
   ["senderPatternNegate", "sender_pattern_negate"],
+  ["senderMatchCase", "sender_match_case"],
   ["receiverPattern", "receiver_pattern"],
   ["receiverPatternNegate", "receiver_pattern_negate"],
   ["mccmncs", "mccmncs"],
@@ -351,6 +352,8 @@ const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
   targets: plainTargets(input.targets),
   // Missing (older clients) means no words; blank rows are dropped.
   contentWords: (input.contentWords ?? []).filter((w) => w.find.trim() !== ""),
+  // Missing (older clients) means Match case on for the Sender ID conditions (team trial round 1).
+  senderMatchCase: input.senderMatchCase ?? true,
 });
 
 export function createTranslationRule(request: FastifyRequest, reply: FastifyReply) {

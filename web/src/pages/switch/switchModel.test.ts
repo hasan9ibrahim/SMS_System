@@ -90,6 +90,12 @@ describe("switch model (§6.4, §13.2)", () => {
       ruleSummary({ ...blankRule(), action: "block", senderPattern: "^TEST", senderPatternNegate: true }),
       "When sender not ~ ^TEST: block",
     );
+    // Sender ID Match case (team trial round 1): on by default, shown only when off.
+    assert.equal(blankRule().senderMatchCase, true);
+    assert.equal(
+      ruleSummary({ ...blankRule(), action: "block", senderPattern: "^BANK$", senderMatchCase: false }),
+      "When sender ~ ^BANK$ (any case): block",
+    );
   });
 });
 
