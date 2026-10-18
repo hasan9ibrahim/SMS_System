@@ -11623,6 +11623,8 @@ export type components = {
       id: components["schemas"]["Id"];
       numberListId: components["schemas"]["Id"];
       value: string;
+      /** @description Sender ID template lists: the message text template paired with the Sender ID (team trial round 1). {code} is the code found in the original text (4-8 digits), {text} the original text. Null elsewhere. */
+      content: string | null;
       createdBy: string | null;
       createdAt: components["schemas"]["Timestamp"];
     };
@@ -11631,6 +11633,8 @@ export type components = {
     };
     NumberListEntriesInput: {
       values: string[];
+      /** @description Sender ID template lists only: the content template of each value, in the same order as values (team trial round 1). {code} = the code found in the original text, {text} = the original text. */
+      contents?: (string | null)[];
     };
     NumberListEntriesResult: {
       added: number;
@@ -11693,7 +11697,7 @@ export type components = {
       receiverListId?: components["schemas"]["Id"] | null;
       receiverListNegate?: boolean;
       /**
-       * @description translation = prefix swap written "from=to"; regex_replace = senderConversionValue is a regular expression and senderConversionReplacement replaces each match ($1..$9 = groups).
+       * @description translation = the new value only: the sender or receiver the conditions matched becomes it (team trial round 1); "from=to" still swaps a prefix. regex_replace = senderConversionValue is a regular expression and senderConversionReplacement replaces each match ($1..$9 = groups).
        * @enum {string|null}
        */
       senderConversion?:
@@ -11706,7 +11710,7 @@ export type components = {
         | "random_number"
         | "sender_id_template"
         | null;
-      /** @description Digits to strip, text to add, "from=to" for translation, or the pattern for regex_replace. */
+      /** @description Digits to strip, text to add, the new value for translation (or "from=to" to swap a prefix), or the pattern for regex_replace. */
       senderConversionValue?: string | null;
       /** @description regex_replace only - the text each match becomes ($1..$9 insert groups); empty removes the match. */
       senderConversionReplacement?: string | null;
@@ -13993,8 +13997,10 @@ export type components = {
       sourceNpi: number;
       destTon: number;
       destNpi: number;
-      /** @description Service Type Routing. */
+      /** @description Service Type Routing (no longer offered by the GUI since the team trial; kept for API callers). */
       serviceType?: string | null;
+      /** @description Test straight to this vendor trunk (team trial round 1): route rules are skipped and the message goes to the vendor at its own buy rate for the destination. The route rules are still evaluated and shown. */
+      vendorTrunkId?: components["schemas"]["Id"] | null;
       text?: string;
       dataCoding: number;
       /**
@@ -14016,6 +14022,15 @@ export type components = {
       bytes: number;
     };
     RouteSimulatorResult: {
+      /** @description The vendor trunk tested directly (vendorTrunkId), with its buy rate; null otherwise. */
+      forcedVendor?: {
+        vendorTrunkId: components["schemas"]["Id"];
+        name: string;
+        /** @description Its buy rate for the destination; null when it has none. */
+        rate: number | null;
+        currency: string | null;
+        platformRate: number | null;
+      } | null;
       trunk: {
         id: components["schemas"]["Id"];
         name: string;

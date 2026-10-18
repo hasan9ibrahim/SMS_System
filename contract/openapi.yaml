@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.36.0
+  version: 0.38.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18495,7 +18495,7 @@ components:
 
     NumberListEntry:
       type: object
-      required: [id, numberListId, value, createdBy, createdAt]
+      required: [id, numberListId, value, content, createdBy, createdAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -18503,6 +18503,11 @@ components:
           $ref: "#/components/schemas/Id"
         value:
           type: string
+        content:
+          type: [string, "null"]
+          description: >-
+            Sender ID template lists: the message text template paired with the Sender ID (team trial round 1).
+            {code} is the code found in the original text (4-8 digits), {text} the original text. Null elsewhere.
         createdBy:
           type: [string, "null"]
         createdAt:
@@ -18532,6 +18537,15 @@ components:
             type: string
             minLength: 1
             maxLength: 64
+        contents:
+          type: array
+          maxItems: 10000
+          description: >-
+            Sender ID template lists only: the content template of each value, in the same order as values (team trial
+            round 1). {code} = the code found in the original text, {text} = the original text.
+          items:
+            type: [string, "null"]
+            maxLength: 1000
 
     NumberListEntriesResult:
       type: object
@@ -18669,11 +18683,11 @@ components:
         senderConversion:
           type: [string, "null"]
           enum: [left_strip, right_strip, prepend, append, translation, regex_replace, random_number, sender_id_template, null]
-          description: "translation = prefix swap written \"from=to\"; regex_replace = senderConversionValue is a regular expression and senderConversionReplacement replaces each match ($1..$9 = groups)."
+          description: "translation = the new value only: the sender or receiver the conditions matched becomes it (team trial round 1); \"from=to\" still swaps a prefix. regex_replace = senderConversionValue is a regular expression and senderConversionReplacement replaces each match ($1..$9 = groups)."
         senderConversionValue:
           type: [string, "null"]
           maxLength: 200
-          description: "Digits to strip, text to add, \"from=to\" for translation, or the pattern for regex_replace."
+          description: "Digits to strip, text to add, the new value for translation (or \"from=to\" to swap a prefix), or the pattern for regex_replace."
         senderConversionReplacement:
           type: [string, "null"]
           maxLength: 100
@@ -23213,7 +23227,14 @@ components:
         serviceType:
           type: [string, "null"]
           maxLength: 6
-          description: Service Type Routing.
+          description: Service Type Routing (no longer offered by the GUI since the team trial; kept for API callers).
+        vendorTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: >-
+            Test straight to this vendor trunk (team trial round 1): route rules are skipped and the message goes to
+            the vendor at its own buy rate for the destination. The route rules are still evaluated and shown.
         text:
           type: string
           maxLength: 1600
@@ -23251,6 +23272,25 @@ components:
       type: object
       required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms]
       properties:
+        forcedVendor:
+          description: The vendor trunk tested directly (vendorTrunkId), with its buy rate; null otherwise.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [vendorTrunkId, name, rate, currency, platformRate]
+              properties:
+                vendorTrunkId:
+                  $ref: "#/components/schemas/Id"
+                name:
+                  type: string
+                rate:
+                  type: [number, "null"]
+                  description: Its buy rate for the destination; null when it has none.
+                currency:
+                  type: [string, "null"]
+                platformRate:
+                  type: [number, "null"]
+            - type: "null"
         trunk:
           type: object
           required: [id, name, enterprise]

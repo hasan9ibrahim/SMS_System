@@ -693,6 +693,7 @@ export const listFields: Record<ListId, ListFields> = {
         hidden: true,
       }),
       field({ field: "value", label: "Number", type: "text", defaultOperator: "like" }),
+      field({ field: "content", label: "Content template", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "createdBy", label: "Created By", type: "text", defaultOperator: "like" }),
       field({ field: "createdAt", label: "Created Time", type: "datetime", defaultOperator: "between" }),
     ],

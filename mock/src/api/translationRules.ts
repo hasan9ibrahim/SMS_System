@@ -178,7 +178,7 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
   } else if (sc === "prepend" || sc === "append") {
     if (!input.senderConversionValue) err("/senderConversionValue", "the text to add");
   } else if (sc === "translation") {
-    if (!/^[^=]+=.*$/.test(input.senderConversionValue ?? "")) err("/senderConversionValue", 'write it as "from=to"');
+    if (!input.senderConversionValue) err("/senderConversionValue", "the new Sender ID");
   } else if (sc === "regex_replace") {
     if (!input.senderConversionValue) err("/senderConversionValue", "the pattern to replace");
     else if (!compile(input.senderConversionValue)) err("/senderConversionValue", "not a valid regular expression");
@@ -192,8 +192,7 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
   } else if (rc === "prepend" || rc === "append") {
     if (!input.receiverConversionValue) err("/receiverConversionValue", "the text to add");
   } else if (rc === "translation") {
-    if (!/^[^=]+=.*$/.test(input.receiverConversionValue ?? ""))
-      err("/receiverConversionValue", 'write it as "from=to"');
+    if (!input.receiverConversionValue) err("/receiverConversionValue", "the new Receiver ID");
   } else if (rc === "regex_replace") {
     if (!input.receiverConversionValue) err("/receiverConversionValue", "the pattern to replace");
     else if (!compile(input.receiverConversionValue)) err("/receiverConversionValue", "not a valid regular expression");
@@ -585,15 +584,22 @@ async function engineContext(db: Db, rules: EngineRule[]): Promise<EngineContext
     (x): x is number => x !== null,
   );
   const { rows } = await db.query(
-    "SELECT number_list_id, value FROM number_list_entries WHERE number_list_id = ANY($1) AND deleted_at IS NULL",
+    "SELECT number_list_id, value, content FROM number_list_entries WHERE number_list_id = ANY($1) AND deleted_at IS NULL",
     [ids],
   );
   const lists = new Map<number, string[]>();
+  const templates = new Map<number, Map<string, string[]>>();
   for (const r of rows) {
     const id = Number(r.number_list_id);
-    lists.set(id, [...(lists.get(id) ?? []), r.value as string]);
+    const value = r.value as string;
+    if (!(lists.get(id) ?? []).includes(value)) lists.set(id, [...(lists.get(id) ?? []), value]);
+    if (r.content !== null) {
+      const byValue = templates.get(id) ?? new Map<string, string[]>();
+      byValue.set(value, [...(byValue.get(value) ?? []), r.content as string]);
+      templates.set(id, byValue);
+    }
   }
-  return { lists, mccmncOf: await mccmncLookup(db), now: new Date(), rand: Math.random };
+  return { lists, templates, mccmncOf: await mccmncLookup(db), now: new Date(), rand: Math.random };
 }
 
 async function engineRules(db: Db, ids: number[]): Promise<Map<number, EngineRule>> {

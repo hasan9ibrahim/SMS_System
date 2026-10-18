@@ -11,6 +11,7 @@ import { closeDb, db, dbReady } from "../src/db.js";
 import {
   convert,
   entryMatches,
+  fillContentTemplate,
   rewriteText,
   runRules,
   type EngineContext,
@@ -112,6 +113,16 @@ describe("translation engine (§6.4)", () => {
     assert.equal(convert("append", "X", "AB"), "ABX");
     assert.equal(convert("translation", "00=+", "0044"), "+44");
     assert.equal(convert("translation", "00=+", "44"), "44", "no prefix, no change");
+    assert.equal(
+      convert("translation", "BRAND", "INFO"),
+      "BRAND",
+      "the new value replaces what the conditions matched",
+    );
+    assert.equal(
+      fillContentTemplate("[OurBrand] code {code}", "Your PIN: 482913, valid 5 min"),
+      "[OurBrand] code 482913",
+    );
+    assert.equal(fillContentTemplate("{text}", "hi"), "hi");
     // Regex Replace next to the prefix swap (decided 2026-10-17)
     assert.equal(convert("regex_replace", "^0(\\d+)", "07123456", "44$1"), "447123456");
     assert.equal(convert("regex_replace", "^(\\d{3})\\d{4}", "4471234567", "$1XXXX"), "447XXXX567");

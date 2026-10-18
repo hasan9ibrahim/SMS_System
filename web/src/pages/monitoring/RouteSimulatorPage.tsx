@@ -1,10 +1,13 @@
-// Route Simulator (§9.2): Customer Trunk ID, Sender ID, Receiver ID, MCCMNC, Source / Dest TON and
-// NPI, Service Type Routing, Message Text, Test SMS and Data coding (0–8), with the live counter
-// (coding, SMS per message, size). Go shows what the switch would do: the trunk's translation rules
-// and HLR rule, the destination and customer rate, the route rules tried, the chosen vendor with its
-// cost and the margin. Test SMS also sends it (simulated outcome in this phase).
+// Route Simulator (§9.2): Customer Trunk ID, Sender ID, Receiver IDs, MCCMNC, Source / Dest TON and
+// NPI, Message Text, Test SMS and Data coding (0–8), with the live counter (coding, SMS per message,
+// size). Go shows what the switch would do: the trunk's translation rules and HLR rule, the destination
+// and customer rate, the route rules tried, the chosen vendor with its cost and the margin. Test SMS
+// also sends it (simulated outcome in this phase). Team trial round 1: a vendor trunk can be tested
+// directly (instead of Service Type Routing), several receivers run at once, and the data coding and
+// TON / NPI follow the text and the addresses until changed by hand.
 import { useState } from "react";
 import type { RouteSimulatorResult, TrunkListRow } from "@sms/contract";
+import { autoCoding, autoTonNpi, parseReceivers } from "./monitorModel";
 import { runRouteSimulator } from "../../api/observation";
 import { pageForPath } from "../../nav/registry";
 import { PageHeader } from "../../page/PageHeader";
@@ -53,12 +56,18 @@ const money = (v: number | null | undefined, ccy?: string) =>
 
 function Result({ r }: { r: RouteSimulatorResult }) {
   const d = r.route.decision;
+  const forced = r.forcedVendor;
   return (
     <div className="rs-result">
       <div className={`rs-verdict ${r.blocked ? "tone-bad" : "tone-ok"}`}>
         <StatusDot tone={r.blocked ? "error" : "good"} />{" "}
         {r.blocked ? (
           <strong>{r.blocked}</strong>
+        ) : forced ? (
+          <strong>
+            Sent straight to {forced.name} (routing skipped) · cost {money(forced.rate, forced.currency ?? undefined)} ·
+            margin {r.marginPct === null ? "—" : `${r.marginPct} %`}
+          </strong>
         ) : (
           <strong>
             Routes to {d!.vendor!.name} ({d!.vendor!.decidedBy}, level {d!.vendor!.level}) · cost{" "}
@@ -139,7 +148,10 @@ function Result({ r }: { r: RouteSimulatorResult }) {
           </dl>
         </section>
         <section className="card rs-wide">
-          <h3>Route {d ? `· rule ${d.ruleId} (${d.outcome.replace("_", " ")})` : "· no rule matched"}</h3>
+          <h3>
+            Route {d ? `· rule ${d.ruleId} (${d.outcome.replace("_", " ")})` : "· no rule matched"}
+            {forced && <span className="muted small"> · shown for reference; the test went to {forced.name}</span>}
+          </h3>
           {d && d.candidates.length > 0 && (
             <table className="mini-table">
               <thead>
@@ -186,47 +198,74 @@ function Result({ r }: { r: RouteSimulatorResult }) {
 export function RouteSimulatorPage() {
   const [trunkId, setTrunkId] = useState<number | null>(null);
   const [sender, setSender] = useState("INFO");
-  const [receiver, setReceiver] = useState("447700900123");
+  const [receivers, setReceivers] = useState("447700900123");
   const [mccmnc, setMccmnc] = useState("");
   const [srcTon, setSrcTon] = useState(5);
   const [srcNpi, setSrcNpi] = useState(0);
   const [dstTon, setDstTon] = useState(1);
   const [dstNpi, setDstNpi] = useState(1);
-  const [serviceType, setServiceType] = useState("");
+  const [vendorId, setVendorId] = useState<number | null>(null);
+  // Hand-set values stop following the text and the addresses.
+  const [touched, setTouched] = useState({ coding: false, src: false, dst: false });
   const [text, setText] = useState("Your verification code is 482913");
   const [coding, setCoding] = useState(0);
   const [testSms, setTestSms] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<RouteSimulatorResult | null>(null);
+  const [results, setResults] = useState<{ receiver: string; r: RouteSimulatorResult | null; error?: string }[]>([]);
+  const routed = results.filter((x) => x.r && !x.r.blocked).length;
   usePageStatus({
-    rows: result ? (result.blocked ? "Would be rejected" : "Would be routed") : "Fill in the message and press Go",
+    rows: results.length ? `${routed} of ${results.length} would be routed` : "Fill in the message and press Go",
     shortcuts: "Enter runs",
   });
-  const enc = messageEncoding(text, coding);
-  const go = () => {
+  const list = parseReceivers(receivers);
+  // Auto values: coding from the text, TON / NPI from the sender and the first receiver.
+  const autoSrc = autoTonNpi(sender);
+  const autoDst = autoTonNpi(list[0] ?? "");
+  const effCoding = touched.coding ? coding : autoCoding(text);
+  const effSrc = touched.src ? { ton: srcTon, npi: srcNpi } : autoSrc;
+  const effDst = touched.dst ? { ton: dstTon, npi: dstNpi } : autoDst;
+  const enc = messageEncoding(text, effCoding);
+  const go = async () => {
     if (!trunkId) return toast({ tone: "warning", message: "Choose the customer trunk" });
+    if (!list.length) return toast({ tone: "warning", message: "Enter at least one receiver" });
+    if (list.length > 20) return toast({ tone: "warning", message: "At most 20 receivers at once" });
     setBusy(true);
-    void runRouteSimulator({
-      customerTrunkId: trunkId,
-      senderId: sender,
-      receiver: receiver.replace(/\D/g, ""),
-      mccmnc: mccmnc.trim() || null,
-      sourceTon: srcTon,
-      sourceNpi: srcNpi,
-      destTon: dstTon,
-      destNpi: dstNpi,
-      serviceType: serviceType.trim() || null,
-      text,
-      dataCoding: coding,
-      testSms,
-    })
-      .then(setResult)
-      .catch((e) => toast({ tone: "error", message: problemText(e) }))
-      .finally(() => setBusy(false));
+    const out: typeof results = [];
+    for (const receiver of list) {
+      try {
+        const r = await runRouteSimulator({
+          customerTrunkId: trunkId,
+          senderId: sender,
+          receiver,
+          mccmnc: mccmnc.trim() || null,
+          sourceTon: effSrc.ton,
+          sourceNpi: effSrc.npi,
+          destTon: touched.dst ? dstTon : autoTonNpi(receiver).ton,
+          destNpi: touched.dst ? dstNpi : autoTonNpi(receiver).npi,
+          vendorTrunkId: vendorId,
+          text,
+          dataCoding: effCoding,
+          testSms,
+        });
+        out.push({ receiver, r });
+      } catch (e) {
+        out.push({ receiver, r: null, error: problemText(e) });
+      }
+      setResults([...out]);
+    }
+    setBusy(false);
   };
-  const select = (label: string, value: number, set: (v: number) => void, options: [number, string][]) => (
+  const select = (
+    label: string,
+    value: number,
+    set: (v: number) => void,
+    options: [number, string][],
+    auto = false,
+  ) => (
     <label className="field">
-      <span>{label} *</span>
+      <span>
+        {label} *{auto && <span className="muted small"> (auto)</span>}
+      </span>
       <select value={value} onChange={(e) => set(Number(e.target.value))}>
         {options.map(([v, l]) => (
           <option key={v} value={v}>
@@ -243,7 +282,7 @@ export function RouteSimulatorPage() {
         className="rs-form"
         onSubmit={(e) => {
           e.preventDefault();
-          go();
+          void go();
         }}
       >
         <div className="field rs-trunk">
@@ -261,9 +300,17 @@ export function RouteSimulatorPage() {
           <span>Sender ID</span>
           <input value={sender} maxLength={20} onChange={(e) => setSender(e.target.value)} />
         </label>
-        <label className="field">
-          <span>Receiver ID *</span>
-          <input value={receiver} maxLength={16} inputMode="numeric" onChange={(e) => setReceiver(e.target.value)} />
+        <label className="field rs-receivers">
+          <span>Receiver IDs *</span>
+          <input
+            value={receivers}
+            maxLength={400}
+            placeholder="447700900123, 33612345678"
+            onChange={(e) => setReceivers(e.target.value)}
+          />
+          <span className="muted small">
+            {list.length > 1 ? `${list.length} receivers` : "Comma-separated, up to 20"}
+          </span>
         </label>
         <label className="field">
           <span>MCCMNC</span>
@@ -276,27 +323,49 @@ export function RouteSimulatorPage() {
         </label>
         {select(
           "Source TON",
-          srcTon,
-          setSrcTon,
+          effSrc.ton,
+          (v) => (setSrcTon(v), setSrcNpi(effSrc.npi), setTouched((t) => ({ ...t, src: true }))),
           TON.map((l, i) => [i, l]),
+          !touched.src,
         )}
-        {select("Source NPI", srcNpi, setSrcNpi, NPI)}
+        {select(
+          "Source NPI",
+          effSrc.npi,
+          (v) => (setSrcNpi(v), setSrcTon(effSrc.ton), setTouched((t) => ({ ...t, src: true }))),
+          NPI,
+          !touched.src,
+        )}
         {select(
           "Dest TON",
-          dstTon,
-          setDstTon,
+          effDst.ton,
+          (v) => (setDstTon(v), setDstNpi(effDst.npi), setTouched((t) => ({ ...t, dst: true }))),
           TON.map((l, i) => [i, l]),
+          !touched.dst,
         )}
-        {select("Dest NPI", dstNpi, setDstNpi, NPI)}
-        <label className="field">
-          <span>Service Type Routing</span>
-          <input value={serviceType} maxLength={6} onChange={(e) => setServiceType(e.target.value)} />
-        </label>
+        {select(
+          "Dest NPI",
+          effDst.npi,
+          (v) => (setDstNpi(v), setDstTon(effDst.ton), setTouched((t) => ({ ...t, dst: true }))),
+          NPI,
+          !touched.dst,
+        )}
+        <div className="field rs-vendor">
+          <span>Vendor trunk (test directly, skips routing)</span>
+          <ListLookup<TrunkListRow>
+            list="vendor_trunks"
+            value={vendorId}
+            onChange={(t) => setVendorId(t?.id ?? null)}
+            labelOf={(t) => `${t.id} · ${t.name}`}
+            detailOf={(t) => t.enterpriseName}
+            placeholder="Any (by the route rules)"
+          />
+        </div>
         {select(
           "Data coding",
-          coding,
-          setCoding,
+          effCoding,
+          (v) => (setCoding(v), setTouched((t) => ({ ...t, coding: true }))),
           CODINGS.map((l, i) => [i, l]),
+          !touched.coding,
         )}
         <label className="field rs-text">
           <span>Message Text</span>
@@ -304,7 +373,7 @@ export function RouteSimulatorPage() {
           <span className="rs-counter small">
             {enc.label} · {enc.chars} chars · {enc.bitsPerChar} bits per char · <strong>{enc.segments} SMS</strong> ·{" "}
             {enc.bytes} bytes
-            {coding < 2 && needsUcs2(text) && (
+            {effCoding < 2 && needsUcs2(text) && (
               <span className="tone-warning"> · has characters outside GSM: use 8 UCS-2</span>
             )}
           </span>
@@ -314,12 +383,26 @@ export function RouteSimulatorPage() {
             <input type="checkbox" checked={testSms} onChange={(e) => setTestSms(e.target.checked)} />
             Test SMS (also send it)
           </label>
+          {(touched.coding || touched.src || touched.dst) && (
+            <button
+              type="button"
+              className="link"
+              onClick={() => setTouched({ coding: false, src: false, dst: false })}
+            >
+              Back to automatic coding and TON / NPI
+            </button>
+          )}
           <Button type="submit" variant="primary" icon="play" disabled={busy}>
-            Go
+            Go{list.length > 1 ? ` (${list.length})` : ""}
           </Button>
         </div>
       </form>
-      {result && <Result r={result} />}
+      {results.map((x) => (
+        <section key={x.receiver} className="rs-one" aria-label={`Result for ${x.receiver}`}>
+          {results.length > 1 && <h2 className="rs-receiver">{x.receiver}</h2>}
+          {x.r ? <Result r={x.r} /> : <p className="error-text">{x.error}</p>}
+        </section>
+      ))}
     </div>
   );
 }

@@ -40,6 +40,8 @@ export function entryProblem(type: ListType, value: string): string | null {
   return value.length >= 1 && value.length <= 64 && !/[\r\n]/.test(value) ? null : "1-64 characters on one line";
 }
 
+const CONTENT_ONLY = "a content template goes only in a Sender ID template list";
+
 async function nameTaken(db: Db, name: string, exceptId: number) {
   const { rows } = await db.query(
     "SELECT 1 FROM number_lists WHERE lower(name) = lower($1) AND deleted_at IS NULL AND id <> $2",
@@ -218,7 +220,7 @@ async function saveEntries(
   request: FastifyRequest,
   pool: pg.Pool,
   list: NumberList,
-  add: string[],
+  add: { value: string; content: string | null }[],
   remove: { id: number; value: string }[],
   changeType: "edit" | "import" | "delete",
   note: string,
@@ -228,11 +230,17 @@ async function saveEntries(
     const diff: DiffEntry[] = [];
     if (add.length) {
       const { rows } = await c.query(
-        `INSERT INTO number_list_entries (number_list_id, value, created_by_id)
-         SELECT $1, v, $3 FROM unnest($2::text[]) AS v RETURNING id, value`,
-        [list.id, add, me.id],
+        `INSERT INTO number_list_entries (number_list_id, value, content, created_by_id)
+         SELECT $1, v, ct, $4 FROM unnest($2::text[], $3::text[]) AS x(v, ct) RETURNING id, value, content`,
+        [list.id, add.map((a) => a.value), add.map((a) => a.content), me.id],
       );
-      for (const r of rows) diff.push({ entity_id: r.id, field: "*", before: null, after: { value: r.value } });
+      for (const r of rows)
+        diff.push({
+          entity_id: r.id,
+          field: "*",
+          before: null,
+          after: r.content === null ? { value: r.value } : { value: r.value, content: r.content },
+        });
     }
     if (remove.length) {
       await c.query("UPDATE number_list_entries SET deleted_at = now() WHERE id = ANY($1)", [remove.map((r) => r.id)]);
@@ -251,44 +259,52 @@ async function saveEntries(
   });
 }
 
+/** Live entries by key: the value, plus the content for a Sender ID template. */
+const entryKey = (value: string, content: string | null) => (content === null ? value : `${value}\u0000${content}`);
+
 async function liveValues(db: Db, id: number) {
   const { rows } = await db.query(
-    "SELECT id, value FROM number_list_entries WHERE number_list_id = $1 AND deleted_at IS NULL",
+    "SELECT id, value, content FROM number_list_entries WHERE number_list_id = $1 AND deleted_at IS NULL",
     [id],
   );
-  return new Map(rows.map((r) => [r.value as string, r.id as number]));
+  return new Map(rows.map((r) => [entryKey(r.value as string, r.content as string | null), r.id as number]));
 }
 
 export function addNumberListEntries(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
-  const { values } = request.body as NumberListEntriesInput;
+  const { values, contents } = request.body as NumberListEntriesInput;
   return withDb(reply, async (pool) => {
     const list = await liveList(pool, reply, id);
     if (!list) return reply;
     const existing = await liveValues(pool, id);
     const errors = [];
-    const add = new Set<string>();
+    const add = new Map<string, { value: string; content: string | null }>();
     let skipped = 0;
+    const template = list.listType === "sender_id_template";
     for (const [i, raw] of values.entries()) {
       const value = raw.trim();
-      const problem = entryProblem(list.listType, value);
+      // Sender ID templates pair a Sender ID with a content template (team trial round 1).
+      const content = template ? contents?.[i]?.trim() || null : null;
+      const problem = entryProblem(list.listType, value) ?? (contents?.[i] && !template ? CONTENT_ONLY : null);
       if (problem) {
         if (errors.length < 200) errors.push({ line: i + 1, key: value, message: problem });
         continue;
       }
-      if (existing.has(value) || add.has(value)) skipped++;
-      else add.add(value);
+      const key = entryKey(value, content);
+      if (existing.has(key) || add.has(key)) skipped++;
+      else add.set(key, { value, content });
     }
     if (errors.length) return { added: 0, skipped, errors, change: null };
     if (!add.size) return { added: 0, skipped, errors, change: null };
+    const first = [...add.values()][0]!;
     const change = await saveEntries(
       request,
       pool,
       list,
-      [...add],
+      [...add.values()],
       [],
       "edit",
-      add.size === 1 ? `Added ${[...add][0]} to ${list.name}` : `Added ${add.size} entries to ${list.name}`,
+      add.size === 1 ? `Added ${first.value} to ${list.name}` : `Added ${add.size} entries to ${list.name}`,
     );
     return { added: add.size, skipped, errors, change };
   });
@@ -323,15 +339,20 @@ export function deleteNumberListEntries(request: FastifyRequest, reply: FastifyR
 export function importNumberListEntries(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
   const body = request.body as ImportRequest;
-  // One value per line, or a CSV with a value (or number) column.
+  // One value per line, or a CSV with a value (or number) column, and a content column for Sender ID
+  // templates (team trial round 1).
   const parsed = parseCsv(body.csv);
-  const col = ["value", "number"].find((c) => parsed.header.includes(c));
-  const rows = col
-    ? parsed.rows.map((r) => ({ line: r.line, value: r.values[col] ?? "" }))
+  const col = ["value", "number", "sender_id", "senderid"].find((c) => parsed.header.includes(c));
+  const rows: { line: number; value: string; content: string | null }[] = col
+    ? parsed.rows.map((r) => ({
+        line: r.line,
+        value: r.values[col] ?? "",
+        content: r.values.content?.trim() || null,
+      }))
     : body.csv
         .replace(/^﻿/, "")
         .split(/\r?\n/)
-        .map((v, i) => ({ line: i + 1, value: v.trim() }))
+        .map((v, i) => ({ line: i + 1, value: v.trim(), content: null }))
         .filter((r) => r.value !== "");
   return withDb(reply, async (pool) => {
     const list = await liveList(pool, reply, id);
@@ -339,27 +360,32 @@ export function importNumberListEntries(request: FastifyRequest, reply: FastifyR
     const run = new ImportRun(rows.length);
     const existing = await liveValues(pool, id);
     const seen = new Map<string, number>();
-    const add: string[] = [];
-    for (const { line, value } of rows) {
+    const add: { value: string; content: string | null }[] = [];
+    const template = list.listType === "sender_id_template";
+    for (const { line, value, content: raw } of rows) {
+      const content = template ? raw : null;
       const problem = entryProblem(list.listType, value);
       if (problem) {
         run.error(line, value || null, problem);
         continue;
       }
-      if (seen.has(value)) {
-        run.warn(line, value, `also on line ${seen.get(value)}; counted once`);
+      const key = entryKey(value, content);
+      if (seen.has(key)) {
+        run.warn(line, value, `also on line ${seen.get(key)}; counted once`);
         continue;
       }
-      seen.set(value, line);
-      if (existing.has(value)) run.unchanged++;
+      seen.set(key, line);
+      if (existing.has(key)) run.unchanged++;
       else {
-        add.push(value);
+        add.push({ value, content });
         run.added++;
       }
     }
     const remove =
       body.mode === "replace"
-        ? [...existing].filter(([v]) => !seen.has(v)).map(([value, entryId]) => ({ id: entryId, value }))
+        ? [...existing]
+            .filter(([k]) => !seen.has(k))
+            .map(([k, entryId]) => ({ id: entryId, value: k.split("\u0000")[0]! }))
         : [];
     run.archived = remove.length;
     if (body.dryRun || run.errors.length) return run.result(false, body.dryRun, null);

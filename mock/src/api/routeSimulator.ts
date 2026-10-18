@@ -1,7 +1,8 @@
 // Route Simulator (§9.2): a message through a customer trunk as the switch would handle it - the
 // trunk's translation rules and HLR rule (§13.2), the destination, the customer rate, the route rules
-// in order (§6.3) and the chosen vendor with its cost and the margin. Test SMS answers with a
-// simulated outcome; no EDR is written and nothing is sent.
+// in order (§6.3) and the chosen vendor with its cost and the margin. A vendor trunk can be tested
+// directly (team trial round 1): the route rules are shown but the message goes to that vendor at its
+// own buy rate. Test SMS answers with a simulated outcome; no EDR is written and nothing is sent.
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { RouteSimulatorInput, RouteSimulatorResult } from "@sms/contract";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
@@ -65,9 +66,35 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
           rateTable: rows[0].rate_table,
         };
     }
+    // Straight to one vendor: its own line for the network, else for the country.
+    let forcedVendor: RouteSimulatorResult["forcedVendor"] = null;
+    if (b.vendorTrunkId) {
+      const { rows: vt } = await pool.query("SELECT id, name FROM vendor_trunks WHERE id = $1 AND deleted_at IS NULL", [
+        b.vendorTrunkId,
+      ]);
+      if (!vt[0]) return badInput(reply, [{ path: "/vendorTrunkId", message: "unknown vendor trunk" }]);
+      const { rows } = m.mccmnc
+        ? await pool.query(
+            `SELECT l.rate, l.currency, ${toPlatformSql("l.rate")} AS conv
+               FROM rate_tables rt JOIN rate_lines l ON l.rate_table_id = rt.id
+               JOIN currency_latest cl ON cl.iso = l.currency
+              WHERE rt.vendor_trunk_id = $1 AND rt.deleted_at IS NULL AND l.mccmnc = ANY($2) AND l.sender_id IS NULL
+                AND NOT l.is_blocked AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
+              ORDER BY length(l.mccmnc) DESC LIMIT 1`,
+            [b.vendorTrunkId, [m.mccmnc, m.mccmnc.slice(0, 3)]],
+          )
+        : { rows: [] };
+      forcedVendor = {
+        vendorTrunkId: Number(vt[0].id),
+        name: vt[0].name,
+        rate: rows[0] ? Number(rows[0].rate) : null,
+        currency: rows[0] ? String(rows[0].currency).trim() : null,
+        platformRate: rows[0] ? Math.round(Number(rows[0].conv) * 1e6) / 1e6 : null,
+      };
+    }
     const d = route.decision;
     const chosen = d?.vendor ? d.candidates.find((c) => c.vendorTrunkId === d.vendor!.vendorTrunkId) : undefined;
-    const cost = chosen?.cost ?? null;
+    const cost = forcedVendor ? forcedVendor.platformRate : (chosen?.cost ?? null);
     const vendorCost = cost === null ? null : { rate: cost, currency: PLATFORM_CURRENCY };
     const sell = customerRate?.platformRate ?? null;
     const marginPct = sell && cost !== null ? Math.round(((sell - cost) / sell) * 1000) / 10 : null;
@@ -77,13 +104,17 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
         ? "Unknown destination: no dial code matches the number"
         : !customerRate
           ? "No customer rate for the destination (ESME_RINVDSTADR)"
-          : !d
-            ? "No route rule matches"
-            : d.outcome === "block"
-              ? `Blocked by route rule ${d.ruleId}`
-              : d.outcome === "no_vendor"
-                ? `Route rule ${d.ruleId} matched but no vendor qualifies`
-                : null;
+          : forcedVendor
+            ? forcedVendor.rate === null
+              ? `${forcedVendor.name} has no rate for the destination`
+              : null
+            : !d
+              ? "No route rule matches"
+              : d.outcome === "block"
+                ? `Blocked by route rule ${d.ruleId}`
+                : d.outcome === "no_vendor"
+                  ? `Route rule ${d.ruleId} matched but no vendor qualifies`
+                  : null;
     let testSms: RouteSimulatorResult["testSms"] = null;
     if (b.testSms) {
       const messageId = Math.floor(Math.random() * 2 ** 48)
@@ -96,7 +127,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
         testSms = {
           messageId,
           status,
-          detail: `Sent to ${d!.vendor!.name}; receipt ${status} after ${(1 + Math.random() * 6).toFixed(1)} s (simulated)`,
+          detail: `Sent to ${forcedVendor ? forcedVendor.name : d!.vendor!.name}; receipt ${status} after ${(1 + Math.random() * 6).toFixed(1)} s (simulated)`,
         };
       }
     }
@@ -114,6 +145,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       marginPct,
       blocked,
       testSms,
+      forcedVendor,
     };
   });
 }

@@ -1,7 +1,15 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import type { TranslationRuleDetail } from "@sms/contract";
-import { blankRule, impliedDirection, inputFromDetail, ruleSummary, splitValues, toSave } from "./switchModel";
+import {
+  blankRule,
+  impliedDirection,
+  inputFromDetail,
+  ruleSummary,
+  splitTemplates,
+  splitValues,
+  toSave,
+} from "./switchModel";
 
 describe("switch model (§6.4, §13.2)", () => {
   test("pasted values split on lines, commas and tabs, trimmed and distinct", () => {
@@ -83,4 +91,11 @@ describe("switch model (§6.4, §13.2)", () => {
       "When sender not ~ ^TEST: block",
     );
   });
+});
+
+test("Sender ID template lines: SENDER | content, content optional (team trial round 1)", () => {
+  assert.deepEqual(splitTemplates("OURBRAND | Your code is {code}\nINFO\n\nOURBRAND | Your code is {code}"), [
+    { value: "OURBRAND", content: "Your code is {code}" },
+    { value: "INFO", content: null },
+  ]);
 });

@@ -12,7 +12,8 @@ export const listTypeLabel = (t: NumberList["listType"]) => LIST_TYPES.find((x) 
 
 export function listTypeHint(t: NumberList["listType"]): string {
   if (t === "random") return "Numbers of 3-20 digits a Random Number conversion picks from.";
-  if (t === "sender_id_template") return "Sender IDs up to 11 characters; each {n} becomes one random digit.";
+  if (t === "sender_id_template")
+    return "A Sender ID (up to 11 characters, each {n} one random digit) and, after a |, the text the message becomes: {code} is the code found in the original text, {text} the original text.";
   return "Numbers or sender IDs that rules match (Sender / Receiver ID List, whitelists).";
 }
 
@@ -47,7 +48,8 @@ export function conversionHint(kind: string | null): string | undefined {
   if (kind === "right_strip") return "Characters to remove from the end";
   if (kind === "prepend") return "Text added in front";
   if (kind === "append") return "Text added at the end";
-  if (kind === "translation") return 'Prefix swap written "from=to", e.g. 00=+';
+  if (kind === "translation")
+    return 'The new value only: what the conditions match becomes it ("from=to" still swaps a prefix)';
   if (kind === "regex_replace") return "Regular expression, e.g. ^0(\\d+)";
   return undefined;
 }
@@ -206,4 +208,20 @@ export function ruleSummary(v: TranslationRuleInput): string {
   return `${when.length ? `When ${when.join(" and ")}` : "Every message"}: ${does.length ? does.join(", ") : "no change"}${
     v.continueAfter ? "" : ", then stop"
   }`;
+}
+
+/** Sender ID template lines "SENDER | content" (team trial round 1); the content is optional. */
+export function splitTemplates(text: string): { value: string; content: string | null }[] {
+  const seen = new Set<string>();
+  const out: { value: string; content: string | null }[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const at = line.indexOf("|");
+    const value = (at < 0 ? line : line.slice(0, at)).trim();
+    const content = at < 0 ? null : line.slice(at + 1).trim() || null;
+    const key = `${value}\u0000${content ?? ""}`;
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ value, content });
+  }
+  return out;
 }

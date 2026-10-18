@@ -15,6 +15,8 @@ export type EngineRule = Required<TranslationRuleFields> & { id: number };
 export interface EngineContext {
   /** Live entries per number list id. */
   lists: Map<number, string[]>;
+  /** Sender ID template lists: the content templates of each Sender ID (team trial round 1). */
+  templates?: Map<number, Map<string, string[]>>;
   /** MCCMNC code of a receiver number (dial-code prefix lookup), or null. */
   mccmncOf: (receiver: string) => string | null;
   now: Date;
@@ -125,8 +127,9 @@ export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext
 const pick = <T>(xs: T[], ctx: EngineContext) => xs[Math.floor(ctx.rand() * xs.length)]!;
 
 /**
- * Applies a Left/Right Strip, Prepend, Append, Translation ("from=to" prefix swap) or Regex
- * Replace (`value` = pattern, `replacement` = what each match becomes, $1..$9 = groups).
+ * Applies a Left/Right Strip, Prepend, Append, Translation or Regex Replace (`value` = pattern,
+ * `replacement` = what each match becomes, $1..$9 = groups). Translation takes only the new value: the
+ * sender or receiver the conditions matched becomes it (team trial round 1); "from=to" swaps a prefix.
  */
 export function convert(kind: string, value: string | null, input: string, replacement: string | null = null): string {
   const v = value ?? "";
@@ -141,7 +144,7 @@ export function convert(kind: string, value: string | null, input: string, repla
       return input + v;
     case "translation": {
       const at = v.indexOf("=");
-      if (at < 0) return input;
+      if (at < 0) return v || input;
       const from = v.slice(0, at);
       return input.startsWith(from) ? v.slice(at + 1) + input.slice(from.length) : input;
     }
@@ -153,6 +156,13 @@ export function convert(kind: string, value: string | null, input: string, repla
       return input;
   }
 }
+
+/** The code in a message (the first run of 4-8 digits), as {code} in a Sender ID template's content. */
+export const codeIn = (text: string) => /(?<!\d)\d{4,8}(?!\d)/.exec(text)?.[0] ?? "";
+
+/** A Sender ID template's content: {code} = the code in the original text, {text} = the original text. */
+export const fillContentTemplate = (template: string, original: string) =>
+  template.replaceAll("{code}", codeIn(original)).replaceAll("{text}", original);
 
 /** Content rewrite: replace the Regex Index group (or the whole match), then the MSG Template. */
 export function rewriteText(rule: EngineRule, text: string): string {
@@ -226,6 +236,10 @@ export function runRule(
         "sender",
         sc === "random_number" ? picked : picked.replace(/\{n\}/g, () => String(Math.floor(ctx.rand() * 10))),
       );
+      // A Sender ID template with content: our text, with the code taken from the original (team trial round 1).
+      const contents =
+        sc === "sender_id_template" ? ctx.templates?.get(rule.senderConversionListId!)?.get(picked) : undefined;
+      if (contents?.length) set("text", fillContentTemplate(pick(contents, ctx), next.text));
     }
   } else if (sc) set("sender", convert(sc, rule.senderConversionValue, next.sender, rule.senderConversionReplacement));
   if (rule.receiverConversion) {

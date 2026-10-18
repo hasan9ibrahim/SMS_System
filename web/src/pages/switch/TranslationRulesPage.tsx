@@ -43,6 +43,7 @@ import { fmtWhen, RecordActions } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
 import { DestinationPick, MultiPick } from "../routing/pickers";
 import { NumberListDialog } from "./NumberListsPage";
+import { RuleCodesDialog } from "../rates/DestinationTree";
 import {
   BILLING_TYPES,
   blankRule,
@@ -519,7 +520,19 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
           </div>
           <div className="cond-field wide">
             <FormField label="MCCMNC" error={form.error("mccmncs")} hint="A 3-digit MCC means the whole country">
-              <DestinationPick value={v.mccmncs} onChange={(c) => form.set("mccmncs", c)} />
+              <div className="pick-with-list">
+                <DestinationPick value={v.mccmncs} onChange={(c) => form.set("mccmncs", c)} />
+                <Button
+                  small
+                  icon="globe"
+                  onClick={async () => {
+                    const codes = await ask<string[]>((d) => <RuleCodesDialog initial={v.mccmncs} done={d} />);
+                    if (codes) form.set("mccmncs", codes);
+                  }}
+                >
+                  Pick from list…
+                </Button>
+              </div>
             </FormField>
             <Negate form={form} path="mccmncNegate" />
           </div>

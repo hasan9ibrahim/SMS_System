@@ -1,7 +1,7 @@
 // Rating destination tree (team trial round 1): search narrows networks, whole countries become countries.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitByCountry, treeRows, type TreeCountry } from "./DestinationTree";
+import { fromRuleCodes, splitByCountry, toRuleCodes, treeRows, type TreeCountry } from "./DestinationTree";
 
 const tree: TreeCountry[] = [
   {
@@ -34,4 +34,10 @@ test("closed countries show one row; a search opens the matching networks only",
 test("whole countries go in as countries, the rest as codes", () => {
   assert.deepEqual(splitByCountry(tree, ["505", "50501", "50502", "23410"]), { countries: ["AU", "GB"], mccmncs: [] });
   assert.deepEqual(splitByCountry(tree, ["50501"]), { countries: [], mccmncs: ["50501"] });
+});
+
+test("rule codes: a whole country is its MCC and opens back into all its codes", () => {
+  assert.deepEqual(toRuleCodes(tree, ["505", "50501", "50502", "23410"]), ["505", "234"]);
+  assert.deepEqual(toRuleCodes(tree, ["50501"]), ["50501"]);
+  assert.deepEqual(fromRuleCodes(tree, ["505"]).sort(), ["505", "50501", "50502"]);
 });

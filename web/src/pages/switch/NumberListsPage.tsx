@@ -20,7 +20,7 @@ import { ask, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { fmtWhen, openImport, RecordActions, RecordDialog } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
-import { LIST_TYPES, listTypeHint, listTypeLabel, splitValues } from "./switchModel";
+import { LIST_TYPES, listTypeHint, listTypeLabel, splitTemplates, splitValues } from "./switchModel";
 
 const page = pageForPath("/switch/number-lists")!;
 
@@ -81,31 +81,27 @@ function AddEntriesDialog({ list, done }: { list: NumberList; done: () => void }
   const add = useAddEntries(list.id);
   const notifySaved = useNotifySaved();
   const [error, setError] = useState<string | null>(null);
-  const values = splitValues(text);
+  const template = list.listType === "sender_id_template";
+  const pairs = template ? splitTemplates(text) : splitValues(text).map((value) => ({ value, content: null }));
+  const values = pairs.map((p) => p.value);
   const submit = () => {
     if (!values.length) return setError("Enter at least one value.");
-    add.mutate(
-      { values },
-      {
-        onSuccess: (r) => {
-          if (r.errors.length)
-            return setError(
-              `${r.errors.length} value${r.errors.length === 1 ? "" : "s"} do not fit: ${r.errors
-                .slice(0, 3)
-                .map((e) => `${e.key} (${e.message})`)
-                .join("; ")}`,
-            );
-          if (r.change)
-            notifySaved(
-              r.change,
-              `Added ${r.added} to ${list.name}${r.skipped ? ` · ${r.skipped} already there` : ""}`,
-            );
-          else toast({ tone: "info", message: `All ${r.skipped} values are already in the list` });
-          done();
-        },
-        onError: (e) => setError(problemText(e)),
+    add.mutate(template ? { values, contents: pairs.map((p) => p.content) } : { values }, {
+      onSuccess: (r) => {
+        if (r.errors.length)
+          return setError(
+            `${r.errors.length} value${r.errors.length === 1 ? "" : "s"} do not fit: ${r.errors
+              .slice(0, 3)
+              .map((e) => `${e.key} (${e.message})`)
+              .join("; ")}`,
+          );
+        if (r.change)
+          notifySaved(r.change, `Added ${r.added} to ${list.name}${r.skipped ? ` · ${r.skipped} already there` : ""}`);
+        else toast({ tone: "info", message: `All ${r.skipped} values are already in the list` });
+        done();
       },
-    );
+      onError: (e) => setError(problemText(e)),
+    });
   };
   return (
     <RecordDialog
@@ -117,8 +113,22 @@ function AddEntriesDialog({ list, done }: { list: NumberList; done: () => void }
       onClose={done}
       width={520}
     >
-      <FormField label="Values" wide hint={`One per line, or separated by commas. ${listTypeHint(list.listType)}`}>
-        <textarea rows={8} autoFocus value={text} onChange={(e) => setText(e.target.value)} />
+      <FormField
+        label={template ? "Sender ID | content template" : "Values"}
+        wide
+        hint={
+          template
+            ? `One per line. ${listTypeHint(list.listType)}`
+            : `One per line, or separated by commas. ${listTypeHint(list.listType)}`
+        }
+      >
+        <textarea
+          rows={8}
+          autoFocus
+          value={text}
+          placeholder={template ? "OURBRAND | Your OurBrand code is {code}" : undefined}
+          onChange={(e) => setText(e.target.value)}
+        />
       </FormField>
     </RecordDialog>
   );
@@ -329,9 +339,17 @@ function Entries({ id, back }: { id: number; back: () => void }) {
       onExport={() =>
         void downloadCsv(`/number-lists/${l.id}/export`).catch((e) => toast({ tone: "error", message: problemText(e) }))
       }
+      {...(l.listType === "sender_id_template"
+        ? { initialState: { visible: ["id", "value", "content", "createdBy", "createdAt"] } }
+        : {})}
       columns={{
         id: { width: 100 },
-        value: { width: 260, render: (r) => <span className="num strong">{r.value}</span> },
+        value: {
+          width: 220,
+          ...(l.listType === "sender_id_template" ? { label: "Sender ID" } : {}),
+          render: (r) => <span className="num strong">{r.value}</span>,
+        },
+        content: { width: 360, render: (r) => r.content ?? <span className="muted">— (Sender ID only)</span> },
         createdBy: { width: 160, render: (r) => r.createdBy ?? <span className="muted">—</span> },
         createdAt: { width: 180, render: (r) => fmtWhen(r.createdAt) },
       }}

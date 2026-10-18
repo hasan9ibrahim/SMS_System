@@ -70,6 +70,30 @@ export function splitByCountry(
   return { countries, mccmncs };
 }
 
+/** Rule MCCMNC lists: a whole country is its 3-digit MCC (§6.4), the rest are network codes. */
+export function toRuleCodes(tree: TreeCountry[], selected: readonly string[]): string[] {
+  const sel = new Set(selected);
+  const out: string[] = [];
+  for (const c of tree) {
+    const picked = c.codes.filter((x) => sel.has(x.mccmnc));
+    if (!picked.length) continue;
+    if (picked.length === c.codes.length) out.push(c.mcc);
+    else out.push(...picked.map((x) => x.mccmnc));
+  }
+  return out;
+}
+
+/** The other way: an MCC opens into all its codes, so the tree shows the country ticked. */
+export function fromRuleCodes(tree: TreeCountry[], codes: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const code of codes) {
+    const country = code.length === 3 ? tree.find((c) => c.mcc === code) : undefined;
+    if (country) country.codes.forEach((x) => out.add(x.mccmnc));
+    else out.add(code);
+  }
+  return [...out];
+}
+
 export function useDestinationTree() {
   const q = useQuery({
     queryKey: ["lookup-side-options", "customer"],
@@ -228,6 +252,34 @@ export function DestinationPickDialog({
       }
     >
       <DestinationTree selected={picked} onChange={setPicked} height={380} />
+    </Modal>
+  );
+}
+
+/** Pick a rule's MCCMNC list in the tree, with select all on the filtered ones (team trial round 1). */
+export function RuleCodesDialog({ initial, done }: { initial: string[]; done: (codes: string[] | null) => void }) {
+  const { tree } = useDestinationTree();
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const current = picked ?? (tree.length ? fromRuleCodes(tree, initial) : []);
+  const codes = useMemo(() => toRuleCodes(tree, current), [tree, current]);
+  return (
+    <Modal
+      title="Pick countries and networks"
+      width={620}
+      onClose={() => done(null)}
+      footer={
+        <>
+          <span className="muted small fb-spacer">
+            {codes.length} code{codes.length === 1 ? "" : "s"} (a whole country is its MCC)
+          </span>
+          <Button onClick={() => done(null)}>Cancel</Button>
+          <Button variant="primary" disabled={!tree.length} onClick={() => done(codes)}>
+            Use these
+          </Button>
+        </>
+      }
+    >
+      <DestinationTree selected={current} onChange={setPicked} height={380} />
     </Modal>
   );
 }

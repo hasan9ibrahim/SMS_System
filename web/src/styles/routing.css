@@ -1185,3 +1185,14 @@ textarea.mono {
 .vv-table tr.muted td {
   color: var(--color-text-secondary);
 }
+
+/* A type-ahead picker with a "Pick from list…" tree next to it (team trial round 1). */
+.pick-with-list {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pick-with-list > :first-child {
+  flex: 1;
+  min-width: 0;
+}

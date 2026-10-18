@@ -1,10 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  autoCoding,
+  autoTonNpi,
   fmtBytes,
   messageEncoding,
   needsUcs2,
   parseIdList,
+  parseReceivers,
   timeBounds,
   timeCondition,
   toGridRow,
@@ -46,4 +49,17 @@ test("sizes and the message counter", () => {
   assert.equal(messageEncoding("a".repeat(307), 0).segments, 3);
   assert.equal(messageEncoding("مرحبا", 8).bytes, 10);
   assert.ok(needsUcs2("مرحبا") && !needsUcs2("Code 1234 €"));
+});
+
+test("route simulator: receivers list, coding and TON/NPI picked from the message (team trial round 1)", () => {
+  assert.deepEqual(parseReceivers("447700900123, 447700900124;\n447700900123, +33 612345678"), [
+    "447700900123",
+    "447700900124",
+    "33612345678",
+  ]);
+  assert.equal(autoCoding("Your code is 1234"), 0);
+  assert.equal(autoCoding("Код 1234"), 8);
+  assert.deepEqual(autoTonNpi("INFO"), { ton: 5, npi: 0 });
+  assert.deepEqual(autoTonNpi("12345"), { ton: 3, npi: 0 });
+  assert.deepEqual(autoTonNpi("+447700900123"), { ton: 1, npi: 1 });
 });

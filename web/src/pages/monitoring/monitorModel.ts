@@ -229,3 +229,32 @@ export function fieldText(v: unknown): string {
   if (Array.isArray(v)) return v.length ? v.join(", ") : "—";
   return String(v);
 }
+
+// ---------------------------------------------------------------- Route simulator defaults (team trial round 1)
+
+/** Receivers typed as a list: commas, semicolons or lines (spaces inside a number are fine); digits only, once each. */
+export function parseReceivers(text: string): string[] {
+  return [
+    ...new Set(
+      text
+        .split(/[,;\n]+/)
+        .map((x) => x.replace(/\D/g, ""))
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/** Data coding from the text: UCS-2 (8) when a character is outside GSM 7-bit, else the default (0). */
+export const autoCoding = (text: string) => (needsUcs2(text) ? 8 : 0);
+
+/**
+ * TON / NPI from an address, as SMPP clients usually send them: letters → 5 Alphanumeric / 0 Unknown;
+ * a short code (up to 8 digits) → 3 Network specific / 0 Unknown; a longer number → 1 International / 1 ISDN.
+ */
+export function autoTonNpi(address: string): { ton: number; npi: number } {
+  const a = address.trim();
+  if (!a) return { ton: 0, npi: 0 };
+  if (/[^\d+]/.test(a)) return { ton: 5, npi: 0 };
+  const digits = a.replace(/\D/g, "");
+  return digits.length <= 8 ? { ton: 3, npi: 0 } : { ton: 1, npi: 1 };
+}
