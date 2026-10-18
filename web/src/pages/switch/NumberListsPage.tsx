@@ -17,6 +17,7 @@ import { ListScreen } from "../../page/ListScreen";
 import { useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
+import { HoverList } from "../../ui/HoverList";
 import { Button } from "../../ui/primitives";
 import { fmtWhen, openImport, RecordActions, RecordDialog } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
@@ -178,11 +179,27 @@ function Lists({ open }: { open: (id: number) => void }) {
         id: { width: 90 },
         name: { width: 280, render: (r) => <strong>{r.name}</strong> },
         listType: { width: 170, render: (r) => <span className="tag">{listTypeLabel(r.listType)}</span> },
-        entries: { width: 110, align: "right" },
+        // Pointing at the count lists the entries / the rules using the list (team trial round 1).
+        entries: {
+          width: 110,
+          align: "right",
+          render: (r) => (
+            <HoverList items={r.entryValues} more={r.entries - r.entryValues.length} heading="Entries">
+              <span className="rr-strong num">{r.entries}</span>
+            </HoverList>
+          ),
+        },
         usedBy: {
           width: 110,
           align: "right",
-          render: (r) => (r.usedBy ? <span className="num">{r.usedBy}</span> : <span className="muted">—</span>),
+          render: (r) =>
+            r.usedBy ? (
+              <HoverList items={r.usedByNames} more={r.usedBy - r.usedByNames.length} heading="Used by">
+                <span className="rr-strong num">{r.usedBy}</span>
+              </HoverList>
+            ) : (
+              <span className="muted">—</span>
+            ),
         },
         updatedBy: { width: 150, render: (r) => r.updatedBy ?? <span className="muted">—</span> },
         updatedAt: { width: 170, render: (r) => fmtWhen(r.updatedAt) },

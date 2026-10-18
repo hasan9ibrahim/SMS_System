@@ -1223,6 +1223,19 @@ export const numberListUsedBySql = (alias: string) => `(
 const numberListEntries =
   "(SELECT count(*) FROM number_list_entries x WHERE x.number_list_id = nl.id AND x.deleted_at IS NULL)::int";
 
+/** The first entries, for the hover list (team trial round 1). */
+const numberListValues = `ARRAY(SELECT x.value FROM number_list_entries x WHERE x.number_list_id = nl.id
+    AND x.deleted_at IS NULL ORDER BY x.id LIMIT 100)`;
+/** The live rules using the list, by name (same rules as numberListUsedBySql). */
+const numberListUsers = `ARRAY(SELECT u.label FROM (
+    SELECT 'Translation rule · ' || x.name AS label FROM translation_rules x WHERE x.deleted_at IS NULL
+       AND nl.id IN (x.sender_list_id, x.receiver_list_id, x.sender_conversion_list_id)
+    UNION ALL
+    SELECT 'Route rule · ' || x.name FROM route_rules x WHERE x.deleted_at IS NULL
+       AND (nl.id IN (x.sender_list_id, x.receiver_list_id)
+            OR EXISTS (SELECT 1 FROM route_rule_whitelists w WHERE w.route_rule_id = x.id AND w.number_list_id = nl.id))
+  ) u ORDER BY u.label LIMIT 100)`;
+
 export const numberListList: ListDef<NumberList> = {
   fields: listFields.number_lists,
   from: "number_lists nl LEFT JOIN users ub ON ub.id = nl.updated_by_id",
@@ -1241,13 +1254,16 @@ export const numberListList: ListDef<NumberList> = {
   search: ["name"],
   idSql: "nl.id",
   select: `nl.id, nl.name, nl.list_type, ${numberListEntries} AS entries, ${numberListUsedBySql("nl")} AS used_by,
+    ${numberListValues} AS entry_values, ${numberListUsers} AS used_by_names,
     ub.username AS updated_by, nl.updated_at, nl.deleted_at`,
   mapRow: (r) => ({
     id: r.id as number,
     name: r.name as string,
     listType: r.list_type as NumberList["listType"],
     entries: Number(r.entries),
+    entryValues: (r.entry_values as string[]) ?? [],
     usedBy: Number(r.used_by),
+    usedByNames: (r.used_by_names as string[]) ?? [],
     updatedBy: (r.updated_by as string | null) ?? null,
     updatedAt: iso(r.updated_at)!,
     archivedAt: iso(r.deleted_at),
@@ -1511,6 +1527,17 @@ const hlrAppliesToSql = `COALESCE((SELECT string_agg(CASE WHEN g.target_type = '
     FROM (SELECT target_type, count(*) AS n FROM hlr_rule_targets WHERE hlr_rule_id = hr.id GROUP BY target_type) g),
   'Not assigned')`;
 
+/** Every target by name for the hover list: "Customer trunk · X", "Enterprise · Y", "All customer trunks". */
+const hlrTargetNames = `ARRAY(SELECT CASE ht.target_type
+      WHEN 'all' THEN 'All customer trunks'
+      WHEN 'trunk' THEN 'Customer trunk · '
+        || COALESCE((SELECT ${ruleTrunkName} FROM customer_trunks t WHERE t.id = ht.target_id), '#' || ht.target_id)
+      WHEN 'enterprise' THEN 'Enterprise · '
+        || COALESCE((SELECT ${vis(enterpriseMask("e"))} FROM enterprises e WHERE e.id = ht.target_id), '#' || ht.target_id)
+      ELSE 'Category · ' || COALESCE((SELECT pc.name FROM product_categories pc WHERE pc.id = ht.target_id), '#' || ht.target_id) END
+    FROM hlr_rule_targets ht WHERE ht.hlr_rule_id = hr.id
+    ORDER BY array_position(ARRAY['all','category','enterprise','trunk'], ht.target_type), 1 LIMIT 100)`;
+
 export const hlrRuleList: ListDef<HlrRuleRow> = {
   fields: listFields.hlr_rules,
   from: `hlr_rules hr JOIN hlr_providers hp ON hp.id = hr.hlr_provider_id LEFT JOIN users ub ON ub.id = hr.updated_by_id`,
@@ -1533,7 +1560,9 @@ export const hlrRuleList: ListDef<HlrRuleRow> = {
   search: ["name", "provider", "dnidPattern"],
   idSql: "hr.id",
   select: `hr.id, hr.name, hr.hlr_provider_id, hp.name AS provider, hp.provider_type, hr.dnid_pattern, hr.status,
-    ${hlrAppliesToSql} AS applies_to, ${hlrUsedBySql("hr")} AS used_by, ub.username AS updated_by, hr.updated_at,
+    ${hlrAppliesToSql} AS applies_to, ${hlrTargetNames} AS target_names,
+    (SELECT count(*)::int FROM hlr_rule_targets x WHERE x.hlr_rule_id = hr.id) AS target_count,
+    ${hlrUsedBySql("hr")} AS used_by, ub.username AS updated_by, hr.updated_at,
     hr.deleted_at`,
   mapRow: (r) => ({
     id: Number(r.id),

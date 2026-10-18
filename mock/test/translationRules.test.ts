@@ -286,6 +286,11 @@ describe("number lists API", { skip }, () => {
   test("number lists page at full volume", async () => {
     const page = await ok("queryNumberLists", call("POST", "/number-lists/query", { limit: 50 }));
     assert.ok(page.rows.length > 0);
+    // Hover lists (team trial round 1): the first entries and the rules using the list.
+    for (const r of page.rows as { entries: number; entryValues: string[]; usedBy: number; usedByNames: string[] }[]) {
+      assert.equal(r.entryValues.length, Math.min(100, r.entries));
+      assert.equal(r.usedByNames.length, Math.min(100, r.usedBy));
+    }
     const dupes = await db().query(
       `SELECT number_list_id, value FROM number_list_entries WHERE deleted_at IS NULL
         GROUP BY 1, 2 HAVING count(*) > 1 LIMIT 1`,

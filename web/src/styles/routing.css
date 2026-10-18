@@ -1291,6 +1291,10 @@ textarea.mono {
   display: block;
   min-width: 0;
 }
+.align-right .hover-list-target {
+  justify-content: flex-end;
+  margin-left: auto;
+}
 .hover-list {
   padding: 6px 0;
   max-width: 420px;

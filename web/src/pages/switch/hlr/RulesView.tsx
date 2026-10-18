@@ -20,6 +20,7 @@ import { ListScreen } from "../../../page/ListScreen";
 import { ListLookup } from "../../../records/parts";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../../ui/feedback";
+import { HoverList } from "../../../ui/HoverList";
 import { Button, Modal } from "../../../ui/primitives";
 import { fmtWhen, RecordActions } from "../../reference/shared";
 import { problemText } from "../../routing/dialogs";
@@ -370,7 +371,15 @@ export function RulesView() {
         appliesTo: {
           width: 200,
           render: (r) =>
-            r.appliesTo === "Not assigned" ? <span className="tone-warning">Not assigned</span> : r.appliesTo,
+            r.appliesTo === "Not assigned" ? (
+              <span className="tone-warning">Not assigned</span>
+            ) : (
+              <HoverList items={r.appliesToNames} more={r.appliesToCount - r.appliesToNames.length}>
+                <span className="rr-strong rr-label">
+                  <span className="rr-main">{r.appliesTo}</span>
+                </span>
+              </HoverList>
+            ),
         },
         usedBy: { width: 90, align: "right" },
         updatedBy: { width: 140, render: (r) => r.updatedBy ?? muted("—") },

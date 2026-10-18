@@ -232,6 +232,21 @@ describe("HLR rules API", { skip }, () => {
   });
 });
 
+describe("HLR rules list", { skip }, () => {
+  test("rows carry their targets by name for the hover list", async () => {
+    const page = await ok("queryHlrRules", call("POST", "/hlr-rules/query", { limit: 500 }));
+    assert.ok(page.rows.length > 0);
+    for (const r of page.rows as { appliesTo: string; appliesToNames: string[]; appliesToCount: number }[]) {
+      assert.equal(r.appliesToNames.length, Math.min(100, r.appliesToCount));
+      if (r.appliesTo === "Not assigned") assert.equal(r.appliesToCount, 0);
+      else
+        assert.ok(
+          r.appliesToNames.every((n) => /^(Customer trunk|Enterprise|Category) · |^All customer trunks$/.test(n)),
+        );
+    }
+  });
+});
+
 describe("HLR policies API", { skip }, () => {
   test("create, validation, test a number, route rules block delete, undo", async () => {
     const input = {

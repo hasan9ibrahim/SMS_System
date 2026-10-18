@@ -11614,8 +11614,12 @@ export type components = {
       name: string;
       listType: components["schemas"]["NumberListType"];
       entries: number;
+      /** @description The first entries (up to 100) for the hover list (team trial round 1). */
+      entryValues: string[];
       /** @description Live translation and route rules using the list. */
       usedBy: number;
+      /** @description The rules using the list, by name (up to 100), e.g. "Translation rule · Strip 00", "Route rule · FR_OTP" (team trial round 1). */
+      usedByNames: string[];
       updatedBy: string | null;
       updatedAt: components["schemas"]["Timestamp"];
       /** Format: date-time */
@@ -12227,6 +12231,10 @@ export type components = {
       dnidPattern: string;
       status: components["schemas"]["RecordStatus"];
       appliesTo: string;
+      /** @description Every target by name for the hover list (up to 100), e.g. "Customer trunk · ACME_OTP", "Enterprise · Acme", "Category · OTP", "All customer trunks" (team trial round 1). */
+      appliesToNames: string[];
+      /** @description Number of targets. */
+      appliesToCount: number;
       usedBy: number;
       updatedBy: string | null;
       updatedAt: components["schemas"]["Timestamp"];
