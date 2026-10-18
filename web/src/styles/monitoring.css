@@ -586,3 +586,31 @@
 .la-total td.num.la-strong {
   font-weight: 700;
 }
+/* Orange and red as solid rounded boxes inside the cell, red with white text (team trial round 1). */
+.la-grid td.la-warn,
+.la-grid td.la-bad {
+  background: none;
+  padding: 2px 3px;
+}
+.la-row:hover td.la-warn,
+.la-row:hover td.la-bad {
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-panel));
+}
+.la-total td.la-warn,
+.la-total td.la-bad {
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
+}
+.la-pill {
+  display: block;
+  padding: 3px 5px;
+  border-radius: 5px;
+  text-align: right;
+}
+.la-warn .la-pill {
+  background: #ffa500;
+  color: #1d1d1d;
+}
+.la-bad .la-pill {
+  background: #f00;
+  color: #fff;
+}

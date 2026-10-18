@@ -127,20 +127,39 @@ export async function loadPostgres(dir: string, opts: { reset: boolean; log: (s:
         .map((f) => f.slice(0, -4)),
     );
     for (const f of files) if (!TABLE_ORDER.includes(f)) throw new Error(`table ${f} is not in TABLE_ORDER`);
+    // Tables the migrations already fill (e.g. the default dial-code profile) keep their rows; the others are
+    // empty after a reset, so anything in them by the time they load was written by a running mock server.
+    const prefilled = new Set<string>();
+    if (opts.reset)
+      for (const table of TABLE_ORDER)
+        if (files.has(table) && (await client.query(`SELECT 1 FROM ${table} LIMIT 1`)).rowCount) prefilled.add(table);
     for (const table of TABLE_ORDER) {
       if (!files.has(table)) continue;
       const path = join(dir, `${table}.csv`);
       const header = readFileSync(path, { encoding: "utf8", flag: "r" }).slice(0, 4096).split("\n")[0]!;
       const started = Date.now();
-      await pipeline(
-        createReadStream(path),
-        client.query(copyFrom(`COPY ${table} (${header}) FROM STDIN WITH (FORMAT csv, HEADER true)`)),
-      );
-      // Identity columns continue after the generated ids.
-      if (header.split(",")[0]! === "id") {
-        await client.query(
-          `SELECT setval(pg_get_serial_sequence('${table}', 'id'), GREATEST((SELECT max(id) FROM ${table}), 1))`,
+      // One transaction per table, locked: a mock server left running during the seed (its alert engine
+      // records incidents, its jobs write logs) may already have written rows into the new tables. They
+      // are cleared first and its writes wait until the generated rows and the id sequence are in place,
+      // so they never collide with generated ids ("duplicate key ... incidents_pkey").
+      await client.query("BEGIN");
+      try {
+        await client.query(`LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE`);
+        if (opts.reset && !prefilled.has(table)) await client.query(`DELETE FROM ${table}`);
+        await pipeline(
+          createReadStream(path),
+          client.query(copyFrom(`COPY ${table} (${header}) FROM STDIN WITH (FORMAT csv, HEADER true)`)),
         );
+        // Identity columns continue after the generated ids.
+        if (header.split(",")[0]! === "id") {
+          await client.query(
+            `SELECT setval(pg_get_serial_sequence('${table}', 'id'), GREATEST((SELECT max(id) FROM ${table}), 1))`,
+          );
+        }
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
       }
       opts.log(`postgres: ${table} loaded in ${((Date.now() - started) / 1000).toFixed(1)}s`);
     }

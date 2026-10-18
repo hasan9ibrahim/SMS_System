@@ -44,6 +44,9 @@ npm run dev:mock                       # API on :4010
 npm run dev:web                        # GUI on http://localhost:5173
 ```
 
+Re-seeding works while the mock server is running, but restart the mock afterwards (Ctrl+C, then
+`npm run dev:mock`) so it drops what it cached from the old data.
+
 ## 2. Who you are in the trial
 
 There is no sign-in screen in this phase. Everyone using the instance works as the demo

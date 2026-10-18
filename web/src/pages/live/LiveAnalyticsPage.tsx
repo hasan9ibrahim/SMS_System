@@ -293,7 +293,8 @@ function Cells({ metrics }: { metrics: Record<string, number | null> }) {
         const t = cellTone(c.metric, v);
         return (
           <td key={c.metric} className={`num${TONED.has(c.metric) ? " la-strong" : ""}${t ? ` la-${t}` : ""}`}>
-            {fmt(v, c.fmt)}
+            {/* Orange and red sit in a rounded box inside the cell (team trial round 1). */}
+            {t === "warn" || t === "bad" ? <span className="la-pill">{fmt(v, c.fmt)}</span> : fmt(v, c.fmt)}
           </td>
         );
       })}
