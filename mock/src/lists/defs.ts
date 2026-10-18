@@ -273,7 +273,9 @@ export const negativeMarginSql = `(CASE WHEN rt.kind = 'customer' THEN (SELECT c
     AND l.rate < bb.rate_usd * (SELECT cl.rate_per_usd FROM currency_latest cl WHERE cl.iso = rt.currency)) END)`;
 // Trunks using a table: customer trunks for a sell table, the owning trunk for a buy table.
 const usersSql = (col: string, sep: string | null) => {
-  const agg = (expr: string) => (sep ? `string_agg(DISTINCT ${expr}, '${sep}')` : `(array_agg(DISTINCT ${expr}))[1:5]`);
+  // Names for the cell and its hover list: up to 100, sorted (team trial round 1).
+  const agg = (expr: string) =>
+    sep ? `string_agg(DISTINCT ${expr}, '${sep}')` : `(array_agg(DISTINCT ${expr} ORDER BY ${expr}))[1:100]`;
   return `(CASE WHEN rt.kind = 'customer'
     THEN (SELECT ${agg(col)} FROM customer_trunk_rate_tables x
             JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL
@@ -281,6 +283,11 @@ const usersSql = (col: string, sep: string | null) => {
            WHERE x.rate_table_id = rt.id)
     ELSE (SELECT ${agg(col)} FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id WHERE t.id = rt.vendor_trunk_id) END)`;
 };
+/** Clients using a customer table (1 for a vendor table). */
+const tableClientCount = `(CASE WHEN rt.kind = 'customer'
+    THEN (SELECT count(DISTINCT t.enterprise_id)::int FROM customer_trunk_rate_tables x
+            JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL WHERE x.rate_table_id = rt.id)
+    ELSE (CASE WHEN rt.vendor_trunk_id IS NULL THEN 0 ELSE 1 END) END)`;
 const tableTrunkName = vis(
   maskName(
     "t.name",
@@ -351,7 +358,7 @@ export const rateTableList: ListDef<RateTableRow> = {
     (SELECT count(*)::int FROM customer_trunk_rate_tables x JOIN customer_trunks ct ON ct.id = x.customer_trunk_id WHERE x.rate_table_id = rt.id AND ct.deleted_at IS NULL) AS trunk_count,
     COALESCE(st.active_lines, 0) AS active_lines, ${scheduledSql} AS scheduled, ${nextChangeSql} AS next_change_at,
     CASE WHEN rt.kind = 'customer' THEN COALESCE(st.negative_lines, 0) END AS negative_lines, ${usersSql(tableTrunkName, null)} AS trunk_names,
-    ${usersSql(tableEnterpriseName, null)} AS enterprise_names, ub.username AS updated_by, rt.updated_at,
+    ${usersSql(tableEnterpriseName, null)} AS enterprise_names, ${tableClientCount} AS enterprise_count, ub.username AS updated_by, rt.updated_at,
     (rt.deleted_at IS NOT NULL OR vt.deleted_at IS NOT NULL) AS archived`,
   mapRow: (r) => ({
     id: r.id as number,
@@ -368,6 +375,7 @@ export const rateTableList: ListDef<RateTableRow> = {
     description: (r.description as string | null) ?? null,
     trunkNames: ((r.trunk_names as string[] | null) ?? []).filter(Boolean),
     enterpriseNames: ((r.enterprise_names as string[] | null) ?? []).filter(Boolean),
+    enterpriseCount: Number(r.enterprise_count ?? 0),
     scheduledChanges: r.scheduled as number,
     nextChangeAt: iso(r.next_change_at),
     negativeMarginLines: (r.negative_lines as number | null) ?? null,

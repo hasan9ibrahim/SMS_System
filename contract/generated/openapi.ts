@@ -10437,10 +10437,12 @@ export type components = {
       activeLines: number;
       updatedAt: components["schemas"]["Timestamp"];
       description: string | null;
-      /** @description Up to five customer trunks using the table (§13.12 "trunks using it"). */
+      /** @description The customer trunks using the table by name, up to 100, for the cell and its hover list (§13.12 "trunks using it"; team trial round 1). */
       trunkNames: string[];
-      /** @description Up to five clients using the table, or the vendor. */
+      /** @description The clients using the table by name (up to 100, for the hover list), or the vendor. */
       enterpriseNames: string[];
+      /** @description Number of clients using the table (1 for a vendor table). */
+      enterpriseCount: number;
       /** @description Lines starting later. */
       scheduledChanges: number;
       nextChangeAt: components["schemas"]["Timestamp"] | null;

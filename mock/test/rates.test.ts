@@ -71,6 +71,17 @@ describe("rate table list and record (§13.12)", { skip }, () => {
       (r: { kind: string; trunkNames: string[] }) => r.kind === "customer" && r.trunkNames.length,
     );
     if (used) assert.ok(used.enterpriseNames.length > 0);
+    // Hover lists (team trial round 1): every client and trunk up to 100, with the counts.
+    for (const r of page.rows as {
+      enterpriseNames: string[];
+      enterpriseCount: number;
+      trunkNames: string[];
+      trunkCount: number;
+      kind: string;
+    }[]) {
+      assert.equal(r.enterpriseNames.length, Math.min(100, r.enterpriseCount));
+      if (r.kind === "customer") assert.equal(r.trunkNames.length, Math.min(100, r.trunkCount));
+    }
     const neg = await ok(
       "queryRateTables",
       call("POST", "/rate-tables/query", { sort: [{ field: "negativeMarginLines", dir: "desc" }], limit: 5 }),

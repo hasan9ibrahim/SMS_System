@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.56.0
+  version: 0.57.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -15733,7 +15733,7 @@ components:
     # ------------------------------------------------------------- rate tables (§6.2, §13.12)
     RateTableRow:
       type: object
-      required: [id, name, kind, categoryId, category, currency, vendorTrunkId, vendorTrunkName, trunkCount, activeLines, updatedAt, description, trunkNames, enterpriseNames, scheduledChanges, nextChangeAt, negativeMarginLines, avgMarginPct, moneyToday, updatedBy, archived]
+      required: [id, name, kind, categoryId, category, currency, vendorTrunkId, vendorTrunkName, trunkCount, activeLines, updatedAt, description, trunkNames, enterpriseNames, enterpriseCount, scheduledChanges, nextChangeAt, negativeMarginLines, avgMarginPct, moneyToday, updatedBy, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -15766,14 +15766,17 @@ components:
           type: [string, "null"]
         trunkNames:
           type: array
-          description: Up to five customer trunks using the table (§13.12 "trunks using it").
+          description: The customer trunks using the table by name, up to 100, for the cell and its hover list (§13.12 "trunks using it"; team trial round 1).
           items:
             type: string
         enterpriseNames:
           type: array
-          description: Up to five clients using the table, or the vendor.
+          description: The clients using the table by name (up to 100, for the hover list), or the vendor.
           items:
             type: string
+        enterpriseCount:
+          type: integer
+          description: Number of clients using the table (1 for a vendor table).
         scheduledChanges:
           type: integer
           description: Lines starting later.

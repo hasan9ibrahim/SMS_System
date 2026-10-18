@@ -2,6 +2,7 @@
 // a table (its name or details icon) shrinks the list into a left panel and shows the
 // table's rates on the right, in the same tab. The open table lives in the tab URL
 // (?table=ID), so links from trunks, rules and alerts open it directly.
+import { HoverList } from "../../ui/HoverList";
 import { useLocation } from "react-router";
 import type { RateTableRow } from "@sms/contract";
 import type { GridState } from "../../grid/filterModel";
@@ -104,12 +105,15 @@ function FullList() {
   const open = useOpenTable();
   const navigate = useTabNavigate();
   const deleteOne = useDeleteRecord();
-  const names = (list: string[], more: number) =>
+  // The first two names in bold, then "+N"; pointing at the cell lists them all (team trial round 1).
+  const names = (list: string[], total: number) =>
     list.length ? (
-      <span title={list.join(", ")}>
-        {list.slice(0, 2).join(", ")}
-        {more > 2 ? <span className="muted"> +{more - 2}</span> : null}
-      </span>
+      <HoverList items={list} more={Math.max(0, total - list.length)}>
+        <span className="rr-strong rr-label">
+          <span className="rr-main">{list.slice(0, 2).join(", ")}</span>
+          {total > 2 ? <span className="muted">+{total - 2}</span> : null}
+        </span>
+      </HoverList>
     ) : (
       <span className="muted">—</span>
     );
@@ -185,7 +189,10 @@ function FullList() {
             </button>
           ),
         },
-        enterpriseNames: { width: 200, render: (r) => names(r.enterpriseNames, r.enterpriseNames.length) },
+        enterpriseNames: {
+          width: 200,
+          render: (r) => names(r.enterpriseNames, r.enterpriseCount || r.enterpriseNames.length),
+        },
         trunkNames: { width: 200, render: (r) => names(r.trunkNames, r.trunkCount || r.trunkNames.length) },
         scheduledChanges: {
           render: (r) =>

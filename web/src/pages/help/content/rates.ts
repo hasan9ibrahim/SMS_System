@@ -273,9 +273,12 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Clients",
-                what: "The clients whose trunks use the table. The first two are shown, then +n; hover to see all.",
+                what: "The clients whose trunks use the table, in bold. The first two are shown, then +n; point at the cell to see them all.",
               },
-              { name: "Trunks", what: "The trunks that use the table (first two, then +n)." },
+              {
+                name: "Trunks",
+                what: "The trunks that use the table, in bold (first two, then +n); point at the cell to see them all.",
+              },
               { name: "Product Category", what: "The table's traffic class, e.g. DIRECT or OTP." },
               { name: "Currency", what: "The currency of every rate in the table." },
               { name: "Active Rates", what: "How many lines are valid right now." },
