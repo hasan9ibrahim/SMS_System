@@ -48,6 +48,27 @@ Then open `http://<server>:8080` (set `WEB_PORT` in `.env` for another port).
 - Stop with `docker compose --profile app down`. The data stays in Docker volumes until you
   add `-v`.
 
+### Updating to a new version
+
+On the machine that runs the trial, from the `SMS_System` folder:
+
+```bash
+git pull                                          # get the new version (branch Claude/Update)
+docker compose --profile app up -d --build        # rebuild and restart the mock server and the web app
+```
+
+Then reload the page in the browser with **Ctrl+Shift+R** (or **Ctrl+F5**) so it loads the new web app.
+
+When an update changes the database, its notes say so. Either reseed (`docker compose --profile seed run
+--rm seed`, which **resets all data**), or keep your data and run the upgrade script it names, e.g.:
+
+```bash
+( echo "SET search_path = sms, public;"; cat db/postgres/upgrades/2026-10-18_trial_round_1.sql ) \
+  | docker compose exec -T postgres psql -U sms -d sms -v ON_ERROR_STOP=1
+```
+
+Upgrade scripts are safe to run more than once, and do nothing on a database seeded after them.
+
 ### On your own machine
 
 ```bash

@@ -1,0 +1,27 @@
+-- One-time upgrade for a database seeded before 2026-10-18 that keeps its data (team trial round 1).
+-- A fresh seed already has all of this. Safe to run more than once: each step runs only once.
+--   ( echo "SET search_path = sms, public;"; cat db/postgres/upgrades/2026-10-18_trial_round_1.sql ) \
+--     | docker compose exec -T postgres psql -U sms -d sms -v ON_ERROR_STOP=1
+CREATE TABLE IF NOT EXISTS upgrade_marks (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+
+-- Match case for Sender ID conditions (migration 045, §6.3, §6.4).
+ALTER TABLE route_rules ADD COLUMN IF NOT EXISTS sender_match_case boolean NOT NULL DEFAULT true;
+ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS sender_match_case boolean NOT NULL DEFAULT true;
+
+-- Route rule priority: the highest is now tried first (100 before 1, §6.3). Flip every rule once, and the
+-- priority changes in the change history with them, so the routing order and undo stay the same.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM upgrade_marks WHERE name = 'priority_high_first') THEN
+    UPDATE route_rules SET priority = 101 - priority;
+    UPDATE changes c SET diff = (
+      SELECT jsonb_agg(CASE WHEN e->>'field' = 'priority' THEN
+          e || jsonb_build_object(
+            'before', CASE WHEN jsonb_typeof(e->'before') = 'number' THEN to_jsonb(101 - (e->>'before')::int) ELSE e->'before' END,
+            'after', CASE WHEN jsonb_typeof(e->'after') = 'number' THEN to_jsonb(101 - (e->>'after')::int) ELSE e->'after' END)
+        ELSE e END ORDER BY o)
+      FROM jsonb_array_elements(c.diff) WITH ORDINALITY x(e, o))
+    WHERE c.entity_type = 'route_rule' AND jsonb_typeof(c.diff) = 'array' AND c.diff @> '[{"field":"priority"}]';
+    INSERT INTO upgrade_marks (name) VALUES ('priority_high_first');
+  END IF;
+END $$;
