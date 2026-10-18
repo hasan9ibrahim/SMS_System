@@ -18,6 +18,12 @@ export interface Series {
   /** Per message in the platform currency; null for vendor trunks (no revenue side). */
   revenue: number | null;
   cost: number;
+  /**
+   * Revenue and cost per minute from the stored EDRs, when the series comes from the EDR store (team trial
+   * round 1: an alert's money must match Live analytics); otherwise money is messages × the averages above.
+   */
+  minRevenue?: number[];
+  minCost?: number[];
   /** Normal levels, the baseline for "yesterday" and "last week" in this phase. */
   normalTps: number;
   normalAsr: number | null;
@@ -176,9 +182,9 @@ export function measure(
       }
       if (s.revenue !== null) {
         hasRevenue = true;
-        revenue += a * s.revenue;
+        revenue += s.minRevenue ? (s.minRevenue[i] ?? 0) : a * s.revenue;
       }
-      cost += a * s.cost;
+      cost += s.minCost ? (s.minCost[i] ?? 0) : a * s.cost;
     }
     tpsNow += offset === 0 ? s.tps : sum(s.minutes.slice(from, to)) / Math.max(1, to - from);
   }

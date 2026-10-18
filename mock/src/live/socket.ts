@@ -100,7 +100,7 @@ function tick() {
   if (!evaluating && now - lastEvaluation >= EVALUATE_EVERY_MS) {
     lastEvaluation = now;
     evaluating = true;
-    evaluateRound(sim, now)
+    evaluateRound(sim, now, undefined, true)
       .catch((err: Error) => console.warn(`alert engine: ${err.message}`))
       .finally(() => (evaluating = false));
   }

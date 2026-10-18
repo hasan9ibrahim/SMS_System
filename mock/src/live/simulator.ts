@@ -26,7 +26,7 @@ const SIM_TOTAL_TPS = (() => {
   const v = Number(process.env.SIM_TOTAL_TPS ?? 40);
   return Number.isFinite(v) && v > 0 ? v : null;
 })();
-const MINUTES = 120; // per-minute history kept for the movers (two 60-minute windows)
+export const MINUTES = 120; // per-minute history kept for the movers (two 60-minute windows)
 const SLOT_S = 5; // chart history resolution
 const SLOTS = 3600 / SLOT_S; // 60 minutes of chart history
 

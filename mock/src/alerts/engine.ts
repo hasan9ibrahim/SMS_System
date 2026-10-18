@@ -6,7 +6,6 @@
 // PostgreSQL, so acknowledgements and snoozes from the API take effect on the next round.
 import type pg from "pg";
 import type { AlertRuleRow, IncidentEvent, IncidentRow } from "@sms/contract";
-import { PLATFORM_CURRENCY } from "../currency.js";
 import { db } from "../db.js";
 import {
   ALERT_RULE_FROM,
@@ -16,7 +15,9 @@ import {
   mapAlertRule,
   mapIncident,
 } from "../lists/alertDefs.js";
-import { BASE_DELAY, type Simulator } from "../live/simulator.js";
+import { BASE_DELAY, MINUTES, type Simulator } from "../live/simulator.js";
+import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
+import { chRows } from "../edr.js";
 import { companyMailbox, logEmail } from "../api/emailLog.js";
 import { contactEmails } from "../api/switchTools.js";
 import { CURRENT_USER_ID } from "../api/session.js";
@@ -54,7 +55,90 @@ export function invalidateRules() {
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
-export function seriesOf(sim: Simulator): { customers: Series[]; vendors: Series[] } {
+/** One minute of one trunk's stored EDRs. */
+interface StoredMinute {
+  n: number;
+  ok: number;
+  dl: number;
+  rev: number;
+  cost: number;
+  delay: number;
+}
+type Stored = { customers: Map<number, Map<number, StoredMinute>>; vendors: Map<number, Map<number, StoredMinute>> };
+
+/**
+ * The last two hours per trunk and minute from the EDR store, where the simulator's messages are written
+ * (team trial round 1: an alert said a margin Live analytics never showed, because the engine priced the
+ * simulator's averages). Null when the store can't be read; the simulator's own series are used then.
+ */
+export async function storedMinutes(): Promise<Stored | null> {
+  const f = await sysToPlatformFactor();
+  const q = (col: string) =>
+    chRows<{ id: number; m: number; n: string; ok: string; dl: string; rev: number; cost: number; delay: number }>(
+      `SELECT ${col} AS id, toUnixTimestamp(toStartOfMinute(start_time)) AS m, count() AS n,
+              countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
+              toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
+              toFloat64(sumIf(delivery_delay_ms, msg_status = 'DELIVRD')) / 1000 AS delay
+         FROM edr WHERE start_time >= now() - INTERVAL ${MINUTES} MINUTE AND ${col} > 0 GROUP BY id, m`,
+      10_000,
+    );
+  const [c, v] = await Promise.all([q("c_trunk_id"), q("v_trunk_id")]);
+  if (!c || !v) return null;
+  const group = (rows: NonNullable<typeof c>) => {
+    const out = new Map<number, Map<number, StoredMinute>>();
+    for (const r of rows) {
+      const byMinute = out.get(Number(r.id)) ?? new Map<number, StoredMinute>();
+      byMinute.set(Number(r.m) * 1000, {
+        n: Number(r.n),
+        ok: Number(r.ok),
+        dl: Number(r.dl),
+        rev: r.rev,
+        cost: r.cost,
+        delay: r.delay,
+      });
+      out.set(Number(r.id), byMinute);
+    }
+    return out;
+  };
+  return { customers: group(c), vendors: group(v) };
+}
+
+/** A trunk's per-minute arrays from the store, aligned with the simulator's (the last is this minute). */
+function fromStore(byMinute: Map<number, StoredMinute> | undefined, now: number) {
+  const nowMinute = Math.floor(now / 60_000) * 60_000;
+  const minutes: number[] = [];
+  const minAsr: (number | null)[] = [];
+  const minDlr: (number | null)[] = [];
+  const minDelay: number[] = [];
+  const minRevenue: number[] = [];
+  const minCost: number[] = [];
+  for (let i = MINUTES - 1; i >= 0; i--) {
+    const x = byMinute?.get(nowMinute - i * 60_000);
+    // `minutes` holds messages per second over the minute, so × 60 gives its messages back.
+    minutes.push((x?.n ?? 0) / 60);
+    minAsr.push(x?.n ? (x.ok / x.n) * 100 : null);
+    minDlr.push(x?.ok ? (x.dl / x.ok) * 100 : null);
+    minDelay.push(x?.dl ? x.delay / x.dl : 0);
+    minRevenue.push(x?.rev ?? 0);
+    minCost.push(x?.cost ?? 0);
+  }
+  return { minutes, minAsr, minDlr, minDelay, minRevenue, minCost };
+}
+
+export function seriesOf(
+  sim: Simulator,
+  stored: Stored | null = null,
+  now = Date.now(),
+): { customers: Series[]; vendors: Series[] } {
+  const live = seriesOfSim(sim);
+  if (!stored) return live;
+  return {
+    customers: live.customers.map((s) => ({ ...s, ...fromStore(stored.customers.get(s.id), now) })),
+    vendors: live.vendors.map((s) => ({ ...s, ...fromStore(stored.vendors.get(s.id), now) })),
+  };
+}
+
+function seriesOfSim(sim: Simulator): { customers: Series[]; vendors: Series[] } {
   return {
     customers: sim.trunks.map((t) => ({
       kind: "customer_trunk" as const,
@@ -291,9 +375,10 @@ export async function evaluateRound(
   sim: Simulator,
   now = Date.now(),
   c: Db = db(),
+  fromEdrStore = false,
 ): Promise<{ opened: number; recovered: number }> {
   const rules = await activeRules(c);
-  const { customers, vendors } = seriesOf(sim);
+  const { customers, vendors } = seriesOf(sim, fromEdrStore ? await storedMinutes() : null, now);
   const { rows: openRows } = await c.query(
     `SELECT id, rule_id, entity_kind, coalesce(entity_id::text, entity_name) AS ek, state, peak_value, last_notified_at, snoozed_until
        FROM incidents WHERE state <> 'recovered'`,
@@ -452,7 +537,7 @@ export async function testRule(
   sim: Simulator,
   c: Db = db(),
 ) {
-  const { customers, vendors } = seriesOf(sim);
+  const { customers, vendors } = seriesOf(sim, await storedMinutes());
   const down = new Set<string>();
   if (rule.metric === "bind_status" || rule.condition.type === "bind_down") {
     const { rows } = await c.query("SELECT side, trunk_id FROM trunk_binds WHERE status = 'offline'");
