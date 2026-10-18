@@ -2,6 +2,7 @@
 // reports every check and change. Pure: lists, the receiver's network and randomness come in
 // through the context, so the same code serves the rule Test, the trunk Rules tab Test and tests.
 import type {
+  ContentWordRule,
   DlrMapEntry,
   MessageState,
   TestMessage,
@@ -166,8 +167,30 @@ export const fillContentTemplate = (template: string, original: string) =>
   template.replaceAll("{code}", codeIn(original)).replaceAll("{text}", original);
 
 /** Content rewrite: replace the Regex Index group (or the whole match), then the MSG Template. */
-export function rewriteText(rule: EngineRule, text: string): string {
+/**
+ * Words or phrases replaced as typed (no regex; team trial round 1). Whole words by default and any case
+ * unless match case is on; removing a word also tidies the space it leaves.
+ */
+export function replaceWords(text: string, words: readonly ContentWordRule[] | null | undefined): string {
   let out = text;
+  for (const w of words ?? []) {
+    if (!w.find) continue;
+    const esc = w.find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Unicode-aware word edges, so Arabic or accented words count as words too.
+    const body = w.wholeWord === false ? esc : `(?<![\\p{L}\\p{N}_])${esc}(?![\\p{L}\\p{N}_])`;
+    const re = new RegExp(body, `gu${w.matchCase ? "" : "i"}`);
+    out = out.replace(re, () => w.replace);
+    if (!w.replace)
+      out = out
+        .replace(/[ \t]{2,}/g, " ")
+        .replace(/ +([,.!?;:])/g, "$1")
+        .trim();
+  }
+  return out;
+}
+
+export function rewriteText(rule: EngineRule, text: string): string {
+  let out = replaceWords(text, rule.contentWords);
   if (rule.contentRegex && rule.contentReplacement !== null) {
     const re = compile(rule.contentRegex, "g");
     if (re) {

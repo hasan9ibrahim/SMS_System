@@ -11674,6 +11674,16 @@ export type components = {
       id: components["schemas"]["Id"] | null;
       label: string;
     };
+    ContentWordRule: {
+      /** @description The word or phrase, as typed (no regex). */
+      find: string;
+      /** @description What goes in its place; empty removes it. */
+      replace: string;
+      /** @description Only whole words ("bit" does not touch "bitcoin"). Missing = true. */
+      wholeWord?: boolean;
+      /** @description Upper and lower case must match. Missing = false. */
+      matchCase?: boolean;
+    };
     /** @description DLR Status & Error Code Convert (§6.4) - the vendor's stat (and error) as the customer gets it. */
     DlrMapEntry: {
       fromStatus: string;
@@ -11756,6 +11766,8 @@ export type components = {
       contentReplacement?: string | null;
       /** @description MSG Template - replaces the whole text; {text} inserts the original. */
       msgTemplate?: string | null;
+      /** @description Words or phrases to replace in the content, in order, before the regex rewrite and the template (team trial round 1). An empty replacement removes the word. Missing = none. */
+      contentWords?: components["schemas"]["ContentWordRule"][];
       senderMinLength?: number;
       senderMaxLength?: number;
       receiverMinLength?: number;

@@ -127,6 +127,7 @@ export function blankRule(): TranslationRuleInput {
     contentRegexIndex: null,
     contentReplacement: null,
     msgTemplate: null,
+    contentWords: [],
     senderMinLength: 0,
     senderMaxLength: 20,
     receiverMinLength: 0,
@@ -162,6 +163,8 @@ export function toSave(v: TranslationRuleInput): TranslationRuleInput {
       v.receiverConversion === "regex_replace" ? (v.receiverConversionReplacement ?? "") : null,
     contentRegexIndex: v.contentRegex ? v.contentRegexIndex : null,
     contentReplacement: v.contentRegex ? (v.contentReplacement ?? "") : null,
+    // Blank rows are left out (team trial round 1).
+    contentWords: (v.contentWords ?? []).filter((w) => w.find.trim() !== ""),
   };
 }
 
@@ -202,6 +205,7 @@ export function ruleSummary(v: TranslationRuleInput): string {
           v.billingType && `billing ${v.billingType}`,
           v.registeredDelivery !== null && `registered delivery ${v.registeredDelivery}`,
           v.dlrMap.length && `DLR ${v.dlrMap.map((m) => `${m.fromStatus}→${m.toStatus}`).join(", ")}`,
+          v.contentWords?.length && `replace ${v.contentWords.length} word${v.contentWords.length === 1 ? "" : "s"}`,
           v.contentRegex && "rewrite text",
           v.msgTemplate && "text template",
         ].filter(Boolean);

@@ -5,6 +5,7 @@
 // the number of trunks it touches; "Duplicate to trunk" makes a variant for one partner.
 import { useState, type ReactNode } from "react";
 import type {
+  ContentWordRule,
   DlrMapEntry,
   Enterprise,
   NumberList,
@@ -341,6 +342,94 @@ function DlrMapEditor({ value, onChange }: { value: DlrMapEntry[]; onChange: (v:
         onClick={() => onChange([...value, { fromStatus: "", fromError: null, toStatus: "", toError: null }])}
       >
         Add DLR conversion
+      </Button>
+    </div>
+  );
+}
+
+/** Words or phrases to replace in the content, as typed; an empty replacement removes them (team trial round 1). */
+function ContentWordsEditor({
+  value,
+  onChange,
+}: {
+  value: ContentWordRule[];
+  onChange: (v: ContentWordRule[]) => void;
+}) {
+  const patch = (i: number, p: Partial<ContentWordRule>) =>
+    onChange(value.map((w, j) => (j === i ? { ...w, ...p } : w)));
+  return (
+    <div className="dlr-map">
+      {value.length > 0 && (
+        <table className="mini-table">
+          <thead>
+            <tr>
+              <th>Find word or phrase</th>
+              <th />
+              <th>Replace with (empty = remove)</th>
+              <th>Whole word</th>
+              <th>Match case</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {value.map((w, i) => (
+              <tr key={i}>
+                <td>
+                  <input
+                    value={w.find}
+                    maxLength={200}
+                    placeholder="e.g. free"
+                    aria-label="Find"
+                    onChange={(e) => patch(i, { find: e.target.value })}
+                  />
+                </td>
+                <td className="muted">→</td>
+                <td>
+                  <input
+                    value={w.replace}
+                    maxLength={500}
+                    placeholder="(remove)"
+                    aria-label="Replace with"
+                    onChange={(e) => patch(i, { replace: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label="Whole word"
+                    checked={w.wholeWord !== false}
+                    onChange={(e) => patch(i, { wholeWord: e.target.checked })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label="Match case"
+                    checked={!!w.matchCase}
+                    onChange={(e) => patch(i, { matchCase: e.target.checked })}
+                  />
+                </td>
+                <td>
+                  <Button
+                    small
+                    variant="ghost"
+                    icon="x"
+                    aria-label="Remove"
+                    onClick={() => onChange(value.filter((__, j) => j !== i))}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <Button
+        small
+        icon="plus"
+        disabled={value.length >= 50}
+        onClick={() => onChange([...value, { find: "", replace: "", wholeWord: true, matchCase: false }])}
+      >
+        Add word
       </Button>
     </div>
   );
@@ -691,6 +780,14 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               </FormField>
             </Section>
             <Section title="Content rewrite" columns={4}>
+              <FormField
+                label="Replace or remove words"
+                wide
+                hint="Done first, as typed (no regex); then the regex rewrite and the template"
+                error={form.error("contentWords")}
+              >
+                <ContentWordsEditor value={v.contentWords ?? []} onChange={(w) => form.set("contentWords", w)} />
+              </FormField>
               <TextField
                 form={form}
                 path="contentRegex"

@@ -33,7 +33,7 @@ type Params = { id: number };
 type Fields = Required<TranslationRuleFields>;
 type TrunkKind = "customer" | "vendor";
 
-/** API field → column. dlrMap is jsonb; everything else is a plain column. */
+/** API field → column. dlrMap and contentWords are jsonb; everything else is a plain column. */
 const COLUMNS: [keyof Fields, string][] = [
   ["name", "name"],
   ["direction", "direction"],
@@ -70,6 +70,7 @@ const COLUMNS: [keyof Fields, string][] = [
   ["contentRegexIndex", "content_regex_index"],
   ["contentReplacement", "content_replacement"],
   ["msgTemplate", "msg_template"],
+  ["contentWords", "content_words"],
   ["senderMinLength", "sender_min_len"],
   ["senderMaxLength", "sender_max_len"],
   ["receiverMinLength", "receiver_min_len"],
@@ -79,7 +80,8 @@ const COLUMNS: [keyof Fields, string][] = [
   ["insertAt", "insert_at"],
 ];
 const FIELD_COLUMN = new Map<string, string>(COLUMNS);
-const toDb = (field: string, v: unknown) => (field === "dlrMap" ? JSON.stringify(v ?? []) : v);
+const JSON_FIELDS = new Set(["dlrMap", "contentWords"]);
+const toDb = (field: string, v: unknown) => (JSON_FIELDS.has(field) ? JSON.stringify(v ?? []) : v);
 
 function fieldsOf(r: Record<string, unknown>): Fields {
   const out: Record<string, unknown> = {};
@@ -90,7 +92,7 @@ function fieldsOf(r: Record<string, unknown>): Fields {
         ? v.toISOString()
         : api === "mccmncs"
           ? ((v as string[]) ?? [])
-          : api === "dlrMap"
+          : JSON_FIELDS.has(api)
             ? ((v as unknown[]) ?? [])
             : (v ?? null);
   }
@@ -347,6 +349,8 @@ const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
   receiverConversionReplacement:
     input.receiverConversion === "regex_replace" ? input.receiverConversionReplacement : null,
   targets: plainTargets(input.targets),
+  // Missing (older clients) means no words; blank rows are dropped.
+  contentWords: (input.contentWords ?? []).filter((w) => w.find.trim() !== ""),
 });
 
 export function createTranslationRule(request: FastifyRequest, reply: FastifyReply) {

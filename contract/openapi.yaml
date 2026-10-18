@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.50.0
+  version: 0.51.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18629,6 +18629,27 @@ components:
         label:
           type: string
 
+    ContentWordRule:
+      type: object
+      additionalProperties: false
+      required: [find, replace]
+      properties:
+        find:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The word or phrase, as typed (no regex).
+        replace:
+          type: string
+          maxLength: 500
+          description: What goes in its place; empty removes it.
+        wholeWord:
+          type: boolean
+          description: Only whole words ("bit" does not touch "bitcoin"). Missing = true.
+        matchCase:
+          type: boolean
+          description: Upper and lower case must match. Missing = false.
+
     DlrMapEntry:
       type: object
       additionalProperties: false
@@ -18779,6 +18800,14 @@ components:
           type: [string, "null"]
           maxLength: 1000
           description: MSG Template - replaces the whole text; {text} inserts the original.
+        contentWords:
+          type: array
+          maxItems: 50
+          description: >-
+            Words or phrases to replace in the content, in order, before the regex rewrite and the template
+            (team trial round 1). An empty replacement removes the word. Missing = none.
+          items:
+            $ref: "#/components/schemas/ContentWordRule"
         senderMinLength:
           type: integer
           minimum: 0

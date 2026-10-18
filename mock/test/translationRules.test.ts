@@ -92,8 +92,10 @@ const BLANK: Omit<TranslationRuleInput, "name" | "targets"> = {
   startsAt: null,
   stopsAt: null,
   insertAt: "bottom",
+  contentWords: [],
 };
-const rule = (id: number, over: Partial<EngineRule>): EngineRule => ({ id, name: `R${id}`, ...BLANK, ...over });
+const rule = (id: number, over: Partial<EngineRule>): EngineRule =>
+  ({ id, name: `R${id}`, ...BLANK, contentWords: BLANK.contentWords ?? [], ...over }) as EngineRule;
 const ctx: EngineContext = {
   lists: new Map([
     [1, ["4479001"]],
@@ -303,6 +305,8 @@ describe("translation rules API", { skip }, () => {
       receiverConversion: "left_strip",
       receiverConversionValue: "2",
       targets: [{ type: "trunk", trunkKind: "customer", id: t1! }],
+      // First on the trunk, so a seeded rule that stops processing cannot keep it from running.
+      insertAt: "top",
     };
     const created = await ok("createTranslationRule", call("POST", "/translation-rules", input), 201);
     const id = created.record.id as number;
@@ -439,4 +443,20 @@ describe("translation rules API", { skip }, () => {
     await undo(back.change);
     await undo(gone.change);
   });
+});
+
+test("content words: replace or remove words as typed (team trial round 1)", async () => {
+  const { replaceWords } = await import("../src/routing/translate.js");
+  assert.equal(
+    replaceWords("Your code is 1234. Call now!", [{ find: "now", replace: "" }]),
+    "Your code is 1234. Call!",
+  );
+  assert.equal(replaceWords("Bitcoin bit BIT", [{ find: "bit", replace: "piece" }]), "Bitcoin piece piece");
+  assert.equal(replaceWords("Bitcoin bit", [{ find: "bit", replace: "x", wholeWord: false }]), "xcoin x");
+  assert.equal(replaceWords("Bit bit", [{ find: "bit", replace: "x", matchCase: true }]), "Bit x");
+  assert.equal(
+    replaceWords("Visit www.a.com (a.com)", [{ find: "a.com", replace: "b.org" }]),
+    "Visit www.b.org (b.org)",
+  );
+  assert.equal(replaceWords("رمزك 1234 الآن", [{ find: "الآن", replace: "" }]), "رمزك 1234");
 });
