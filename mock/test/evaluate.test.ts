@@ -3,6 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  byQbr,
+  qbrScore,
   bucket,
   compare,
   conditionChecks,
@@ -209,4 +211,20 @@ test("the fast match agrees with the full checks; destination pre-filter keeps t
     kept.map((r) => r.id),
     [1, 2, 3, 4, 5, 6, 7, 10],
   );
+});
+
+test("QBR score: ASR and DLR weigh most, then delay, then cost (decided 2026-10-18)", () => {
+  const good = { asr: 95, dlr: 90, delayS: 5, cost: 0.02 };
+  const cheapButPoor = { asr: 70, dlr: 55, delayS: 5, cost: 0.01 };
+  const slow = { asr: 95, dlr: 90, delayS: 50, cost: 0.02 };
+  assert.deepEqual(byQbr([cheapButPoor, slow, good]), [good, slow, cheapButPoor]);
+  assert.ok(Math.abs(qbrScore({ asr: 100, dlr: 100, delayS: 0, cost: 0.01 }, 0.01) - 1) < 1e-9);
+  assert.ok(Math.abs(qbrScore({ asr: null, dlr: null, delayS: null, cost: null }, null) - 0.5) < 1e-9);
+});
+
+test("QBR weights per rule: cost-only weights pick the cheapest (team trial round 1)", () => {
+  const good = { asr: 95, dlr: 90, delayS: 5, cost: 0.02 };
+  const cheap = { asr: 70, dlr: 55, delayS: 5, cost: 0.01 };
+  assert.deepEqual(byQbr([good, cheap], { asr: 0, dlr: 0, delay: 0, cost: 100 }), [cheap, good]);
+  assert.deepEqual(byQbr([cheap, good], null), [good, cheap]);
 });

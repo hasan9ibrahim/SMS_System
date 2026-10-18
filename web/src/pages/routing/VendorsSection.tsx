@@ -18,6 +18,7 @@ type Draft = Pick<
   | "maxRouteLevel"
   | "margin"
   | "qbrFormula"
+  | "qbrWeights"
   | "skipVendorAtTpsPct"
   | "lcrProfileId"
   | "threshold"
@@ -37,6 +38,7 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
   maxRouteLevel: r.maxRouteLevel,
   margin: r.margin,
   qbrFormula: r.qbrFormula,
+  qbrWeights: r.qbrWeights ?? null,
   skipVendorAtTpsPct: r.skipVendorAtTpsPct,
   lcrProfileId: r.lcrProfileId ?? null,
   threshold: r.threshold,
@@ -52,6 +54,15 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
 const numOrNull = (v: string) => (v === "" ? null : Number(v));
 
 /** Read-only vendors of a rule for the detail panel; editing opens the popup. */
+/** Quality (QBR) ranking: the defaults decided 2026-10-18, changeable per rule (team trial round 1). */
+const QBR_DEFAULT = { asr: 35, dlr: 35, delay: 20, cost: 10 };
+const QBR_PARTS = [
+  { key: "asr", label: "ASR" },
+  { key: "dlr", label: "DLR" },
+  { key: "delay", label: "Delay" },
+  { key: "cost", label: "Cost" },
+] as const;
+
 export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (() => void) | null }) {
   const name = (id: number) => rule.labels.vendorTrunks.find((v) => v.id === id)?.name ?? `#${id}`;
   const type = routeTypeOf(rule.routeType);
@@ -157,6 +168,9 @@ export function VendorsSection({
 
   const save = async () => {
     if (problems.length) return setError(problems.join(" "));
+    const w = d.qbrWeights;
+    if (d.routeType === "qbr" && w && w.asr + w.dlr + w.delay + w.cost !== 100)
+      return setError("The quality weights must add up to 100 %.");
     if (d.routeType === "static" && vendors.length === 0) return setError("A static rule needs at least one vendor.");
     if (vendors.some((v) => !v.vendorTrunkId)) return setError("Choose a vendor trunk on every row.");
     if (whitelists.some((w) => !w.vendorTrunkId || (!w.numbers.length && !w.numberListId)))
@@ -204,14 +218,8 @@ export function VendorsSection({
                 onChange={(e) => set({ maxRouteLevel: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })}
               />
             </label>
-            <label className="toggle-inline">
-              <input
-                type="checkbox"
-                checked={!!d.enableBackupRoutes}
-                onChange={(e) => set({ enableBackupRoutes: e.target.checked })}
-              />
-              Backup routes
-            </label>
+            {/* The rule-level "Backup routes" switch had no effect and was removed (team trial round 1);
+                a vendor ticked Backup is used only when every other vendor is rejected. */}
           </>
         )}
       </div>
@@ -452,15 +460,46 @@ export function VendorsSection({
                 </div>
               )}
               {d.routeType === "qbr" && (
-                <label className="field">
-                  <span>QBR formula</span>
-                  <input
-                    value={d.qbrFormula ?? ""}
-                    maxLength={500}
-                    placeholder="e.g. 0.6*DLR + 0.3*ASR - 0.1*ADD"
-                    onChange={(e) => set({ qbrFormula: e.target.value || null })}
-                  />
-                </label>
+                <div className="field wide">
+                  <span>Quality ranking weights (%)</span>
+                  <span className="qbr-weights">
+                    {QBR_PARTS.map((p) => (
+                      <label key={p.key} className="toggle-inline">
+                        {p.label}
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={(d.qbrWeights ?? QBR_DEFAULT)[p.key]}
+                          onChange={(e) =>
+                            set({
+                              qbrWeights: {
+                                ...(d.qbrWeights ?? QBR_DEFAULT),
+                                [p.key]: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                    {d.qbrWeights && (
+                      <button type="button" className="link" onClick={() => set({ qbrWeights: null })}>
+                        Back to defaults
+                      </button>
+                    )}
+                  </span>
+                  {(() => {
+                    const w = d.qbrWeights ?? QBR_DEFAULT;
+                    const sum = w.asr + w.dlr + w.delay + w.cost;
+                    return sum === 100 ? (
+                      <small className="muted">
+                        {d.qbrWeights ? "Custom for this rule" : "Defaults: ASR 35 · DLR 35 · delay 20 · cost 10"}
+                      </small>
+                    ) : (
+                      <small className="tone-error">The weights add up to {sum} %; they must make 100 %.</small>
+                    );
+                  })()}
+                </div>
               )}
             </fieldset>
           )}

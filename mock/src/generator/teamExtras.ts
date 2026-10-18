@@ -28,7 +28,6 @@ export const PAGES_BY_DEPARTMENT: Record<string, string[]> = {
     "/finance/vendor-invoices",
     "/finance/balances",
   ],
-  Support: ["/enterprises", "/observation/edrs", "/switch/email-logs", "/monitoring/incidents"],
   Management: ["/reports/team", "/reports/master", "/dashboard", "/reports/sales", "/live"],
   Admin: ["/admin/users", "/admin/audit", "/admin/visibility", "/admin/logged-in"],
 };
@@ -55,7 +54,7 @@ export async function generateTeamExtras(world: World, rng: Rng, sink: TableSink
     const usual = rng.pick(CLIENTS.slice(0, 3));
     const ip = `${rng.pick(["192.0.2", "198.51.100", "203.0.113"])}.${rng.int(1, 254)}`;
     const location = rng.pick(LOCATIONS);
-    const presence = u.department === "Support" ? 0.5 : rng.int(65, 95) / 100;
+    const presence = rng.int(65, 95) / 100;
     const startHour = rng.int(6, 10);
     for (let d = days; d >= 1; d--) {
       const dayStart = today - d * DAY;

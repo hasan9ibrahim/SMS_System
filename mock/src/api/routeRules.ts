@@ -101,6 +101,7 @@ const JSONS: FieldSpec[] = [
   { api: "tps", col: "tps_condition", cast: "::jsonb" },
   { api: "revenue", col: "revenue_condition", cast: "::jsonb" },
   { api: "hlrAction", col: "hlr_action", cast: "::jsonb" },
+  { api: "qbrWeights", col: "qbr_weights", cast: "::jsonb" },
 ];
 const ARRAY_FIELDS = new Set(["categoryIds", "customerTrunkIds", "vendorCategoryIds", "vendorTrunkIds"]);
 const FIELD_PATHS = [...SCALARS, ...JSONS].map((s) => s.api).concat(["vendors", "whitelists"]);
@@ -335,6 +336,9 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
   if (!r.name) errors.push({ path: "/name", message: "required" });
   if (Date.parse(r.stopsAt) <= Date.parse(r.startsAt))
     errors.push({ path: "/stopsAt", message: "must be after the start time" });
+  const w = r.qbrWeights;
+  if (w && w.asr + w.dlr + w.delay + w.cost !== 100)
+    errors.push({ path: "/qbrWeights", message: "the four weights must add up to 100 %" });
   for (const [path, p] of [
     ["mccmncPattern", r.mccmncPattern],
     ["senderPattern", r.senderPattern],

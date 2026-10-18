@@ -16321,6 +16321,10 @@ export type components = {
       routeType?: "block" | "static" | "dynamic" | "qbr";
       /** @enum {string} */
       huntPolicy?: "top_down" | "round_robin" | "percentage";
+      /**
+       * @deprecated
+       * @description No effect; no longer shown (team trial round 1). A vendor's isBackup decides fail-over.
+       */
       enableBackupRoutes?: boolean;
       vendorCategoryMode?: components["schemas"]["MatchMode"];
       vendorCategoryIds?: components["schemas"]["Id"][];
@@ -16330,7 +16334,18 @@ export type components = {
       maxRouteLevel?: number;
       /** @description Margin (Flat) - vendors leaving less are skipped. */
       margin?: number;
+      /**
+       * @deprecated
+       * @description No effect; qbrWeights decides the Quality ranking (team trial round 1).
+       */
       qbrFormula?: string | null;
+      /** @description Quality (QBR) ranking weights in % for this rule, summing to 100; null = the defaults decided 2026-10-18: ASR 35, DLR 35, delivery delay 20 (0 s best, 60 s or more worst), cost 10 (cheapest of the pool best). */
+      qbrWeights?: {
+        asr: number;
+        dlr: number;
+        delay: number;
+        cost: number;
+      } | null;
       /** @description Skip a vendor at this % of its TPS limit (§13.8 vendor capacity option). */
       skipVendorAtTpsPct?: number | null;
       /** @description LCR profile of a Least cost (dynamic) rule (§13.23); null = cheapest vendors in scope. */

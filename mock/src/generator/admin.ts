@@ -14,7 +14,8 @@ export const SEED_PASSWORD = "demo-password-2026";
 /** The demo admin's fake TOTP secret, so 2FA can be tried with any authenticator app. */
 export const DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 
-export const DEPARTMENTS = ["Management", "Sales", "NOC", "Rates", "Billing", "Admin", "Support"];
+// NOC and Support are one department (team trial round 1, 2026-10-18).
+export const DEPARTMENTS = ["Management", "Sales", "NOC", "Rates", "Billing", "Admin"];
 
 // Permission keys are page keys of the menu (admin/catalog.ts, §11).
 const ACCESS_GROUPS: { name: string; description: string; permissions: Record<string, string[]> }[] = [
@@ -107,7 +108,6 @@ const DEPT_GROUP: Record<string, string> = {
   Rates: "Rates Analyst",
   Billing: "Finance",
   Admin: "Administrator",
-  Support: "Read Only",
 };
 
 export async function generateAdmin(world: World, rng: Rng, sink: TableSink, profile: Profile): Promise<void> {
@@ -149,9 +149,9 @@ export async function generateAdmin(world: World, rng: Rng, sink: TableSink, pro
   // Department sizes: Sales holds the account managers.
   const plan: string[] = [];
   plan.push("Admin", "Admin", "Admin");
-  for (let i = 0; i < 5; i++) plan.push("Management"); // one manager per department
+  for (let i = 0; i < 4; i++) plan.push("Management"); // one manager per department
   for (let i = 0; i < profile.accountManagers; i++) plan.push("Sales");
-  const rest = ["NOC", "NOC", "NOC", "Rates", "Rates", "Billing", "Billing", "Support", "Sales"];
+  const rest = ["NOC", "NOC", "NOC", "NOC", "Rates", "Rates", "Billing", "Billing", "Sales"];
   while (plan.length < profile.users) plan.push(rng.pick(rest));
 
   const usernames = new Set<string>();
@@ -171,7 +171,7 @@ export async function generateAdmin(world: World, rng: Rng, sink: TableSink, pro
     let managerId: number | null = null;
     let managedDept: string | null = null;
     if (dept === "Management") {
-      managedDept = ["Sales", "NOC", "Rates", "Billing", "Support"][managers.size]!;
+      managedDept = ["Sales", "NOC", "Rates", "Billing"][managers.size]!;
       managers.set(managedDept, id);
     } else {
       managerId = managers.get(dept) ?? null;

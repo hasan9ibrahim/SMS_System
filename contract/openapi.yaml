@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.39.0
+  version: 0.40.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -29086,6 +29086,8 @@ components:
           enum: [top_down, round_robin, percentage]
         enableBackupRoutes:
           type: boolean
+          deprecated: true
+          description: No effect; no longer shown (team trial round 1). A vendor's isBackup decides fail-over.
         vendorCategoryMode:
           $ref: "#/components/schemas/MatchMode"
         vendorCategoryIds:
@@ -29109,6 +29111,22 @@ components:
         qbrFormula:
           type: [string, "null"]
           maxLength: 500
+          deprecated: true
+          description: No effect; qbrWeights decides the Quality ranking (team trial round 1).
+        qbrWeights:
+          description: >-
+            Quality (QBR) ranking weights in % for this rule, summing to 100; null = the defaults decided 2026-10-18:
+            ASR 35, DLR 35, delivery delay 20 (0 s best, 60 s or more worst), cost 10 (cheapest of the pool best).
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [asr, dlr, delay, cost]
+              properties:
+                asr: { type: integer, minimum: 0, maximum: 100 }
+                dlr: { type: integer, minimum: 0, maximum: 100 }
+                delay: { type: integer, minimum: 0, maximum: 100 }
+                cost: { type: integer, minimum: 0, maximum: 100 }
+            - type: "null"
         skipVendorAtTpsPct:
           type: [integer, "null"]
           minimum: 1

@@ -140,7 +140,8 @@ describe("Notification: Send Rate, Send Tech Info, View Rate (§8)", { skip }, (
     );
     assert.equal(tech.sent, 1);
     const techLog = (await logsSince("send_tech_info")).at(-1)!;
-    assert.ok(!/password\s*:/i.test(techLog.body), "the password is never e-mailed");
+    // The SMPP password goes in the e-mail in plain text (decided 2026-10-18, team trial round 1).
+    assert.ok(/Password: \S+/.test(techLog.body), "the password is in the e-mail");
   });
 });
 

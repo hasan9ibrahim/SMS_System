@@ -1227,3 +1227,12 @@ textarea.mono {
 .rs-receivers .multi-pick > .chips > .muted {
   display: none;
 }
+.qbr-weights {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.qbr-weights input {
+  width: 64px;
+}

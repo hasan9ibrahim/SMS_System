@@ -145,6 +145,7 @@ interface TrunkInfo {
   port: number;
   username: string;
   bindType: string;
+  password: string;
   ips: string[];
   tps: number;
   connections: number;
@@ -155,7 +156,7 @@ interface TrunkInfo {
 async function trunkInfo(c: Db, id: number): Promise<TrunkInfo | null> {
   const { rows } = await c.query(
     `SELECT t.id, t.name, t.enterprise_id, e.name AS enterprise, bc.name AS company, bc.smpp_host, t.port, t.username,
-            t.bind_type, array(SELECT host(x) FROM unnest(t.host_ips) x) AS ips, t.tps, t.max_connections,
+            t.bind_type, array(SELECT host(x) FROM unnest(t.host_ips) x) AS ips, t.tps, t.max_connections, t.password,
             (SELECT rt.id FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
               WHERE x.customer_trunk_id = t.id ORDER BY x.position LIMIT 1) AS rate_table_id,
             (SELECT rt.currency FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
@@ -177,6 +178,7 @@ async function trunkInfo(c: Db, id: number): Promise<TrunkInfo | null> {
     port: Number(r.port),
     username: r.username,
     bindType: r.bind_type,
+    password: r.password ?? "",
     ips: r.ips ?? [],
     tps: Number(r.tps),
     connections: Number(r.max_connections),
@@ -270,6 +272,8 @@ async function techMail(c: Db, t: TrunkInfo) {
     ips: t.ips.join(", ") || "—",
     tps: String(t.tps),
     connections: String(t.connections),
+    // The SMPP password goes in the e-mail in plain text (decided 2026-10-18, team trial round 1).
+    password: t.password || "—",
   };
   return {
     to: await contactEmails(c, t.enterpriseId, ["technical", "commercial"]).then((x) => x.slice(0, 3)),

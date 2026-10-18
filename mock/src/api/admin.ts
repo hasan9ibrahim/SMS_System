@@ -818,6 +818,7 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["ips", "Allowed IPs", "192.0.2.10, 192.0.2.11"],
     ["tps", "TPS", "100"],
     ["connections", "Connections", "4"],
+    ["password", "SMPP password (plain text, team trial round 1)", "fake-pass-123"],
   ],
   trunk_change_info: [
     ["trunk", "Trunk", "FENPHY-MAIN"],

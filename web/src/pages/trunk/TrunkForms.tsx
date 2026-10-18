@@ -363,7 +363,7 @@ export function CustomerTrunkFields({
             { value: "same_ip", label: "Any session from the same IP" },
             { value: "same_trunk", label: "Any session of the trunk" },
           ]}
-          hint="Receipts go at once on the session and IP the message came from; this decides only where they go if that session is gone"
+          hint="Receipts go at once on the session the message came from; if it is gone, on another bound receiver session of the trunk, else they wait until the customer binds again (SMPP 3.4). This setting only picks which session first."
         />
         <NumberField
           form={form}

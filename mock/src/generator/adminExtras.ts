@@ -226,7 +226,7 @@ export async function generateAdminExtras(world: World, rng: Rng, sink: TableSin
   const total = full ? 120_000 : 4_000;
   const weights = AUDIT_OPS.map((o) => o[5]);
   const sum = weights.reduce((a, b) => a + b, 0);
-  const staff = world.users.filter((u) => u.department !== "Support");
+  const staff = world.users;
   const times = Array.from({ length: total }, () => now - rng.int(0, 90 * DAY)).sort((a, b) => a - b);
   for (const [i, at] of times.entries()) {
     let x = rng.int(0, sum - 1);

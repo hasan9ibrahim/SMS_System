@@ -26,6 +26,40 @@ export interface MessageContext {
   listHas: (listId: number, value: string) => boolean;
 }
 
+/**
+ * Quality score of a vendor for a Quality (QBR) rule, 0–1 (team trial round 1, decided 2026-10-18):
+ * ASR and DLR weigh most (35 % each), then delivery delay (20 %), then cost (10 %). Delay scores 1 at
+ * 0 s down to 0 at 60 s; cost scores the cheapest of the pool as 1. A missing figure counts as neutral (0.5).
+ */
+export const QBR_WEIGHTS = { asr: 35, dlr: 35, delay: 20, cost: 10 } as const;
+export type QbrWeights = { asr: number; dlr: number; delay: number; cost: number };
+export function qbrScore(
+  o: Pick<VendorOption, "asr" | "dlr" | "delayS" | "cost">,
+  cheapest: number | null,
+  weights: QbrWeights | null = null,
+): number {
+  // A rule may set its own weights (team trial round 1); they are normalised to their sum.
+  const w = weights ?? QBR_WEIGHTS;
+  const sum = w.asr + w.dlr + w.delay + w.cost || 1;
+  const pct = (v: number | null | undefined) =>
+    v === null || v === undefined ? 0.5 : Math.min(1, Math.max(0, v / 100));
+  const delay = o.delayS === null || o.delayS === undefined ? 0.5 : 1 - Math.min(60, Math.max(0, o.delayS)) / 60;
+  const cost = o.cost === null || !cheapest ? 0.5 : Math.min(1, cheapest / o.cost);
+  return (w.asr * pct(o.asr) + w.dlr * pct(o.dlr) + w.delay * delay + w.cost * cost) / sum;
+}
+
+/** Best quality first (qbrScore), cheaper first on a tie. */
+export function byQbr<T extends Pick<VendorOption, "asr" | "dlr" | "delayS" | "cost">>(
+  xs: T[],
+  weights: QbrWeights | null = null,
+): T[] {
+  const costs = xs.map((x) => x.cost).filter((c): c is number => c !== null && c > 0);
+  const cheapest = costs.length ? Math.min(...costs) : null;
+  const scored = xs.map((x) => ({ x, s: qbrScore(x, cheapest, weights) }));
+  scored.sort((a, b) => b.s - a.s || (a.x.cost ?? Infinity) - (b.x.cost ?? Infinity));
+  return scored.map((y) => y.x);
+}
+
 export interface VendorOption {
   vendorTrunkId: number;
   name: string;
@@ -70,6 +104,7 @@ type Rule = Pick<
   | "huntPolicy"
   | "margin"
   | "vendors"
+  | "qbrWeights"
   | "whitelists"
   | "vendorTrunkMode"
   | "vendorTrunkIds"
@@ -422,9 +457,8 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
     let pool = byRule.get(rule);
     if (!pool) {
       pool = [...options.values()].filter((o) => o.cost !== null && inScope(o));
-      pool.sort((a, b) =>
-        rule.routeType === "qbr" ? (b.dlr ?? -1) - (a.dlr ?? -1) || a.cost! - b.cost! : a.cost! - b.cost!,
-      );
+      if (rule.routeType === "qbr") pool = byQbr(pool, rule.qbrWeights ?? null);
+      else pool.sort((a, b) => a.cost! - b.cost!);
       byRule.set(rule, pool);
     }
     let candidates: RouteCandidate[];
@@ -472,9 +506,11 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
     let ordered = at;
     let decidedBy: "percentage" | "top_down" | "round_robin" | "qbr" = rule.huntPolicy;
     if (rule.routeType === "qbr") {
-      ordered = [...at].sort(
-        (a, b) => (options.get(b.vendorTrunkId)?.dlr ?? -1) - (options.get(a.vendorTrunkId)?.dlr ?? -1),
-      );
+      const none = { asr: null, dlr: null, delayS: null, cost: null };
+      ordered = byQbr(
+        at.map((v) => ({ v, ...(options.get(v.vendorTrunkId) ?? none) })),
+        rule.qbrWeights ?? null,
+      ).map((x) => x.v);
       decidedBy = "qbr";
     } else if (rule.huntPolicy === "percentage") {
       const b = bucket(m.receiver);
