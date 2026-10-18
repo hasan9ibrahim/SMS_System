@@ -131,7 +131,8 @@ describe("§11 access group catalogue", () => {
   test("every page of the web registry is in the catalogue and back", () => {
     const src = readFileSync(new URL("../../web/src/nav/registry.ts", import.meta.url), "utf8");
     const body = src.slice(src.indexOf("export const PAGES"), src.indexOf("export const HOME"));
-    const keys = [...body.matchAll(/p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!);
+    // The help center (§15.1) is open to every user, so it has no access-group entry.
+    const keys = [...body.matchAll(/p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!).filter((k) => k !== "help");
     assert.ok(keys.length > 50);
     assert.deepEqual([...keys].sort(), MODULES.map((m) => m.key).sort());
   });

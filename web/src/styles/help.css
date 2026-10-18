@@ -198,6 +198,9 @@
 .help-fields th:last-child {
   width: 30%;
 }
+.help-fields.two th:last-child {
+  width: auto;
+}
 .help-field-name {
   font-weight: 600;
 }

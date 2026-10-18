@@ -95,16 +95,18 @@ function Block({ b, hl, go }: { b: HelpBlock; hl: RegExp | null; go: (topic: str
         </>
       );
     }
-    case "fields":
+    case "fields": {
+      // Column lists have nothing to enter: drop the third column when no row fills it.
+      const withValues = b.fields.some((f) => f.values);
       return (
         <>
           {b.title && <h4>{b.title}</h4>}
-          <table className="help-fields">
+          <table className={`help-fields${withValues ? "" : " two"}`}>
             <thead>
               <tr>
-                <th>Field</th>
+                <th>{withValues ? "Field" : "Name"}</th>
                 <th>What it does</th>
-                <th>What to enter</th>
+                {withValues && <th>What to enter</th>}
               </tr>
             </thead>
             <tbody>
@@ -114,13 +116,14 @@ function Block({ b, hl, go }: { b: HelpBlock; hl: RegExp | null; go: (topic: str
                     <Marked text={f.name} hl={hl} />
                   </td>
                   <td>{I(f.what)}</td>
-                  <td>{f.values ? I(f.values) : <span className="muted">—</span>}</td>
+                  {withValues && <td>{f.values ? I(f.values) : <span className="muted">—</span>}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
         </>
       );
+    }
   }
 }
 
@@ -281,6 +284,12 @@ export function HelpPage() {
     if (el) el.scrollIntoView({ block: "start" });
     else main.scrollTop = 0;
   }, [topicId, sectionId, q]);
+
+  useEffect(() => {
+    mainRef.current?.parentElement
+      ?.querySelector<HTMLElement>(".help-contents .help-link.current")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [topicId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

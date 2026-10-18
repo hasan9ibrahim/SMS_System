@@ -552,5 +552,17 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
+- *Found while writing the help center (2026-10-18), where the screens and the spec differ:*
+  - Route rules: when a rule has both a destination **pattern** and a destination **list**, the evaluator only checks the pattern. Should the pattern narrow the list (both must match) instead?
+  - Route rules: Sender ID / Receiver ID **number lists** can't be negated (spec §6.3 says lists have Match / Not match too). Add the switch to lists?
+  - Route rules: **Continue routing** YES / NEXT only act when the matched rule has no usable vendor. Is that the intended meaning?
+  - Route rules: **Group** / **Next group** fields exist but no page creates or manages groups.
+  - Trunks: is the **express margin** an amount per message or a %? (The help says amount.)
+  - Invoices: nothing creates **Auto** invoices at the end of a cycle yet (only seeded ones exist); backend job needed.
+  - Master report PDF export lists the first 2,000 rows although the dialog allows up to 100,000.
+  - Sales report: the **product category** filter from §13.15 is not built.
+  - Incoming RNs: §13.32 asks for reminder alerts for flagged RNs still pending near their effective date; not built.
+  - 2FA: a code is only asked on a password change when the user has an authenticator app enrolled; the Security settings page says always.
+
 - Answered 2026-10-18: NOC and Support merged; tech info password in plain text in the e-mail; TPS per session on both trunk kinds; receipts per SMPP 3.4 (above); QBR weights ASR/DLR highest, then delay, then cost, changeable per rule; Rate manager opens on customer tables with a switch.
 - Answered 2026-10-18: a failed vendor's traffic goes to its own backups first (split by their share), then the other vendors of its level, then the next level.
