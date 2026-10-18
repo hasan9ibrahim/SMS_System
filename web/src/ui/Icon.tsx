@@ -73,6 +73,7 @@ const PATHS = {
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
   save: "M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6",
   copy: "M8 8h12v12H8zM4 16V4h12",
+  help: "M12 21a9 9 0 100-18 9 9 0 000 18zM9.5 9.5a2.5 2.5 0 114 2c-1 .6-1.5 1.2-1.5 2.5M12 17h.01",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -26,7 +26,8 @@ export type SectionKey =
   | "switch"
   | "monitoring"
   | "reports"
-  | "admin";
+  | "admin"
+  | "help";
 
 export interface SectionDef {
   key: SectionKey;
@@ -45,6 +46,7 @@ export const SECTIONS: SectionDef[] = [
   { key: "monitoring", label: "Monitoring" },
   { key: "reports", label: "Reports" },
   { key: "admin", label: "Admin" },
+  { key: "help", label: "Help" },
 ];
 
 const p = (
@@ -640,6 +642,17 @@ export const PAGES: PageDef[] = [
     "§11",
     "5.11",
     "Customer self-service logins",
+  ),
+
+  p(
+    "help",
+    "help",
+    "Help center",
+    "/help",
+    "help",
+    "§15.1",
+    "6",
+    "How every page works, what each field means, with search",
   ),
 ];
 

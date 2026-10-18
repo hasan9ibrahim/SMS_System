@@ -135,7 +135,7 @@ export function EnterprisePage() {
   if (q.isError) {
     return (
       <div className="page">
-        <PageHeader page={page} title={`Enterprise ${raw}`} />
+        <PageHeader page={page} title={`Enterprise ${raw}`} helpTopic="enterprise-record" />
         <div className="grid-message error">
           <Icon name="alert" /> {(q.error as Error).message}
         </div>
@@ -145,7 +145,7 @@ export function EnterprisePage() {
   if (id !== null && !e) {
     return (
       <div className="page">
-        <PageHeader page={page} title={`Enterprise ${id}`} />
+        <PageHeader page={page} title={`Enterprise ${id}`} helpTopic="enterprise-record" />
         <div className="grid-message muted">Loading…</div>
       </div>
     );
@@ -154,6 +154,7 @@ export function EnterprisePage() {
   return (
     <div className="page record-page">
       <PageHeader
+        helpTopic="enterprise-record"
         page={page}
         title="New enterprise"
         heading={

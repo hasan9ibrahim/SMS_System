@@ -38,14 +38,32 @@ function BackButton() {
   );
 }
 
+/** Opens this page's help topic in a new tab (§15.1 help). */
+function HelpButton({ topic }: { topic: string }) {
+  return (
+    <button
+      type="button"
+      className="icon-btn page-help"
+      title="Help for this page"
+      aria-label="Help for this page"
+      onClick={() => useTabs.getState().open(`/help?topic=${topic}`, { newTab: true })}
+    >
+      <Icon name="help" />
+    </button>
+  );
+}
+
 export function PageHeader({
   page,
   title,
   heading,
   actions,
+  helpTopic,
 }: {
   page: PageDef;
   title?: string;
+  /** Help topic the ? button opens; defaults to the page's own (a record screen names its own). */
+  helpTopic?: string;
   /** Replaces the plain title, e.g. a record picker (§5.1); must contain the page's h1. */
   heading?: ReactNode;
   actions?: ReactNode;
@@ -56,6 +74,7 @@ export function PageHeader({
     <div className="page-header">
       <BackButton />
       {heading ?? <h1>{title ?? page.label}</h1>}
+      {page.key !== "help" && <HelpButton topic={helpTopic ?? page.key} />}
       {siblings.length > 1 && (
         <nav className="siblings" aria-label={`${page.label} and related pages`}>
           {siblings.map((s) => (

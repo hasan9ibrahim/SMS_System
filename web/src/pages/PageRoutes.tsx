@@ -78,6 +78,8 @@ const MasterReportPage = lazy(() =>
 );
 const SalesReportPage = lazy(() => import("./reports/SalesReportPage").then((m) => ({ default: m.SalesReportPage })));
 const NocReportPage = lazy(() => import("./reports/NocReportPage").then((m) => ({ default: m.NocReportPage })));
+// Help content is a large text bundle, loaded when the help center first opens.
+const HelpPage = lazy(() => import("./help/HelpPage").then((m) => ({ default: m.HelpPage })));
 const RateLookupPage = lazy(() => import("./lookup/RateLookupPage").then((m) => ({ default: m.RateLookupPage })));
 
 const BUILT = new Set([
@@ -151,6 +153,7 @@ const BUILT = new Set([
   "/live/analytics",
   "/monitoring/alert-rules",
   "/monitoring/incidents",
+  "/help",
 ]);
 
 export function PageRoutes({ path }: { path: string }) {
@@ -273,6 +276,14 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/admin/security" element={<SecurityPage />} />
       <Route path="/monitoring/alert-rules" element={<AlertRulesPage />} />
       <Route path="/monitoring/incidents" element={<IncidentsPage />} />
+      <Route
+        path="/help"
+        element={
+          <Suspense fallback={<div className="grid-message muted">Loading…</div>}>
+            <HelpPage />
+          </Suspense>
+        }
+      />
       {PAGES.filter((p) => !BUILT.has(p.path)).map((p) => (
         <Route key={p.key} path={p.path} element={<PlaceholderPage page={p} />} />
       ))}

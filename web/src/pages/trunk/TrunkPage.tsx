@@ -207,7 +207,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
   if (q.isError || source.isError) {
     return (
       <div className="page">
-        <PageHeader page={page} title={`${LABEL[kind]} ${raw}`} />
+        <PageHeader page={page} title={`${LABEL[kind]} ${raw}`} helpTopic="trunk-record" />
         <div className="grid-message error">
           <Icon name="alert" /> {((q.error ?? source.error) as Error).message}
         </div>
@@ -218,7 +218,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
   if (waiting) {
     return (
       <div className="page">
-        <PageHeader page={page} title={LABEL[kind]} />
+        <PageHeader page={page} title={LABEL[kind]} helpTopic="trunk-record" />
         <div className="grid-message muted">Loading…</div>
       </div>
     );
@@ -239,6 +239,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
   return (
     <div className="page record-page">
       <PageHeader
+        helpTopic="trunk-record"
         page={page}
         title={title}
         actions={
