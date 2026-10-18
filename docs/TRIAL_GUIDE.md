@@ -21,6 +21,20 @@ docker compose --profile seed run --rm seed                # load the fake data 
 
 Then open `http://<server>:8080` (set `WEB_PORT` in `.env` for another port).
 
+**Lock it before sharing the address:**
+
+- **Team password.** Set `TEAM_PASSWORD` (and optionally `TEAM_USER`, default `team`) in `.env`, then
+  `docker compose --profile app up -d` again. The browser then asks for that one username and password
+  before anything loads; pages, the API and the live WebSocket are all covered. Leave it empty for an
+  open instance (the web container logs a warning). Avoid `$` in the password (Compose reads it as a
+  variable). To change it, edit `.env` and run the same command. This is a gate for the trial only, not
+  the platform's own sign-in (§13.28), which comes with the backend.
+- **Database ports.** Postgres, ClickHouse and Redis listen on `127.0.0.1` only, so the network sees just
+  the web port (8080). Tools on the server itself (`psql`, the npm scripts) still connect as before;
+  from another machine use an SSH tunnel, e.g. `ssh -L 5432:127.0.0.1:5432 <server>`.
+- Still keep the instance on the office network or VPN and open only port 8080 in the firewall: the team
+  password travels over plain HTTP unless you put the server behind HTTPS.
+
 - `SEED_PROFILE=small docker compose --profile seed run --rm seed` loads a small set in a few minutes.
   The default `full` profile is the production-like volume the screens were tuned for, and takes longer.
 - Re-running the seed job **resets all data**, including everything changed during the trial. Export

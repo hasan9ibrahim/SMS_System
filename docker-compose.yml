@@ -15,8 +15,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-sms_config}
       POSTGRES_USER: ${POSTGRES_USER:-sms_dev}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sms_dev_password}
+    # Data store ports listen on the server itself only; the network sees just the web app (WEB_PORT).
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -35,8 +36,8 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-sms_dev_password}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ports:
-      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
-      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./db/clickhouse/init:/docker-entrypoint-initdb.d:ro
@@ -55,7 +56,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -107,6 +108,10 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:80"
+    environment:
+      # Optional shared team password (docs/TRIAL_GUIDE.md); empty = open.
+      TEAM_USER: ${TEAM_USER:-team}
+      TEAM_PASSWORD: ${TEAM_PASSWORD:-}
     depends_on:
       # nginx answers 502 until the mock listens (it loads caches for a few seconds at start).
       mock: { condition: service_healthy }
