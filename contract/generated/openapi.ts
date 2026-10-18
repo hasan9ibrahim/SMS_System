@@ -10573,8 +10573,15 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /**
+       * @description After saving, e-mail a rate notification to each customer using a changed customer table (its rates contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default). Logged in Email logs as send_rate. Vendor tables are never notified.
+       * @default false
+       */
+      sendNotification: boolean;
     };
     RateLineChangesSaved: {
+      /** @description Rate notification e-mails written (when sendNotification was set). */
+      notificationsSent?: number;
       change: components["schemas"]["Change"] | null;
       /** @description Edits that changed something. */
       applied: number;
@@ -10744,8 +10751,15 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /**
+       * @description After saving, e-mail a rate notification to each customer using a changed customer table (its rates contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default). Logged in Email logs as send_rate. Vendor tables are never notified.
+       * @default false
+       */
+      sendNotification: boolean;
     };
     RateBulkSaved: {
+      /** @description Rate notification e-mails written (when sendNotification was set). */
+      notificationsSent?: number;
       change: components["schemas"]["Change"] | null;
       applied: number;
       skipped: number;
@@ -16871,23 +16885,7 @@ export type components = {
         tables: number;
       }[];
     };
-    LookupSideFilters: {
-      side: components["schemas"]["LookupSide"];
-      /** @description Empty or missing = every category. */
-      categoryIds?: number[];
-      /** @description Customer trunks (tables linked to them) or vendor trunks. Empty = all. */
-      trunkIds?: number[];
-      /** @description Countries by MCC. Empty = all. */
-      mccs?: string[];
-      /** @description Destination codes. Empty = all codes of the chosen countries. */
-      mccmncs?: string[];
-      /** @description Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25). */
-      search?: string;
-      /** @description Include inactive trunks. */
-      includeInactive?: boolean;
-      asOf?: components["schemas"]["Timestamp"];
-    };
-    /** @description The side's filters (as LookupSideFilters) plus paging and sort. */
+    /** @description The side's filters plus paging and sort. */
     LookupSideRequest: {
       side: components["schemas"]["LookupSide"];
       /** @description Empty or missing = every category. */
@@ -16942,7 +16940,7 @@ export type components = {
       nextCursor: string | null;
       platformCurrency: string;
     };
-    /** @description The side's filters (as LookupSideFilters) and the destination to expand. */
+    /** @description The side's filters (as in LookupSideRequest) and the destination to expand. */
     LookupSideLinesRequest: {
       side: components["schemas"]["LookupSide"];
       /** @description Empty or missing = every category. */

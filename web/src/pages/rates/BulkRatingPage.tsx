@@ -43,6 +43,8 @@ import {
 } from "./bulkModel";
 import { formatPct, formatRate, shortDateTime } from "./format";
 import { NoticeDialog } from "./RateTableView";
+import { SendRnCheck } from "./dialogs";
+import { DestinationPickDialog } from "./DestinationTree";
 
 const page = pageForPath("/rates/bulk")!;
 
@@ -195,16 +197,26 @@ function PasteDialog({ done }: { done: (v: { mccmncs: string[]; countries: strin
   );
 }
 
-function ApplyDialog({ count, tables, done }: { count: number; tables: number; done: (note: string | null) => void }) {
+function ApplyDialog({
+  count,
+  tables,
+  done,
+}: {
+  count: number;
+  tables: number;
+  done: (v: { note: string; sendRn: boolean } | null) => void;
+}) {
   const [note, setNote] = useState("");
+  const [sendRn, setSendRn] = useState(true);
   return (
     <Modal
       title={`Apply ${count.toLocaleString("en-US")} change${count === 1 ? "" : "s"}?`}
       onClose={() => done(null)}
       footer={
         <>
+          <SendRnCheck checked={sendRn} onChange={setSendRn} />
           <Button onClick={() => done(null)}>Cancel</Button>
-          <Button variant="primary" onClick={() => done(note)}>
+          <Button variant="primary" onClick={() => done({ note, sendRn })}>
             Apply
           </Button>
         </>
@@ -348,15 +360,19 @@ export function BulkRatingPage() {
     }
   };
 
-  const runApply = async (note: string, acceptNoticeBreach = false): Promise<void> => {
+  const runApply = async (note: string, sendRn: boolean, acceptNoticeBreach = false): Promise<void> => {
     try {
       const r = await apply.mutateAsync({
         items,
+        sendNotification: sendRn,
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
       });
       if (r.change) {
-        notifySaved(r.change, `Applied ${r.applied} change${r.applied === 1 ? "" : "s"} on ${r.tables} tables`);
+        notifySaved(
+          r.change,
+          `Applied ${r.applied} change${r.applied === 1 ? "" : "s"} on ${r.tables} tables${r.notificationsSent ? ` · RN sent to ${r.notificationsSent} client${r.notificationsSent === 1 ? "" : "s"}` : ""}`,
+        );
         if (move)
           void actOnMove(move.id, {
             action: "handled",
@@ -370,7 +386,7 @@ export function BulkRatingPage() {
         const ok = await ask<boolean>((done) => (
           <NoticeDialog breach={err.problem as unknown as NoticeBreach} done={done} />
         ));
-        if (ok) return runApply(note, true);
+        if (ok) return runApply(note, sendRn, true);
         return;
       }
       toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
@@ -378,10 +394,10 @@ export function BulkRatingPage() {
   };
 
   const confirmApply = async () => {
-    const note = await ask<string>((done) => (
+    const v = await ask<{ note: string; sendRn: boolean }>((done) => (
       <ApplyDialog count={items.length} tables={new Set(items.map((i) => i.rateTableId)).size} done={done} />
     ));
-    if (note !== null) await runApply(note);
+    if (v) await runApply(v.note, v.sendRn);
   };
 
   const setRate = (key: string, v: number | null) => {
@@ -572,6 +588,20 @@ export function BulkRatingPage() {
             <CodeChips list="countries" codes={countries} onChange={setCountries} />
           </div>
           <div className="bulk-row">
+            <Button
+              small
+              icon="globe"
+              onClick={async () => {
+                const v = await ask<{ mccmncs: string[]; countries: string[] }>((done) => (
+                  <DestinationPickDialog done={done} />
+                ));
+                if (!v) return;
+                setMccmncs([...new Set([...mccmncs, ...v.mccmncs])]);
+                setCountries([...new Set([...countries, ...v.countries])]);
+              }}
+            >
+              Pick countries and networks…
+            </Button>
             <Button
               small
               icon="upload"

@@ -24,6 +24,8 @@ import { ColumnFilter } from "./ColumnFilter";
 import { isChoice, isNumeric, isTime, nextSort, toListQuery, type GridState } from "./filterModel";
 
 export const ROW_HEIGHT = 38;
+/** Most rows "Select all matching" takes (one bulk action stays reviewable). */
+const SELECT_ALL_MAX = 5000;
 const PAGE_SIZE = 200;
 
 export interface ColumnOverride<Row> {
@@ -441,6 +443,21 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const someChecked = !allChecked && rows.some((r) => selected.has(r.id));
 
+  // Select all matching (team trial round 1): loads the remaining pages, up to SELECT_ALL_MAX rows,
+  // then selects every row the filters match, not only the loaded ones.
+  const [selectingAll, setSelectingAll] = useState(false);
+  useEffect(() => {
+    if (!selectingAll || result.isFetching) return;
+    if (result.hasNextPage && rows.length < SELECT_ALL_MAX) {
+      void result.fetchNextPage();
+      return;
+    }
+    setSelectingAll(false);
+    onSelectedChange(new Set(rows.slice(0, SELECT_ALL_MAX).map((r) => r.id)));
+  }, [selectingAll, result.isFetching, result.hasNextPage, rows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const total = first?.total ?? null;
+  const moreMatch = allChecked && total !== null && total > rows.length && !first?.totalIsEstimate;
+
   return (
     <div
       className="grid"
@@ -502,6 +519,21 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
           ))}
           {trailing && <div className="gf-cell" style={{ width: trailing.width }} />}
         </div>
+        {(moreMatch || selectingAll) && (
+          <div className="grid-selall" role="status">
+            {selectingAll ? (
+              <span>Selecting… {rows.length.toLocaleString("en-US")} loaded</span>
+            ) : (
+              <>
+                <span>All {rows.length.toLocaleString("en-US")} loaded rows are selected.</span>
+                <button type="button" className="link" onClick={() => setSelectingAll(true)}>
+                  Select all {Math.min(total!, SELECT_ALL_MAX).toLocaleString("en-US")}
+                  {total! > SELECT_ALL_MAX ? ` of ${total!.toLocaleString("en-US")}` : ""} matching
+                </button>
+              </>
+            )}
+          </div>
+        )}
         <div className="gb" style={{ height: Math.max(virtualizer.getTotalSize(), 120) }} role="rowgroup">
           {error && (
             <div className="grid-message error">

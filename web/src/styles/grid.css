@@ -213,3 +213,18 @@
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
 }
+
+/* Select all matching (team trial round 1): under the filter row, stays in view. */
+.grid-selall {
+  position: sticky;
+  top: 76px;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--accent-soft);
+  border-bottom: var(--border-width) solid var(--color-border);
+}

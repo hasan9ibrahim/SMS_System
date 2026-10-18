@@ -303,7 +303,8 @@ export type LookupClientRate = Schemas["LookupClientRate"];
 export type RateLookupResult = Schemas["RateLookupResult"];
 export type LookupSide = Schemas["LookupSide"];
 export type LookupSideOptions = Schemas["LookupSideOptions"];
-export type LookupSideFilters = Schemas["LookupSideFilters"];
+/** A side's filters: the side lookup request without paging and sort. */
+export type LookupSideFilters = Omit<Schemas["LookupSideRequest"], "limit" | "cursor" | "sort" | "dir">;
 export type LookupSideRequest = Schemas["LookupSideRequest"];
 export type LookupSideRow = Schemas["LookupSideRow"];
 export type LookupSidePage = Schemas["LookupSidePage"];

@@ -29,6 +29,7 @@ import {
 import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { sendRateNotices } from "./rateNotices.js";
 
 const MAX_ROWS = 20_000;
 /** Start times may be up to a minute in the past (clock skew); never earlier (§13.32). */
@@ -219,9 +220,7 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
     const round = a.round ?? 6;
     const fromBase = body.effectiveFrom ? Math.max(Date.parse(body.effectiveFrom), now) : now;
     // Suggested rates per table and destination (Market moves "Update rates", §13.14).
-    const overrides = new Map(
-      (body.overrides ?? []).map((o) => [`${o.rateTableId}:${o.mccmnc}`, o] as const),
-    );
+    const overrides = new Map((body.overrides ?? []).map((o) => [`${o.rateTableId}:${o.mccmnc}`, o] as const));
     const summary: RateBulkSummary = {
       tables: tables.size,
       destinations: mIds.length,
@@ -453,8 +452,9 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
 
     const breaches: Breach[] = [];
     let skipped = 0;
+    const diff: DiffEntry[] = [];
     const result = await inTransaction(pool, async (c) => {
-      const diff: DiffEntry[] = [];
+      diff.length = 0;
       const changed: number[] = [];
       for (const [id, edits] of byTable) {
         const before = diff.length;
@@ -497,6 +497,8 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
     });
     if (result === null) return sendNoticeBreach(reply, breaches);
     if (result.change && [...tables.values()].some((t) => t.kind === "vendor")) scheduleBestBuyRefresh();
-    return { ...result, skipped };
+    // Rate notifications to the customers using the changed tables (team trial round 1).
+    const notificationsSent = result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id) : 0;
+    return { ...result, skipped, notificationsSent };
   });
 }

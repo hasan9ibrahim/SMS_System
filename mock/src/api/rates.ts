@@ -27,6 +27,7 @@ import { archiveGate } from "./enterprises.js";
 import { archivedInfo, dependencies, isAdmin, iso, recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { sendRateNotices } from "./rateNotices.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Rate table ${id} not found`);
@@ -879,8 +880,9 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
 
     const breaches: Breach[] = [];
     let skipped = 0;
+    const diff: DiffEntry[] = [];
     const result = await inTransaction(pool, async (c) => {
-      const diff: DiffEntry[] = [];
+      diff.length = 0;
       skipped = await applyLineEdits(c, table, body.items, mccmncIds, me.id, now, diff, breaches);
       if (breaches.length && !body.acceptNoticeBreach) throw new NoticeBreachError();
       if (diff.length === 0) return { change: null, applied: 0 };
@@ -906,7 +908,9 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
         breaches.map(({ rateTableId: _r, table: _t, ...b }) => b),
       );
     if (result.change && table.kind === "vendor") scheduleBestBuyRefresh();
-    return { change: result.change, applied: result.applied, skipped };
+    // Rate notifications to the customers using the changed tables (team trial round 1).
+    const notificationsSent = result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id) : 0;
+    return { change: result.change, applied: result.applied, skipped, notificationsSent };
   });
 }
 

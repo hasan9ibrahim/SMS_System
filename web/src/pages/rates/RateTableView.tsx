@@ -17,7 +17,7 @@ import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button, Menu, Modal, Popover } from "../../ui/primitives";
 import { scopeUrl } from "./bulkModel";
-import { AddRatesDialog, RenameTableDialog } from "./dialogs";
+import { AddRatesDialog, SendRnCheck, RenameTableDialog } from "./dialogs";
 import { formatMoney, formatPct, formatRate, formatSigned, shortDate, shortDateTime } from "./format";
 import { buildItems, changeRate, merge, round6, type ChangeMode, type Pending } from "./pending";
 import { useOpenTable } from "./RateManagerPage";
@@ -310,6 +310,8 @@ export function RateTableView({ id }: { id: number }) {
   const [pending, setPending] = useState<Pending>(new Map());
   const [effectiveFrom, setEffectiveFrom] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // "Send RN" ticked by default on customer tables (team trial round 1).
+  const [sendRn, setSendRn] = useState(true);
   const [active, setActive] = useState<RateLineRow | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [dialog, setDialog] = useState<"add" | "rename" | null>(null);
@@ -481,11 +483,19 @@ export function RateTableView({ id }: { id: number }) {
       return;
     }
     try {
-      const r = await change.mutateAsync({ items, ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}) });
+      const r = await change.mutateAsync({
+        items,
+        sendNotification: sendRn && t?.kind === "customer",
+        ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
+      });
       setPending(new Map());
       setSelected(new Set());
       setEffectiveFrom(null);
-      if (r.change) notifySaved(r.change, `Saved ${r.applied} change${r.applied === 1 ? "" : "s"}`);
+      if (r.change)
+        notifySaved(
+          r.change,
+          `Saved ${r.applied} change${r.applied === 1 ? "" : "s"}${r.notificationsSent ? ` · RN sent to ${r.notificationsSent} client${r.notificationsSent === 1 ? "" : "s"}` : ""}`,
+        );
       else toast({ tone: "info", message: "Nothing changed" });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -804,6 +814,7 @@ export function RateTableView({ id }: { id: number }) {
                 <button type="button" className="btn btn-sm btn-ghost bar-btn" onClick={() => setPending(new Map())}>
                   Discard
                 </button>
+                {t.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
                 <Button small variant="primary" disabled={change.isPending} onClick={() => void save()}>
                   Save {pending.size} change{pending.size === 1 ? "" : "s"}
                 </Button>

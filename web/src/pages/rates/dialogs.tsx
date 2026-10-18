@@ -2,7 +2,7 @@
 // trunk's rates plus a margin), rename, and Add rates for new destinations (§13.21 picker).
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Destination, ListQuery, RateLineEdit, RateTableDetail, TrunkListRow } from "@sms/contract";
+import type { RateLineEdit, RateTableDetail, TrunkListRow } from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { fetchListPage } from "../../api/hooks";
 import { usePlatformCurrency, useChangeRateLines, useReference, useSaveRateTable } from "../../api/records";
@@ -10,6 +10,20 @@ import { useNotifySaved } from "../../history/undo";
 import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
+import { DestinationTree } from "./DestinationTree";
+
+/** "Send RN" on rating saves (team trial round 1): ticked by default on customer tables. */
+export function SendRnCheck({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label
+      className="toggle-inline send-rn"
+      title="E-mail a rate notification with the changed lines to each client using the table (Email logs)"
+    >
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      Send RN to clients
+    </label>
+  );
+}
 
 const problemText = (e: unknown) => {
   if (!(e instanceof ApiError)) return String(e);
@@ -188,46 +202,41 @@ export function RenameTableDialog({ table, done }: { table: RateTableDetail; don
   );
 }
 
-/** Add rates for destinations (§12.1 Add rate line: one line per chosen MCCMNC). */
+/**
+ * Add rates for destinations (§12.1 Add rate line: one line per chosen MCCMNC). Destinations are picked
+ * in the country / network tree, with select all on the filtered ones (team trial round 1).
+ */
 export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: () => void }) {
   const change = useChangeRateLines(table.id);
   const notifySaved = useNotifySaved();
-  const [q, setQ] = useState("");
-  const [picked, setPicked] = useState<Destination[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
   const [rate, setRate] = useState("");
   const [senderId, setSenderId] = useState("");
   const [from, setFrom] = useState("");
   const [note, setNote] = useState("");
+  const [sendRn, setSendRn] = useState(table.kind === "customer");
   const [error, setError] = useState<string | null>(null);
-  const results = useQuery({
-    queryKey: ["picker", "destinations", q],
-    queryFn: () =>
-      fetchListPage<Destination>("destinations", {
-        ...(q.trim() ? { search: q.trim() } : {}),
-        limit: 40,
-        withTotal: false,
-      } as ListQuery),
-    staleTime: 60_000,
-  });
-  const toggle = (d: Destination) =>
-    setPicked((p) => (p.some((x) => x.id === d.id) ? p.filter((x) => x.id !== d.id) : [...p, d]));
   const submit = () => {
     const value = Number(rate);
     if (!picked.length) return setError("Choose at least one destination.");
     if (!rate || !Number.isFinite(value) || value < 0) return setError("Enter the rate.");
-    const items: RateLineEdit[] = picked.map((d) => ({
+    const items: RateLineEdit[] = picked.map((mccmnc) => ({
       action: "set",
-      mccmnc: d.mccmnc,
+      mccmnc,
       rate: value,
       ...(senderId.trim() ? { senderId: senderId.trim() } : {}),
       ...(from ? { effectiveFrom: new Date(`${from}:00Z`).toISOString() } : {}),
       ...(note.trim() ? { rateNote: note.trim() } : {}),
     }));
     change.mutate(
-      { items },
+      { items, sendNotification: sendRn && table.kind === "customer" },
       {
         onSuccess: (r) => {
-          if (r.change) notifySaved(r.change, `Added ${r.applied} rate${r.applied === 1 ? "" : "s"}`);
+          if (r.change)
+            notifySaved(
+              r.change,
+              `Added ${r.applied} rate${r.applied === 1 ? "" : "s"}${r.notificationsSent ? ` · RN sent to ${r.notificationsSent} client${r.notificationsSent === 1 ? "" : "s"}` : ""}`,
+            );
           done();
         },
         onError: (e) => setError(problemText(e)),
@@ -237,10 +246,11 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   return (
     <Modal
       title={`Add rates to ${table.name}`}
-      width={640}
+      width={680}
       onClose={done}
       footer={
         <>
+          {table.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
           <Button onClick={done}>Cancel</Button>
           <Button variant="primary" onClick={submit} disabled={change.isPending}>
             Add {picked.length || ""} rate{picked.length === 1 ? "" : "s"}
@@ -252,35 +262,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
         <span>
           Destinations<span className="req">*</span>
         </span>
-        <div className="chips">
-          {picked.map((d) => (
-            <span key={d.id} className="chip">
-              {d.country} · {d.network} ({d.mccmnc})
-              <button type="button" aria-label="Remove" onClick={() => toggle(d)}>
-                <Icon name="x" size={11} />
-              </button>
-            </span>
-          ))}
-          {picked.length === 0 && <span className="muted small">Search and tick destinations below.</span>}
-        </div>
-        <input
-          autoFocus
-          placeholder="Country, network or MCCMNC…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label="Find destinations"
-        />
-        <div className="dest-list">
-          {results.data?.rows.map((d) => (
-            <label key={d.id} className="choice-row">
-              <input type="checkbox" checked={picked.some((x) => x.id === d.id)} onChange={() => toggle(d)} />
-              <span>
-                {d.country} · {d.network}
-              </span>
-              <span className="muted small num">{d.mccmnc}</span>
-            </label>
-          ))}
-        </div>
+        <DestinationTree selected={picked} onChange={setPicked} height={260} />
       </div>
       <div className="fgrid cols-3">
         <label className="field">

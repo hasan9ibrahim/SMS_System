@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.35.0
+  version: 0.36.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -16071,11 +16071,21 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        sendNotification:
+          type: boolean
+          default: false
+          description: >-
+            After saving, e-mail a rate notification to each customer using a changed customer table (its rates
+            contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default).
+            Logged in Email logs as send_rate. Vendor tables are never notified.
 
     RateLineChangesSaved:
       type: object
       required: [change, applied, skipped]
       properties:
+        notificationsSent:
+          type: integer
+          description: Rate notification e-mails written (when sendNotification was set).
         change:
           oneOf:
             - $ref: "#/components/schemas/Change"
@@ -16466,6 +16476,13 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        sendNotification:
+          type: boolean
+          default: false
+          description: >-
+            After saving, e-mail a rate notification to each customer using a changed customer table (its rates
+            contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default).
+            Logged in Email logs as send_rate. Vendor tables are never notified.
     RateBulkSaved:
       type: object
       required:
@@ -16474,6 +16491,9 @@ components:
       - skipped
       - tables
       properties:
+        notificationsSent:
+          type: integer
+          description: Rate notification e-mails written (when sendNotification was set).
         change:
           oneOf:
           - $ref: '#/components/schemas/Change'
@@ -29879,48 +29899,11 @@ components:
               allNetworks: { type: boolean }
               tables: { type: integer }
 
-    LookupSideFilters:
-      type: object
-      additionalProperties: false
-      required: [side]
-      properties:
-        side:
-          $ref: "#/components/schemas/LookupSide"
-        categoryIds:
-          type: array
-          maxItems: 500
-          items: { type: integer }
-          description: Empty or missing = every category.
-        trunkIds:
-          type: array
-          maxItems: 5000
-          items: { type: integer }
-          description: Customer trunks (tables linked to them) or vendor trunks. Empty = all.
-        mccs:
-          type: array
-          maxItems: 1000
-          items: { type: string, pattern: "^[0-9]{3}$" }
-          description: Countries by MCC. Empty = all.
-        mccmncs:
-          type: array
-          maxItems: 10000
-          items: { type: string, pattern: "^[0-9]{3,6}$" }
-          description: Destination codes. Empty = all codes of the chosen countries.
-        search:
-          type: string
-          maxLength: 100
-          description: Country, network or code; `%` and `_` wildcards, case-insensitive (§13.25).
-        includeInactive:
-          type: boolean
-          description: Include inactive trunks.
-        asOf:
-          $ref: "#/components/schemas/Timestamp"
-
     LookupSideRequest:
       type: object
       additionalProperties: false
       required: [side]
-      description: The side's filters (as LookupSideFilters) plus paging and sort.
+      description: The side's filters plus paging and sort.
       properties:
         side:
           $ref: "#/components/schemas/LookupSide"
@@ -30015,7 +29998,7 @@ components:
       type: object
       additionalProperties: false
       required: [side, mccmnc]
-      description: The side's filters (as LookupSideFilters) and the destination to expand.
+      description: The side's filters (as in LookupSideRequest) and the destination to expand.
       properties:
         side:
           $ref: "#/components/schemas/LookupSide"

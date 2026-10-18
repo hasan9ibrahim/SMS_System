@@ -512,3 +512,32 @@
   align-items: center;
   gap: 6px;
 }
+
+/* Rating destination tree and Send RN (team trial round 1). */
+.dtree {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dtree-country {
+  gap: 4px;
+}
+.dtree-toggle {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+.dtree-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  min-width: 0;
+}
+.dtree-code {
+  padding-left: 38px;
+}
+.send-rn {
+  margin-right: auto;
+  font-weight: 500;
+}
