@@ -8,8 +8,11 @@ import { FormField, SelectField, TextField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
-import { ask } from "../../ui/feedback";
+import { useMe } from "../../api/hooks";
+import { useRestore } from "../../api/records";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
+import { ask, toast } from "../../ui/feedback";
+import { problemText } from "../routing/dialogs";
 import { Button } from "../../ui/primitives";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
 import { Kv, openTempPassword, PasswordRules, statusCell } from "./parts";
@@ -125,6 +128,13 @@ function PasswordButton({ r }: { r: PortalUserRow }) {
 }
 
 export function CustomerPortalPage() {
+  const setPassword = useSetPortalPassword();
+  const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("portal_user");
+  const deleted = (r: PortalUserRow) => (r.archivedAt ? "Deleted login: restore it first" : undefined);
   return (
     <ListScreen<PortalUserRow>
       list="customer_portal_users"
@@ -132,6 +142,47 @@ export function CustomerPortalPage() {
       noSelection
       historyScope={{ entityTypes: ["portal_user", "portal_user_password"] }}
       primary={{ label: "Add portal user", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: deleted(r),
+          onSelect: () => void openDialog(r),
+        },
+        {
+          label: "Change password…",
+          icon: "key",
+          disabled: !!r.archivedAt,
+          hint: deleted(r) ?? "Temporary password valid 24 hours",
+          onSelect: () =>
+            void openTempPassword(
+              r.username,
+              { username: r.username, firstName: r.firstName, lastName: r.lastName },
+              (input) => setPassword.mutateAsync({ id: r.id, input }),
+            ),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored ${r.username}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("portal_user", r.id, r.username),
+            },
+      ]}
       columns={{
         id: { width: 90 },
         email: { width: 260 },

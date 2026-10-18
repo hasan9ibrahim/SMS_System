@@ -27,18 +27,19 @@ import {
   useVendorComparison,
   useVendorInvoice,
 } from "../../api/invoices";
+import { useMe } from "../../api/hooks";
 import { downloadCsv } from "../../api/masterData";
-import { usePlatformCurrency, useReference } from "../../api/records";
+import { usePlatformCurrency, useReference, useRestore, type RecordKind } from "../../api/records";
 import { FormField, NumberField, Section, SelectField, TextField, useForm } from "../../form/form";
 import { toListQuery } from "../../grid/filterModel";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { PageHeader } from "../../page/PageHeader";
-import { ListLookup } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
-import { Button, Modal, StatusDot } from "../../ui/primitives";
+import { Button, Modal, StatusDot, type MenuItem } from "../../ui/primitives";
 import { fmtWhen, openImport, RecordActions } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
 import { money } from "./financeModel";
@@ -287,6 +288,29 @@ const openEditor = (id: number | null) =>
     id === null ? <VendorInvoiceEditor detail={null} done={done} /> : <EditLoader id={id} done={done} />,
   );
 
+/** Delete, or Restore (admin only) when archived: the record action bar's item, like RecordActions. */
+function useDeleteOrRestore(kind: RecordKind) {
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const del = useDeleteRecord();
+  const restore = useRestore(kind);
+  const notifySaved = useNotifySaved();
+  return (id: number, name: string, archived: boolean): MenuItem =>
+    archived
+      ? {
+          label: "Restore",
+          icon: "undo",
+          disabled: !admin || restore.isPending,
+          ...(admin ? {} : { hint: "Deleted. An administrator can restore it." }),
+          onSelect: () =>
+            restore.mutate(id, {
+              onSuccess: (r) => r.change && notifySaved(r.change, `Restored ${name}`),
+              onError: (e) => toast({ tone: "error", message: problemText(e) }),
+            }),
+        }
+      : { label: "Delete", icon: "trash", danger: true, onSelect: () => void del(kind, id, name) };
+}
+
 // ---------------------------------------------------------------- decisions
 
 type Action = "accept" | "reject" | "keep_pending" | "send_acceptance";
@@ -393,6 +417,17 @@ function DecisionDialog({ inv, action, done }: { inv: VendorInvoiceDetail; actio
       {action === "keep_pending" && (
         <p className="muted small">The invoice stays Disputed and waits; the note is kept for reference (§13.31).</p>
       )}
+    </Modal>
+  );
+}
+
+/** Loads the invoice, then opens the same decision dialog as the result screen (record action bar). */
+function DecideLoader({ id, action, done }: { id: number; action: Action; done: () => void }) {
+  const q = useVendorInvoice(id);
+  if (q.data) return <DecisionDialog inv={q.data} action={action} done={done} />;
+  return (
+    <Modal title={`${ACTION_LABEL[action]}…`} onClose={done} width={360}>
+      <p className={q.isError ? "error-text" : "muted"}>{q.isError ? problemText(q.error) : "Loading…"}</p>
     </Modal>
   );
 }
@@ -697,6 +732,11 @@ function DestinationsView({ row }: { row: VendorInvoiceRow }) {
 
 function InvoicesView() {
   const [selectId, setSelectId] = useState<number | null>(null);
+  const recheck = useRecheckVendorInvoice();
+  const notifySaved = useNotifySaved();
+  const deleteOrRestore = useDeleteOrRestore("vendor_invoice");
+  const decide = (id: number, action: Action) =>
+    void ask<void>((done) => <DecideLoader id={id} action={action} done={() => done()} />);
   const importFile = () =>
     void openImport({
       target: { kind: "vendor_invoices" },
@@ -719,6 +759,71 @@ function InvoicesView() {
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["vendor_invoice"] }}
+      rowActions={(r) => {
+        const live = !r.archivedAt;
+        const gone = live ? {} : { hint: "Deleted" };
+        return [
+          {
+            label: "Accept…",
+            icon: "check",
+            main: true,
+            disabled: !live || r.status === "accepted",
+            ...(r.status === "accepted" ? { hint: "Already accepted" } : gone),
+            onSelect: () => decide(r.id, "accept"),
+          },
+          {
+            label: "Reject…",
+            icon: "x",
+            disabled: !live || r.status === "rejected",
+            ...(r.status === "rejected" ? { hint: "Already rejected" } : gone),
+            onSelect: () => decide(r.id, "reject"),
+          },
+          {
+            label: "Keep pending…",
+            icon: "clock",
+            disabled: !live || r.status === "disputed" || r.status === "rejected",
+            ...(r.status === "disputed" || r.status === "rejected"
+              ? { hint: "Not for a disputed or rejected invoice" }
+              : gone),
+            onSelect: () => decide(r.id, "keep_pending"),
+          },
+          {
+            label: "Send acceptance…",
+            icon: "mail",
+            disabled: !live || r.status !== "accepted" || r.emailStatus === "sent",
+            ...(r.status !== "accepted"
+              ? { hint: "Accept the invoice first" }
+              : r.emailStatus === "sent"
+                ? { hint: "Acceptance already sent" }
+                : gone),
+            onSelect: () => decide(r.id, "send_acceptance"),
+          },
+          {
+            label: "Check again",
+            icon: "refresh",
+            disabled: !live || recheck.isPending,
+            onSelect: () =>
+              recheck.mutate(r.id, {
+                onSuccess: (res) =>
+                  res.change
+                    ? notifySaved(res.change, `Checked: ${comparisonInfo(res.record.comparison).label}`)
+                    : toast({
+                        tone: "info",
+                        message: `Checked again: ${comparisonInfo(res.record.comparison).label}, nothing changed`,
+                      }),
+                onError: (e) => toast({ tone: "error", message: problemText(e) }),
+              }),
+          },
+          { label: "Edit", icon: "file", disabled: !live, onSelect: () => void openEditor(r.id) },
+          {
+            label: "Note…",
+            icon: "plus",
+            disabled: !live,
+            onSelect: () => void ask<void>((done) => <NoteDialog id={r.id} done={() => done()} />),
+          },
+          deleteOrRestore(r.id, `vendor invoice ${r.invoiceNumber}`, !!r.archivedAt),
+        ];
+      }}
       above={
         <ViewSwitch note="Dispute amount = their amount − ours, from our EDRs for the same period and time zone." />
       }
@@ -971,6 +1076,7 @@ function RuleDialog({ row, done }: { row: ReconRuleRow | null; done: () => void 
 
 function RulesView() {
   const open = (row: ReconRuleRow | null) => ask<void>((d) => <RuleDialog row={row} done={() => d()} />);
+  const deleteOrRestore = useDeleteOrRestore("recon_rule");
   return (
     <ListScreen<ReconRuleRow>
       list="recon_rules"
@@ -978,6 +1084,19 @@ function RulesView() {
       title="Reconciliation rules"
       noSelection
       historyScope={{ entityTypes: ["recon_rule"] }}
+      rowActions={(r) => [
+        { label: "Edit", icon: "file", main: true, disabled: !!r.archivedAt, onSelect: () => void open(r) },
+        r.enterpriseId === null
+          ? {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              disabled: true,
+              hint: "The default rule cannot be deleted",
+              onSelect: () => undefined,
+            }
+          : deleteOrRestore(r.id, `${r.enterprise}'s rule`, !!r.archivedAt),
+      ]}
       above={
         <ViewSwitch note="A partner matches when amount and count are within tolerance. Later rule changes do not alter past results." />
       }

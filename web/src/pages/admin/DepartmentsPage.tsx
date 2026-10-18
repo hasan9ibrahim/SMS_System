@@ -8,8 +8,11 @@ import { FormField, SelectField, TextArea, TextField, useForm } from "../../form
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
-import { ask } from "../../ui/feedback";
+import { useMe } from "../../api/hooks";
+import { useRestore } from "../../api/records";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
+import { ask, toast } from "../../ui/feedback";
+import { problemText } from "../routing/dialogs";
 import { useTabNavigate } from "../../shell/tabContext";
 import { Button } from "../../ui/primitives";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
@@ -76,6 +79,15 @@ const openDialog = (row: DepartmentRow | null) => ask<void>((d) => <DepartmentDi
 
 export function DepartmentsPage() {
   const navigate = useTabNavigate();
+  const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("department");
+  const showUsers = (r: DepartmentRow) =>
+    navigate(
+      `/admin/users?g=${encodeState({ ...emptyState(), columns: { department: { field: "department", op: "eq", value: r.name } } })}`,
+    );
   return (
     <ListScreen<DepartmentRow>
       list="departments"
@@ -83,6 +95,36 @@ export function DepartmentsPage() {
       noSelection
       historyScope={{ entityTypes: ["department"] }}
       primary={{ label: "Add department", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted department: restore it first" : undefined,
+          onSelect: () => void openDialog(r),
+        },
+        { label: "Users", icon: "users", onSelect: () => showUsers(r) },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("department", r.id, r.name),
+            },
+      ]}
       columns={{
         id: { width: 90 },
         name: { width: 240, render: (r) => <strong>{r.name}</strong> },
@@ -108,15 +150,7 @@ export function DepartmentsPage() {
             label: "Department",
             actions: (
               <>
-                <Button
-                  small
-                  icon="users"
-                  onClick={() =>
-                    navigate(
-                      `/admin/users?g=${encodeState({ ...emptyState(), columns: { department: { field: "department", op: "eq", value: r.name } } })}`,
-                    )
-                  }
-                >
+                <Button small icon="users" onClick={() => showUsers(r)}>
                   Users
                 </Button>
                 <RecordActions

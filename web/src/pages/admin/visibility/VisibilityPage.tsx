@@ -313,6 +313,7 @@ function PoliciesView() {
       noSelection
       historyScope={{ entityTypes: ["visibility_policy"] }}
       primary={{ label: "New policy", onClick: () => edit(null) }}
+      rowActions={(r) => [{ label: "Edit", icon: "file", main: true, onSelect: () => edit(r.id) }]}
       columns={{
         name: { width: 200, render: (r) => <strong>{r.name}</strong> },
         status: {
@@ -472,6 +473,20 @@ function AssignmentsView() {
       noSelection
       historyScope={null}
       primary={{ label: "Assign policy", onClick: () => void ask<boolean>((done) => <AssignDialog done={done} />) }}
+      rowActions={(r) => [
+        {
+          label: "Remove",
+          icon: "trash",
+          danger: true,
+          disabled: remove.isPending,
+          hint: `Remove ${r.policyName} from ${r.targetName}`,
+          onSelect: () =>
+            remove.mutate(r.id, {
+              onSuccess: () => toast({ tone: "good", message: `Removed ${r.policyName} from ${r.targetName}` }),
+              onError: fail,
+            }),
+        },
+      ]}
       columns={{
         targetType: {
           width: 170,
@@ -625,6 +640,21 @@ function GrantsView() {
       noSelection
       historyScope={null}
       primary={{ label: "Grant access", onClick: () => void ask<boolean>((done) => <GrantDialog done={done} />) }}
+      rowActions={(r) => [
+        {
+          label: "Revoke",
+          icon: "x",
+          danger: true,
+          disabled: r.state !== "active" || revoke.isPending,
+          hint: r.state === "active" ? `Revoke ${r.userName}'s access to ${r.enterpriseName}` : `Already ${r.state}`,
+          onSelect: () =>
+            revoke.mutate(r.id, {
+              onSuccess: () =>
+                toast({ tone: "good", message: `Revoked ${r.userName}'s access to ${r.enterpriseName}` }),
+              onError: fail,
+            }),
+        },
+      ]}
       columns={{
         userName: { width: 180, render: (r) => <strong>{r.userName}</strong> },
         enterpriseName: { width: 220 },

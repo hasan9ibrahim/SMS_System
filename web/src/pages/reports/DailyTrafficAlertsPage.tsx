@@ -4,12 +4,13 @@
 import { useState } from "react";
 import type { DailyTrafficAlertInput, DailyTrafficAlertRow, Enterprise } from "@sms/contract";
 import { useSaveDailyAlert, useSendDailyAlert } from "../../api/masterReports";
-import { useReference } from "../../api/records";
+import { useMe } from "../../api/hooks";
+import { useReference, useRestore } from "../../api/records";
 import { FormField, NumberField, SelectField, TextArea, TextField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
@@ -142,12 +143,49 @@ function SentDialog({
 
 export function DailyTrafficAlertsPage() {
   const send = useSendDailyAlert();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const del = useDeleteRecord();
+  const restore = useRestore("daily_traffic_alert");
+  const notifySaved = useNotifySaved();
   return (
     <ListScreen<DailyTrafficAlertRow>
       list="daily_traffic_alerts"
       page={page}
       noSelection
       historyScope={{ entityTypes: ["daily_traffic_alert"] }}
+      rowActions={(r) => [
+        { label: "Edit", icon: "file", main: true, disabled: !!r.archivedAt, onSelect: () => void openDialog(r) },
+        {
+          label: "Send now",
+          icon: "send",
+          main: true,
+          disabled: send.isPending || !!r.archivedAt,
+          onSelect: () =>
+            send.mutate(r.id, {
+              onSuccess: (mail) => void ask<void>((d) => <SentDialog mail={mail} done={() => d()} />),
+              onError: (e) => toast({ tone: "error", message: problemText(e) }),
+            }),
+        },
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              ...(admin ? {} : { hint: "Deleted. An administrator can restore it." }),
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void del("daily_traffic_alert", r.id, r.name),
+            },
+      ]}
       primary={{ label: "Add", icon: "plus", onClick: () => void openDialog(null) }}
       columns={{
         id: { width: 90 },

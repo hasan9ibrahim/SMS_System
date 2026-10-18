@@ -39,6 +39,22 @@ export function ChangeHistoryPage() {
       page={page}
       title={mine ? "My changes" : "Change history"}
       initialState={mine && me ? { columns: { userId: { field: "userId", op: "eq", value: me.id } } } : {}}
+      rowActions={(c) => [
+        {
+          label: "Undo",
+          icon: "undo",
+          main: true,
+          disabled: !undoable(c),
+          hint: undoable(c)
+            ? "Undo this change"
+            : c.undoneById
+              ? `Already undone by #${c.undoneById}`
+              : c.changeType === "undo"
+                ? "An undo cannot be undone here"
+                : "Only your own changes (or with the undo-others permission)",
+          onSelect: () => void undo(c.id),
+        },
+      ]}
       columns={{
         id: { width: 90, render: (c) => <span className="num">#{c.id}</span> },
         at: { width: 150 },

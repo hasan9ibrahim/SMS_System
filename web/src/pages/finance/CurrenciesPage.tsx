@@ -163,6 +163,14 @@ function CurrenciesView() {
       page={page}
       title="Currency"
       historyScope={{ entityTypes: ["currency"] }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          onSelect: () => void ask<void>((d) => <CurrencyDialog row={r} done={() => d()} />),
+        },
+      ]}
       primary={{
         label: "Add currency",
         icon: "plus",
@@ -264,6 +272,16 @@ function ExchangeView() {
       page={page}
       title="Currency Exchange"
       historyScope={{ entityTypes: ["currency"] }}
+      rowActions={(r) => [
+        {
+          label: "Edit rate…",
+          icon: "file",
+          main: true,
+          disabled: r.iso === "USD",
+          ...(r.iso === "USD" ? { hint: "Rates are per USD; USD is always 1." } : {}),
+          onSelect: () => edit(r),
+        },
+      ]}
       primary={{
         label: sync.isPending ? "Syncing…" : "Sync Rates",
         icon: "refresh",

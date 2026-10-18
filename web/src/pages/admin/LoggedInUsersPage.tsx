@@ -37,12 +37,30 @@ function LogoutButton({ r }: { r: UserSessionRow }) {
 }
 
 export function LoggedInUsersPage() {
+  const end = useEndSession();
+  const forceLogout = (r: UserSessionRow) => {
+    if (!window.confirm(`Sign ${r.displayName} out of this session (${r.ip})?`)) return;
+    end.mutate(r.id, {
+      onSuccess: () => toast({ tone: "good", message: `${r.displayName} was signed out` }),
+      onError: (err) => toast({ tone: "error", message: problemText(err) }),
+    });
+  };
   return (
     <ListScreen<UserSessionRow>
       list="user_sessions"
       page={page}
       noSelection
       historyScope={null}
+      rowActions={(r) => [
+        {
+          label: "Force logout",
+          icon: "logout",
+          main: true,
+          disabled: r.current || end.isPending,
+          hint: r.current ? "This is your own session" : `Sign ${r.displayName} out of this session`,
+          onSelect: () => forceLogout(r),
+        },
+      ]}
       columns={{
         loggedInAt: { width: 170, render: (r) => fmtWhen(r.loggedInAt) },
         displayName: {

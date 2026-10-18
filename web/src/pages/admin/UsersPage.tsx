@@ -14,12 +14,13 @@ import {
   useSaveUser,
   useSetUserPassword,
 } from "../../api/admin";
-import { useReference } from "../../api/records";
+import { useMe } from "../../api/hooks";
+import { useReference, useRestore } from "../../api/records";
 import { CheckField, FormField, SelectField, TextField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
@@ -373,12 +374,90 @@ function SecurityActions({ r }: { r: UserRow }) {
 export function UsersPage() {
   const force = useForcePasswordChange();
   const notifySaved = useNotifySaved();
+  const setPassword = useSetUserPassword();
+  const disable = useDisableTotp();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("user");
+  const deleted = (r: UserRow) => (r.archivedAt ? "Deleted user: restore it first" : undefined);
   return (
     <ListScreen<UserRow>
       list="users"
       page={page}
       historyScope={{ entityTypes: ["user", "user_password", "user_totp"] }}
       primary={{ label: "Add user", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: deleted(r),
+          onSelect: () => void openDialog(r),
+        },
+        {
+          label: "Change password…",
+          icon: "key",
+          disabled: !!r.archivedAt,
+          hint: deleted(r) ?? "Temporary password valid 24 hours",
+          onSelect: () =>
+            void openTempPassword(r.username, { userId: r.id }, (input) =>
+              setPassword.mutateAsync({ id: r.id, input }),
+            ),
+        },
+        {
+          label: "Force change",
+          icon: "lock",
+          disabled: !!r.archivedAt || r.mustChangePassword || force.isPending,
+          hint: deleted(r) ?? (r.mustChangePassword ? "Already has to change it at next login" : undefined),
+          onSelect: () =>
+            force.mutate([r.id], {
+              onSuccess: (x) =>
+                x.change && notifySaved(x.change, `${r.username} must change the password at next login`),
+              onError: (e) => toast({ tone: "error", message: problemText(e) }),
+            }),
+        },
+        r.totpEnabled
+          ? {
+              label: "Disable QR 2FA",
+              icon: "shield",
+              disabled: !!r.archivedAt || disable.isPending,
+              hint: deleted(r),
+              onSelect: () =>
+                window.confirm(`Disable QR 2FA for ${r.username}?`) &&
+                disable.mutate(r.id, {
+                  onSuccess: () => toast({ tone: "warning", message: `2FA disabled for ${r.username}` }),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Enable QR 2FA…",
+              icon: "shield",
+              disabled: !!r.archivedAt,
+              hint: deleted(r),
+              onSelect: () => void ask<void>((d) => <TotpDialog row={r} done={() => d()} />),
+            },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored ${r.username}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("user", r.id, r.username),
+            },
+      ]}
       columns={{
         id: { width: 80 },
         department: { width: 120 },

@@ -94,6 +94,33 @@ export function SoaReportPage() {
       page={page}
       noSelection
       historyScope={null}
+      rowActions={(r) => {
+        const notReady = r.status === "success" ? {} : { hint: "Only a finished (Success) report" };
+        return [
+          {
+            label: "Download",
+            icon: "download",
+            main: true,
+            disabled: r.status !== "success",
+            ...notReady,
+            onSelect: () => download(r.id),
+          },
+          {
+            label: "Send Email…",
+            icon: "mail",
+            main: true,
+            disabled: r.status !== "success",
+            ...notReady,
+            onSelect: () => void ask<void>((d) => <SendDialog row={r} done={() => d()} />),
+          },
+          {
+            label: "SOA screen",
+            icon: "file",
+            hint: "Open the SOA screen for this enterprise",
+            onSelect: () => navigate(`/finance/soa?enterprises=${r.enterpriseId}`),
+          },
+        ];
+      }}
       primary={{ label: "New SOA", icon: "plus", onClick: () => navigate("/finance/soa") }}
       columns={{
         id: { width: 80 },

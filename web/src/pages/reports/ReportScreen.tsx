@@ -607,6 +607,24 @@ export function ReportScreen({
       title={title}
       noSelection
       historyScope={null}
+      rowActions={(r) => [
+        {
+          label: "View EDRs",
+          icon: "search",
+          main: true,
+          disabled: !result,
+          hint: "EDRs behind this row",
+          onSelect: () => result && navigate(edrSearchPath(r.row, groupBy, result.from, result.to)),
+        },
+        ...(groupBy.length >= 5
+          ? []
+          : DIMENSIONS.filter((d) => !groupBy.includes(d)).map((d) => ({
+              label: `Drill by ${labels.get(d) ?? d}`,
+              icon: "filter" as const,
+              hint: "Keep only this row and break it down",
+              onSelect: () => drill(r, d),
+            }))),
+      ]}
       initialState={initial}
       queryScope={scope}
       fetchPage={fetchPage}

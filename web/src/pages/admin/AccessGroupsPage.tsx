@@ -11,6 +11,9 @@ import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { useTabNavigate } from "../../shell/tabContext";
+import { useMe } from "../../api/hooks";
+import { useRestore } from "../../api/records";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { Button, Modal } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
@@ -266,6 +269,25 @@ export function AccessGroupsPage() {
   const clone = useCloneAccessGroup();
   const navigate = useTabNavigate();
   const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("access_group");
+  const cloneGroup = (r: AccessGroupRow) => {
+    const name = window.prompt("Name of the copy", `${r.name} (copy)`);
+    if (name?.trim())
+      clone.mutate(
+        { id: r.id, name: name.trim() },
+        {
+          onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}`),
+          onError: (e) => toast({ tone: "error", message: problemText(e) }),
+        },
+      );
+  };
+  const showUsers = (r: AccessGroupRow) =>
+    navigate(
+      `/admin/users?g=${encodeState({ ...emptyState(), columns: { accessGroup: { field: "accessGroup", op: "eq", value: r.name } } })}`,
+    );
   return (
     <ListScreen<AccessGroupRow>
       list="access_groups"
@@ -273,6 +295,37 @@ export function AccessGroupsPage() {
       noSelection
       historyScope={{ entityTypes: ["access_group"] }}
       primary={{ label: "Add group", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted group: restore it first" : undefined,
+          onSelect: () => void openDialog(r),
+        },
+        { label: "Clone", icon: "copy", disabled: clone.isPending, onSelect: () => cloneGroup(r) },
+        { label: "Users", icon: "users", onSelect: () => showUsers(r) },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("access_group", r.id, r.name),
+            },
+      ]}
       columns={{
         id: { width: 90 },
         name: { width: 220, render: (r) => <strong>{r.name}</strong> },
@@ -303,33 +356,10 @@ export function AccessGroupsPage() {
             label: "Pages and buttons",
             actions: (
               <>
-                <Button
-                  small
-                  icon="copy"
-                  disabled={clone.isPending}
-                  onClick={() => {
-                    const name = window.prompt("Name of the copy", `${r.name} (copy)`);
-                    if (name?.trim())
-                      clone.mutate(
-                        { id: r.id, name: name.trim() },
-                        {
-                          onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}`),
-                          onError: (e) => toast({ tone: "error", message: problemText(e) }),
-                        },
-                      );
-                  }}
-                >
+                <Button small icon="copy" disabled={clone.isPending} onClick={() => cloneGroup(r)}>
                   Clone
                 </Button>
-                <Button
-                  small
-                  icon="users"
-                  onClick={() =>
-                    navigate(
-                      `/admin/users?g=${encodeState({ ...emptyState(), columns: { accessGroup: { field: "accessGroup", op: "eq", value: r.name } } })}`,
-                    )
-                  }
-                >
+                <Button small icon="users" onClick={() => showUsers(r)}>
                   Users
                 </Button>
                 <RecordActions

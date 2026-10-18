@@ -23,7 +23,9 @@ import {
   useSaveBusinessCompany,
   useUploadCompanyFile,
 } from "../../api/admin";
-import { useReference } from "../../api/records";
+import { useMe } from "../../api/hooks";
+import { useReference, useRestore } from "../../api/records";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { FormField, NumberField, SelectField, TextArea, TextField, useForm, type FormApi } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
@@ -459,6 +461,18 @@ function CompanyDialog({ record, done }: { record: BusinessCompanyRecord | null;
 const openDialog = (record: BusinessCompanyRecord | null) =>
   ask<void>((d) => <CompanyDialog record={record} done={() => d()} />);
 
+/** Loads the full record (same query as the detail panel), then shows the editor: Edit from the action bar. */
+function LoadAndEdit({ id, done }: { id: number; done: () => void }) {
+  const rec = useBusinessCompany(id);
+  if (rec.data) return <CompanyDialog record={rec.data} done={done} />;
+  return (
+    <Modal title="Edit business company" width={420} onClose={done}>
+      <p className={rec.error ? "error-text" : "muted"}>{rec.error ? problemText(rec.error) : "Loading…"}</p>
+    </Modal>
+  );
+}
+const editById = (id: number) => ask<void>((d) => <LoadAndEdit id={id} done={() => d()} />);
+
 function CompanyDetail({ r, part }: { r: BusinessCompanyRow; part: "info" | "mailboxes" | "files" }) {
   const rec = useBusinessCompany(r.id);
   const d = rec.data;
@@ -529,6 +543,23 @@ function CompanyDetail({ r, part }: { r: BusinessCompanyRow; part: "info" | "mai
   );
 }
 
+/** Asks for the copy's name and clones the company (secrets are not copied). */
+function cloneCompany(
+  clone: ReturnType<typeof useCloneBusinessCompany>,
+  notifySaved: ReturnType<typeof useNotifySaved>,
+  r: BusinessCompanyRow,
+) {
+  const name = window.prompt("Name of the copy", `${r.name} (copy)`);
+  if (name?.trim())
+    clone.mutate(
+      { id: r.id, name: name.trim() },
+      {
+        onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}; enter its mailbox secrets`),
+        onError: (e) => toast({ tone: "error", message: problemText(e) }),
+      },
+    );
+}
+
 function CompanyActions({ r }: { r: BusinessCompanyRow }) {
   const rec = useBusinessCompany(r.archivedAt ? null : r.id);
   const clone = useCloneBusinessCompany();
@@ -536,23 +567,7 @@ function CompanyActions({ r }: { r: BusinessCompanyRow }) {
   return (
     <>
       {!r.archivedAt && (
-        <Button
-          small
-          icon="copy"
-          disabled={clone.isPending}
-          onClick={() => {
-            const name = window.prompt("Name of the copy", `${r.name} (copy)`);
-            if (name?.trim())
-              clone.mutate(
-                { id: r.id, name: name.trim() },
-                {
-                  onSuccess: (x) =>
-                    x.change && notifySaved(x.change, `Cloned as ${x.record.name}; enter its mailbox secrets`),
-                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
-                },
-              );
-          }}
-        >
+        <Button small icon="copy" disabled={clone.isPending} onClick={() => cloneCompany(clone, notifySaved, r)}>
           Clone
         </Button>
       )}
@@ -568,6 +583,12 @@ function CompanyActions({ r }: { r: BusinessCompanyRow }) {
 }
 
 export function BusinessCompaniesPage() {
+  const clone = useCloneBusinessCompany();
+  const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("business_company");
   return (
     <ListScreen<BusinessCompanyRow>
       list="business_companies"
@@ -575,6 +596,42 @@ export function BusinessCompaniesPage() {
       noSelection
       historyScope={{ entityTypes: ["business_company", "business_company_file"] }}
       primary={{ label: "Add company", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: r.archivedAt ? "Deleted company: restore it first" : undefined,
+          onSelect: () => void editById(r.id),
+        },
+        {
+          label: "Clone",
+          icon: "copy",
+          disabled: !!r.archivedAt || clone.isPending,
+          hint: r.archivedAt ? "Deleted company: restore it first" : "Copies everything except secrets",
+          onSelect: () => cloneCompany(clone, notifySaved, r),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("business_company", r.id, r.name),
+            },
+      ]}
       columns={{
         id: { width: 90 },
         name: { width: 240, render: (r) => <strong>{r.name}</strong> },

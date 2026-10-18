@@ -11,7 +11,9 @@ import {
   useSaveEmailTemplate,
   useTemplatePreview,
 } from "../../api/admin";
-import { useReference } from "../../api/records";
+import { useMe } from "../../api/hooks";
+import { useReference, useRestore } from "../../api/records";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { SelectField, TextField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
@@ -175,6 +177,35 @@ function TemplateDialog({ record, done }: { record: EmailTemplateRecord | null; 
 const openDialog = (record: EmailTemplateRecord | null) =>
   ask<void>((d) => <TemplateDialog record={record} done={() => d()} />);
 
+/** Loads the full template (same query as the detail panel), then shows the editor: Edit from the action bar. */
+function LoadAndEdit({ id, done }: { id: number; done: () => void }) {
+  const rec = useEmailTemplate(id);
+  if (rec.data) return <TemplateDialog record={rec.data} done={done} />;
+  return (
+    <Modal title="Edit e-mail template" width={420} onClose={done}>
+      <p className={rec.error ? "error-text" : "muted"}>{rec.error ? problemText(rec.error) : "Loading…"}</p>
+    </Modal>
+  );
+}
+const editById = (id: number) => ask<void>((d) => <LoadAndEdit id={id} done={() => d()} />);
+
+/** Asks for the copy's name and clones the template. */
+function cloneTemplate(
+  clone: ReturnType<typeof useCloneEmailTemplate>,
+  notifySaved: ReturnType<typeof useNotifySaved>,
+  r: EmailTemplateRow,
+) {
+  const name = window.prompt("Name of the copy", `${r.name} (copy)`);
+  if (name?.trim())
+    clone.mutate(
+      { id: r.id, name: name.trim() },
+      {
+        onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}`),
+        onError: (e) => toast({ tone: "error", message: problemText(e) }),
+      },
+    );
+}
+
 function TemplateDetail({ r }: { r: EmailTemplateRow }) {
   const rec = useEmailTemplate(r.id);
   const preview = useTemplatePreview(
@@ -198,22 +229,7 @@ function TemplateActions({ r }: { r: EmailTemplateRow }) {
   return (
     <>
       {!r.archivedAt && (
-        <Button
-          small
-          icon="copy"
-          disabled={clone.isPending}
-          onClick={() => {
-            const name = window.prompt("Name of the copy", `${r.name} (copy)`);
-            if (name?.trim())
-              clone.mutate(
-                { id: r.id, name: name.trim() },
-                {
-                  onSuccess: (x) => x.change && notifySaved(x.change, `Cloned as ${x.record.name}`),
-                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
-                },
-              );
-          }}
-        >
+        <Button small icon="copy" disabled={clone.isPending} onClick={() => cloneTemplate(clone, notifySaved, r)}>
           Clone
         </Button>
       )}
@@ -229,6 +245,13 @@ function TemplateActions({ r }: { r: EmailTemplateRow }) {
 }
 
 export function EmailTemplatesPage() {
+  const clone = useCloneEmailTemplate();
+  const notifySaved = useNotifySaved();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const deleteOne = useDeleteRecord();
+  const restore = useRestore("email_template");
+  const deleted = (r: EmailTemplateRow) => (r.archivedAt ? "Deleted template: restore it first" : undefined);
   return (
     <ListScreen<EmailTemplateRow>
       list="email_templates"
@@ -236,6 +259,42 @@ export function EmailTemplatesPage() {
       noSelection
       historyScope={{ entityTypes: ["email_template"] }}
       primary={{ label: "Add template", icon: "plus", onClick: () => void openDialog(null) }}
+      rowActions={(r) => [
+        {
+          label: "Edit",
+          icon: "file",
+          main: true,
+          disabled: !!r.archivedAt,
+          hint: deleted(r),
+          onSelect: () => void editById(r.id),
+        },
+        {
+          label: "Clone",
+          icon: "copy",
+          disabled: !!r.archivedAt || clone.isPending,
+          hint: deleted(r),
+          onSelect: () => cloneTemplate(clone, notifySaved, r),
+        },
+        "separator",
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              hint: admin ? undefined : "Deleted. An administrator can restore it.",
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (x) => x.change && notifySaved(x.change, `Restored ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete…",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void deleteOne("email_template", r.id, r.name),
+            },
+      ]}
       columns={{
         id: { width: 90 },
         name: { width: 280, render: (r) => <strong>{r.name}</strong> },

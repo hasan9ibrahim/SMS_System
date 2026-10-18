@@ -21,14 +21,15 @@ import {
   useSendConfirmation,
   useTransaction,
 } from "../../api/finance";
+import { useMe } from "../../api/hooks";
 import { downloadCsv } from "../../api/masterData";
-import { useReference } from "../../api/records";
+import { useReference, useRestore } from "../../api/records";
 import { FormField, NumberField, Section, SelectField, TextField, useForm } from "../../form/form";
 import { toListQuery } from "../../grid/filterModel";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ListLookup } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../ui/primitives";
 import { fmtWhen, RecordActions } from "../reference/shared";
@@ -468,6 +469,11 @@ export function TransactionsPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
   const bulk = useBulkTransactions();
   const notifySaved = useNotifySaved();
+  const send = useSendConfirmation();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const del = useDeleteRecord();
+  const restore = useRestore("transaction");
   const runBulk = async (
     ids: number[],
     action: "include_in_soa" | "exclude_from_soa" | "send_confirmation",
@@ -496,6 +502,60 @@ export function TransactionsPage() {
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["transaction"] }}
+      rowActions={(r) => {
+        const live = !r.archivedAt;
+        return [
+          { label: "Edit", icon: "file", main: true, disabled: !live, onSelect: () => void openEditor(r.id) },
+          {
+            label: r.confirmationStatus === "sent" ? "Re-send confirmation" : "Send confirmation",
+            icon: "mail",
+            disabled: !live || send.isPending,
+            onSelect: () =>
+              send.mutate(r.id, {
+                onSuccess: (res) =>
+                  res.change &&
+                  notifySaved(
+                    res.change,
+                    res.record.confirmationStatus === "sent"
+                      ? "Confirmation sent"
+                      : "Confirmation failed: no billing contact",
+                  ),
+                onError: (e) => toast({ tone: "error", message: problemText(e) }),
+              }),
+          },
+          r.includeInSoa
+            ? {
+                label: "Exclude from SOA…",
+                icon: "x",
+                disabled: !live,
+                onSelect: () => void runBulk([r.id], "exclude_from_soa", () => undefined),
+              }
+            : {
+                label: "Include in SOA",
+                icon: "check",
+                disabled: !live,
+                onSelect: () => void runBulk([r.id], "include_in_soa", () => undefined),
+              },
+          live
+            ? {
+                label: "Delete",
+                icon: "trash",
+                danger: true,
+                onSelect: () => void del("transaction", r.id, `TX-${r.id}`),
+              }
+            : {
+                label: "Restore",
+                icon: "undo",
+                disabled: !admin || restore.isPending,
+                ...(admin ? {} : { hint: "Deleted. An administrator can restore it." }),
+                onSelect: () =>
+                  restore.mutate(r.id, {
+                    onSuccess: (res) => res.change && notifySaved(res.change, `Restored TX-${r.id}`),
+                    onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                  }),
+              },
+        ];
+      }}
       primary={{
         label: "Add transaction",
         icon: "plus",

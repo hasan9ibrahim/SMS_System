@@ -29,6 +29,16 @@ export function BalancesPage() {
       page={page}
       noSelection
       historyScope={null}
+      rowActions={(r) => [
+        { label: "Send SOA", icon: "mail", main: true, onSelect: () => navigate(soaLink([r.id])) },
+        { label: "Billing settings", icon: "file", onSelect: () => navigate(`/enterprises/${r.id}?tab=billing`) },
+        {
+          label: "Transactions",
+          icon: "wallet",
+          hint: "Filter Name on the Transactions page for this enterprise",
+          onSelect: () => navigate(`/finance/transactions`),
+        },
+      ]}
       above={
         <div className="rm-trunk">
           <span className="muted small">

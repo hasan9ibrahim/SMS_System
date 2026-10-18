@@ -53,6 +53,10 @@ export function BillingReportPage() {
       title="Billing report"
       noSelection
       historyScope={null}
+      rowActions={(r) => [
+        { label: "SOA", icon: "mail", main: true, onSelect: () => navigate(`/finance/soa?enterprises=${r.id}`) },
+        { label: "Billing settings", icon: "file", onSelect: () => navigate(`/enterprises/${r.id}?tab=billing`) },
+      ]}
       queryScope={params}
       enabled={ready}
       idleMessage="Choose the From and To dates of the custom period."

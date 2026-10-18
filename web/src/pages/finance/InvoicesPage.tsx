@@ -17,13 +17,15 @@ import {
   useUpdateInvoice,
   waitForRequests,
 } from "../../api/invoices";
+import { useMe } from "../../api/hooks";
 import { downloadCsv } from "../../api/masterData";
-import { useReference, useRefreshRecords } from "../../api/records";
+import { useReference, useRefreshRecords, useRestore } from "../../api/records";
 import { FormField, NumberField, Section, SelectField, TextField, useForm } from "../../form/form";
 import { toListQuery } from "../../grid/filterModel";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
@@ -639,7 +641,23 @@ function InvoiceDetailView({ row, onRegenerate }: { row: InvoiceRow; onRegenerat
   );
 }
 
+/** Loads the invoice, then opens the same Edit dialog as the detail panel (record action bar). */
+function EditInvoice({ id, done }: { id: number; done: () => void }) {
+  const q = useInvoice(id);
+  if (q.data) return <EditDialog inv={q.data} done={done} />;
+  return (
+    <Modal title="Edit invoice" width={440} onClose={done}>
+      <p className="muted">{q.isError ? problemText(q.error) : "Loading…"}</p>
+    </Modal>
+  );
+}
+
 function InvoicesView({ onGenerate }: { onGenerate: () => void }) {
+  const navigate = useTabNavigate();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const del = useDeleteRecord();
+  const restore = useRestore("invoice");
   const send = useSendInvoices();
   const mark = useMarkInvoices();
   const regenerate = useRegenerateInvoice();
@@ -689,6 +707,64 @@ function InvoicesView({ onGenerate }: { onGenerate: () => void }) {
       list="invoices"
       page={page}
       historyScope={{ entityTypes: ["invoice"] }}
+      rowActions={(r) => {
+        const live = !r.archivedAt;
+        const done = r.status === "completed";
+        const busy = r.status === "pending" || r.status === "inprogress";
+        const notDone = done ? {} : { hint: "The invoice is not completed yet" };
+        return [
+          {
+            label: r.emailStatus === "sent" ? "Send again" : "Send Invoice",
+            icon: "mail",
+            main: true,
+            disabled: !live || !done || send.isPending,
+            ...notDone,
+            onSelect: () => sendMany([r.id], () => undefined),
+          },
+          {
+            label: "Edit",
+            icon: "file",
+            disabled: !live,
+            onSelect: () => void ask<void>((d) => <EditInvoice id={r.id} done={() => d()} />),
+          },
+          { label: "PDF", icon: "download", disabled: !done, ...notDone, onSelect: () => pdf(r.id) },
+          { label: "Charge Details", icon: "list", onSelect: () => void openCharges(r) },
+          { label: "Mark…", icon: "check", disabled: !live, onSelect: () => void markMany([r.id], () => undefined) },
+          {
+            label: "Regenerate",
+            icon: "refresh",
+            disabled: !live || busy,
+            hint: busy
+              ? "A request is still running"
+              : "Compute usage and balances again (blocked while payments are linked)",
+            onSelect: () => doRegenerate(r.id),
+          },
+          {
+            label: "Send SOA",
+            icon: "mail",
+            hint: "Open the SOA screen for this enterprise",
+            onSelect: () => navigate(soaLink([r.enterpriseId])),
+          },
+          live
+            ? {
+                label: "Delete",
+                icon: "trash",
+                danger: true,
+                onSelect: () => void del("invoice", r.id, `invoice ${r.invoiceNumber}`),
+              }
+            : {
+                label: "Restore",
+                icon: "undo",
+                disabled: !admin || restore.isPending,
+                ...(admin ? {} : { hint: "Deleted. An administrator can restore it." }),
+                onSelect: () =>
+                  restore.mutate(r.id, {
+                    onSuccess: (res) => res.change && notifySaved(res.change, `Restored invoice ${r.invoiceNumber}`),
+                    onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                  }),
+              },
+        ];
+      }}
       above={<ViewSwitch />}
       primary={{ label: "Generate Request", icon: "play", onClick: onGenerate }}
       onExport={(s) =>

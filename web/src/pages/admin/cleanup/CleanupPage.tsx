@@ -313,8 +313,13 @@ export function CleanupPage() {
   const scan = useScanCleanup();
   const apply = useApplyCleanup();
   const ignore = useIgnoreFinding();
+  const approve = useApproveCleanup();
+  const reopen = useReopenFinding();
+  const { data: me } = useMe();
+  const admin = !!me?.permissions.includes("*");
   const done = (r: Parameters<typeof resultText>[0]) =>
     toast({ tone: r.applied || r.awaitingApproval ? "good" : "warning", message: resultText(r) });
+  const notOpen = (r: CleanupFinding) => (r.state === "open" ? undefined : `${STATE[r.state].label}: nothing to apply`);
   return (
     <ListScreen<CleanupFinding>
       list="cleanup_findings"
@@ -345,6 +350,50 @@ export function CleanupPage() {
           </Button>
         </>
       }
+      rowActions={(r) => [
+        // One item per action the finding offers; the suggested one is the main action (§13.19).
+        ...r.actions
+          .filter((a) => a !== "review")
+          .map((a) => ({
+            label: `Apply: ${ACTION_LABEL[a]}`,
+            icon: "check" as const,
+            main: a === r.suggestion,
+            disabled: r.state !== "open" || apply.isPending,
+            hint: notOpen(r) ?? (a === r.suggestion ? "The suggested action" : undefined),
+            onSelect: () => apply.mutate({ findingIds: [r.id], action: a }, { onSuccess: done, onError: fail }),
+          })),
+        {
+          label: "Approve",
+          icon: "check",
+          main: r.state === "awaiting_approval",
+          disabled: r.state !== "awaiting_approval" || !admin || approve.isPending,
+          hint:
+            r.state !== "awaiting_approval"
+              ? "Only a finding awaiting approval"
+              : admin
+                ? undefined
+                : "An administrator approves cleanups",
+          onSelect: () => approve.mutate({ findingIds: [r.id] }, { onSuccess: done, onError: fail }),
+        },
+        "separator",
+        {
+          label: "Ignore…",
+          icon: "eye",
+          disabled: r.state !== "open",
+          hint: notOpen(r),
+          onSelect: () =>
+            void ask<string | null>((close) => <IgnoreDialog done={close} />).then(
+              (reason) => reason && ignore.mutate({ id: r.id, reason }, { onError: fail }),
+            ),
+        },
+        {
+          label: "Reopen",
+          icon: "refresh",
+          disabled: r.state !== "ignored",
+          hint: r.state === "ignored" ? undefined : "Only an ignored finding",
+          onSelect: () => reopen.mutate(r.id, { onError: fail }),
+        },
+      ]}
       columns={{
         kind: { width: 210, render: (r) => r.kindLabel },
         title: { width: 420, render: (r) => <span title={r.why}>{r.title}</span> },

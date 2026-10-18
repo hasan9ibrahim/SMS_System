@@ -4,9 +4,9 @@
 // Run now e-mails it at once (Email Logs). Saves are undoable (§13.10); delete archives (§13.29).
 import { useEffect, useState } from "react";
 import type { CronPreview, ScheduledReportInput, ScheduledReportRow } from "@sms/contract";
-import { useViews } from "../../api/hooks";
+import { useMe, useViews } from "../../api/hooks";
 import { previewCron, useReportPresets, useRunScheduledReport, useSaveScheduledReport } from "../../api/masterReports";
-import { useReference } from "../../api/records";
+import { useReference, useRestore } from "../../api/records";
 import { FormField, SelectField, TextArea, TextField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
@@ -16,7 +16,7 @@ import { Button, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
 import { parseEmails } from "../switch/tools/toolsModel";
-import { ListLookup } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 
 const page = pageForPath("/reports/scheduled")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -273,6 +273,11 @@ const openDialog = (row: ScheduledReportRow | null) => ask<void>((d) => <Schedul
 
 export function ScheduledReportsPage() {
   const runNow = useRunScheduledReport();
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const del = useDeleteRecord();
+  const restore = useRestore("scheduled_report");
+  const notifySaved = useNotifySaved();
   const run = (r: ScheduledReportRow) =>
     runNow.mutate(r.id, {
       onSuccess: (x) =>
@@ -291,6 +296,34 @@ export function ScheduledReportsPage() {
       page={page}
       noSelection
       historyScope={{ entityTypes: ["scheduled_report"] }}
+      rowActions={(r) => [
+        { label: "Edit", icon: "file", main: true, disabled: !!r.archivedAt, onSelect: () => void openDialog(r) },
+        {
+          label: "Run now",
+          icon: "send",
+          main: true,
+          disabled: runNow.isPending || !!r.archivedAt,
+          onSelect: () => run(r),
+        },
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              ...(admin ? {} : { hint: "Deleted. An administrator can restore it." }),
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored scheduled report ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void del("scheduled_report", r.id, `Scheduled report ${r.name}`),
+            },
+      ]}
       primary={{ label: "Add", icon: "plus", onClick: () => void openDialog(null) }}
       columns={{
         id: { width: 90 },

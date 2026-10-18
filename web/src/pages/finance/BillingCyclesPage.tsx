@@ -2,13 +2,17 @@
 // and due days. Delete is blocked while enterprises are billed on a cycle (§13.29); every save
 // is one undoable change (§13.10).
 import { useState } from "react";
+import { useMe } from "../../api/hooks";
+import { useRestore } from "../../api/records";
 import type { BillingCycleInput, BillingCycleRow } from "@sms/contract";
 import { useSaveBillingCycle } from "../../api/finance";
 import { NumberField, SelectField, TextField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { ask } from "../../ui/feedback";
+import { isAdminUser, useDeleteRecord } from "../../records/parts";
+import { ask, toast } from "../../ui/feedback";
+import { problemText } from "../routing/dialogs";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
 
 const page = pageForPath("/finance/billing-cycles")!;
@@ -125,11 +129,37 @@ function CycleDialog({ row, done }: { row: BillingCycleRow | null; done: () => v
 
 export function BillingCyclesPage() {
   const open = (row: BillingCycleRow | null) => ask<void>((d) => <CycleDialog row={row} done={() => d()} />);
+  const { data: me } = useMe();
+  const admin = isAdminUser(me?.permissions);
+  const del = useDeleteRecord();
+  const restore = useRestore("billing_cycle");
+  const notifySaved = useNotifySaved();
   return (
     <ListScreen<BillingCycleRow>
       list="billing_cycles"
       page={page}
       historyScope={{ entityTypes: ["billing_cycle"] }}
+      rowActions={(r) => [
+        { label: "Edit", icon: "file", main: true, disabled: !!r.archivedAt, onSelect: () => void open(r) },
+        r.archivedAt
+          ? {
+              label: "Restore",
+              icon: "undo",
+              disabled: !admin || restore.isPending,
+              ...(admin ? {} : { hint: "Deleted. An administrator can restore it." }),
+              onSelect: () =>
+                restore.mutate(r.id, {
+                  onSuccess: (res) => res.change && notifySaved(res.change, `Restored billing cycle ${r.name}`),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                }),
+            }
+          : {
+              label: "Delete",
+              icon: "trash",
+              danger: true,
+              onSelect: () => void del("billing_cycle", r.id, `billing cycle ${r.name}`),
+            },
+      ]}
       primary={{ label: "Add cycle", icon: "plus", onClick: () => void open(null) }}
       columns={{
         id: { width: 90 },

@@ -20,6 +20,16 @@ export function AuditTrailPage() {
       page={page}
       noSelection
       historyScope={null}
+      rowActions={(r) => [
+        {
+          label: "Change history",
+          icon: "history",
+          main: true,
+          disabled: !r.userId,
+          hint: r.userId ? "Field-level before / after values (§13.10)" : "System entry: no user change",
+          onSelect: () => navigate("/admin/changes"),
+        },
+      ]}
       columns={{
         id: { width: 100, render: (r) => <span className="num">{r.id}</span> },
         ip: { width: 140, render: (r) => (r.ip ? <span className="mono">{r.ip}</span> : muted("—")) },
