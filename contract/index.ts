@@ -293,6 +293,7 @@ export type RouteCheck = Schemas["RouteCheck"];
 export type RouteCandidate = Schemas["RouteCandidate"];
 export type RouteDecision = Schemas["RouteDecision"];
 export type RouteSimulation = Schemas["RouteSimulation"];
+export type EgressSkip = Schemas["EgressSkip"];
 export type LookupDestination = Schemas["LookupDestination"];
 export type LookupResolution = Schemas["LookupResolution"];
 export type CurrencyMode = Schemas["CurrencyMode"];

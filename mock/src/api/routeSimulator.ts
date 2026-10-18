@@ -9,6 +9,7 @@ import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import { withDb } from "../db.js";
 import { messageEncoding } from "../smpp.js";
 import { listIdsOf, loadRulesInOrder, messageContext, routeThrough, vendorOptions } from "./routeRules.js";
+import { skipEgressBlocked } from "./egress.js";
 import { badInput } from "./switchTools.js";
 import { runTrunkRules } from "./translationRules.js";
 
@@ -56,27 +57,24 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       listIdsOf(rules),
     );
     const options = await vendorOptions(pool, m.mccmnc, null);
-    let route = routeThrough(rules, m, options);
     // A vendor whose own egress rules block the message is skipped and the next vendor tried
     // (decided 2026-10-18); a block on the customer trunk rejects the message before routing.
-    const egressSkipped: RouteSimulatorResult["egressSkipped"] = [];
-    if (!translation.blocked && !b.vendorTrunkId) {
-      const skip = new Set<number>();
-      for (let i = 0; i < 10 && route.decision?.vendor; i++) {
-        const v = route.decision.vendor;
-        const res = await runTrunkRules(pool, "vendor", v.vendorTrunkId, {
-          sender,
-          receiver,
-          text: translation.after.text,
-          senderTon: translation.after.senderTon,
-          senderNpi: translation.after.senderNpi,
-        });
-        if (!res?.blocked) break;
-        skip.add(v.vendorTrunkId);
-        egressSkipped.push({ vendorTrunkId: v.vendorTrunkId, vendorTrunk: v.name, result: res });
-        route = routeThrough(rules, { ...m, egressBlocked: skip }, options);
-      }
-    }
+    const { result: route, skipped: egressSkipped } =
+      !translation.blocked && !b.vendorTrunkId
+        ? await skipEgressBlocked(
+            pool,
+            m,
+            {
+              sender,
+              receiver,
+              text: translation.after.text,
+              senderTon: translation.after.senderTon,
+              senderNpi: translation.after.senderNpi,
+            },
+            (mm) => routeThrough(rules, mm, options),
+            (r) => r.decision?.vendor,
+          )
+        : { result: routeThrough(rules, m, options), skipped: [] };
 
     let customerRate: RouteSimulatorResult["customerRate"] = null;
     if (m.mccmnc) {
@@ -192,7 +190,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       destination: m.destination,
       encoding: messageEncoding(translation.after.text, b.dataCoding),
       customerRate,
-      route,
+      route: { ...route, egressSkipped },
       vendorCost,
       marginPct,
       blocked,

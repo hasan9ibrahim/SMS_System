@@ -42,6 +42,7 @@ import {
 } from "./records.js";
 import { qbrDlrByCode } from "./qbr.js";
 import { ruleTraffic } from "./routeTraffic.js";
+import { skipEgressBlocked } from "./egress.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 
@@ -1037,11 +1038,17 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
       ? null
       : [...rule.vendors.map((v) => v.vendorTrunkId), ...rule.whitelists.map((w) => w.vendorTrunkId)];
     const profiles = rule.lcrProfileId ? await loadLcrProfiles(pool) : null;
-    return decide(
-      { ...rule, lcrProfile: profiles?.get(rule.lcrProfileId!) ?? null },
+    const options = await vendorOptions(pool, m.mccmnc, ids);
+    const withProfile = { ...rule, lcrProfile: profiles?.get(rule.lcrProfileId!) ?? null };
+    // A vendor whose own egress rules block the message is skipped for the next one (decided 2026-10-18).
+    const { result, skipped } = await skipEgressBlocked(
+      pool,
       m,
-      await vendorOptions(pool, m.mccmnc, ids),
+      testMessage(input),
+      (mm) => decide(withProfile, mm, options),
+      (d) => d.vendor,
     );
+    return { ...result, egressSkipped: skipped };
   });
 }
 
@@ -1114,6 +1121,21 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
     if (errors.length) return badInput(reply, errors);
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(pool, input, listIdsOf(rules));
-    return routeThrough(rules, m, await vendorOptions(pool, m.mccmnc, null));
+    const options = await vendorOptions(pool, m.mccmnc, null);
+    const { result, skipped } = await skipEgressBlocked(
+      pool,
+      m,
+      testMessage(input),
+      (mm) => routeThrough(rules, mm, options),
+      (r) => r.decision?.vendor,
+    );
+    return { ...result, egressSkipped: skipped };
   });
 }
+
+/** The message a vendor's egress rules see in a Test or Simulate (no TON / NPI in that form). */
+const testMessage = (input: RouteTestRequest) => ({
+  sender: input.sender ?? "",
+  receiver: input.receiver ?? "",
+  text: input.content ?? "",
+});

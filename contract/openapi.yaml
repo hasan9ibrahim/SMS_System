@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.62.0
+  version: 0.63.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23403,16 +23403,7 @@ components:
             and the next vendor tried (decided 2026-10-18). Empty when none was skipped or a vendor was tested directly.
           type: array
           items:
-            type: object
-            additionalProperties: false
-            required: [vendorTrunkId, vendorTrunk, result]
-            properties:
-              vendorTrunkId:
-                $ref: "#/components/schemas/Id"
-              vendorTrunk:
-                type: string
-              result:
-                $ref: "#/components/schemas/TrunkRulesTestResult"
+            $ref: "#/components/schemas/EgressSkip"
         vendorTranslation:
           description: >-
             Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as
@@ -29808,11 +29799,38 @@ components:
         sellRate:
           type: [number, "null"]
           description: Customer rate for the message in the platform currency, when a customer trunk is given.
+        egressSkipped:
+          description: >-
+            Rule Test only: vendors skipped because their own vendor translation rules block the message
+            (§6.4); the decision is the vendor tried after them.
+          type: array
+          items:
+            $ref: "#/components/schemas/EgressSkip"
+
+    EgressSkip:
+      type: object
+      additionalProperties: false
+      description: >-
+        A vendor routing picked whose own egress translation rules block the message; it is skipped and the
+        next vendor tried (§6.4, decided 2026-10-18).
+      required: [vendorTrunkId, vendorTrunk, result]
+      properties:
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        vendorTrunk:
+          type: string
+        result:
+          $ref: "#/components/schemas/TrunkRulesTestResult"
 
     RouteSimulation:
       type: object
-      required: [tried, decision]
+      required: [tried, decision, egressSkipped]
       properties:
+        egressSkipped:
+          description: Vendors skipped because their own vendor translation rules block the message.
+          type: array
+          items:
+            $ref: "#/components/schemas/EgressSkip"
         tried:
           type: array
           description: Rules tried in priority order, up to the deciding one (at most 100 listed).

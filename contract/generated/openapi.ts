@@ -14090,11 +14090,7 @@ export type components = {
     };
     RouteSimulatorResult: {
       /** @description Vendors routing picked first whose own egress translation rules block the message; each is skipped and the next vendor tried (decided 2026-10-18). Empty when none was skipped or a vendor was tested directly. */
-      egressSkipped: {
-        vendorTrunkId: components["schemas"]["Id"];
-        vendorTrunk: string;
-        result: components["schemas"]["TrunkRulesTestResult"];
-      }[];
+      egressSkipped: components["schemas"]["EgressSkip"][];
       /** @description Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as ingress translation left it, after routing; shows what the vendor would receive. Null when no vendor is chosen (blocked, no route). A vendor whose rules block the message is skipped (egressSkipped). */
       vendorTranslation: {
         vendorTrunkId: components["schemas"]["Id"];
@@ -16715,8 +16711,18 @@ export type components = {
       destination: string | null;
       /** @description Customer rate for the message in the platform currency, when a customer trunk is given. */
       sellRate: number | null;
+      /** @description Rule Test only: vendors skipped because their own vendor translation rules block the message (§6.4); the decision is the vendor tried after them. */
+      egressSkipped?: components["schemas"]["EgressSkip"][];
+    };
+    /** @description A vendor routing picked whose own egress translation rules block the message; it is skipped and the next vendor tried (§6.4, decided 2026-10-18). */
+    EgressSkip: {
+      vendorTrunkId: components["schemas"]["Id"];
+      vendorTrunk: string;
+      result: components["schemas"]["TrunkRulesTestResult"];
     };
     RouteSimulation: {
+      /** @description Vendors skipped because their own vendor translation rules block the message. */
+      egressSkipped: components["schemas"]["EgressSkip"][];
       /** @description Rules tried in priority order, up to the deciding one (at most 100 listed). */
       tried: {
         ruleId: components["schemas"]["Id"];

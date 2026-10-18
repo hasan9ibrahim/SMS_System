@@ -328,7 +328,8 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     const busiest = await query({ sort: [{ field: "messages", dir: "desc" }], limit: 1 });
     const t = await ok("getRouteRuleTraffic", call("GET", `/route-rules/${busiest.rows[0].id}/traffic?window=24h`));
     if (!t.available) return;
-    assert.equal(t.total.messages, busiest.rows[0].messages);
+    // A running mock server writes live EDRs between the two reads (team trial round 1), so allow a few.
+    assert.ok(Math.abs(t.total.messages - busiest.rows[0].messages) <= Math.max(5, busiest.rows[0].messages * 0.01));
     const sum = t.byCustomer.reduce((a: number, r: { messages: number }) => a + r.messages, 0);
     assert.ok(sum <= t.total.messages);
     assert.ok(t.series.length > 0);

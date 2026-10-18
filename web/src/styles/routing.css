@@ -1324,3 +1324,8 @@ textarea.mono {
   color: var(--color-text-secondary);
   font-size: 12px;
 }
+
+/* Vendors skipped on an egress block (§6.4, decided 2026-10-18). */
+.egress-skipped {
+  margin-top: 8px;
+}

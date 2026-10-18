@@ -1,7 +1,7 @@
 // Rule Test (§15.4) and the Route Simulator dialog (§6.3): run a sample number through
 // one rule, or through all rules in priority order, and show the decision step by step.
 import { useState } from "react";
-import type { RouteDecision, RouteSimulation, RouteTestRequest, TrunkListRow } from "@sms/contract";
+import type { EgressSkip, RouteDecision, RouteSimulation, RouteTestRequest, TrunkListRow } from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { simulateRoute, testRouteRule } from "../../api/routing";
 import { ListLookup } from "../../records/parts";
@@ -151,7 +151,7 @@ function TestForm({
   );
 }
 
-function DecisionView({ d }: { d: RouteDecision }) {
+function DecisionView({ d, skipped = [] }: { d: RouteDecision; skipped?: EgressSkip[] | undefined }) {
   const o = OUTCOME[d.outcome];
   return (
     <div className="decision">
@@ -209,6 +209,28 @@ function DecisionView({ d }: { d: RouteDecision }) {
           </tbody>
         </table>
       )}
+      {skipped.length > 0 && (
+        // Vendors passed over because their own vendor translation rules block the message (decided 2026-10-18).
+        <div className="egress-skipped">
+          <strong className="small">Vendors skipped</strong>
+          <ul className="checks">
+            {skipped.map((x) => (
+              <li key={x.vendorTrunkId} className="fail">
+                <Icon name="x" size={13} />
+                <span className="strong">{x.vendorTrunk}</span>
+                <span className="muted">
+                  blocked by its vendor translation rule{" "}
+                  {x.result.steps
+                    .filter((st) => st.blocked)
+                    .map((st) => st.name)
+                    .join(", ")}{" "}
+                  — the next vendor was tried
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -242,7 +264,7 @@ export function TestSection({ ruleId, trunkId }: { ruleId: number; trunkId: numb
     <div className="test-section">
       <TestForm value={req} onChange={setReq} onRun={() => void run()} running={running} />
       {error && <p className="error-text">{error}</p>}
-      {result && <DecisionView d={result} />}
+      {result && <DecisionView d={result} skipped={result.egressSkipped} />}
     </div>
   );
 }
@@ -309,7 +331,7 @@ export function SimulateDialog({ onClose, onOpenRule }: { onClose: () => void; o
             </tbody>
           </table>
           {result.decision ? (
-            <DecisionView d={result.decision} />
+            <DecisionView d={result.decision} skipped={result.egressSkipped} />
           ) : (
             <p className="muted">No rule matched: the message would be rejected.</p>
           )}
