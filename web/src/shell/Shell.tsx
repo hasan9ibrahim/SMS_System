@@ -101,6 +101,20 @@ export function Shell() {
   const activeId = useTabs((s) => s.activeId);
   const splitId = useTabs((s) => s.splitId);
   const split = splitId && splitId !== activeId && tabs.some((t) => t.id === splitId) ? splitId : null;
+  const splitLeft = useTabs((s) => s.splitLeft);
+  // Split view sides (team trial round 1): the focused tab and the other one, each on its own side.
+  const sideOf = (id: string): "left" | "right" | null =>
+    !split
+      ? null
+      : id === activeId
+        ? splitLeft
+          ? "right"
+          : "left"
+        : id === split
+          ? splitLeft
+            ? "left"
+            : "right"
+          : null;
   const blocked = usePasswordBlocked();
   // §13.28: an expired, temporary or must-change password leaves only the Change Password screen.
   if (blocked)
@@ -119,7 +133,13 @@ export function Shell() {
       <main className={`panes${split ? " split" : ""}`}>
         {ready ? (
           tabs.map((t) => (
-            <TabPane key={t.id} tab={t} shown={t.id === activeId || t.id === split} focused={t.id === activeId} />
+            <TabPane
+              key={t.id}
+              tab={t}
+              shown={t.id === activeId || t.id === split}
+              focused={t.id === activeId}
+              side={sideOf(t.id)}
+            />
           ))
         ) : (
           <div className="grid-message muted">Opening your workspace…</div>

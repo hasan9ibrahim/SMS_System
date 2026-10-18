@@ -100,3 +100,28 @@ test("Back: previous page in the tab (filters kept), then the tab it was opened 
   s().close(first);
   assert.equal(canGoBack(s(), second), false, "opener closed");
 });
+
+test("split view: each side picks its tab, the strip fills the focused side (team trial round 1)", async () => {
+  const s = () => useTabs.getState();
+  const a = s().open("/enterprises", { newTab: true });
+  const b = s().open("/rates/manager", { newTab: true });
+  const c = s().open("/routing/rules", { newTab: true });
+  s().activate(a);
+  s().setSplit(b);
+  const sides = () => (s().splitLeft ? [s().splitId, s().activeId] : [s().activeId, s().splitId]);
+  assert.deepEqual(sides(), [a, b]);
+  // Focusing the right side keeps both where they are.
+  s().activate(b);
+  assert.deepEqual(sides(), [a, b]);
+  assert.equal(s().activeId, b);
+  // A tab clicked in the strip opens on the focused (right) side.
+  s().activate(c);
+  assert.deepEqual(sides(), [a, c]);
+  // Picking for the left side; picking the tab on the other side swaps them.
+  s().setPane("left", b);
+  assert.deepEqual(sides(), [b, c]);
+  s().setPane("left", c);
+  assert.deepEqual(sides(), [c, b]);
+  s().swapSides();
+  assert.deepEqual(sides(), [b, c]);
+});

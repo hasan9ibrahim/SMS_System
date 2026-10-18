@@ -45,8 +45,10 @@ export interface OpenOptions {
 interface TabsState {
   tabs: Tab[];
   activeId: string;
-  /** Tab shown on the right in split view (§15.1), or null. */
+  /** The other tab shown in split view (§15.1), or null; the active tab is the focused side. */
   splitId: string | null;
+  /** True when splitId is on the left (so the active tab is on the right; team trial round 1). */
+  splitLeft: boolean;
   userId: number | null;
   hydrate: (userId: number, ws: Workspace | null) => void;
   open: (path: string, opts?: OpenOptions) => string;
@@ -62,6 +64,9 @@ interface TabsState {
   setAlert: (id: string, alert: boolean) => void;
   toggleSplit: () => void;
   setSplit: (id: string) => void;
+  /** Shows a tab on one side of split view and focuses that side (team trial round 1). */
+  setPane: (side: "left" | "right", id: string) => void;
+  swapSides: () => void;
   /** Removes a tab that moved to its own window. */
   detach: (id: string) => Tab | undefined;
   /** Adds a tab coming back from a window (drag back or Dock button). */
@@ -97,6 +102,7 @@ export const useTabs = create<TabsState>((set, get) => ({
   tabs: [homeTab()],
   activeId: HOME_TAB_ID,
   splitId: null,
+  splitLeft: false,
   userId: null,
   back: {},
 
@@ -151,18 +157,36 @@ export const useTabs = create<TabsState>((set, get) => ({
   },
 
   activate: (id) => {
-    const { splitId, activeId } = get();
-    // Clicking the tab shown on the right swaps the panes.
-    set({ activeId: id, splitId: splitId === id ? activeId : splitId });
+    const { splitId, activeId, splitLeft } = get();
+    // The other split tab takes the focus and both stay on their side; any other tab replaces
+    // the focused side.
+    if (splitId === id) return set({ activeId: id, splitId: activeId, splitLeft: !splitLeft });
+    set({ activeId: id });
   },
 
   toggleSplit: () => {
     const { splitId, tabs, activeId } = get();
-    if (splitId) return set({ splitId: null });
+    if (splitId) return set({ splitId: null, splitLeft: false });
     const other = tabs.find((t) => t.id !== activeId && t.id !== HOME_TAB_ID) ?? tabs.find((t) => t.id !== activeId);
-    set({ splitId: other?.id ?? null });
+    set({ splitId: other?.id ?? null, splitLeft: false });
   },
   setSplit: (id) => set({ splitId: id === get().activeId ? null : id }),
+
+  setPane: (side, id) => {
+    const { splitId, activeId, splitLeft } = get();
+    if (!splitId) return;
+    const left = splitLeft ? splitId : activeId;
+    const right = splitLeft ? activeId : splitId;
+    // Choosing the tab already on the other side swaps the two.
+    const [nl, nr] = side === "left" ? [id, id === right ? left : right] : [id === left ? right : left, id];
+    if (nl === nr) return;
+    set(
+      side === "left"
+        ? { activeId: nl, splitId: nr, splitLeft: false }
+        : { activeId: nr, splitId: nl, splitLeft: true },
+    );
+  },
+  swapSides: () => set({ splitLeft: !get().splitLeft }),
 
   close: async (id) => {
     if (id === HOME_TAB_ID) return false;

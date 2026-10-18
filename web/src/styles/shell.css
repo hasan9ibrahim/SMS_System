@@ -253,6 +253,32 @@ a.btn {
 .panes.split .pane:not(.focused) {
   opacity: 0.92;
 }
+/* Split view sides (team trial round 1): each pane has a bar to pick its tab. */
+.pane.pane-split {
+  flex-direction: column;
+}
+.split-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-page-bg);
+  font-size: 12px;
+}
+.split-bar.focused {
+  box-shadow: inset 0 2px 0 var(--color-accent);
+}
+.split-bar-side {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.split-bar.focused .split-bar-side {
+  color: var(--color-accent);
+}
+.split-bar select {
+  max-width: 260px;
+}
 .page {
   flex: 1;
   min-width: 0;

@@ -3,7 +3,8 @@
 import { Component, memo, type ErrorInfo, type ReactNode } from "react";
 import { PageRoutes } from "../pages/PageRoutes";
 import { TabProvider } from "./tabContext";
-import type { Tab } from "./tabs";
+import { useTabs, type Tab } from "./tabs";
+import { SplitPaneBar } from "./SplitPaneBar";
 
 class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   override state = { error: null as Error | null };
@@ -35,19 +36,26 @@ export const TabPane = memo(function TabPane({
   shown,
   focused,
   popout = false,
+  side = null,
 }: {
   tab: Tab;
   shown: boolean;
   focused: boolean;
   popout?: boolean;
+  /** Its side in split view, or null (team trial round 1). */
+  side?: "left" | "right" | null;
 }) {
   return (
     <div
-      className={`pane${shown ? "" : " hidden"}${focused ? " focused" : ""}`}
+      className={`pane${shown ? "" : " hidden"}${focused ? " focused" : ""}${side ? " pane-split" : ""}`}
       role="tabpanel"
       aria-label={tab.title}
       hidden={!shown}
+      style={side ? { order: side === "left" ? 1 : 2 } : undefined}
+      // In split view a click in the other pane focuses it, so the tab strip then fills that side.
+      onMouseDownCapture={side && !focused ? () => useTabs.getState().activate(tab.id) : undefined}
     >
+      {side && <SplitPaneBar side={side} tab={tab} focused={focused} />}
       <TabProvider value={{ tab, active: focused, popout }}>
         <TabErrorBoundary>
           <PageRoutes path={tab.path} />
