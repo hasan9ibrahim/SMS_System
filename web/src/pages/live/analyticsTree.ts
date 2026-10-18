@@ -152,11 +152,24 @@ export function rangeProblem(s: Settings): string | null {
 // ---------------------------------------------------------------- queries
 
 /** One breakdown's query: rows by `dim`, filtered on the parents' groups. */
+/** A column sort picked in the header: by the row names, or by a metric (team trial round 1). */
+export interface ColumnSort {
+  key: "name" | ReportMetric;
+  dir: "asc" | "desc";
+}
+
+/** The next sort when a header is clicked: the same column flips, a new one starts busiest / A–Z first. */
+export function nextSort(current: ColumnSort | null, key: ColumnSort["key"]): ColumnSort {
+  if (current?.key === key) return { key, dir: current.dir === "asc" ? "desc" : "asc" };
+  return { key, dir: key === "name" ? "asc" : "desc" };
+}
+
 export function levelQuery(
   s: Settings,
   dim: ReportDimension,
   parents: FilterCondition[],
   limit = 100,
+  columnSort: ColumnSort | null = null,
 ): MasterReportQuery {
   const to = s.at ? s.at.to : new Date(Date.parse(`${s.toDate}T00:00:00Z`) + 86_400_000).toISOString();
   const allHours = !!s.at || (s.hourFrom === 0 && s.hourTo === 23);
@@ -172,12 +185,12 @@ export function levelQuery(
     compare: "none",
     ...(allHours ? {} : { hourFrom: s.hourFrom, hourTo: s.hourTo }),
     ...(parents.length ? { filter: { logic: "and", conditions: parents } } : {}),
-    // Time levels read in time order; the others busiest first.
+    // A picked column sorts every breakdown (names by name, server-side); else time levels read in time
+    // order and the others busiest first.
     sort: [
-      {
-        field: TIME.has(dim) ? dim : "attempts",
-        dir: TIME.has(dim) ? "asc" : "desc",
-      },
+      columnSort
+        ? { field: columnSort.key === "name" ? dim : columnSort.key, dir: columnSort.dir }
+        : { field: TIME.has(dim) ? dim : "attempts", dir: TIME.has(dim) ? "asc" : "desc" },
     ],
     limit,
   };

@@ -614,3 +614,25 @@
   background: #f00;
   color: #fff;
 }
+/* Sortable headers (team trial round 1). */
+.la-grid th .la-sort {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: inherit;
+}
+.la-grid th .la-sort:hover {
+  color: var(--color-accent);
+}
+.la-th-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.la-th-search .la-sort {
+  flex: none;
+  font-size: 11px;
+}

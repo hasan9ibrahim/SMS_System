@@ -8,6 +8,7 @@ import {
   fmt,
   levelOptions,
   levelQuery,
+  nextSort,
   presetRange,
   rangeProblem,
 } from "./analyticsTree";
@@ -79,4 +80,16 @@ test("a row's + offers every level not used above it; headers are one line (team
   assert.equal(COLUMNS.find((c) => c.metric === "submitted")?.label, "Submitted");
   assert.equal(COLUMNS.find((c) => c.metric === "tpsNow")?.label, "TPS");
   assert.ok(!COLUMNS.some((c) => c.metric === "hlrPorted"), "TPS replaced HLR ported");
+});
+
+test("column sort: a header flips its direction, names sort by the level's field (team trial round 1)", () => {
+  assert.deepEqual(nextSort(null, "margin"), { key: "margin", dir: "desc" });
+  assert.deepEqual(nextSort({ key: "margin", dir: "desc" }, "margin"), { key: "margin", dir: "asc" });
+  assert.deepEqual(nextSort({ key: "margin", dir: "asc" }, "name"), { key: "name", dir: "asc" });
+  assert.deepEqual(levelQuery(base, "customerTrunk", [], 100, { key: "name", dir: "desc" }).sort, [
+    { field: "customerTrunk", dir: "desc" },
+  ]);
+  assert.deepEqual(levelQuery(base, "customer", [], 100, { key: "tpsNow", dir: "desc" }).sort, [
+    { field: "tpsNow", dir: "desc" },
+  ]);
 });

@@ -14139,7 +14139,7 @@ export type components = {
       | "errorCode"
       | "deliveryStatus";
     /**
-     * @description Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency. tpsNow is the live TPS: messages per second over the last minute up to now, null when the period does not include now (team trial round 1); like tpsPeak it is not sortable or filterable.
+     * @description Master Report metrics (§10, §13.15). Money in the platform currency; *Base in the base currency. tpsNow is the live TPS: messages per second over the last minute up to now, null when the period does not include now (team trial round 1); it can be sorted on but, like tpsPeak, not filtered. A group-by field in sort orders by its name (enterprise, trunk, country, network), not its ID.
      * @enum {string}
      */
     ReportMetric:

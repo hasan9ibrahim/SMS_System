@@ -42,6 +42,8 @@ import {
   presetRange,
   rangeProblem,
   TONED,
+  nextSort,
+  type ColumnSort,
   type Settings,
 } from "./analyticsTree";
 
@@ -357,6 +359,7 @@ function Level({
   window,
   onDetail,
   selected,
+  sort,
 }: {
   settings: Settings;
   /** This breakdown's level; `used` holds it and the levels above, which the rows' "+" leave out. */
@@ -370,6 +373,7 @@ function Level({
   window: { from: string; to: string };
   onDetail: (d: Detail) => void;
   selected: string | null;
+  sort: ColumnSort | null;
 }) {
   // Row key → the level it is broken down by.
   const [open, setOpen] = useState<Map<string, ReportDimension>>(new Map());
@@ -379,8 +383,8 @@ function Level({
   const depth = chain.length;
   const conds = typed ? [...parents, { field: dim, op: "like" as const, value: `%${typed}%` }] : parents;
   const q = useQuery({
-    queryKey: ["analytics-level", settings, dim, conds, limit, tick],
-    queryFn: () => runMasterReport(levelQuery(settings, dim, conds, limit)),
+    queryKey: ["analytics-level", settings, dim, conds, limit, tick, sort],
+    queryFn: () => runMasterReport(levelQuery(settings, dim, conds, limit, sort)),
     placeholderData: keepPreviousData,
   });
   const indent = { paddingLeft: 8 + (depth + 1) * 18 };
@@ -509,6 +513,7 @@ function Level({
                 window={window}
                 onDetail={onDetail}
                 selected={selected}
+                sort={sort}
               />
             )}
           </Fragment>
@@ -542,6 +547,9 @@ export function LiveAnalyticsPage() {
   const [draft, setDraft] = useState<Settings>(() => ({ ...presetRange("today"), hourFrom: 0, hourTo: 23 }));
   // How the total row is broken down (its "+"); opens by customer, or by the Dashboard link's ?by=.
   const [top, setTop] = useState<ReportDimension | null>(first);
+  // A clicked header sorts every breakdown, up or down (team trial round 1).
+  const [sort, setSort] = useState<ColumnSort | null>(null);
+  const arrow = (key: ColumnSort["key"]) => (sort?.key === key ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
   const [settings, setSettings] = useState<Settings>(draft);
   // "Today" is the server's report day: the latest day with traffic (the fake data stops when it was
   // generated). Presets count from it, and the page opens on it.
@@ -724,20 +732,39 @@ export function LiveAnalyticsPage() {
             <tr>
               <th className="la-th-name" title="Use + on a row to break it down by any level">
                 {top ? (
-                  <input
-                    className="la-row-search"
-                    placeholder={`Search ${levelLabel(top).toLowerCase()}…`}
-                    aria-label={`Search ${levelLabel(top).toLowerCase()}`}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
+                  <span className="la-th-search">
+                    <input
+                      className="la-row-search"
+                      placeholder={`Search ${levelLabel(top).toLowerCase()}…`}
+                      aria-label={`Search ${levelLabel(top).toLowerCase()}`}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="la-sort"
+                      title="Sort by name"
+                      aria-label="Sort by name"
+                      onClick={() => setSort(nextSort(sort, "name"))}
+                    >
+                      A–Z{arrow("name")}
+                    </button>
+                  </span>
                 ) : (
                   "Total"
                 )}
               </th>
               {COLUMNS.map((c) => (
-                <th key={c.metric} className="num" title={c.title}>
-                  {c.label}
+                <th
+                  key={c.metric}
+                  className="num"
+                  title={c.title}
+                  aria-sort={sort?.key === c.metric ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
+                >
+                  <button type="button" className="la-sort" onClick={() => setSort(nextSort(sort, c.metric))}>
+                    {c.label}
+                    {arrow(c.metric)}
+                  </button>
                 </th>
               ))}
               <th>EDRs</th>
@@ -792,6 +819,7 @@ export function LiveAnalyticsPage() {
                 window={window}
                 onDetail={setDetail}
                 selected={detail?.key ?? null}
+                sort={sort}
               />
             )}
           </tbody>

@@ -480,29 +480,65 @@ export async function runMasterReport(
   const D = dimsFor(q);
   const dimWhere = split.dims ? await chWhere(pool, dimDef(tz, D), { filter: split.dims }) : "1";
   const typeWhere = q.msgType ? `msg_type = ${lit(q.msgType)}` : "1";
+  // Live TPS (team trial round 1): the last minute up to now, when the period includes now. "Now" is the
+  // latest EDR in this phase (the fake data ends when it was generated); the backend uses its live counters.
+  // Counted in the grouped query, so it can be sorted on like any metric.
+  const nowMs = q.metrics.includes("tpsNow") || q.sort?.some((x) => x.field === "tpsNow") ? await reportNow() : null;
+  const nowWindow =
+    nowMs !== null && window.from.getTime() <= nowMs && nowMs <= window.to.getTime()
+      ? { from: new Date(nowMs - 60_000), to: new Date(nowMs + 1) }
+      : null;
+  const nowCol = nowWindow ? `countIf(${timeWhere(nowWindow)}) AS now_n` : "0 AS now_n";
   const grouped = (w: Window, extra = "1") =>
-    `SELECT ${dimIds.join(", ")}, ${baseSums(factor)} FROM edr WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
+    `SELECT ${dimIds.join(", ")}, ${baseSums(factor)}, ${nowCol} FROM edr WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
       GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}`;
   const withMetrics = (w: Window, extra = "1") =>
     `SELECT *, ${Object.entries(msql)
       .map(([k, v]) => `${v} AS ${k}`)
       .join(", ")} FROM (${grouped(w, extra)})`;
   const metricWhere = split.metrics ? await chWhere(pool, metricDef(secs), { filter: split.metrics }) : "1";
+  // Labels, also used to sort a group-by field by name (enterprises, trunks, countries, networks) rather
+  // than by its internal ID (team trial round 1: sort any column of Live analytics).
+  const names = new Map<ReportDimension, Map<number, string>>();
+  for (const d of q.groupBy) if (D[d].names) names.set(d, await namesOf(pool, D[d].names!));
+  const lk = q.groupBy.some((d) => DIMS[d].lookup) ? await loadLookups(pool) : null;
+  const byName = (d: ReportDimension): string => {
+    const dim = DIMS[d];
+    const m: Map<string | number, string> | null | undefined = dim.names
+      ? names.get(d)
+      : dim.lookup === "country"
+        ? lk?.country
+        : dim.lookup === "mcc"
+          ? lk?.mcc
+          : dim.lookup === "mccmnc"
+            ? lk?.mccmnc
+            : null;
+    if (!m || !m.size) return `d_${d}`;
+    const keys = [...m.keys()];
+    const numeric = typeof keys[0] === "number";
+    const arr = (xs: (string | number)[]) =>
+      `[${xs.map((x) => (numeric && typeof x === "number" ? String(x) : lit(String(x)))).join(", ")}]`;
+    return `lower(transform(${numeric ? `toInt64(d_${d})` : `toString(d_${d})`}, ${arr(keys)}, ${arr([...m.values()])}, toString(d_${d})))`;
+  };
   const sort = (
     q.sort?.length
       ? q.sort
       : [{ field: q.metrics.find((m) => m !== "tpsPeak" && m !== "tpsNow") ?? "attempts", dir: "desc" as const }]
   )
-    .filter((s) => s.field !== "tpsPeak" && s.field !== "tpsNow")
-    .map((s) => `${s.field in DIMS ? `d_${s.field}` : s.field} ${s.dir === "desc" ? "DESC" : "ASC"}`);
+    .filter((s) => s.field !== "tpsPeak")
+    .map((s) => {
+      const expr = s.field === "tpsNow" ? "now_n" : s.field in DIMS ? byName(s.field as ReportDimension) : s.field;
+      return `${expr} ${s.dir === "desc" ? "DESC" : "ASC"}`;
+    });
   sort.push(...q.groupBy.map((d) => `d_${d} ASC`));
   const limit = opts.all ? 100_000 : (q.limit ?? 200);
   const offset = opts.all ? 0 : decodeCursor(q.cursor);
   // Totals get "t_" aliases: in ClickHouse a SELECT alias is visible in WHERE, so `sum(x) AS x` would
   // turn the threshold filter on x into an aggregate.
-  const sumBase = BASE_COLUMNS.map((c) =>
-    c === "companies" ? "max(companies) AS t_companies" : `sum(${c}) AS t_${c}`,
-  ).join(", ");
+  const sumBase = [
+    ...BASE_COLUMNS.map((c) => (c === "companies" ? "max(companies) AS t_companies" : `sum(${c}) AS t_${c}`)),
+    "sum(now_n) AS t_now_n",
+  ].join(", ");
   const [page, totals, count] = await Promise.all([
     chQuery<Record<string, unknown>>(
       `SELECT * FROM (${withMetrics(window)}) WHERE ${metricWhere} ORDER BY ${sort.join(", ")} LIMIT ${limit + 1} OFFSET ${offset}`,
@@ -525,24 +561,12 @@ export async function runMasterReport(
       : "0";
   const prevWindow = q.compare && q.compare !== "none" ? previousWindow(window, q.compare) : null;
   const wantPeak = q.metrics.includes("tpsPeak");
-  // Live TPS (team trial round 1): the last minute up to now, when the period includes now. "Now" is the
-  // latest EDR in this phase (the fake data ends when it was generated); the backend uses its live counters.
-  const nowMs = q.metrics.includes("tpsNow") ? await reportNow() : null;
-  const nowWindow =
-    nowMs !== null && window.from.getTime() <= nowMs && nowMs <= window.to.getTime()
-      ? { from: new Date(nowMs - 60_000), to: new Date(nowMs + 1) }
-      : null;
-  const nowSql = (rs: Record<string, unknown>[] | null) =>
-    `SELECT ${rs ? q.groupBy.map((d) => `d_${d}`).join(", ") + ", " : ""}count() AS n FROM (
-       SELECT ${dimIds.join(", ")} FROM edr
-        WHERE ${tw(nowWindow!)} AND ${typeWhere} AND ${dimWhere} AND ${rs ? tupleIn(rs) : "1"})
-     ${rs ? `GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}` : ""}`;
   const peakSql = (w: Window, rs: Record<string, unknown>[] | null) =>
     `SELECT ${rs ? q.groupBy.map((d) => `d_${d}`).join(", ") + ", " : ""}max(n) AS peak FROM (
        SELECT ${dimIds.join(", ")}, toStartOfMinute(start_time) AS minute, count() AS n FROM edr
         WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${rs ? tupleIn(rs) : "1"}
         GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}, minute)${rs ? ` GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}` : ""}`;
-  const [prevRows, prevTotals, peaks, peakTotal, nows, nowTotal] = await Promise.all([
+  const [prevRows, prevTotals, peaks, peakTotal] = await Promise.all([
     prevWindow && rowsRaw.length
       ? chQuery<Record<string, unknown>>(withMetrics(prevWindow, tupleIn(rowsRaw)))
       : Promise.resolve([]),
@@ -551,21 +575,14 @@ export async function runMasterReport(
       : Promise.resolve(null),
     wantPeak && rowsRaw.length ? chQuery<Record<string, unknown>>(peakSql(window, rowsRaw)) : Promise.resolve([]),
     wantPeak ? chQuery<{ peak: string }>(peakSql(window, null)) : Promise.resolve(null),
-    nowWindow && rowsRaw.length ? chQuery<Record<string, unknown>>(nowSql(rowsRaw)) : Promise.resolve([]),
-    nowWindow ? chQuery<{ n: string }>(nowSql(null)) : Promise.resolve(null),
   ]);
   const prevByKey = new Map(prevRows.map((r) => [keyOf(r), r]));
   const peakByKey = new Map(peaks.map((r) => [keyOf(r), Number(r.peak)]));
-  const nowByKey = new Map(nows.map((r) => [keyOf(r), Number(r.n)]));
   const tps = (n: number) => Math.round((n / 60) * 100) / 100;
   // In the live minute a group with no messages runs at 0; outside the period's "now" there is no live TPS.
-  const tpsNowOf = (key: string | null) =>
-    nowWindow ? tps(key === null ? Number(nowTotal?.[0]?.n ?? 0) : (nowByKey.get(key) ?? 0)) : null;
+  const tpsNowOf = (n: unknown) => (nowWindow ? tps(Number(n ?? 0)) : null);
 
-  // Labels
-  const names = new Map<ReportDimension, Map<number, string>>();
-  for (const d of q.groupBy) if (D[d].names) names.set(d, await namesOf(pool, D[d].names!));
-  const lk = q.groupBy.some((d) => DIMS[d].lookup) ? await loadLookups(pool) : null;
+  // Labels (names and lookups loaded above)
   const label = (d: ReportDimension, id: unknown): string => {
     const dim = DIMS[d];
     const s = String(id ?? "");
@@ -612,7 +629,7 @@ export async function runMasterReport(
       ),
       metrics: pick(r, {
         tpsPeak: peakByKey.has(key) ? tps(peakByKey.get(key)!) : null,
-        tpsNow: tpsNowOf(key),
+        tpsNow: tpsNowOf(r.now_n),
       }),
       previous: prevWindow ? (prev ? pick(prev) : Object.fromEntries(q.metrics.map((m) => [m, null]))) : null,
     };
@@ -621,7 +638,7 @@ export async function runMasterReport(
     Object.fromEntries(BASE_COLUMNS.map((c) => [c, Number(r?.[`t_${c}`] ?? 0)])) as Base;
   const totalMetrics = metricsFromBase(toBase(totals[0]), secs);
   if (wantPeak) totalMetrics.tpsPeak = peakTotal?.[0] ? tps(Number(peakTotal[0].peak)) : null;
-  if (q.metrics.includes("tpsNow")) totalMetrics.tpsNow = tpsNowOf(null);
+  if (q.metrics.includes("tpsNow")) totalMetrics.tpsNow = tpsNowOf(totals[0]?.t_now_n);
   const only = (m: Record<string, number | null>) => Object.fromEntries(q.metrics.map((k) => [k, m[k] ?? null]));
   return {
     window,
