@@ -88,6 +88,7 @@ services:
       REDIS_PORT: 6379
       PLATFORM_CURRENCY: ${PLATFORM_CURRENCY:-EUR}
       PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-UTC}
+      SIM_TOTAL_TPS: ${SIM_TOTAL_TPS:-40}
       MOCK_SECRET_KEY: ${MOCK_SECRET_KEY:-trial-only-not-a-real-key}
     depends_on:
       postgres: { condition: service_healthy }

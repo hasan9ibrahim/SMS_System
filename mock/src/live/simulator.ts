@@ -18,11 +18,14 @@ import { PLATFORM_DAY_START_SQL, platformDay } from "../platform.js";
 import { chRows } from "../edr.js";
 
 /**
- * Platform volume. By default the stored EDRs' own rate over the last 7 days, so the live dashboard and
- * alert popups agree with Live analytics and the reports on the same data (team trial round 1: a popup
- * showed a margin 900 times the real one when the simulator assumed 1,800 TPS). SIM_TOTAL_TPS overrides it.
+ * Platform volume in messages per second (team trial round 1: "good sending", not a trickle). Every
+ * simulated message is written to the EDR store, so the dashboard, alerts, Live analytics and the reports
+ * count the same traffic at any volume. SIM_TOTAL_TPS changes it; 0 uses the stored EDRs' own rate.
  */
-const SIM_TOTAL_TPS = process.env.SIM_TOTAL_TPS ? Number(process.env.SIM_TOTAL_TPS) : null;
+const SIM_TOTAL_TPS = (() => {
+  const v = Number(process.env.SIM_TOTAL_TPS ?? 40);
+  return Number.isFinite(v) && v > 0 ? v : null;
+})();
 const MINUTES = 120; // per-minute history kept for the movers (two 60-minute windows)
 const SLOT_S = 5; // chart history resolution
 const SLOTS = 3600 / SLOT_S; // 60 minutes of chart history
