@@ -1,4 +1,6 @@
-// Change history (§13.10): every save with who, when and what, and Undo per change.
+// Change history (§13.10): every save with who, when and what, and Undo per change. "What changed"
+// reads as a sentence with record names, and Fields shows labels, names for ids and what a list gained
+// or lost (team trial round 1).
 // "My changes" (?mine=1) is the same page filtered to the signed-in user.
 import { useLocation } from "react-router";
 import type { Change } from "@sms/contract";
@@ -11,6 +13,13 @@ import { Button } from "../ui/primitives";
 const page = pageForPath("/admin/changes")!;
 const show = (v: unknown) =>
   v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v);
+
+/** "NG MTN (#7)" when the record's name is known (team trial round 1), else "#7". */
+function recordName(c: Change, id: number): string {
+  const i = c.entityIds.indexOf(id);
+  const name = i >= 0 ? c.entityNames?.[i] : undefined;
+  return name && c.entityNames!.length === Math.min(c.entityIds.length, 20) ? `${name} (#${id})` : `#${id}`;
+}
 
 export function ChangeHistoryPage() {
   const { data: me } = useMe();
@@ -29,7 +38,7 @@ export function ChangeHistoryPage() {
       columns={{
         id: { width: 90, render: (c) => <span className="num">#{c.id}</span> },
         at: { width: 150 },
-        note: { width: 260 },
+        note: { width: 200 },
         userName: { width: 160 },
         changeType: {
           width: 100,
@@ -44,20 +53,24 @@ export function ChangeHistoryPage() {
         },
       }}
       trailing={{
-        header: "",
-        width: 200,
-        render: (c) =>
-          c.undoneById ? (
-            <span className="muted small">undone by #{c.undoneById}</span>
-          ) : undoable(c) ? (
-            <Button small icon="undo" onClick={() => void undo(c.id)}>
-              Undo
-            </Button>
-          ) : (
-            <span className="muted small" title="Diff">
-              {describeDiff(c.diff, 1)}
+        header: "What changed",
+        width: 440,
+        render: (c) => (
+          <span className="ch-what">
+            <span className="ch-summary" title={c.summary ?? describeDiff(c.diff, 6)}>
+              {c.summary ?? describeDiff(c.diff, 1)}
             </span>
-          ),
+            {c.undoneById ? (
+              <span className="muted small">undone by #{c.undoneById}</span>
+            ) : (
+              undoable(c) && (
+                <Button small icon="undo" onClick={() => void undo(c.id)}>
+                  Undo
+                </Button>
+              )
+            )}
+          </span>
+        ),
       }}
       detail={(c) => ({
         title: (
@@ -69,6 +82,9 @@ export function ChangeHistoryPage() {
           </>
         ),
         sections: [
+          ...(c.summary
+            ? [{ key: "summary", label: "Summary", content: <p className="ch-summary-full">{c.summary}</p> }]
+            : []),
           {
             key: "diff",
             label: "Fields",
@@ -85,10 +101,26 @@ export function ChangeHistoryPage() {
                 <tbody>
                   {c.diff.map((d, i) => (
                     <tr key={i}>
-                      <td className="num">#{d.entityId}</td>
-                      <td>{d.field === "*" ? "whole record" : d.field}</td>
-                      <td>{show(d.before)}</td>
-                      <td>{show(d.after)}</td>
+                      <td>{recordName(c, d.entityId)}</td>
+                      <td>{d.label ?? (d.field === "*" ? "whole record" : d.field)}</td>
+                      <td>{d.beforeText ?? show(d.before)}</td>
+                      <td>
+                        {d.afterText ?? show(d.after)}
+                        {d.added?.length || d.removed?.length ? (
+                          <div className="ch-delta small">
+                            {d.added?.map((x, j) => (
+                              <div key={`a${j}`} className="tone-success">
+                                + {x}
+                              </div>
+                            ))}
+                            {d.removed?.map((x, j) => (
+                              <div key={`r${j}`} className="tone-error">
+                                − {x}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -103,7 +135,13 @@ export function ChangeHistoryPage() {
                 <dt>Record type</dt>
                 <dd>{c.entityType}</dd>
                 <dt>Records</dt>
-                <dd>{c.entityIds.join(", ")}</dd>
+                <dd>
+                  {c.entityIds
+                    .slice(0, 20)
+                    .map((id) => recordName(c, id))
+                    .join(", ")}
+                  {c.entityIds.length > 20 ? ` +${c.entityIds.length - 20} more` : ""}
+                </dd>
                 <dt>Note</dt>
                 <dd>{c.note ?? "—"}</dd>
                 <dt>IP</dt>

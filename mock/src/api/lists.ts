@@ -9,7 +9,7 @@ import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 
 /** PostgreSQL rejected a regular expression that JavaScript accepted (POSIX vs JS syntax). */
-const isBadRegex = (err: unknown) => (err as { code?: string }).code === "2201B";
+export const isBadRegex = (err: unknown) => (err as { code?: string }).code === "2201B";
 
 export function queryList(list: PgListId) {
   return async (request: FastifyRequest, reply: FastifyReply) => {

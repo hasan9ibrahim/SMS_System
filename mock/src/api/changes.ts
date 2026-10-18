@@ -4,9 +4,14 @@ import { applyBusinessCompanyField } from "./businessCompanies.js";
 import { applyAlertRuleField } from "./alerts.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
-import type { UndoRequest } from "@sms/contract";
+import type { Change, ListQuery, UndoRequest } from "@sms/contract";
 import { withDb } from "../db.js";
-import { changeSelect, mapChange } from "../lists/defs.js";
+import { changeSelect, listDefs, mapChange } from "../lists/defs.js";
+import { listFields } from "../lists/fields.js";
+import { runList, type ListDef } from "../lists/engine.js";
+import { checkListQuery } from "../lists/validate.js";
+import { isBadRegex } from "./lists.js";
+import { withDescriptions } from "../history/describe.js";
 import { sendProblem } from "../problem.js";
 import { CURRENT_USER_ID, canUndoOthers, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
@@ -571,6 +576,25 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
       `SELECT ${changeSelect} FROM changes c JOIN users u ON u.id = c.user_id WHERE c.id = $1`,
       [newId],
     );
-    return mapChange(out[0]);
+    return (await withDescriptions(pool, [mapChange(out[0])]))[0];
+  });
+}
+
+/** Change history list (§13.10) with record names, a summary and readable fields (team trial round 1). */
+export function queryChanges(request: FastifyRequest, reply: FastifyReply) {
+  const query = request.body as ListQuery;
+  const errors = checkListQuery(query, listFields.changes);
+  if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
+  return withDb(reply, async (pool) => {
+    try {
+      const page = await runList(pool, listDefs.changes as ListDef<Change>, query);
+      return { ...page, rows: await withDescriptions(pool, page.rows) };
+    } catch (err) {
+      if (isBadRegex(err))
+        return sendProblem(reply, 400, "Invalid list query", {
+          errors: [{ path: "/filter", message: "invalid regular expression" }],
+        });
+      throw err;
+    }
   });
 }

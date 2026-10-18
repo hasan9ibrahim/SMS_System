@@ -9845,6 +9845,15 @@ export type components = {
       field: string;
       before: unknown;
       after: unknown;
+      /** @description The field in words, e.g. "Route type" (team trial round 1). */
+      label?: string;
+      /** @description The value before, as text; ids of trunks, lists, tables and users are shown by name. */
+      beforeText?: string;
+      afterText?: string;
+      /** @description List fields only, what the save added (as text). */
+      added?: string[];
+      /** @description List fields only, what the save removed (as text). */
+      removed?: string[];
     };
     Change: {
       id: components["schemas"]["Id"];
@@ -9853,6 +9862,10 @@ export type components = {
       entityIds: components["schemas"]["Id"][];
       changeType: components["schemas"]["ChangeType"];
       diff: components["schemas"]["ChangeField"][];
+      /** @description Names of the records touched (first 20), so the history says which rule, trunk or table changed. */
+      entityNames?: string[];
+      /** @description One line on what the user changed, e.g. 'Edited route rule “NG MTN”: Route type static → block; Vendors +Kite_DIR (level 1, 60 %)' (team trial round 1). */
+      summary?: string;
       note?: string | null;
       userId: components["schemas"]["Id"];
       userName: string;

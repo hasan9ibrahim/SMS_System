@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.44.0
+  version: 0.45.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14502,6 +14502,24 @@ components:
           type: string
         before: {}
         after: {}
+        label:
+          type: string
+          description: The field in words, e.g. "Route type" (team trial round 1).
+        beforeText:
+          type: string
+          description: The value before, as text; ids of trunks, lists, tables and users are shown by name.
+        afterText:
+          type: string
+        added:
+          type: array
+          items:
+            type: string
+          description: List fields only, what the save added (as text).
+        removed:
+          type: array
+          items:
+            type: string
+          description: List fields only, what the save removed (as text).
 
     Change:
       type: object
@@ -14522,6 +14540,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ChangeField"
+        entityNames:
+          type: array
+          items:
+            type: string
+          description: Names of the records touched (first 20), so the history says which rule, trunk or table changed.
+        summary:
+          type: string
+          description: >-
+            One line on what the user changed, e.g. 'Edited route rule “NG MTN”: Route type static → block; Vendors
+            +Kite_DIR (level 1, 60 %)' (team trial round 1).
         note:
           type: [string, "null"]
         userId:

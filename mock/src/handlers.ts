@@ -458,7 +458,7 @@ import {
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
-import { undoChange } from "./api/changes.js";
+import { queryChanges, undoChange } from "./api/changes.js";
 
 /** Routing costs and route maps are cached a minute; rate changes and undos clear them. */
 const clearRouteCaches = () => {
@@ -1093,7 +1093,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryAuditLog: queryList("audit_log"),
   queryBusinessCompanies: queryList("business_companies"),
   queryPortalUsers: queryList("customer_portal_users"),
-  queryChanges: queryList("changes"),
+  queryChanges,
   undoChange: (request, reply) =>
     Promise.resolve(undoChange(request, reply)).finally(() => {
       clearRouteCaches();

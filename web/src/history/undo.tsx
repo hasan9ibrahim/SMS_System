@@ -224,7 +224,7 @@ export function ChangeEntry({
           )
         )}
       </div>
-      <div className="change-diff">{describeDiff(change.diff, 4)}</div>
+      <div className="change-diff">{change.summary ?? describeDiff(change.diff, 4)}</div>
       {change.note && <div className="muted small">“{change.note}”</div>}
     </li>
   );
