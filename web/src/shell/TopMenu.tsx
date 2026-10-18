@@ -1,4 +1,4 @@
-// Top menu bar (§15.1): logo, main menu with dropdowns, search / jump-to (Ctrl K), live TPS
+// Top menu bar (§15.1): logo, main menu with dropdowns, search / jump-to (Ctrl K), system clock, live TPS
 // pill, alert bell with count, user avatar.
 import { useEffect, useRef, useState } from "react";
 import { useMe, useUpdatePreferences } from "../api/hooks";
@@ -14,6 +14,7 @@ import { openMyPassword } from "../pages/admin/parts";
 import { openAlertSounds } from "../pages/monitoring/alerts/parts";
 import { ask } from "../ui/feedback";
 import { ViewAsDialog } from "./ViewAsBanner";
+import { SystemClock } from "./SystemClock";
 
 const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n < 100 ? 1 : 0 });
 
@@ -229,6 +230,7 @@ export function TopMenu() {
           <span>Search or jump to…</span>
           <kbd>Ctrl K</kbd>
         </button>
+        <SystemClock />
         <button
           type="button"
           className={`tps-pill${connected ? "" : " offline"}`}

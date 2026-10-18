@@ -304,6 +304,8 @@ a.btn {
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+  flex: none;
   font-weight: 700;
   background: none;
   border: 0;
@@ -369,7 +371,61 @@ a.btn {
   color: var(--menu-text-dim);
   border-color: color-mix(in srgb, #ffffff 18%, transparent);
 }
+/* Narrower screens: the search shrinks to its icon and shortcut so the whole menu fits. */
+@media (max-width: 1500px) {
+  .jump {
+    min-width: 0;
+  }
+  .jump > span {
+    display: none;
+  }
+  .jump kbd {
+    white-space: nowrap;
+  }
+  .menu-top {
+    padding: 0 7px;
+  }
+  .top-clock-tz {
+    display: none;
+  }
+}
+@media (max-width: 1300px) {
+  .menu-top {
+    padding: 0 5px;
+  }
+  .logo {
+    padding-right: 4px;
+  }
+}
+/* System clock (team trial round 1): server time in the platform time zone. */
+.top-clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 4px;
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
+}
+.top-clock .num {
+  font-variant-numeric: tabular-nums;
+}
+.top-clock-tz {
+  color: var(--menu-text-dim);
+  font-weight: 500;
+  font-size: 12px;
+}
+.top-clock.offline .num {
+  color: var(--menu-text-dim);
+}
+@media (max-width: 1100px) {
+  .top-clock-tz {
+    display: none;
+  }
+}
 .tps-pill {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;
