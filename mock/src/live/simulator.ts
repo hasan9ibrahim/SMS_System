@@ -52,6 +52,9 @@ export interface SimTrunk {
   /** Sending rate (messages per second) and the part of a message built up but not sent yet. */
   rate?: number;
   owed?: number;
+  /** Whole messages sent in each of the last seconds, and when it last sent one (TPS, "sending"). */
+  recent?: number[];
+  lastSentAt?: number;
   /**
    * Messages sent but not yet written to the EDR store (live EDRs), by outcome: delivered, accepted but
    * not delivered, refused by the vendor, not sent to a vendor.
@@ -82,8 +85,10 @@ export interface SimTrunk {
 
 export interface SimVendor {
   id: number;
-  /** Smoothed messages per second (online, ordering); `tps` is the messages of the last second. */
+  /** Smoothed messages per second; `tps` is the messages of the last 10 seconds per second. */
   rate?: number;
+  recent?: number[];
+  lastSentAt?: number;
   name: string;
   enterpriseId: number;
   enterpriseName: string;
@@ -462,6 +467,12 @@ function seedHistory(sim: Simulator, now: number) {
   let total = 0;
   for (const t of sim.trunks) total += t.rate = t.base * levelAt(t.segments, now);
   for (const v of sim.vendors) v.rate = total * v.weight;
+  // Until 10 seconds of messages are in, TPS starts at the seeded rate.
+  for (const x of [...sim.trunks, ...sim.vendors]) {
+    x.tps = Math.round((x.rate ?? 0) * 10) / 10;
+    x.recent = Array.from({ length: TPS_WINDOW - 1 }, () => x.rate ?? 0);
+    if ((x.rate ?? 0) > 0.001) x.lastSentAt = now;
+  }
   // Vendor minute history follows the customers' total by share.
   for (let i = 0; i < MINUTES; i++) {
     const sum = sim.trunks.reduce((acc, t) => acc + (t.minutes[i] ?? 0), 0);
@@ -596,6 +607,21 @@ export async function createSimulator(): Promise<Simulator> {
 
 // ---------------------------------------------------------------- one second
 
+/** Seconds of messages behind a TPS figure: TPS is a rate, measured over the last 10 seconds. */
+const TPS_WINDOW = 10;
+
+/** Records the whole messages a trunk sent this second; its TPS is their average over the window. */
+function windowTps(x: SimTrunk | SimVendor, n: number, now: number) {
+  const recent = (x.recent ??= []);
+  recent.push(n);
+  if (recent.length > TPS_WINDOW) recent.shift();
+  x.tps = Math.round((recent.reduce((a, b) => a + b, 0) / TPS_WINDOW) * 10) / 10;
+  if (n > 0) x.lastSentAt = now;
+}
+
+/** Sending: sent a message in the last minute. */
+const sending = (x: SimTrunk | SimVendor, now: number) => (x.lastSentAt ?? 0) > now - 60_000;
+
 /** Advances the simulation to `now`: TPS per trunk and vendor, histories and today's totals. */
 export function step(sim: Simulator, now = Date.now()) {
   const dt = Math.min(5, Math.max(0, (now - sim.lastTick) / 1000));
@@ -639,7 +665,7 @@ export function step(sim: Simulator, now = Date.now()) {
     t.owed = (t.owed ?? 0) + rate * dt;
     const n = Math.floor(t.owed);
     t.owed -= n;
-    t.tps = n;
+    windowTps(t, n, now);
     total += n;
     quality(t, rate > 0.001, now);
     rollMinute(t, newMinute);
@@ -714,7 +740,7 @@ export function step(sim: Simulator, now = Date.now()) {
     }
   for (const v of sim.vendors) {
     const n = toVendor.get(v) ?? 0;
-    v.tps = n;
+    windowTps(v, n, now);
     v.rate = (v.rate ?? 0) * 0.8 + n * 0.2;
     quality(v, v.rate > 0.001, now);
     rollMinute(v, newMinute);
@@ -776,10 +802,10 @@ const pct = (a: number, b: number) => (b > 0 ? r1((a / b) * 100) : null);
 export function tickEvent(sim: Simulator, now = Date.now()): TpsTickEvent {
   // Sending now (by rate); the TPS shown is the whole messages of the last second.
   const customers = sim.trunks
-    .filter((t) => (t.rate ?? 0) > 0.001)
+    .filter((t) => sending(t, now))
     .sort((a, b) => b.tps - a.tps || (b.rate ?? 0) - (a.rate ?? 0));
   const vendors = sim.vendors
-    .filter((v) => (v.rate ?? 0) > 0.001)
+    .filter((v) => sending(v, now))
     .sort((a, b) => b.tps - a.tps || (b.rate ?? 0) - (a.rate ?? 0));
   const queue = (tps: number, limit: number) => (tps > limit ? Math.round((tps - limit) * 5) : 0);
   return {
@@ -805,8 +831,8 @@ export function tickEvent(sim: Simulator, now = Date.now()): TpsTickEvent {
 export function summaryEvent(sim: Simulator, now = Date.now()): DashboardSummaryEvent {
   const t = sim.today;
   const tps = sim.trunks.reduce((s, x) => s + x.tps, 0);
-  const online = (xs: { rate?: number; enterpriseId: number }[]) =>
-    new Set(xs.filter((x) => (x.rate ?? 0) > 0.001).map((x) => x.enterpriseId)).size;
+  const online = (xs: (SimTrunk | SimVendor)[]) =>
+    new Set(xs.filter((x) => sending(x, now)).map((x) => x.enterpriseId)).size;
   const top = [...t.destinations.entries()]
     .filter(([code]) => code.length >= 5)
     .sort((a, b) => b[1].attempts - a[1].attempts)
