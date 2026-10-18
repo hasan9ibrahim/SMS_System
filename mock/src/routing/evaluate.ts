@@ -499,7 +499,18 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
 
   // 4. Static (and QBR with listed vendors): levels in order, the split inside a level.
   const levels = [...new Set(rule.vendors.filter((v) => !v.isBackup).map((v) => v.level))].sort((a, b) => a - b);
-  const backups = rule.vendors.filter((v) => v.isBackup);
+  // Backups of one vendor stand in for it first (team trial round 1); the others are the rule's last resort.
+  const backups = rule.vendors.filter((v) => v.isBackup && !v.backupForVendorTrunkId);
+  const backupsOf = (id: number) => {
+    const bs = rule.vendors.filter((v) => v.isBackup && v.backupForVendorTrunkId === id);
+    if (bs.length < 2) return bs;
+    // Split the vendor's traffic between its backups by their share %.
+    const b = bucket(`${m.receiver}:b`);
+    const total = bs.reduce((n, v) => n + (v.sharePct ?? 0), 0) || bs.length;
+    let acc = 0;
+    const hit = bs.find((v) => (acc += ((v.sharePct ?? (total === bs.length ? 1 : 0)) * 100) / total) > b) ?? bs[0]!;
+    return [hit, ...bs.filter((v) => v !== hit)];
+  };
   const candidates: RouteCandidate[] = [];
   for (const level of levels) {
     const at = rule.vendors.filter((v) => v.level === level && !v.isBackup);
@@ -537,6 +548,18 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
         };
       }
       c.note = `margin below ${rule.margin}`;
+      for (const bv of backupsOf(v.vendorTrunkId)) {
+        const bc = candidate(bv.vendorTrunkId, level, `backup for ${c.name}${bv.sharePct ? ` (${bv.sharePct}%)` : ""}`);
+        candidates.push(bc);
+        if (marginOk(bc))
+          return {
+            ...base,
+            outcome: "route",
+            vendor: { vendorTrunkId: bc.vendorTrunkId, name: bc.name, level, decidedBy },
+            candidates,
+          };
+        bc.note = `${bc.note}; margin below ${rule.margin}`;
+      }
     }
   }
   for (const v of backups) {

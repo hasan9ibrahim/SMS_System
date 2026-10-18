@@ -164,7 +164,8 @@ function rowToRule(r: Record<string, unknown>, vendors: RouteVendor[], whitelist
 async function vendorsOf(db: Db, ids: number[]) {
   const [v, w] = await Promise.all([
     db.query(
-      `SELECT route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per
+      `SELECT route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per,
+              backup_for_vendor_trunk_id
          FROM route_rule_vendors WHERE route_rule_id = ANY($1) ORDER BY route_rule_id, level, is_backup, share_pct DESC NULLS LAST, id`,
       [ids],
     ),
@@ -182,6 +183,10 @@ async function vendorsOf(db: Db, ids: number[]) {
       vendorTrunkId: r.vendor_trunk_id,
       sharePct: r.share_pct ?? null,
       isBackup: r.is_backup,
+      // Only when set, so rules without one compare equal to inputs that leave it out.
+      ...(r.backup_for_vendor_trunk_id === null
+        ? {}
+        : { backupForVendorTrunkId: Number(r.backup_for_vendor_trunk_id) }),
       warmupCount: r.warmup_count ?? null,
       warmupReset: r.warmup_reset ?? null,
       warmupPer: r.warmup_per ?? null,
@@ -445,8 +450,9 @@ async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]
   await c.query("DELETE FROM route_rule_vendors WHERE route_rule_id = $1", [id]);
   for (const v of vendors)
     await c.query(
-      `INSERT INTO route_rule_vendors (route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO route_rule_vendors (route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per,
+                                       backup_for_vendor_trunk_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         id,
         v.level,
@@ -456,6 +462,7 @@ async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]
         v.warmupCount ?? null,
         v.warmupReset ?? null,
         v.warmupPer ?? null,
+        v.isBackup ? (v.backupForVendorTrunkId ?? null) : null,
       ],
     );
 }

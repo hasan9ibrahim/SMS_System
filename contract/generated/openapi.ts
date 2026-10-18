@@ -16256,9 +16256,12 @@ export type components = {
     RouteVendor: {
       level: number;
       vendorTrunkId: components["schemas"]["Id"];
-      /** @description Percentage hunt policy; shares of a level add up to 100. */
+      /** @description Percentage hunt policy; shares of a level add up to 100. For a backup of one vendor (backupForVendorTrunkId), its share of that vendor's traffic; the backups of one vendor add up to 100. */
       sharePct?: number | null;
+      /** @description A backup takes no traffic until it is needed. With backupForVendorTrunkId it stands in for that vendor only; without, it is the rule's last resort after every level. */
       isBackup?: boolean;
+      /** @description The primary vendor of this rule this backup stands in for (team trial round 1). When that vendor is rejected (down, no rate, over TPS, below the minimum margin), its traffic goes to its backups, split by their sharePct, before the other vendors of the level or the next level are tried. */
+      backupForVendorTrunkId?: components["schemas"]["Id"] | null;
       /** @description Send the first N messages to this vendor before the normal split. */
       warmupCount?: number | null;
       /** @enum {string|null} */
