@@ -1236,3 +1236,25 @@ textarea.mono {
 .qbr-weights input {
   width: 64px;
 }
+
+/* A vendor's own backups, under its row (team trial round 1). */
+.vf-backups td {
+  border-top: 0;
+  padding-top: 0;
+}
+.vf-backup-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 4px 0 8px 16px;
+  border-left: 2px solid var(--color-accent);
+}
+.vf-backup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.vf-backup .lookup {
+  min-width: 200px;
+}

@@ -1,14 +1,14 @@
 // Vendors section of a route rule (§6.3 Route Information, §13.8 vendor capacity, §13.27
 // warm-up threshold and number whitelists). Edits stay local until Save, which writes the
 // rule once (one undoable change, §13.10).
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { RouteRuleDetail, RouteRuleInput, RouteVendor, RouteWhitelist, TrunkListRow } from "@sms/contract";
 import { useReference } from "../../api/records";
 import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
-import { ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
+import { backupProblems, ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
 
 type Draft = Pick<
   RouteRuleInput,
@@ -66,9 +66,13 @@ const QBR_PARTS = [
 export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (() => void) | null }) {
   const name = (id: number) => rule.labels.vendorTrunks.find((v) => v.id === id)?.name ?? `#${id}`;
   const type = routeTypeOf(rule.routeType);
-  const vendors = [...(rule.vendors ?? [])].sort(
-    (a, b) => a.level - b.level || Number(a.isBackup) - Number(b.isBackup),
-  );
+  // Each vendor followed by its own backups; rule-wide backups last.
+  const all = rule.vendors ?? [];
+  const primaries = all.filter((v) => !v.isBackup).sort((a, b) => a.level - b.level);
+  const vendors = [
+    ...primaries.flatMap((p) => [p, ...all.filter((b) => b.isBackup && b.backupForVendorTrunkId === p.vendorTrunkId)]),
+    ...all.filter((b) => b.isBackup && !b.backupForVendorTrunkId),
+  ];
   const hunt = { top_down: "Top down (by level)", round_robin: "Round robin", percentage: "Percentage split" }[
     rule.huntPolicy ?? "top_down"
   ];
@@ -117,7 +121,9 @@ export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (
                 <td className="num">{v.level}</td>
                 <td className="strong">{name(v.vendorTrunkId)}</td>
                 <td className="num">{v.sharePct === null || v.sharePct === undefined ? "—" : `${v.sharePct}%`}</td>
-                <td>{v.isBackup ? "Backup" : ""}</td>
+                <td>
+                  {v.backupForVendorTrunkId ? `for ${name(v.backupForVendorTrunkId)}` : v.isBackup ? "last resort" : ""}
+                </td>
                 <td>{v.warmupCount ? `${v.warmupCount} per ${v.warmupPer ?? "day"}` : "—"}</td>
               </tr>
             ))}
@@ -133,6 +139,18 @@ export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (
     </div>
   );
 }
+
+/** A backup row standing in for one vendor (team trial round 1): same level, takes its traffic when it fails. */
+const backupOf = (v: RouteVendor, share = 100): RouteVendor => ({
+  level: v.level,
+  vendorTrunkId: 0,
+  sharePct: share,
+  isBackup: true,
+  backupForVendorTrunkId: v.vendorTrunkId,
+  warmupCount: null,
+  warmupPer: null,
+  warmupReset: null,
+});
 
 export function VendorsSection({
   rule,
@@ -168,6 +186,8 @@ export function VendorsSection({
 
   const save = async () => {
     if (problems.length) return setError(problems.join(" "));
+    const bp = backupProblems(vendors, vendorName);
+    if (bp.length) return setError(bp.join(" "));
     const w = d.qbrWeights;
     if (d.routeType === "qbr" && w && w.asr + w.dlr + w.delay + w.cost !== 100)
       return setError("The quality weights must add up to 100 %.");
@@ -242,113 +262,216 @@ export function VendorsSection({
               </tr>
             </thead>
             <tbody>
-              {vendors.map((v, i) => (
-                <tr key={i}>
-                  <td>
-                    <select
-                      value={v.level}
-                      aria-label="Level"
-                      onChange={(e) => setVendor(i, { level: Number(e.target.value) })}
-                    >
-                      {Array.from({ length: d.maxRouteLevel ?? 1 }, (_, k) => k + 1).map((l) => (
-                        <option key={l} value={l}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="vf-vendor">
-                    <ListLookup<TrunkListRow>
-                      list="vendor_trunks"
-                      value={v.vendorTrunkId || null}
-                      clearable={false}
-                      onChange={(r) => r && setVendor(i, { vendorTrunkId: r.id })}
-                      labelOf={(r) => r.name}
-                      detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
-                      placeholder="Vendor trunk…"
-                    />
-                  </td>
-                  {d.huntPolicy === "percentage" && (
-                    <td>
-                      <input
-                        className="num w-num"
-                        type="number"
-                        min={0}
-                        max={100}
-                        aria-label="Share %"
-                        value={v.sharePct ?? ""}
-                        disabled={v.isBackup}
-                        onChange={(e) => setVendor(i, { sharePct: numOrNull(e.target.value) })}
-                      />
-                    </td>
-                  )}
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label="Backup"
-                      checked={!!v.isBackup}
-                      onChange={(e) => setVendor(i, { isBackup: e.target.checked })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="num w-num"
-                      type="number"
-                      min={1}
-                      placeholder="off"
-                      aria-label="Warm-up messages"
-                      value={v.warmupCount ?? ""}
-                      onChange={(e) => {
-                        const n = numOrNull(e.target.value);
-                        setVendor(
-                          i,
-                          n
-                            ? { warmupCount: n, warmupPer: v.warmupPer ?? "rule", warmupReset: v.warmupReset ?? null }
-                            : { warmupCount: null, warmupPer: null, warmupReset: null },
-                        );
-                      }}
-                    />
-                  </td>
-                  <td>
-                    <select
-                      aria-label="Warm-up counted per"
-                      disabled={!v.warmupCount}
-                      value={v.warmupPer ?? ""}
-                      onChange={(e) =>
-                        setVendor(i, { warmupPer: (e.target.value || null) as RouteVendor["warmupPer"] })
-                      }
-                    >
-                      <option value="rule">Rule</option>
-                      <option value="customer_trunk">Customer trunk</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select
-                      aria-label="Warm-up resets"
-                      disabled={!v.warmupCount}
-                      value={v.warmupReset ?? ""}
-                      onChange={(e) =>
-                        setVendor(i, { warmupReset: (e.target.value || null) as RouteVendor["warmupReset"] })
-                      }
-                    >
-                      <option value="">Never</option>
-                      <option value="hour">Hourly</option>
-                      <option value="day">Daily</option>
-                      <option value="week">Weekly</option>
-                    </select>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label="Remove vendor"
-                      onClick={() => set({ vendors: vendors.filter((_, j) => j !== i) })}
-                    >
-                      <Icon name="x" size={13} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {vendors.map((v, i) => {
+                if (v.isBackup && v.backupForVendorTrunkId) return null;
+                const own = vendors
+                  .map((b, j) => ({ b, j }))
+                  .filter(({ b }) => b.isBackup && !!v.vendorTrunkId && b.backupForVendorTrunkId === v.vendorTrunkId);
+                return (
+                  <Fragment key={i}>
+                    <tr>
+                      <td>
+                        <select
+                          value={v.level}
+                          aria-label="Level"
+                          onChange={(e) => setVendor(i, { level: Number(e.target.value) })}
+                        >
+                          {Array.from({ length: d.maxRouteLevel ?? 1 }, (_, k) => k + 1).map((l) => (
+                            <option key={l} value={l}>
+                              {l}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="vf-vendor">
+                        <ListLookup<TrunkListRow>
+                          list="vendor_trunks"
+                          value={v.vendorTrunkId || null}
+                          clearable={false}
+                          onChange={(r) =>
+                            r &&
+                            set({
+                              // Its own backups follow the vendor it stands in for.
+                              vendors: vendors.map((x, j) =>
+                                j === i
+                                  ? { ...x, vendorTrunkId: r.id }
+                                  : x.isBackup && x.backupForVendorTrunkId === v.vendorTrunkId && v.vendorTrunkId
+                                    ? { ...x, backupForVendorTrunkId: r.id }
+                                    : x,
+                              ),
+                            })
+                          }
+                          labelOf={(r) => r.name}
+                          detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
+                          placeholder="Vendor trunk…"
+                        />
+                      </td>
+                      {d.huntPolicy === "percentage" && (
+                        <td>
+                          <input
+                            className="num w-num"
+                            type="number"
+                            min={0}
+                            max={100}
+                            aria-label="Share %"
+                            value={v.sharePct ?? ""}
+                            disabled={v.isBackup}
+                            onChange={(e) => setVendor(i, { sharePct: numOrNull(e.target.value) })}
+                          />
+                        </td>
+                      )}
+                      <td>
+                        {v.isBackup ? (
+                          // An older rule-wide backup: the last resort after every level.
+                          <label className="toggle-inline small" title="Tried last, after every level">
+                            <input type="checkbox" checked onChange={() => setVendor(i, { isBackup: false })} />
+                            last resort
+                          </label>
+                        ) : (
+                          <input
+                            type="checkbox"
+                            aria-label="Backups for this vendor"
+                            title={
+                              v.vendorTrunkId
+                                ? "Vendors that take this vendor's traffic when it fails"
+                                : "Choose the vendor first"
+                            }
+                            disabled={!v.vendorTrunkId}
+                            checked={own.length > 0}
+                            onChange={(e) =>
+                              set({
+                                vendors: e.target.checked
+                                  ? [...vendors, backupOf(v)]
+                                  : vendors.filter(
+                                      (x) => !(x.isBackup && x.backupForVendorTrunkId === v.vendorTrunkId),
+                                    ),
+                              })
+                            }
+                          />
+                        )}
+                      </td>
+                      <td>
+                        <input
+                          className="num w-num"
+                          type="number"
+                          min={1}
+                          placeholder="off"
+                          aria-label="Warm-up messages"
+                          value={v.warmupCount ?? ""}
+                          onChange={(e) => {
+                            const n = numOrNull(e.target.value);
+                            setVendor(
+                              i,
+                              n
+                                ? {
+                                    warmupCount: n,
+                                    warmupPer: v.warmupPer ?? "rule",
+                                    warmupReset: v.warmupReset ?? null,
+                                  }
+                                : { warmupCount: null, warmupPer: null, warmupReset: null },
+                            );
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          aria-label="Warm-up counted per"
+                          disabled={!v.warmupCount}
+                          value={v.warmupPer ?? ""}
+                          onChange={(e) =>
+                            setVendor(i, { warmupPer: (e.target.value || null) as RouteVendor["warmupPer"] })
+                          }
+                        >
+                          <option value="rule">Rule</option>
+                          <option value="customer_trunk">Customer trunk</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          aria-label="Warm-up resets"
+                          disabled={!v.warmupCount}
+                          value={v.warmupReset ?? ""}
+                          onChange={(e) =>
+                            setVendor(i, { warmupReset: (e.target.value || null) as RouteVendor["warmupReset"] })
+                          }
+                        >
+                          <option value="">Never</option>
+                          <option value="hour">Hourly</option>
+                          <option value="day">Daily</option>
+                          <option value="week">Weekly</option>
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label="Remove vendor"
+                          onClick={() =>
+                            set({
+                              vendors: vendors.filter(
+                                (x, j) =>
+                                  j !== i &&
+                                  !(x.isBackup && v.vendorTrunkId && x.backupForVendorTrunkId === v.vendorTrunkId),
+                              ),
+                            })
+                          }
+                        >
+                          <Icon name="x" size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                    {own.length > 0 && (
+                      <tr className="vf-backups">
+                        <td />
+                        <td colSpan={d.huntPolicy === "percentage" ? 7 : 6}>
+                          <div className="vf-backup-list">
+                            <span className="muted small">Backups for this vendor (share of its traffic):</span>
+                            {own.map(({ b, j }) => (
+                              <span key={j} className="vf-backup">
+                                <ListLookup<TrunkListRow>
+                                  list="vendor_trunks"
+                                  value={b.vendorTrunkId || null}
+                                  clearable={false}
+                                  onChange={(r) => r && setVendor(j, { vendorTrunkId: r.id })}
+                                  labelOf={(r) => r.name}
+                                  detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
+                                  placeholder="Backup vendor…"
+                                />
+                                <input
+                                  className="num w-num"
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  aria-label="Backup share %"
+                                  value={b.sharePct ?? ""}
+                                  onChange={(e) => setVendor(j, { sharePct: numOrNull(e.target.value) })}
+                                />
+                                %
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  aria-label="Remove backup"
+                                  onClick={() => set({ vendors: vendors.filter((_, k) => k !== j) })}
+                                >
+                                  <Icon name="x" size={12} />
+                                </button>
+                              </span>
+                            ))}
+                            <button
+                              type="button"
+                              className="link small"
+                              disabled={own.length >= 5}
+                              onClick={() => set({ vendors: [...vendors, backupOf(v, 0)] })}
+                            >
+                              + Add backup
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {vendors.length === 0 && (
                 <tr>
                   <td colSpan={8} className="muted">

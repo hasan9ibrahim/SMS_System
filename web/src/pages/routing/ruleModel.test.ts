@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { RouteRuleDetail } from "@sms/contract";
 import {
+  backupProblems,
   clearCondition,
   compact,
   conditionChips,
@@ -140,4 +141,21 @@ test("percentage shares must add up to 100 per level; counts read compact", () =
   assert.equal(compact(28_200), "28.2k");
   assert.equal(compact(812), "812");
   assert.equal(compact(null), "—");
+});
+
+test("a vendor's own backups: all chosen, shares add up to 100 when several (team trial round 1)", () => {
+  const b = (id: number, share: number) => ({
+    level: 1,
+    vendorTrunkId: id,
+    sharePct: share,
+    isBackup: true,
+    backupForVendorTrunkId: 7,
+  });
+  const name = (id: number) => `#${id}`;
+  assert.deepEqual(backupProblems([b(3, 100)], name), []);
+  assert.deepEqual(backupProblems([b(3, 70), b(4, 30)], name), []);
+  assert.deepEqual(backupProblems([b(3, 70), b(0, 20)], name), [
+    "Choose every backup of #7.",
+    "Backups of #7 add up to 90%, not 100%.",
+  ]);
 });

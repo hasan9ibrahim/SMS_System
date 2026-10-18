@@ -287,6 +287,21 @@ export function shareProblems(vendors: RouteVendor[], huntPolicy: string): strin
     .map(([level, s]) => `Level ${level} shares add up to ${s}%, not 100%.`);
 }
 
+/** Each vendor's backups: all chosen, and their shares add up to 100 when there are several. */
+export function backupProblems(vendors: RouteVendor[], nameOf: (id: number) => string): string[] {
+  const by = new Map<number, RouteVendor[]>();
+  for (const v of vendors)
+    if (v.isBackup && v.backupForVendorTrunkId)
+      by.set(v.backupForVendorTrunkId, [...(by.get(v.backupForVendorTrunkId) ?? []), v]);
+  const out: string[] = [];
+  for (const [id, bs] of by) {
+    if (bs.some((b) => !b.vendorTrunkId)) out.push(`Choose every backup of ${nameOf(id)}.`);
+    const sum = bs.reduce((n, b) => n + (b.sharePct ?? 0), 0);
+    if (bs.length > 1 && sum !== 100) out.push(`Backups of ${nameOf(id)} add up to ${sum}%, not 100%.`);
+  }
+  return out;
+}
+
 export const ROUTE_TYPES = [
   { value: "static", label: "Static", tone: "neutral" },
   { value: "dynamic", label: "Least cost", tone: "accent" },
