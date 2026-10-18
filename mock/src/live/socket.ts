@@ -8,6 +8,7 @@
 // pushes each subscriber's Report By snapshot every 1, 5 or 15 seconds (§13.4); `alerts:<userId>`
 // carries incidents raised by the alert engine (alerts/engine.ts, §13.6), which runs every 15 seconds
 // from server start, whether or not anyone is connected.
+import { WRITE_EVERY_MS, writeLiveEdrs } from "./edrWriter.js";
 import type { FastifyInstance } from "fastify";
 import websocket from "@fastify/websocket";
 import type { WebSocket } from "ws";
@@ -40,6 +41,7 @@ let loading: Promise<Simulator> | null = null;
 let timer: NodeJS.Timeout | null = null;
 let ticks = 0;
 let lastEvaluation = 0;
+let lastEdrWrite = 0;
 let evaluating = false;
 
 /** The simulator if it is running, without starting it (LCR TPS figures, §13.23). */
@@ -90,6 +92,11 @@ function tick() {
   for (const c of clients)
     if (c.analytics && c.topics.has("live:analytics") && ticks % c.analytics.intervalSeconds === 0)
       send(c, "live:analytics", "snapshot", analyticsSnapshot(sim, c.analytics, now));
+  // The simulated messages go to the EDR store too, so Live analytics and the reports grow with them.
+  if (now - lastEdrWrite >= WRITE_EVERY_MS) {
+    lastEdrWrite = now;
+    void writeLiveEdrs(sim);
+  }
   if (!evaluating && now - lastEvaluation >= EVALUATE_EVERY_MS) {
     lastEvaluation = now;
     evaluating = true;

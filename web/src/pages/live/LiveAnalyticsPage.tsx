@@ -229,7 +229,20 @@ function useLiveTick(seconds: number, enabled: boolean): number {
       { groupBy: "customer", intervalSeconds: seconds < 5 ? 1 : seconds < 15 ? 5 : 15, limit: 1 },
     );
     s.connect();
-    return () => s.close();
+    // Without pushes (socket down or reconnecting) a timer keeps the refresh going.
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const busy =
+        client.isFetching({ queryKey: ["analytics-level"] }) + client.isFetching({ queryKey: ["analytics-total"] }) > 0;
+      if (!busy && now - last.current >= seconds * 1500) {
+        last.current = now;
+        setTick((t) => t + 1);
+      }
+    }, seconds * 1000);
+    return () => {
+      clearInterval(timer);
+      s.close();
+    };
   }, [seconds, enabled, client]);
   return tick;
 }
