@@ -24,7 +24,7 @@ import { billingContacts } from "./finance.js";
 import { exportList, load, notFound, setArchived } from "./masterData.js";
 import { dependencies, isTimezone, recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
-import { companyMailbox, logEmail } from "./emailLog.js";
+import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -236,19 +236,18 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
         409,
         `Invoice ${inv.invoiceNumber} is ${inv.status}; the PDF exists once it is completed`,
       );
-    const { rows } = await pool.query(
-      `SELECT bc.name AS bc_name, bc.address_line1 AS bc_addr, bc.city AS bc_city, bc.website,
-              e.name, e.address_line1, e.city, e.vat_number
-         FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id WHERE e.id = $1`,
-      [inv.enterpriseId],
-    );
+    const { rows } = await pool.query("SELECT name, address_line1, city, vat_number FROM enterprises WHERE id = $1", [
+      inv.enterpriseId,
+    ]);
     const p = rows[0]!;
+    // The partner's business company issues the invoice: its name, address and bank account (§11).
+    const bc = await companyDetails(pool, { enterpriseId: inv.enterpriseId });
     const charges = await chargeLines(pool, inv);
     const top = charges.rows.slice(0, 18);
     const pdf = simplePdf([
-      { text: p.bc_name, size: 16, bold: true, gap: 0 },
-      { text: [p.bc_addr, p.bc_city].filter(Boolean).join(", ") },
-      { text: p.website ?? "" },
+      { text: bc?.name ?? "", size: 16, bold: true, gap: 0 },
+      { text: bc?.address ?? "" },
+      { text: bc?.website ?? "" },
       { text: inv.kind === "proforma" ? "PROFORMA INVOICE" : "INVOICE", size: 14, bold: true, gap: 30 },
       { text: `Invoice No: ${inv.invoiceNumber}` },
       { text: `Invoice Date: ${inv.invoiceDate}    Payment Due Date: ${inv.dueDate}` },
@@ -274,6 +273,13 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
           ]
         : []),
       ...(charges.note ? [{ text: charges.note, size: 8, gap: 18 }] : []),
+      ...(bc?.bank.length
+        ? [
+            { text: "Payment details", bold: true, gap: 24 },
+            ...bc.bank.map((b) => ({ text: `${b.label}: ${b.value}`, size: 9 })),
+            { text: `Please quote invoice ${inv.invoiceNumber} with your payment.`, size: 8, gap: 16 },
+          ]
+        : []),
     ]);
     return reply
       .type("application/pdf")
@@ -283,6 +289,32 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
 }
 
 // ---------------------------------------------------------------- send and mark
+
+/**
+ * The invoice e-mail: the partner's business company's Invoice template (§11), filled with the invoice and
+ * the company's placeholders, so each entity's invoices carry its own wording and bank details.
+ */
+const twoDp = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+async function invoiceMail(c: Db, id: number) {
+  const inv = await loadInvoice(c, id);
+  if (!inv) return null;
+  const tpl = await companyTemplate(c, { enterpriseId: inv.enterpriseId }, "invoice");
+  if (!tpl) return null;
+  const { rows } = await c.query("SELECT name FROM enterprises WHERE id = $1", [inv.enterpriseId]);
+  const vars: Record<string, string> = {
+    ...companyPlaceholders(await companyDetails(c, { enterpriseId: inv.enterpriseId })),
+    enterprise: (rows[0]?.name as string | undefined) ?? "",
+    from: inv.usageStart,
+    to: inv.usageEnd,
+    invoice_no: inv.invoiceNumber,
+    amount: twoDp(inv.usageCharges ?? 0),
+    due_amount: twoDp(inv.dueAmount ?? 0),
+    currency: inv.currency,
+    due_date: inv.dueDate,
+  };
+  const fill = (t: string) => t.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+  return { subject: fill(tpl.subject), body: fill(tpl.body) };
+}
 
 export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
   const { ids } = request.body as InvoiceIdsInput;
@@ -327,17 +359,19 @@ export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
     if (!send.length) return { sent: 0, skipped, change: null };
     const me = await getCurrentUser();
     const change = await inTransaction(pool, async (c) => {
-      for (const s of send)
+      for (const s of send) {
+        const mail = await invoiceMail(c, s.id);
         await logEmail(c, {
           type: "invoice",
           enterpriseId: s.enterpriseId,
           to: s.to,
-          sender: await companyMailbox(c, s.enterpriseId!, "billing"),
-          subject: `Invoice ${s.number}`,
-          body: `Please find attached invoice ${s.number}.`,
+          sender: await companyMailbox(c, s.enterpriseId!, "invoice"),
+          subject: mail?.subject ?? `Invoice ${s.number}`,
+          body: mail?.body ?? `Please find attached invoice ${s.number}.`,
           file: `${s.number}.pdf`,
           userId: me.id,
         });
+      }
       for (const s of send)
         await c.query(
           `UPDATE invoices SET email_status = 'sent', email_sent_at = now(), email_recipients = $2,

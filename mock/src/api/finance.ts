@@ -414,7 +414,7 @@ async function logConfirmation(c: Db, txId: number, enterpriseId: number, to: st
     type: "payment_confirmation",
     enterpriseId,
     to,
-    sender: await companyMailbox(c, enterpriseId, "billing"),
+    sender: await companyMailbox(c, enterpriseId, "paymentConfirmation"),
     subject: `Payment confirmation TX-${txId}: ${Number(t.amount).toFixed(2)} ${String(t.currency).trim()}`,
     body: `We confirm your payment of ${Number(t.amount).toFixed(2)} ${String(t.currency).trim()} dated ${
       t.payment_date instanceof Date ? t.payment_date.toISOString().slice(0, 10) : t.payment_date

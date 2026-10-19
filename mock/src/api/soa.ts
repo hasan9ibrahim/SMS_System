@@ -29,7 +29,7 @@ import { notFound, setArchived } from "./masterData.js";
 import { recordChange, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
-import { companyMailbox, logEmail } from "./emailLog.js";
+import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -593,6 +593,7 @@ async function emailFor(c: Db, st: SoaStatement, templateId: number) {
   if (!t) return null;
   const main = st.sides.find((s) => s.side === "customer") ?? st.sides[0];
   const vars: Record<string, string> = {
+    ...companyPlaceholders(await companyDetails(c, { enterpriseId: st.enterpriseId })),
     enterprise: st.enterprise,
     from: st.from,
     to: st.to,
@@ -752,12 +753,14 @@ async function logSoaEmail(
   userId: unknown,
   fileType: string,
 ) {
-  const mail = templateId === null ? null : await emailFor(c, st, templateId);
+  // No template picked: the partner's business company's SOA Statement template (§11).
+  const tid = templateId ?? (await companyTemplate(c, { enterpriseId: st.enterpriseId }, "soa_statement"))?.id ?? null;
+  const mail = tid === null ? null : await emailFor(c, st, tid);
   await logEmail(c, {
     type: "send_soa",
     enterpriseId: st.enterpriseId,
     to,
-    sender: await companyMailbox(c, st.enterpriseId, "billing"),
+    sender: await companyMailbox(c, st.enterpriseId, "soa"),
     subject: mail?.subject ?? `Statement of account ${st.from} to ${st.to}`,
     body: mail?.body ?? "",
     file: `SOA_${st.from}_${st.to}.${fileType === "excel" ? "xls" : "pdf"}`,

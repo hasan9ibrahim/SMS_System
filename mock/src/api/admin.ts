@@ -58,6 +58,7 @@ import { dependencies, recordChange, type DiffEntry, type FieldError } from "./r
 import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
 import { inTransaction } from "./views.js";
+import { companyDetails, companyPlaceholders } from "./emailLog.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -786,6 +787,21 @@ export function endUserSession(request: FastifyRequest, reply: FastifyReply) {
 const COMMON: [string, string, string][] = [
   ["enterprise", "Partner (enterprise) name", "Fenphy Demo Telecom"],
   ["company", "Business company name", "Bricor Gateway Group"],
+  // The sending business company's address and bank (§11): each entity's e-mails carry its own account.
+  ["company_address", "Business company address", "12 Example Street, 1000 Demo City, Lebanon"],
+  ["company_website", "Business company website", "https://bricor.example"],
+  [
+    "bank_details",
+    "All bank lines of the business company",
+    "Beneficiary: Bricor Gateway Group\nBank: Demo Bank SAL\nIBAN: LB00 0000 0000 0000 0000 0000 0000\nSWIFT: DEMOLBBE",
+  ],
+  ["bank_beneficiary", "Bank beneficiary name", "Bricor Gateway Group"],
+  ["bank_name", "Bank name", "Demo Bank SAL"],
+  ["bank_address", "Bank address", "1 Bank Square, Demo City"],
+  ["bank_currency", "Bank account currency", "USD"],
+  ["bank_account", "Bank account number", "000123456789"],
+  ["bank_iban", "IBAN", "LB00 0000 0000 0000 0000 0000 0000"],
+  ["bank_swift", "SWIFT / BIC", "DEMOLBBE"],
 ];
 const PLACEHOLDERS: Record<string, [string, string, string][]> = {
   customer_rate: [
@@ -797,6 +813,7 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["to", "Usage end", "2026-10-15"],
     ["invoice_no", "Invoice number", "INV-1042"],
     ["amount", "Total", "1,250.40"],
+    ["due_amount", "Amount due (after balance)", "1,250.40"],
     ["currency", "Currency", "USD"],
     ["due_date", "Due date", "2026-10-30"],
   ],
@@ -991,9 +1008,16 @@ export function cloneEmailTemplate(request: FastifyRequest, reply: FastifyReply)
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
 /** Fills {placeholders} with sample values; plain-text bodies become HTML with line breaks. */
-export function fillTemplate(type: string, subject: string, body: string, company: string | null) {
+export function fillTemplate(
+  type: string,
+  subject: string,
+  body: string,
+  company: string | Record<string, string> | null,
+) {
   const values = new Map(placeholdersOf(type).map((p) => [p.key, p.sample]));
-  if (company) values.set("company", company);
+  // A business company picked: its own name, address and bank fill the company placeholders (§11).
+  if (typeof company === "string") values.set("company", company);
+  else if (company) for (const [k, v] of Object.entries(company)) if (v && values.has(k)) values.set(k, v);
   const unknown = new Set<string>();
   const fill = (text: string, html: boolean) =>
     text.replace(/\{([a-z_]+)\}/g, (m, key: string) => {
@@ -1012,11 +1036,10 @@ export function fillTemplate(type: string, subject: string, body: string, compan
 export function previewEmailTemplate(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as EmailTemplatePreviewInput;
   return withDb(reply, async (pool) => {
-    let company: string | null = null;
-    if (b.businessCompanyId != null) {
-      const { rows } = await pool.query("SELECT name FROM business_companies WHERE id = $1", [b.businessCompanyId]);
-      company = (rows[0]?.name as string | undefined) ?? null;
-    }
+    const company =
+      b.businessCompanyId == null
+        ? null
+        : companyPlaceholders(await companyDetails(pool, { companyId: b.businessCompanyId }));
     return fillTemplate(b.emailType, b.subject, b.body, company);
   });
 }

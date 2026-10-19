@@ -255,6 +255,20 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
     assert.equal(pdf.statusCode, 200);
     assert.equal(pdf.headers["content-type"], "application/pdf");
     assert.ok(pdf.rawPayload.subarray(0, 8).toString() === "%PDF-1.4");
+    // The partner's business company issues it (§11): its mailbox, Invoice template and bank account.
+    const { rows: bc } = await db().query(
+      `SELECT bc.name, bc.bank_iban, mb.smtp_email FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id
+         LEFT JOIN business_company_mailboxes mb ON mb.business_company_id = bc.id AND mb.department = 'billing' WHERE e.id = $1`,
+      [enterpriseId],
+    );
+    const { rows: mail } = await db().query(
+      "SELECT sender, subject, body FROM email_logs WHERE email_type = 'invoice' AND subject LIKE $1 ORDER BY id DESC LIMIT 1",
+      [`%${inv.invoiceNumber}%`],
+    );
+    assert.equal(mail[0]?.sender, bc[0].smtp_email);
+    assert.ok(String(mail[0].body).includes(`IBAN: ${bc[0].bank_iban}`), "the e-mail carries the company's bank");
+    assert.ok(String(mail[0].subject).includes(bc[0].name));
+    assert.ok(pdf.rawPayload.toString("latin1").includes(`(IBAN: ${bc[0].bank_iban}) Tj`), "the PDF carries it too");
 
     const regen = await ok("regenerateInvoice", call("POST", `/invoices/${inv.id}/regenerate`), 202);
     assert.equal(regen.regenerate, true);

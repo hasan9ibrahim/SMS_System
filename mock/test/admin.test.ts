@@ -24,6 +24,7 @@ import {
 import { DEMO_TOTP_SECRET, SEED_PASSWORD } from "../src/generator/admin.js";
 import { fillTemplate } from "../src/api/admin.js";
 import { tableOf } from "../src/api/audit.js";
+import { companyDetails, companyPlaceholders, companyTemplate, senderFor } from "../src/api/emailLog.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -521,6 +522,7 @@ describe("§11 business companies", { skip }, () => {
       address: r.address,
       bank: r.bank,
       defaultTemplates: r.defaultTemplates,
+      senders: r.senders,
       mailboxes: r.mailboxes.map(
         ({ hasSmtpPassword: _a, hasClientSecret: _b, lastCheckAt: _c, lastCheckOk: _d, ...m }) => ({
           ...m,
@@ -551,8 +553,41 @@ describe("§11 business companies", { skip }, () => {
     withSecrets.mailboxes = withSecrets.mailboxes.map((m) => ({ ...m, clientSecret: "fake-new-secret" }));
     withSecrets.bank = { ...withSecrets.bank, iban: "XX00FAKE000" };
     withSecrets.defaultTemplates = { ...withSecrets.defaultTemplates, lowBalance: 10 };
+    // Senders (§11): tech info from the Support mailbox instead of NOC.
+    assert.equal(copy.senders.techInfo, "noc");
+    withSecrets.senders = { ...withSecrets.senders, techInfo: "support" };
     const saved = await ok("updateBusinessCompany", call("PUT", `/business-companies/${copy.id}`, withSecrets));
     assert.equal(saved.record.bank.iban, "XX00FAKE000");
+    assert.equal(saved.record.senders.techInfo, "support");
+    const support = saved.record.mailboxes.find((m: { department: string }) => m.department === "support")?.smtpEmail;
+    assert.equal(await senderFor(db(), { companyId: copy.id }, "techInfo"), support);
+    const billing = saved.record.mailboxes.find((m: { department: string }) => m.department === "billing")?.smtpEmail;
+    assert.equal(await senderFor(db(), { companyId: copy.id }, "invoice"), billing);
+    // Templates (§11): the company's chosen default wins, then its own template of the type, then a shared one.
+    const firstCompany = await companyTemplate(db(), { companyId: 1 }, "low_balance");
+    const { rows: own } = await db().query(
+      `INSERT INTO email_templates (business_company_id, name, email_type, subject, body)
+       VALUES ($1, $2, 'low_balance', 'Low balance – {company}', 'Pay to {bank_iban}') RETURNING id`,
+      [copy.id, `Own low balance ${run}`],
+    );
+    const ownId = Number(own[0].id);
+    assert.equal(
+      (await companyTemplate(db(), { companyId: copy.id }, "low_balance"))?.id,
+      saved.record.defaultTemplates.lowBalance,
+    );
+    await db().query(
+      "UPDATE business_companies SET default_templates = default_templates - 'lowBalance' WHERE id = $1",
+      [copy.id],
+    );
+    assert.equal((await companyTemplate(db(), { companyId: copy.id }, "low_balance"))?.id, ownId);
+    assert.equal(
+      (await companyTemplate(db(), { companyId: 1 }, "low_balance"))?.id,
+      firstCompany?.id,
+      "other companies keep theirs",
+    );
+    const placeholders = companyPlaceholders(await companyDetails(db(), { companyId: copy.id }));
+    assert.equal(placeholders.bank_iban, "XX00FAKE000");
+    assert.match(placeholders.bank_details!, /IBAN: XX00FAKE000/);
     assert.ok(saved.record.mailboxes.every((m: { hasClientSecret: boolean }) => m.hasClientSecret));
     const { rows: enc } = await db().query(
       "SELECT client_secret_enc FROM business_company_mailboxes WHERE business_company_id = $1 LIMIT 1",

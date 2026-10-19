@@ -348,7 +348,7 @@ export async function sendIncidentEmail(
     type: "monitoring_alert",
     enterpriseId: rule.partnerContactType ? ent : null,
     to,
-    sender: ent ? await companyMailbox(c, ent, "noc") : null,
+    sender: ent ? await companyMailbox(c, ent, "trafficAlert") : null,
     subject: fill(tpl.subject, values),
     body: fill(tpl.body, values),
   });

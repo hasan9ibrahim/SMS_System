@@ -274,7 +274,7 @@ async function buildTicket(pool: pg.Pool, b: TroubleTicketPreviewInput): Promise
     customerTrunkId,
     vendorTrunkId,
     recipients: await contactEmails(pool, enterpriseId, ["technical", "commercial"]).then((all) => all.slice(0, 4)),
-    sender: await companyMailbox(pool, enterpriseId, "noc"),
+    sender: await companyMailbox(pool, enterpriseId, "troubleTicket"),
     subject: b.subject.trim() || fill(tpl[0].subject, vars),
     body: fill(tpl[0].body, vars),
     rows,

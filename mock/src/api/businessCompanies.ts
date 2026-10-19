@@ -10,12 +10,14 @@ import type {
   BusinessCompanyRecord,
   CloneInput,
   CompanyFileUpload,
+  CompanySenders,
   MailboxInput,
   MailboxRow,
   SmtpCheckInput,
 } from "@sms/contract";
 import { withDb } from "../db.js";
 import { decryptSecret, encryptSecret } from "../admin/passwords.js";
+import { SENDER_DEFAULTS } from "./emailLog.js";
 import { BUSINESS_COMPANY_FROM, BUSINESS_COMPANY_SELECT } from "../lists/adminDefs.js";
 import { sendProblem } from "../problem.js";
 import { archiveGate } from "./enterprises.js";
@@ -135,6 +137,7 @@ export async function loadCompany(c: Db, id: number): Promise<BusinessCompanyRec
     defaultTemplates: Object.fromEntries(
       Object.keys(TEMPLATE_TYPES).map((k) => [k, dt[k] ?? null]),
     ) as BusinessCompanyRecord["defaultTemplates"],
+    senders: { ...SENDER_DEFAULTS, ...((r.senders as Partial<CompanySenders> | null) ?? {}) },
     mailboxes: mb.map(mapMailbox),
     files: files.map((f) => ({
       kind: f.kind,
@@ -283,6 +286,11 @@ export async function applyBusinessCompanyField(c: pg.PoolClient, id: number, fi
       id,
       JSON.stringify(value ?? {}),
     ]);
+  } else if (field === "senders") {
+    await c.query("UPDATE business_companies SET senders = $2, updated_at = now() WHERE id = $1", [
+      id,
+      JSON.stringify(value ?? {}),
+    ]);
   } else if (field === "mailboxes") {
     // Secrets are not in the history; an undo keeps the stored ones per department.
     await writeMailboxes(c, id, (value as MailboxRow[]) ?? []);
@@ -316,7 +324,7 @@ export function createBusinessCompany(request: FastifyRequest, reply: FastifyRep
         [b.name, b.baseCurrency, b.invoiceNumberStart, me.id],
       );
       const id = Number(rows[0].id);
-      for (const f of [...SCALARS.map(([k]) => k), "address", "bank", "defaultTemplates"])
+      for (const f of [...SCALARS.map(([k]) => k), "address", "bank", "defaultTemplates", "senders"])
         await applyBusinessCompanyField(c, id, f, (b as unknown as Row)[f]);
       await writeMailboxes(c, id, b.mailboxes);
       const change = await recordChange(c, {
@@ -343,7 +351,7 @@ export function updateBusinessCompany(request: FastifyRequest, reply: FastifyRep
     if (before.archivedAt) return sendProblem(reply, 409, "This business company is deleted; restore it first");
     const errors = await check(pool, b, id);
     if (errors.length) return badInput(reply, errors);
-    const keys = [...SCALARS.map(([k]) => k), "address", "bank", "defaultTemplates"];
+    const keys = [...SCALARS.map(([k]) => k), "address", "bank", "defaultTemplates", "senders"];
     const diff: DiffEntry[] = keys
       .filter((k) => !same((before as unknown as Row)[k], (b as unknown as Row)[k]))
       .map((k) => ({
@@ -479,7 +487,13 @@ export function cloneBusinessCompany(request: FastifyRequest, reply: FastifyRepl
         [name.trim(), src.baseCurrency, src.invoiceNumberStart, me.id],
       );
       const newId = Number(rows[0].id);
-      for (const f of [...SCALARS.map(([k]) => k).filter((k) => k !== "name"), "address", "bank", "defaultTemplates"])
+      for (const f of [
+        ...SCALARS.map(([k]) => k).filter((k) => k !== "name"),
+        "address",
+        "bank",
+        "defaultTemplates",
+        "senders",
+      ])
         await applyBusinessCompanyField(c, newId, f, (src as unknown as Row)[f]);
       // Mailboxes without passwords or secrets: those are entered again for the new company.
       for (const m of src.mailboxes)

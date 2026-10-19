@@ -47,7 +47,7 @@ import {
 import { sendProblem } from "../problem.js";
 import { spreadsheetXml } from "../billing/files.js";
 import { edrCoverage } from "../billing/edrFigures.js";
-import { companyMailbox, logEmail } from "./emailLog.js";
+import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
 import { exportList, notFound, setArchived } from "./masterData.js";
 import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
@@ -74,13 +74,13 @@ async function one<T>(
   return rows[0] ? map(rows[0]) : null;
 }
 
-/** First template of a type (the shared ones; per-company templates come with §11). */
-async function templateOf(c: Db, type: string) {
-  const { rows } = await c.query(
-    "SELECT id, subject, body FROM email_templates WHERE email_type = $1 AND deleted_at IS NULL ORDER BY id LIMIT 1",
-    [type],
-  );
-  return rows[0] as { id: number; subject: string; body: string } | undefined;
+/** The template a partner's e-mail uses: its business company's default, else a shared one (§11). */
+async function templateFor(c: Db, enterpriseId: number, type: string) {
+  return companyTemplate(c, { enterpriseId }, type);
+}
+/** The sending business company's placeholders ({company}, {bank_details}, …) for a partner (§11). */
+async function companyVarsOf(c: Db, enterpriseId: number) {
+  return companyPlaceholders(await companyDetails(c, { enterpriseId }));
 }
 export const fill = (s: string, vars: Record<string, string>) =>
   s.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
@@ -250,8 +250,14 @@ export function downloadRateSheet(request: FastifyRequest, reply: FastifyReply) 
 }
 
 async function rateMail(c: Db, t: TrunkInfo) {
-  const tpl = await templateOf(c, "customer_rate");
-  const vars = { enterprise: t.enterprise, trunk: t.name, company: t.company, rate_date: today() };
+  const tpl = await templateFor(c, t.enterpriseId, "customer_rate");
+  const vars = {
+    ...(await companyVarsOf(c, t.enterpriseId)),
+    enterprise: t.enterprise,
+    trunk: t.name,
+    company: t.company,
+    rate_date: today(),
+  };
   return {
     to: await contactEmails(c, t.enterpriseId, ["rates", "commercial"]).then((x) => x.slice(0, 3)),
     subject: fill(tpl?.subject ?? "Rate update for {trunk}", vars),
@@ -260,8 +266,9 @@ async function rateMail(c: Db, t: TrunkInfo) {
 }
 
 async function techMail(c: Db, t: TrunkInfo) {
-  const tpl = await templateOf(c, "customer_tech_info");
+  const tpl = await templateFor(c, t.enterpriseId, "customer_tech_info");
   const vars = {
+    ...(await companyVarsOf(c, t.enterpriseId)),
     enterprise: t.enterprise,
     trunk: t.name,
     company: t.company,
@@ -316,7 +323,7 @@ export function sendRateNotifications(request: FastifyRequest, reply: FastifyRep
         enterpriseId: t.enterpriseId,
         customerTrunkId: t.id,
         to: m.to,
-        sender: await companyMailbox(pool, t.enterpriseId, "rates"),
+        sender: await companyMailbox(pool, t.enterpriseId, "rateSheet"),
         subject: m.subject,
         body: `${m.body}\n\n(${lines.length} rate lines attached)`,
         file: sheetFile(t, [], b.fileType).name,
@@ -348,7 +355,7 @@ export function sendTechInfoNotifications(request: FastifyRequest, reply: Fastif
         enterpriseId: t.enterpriseId,
         customerTrunkId: t.id,
         to: m.to,
-        sender: await companyMailbox(pool, t.enterpriseId, "noc"),
+        sender: await companyMailbox(pool, t.enterpriseId, "techInfo"),
         subject: m.subject,
         body: m.body,
         userId: me.id,
@@ -776,6 +783,7 @@ export async function runAlertCheck(c: Db, id: number): Promise<TrafficAlertChec
     ];
     const { rows: tp } = await c.query("SELECT subject, body FROM email_templates WHERE id = $1", [a.templateId]);
     const vars = {
+      ...(await companyVarsOf(c, enterpriseId)),
       alert: a.name,
       trunk: a.customerTrunk,
       enterprise: a.enterprise,
@@ -789,7 +797,7 @@ export async function runAlertCheck(c: Db, id: number): Promise<TrafficAlertChec
       customerTrunkId: a.customerTrunkId,
       vendorTrunkId: a.vendorTrunkId,
       to: emailed,
-      sender: await companyMailbox(c, enterpriseId, "noc"),
+      sender: await companyMailbox(c, enterpriseId, "trafficAlert"),
       subject: fill(tp[0]?.subject ?? "Traffic alert: {alert}", vars),
       body: fill(tp[0]?.body ?? "{breaches}", vars),
     });

@@ -1014,7 +1014,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Mailboxes",
-                what: "One row per department mailbox: sender, SMTP server, whether a password and client secret are stored (amber or red when missing), and the last connection check (green or red dot).",
+                what: "One row per department mailbox: sender, which e-mails it sends (Senders), SMTP server, whether a password and client secret are stored (amber or red when missing), and the last connection check (green or red dot).",
               },
               {
                 name: "Format files",
@@ -1031,7 +1031,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The form has five parts, picked with the switch at the top: **Company**, **Default templates**, **Address & bank**, **Mailboxes** and **Format files**. A red dot on a part means a field there has an error.",
+            text: "The form has six parts, picked with the switch at the top: **Company**, **Default templates**, **Address & bank**, **Mailboxes**, **Senders** and **Format files**. A red dot on a part means a field there has an error.",
           },
           {
             kind: "fields",
@@ -1151,6 +1151,37 @@ export const topics: HelpTopic[] = [
                 what: "Tests the mailbox step by step: resolve host, connect, encryption, log in. Each step shows a green or red dot; steps after a failure are skipped.",
               },
             ],
+          },
+        ],
+      },
+      {
+        id: "fields-senders",
+        title: "Fields: Senders part",
+        blocks: [
+          {
+            kind: "text",
+            text: "Picks which department mailbox sends each kind of e-mail for this company's partners, for example tech info from **Support** instead of **NOC**. Under each choice you see the address it will go out from. If the chosen department has no mailbox, the default department's mailbox is used, then department@website. A partner always gets e-mail from the mailboxes of the company it belongs to, so a partner of one entity never receives mail from another.",
+          },
+          {
+            kind: "fields",
+            title: "E-mail kinds (default mailbox)",
+            fields: [
+              { name: "Rate sheets & rate notices", what: "Send rate and rate-change notices. Default **Rates**." },
+              { name: "Replies to vendor RNs", what: "RN accepted / rejected replies. Default **Rates**." },
+              { name: "Tech info", what: "Customer connection details. Default **NOC**." },
+              { name: "Traffic & monitoring alerts", what: "Alerts sent to partners. Default **NOC**." },
+              { name: "Trouble tickets", what: "Message lists sent from the Observation Deck. Default **NOC**." },
+              { name: "Daily traffic summary", what: "Daily traffic alerts. Default **NOC**." },
+              { name: "Scheduled reports", what: "Scheduled report e-mails. Default **NOC**." },
+              { name: "Invoices", what: "Customer invoices. Default **Billing**." },
+              { name: "Statements of account", what: "SOA e-mails. Default **Billing**." },
+              { name: "Payment confirmations", what: "Sent after a payment is booked. Default **Billing**." },
+              { name: "Vendor invoice replies", what: "Accepting or disputing a vendor invoice. Default **Billing**." },
+            ],
+          },
+          {
+            kind: "text",
+            text: "**Templates and bank details per company.** Every e-mail uses the partner's company's default template for its type (Default templates part), else one of the company's own templates, else the shared one. Any template can use the company's details: `{company}`, `{company_address}`, `{company_website}`, `{bank_details}` (all bank lines) and `{bank_beneficiary}`, `{bank_name}`, `{bank_address}`, `{bank_currency}`, `{bank_account}`, `{bank_iban}`, `{bank_swift}`. Invoices are issued by the partner's company: the PDF shows its name, address and a **Payment details** block with its bank account, and the invoice e-mail comes from its billing mailbox with its Invoice template.",
           },
         ],
       },

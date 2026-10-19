@@ -40,3 +40,11 @@ ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS criteria text;
 -- Incidents: the destinations behind a margin / ASR / DLR incident (migration 049, §13.6).
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS breakdown text;
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS breakdown_at timestamptz;
+
+-- Business company: sending mailbox per e-mail kind, and the Invoice template with bank details (migration 050, §11).
+ALTER TABLE business_companies ADD COLUMN IF NOT EXISTS senders jsonb NOT NULL DEFAULT '{}'::jsonb;
+UPDATE email_templates
+   SET subject = 'Invoice {invoice_no} for {from} to {to} – {company}',
+       body = E'Dear {enterprise} team,\n\nPlease find attached invoice {invoice_no} for {from} to {to}.\nAmount due: {due_amount} {currency}, payable by {due_date}.\n\nPayment details:\n{bank_details}\n\nPlease quote the invoice number with your payment.\n\nKind regards,\nBilling team, {company}'
+ WHERE name = 'Invoice – standard' AND email_type = 'invoice'
+   AND body = E'Dear {enterprise} team,\n\nPlease find attached your invoice.\n\nKind regards,\nBilling team, {company}';

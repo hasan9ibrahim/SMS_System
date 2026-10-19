@@ -8,6 +8,7 @@ import {
   companyInput,
   insertAt,
   passwordLabel,
+  senderAddress,
   toggleModule,
   togglePermission,
   toggleSection,
@@ -68,5 +69,18 @@ describe("admin model (§11, §13.28)", () => {
   test("placeholders insert at the caret", () => {
     assert.deepEqual(insertAt("Dear , hi", 5, 5, "{enterprise}"), { text: "Dear {enterprise}, hi", caret: 17 });
     assert.deepEqual(insertAt("abc", 1, 2, "X"), { text: "aXc", caret: 2 });
+  });
+});
+
+describe("senders (§11)", () => {
+  test("chosen department's mailbox, else the default department's, else department@website", () => {
+    const v = { ...blankCompany(), website: "https://www.demo.example" };
+    assert.equal(senderAddress(v, "techInfo"), "noc@demo.example");
+    v.mailboxes = [blankMailbox("noc", v.website), blankMailbox("support", v.website)];
+    v.mailboxes[1]!.smtpEmail = "help@demo.example";
+    assert.equal(senderAddress(v, "techInfo"), v.mailboxes[0]!.smtpEmail);
+    v.senders = { ...v.senders, techInfo: "support", invoice: "sales" };
+    assert.equal(senderAddress(v, "techInfo"), "help@demo.example");
+    assert.equal(senderAddress(v, "invoice"), "sales@demo.example", "no Sales or Billing mailbox");
   });
 });

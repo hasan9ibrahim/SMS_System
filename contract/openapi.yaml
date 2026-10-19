@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.66.0
+  version: 0.67.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -25586,6 +25586,74 @@ components:
         soaStatement: *id001
         rateUploadNotification: *id001
         autoUploadRejected: *id001
+    SenderEmail:
+      type: string
+      enum:
+      - rateSheet
+      - rnReply
+      - techInfo
+      - trafficAlert
+      - dailyReport
+      - scheduledReport
+      - invoice
+      - soa
+      - paymentConfirmation
+      - vendorInvoiceReply
+      - troubleTicket
+      description: E-mail kinds whose sending mailbox is chosen per business company (§11, team trial round 1).
+    CompanySenders:
+      type: object
+      description: >-
+        Which department mailbox sends each kind of e-mail for this business company (§11). Defaults:
+        rateSheet rates; rnReply rates; techInfo noc; trafficAlert noc; dailyReport noc; scheduledReport noc; invoice billing; soa billing; paymentConfirmation billing; vendorInvoiceReply billing; troubleTicket noc. When the chosen department has no mailbox, the
+        default department's mailbox is used, then <department>@<website>.
+      additionalProperties: false
+      required:
+      - rateSheet
+      - rnReply
+      - techInfo
+      - trafficAlert
+      - dailyReport
+      - scheduledReport
+      - invoice
+      - soa
+      - paymentConfirmation
+      - vendorInvoiceReply
+      - troubleTicket
+      properties:
+        rateSheet:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Customer rate sheets and rate-change notices.
+        rnReply:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Replies to vendor rate notifications (RN received / rejected).
+        techInfo:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Customer tech info (connection details).
+        trafficAlert:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Traffic alerts and monitoring alerts to partners.
+        dailyReport:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Daily traffic summary e-mails.
+        scheduledReport:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Scheduled report e-mails.
+        invoice:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Invoices.
+        soa:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Statements of account.
+        paymentConfirmation:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Payment confirmations.
+        vendorInvoiceReply:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Vendor invoice acceptance / rejection replies.
+        troubleTicket:
+          $ref: '#/components/schemas/MailboxDepartment'
+          description: Trouble tickets (Observation Deck message lists to a partner).
     BusinessCompanyFields:
       type: object
       required:
@@ -25602,6 +25670,7 @@ components:
       - address
       - bank
       - defaultTemplates
+      - senders
       properties:
         name:
           type: string
@@ -25659,6 +25728,8 @@ components:
           $ref: '#/components/schemas/CompanyBank'
         defaultTemplates:
           $ref: '#/components/schemas/CompanyDefaultTemplates'
+        senders:
+          $ref: '#/components/schemas/CompanySenders'
     BusinessCompanyInput:
       allOf:
       - $ref: '#/components/schemas/BusinessCompanyFields'

@@ -41,18 +41,21 @@ import {
   companyInput,
   FILE_KINDS,
   MAILBOX_DEPARTMENTS,
+  SENDER_SLOTS,
+  senderAddress,
   TEMPLATE_SLOTS,
   countryOptions,
 } from "./adminModel";
 import { Kv } from "./parts";
 
 const page = pageForPath("/admin/business-companies")!;
-type Part = "company" | "templates" | "address" | "mailboxes" | "files";
+type Part = "company" | "templates" | "address" | "mailboxes" | "senders" | "files";
 const PARTS: { key: Part; label: string }[] = [
   { key: "company", label: "Company" },
   { key: "templates", label: "Default templates" },
   { key: "address", label: "Address & bank" },
   { key: "mailboxes", label: "Mailboxes" },
+  { key: "senders", label: "Senders" },
   { key: "files", label: "Format files" },
 ];
 
@@ -280,9 +283,11 @@ function CompanyDialog({ record, done }: { record: BusinessCompanyRecord | null;
         ? "mailboxes"
         : k.startsWith("defaultTemplates")
           ? "templates"
-          : k.startsWith("address") || k.startsWith("bank")
-            ? "address"
-            : "company",
+          : k.startsWith("senders")
+            ? "senders"
+            : k.startsWith("address") || k.startsWith("bank")
+              ? "address"
+              : "company",
     ),
   );
   const missing = MAILBOX_DEPARTMENTS.filter((d) => !v.mailboxes.some((m) => m.department === d.value));
@@ -447,6 +452,26 @@ function CompanyDialog({ record, done }: { record: BusinessCompanyRecord | null;
             )}
           </>
         )}
+        {part === "senders" && (
+          <>
+            <p className="muted small">
+              Which mailbox each kind of e-mail is sent from, for partners of this company. When the chosen department
+              has no mailbox, its default department&apos;s mailbox is used.
+            </p>
+            <div className="fgrid cols-3">
+              {SENDER_SLOTS.map((x) => (
+                <SelectField
+                  key={x.key}
+                  form={form}
+                  path={`senders.${x.key}`}
+                  label={x.label}
+                  options={MAILBOX_DEPARTMENTS}
+                  hint={`${x.hint} · from ${senderAddress(v, x.key) ?? "—"}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
         {part === "files" &&
           (record ? (
             <FilesPart record={record} />
@@ -485,6 +510,7 @@ function CompanyDetail({ r, part }: { r: BusinessCompanyRow; part: "info" | "mai
           <tr>
             <th>Department</th>
             <th>Sender</th>
+            <th>Sends</th>
             <th>SMTP</th>
             <th>Secrets</th>
             <th>Last check</th>
@@ -497,6 +523,11 @@ function CompanyDetail({ r, part }: { r: BusinessCompanyRow; part: "info" | "mai
               <td>
                 {m.smtpEmail}
                 {m.name && <span className="muted small"> · {m.name}</span>}
+              </td>
+              <td className="small">
+                {SENDER_SLOTS.filter((x) => senderAddress(d, x.key) === m.smtpEmail)
+                  .map((x) => x.label)
+                  .join(", ") || <span className="muted">—</span>}
               </td>
               <td className="mono small">
                 {m.smtpHost}:{m.smtpPort} ({m.smtpSecure})

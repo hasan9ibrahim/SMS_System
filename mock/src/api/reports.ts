@@ -47,7 +47,7 @@ import { previousWindow, resolvePeriod, validZone, type Window } from "../report
 import { PRESETS } from "../reports/presets.js";
 import { causeName } from "../smpp.js";
 import { chProblem } from "./observation.js";
-import { logEmail } from "./emailLog.js";
+import { logEmail, senderFor } from "./emailLog.js";
 import { csvCell, notFound } from "./masterData.js";
 import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
@@ -629,7 +629,6 @@ export async function runScheduled(pool: pg.Pool, id: number, userId: number | n
     const { rows: bc } = await pool.query("SELECT name, website FROM business_companies WHERE id = $1", [
       r.businessCompanyId,
     ]);
-    const host = String(bc[0]?.website ?? "").replace(/^https?:\/\/(www\.)?/, "");
     const vars = {
       report: r.template,
       from: iso(w.from).slice(0, 16).replace("T", " "),
@@ -640,7 +639,7 @@ export async function runScheduled(pool: pg.Pool, id: number, userId: number | n
     status = await logEmail(pool, {
       type: "schedule_report_alert",
       to: r.notificationEmails,
-      sender: host ? `reports@${host}` : null,
+      sender: await senderFor(pool, { companyId: r.businessCompanyId }, "scheduledReport"),
       subject: `${r.name}: ${vars.from} to ${vars.to} UTC`,
       body: fill(r.emailBody.replace(/<[^>]+>/g, ""), vars),
       file: `${r.name.replace(/[^\w-]+/g, "_")}_${iso(w.from).slice(0, 10)}.${f.ext}`,
@@ -673,7 +672,7 @@ async function runScheduledTeam(pool: pg.Pool, r: ScheduledReportRow, userId: nu
     status = await logEmail(pool, {
       type: "schedule_report_alert",
       to: r.notificationEmails,
-      sender: null,
+      sender: await senderFor(pool, { companyId: r.businessCompanyId }, "scheduledReport"),
       subject: `${r.name}: ${from} to ${to} UTC`,
       body: fill(r.emailBody.replace(/<[^>]+>/g, ""), {
         report: r.template,
@@ -857,10 +856,9 @@ export async function sendDaily(pool: pg.Pool, id: number, userId: number | null
   if (!a) return null;
   const { day, table } = await dailySummary(pool, a.enterpriseId);
   const { rows: bc } = await pool.query(
-    `SELECT bc.name, bc.website FROM enterprises e JOIN business_companies bc ON bc.id = coalesce($2, e.business_company_id) WHERE e.id = $1`,
+    `SELECT bc.id, bc.name FROM enterprises e JOIN business_companies bc ON bc.id = coalesce($2, e.business_company_id) WHERE e.id = $1`,
     [a.enterpriseId, a.businessCompanyId],
   );
-  const host = String(bc[0]?.website ?? "").replace(/^https?:\/\/(www\.)?/, "");
   const recipients = await contactEmails(pool, a.enterpriseId, [a.contactType]);
   const vars = { enterprise: a.enterprise, date: day, summary: table, company: bc[0]?.name ?? "" };
   const mail = {
@@ -872,7 +870,7 @@ export async function sendDaily(pool: pg.Pool, id: number, userId: number | null
     type: "daily_report",
     enterpriseId: a.enterpriseId,
     to: recipients,
-    sender: host ? `noc@${host}` : null,
+    sender: bc[0] ? await senderFor(pool, { companyId: Number(bc[0].id) }, "dailyReport") : null,
     subject: mail.subject,
     body: mail.body,
     userId,

@@ -61,7 +61,7 @@ export async function sendRateNotices(db: Db, diff: DiffEntry[], userId: number)
   let sent = 0;
   for (const r of rows) {
     const lines = byTable.get(Number(r.table_id)) ?? [];
-    const sender = await companyMailbox(db, Number(r.enterprise_id), "rates");
+    const sender = await companyMailbox(db, Number(r.enterprise_id), "rateSheet");
     await logEmail(db, {
       type: "send_rate",
       enterpriseId: Number(r.enterprise_id),

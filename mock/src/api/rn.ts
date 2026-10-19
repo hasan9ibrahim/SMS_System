@@ -26,7 +26,7 @@ import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 import { mappingOf, matchTrunk, readSheet, trunkByUsername, type SheetRow, type TrunkRef } from "../rn/parse.js";
 import { scheduleBestBuyRefresh } from "./bestbuy.js";
-import { companyMailbox, logEmail } from "./emailLog.js";
+import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
 import { applyLineEdits, checkLineEdits, type EditTable } from "./rates.js";
 import { iso, recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
@@ -448,10 +448,16 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
 const fill = (t: string, v: Record<string, string>) => t.replace(/\{([a-z_]+)\}/g, (m, k: string) => v[k] ?? m);
 const day = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
 
-async function replyTemplate(c: Db, type: "rate_upload_notification" | "auto_upload_rejected") {
+/** The vendor's business company's template for a reply (§11), else a shared one. */
+async function replyTemplate(
+  c: Db,
+  vendorId: number | null,
+  type: "rate_upload_notification" | "auto_upload_rejected",
+) {
+  if (vendorId !== null) return companyTemplate(c, { enterpriseId: vendorId }, type);
   const { rows } = await c.query(
     `SELECT subject, body FROM email_templates WHERE email_type = $1 AND deleted_at IS NULL
-      ORDER BY business_company_id NULLS LAST, id LIMIT 1`,
+      ORDER BY business_company_id NULLS FIRST, id LIMIT 1`,
     [type],
   );
   return rows[0] as { subject: string; body: string } | undefined;
@@ -489,7 +495,12 @@ async function makeReply(c: Db, rnId: number, kind: "successful" | "failed" | "r
   const ref = rn.reference as string;
   let subject = "";
   let body = "";
-  const tpl = await replyTemplate(c, kind === "successful" ? "rate_upload_notification" : "auto_upload_rejected");
+  const vendorId = rn.vendor_id === null ? null : Number(rn.vendor_id);
+  const tpl = await replyTemplate(
+    c,
+    vendorId,
+    kind === "successful" ? "rate_upload_notification" : "auto_upload_rejected",
+  );
   const vars = { reference: ref, vendor: rn.vendor ?? "", trunk: rn.trunk ?? "", file: rn.file_name ?? "" };
   if (kind === "successful") {
     subject = `Rates accepted – ${ref}${rn.trunk ? ` (${rn.trunk})` : ""}`;
@@ -528,14 +539,13 @@ async function makeReply(c: Db, rnId: number, kind: "successful" | "failed" | "r
   }
   if (tpl) {
     // The vendor's e-mail template (Email Templates, §11) frames the generated details.
-    const company = rn.vendor_id ? ((await companyMailbox(c, Number(rn.vendor_id), "rates")) ?? "") : "";
     const v = {
+      ...companyPlaceholders(vendorId === null ? null : await companyDetails(c, { enterpriseId: vendorId })),
       ...vars,
       enterprise: rn.vendor ?? "",
       lines: String(accepted.length),
       rate_date: rn.effective_from ? day(rn.effective_from) : day(new Date()),
       reason: body,
-      company: company.split("@")[1] ?? company,
     };
     subject = `${fill(tpl.subject, v)} (${ref})`;
     body = kind === "successful" ? `${fill(tpl.body, v)}\n\n${body}` : fill(tpl.body, v);
@@ -563,7 +573,7 @@ async function sendReply(c: Db, rnId: number, replyId: number, userId: number | 
     enterpriseId: p.vendor_id,
     vendorTrunkId: p.vendor_trunk_id,
     to,
-    sender: p.vendor_id ? await companyMailbox(c, Number(p.vendor_id), "rates") : null,
+    sender: p.vendor_id ? await companyMailbox(c, Number(p.vendor_id), "rnReply") : null,
     subject,
     body,
     file: p.file_name,

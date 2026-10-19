@@ -73,6 +73,48 @@ export const TEMPLATE_SLOTS: { key: keyof BusinessCompanyInput["defaultTemplates
   { key: "autoUploadRejected", label: "Auto Upload Report – Rejected", type: "auto_upload_rejected" },
 ];
 
+/** Which department mailbox sends each kind of e-mail (Senders, §11); the default first. */
+export const SENDER_SLOTS: { key: keyof BusinessCompanyInput["senders"]; label: string; hint: string }[] = [
+  { key: "rateSheet", label: "Rate sheets & rate notices", hint: "Send rate, rate-change notices" },
+  { key: "rnReply", label: "Replies to vendor RNs", hint: "RN accepted / rejected" },
+  { key: "techInfo", label: "Tech info", hint: "Customer connection details" },
+  { key: "trafficAlert", label: "Traffic & monitoring alerts", hint: "Alerts to partners" },
+  { key: "troubleTicket", label: "Trouble tickets", hint: "Observation Deck message lists" },
+  { key: "dailyReport", label: "Daily traffic summary", hint: "Daily traffic alerts" },
+  { key: "scheduledReport", label: "Scheduled reports", hint: "Report e-mails" },
+  { key: "invoice", label: "Invoices", hint: "Customer invoices" },
+  { key: "soa", label: "Statements of account", hint: "SOA e-mails" },
+  { key: "paymentConfirmation", label: "Payment confirmations", hint: "After a payment is booked" },
+  { key: "vendorInvoiceReply", label: "Vendor invoice replies", hint: "Accept / dispute a vendor invoice" },
+];
+export const SENDER_DEFAULTS: BusinessCompanyInput["senders"] = {
+  rateSheet: "rates",
+  rnReply: "rates",
+  techInfo: "noc",
+  trafficAlert: "noc",
+  troubleTicket: "noc",
+  dailyReport: "noc",
+  scheduledReport: "noc",
+  invoice: "billing",
+  soa: "billing",
+  paymentConfirmation: "billing",
+  vendorInvoiceReply: "billing",
+};
+
+/**
+ * The address a kind of e-mail goes out from, as the server picks it: the chosen department's mailbox,
+ * else the default department's, else department@website.
+ */
+export function senderAddress(
+  v: Pick<BusinessCompanyInput, "senders" | "website"> & { mailboxes: { department: string; smtpEmail: string }[] },
+  key: keyof BusinessCompanyInput["senders"],
+): string | null {
+  const dept = v.senders[key];
+  const box = (d: string) => v.mailboxes.find((m) => m.department === d)?.smtpEmail?.trim() || null;
+  const host = v.website?.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
+  return box(dept) ?? box(SENDER_DEFAULTS[key]) ?? (host ? `${dept}@${host}` : null);
+}
+
 export const FILE_KINDS = [
   { kind: "logo", label: "Company Logo (PNG)", accept: ".png,image/png" },
   { kind: "invoice_format", label: "Invoice Format File (XLSX)", accept: ".xlsx,.xls,.xml" },
@@ -118,6 +160,7 @@ export function companyInput(r: BusinessCompanyRecord): BusinessCompanyInput {
     address: { ...r.address },
     bank: { ...r.bank },
     defaultTemplates: { ...r.defaultTemplates },
+    senders: { ...SENDER_DEFAULTS, ...r.senders },
     mailboxes: r.mailboxes.map(
       ({ hasSmtpPassword: _p, hasClientSecret: _s, lastCheckAt: _a, lastCheckOk: _o, ...m }) => ({
         ...m,
@@ -154,6 +197,7 @@ export function blankCompany(): BusinessCompanyInput {
     defaultTemplates: Object.fromEntries(
       TEMPLATE_SLOTS.map((t) => [t.key, null]),
     ) as BusinessCompanyInput["defaultTemplates"],
+    senders: { ...SENDER_DEFAULTS },
     mailboxes: [],
   };
 }

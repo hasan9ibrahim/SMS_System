@@ -15052,6 +15052,47 @@ export type components = {
       rateUploadNotification: components["schemas"]["Id"] | null;
       autoUploadRejected: components["schemas"]["Id"] | null;
     };
+    /**
+     * @description E-mail kinds whose sending mailbox is chosen per business company (§11, team trial round 1).
+     * @enum {string}
+     */
+    SenderEmail:
+      | "rateSheet"
+      | "rnReply"
+      | "techInfo"
+      | "trafficAlert"
+      | "dailyReport"
+      | "scheduledReport"
+      | "invoice"
+      | "soa"
+      | "paymentConfirmation"
+      | "vendorInvoiceReply"
+      | "troubleTicket";
+    /** @description Which department mailbox sends each kind of e-mail for this business company (§11). Defaults: rateSheet rates; rnReply rates; techInfo noc; trafficAlert noc; dailyReport noc; scheduledReport noc; invoice billing; soa billing; paymentConfirmation billing; vendorInvoiceReply billing; troubleTicket noc. When the chosen department has no mailbox, the default department's mailbox is used, then <department>@<website>. */
+    CompanySenders: {
+      /** @description Customer rate sheets and rate-change notices. */
+      rateSheet: components["schemas"]["MailboxDepartment"];
+      /** @description Replies to vendor rate notifications (RN received / rejected). */
+      rnReply: components["schemas"]["MailboxDepartment"];
+      /** @description Customer tech info (connection details). */
+      techInfo: components["schemas"]["MailboxDepartment"];
+      /** @description Traffic alerts and monitoring alerts to partners. */
+      trafficAlert: components["schemas"]["MailboxDepartment"];
+      /** @description Daily traffic summary e-mails. */
+      dailyReport: components["schemas"]["MailboxDepartment"];
+      /** @description Scheduled report e-mails. */
+      scheduledReport: components["schemas"]["MailboxDepartment"];
+      /** @description Invoices. */
+      invoice: components["schemas"]["MailboxDepartment"];
+      /** @description Statements of account. */
+      soa: components["schemas"]["MailboxDepartment"];
+      /** @description Payment confirmations. */
+      paymentConfirmation: components["schemas"]["MailboxDepartment"];
+      /** @description Vendor invoice acceptance / rejection replies. */
+      vendorInvoiceReply: components["schemas"]["MailboxDepartment"];
+      /** @description Trouble tickets (Observation Deck message lists to a partner). */
+      troubleTicket: components["schemas"]["MailboxDepartment"];
+    };
     BusinessCompanyFields: {
       name: string;
       description: string | null;
@@ -15069,6 +15110,7 @@ export type components = {
       address: components["schemas"]["CompanyAddress"];
       bank: components["schemas"]["CompanyBank"];
       defaultTemplates: components["schemas"]["CompanyDefaultTemplates"];
+      senders: components["schemas"]["CompanySenders"];
     };
     BusinessCompanyInput: components["schemas"]["BusinessCompanyFields"] & {
       /** @description One sender block per department mailbox. */
