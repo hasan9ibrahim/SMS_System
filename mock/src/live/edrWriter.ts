@@ -9,8 +9,11 @@ import type { Simulator, SimTrunk } from "./simulator.js";
 
 /** How often the sent messages are written. */
 export const WRITE_EVERY_MS = 1_000;
-/** Templates kept per customer trunk and outcome (its latest first attempts of the last 7 days). */
-const PER_OUTCOME = 10;
+/**
+ * Templates kept per customer trunk and outcome (its latest first attempts of the last 7 days). Enough that
+ * each vendor and destination keeps its own delivery mix (with 10, a vendor could look 0 % or 100 %).
+ */
+const PER_OUTCOME = 100;
 const TEMPLATES = "edr_live_templates";
 /** The outcome of a stored EDR, in the simulator's order (SimTrunk.pending). */
 const OUTCOME = "multiIf(msg_status = 'DELIVRD', 0, is_submit_success = 1, 1, v_trunk_id > 0, 2, 3)";
