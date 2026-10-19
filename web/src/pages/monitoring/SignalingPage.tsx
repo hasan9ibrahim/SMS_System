@@ -13,6 +13,7 @@ import { problemText } from "../routing/dialogs";
 import { fmtWhen } from "../reference/shared";
 import { fmtBytes, jobTone } from "./monitorModel";
 import { useAutoRefresh } from "./parts";
+import { RecordingBar } from "./RecordingBar";
 
 const page = pageForPath("/monitoring/signaling")!;
 export const muted = (v: string) => <span className="muted">{v}</span>;
@@ -73,7 +74,32 @@ function StartBar() {
 }
 
 export function SignalingPage() {
-  return <CaptureFiles source="live" page={page} above={<StartBar />} />;
+  // Live capture from now on, or extract from the 60-day recording (team trial round 1); both kinds of file
+  // are listed here.
+  const [mode, setMode] = useState<"live" | "extract">("live");
+  return (
+    <CaptureFiles
+      page={page}
+      above={
+        <>
+          <div className="segmented capture-mode" role="tablist" aria-label="New file">
+            <button type="button" role="tab" className={mode === "live" ? "on" : ""} onClick={() => setMode("live")}>
+              Live capture
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={mode === "extract" ? "on" : ""}
+              onClick={() => setMode("extract")}
+            >
+              Extract from the recording
+            </button>
+          </div>
+          {mode === "live" ? <StartBar /> : <RecordingBar />}
+        </>
+      }
+    />
+  );
 }
 
 /**
@@ -86,7 +112,8 @@ export function CaptureFiles({
   above,
   title,
 }: {
-  source: SignalingCaptureRow["source"];
+  /** Only files of this kind; all when left out. */
+  source?: SignalingCaptureRow["source"];
   page: NonNullable<ReturnType<typeof pageForPath>>;
   above: ReactNode;
   title?: string;
@@ -116,15 +143,20 @@ export function CaptureFiles({
       list="signaling_captures"
       page={page}
       {...(title ? { title } : {})}
-      queryScope={source}
+      queryScope={source ?? "all"}
       fetchPage={(body) =>
-        fetchListPage<SignalingCaptureRow>("signaling_captures", {
-          ...body,
-          filter: {
-            logic: "and",
-            conditions: [{ field: "source", op: "in", values: [source] }, ...(body.filter ? [body.filter] : [])],
-          },
-        })
+        fetchListPage<SignalingCaptureRow>(
+          "signaling_captures",
+          source
+            ? {
+                ...body,
+                filter: {
+                  logic: "and",
+                  conditions: [{ field: "source", op: "in", values: [source] }, ...(body.filter ? [body.filter] : [])],
+                },
+              }
+            : body,
+        )
       }
       noSelection
       historyScope={null}
@@ -154,7 +186,7 @@ export function CaptureFiles({
                 Recording {fmtWhen(r.recordedFrom!)} – {fmtWhen(r.recordedTo!).slice(-5)}
               </span>
             ) : (
-              muted("—")
+              muted("Live capture")
             ),
         },
         status: {

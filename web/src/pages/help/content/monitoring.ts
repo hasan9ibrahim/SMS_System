@@ -1276,7 +1276,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The switch records all SMPP traffic all the time, so you can look at the packets of something that already happened (a customer's complaint from yesterday, a vendor's receipts last week) without having started a capture first. For a capture from now on, use [[signaling|Signaling deck]].",
+            text: "The switch records all SMPP traffic all the time, so you can look at the packets of something that already happened (a customer's complaint from yesterday, a vendor's receipts last week) without having started a capture first. For a capture from now on, use [[signaling|Signaling deck]], which also has this extract filter (**Extract from the recording**) and lists both kinds of file.",
           },
         ],
       },

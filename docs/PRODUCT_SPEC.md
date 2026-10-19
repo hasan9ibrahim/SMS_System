@@ -463,7 +463,7 @@ Buttons: Trouble Ticket, Search.
 
 | Screen | Controls | Output |
 | --- | --- | --- |
-| Signaling Deck | Filter (IP address), Max Duration (s), Max File Size (bytes), Start | Captured SMPP trace files: Sr. No., File Name, File Size, Download, Update Time, Keep, Deleted on. A file is deleted 30 days after its capture ended unless Keep is ticked (team trial round 1); kept files stay until unticked |
+| Signaling Deck | Live capture: Filter (IP address), Max Duration (s), Max File Size (bytes), Start; or Extract from the recording (the PCAP Trace filter) | Captured SMPP trace files: Sr. No., File Name, File Size, Download, Update Time, Keep, Deleted on, Source (live capture or recording, with its window). A file is deleted 30 days after its capture ended unless Keep is ticked (team trial round 1); kept files stay until unticked |
 | EDR Template | Add, Edit, View, Clear, Search | Info ID, Name, Updated By/Time. Form: Name\*, Column Selection\* (any EDR column) |
 | EDR Download | EDR Request, View, Refresh, Clear | EDR No, Status, File, File Type, Progress, Request Start/End Time, Error, Requested By (async CSV/XLSX export) |
 | Route Simulator | Go | Inputs: Customer Trunk ID\*, Sender ID, Receiver ID\*, MCCMNC, Source TON\*, Source NPI\*, Dest TON\*, Dest NPI\*, Service Type Routing, Message Text, Test SMS, Data coding (0–8). Live counter: coding, SMS per message, message size (chars/bits). Shows the rule, route table and vendors that would be chosen; Test SMS sends a real message |
