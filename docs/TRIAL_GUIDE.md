@@ -53,7 +53,7 @@ Then open `http://<server>:8080` (set `WEB_PORT` in `.env` for another port).
 On the machine that runs the trial, from the `SMS_System` folder:
 
 ```bash
-git pull                                          # get the new version (branch Claude/Update)
+git pull                                          # get the new version (the server follows main)
 docker compose --profile app up -d --build        # rebuild and restart the mock server and the web app
 ```
 
@@ -64,7 +64,7 @@ When an update changes the database, its notes say so. Either reseed (`docker co
 
 ```bash
 ( echo "SET search_path = sms, public;"; cat db/postgres/upgrades/2026-10-18_trial_round_1.sql ) \
-  | docker compose exec -T postgres psql -U sms -d sms -v ON_ERROR_STOP=1
+  | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
 ```
 
 Upgrade scripts are safe to run more than once, and do nothing on a database seeded after them.

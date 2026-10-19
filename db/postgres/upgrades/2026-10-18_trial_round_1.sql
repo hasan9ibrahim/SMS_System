@@ -1,7 +1,7 @@
 -- One-time upgrade for a database seeded before 2026-10-18 that keeps its data (team trial round 1).
 -- A fresh seed already has all of this. Safe to run more than once: each step runs only once.
 --   ( echo "SET search_path = sms, public;"; cat db/postgres/upgrades/2026-10-18_trial_round_1.sql ) \
---     | docker compose exec -T postgres psql -U sms -d sms -v ON_ERROR_STOP=1
+--     | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
 CREATE TABLE IF NOT EXISTS upgrade_marks (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
 
 -- Match case for Sender ID conditions (migration 045, §6.3, §6.4).
