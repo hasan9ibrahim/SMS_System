@@ -4,6 +4,7 @@
  * trail. Runs after every other step on its own forked stream, so earlier tables are unchanged for the
  * same seed. Addresses, IPs and secrets are fake (TEST-NET ranges, .example domains).
  */
+import { fakeLogoPng } from "../email/png.js";
 import { encryptSecret, hashPassword } from "../admin/passwords.js";
 import { SEED_PASSWORD } from "./admin.js";
 import { domainOf, fakeSecret, personName, phone } from "./names.js";
@@ -55,11 +56,12 @@ const AUDIT_OPS: [string, string, string, string, string | null, number][] = [
   ["reports", "/reports/master/export", "POST", "exportMasterReport", null, 6],
 ];
 
-const PNG_1X1 = Buffer.from(
-  "89504e470d0a1a0a0000000d4948445200000001000000010806000000" +
-    "1f15c4890000000d49444154789c6360f8cfc0f01f0005000201ffa65a1d0000000049454e44ae426082",
-  "hex",
-);
+const LOGO_COLOURS: [number, number, number][] = [
+  [37, 99, 235],
+  [5, 150, 105],
+  [217, 119, 6],
+  [124, 58, 237],
+];
 // A tiny SpreadsheetML file standing in for an uploaded format (fake; the backend stores real XLSX).
 const formatFile = (title: string, vars: string[]) =>
   Buffer.from(
@@ -106,7 +108,7 @@ export async function generateAdminExtras(world: World, rng: Rng, sink: TableSin
       });
     }
     const files: [string, string, string, Buffer][] = [
-      ["logo", "logo.png", "image/png", PNG_1X1],
+      ["logo", "logo.png", "image/png", fakeLogoPng(LOGO_COLOURS[(Number(bc.id) - 1) % LOGO_COLOURS.length]!)],
       [
         "invoice_format",
         "invoice_format.xls",

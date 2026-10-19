@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.67.0
+  version: 0.68.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -10853,6 +10853,114 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /email-templates/test:
+    post:
+      tags:
+      - admin
+      operationId: testEmailTemplate
+      summary: Send a test of a template (§11)
+      description: >-
+        Sends the filled template (fake sample values, the picked business company's details and its billing
+        mailbox) to up to five addresses, so it can be checked in Outlook and other mail apps. Logged in Email Logs as
+        template_test. In this phase nothing leaves the platform: the e-mail is only logged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailTemplateTestInput'
+      responses:
+        '200':
+          description: Sent (or failed), with the log entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplateTestResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-assets:
+    get:
+      tags:
+      - admin
+      operationId: listEmailAssets
+      summary: Images uploaded for e-mail templates (§11)
+      description: Newest first, at most 200; with businessCompanyId, that company's images and the shared ones.
+      parameters:
+      - name: businessCompanyId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Id'
+      responses:
+        '200':
+          description: The images
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailAssetList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      operationId: uploadEmailAsset
+      summary: Upload an image for e-mail templates (§11)
+      description: >-
+        PNG, JPEG or GIF up to 2 MB (SVG and WebP are not shown by classic Outlook and Gmail). Sent e-mails embed
+        the image inline, so recipients see it without allowing remote images.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailAssetUpload'
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /email-assets/{id}/file:
+    get:
+      tags:
+      - admin
+      operationId: downloadEmailAsset
+      summary: The image itself
+      parameters:
+      - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: The image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/gif:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /business-companies/query:
     post:
       tags:
@@ -22009,8 +22117,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder]
-      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators) and password_reminder (§13.28).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) and template_test (a test of an e-mail template, §11).
 
     EmailLogRow:
       type: object
@@ -22072,12 +22180,20 @@ components:
       allOf:
         - $ref: "#/components/schemas/EmailLogRow"
         - type: object
-          required: [body, sender]
+          required: [body, sender, bodyHtml, inlineImages]
           properties:
             body:
               type: string
             sender:
               type: [string, "null"]
+            bodyHtml:
+              type: [string, "null"]
+              description: The e-mail document as sent (images by url); null for e-mails logged before v0.68.0.
+            inlineImages:
+              type: array
+              items:
+                type: string
+              description: File names of the images embedded in the e-mail (cid).
 
     NotificationTrunksInput:
       type: object
@@ -25230,8 +25346,11 @@ components:
         body:
           type: string
           minLength: 1
-          maxLength: 100000
-          description: Rich text (HTML) with {placeholders}.
+          maxLength: 500000
+          description: >-
+            Plain text, or a full HTML design with {placeholders}: fonts, colours, tables, <style> blocks and images
+            (uploaded e-mail assets, referenced by their url). Saved sanitised: scripts, event handlers, forms and
+            frames are removed; Outlook conditional comments are kept.
         businessCompanyId:
           oneOf: *id002
           description: Null = shared by every business company.
@@ -25330,23 +25449,166 @@ components:
         body:
           type: string
           minLength: 0
-          maxLength: 100000
+          maxLength: 500000
         businessCompanyId: *id001
     EmailTemplatePreview:
       type: object
       required:
       - subject
       - bodyHtml
+      - emailHtml
+      - outlookHtml
+      - issues
       - unknownPlaceholders
       properties:
         subject:
           type: string
         bodyHtml:
           type: string
+          description: The filled body as an HTML fragment.
+        emailHtml:
+          type: string
+          description: >-
+            The whole e-mail as it is sent (CSS inlined, Outlook head, image widths), with images by url instead of
+            cid; this is how the system and modern mail apps (new Outlook, Outlook on the web, Gmail, Apple Mail)
+            show it.
+        outlookHtml:
+          type: string
+          description: >-
+            An approximation of classic Outlook for Windows (Word rendering engine): unsupported CSS removed (rounded
+            corners, shadows, background images, flex / grid, positioning, max-width, media queries), web fonts
+            replaced by their fallback and images at their width attribute. Not pixel-exact; send a test to check.
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmailCompatIssue'
         unknownPlaceholders:
           type: array
           items:
             type: string
+    EmailClient:
+      type: string
+      enum: [outlook_windows, outlook_new, outlook_mobile, gmail, apple_mail]
+      description: >-
+        outlook_windows = classic Outlook 2016–2021 / 365 desktop on Windows (Word engine); outlook_new = new Outlook
+        for Windows, Outlook on the web and Outlook for Mac.
+    EmailCompatIssue:
+      type: object
+      required: [level, feature, clients, message, count]
+      properties:
+        level:
+          type: string
+          enum: [warning, info]
+        feature:
+          type: string
+          description: Short key, e.g. web_font, border_radius, background_image, data_image.
+        clients:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmailClient'
+        message:
+          type: string
+        count:
+          type: integer
+          minimum: 1
+          description: How many places in the e-mail.
+    EmailTemplateTestInput:
+      type: object
+      additionalProperties: false
+      required: [emailType, subject, body, businessCompanyId, to]
+      properties:
+        emailType:
+          $ref: '#/components/schemas/EmailTemplateType'
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 300
+        body:
+          type: string
+          minLength: 1
+          maxLength: 500000
+        businessCompanyId:
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        to:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: string
+            format: email
+    EmailTemplateTestResult:
+      type: object
+      required: [status, emailLogId, sender, inlineImages]
+      properties:
+        status:
+          type: string
+          enum: [sent, failed]
+        emailLogId:
+          $ref: '#/components/schemas/Id'
+        sender:
+          type: [string, 'null']
+        inlineImages:
+          type: integer
+          minimum: 0
+    EmailAsset:
+      type: object
+      required: [id, name, contentType, size, width, height, url, businessCompanyId, uploadedBy, uploadedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        contentType:
+          type: string
+          enum: [image/png, image/jpeg, image/gif]
+        size:
+          type: integer
+          minimum: 0
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        url:
+          type: string
+          description: Where the system loads it (templates reference this); sent e-mails embed it inline (cid).
+        businessCompanyId:
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+        uploadedBy:
+          type: [string, 'null']
+        uploadedAt:
+          $ref: '#/components/schemas/Timestamp'
+    EmailAssetUpload:
+      type: object
+      additionalProperties: false
+      required: [name, contentBase64, businessCompanyId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        contentBase64:
+          type: string
+          minLength: 1
+          maxLength: 2800000
+          description: PNG, JPEG or GIF, at most 2 MB.
+        businessCompanyId:
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+    EmailAssetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmailAsset'
     MailboxDepartment:
       type: string
       enum:

@@ -7434,6 +7434,67 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/email-templates/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a test of a template (§11)
+     * @description Sends the filled template (fake sample values, the picked business company's details and its billing mailbox) to up to five addresses, so it can be checked in Outlook and other mail apps. Logged in Email Logs as template_test. In this phase nothing leaves the platform: the e-mail is only logged.
+     */
+    post: operations["testEmailTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-assets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Images uploaded for e-mail templates (§11)
+     * @description Newest first, at most 200; with businessCompanyId, that company's images and the shared ones.
+     */
+    get: operations["listEmailAssets"];
+    put?: never;
+    /**
+     * Upload an image for e-mail templates (§11)
+     * @description PNG, JPEG or GIF up to 2 MB (SVG and WebP are not shown by classic Outlook and Gmail). Sent e-mails embed the image inline, so recipients see it without allowing remote images.
+     */
+    post: operations["uploadEmailAsset"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/email-assets/{id}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The image itself */
+    get: operations["downloadEmailAsset"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/business-companies/query": {
     parameters: {
       query?: never;
@@ -13496,7 +13557,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators) and password_reminder (§13.28).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) and template_test (a test of an e-mail template, §11).
      * @enum {string}
      */
     EmailType:
@@ -13523,7 +13584,8 @@ export type components = {
       | "monitoring_alert"
       | "cleanup_summary"
       | "credential_transfer"
-      | "password_reminder";
+      | "password_reminder"
+      | "template_test";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -13551,6 +13613,10 @@ export type components = {
     EmailLogDetail: components["schemas"]["EmailLogRow"] & {
       body: string;
       sender: string | null;
+      /** @description The e-mail document as sent (images by url); null for e-mails logged before v0.68.0. */
+      bodyHtml: string | null;
+      /** @description File names of the images embedded in the e-mail (cid). */
+      inlineImages: string[];
     };
     NotificationTrunksInput: {
       trunkIds: components["schemas"]["Id"][];
@@ -14950,7 +15016,7 @@ export type components = {
       name: string;
       emailType: components["schemas"]["EmailTemplateType"];
       subject: string;
-      /** @description Rich text (HTML) with {placeholders}. */
+      /** @description Plain text, or a full HTML design with {placeholders}: fonts, colours, tables, <style> blocks and images (uploaded e-mail assets, referenced by their url). Saved sanitised: scripts, event handlers, forms and frames are removed; Outlook conditional comments are kept. */
       body: string;
       /** @description Null = shared by every business company. */
       businessCompanyId: components["schemas"]["Id"] | null;
@@ -14989,8 +15055,66 @@ export type components = {
     };
     EmailTemplatePreview: {
       subject: string;
+      /** @description The filled body as an HTML fragment. */
       bodyHtml: string;
+      /** @description The whole e-mail as it is sent (CSS inlined, Outlook head, image widths), with images by url instead of cid; this is how the system and modern mail apps (new Outlook, Outlook on the web, Gmail, Apple Mail) show it. */
+      emailHtml: string;
+      /** @description An approximation of classic Outlook for Windows (Word rendering engine): unsupported CSS removed (rounded corners, shadows, background images, flex / grid, positioning, max-width, media queries), web fonts replaced by their fallback and images at their width attribute. Not pixel-exact; send a test to check. */
+      outlookHtml: string;
+      issues: components["schemas"]["EmailCompatIssue"][];
       unknownPlaceholders: string[];
+    };
+    /**
+     * @description outlook_windows = classic Outlook 2016–2021 / 365 desktop on Windows (Word engine); outlook_new = new Outlook for Windows, Outlook on the web and Outlook for Mac.
+     * @enum {string}
+     */
+    EmailClient: "outlook_windows" | "outlook_new" | "outlook_mobile" | "gmail" | "apple_mail";
+    EmailCompatIssue: {
+      /** @enum {string} */
+      level: "warning" | "info";
+      /** @description Short key, e.g. web_font, border_radius, background_image, data_image. */
+      feature: string;
+      clients: components["schemas"]["EmailClient"][];
+      message: string;
+      /** @description How many places in the e-mail. */
+      count: number;
+    };
+    EmailTemplateTestInput: {
+      emailType: components["schemas"]["EmailTemplateType"];
+      subject: string;
+      body: string;
+      businessCompanyId: components["schemas"]["Id"] | null;
+      to: string[];
+    };
+    EmailTemplateTestResult: {
+      /** @enum {string} */
+      status: "sent" | "failed";
+      emailLogId: components["schemas"]["Id"];
+      sender: string | null;
+      inlineImages: number;
+    };
+    EmailAsset: {
+      id: components["schemas"]["Id"];
+      name: string;
+      /** @enum {string} */
+      contentType: "image/png" | "image/jpeg" | "image/gif";
+      size: number;
+      width: number;
+      height: number;
+      /** @description Where the system loads it (templates reference this); sent e-mails embed it inline (cid). */
+      url: string;
+      businessCompanyId: components["schemas"]["Id"] | null;
+      uploadedBy: string | null;
+      uploadedAt: components["schemas"]["Timestamp"];
+    };
+    EmailAssetUpload: {
+      name: string;
+      /** @description PNG, JPEG or GIF, at most 2 MB. */
+      contentBase64: string;
+      businessCompanyId: components["schemas"]["Id"] | null;
+    };
+    EmailAssetList: {
+      items: components["schemas"]["EmailAsset"][];
     };
     /** @enum {string} */
     MailboxDepartment: "noc" | "sales" | "rates" | "billing" | "support";
@@ -28519,6 +28643,110 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  testEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmailTemplateTestInput"];
+      };
+    };
+    responses: {
+      /** @description Sent (or failed), with the log entry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailTemplateTestResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listEmailAssets: {
+    parameters: {
+      query?: {
+        businessCompanyId?: components["schemas"]["Id"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The images */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailAssetList"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  uploadEmailAsset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmailAssetUpload"];
+      };
+    };
+    responses: {
+      /** @description Stored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmailAsset"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadEmailAsset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The image */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/png": string;
+          "image/jpeg": string;
+          "image/gif": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
     };
   };
   queryBusinessCompanies: {

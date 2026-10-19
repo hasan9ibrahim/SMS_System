@@ -1,6 +1,7 @@
 // Reports (§10, §13.15): the Master Report and its export, the presets (department reports and the
 // §10 reports that became saved views), Sales and NOC insights, the Billing report list, scheduled
 // reports (CRON, e-mailed) and daily traffic alerts. Figures come from the EDR store (reports/engine.ts).
+import { fillBody } from "../email/html.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -51,7 +52,7 @@ import { logEmail, senderFor } from "./emailLog.js";
 import { csvCell, notFound } from "./masterData.js";
 import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
-import { archiver, badInput, contactEmails, fill } from "./switchTools.js";
+import { archiver, badInput, contactEmails } from "./switchTools.js";
 import { inTransaction } from "./views.js";
 import { buildTeamReport } from "./team.js";
 
@@ -641,7 +642,7 @@ export async function runScheduled(pool: pg.Pool, id: number, userId: number | n
       to: r.notificationEmails,
       sender: await senderFor(pool, { companyId: r.businessCompanyId }, "scheduledReport"),
       subject: `${r.name}: ${vars.from} to ${vars.to} UTC`,
-      body: fill(r.emailBody.replace(/<[^>]+>/g, ""), vars),
+      body: fillBody(r.emailBody, vars),
       file: `${r.name.replace(/[^\w-]+/g, "_")}_${iso(w.from).slice(0, 10)}.${f.ext}`,
       userId,
     });
@@ -674,7 +675,7 @@ async function runScheduledTeam(pool: pg.Pool, r: ScheduledReportRow, userId: nu
       to: r.notificationEmails,
       sender: await senderFor(pool, { companyId: r.businessCompanyId }, "scheduledReport"),
       subject: `${r.name}: ${from} to ${to} UTC`,
-      body: fill(r.emailBody.replace(/<[^>]+>/g, ""), {
+      body: fillBody(r.emailBody, {
         report: r.template,
         from,
         to,
@@ -864,7 +865,7 @@ export async function sendDaily(pool: pg.Pool, id: number, userId: number | null
   const mail = {
     recipients,
     subject: `Daily traffic summary ${day} – ${a.enterprise}`,
-    body: fill(a.emailBody.replace(/<[^>]+>/g, ""), vars),
+    body: fillBody(a.emailBody, vars),
   };
   await logEmail(pool, {
     type: "daily_report",

@@ -3,6 +3,7 @@
 // the partner's credit); the disputed block for vendor invoices not accepted (as the partner's
 // reconciliation rule says), payments left off the SOA, lines removed by hand, manual entries; Send
 // Email and Queue SOA Export run as SOA reports in the background and keep the statement as sent.
+import { fillBody, fillText } from "../email/html.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -603,8 +604,12 @@ async function emailFor(c: Db, st: SoaStatement, templateId: number) {
     balance_words: main ? balanceWords(main.closingBalance, main.side) : "settled",
     company: st.businessCompany,
   };
-  const fill = (s: string) => s.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
-  return { name: t.name as string, type: t.email_type as string, subject: fill(t.subject), body: fill(t.body) };
+  return {
+    name: t.name as string,
+    type: t.email_type as string,
+    subject: fillText(t.subject, vars),
+    body: fillBody(t.body, vars),
+  };
 }
 
 const SOA_TEMPLATE_TYPES = new Set(["soa_statement", "send_soa"]);

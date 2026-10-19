@@ -2,6 +2,7 @@
 // (banned / trusted IPs and filters), Traffic Alert (checked against the EDR store), SMS To Voice and
 // Broadcast. Saves are undoable changes (§13.10); delete archives (§13.29); every e-mail the
 // platform sends is logged (emailLog.ts).
+import { appendText, fillBody, fillText } from "../email/html.js";
 import { isIP } from "node:net";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
@@ -100,11 +101,17 @@ export function getEmailLog(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
   return withDb(reply, async (pool) => {
     const { rows } = await pool.query(
-      `SELECT ${EMAIL_LOG_SELECT}, l.body, l.sender FROM ${EMAIL_LOG_FROM} WHERE l.id = $1`,
+      `SELECT ${EMAIL_LOG_SELECT}, l.body, l.sender, l.body_html, l.inline_images FROM ${EMAIL_LOG_FROM} WHERE l.id = $1`,
       [id],
     );
     if (!rows[0]) return notFound(reply, "E-mail log", id);
-    return { ...mapEmailLog(rows[0]), body: rows[0].body ?? "", sender: rows[0].sender ?? null };
+    return {
+      ...mapEmailLog(rows[0]),
+      body: rows[0].body ?? "",
+      sender: rows[0].sender ?? null,
+      bodyHtml: rows[0].body_html ?? null,
+      inlineImages: rows[0].inline_images ?? [],
+    };
   });
 }
 
@@ -260,8 +267,8 @@ async function rateMail(c: Db, t: TrunkInfo) {
   };
   return {
     to: await contactEmails(c, t.enterpriseId, ["rates", "commercial"]).then((x) => x.slice(0, 3)),
-    subject: fill(tpl?.subject ?? "Rate update for {trunk}", vars),
-    body: fill(tpl?.body ?? "", vars),
+    subject: fillText(tpl?.subject ?? "Rate update for {trunk}", vars),
+    body: fillBody(tpl?.body ?? "", vars),
   };
 }
 
@@ -284,8 +291,8 @@ async function techMail(c: Db, t: TrunkInfo) {
   };
   return {
     to: await contactEmails(c, t.enterpriseId, ["technical", "commercial"]).then((x) => x.slice(0, 3)),
-    subject: fill(tpl?.subject ?? "Connection details for {trunk}", vars),
-    body: fill(tpl?.body ?? "", vars),
+    subject: fillText(tpl?.subject ?? "Connection details for {trunk}", vars),
+    body: fillBody(tpl?.body ?? "", vars),
   };
 }
 
@@ -325,7 +332,7 @@ export function sendRateNotifications(request: FastifyRequest, reply: FastifyRep
         to: m.to,
         sender: await companyMailbox(pool, t.enterpriseId, "rateSheet"),
         subject: m.subject,
-        body: `${m.body}\n\n(${lines.length} rate lines attached)`,
+        body: appendText(m.body, `(${lines.length} rate lines attached)`),
         file: sheetFile(t, [], b.fileType).name,
         rateDate: today(),
         userId: me.id,
@@ -798,8 +805,8 @@ export async function runAlertCheck(c: Db, id: number): Promise<TrafficAlertChec
       vendorTrunkId: a.vendorTrunkId,
       to: emailed,
       sender: await companyMailbox(c, enterpriseId, "trafficAlert"),
-      subject: fill(tp[0]?.subject ?? "Traffic alert: {alert}", vars),
-      body: fill(tp[0]?.body ?? "{breaches}", vars),
+      subject: fillText(tp[0]?.subject ?? "Traffic alert: {alert}", vars),
+      body: fillBody(tp[0]?.body ?? "{breaches}", vars),
     });
   }
   await c.query(

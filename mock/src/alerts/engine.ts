@@ -4,6 +4,7 @@
 // recovers when the metric is back (OK notice), followed by the rule's cooldown. Warning e-mails go out
 // in a 15-minute digest, Info in the daily summary at 07:00 UTC, Critical at once. State lives in
 // PostgreSQL, so acknowledgements and snoozes from the API take effect on the next round.
+import { fillBody, fillText } from "../email/html.js";
 import type pg from "pg";
 import type { AlertRuleRow, IncidentEvent, IncidentRow } from "@sms/contract";
 import { db } from "../db.js";
@@ -291,8 +292,6 @@ async function template(c: Db) {
   );
 }
 
-const fill = (t: string, v: Record<string, string>) => t.replace(/\{([a-z_]+)\}/g, (m, k: string) => v[k] ?? m);
-
 async function enterpriseOf(c: Db, inc: IncidentRow): Promise<number | null> {
   if (inc.entityKind === "customer" || inc.entityKind === "vendor") return inc.entityId;
   if (inc.entityKind === "customer_trunk" || inc.entityKind === "vendor_trunk") {
@@ -349,8 +348,8 @@ export async function sendIncidentEmail(
     enterpriseId: rule.partnerContactType ? ent : null,
     to,
     sender: ent ? await companyMailbox(c, ent, "trafficAlert") : null,
-    subject: fill(tpl.subject, values),
-    body: fill(tpl.body, values),
+    subject: fillText(tpl.subject, values),
+    body: fillBody(tpl.body, values),
   });
   await c.query("UPDATE incidents SET emailed_at = now(), digest_pending = false WHERE id = ANY($1)", [
     incs.map((i) => i.id),

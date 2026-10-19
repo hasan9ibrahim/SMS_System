@@ -59,6 +59,7 @@ import {
   zonedTime,
 } from "./invoiceModel";
 import { tzOptions } from "../../ui/timezones";
+import { MailBody } from "../../ui/MailPreview";
 
 const page = pageForPath("/finance/vendor-invoices")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -405,7 +406,7 @@ function DecisionDialog({ inv, action, done }: { inv: VendorInvoiceDetail; actio
               <div className="small">
                 <strong>Subject:</strong> {preview.data.subject}
               </div>
-              <pre>{preview.data.body}</pre>
+              <MailBody body={preview.data.body} />
             </>
           ) : (
             <span className="muted small">

@@ -3,6 +3,7 @@
 // rate, and increases or closes are checked against live traffic on that trunk. Accepting loads the
 // lines into the trunk's rate table as one undoable change (§13.10), never back-dated (§13.32); the
 // vendor gets a Successful, Failed or Rejected reply, sent at once or kept as a draft per vendor.
+import { appendText, fillBody, fillText } from "../email/html.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -445,7 +446,6 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
 
 // ---------------------------------------------------------------- replies
 
-const fill = (t: string, v: Record<string, string>) => t.replace(/\{([a-z_]+)\}/g, (m, k: string) => v[k] ?? m);
 const day = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
 
 /** The vendor's business company's template for a reply (§11), else a shared one. */
@@ -547,8 +547,8 @@ async function makeReply(c: Db, rnId: number, kind: "successful" | "failed" | "r
       rate_date: rn.effective_from ? day(rn.effective_from) : day(new Date()),
       reason: body,
     };
-    subject = `${fill(tpl.subject, v)} (${ref})`;
-    body = kind === "successful" ? `${fill(tpl.body, v)}\n\n${body}` : fill(tpl.body, v);
+    subject = `${fillText(tpl.subject, v)} (${ref})`;
+    body = kind === "successful" ? appendText(fillBody(tpl.body, v), body) : fillBody(tpl.body, v);
   }
   const { rows: ins } = await c.query(
     `INSERT INTO rate_notification_replies (rn_id, kind, to_addresses, subject, body) VALUES ($1, $2, $3, $4, $5) RETURNING id`,

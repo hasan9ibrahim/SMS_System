@@ -44,6 +44,7 @@ import {
   TRANSACTION_TYPES,
   typeLabel,
 } from "./financeModel";
+import { MailBody } from "../../ui/MailPreview";
 
 const page = pageForPath("/finance/transactions")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -75,7 +76,7 @@ function PreviewBox({ input }: { input: TransactionInput }) {
       <div className="small">
         <strong>Subject:</strong> {q.data.subject}
       </div>
-      <pre>{q.data.body}</pre>
+      <MailBody body={q.data.body} />
     </div>
   );
 }

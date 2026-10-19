@@ -10,6 +10,8 @@ import type {
   CloneInput,
   DepartmentInput,
   EmailTemplateInput,
+  EmailTemplateTestInput,
+  SenderEmail,
   EmailTemplatePreviewInput,
   EmailTemplateRecord,
   ForcePasswordChangeInput,
@@ -58,7 +60,17 @@ import { dependencies, recordChange, type DiffEntry, type FieldError } from "./r
 import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
 import { inTransaction } from "./views.js";
-import { companyDetails, companyPlaceholders } from "./emailLog.js";
+import { companyDetails, companyPlaceholders, logEmail, senderFor } from "./emailLog.js";
+import {
+  compatIssues,
+  emailDocument,
+  escapeHtml,
+  fillBody,
+  fillText,
+  isHtml,
+  outlookView,
+  sanitizeHtml,
+} from "../email/html.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -788,6 +800,7 @@ const COMMON: [string, string, string][] = [
   ["enterprise", "Partner (enterprise) name", "Fenphy Demo Telecom"],
   ["company", "Business company name", "Bricor Gateway Group"],
   // The sending business company's address and bank (§11): each entity's e-mails carry its own account.
+  ["company_logo", "Business company logo (image, 48 px high)", "[logo]"],
   ["company_address", "Business company address", "12 Example Street, 1000 Demo City, Lebanon"],
   ["company_website", "Business company website", "https://bricor.example"],
   [
@@ -949,7 +962,8 @@ const templates = records<EmailTemplateInput, EmailTemplateRecord>({
     ["businessCompanyId", "business_company_id"],
   ],
   load: loadTemplate,
-  values: (b) => ({ ...b, name: b.name.trim(), subject: b.subject.trim() }),
+  // Designs are kept whole; only scripts, handlers, forms and frames are removed (§11).
+  values: (b) => ({ ...b, name: b.name.trim(), subject: b.subject.trim(), body: sanitizeHtml(b.body) }),
   check: (c, b) => checkTemplate(c, b),
   nameOf: (b) => b.name,
   deps: async (c, id) => {
@@ -1005,42 +1019,98 @@ export function cloneEmailTemplate(request: FastifyRequest, reply: FastifyReply)
   });
 }
 
-const escapeHtml = (s: string) =>
-  s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
-/** Fills {placeholders} with sample values; plain-text bodies become HTML with line breaks. */
+/** Shown for {company_logo} when no business company (or no logo) is picked. */
+const LOGO_SAMPLE =
+  '<span style="display:inline-block;width:120px;height:40px;line-height:40px;text-align:center;background-color:#e5e7eb;color:#6b7280;font:bold 12px Arial,sans-serif">LOGO</span>';
+
+/**
+ * Fills {placeholders} with sample values (a picked business company's own name, address, bank and
+ * logo), and builds the e-mail as sent, the classic Outlook view and the compatibility report (§11).
+ */
+/** The template filled with sample values (a picked business company's own name, address, bank and logo). */
+function fillSamples(type: string, subject: string, body: string, company: string | Record<string, string> | null) {
+  const values: Record<string, string> = Object.fromEntries(placeholdersOf(type).map((p) => [p.key, p.sample]));
+  values.company_logo = LOGO_SAMPLE;
+  if (typeof company === "string") values.company = company;
+  else if (company) for (const [k, v] of Object.entries(company)) if (v && k in values) values[k] = v;
+  const unknown = new Set<string>();
+  return { subject: fillText(subject, values, unknown), body: fillBody(body, values, unknown), unknown };
+}
+
+/** Preview (§11): the filled body, the e-mail as sent, the classic Outlook view and the compatibility report. */
 export function fillTemplate(
   type: string,
   subject: string,
   body: string,
   company: string | Record<string, string> | null,
 ) {
-  const values = new Map(placeholdersOf(type).map((p) => [p.key, p.sample]));
-  // A business company picked: its own name, address and bank fill the company placeholders (§11).
-  if (typeof company === "string") values.set("company", company);
-  else if (company) for (const [k, v] of Object.entries(company)) if (v && values.has(k)) values.set(k, v);
-  const unknown = new Set<string>();
-  const fill = (text: string, html: boolean) =>
-    text.replace(/\{([a-z_]+)\}/g, (m, key: string) => {
-      const v = values.get(key);
-      if (v == null) {
-        unknown.add(key);
-        return m;
-      }
-      return html ? escapeHtml(v) : v;
-    });
-  const isHtml = /<[a-z][^>]*>/i.test(body);
-  const bodyHtml = fill(isHtml ? body : escapeHtml(body).replace(/\n/g, "<br>"), true);
-  return { subject: fill(subject, false), bodyHtml, unknownPlaceholders: [...unknown] };
+  const f = fillSamples(type, subject, body, company);
+  const emailHtml = emailDocument(f.body);
+  return {
+    subject: f.subject,
+    bodyHtml: isHtml(body) ? sanitizeHtml(f.body) : escapeHtml(f.body).replace(/\n/g, "<br>"),
+    emailHtml,
+    outlookHtml: outlookView(emailHtml),
+    issues: compatIssues(emailHtml, body),
+    unknownPlaceholders: [...f.unknown],
+  };
 }
+
+const companyValues = async (c: Db, companyId: number | null) =>
+  companyId == null ? null : companyPlaceholders(await companyDetails(c, { companyId }));
 
 export function previewEmailTemplate(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as EmailTemplatePreviewInput;
+  return withDb(reply, async (pool) =>
+    fillTemplate(b.emailType, b.subject, b.body, await companyValues(pool, b.businessCompanyId)),
+  );
+}
+
+/** The mailbox that sends each template type (Senders, §11). */
+const SENDER_OF: Record<string, SenderEmail> = {
+  customer_rate: "rateSheet",
+  invoice: "invoice",
+  low_balance: "invoice",
+  bind_down: "techInfo",
+  customer_tech_info: "techInfo",
+  trunk_change_info: "techInfo",
+  soa_statement: "soa",
+  send_soa: "soa",
+  rate_upload_notification: "rnReply",
+  auto_upload_rejected: "rnReply",
+  traffic_alert: "trafficAlert",
+  monitoring_alert: "trafficAlert",
+  trouble_ticket: "troubleTicket",
+};
+
+/** A test of a template to real addresses, so it can be checked in Outlook (logged as template_test). */
+export function testEmailTemplate(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as EmailTemplateTestInput;
   return withDb(reply, async (pool) => {
-    const company =
+    if (b.businessCompanyId != null && !(await exists(pool, "business_companies", b.businessCompanyId)))
+      return badInput(reply, [{ path: "/businessCompanyId", message: "unknown business company" }]);
+    if (!b.subject.trim() || !b.body.trim())
+      return badInput(reply, [{ path: b.subject.trim() ? "/body" : "/subject", message: "required" }]);
+    const f = fillSamples(b.emailType, b.subject, b.body, await companyValues(pool, b.businessCompanyId));
+    const me = await getCurrentUser();
+    const sender =
       b.businessCompanyId == null
         ? null
-        : companyPlaceholders(await companyDetails(pool, { companyId: b.businessCompanyId }));
-    return fillTemplate(b.emailType, b.subject, b.body, company);
+        : await senderFor(pool, { companyId: b.businessCompanyId }, SENDER_OF[b.emailType] ?? "techInfo");
+    const id = { value: 0 };
+    const to = [...new Set(b.to.map((x) => x.trim().toLowerCase()))];
+    const status = await logEmail(
+      pool,
+      { type: "template_test", to, sender, subject: `[Test] ${f.subject}`, body: f.body, userId: me.id },
+      id,
+    );
+    const { rows } = await pool.query("SELECT inline_images FROM email_logs WHERE id = $1", [id.value]);
+    return {
+      status,
+      emailLogId: id.value,
+      sender,
+      inlineImages: (rows[0]?.inline_images as string[] | undefined)?.length ?? 0,
+    };
   });
 }
 

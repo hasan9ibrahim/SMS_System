@@ -25,6 +25,8 @@ import { DEMO_TOTP_SECRET, SEED_PASSWORD } from "../src/generator/admin.js";
 import { fillTemplate } from "../src/api/admin.js";
 import { tableOf } from "../src/api/audit.js";
 import { companyDetails, companyPlaceholders, companyTemplate, senderFor } from "../src/api/emailLog.js";
+import { fakeLogoPng } from "../src/email/png.js";
+import { embedImages, fillBody, outlookFont, sanitizeHtml } from "../src/email/html.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -47,6 +49,8 @@ after(async () => {
     await q("DELETE FROM departments WHERE inserted_at >= $1");
     await q("DELETE FROM access_groups WHERE inserted_at >= $1");
     await q("DELETE FROM email_templates WHERE inserted_at >= $1");
+    await q("DELETE FROM email_logs WHERE email_type = 'template_test' AND inserted_at >= $1");
+    await q("DELETE FROM email_assets WHERE uploaded_at >= $1");
     await q("DELETE FROM customer_portal_users WHERE inserted_at >= $1");
     await q(
       "DELETE FROM business_company_files WHERE business_company_id IN (SELECT id FROM business_companies WHERE inserted_at >= $1)",
@@ -120,6 +124,17 @@ describe("§13.28 password and 2FA helpers", () => {
     assert.equal(r.subject, "Down FENPHY-MAIN");
     assert.match(r.bodyHtml, /Hi Fenphy Demo Telecom 5 &lt; 6<br>\{nope\}/);
     assert.deepEqual(r.unknownPlaceholders, ["nope"]);
+  });
+  test("e-mail HTML: sanitising keeps designs, values cannot break them, Outlook font fallback (§11)", () => {
+    const html = sanitizeHtml(
+      '<div style="color:red" onmouseover="x()"><a href="javascript:x()">a</a><iframe src="//x"></iframe><!--[if mso]><b>o</b><![endif]--></div>',
+    );
+    assert.equal(html, '<div style="color:red"><a>a</a><!--[if mso]><b>o</b><![endif]--></div>');
+    assert.equal(fillBody("<p>{a}</p>", { a: "<b>&\nx" }), "<p>&lt;b&gt;&amp;<br>x</p>");
+    assert.equal(fillBody("Hi {a}", { a: "<b>" }), "Hi <b>", "plain text stays plain");
+    assert.equal(outlookFont("'Montserrat', Arial, sans-serif"), "Arial, sans-serif");
+    assert.equal(outlookFont("Montserrat"), "'Times New Roman', serif");
+    assert.equal(outlookFont("Georgia, serif"), "Georgia, serif");
   });
   test("audit table names come from the path", () => {
     assert.equal(tableOf("/rate-tables/{id}/lines"), "rate_tables");
@@ -467,6 +482,106 @@ describe("§11 departments, access groups, templates, portal users", { skip }, (
     await ok("archiveEmailTemplate", call("POST", `/email-templates/${record.id}/archive`, {}));
     const used = await fails("archiveEmailTemplate", call("POST", "/email-templates/4/archive", {}), 409);
     assert.ok(used.dependencies.blocked);
+  });
+
+  test("e-mail designs: images, sanitising, the e-mail as sent, the Outlook view, test sends (§11)", async () => {
+    const png = fakeLogoPng([200, 30, 30]);
+    const bad = await fails(
+      "uploadEmailAsset",
+      call("POST", "/email-assets", {
+        name: "x.svg",
+        contentBase64: Buffer.from("<svg/>").toString("base64"),
+        businessCompanyId: null,
+      }),
+      400,
+    );
+    assert.match(bad.errors[0].message, /PNG, JPEG or GIF/);
+    const asset = await ok(
+      "uploadEmailAsset",
+      call("POST", "/email-assets", {
+        name: `banner ${run}.png`,
+        contentBase64: png.toString("base64"),
+        businessCompanyId: 2,
+      }),
+      201,
+    );
+    assert.deepEqual([asset.width, asset.height, asset.contentType], [160, 48, "image/png"]);
+    const file = await call("GET", asset.url.replace(API_PREFIX, ""));
+    assert.equal(file.headers["content-type"], "image/png");
+    assert.equal(file.rawPayload.length, png.length);
+    const list = await ok("listEmailAssets", call("GET", "/email-assets?businessCompanyId=2"));
+    assert.ok(list.items.some((x: { id: number }) => x.id === asset.id));
+    const other = await ok("listEmailAssets", call("GET", "/email-assets?businessCompanyId=1"));
+    assert.ok(!other.items.some((x: { id: number }) => x.id === asset.id), "another company's images stay out");
+
+    const design = `<style>.btn{background:#2563eb;color:#ffffff;border-radius:6px;padding:10px 18px}</style>
+      <table width="600" style="font-family:'Montserrat',Arial,sans-serif;background:#f3f4f6">
+        <tr><td>{company_logo}<img src="${asset.url}" style="width:160px"></td></tr>
+        <tr><td style="padding:16px"><p onclick="steal()">Dear {enterprise},</p>
+          <a class="btn" href="javascript:steal()">Pay {due_amount} {currency}</a><p>{bank_details}</p></td></tr>
+      </table><script>steal()</script>`;
+    const p = await ok(
+      "previewEmailTemplate",
+      call("POST", "/email-templates/preview", {
+        emailType: "invoice",
+        subject: "Invoice {invoice_no}",
+        body: design,
+        businessCompanyId: 2,
+      }),
+    );
+    assert.ok(!/<script|onclick|javascript:/i.test(p.emailHtml), "scripts, handlers and javascript: links are removed");
+    assert.match(
+      p.emailHtml,
+      /class="btn" style="background: #2563eb; color: #ffffff; border-radius: 6px/,
+      "CSS inlined",
+    );
+    assert.match(
+      p.emailHtml,
+      /business-companies\/2\/files\/logo" alt="[^"]+" width="160" height="48"/,
+      "the company's logo",
+    );
+    assert.match(p.emailHtml, /IBAN: [A-Z0-9]+<br>/, "multi-line values keep their lines");
+    assert.match(p.emailHtml, /<!--\[if mso\]>.*font-family: Arial/s, "Outlook gets the fallback font");
+    assert.ok(!/border-radius/.test(p.outlookHtml), "square corners in classic Outlook");
+    assert.match(p.outlookHtml, /font-family: Arial, sans-serif/);
+    const features = p.issues.map((i: { feature: string }) => i.feature);
+    for (const f of ["web_font", "border_radius"]) assert.ok(features.includes(f), f);
+    assert.ok(!features.includes("external_image"), "uploaded images are embedded, not external");
+
+    const saved = await ok(
+      "createEmailTemplate",
+      call("POST", "/email-templates", {
+        name: `Design ${run}`,
+        emailType: "invoice",
+        subject: "Invoice {invoice_no}",
+        body: design,
+        businessCompanyId: 2,
+      }),
+      201,
+    );
+    assert.ok(!/<script|onclick/i.test(saved.record.body), "saved sanitised");
+    assert.match(saved.record.body, /<style>/, "the design is kept");
+
+    const sent = await ok(
+      "testEmailTemplate",
+      call("POST", "/email-templates/test", {
+        emailType: "invoice",
+        subject: "Invoice {invoice_no}",
+        body: design,
+        businessCompanyId: 2,
+        to: ["qa@demo.example"],
+      }),
+    );
+    assert.equal(sent.status, "sent");
+    assert.equal(sent.inlineImages, 2, "logo and banner go inline");
+    assert.match(sent.sender, /^billing@/);
+    const log = await ok("getEmailLog", call("GET", `/email-logs/${sent.emailLogId}`));
+    assert.equal(log.emailType, "template_test");
+    assert.match(log.subject, /^\[Test\] Invoice /);
+    assert.match(log.bodyHtml, /<!DOCTYPE html>/);
+    assert.deepEqual(log.inlineImages.sort(), [`image-${asset.id}`, "logo-2"]);
+    const cid = embedImages(log.bodyHtml);
+    assert.ok(cid.html.includes(`cid:asset-${asset.id}@sms.local`));
   });
 
   test("portal users: customers only, temporary password", async () => {

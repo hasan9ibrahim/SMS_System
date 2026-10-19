@@ -1474,7 +1474,15 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Body",
-                what: "Required. Plain text or HTML. Plain text is sent with its line breaks kept.",
+                what: "Required. Designed in **Visual** mode (what you see is the e-mail) or written in **HTML** mode (the full source, for designs made in another tool). **Import HTML file** loads a design saved as .html. Plain text still works and keeps its line breaks.",
+              },
+              {
+                name: "Visual toolbar",
+                what: "Style (paragraph, headings, quote), **Font** (fonts every mail app has, and web fonts such as Montserrat that classic Outlook replaces with their fallback), **Size**, bold / italic / underline / strike, **text colour**, **highlight**, **cell / paragraph background** (for coloured sections and buttons), alignment, lists, **link**, **image**, image width and centring, **button**, **table**, **divider**, **e-mail layout** (a page background with a 600 px card; click again to change the colours), clear formatting, undo and redo.",
+              },
+              {
+                name: "Images",
+                what: 'Upload PNG, JPEG or GIF up to 2 MB, or reuse an image uploaded before. Uploaded images are embedded in the sent e-mail, so readers see them without clicking "Download pictures". `{company_logo}` puts the business company\'s own logo in.',
               },
               {
                 name: "Placeholder chips",
@@ -1483,8 +1491,16 @@ export const topics: HelpTopic[] = [
                   "Every type has `{enterprise}` and `{company}`; e.g. Customer Rate adds `{trunk}`, `{rate_date}`",
               },
               {
-                name: "Preview (fake sample values)",
-                what: "The finished e-mail as the partner will see it, updated as you type. A warning lists any `{word}` that is not a placeholder of this type.",
+                name: "Preview (sample values)",
+                what: "The finished e-mail, updated as you pause typing, in three views: **In the system** (as Email Logs, new Outlook, Outlook on the web, Gmail and Apple Mail show it), **Outlook for Windows** (an approximation of classic Outlook, which draws e-mails with Word: rounded corners, shadows, background images and web fonts are dropped) and **Phone** (375 px). With a business company picked, its name, logo, address and bank fill the placeholders. A warning lists any `{word}` that is not a placeholder of this type.",
+              },
+              {
+                name: "Compatibility",
+                what: "Under the preview: what will look different and in which mail apps. **Check** items need attention (an image without a width, a web font with no fallback, images from other websites, pictures pasted as data, Gmail's 102 KB limit); **Note** items are small differences (square corners in classic Outlook, ignored responsive rules).",
+              },
+              {
+                name: "Send test",
+                what: "Sends the template with sample values to up to five addresses, from the mailbox that sends this kind of e-mail, so you can open it in your own Outlook. In the trial it is written to [[email-logs|Email Logs]] (type Template Test) instead of being sent.",
               },
             ],
           },
@@ -1500,8 +1516,9 @@ export const topics: HelpTopic[] = [
             items: [
               "Click **Add template**.",
               "Pick the **Email Type** first, then type the **Name** and **Subject**.",
-              "Write the **Body**, clicking placeholder chips to insert them.",
-              "Check the preview and the warning line, then click **Add template**.",
+              "Design the **Body** in Visual mode (or paste or import HTML), clicking placeholder chips to insert them.",
+              "Check the three preview views and the Compatibility list; use **Send test** to see it in your own Outlook.",
+              "Click **Add template**.",
               "Choose it as a default on [[business-companies]] if needed.",
             ],
           },

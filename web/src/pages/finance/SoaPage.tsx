@@ -52,6 +52,7 @@ import {
   SIDE_TITLE,
   signedAmount,
 } from "./soaModel";
+import { MailBody } from "../../ui/MailPreview";
 
 const page = pageForPath("/finance/soa")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -325,7 +326,7 @@ function SendDialog({
             <div className="small">
               <strong>Subject:</strong> {preview.data.subject}
             </div>
-            <pre>{preview.data.body}</pre>
+            <MailBody body={preview.data.body} />
           </>
         ) : (
           <span className="muted small">{preview.isError ? problemText(preview.error) : "Preparing the e-mail…"}</span>

@@ -2,6 +2,7 @@
 // (pending → inprogress → completed / failed), Send Invoice, Mark, Charge Details from the EDR
 // store, PDF, safe delete (§13.29). Balances use the §7 sign: positive = the client's credit,
 // negative = owed; the due amount is the owed part of the closing balance.
+import { fillBody, fillText } from "../email/html.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -312,8 +313,7 @@ async function invoiceMail(c: Db, id: number) {
     currency: inv.currency,
     due_date: inv.dueDate,
   };
-  const fill = (t: string) => t.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
-  return { subject: fill(tpl.subject), body: fill(tpl.body) };
+  return { subject: fillText(tpl.subject, vars), body: fillBody(tpl.body, vars) };
 }
 
 export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {

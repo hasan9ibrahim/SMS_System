@@ -1,7 +1,7 @@
 // Admin (§11, §12.5, §13.28): users, passwords and 2FA, departments, GUI access groups, logged-in
 // users, e-mail templates, business companies and customer portal logins. Lists go through
 // fetchListPage; these are the record reads and writes.
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AccessCatalog,
   AccessGroupInput,
@@ -12,7 +12,12 @@ import type {
   CompanyFile,
   DepartmentInput,
   DepartmentSaved,
+  EmailAsset,
+  EmailAssetList,
+  EmailAssetUpload,
   EmailPlaceholderCatalog,
+  EmailTemplateTestInput,
+  EmailTemplateTestResult,
   EmailTemplateInput,
   EmailTemplatePreview,
   EmailTemplatePreviewInput,
@@ -155,6 +160,32 @@ export function useTemplatePreview(input: EmailTemplatePreviewInput | null) {
     placeholderData: (prev) => prev,
   });
 }
+
+/** Images for e-mail designs (§11): a company's own and the shared ones. */
+export function useEmailAssets(businessCompanyId: number | null) {
+  return useQuery<EmailAssetList>({
+    queryKey: ["email-assets", businessCompanyId],
+    queryFn: () =>
+      unwrap(
+        api.GET("/email-assets", {
+          params: { query: businessCompanyId == null ? {} : { businessCompanyId } },
+        }),
+      ),
+  });
+}
+export function useUploadEmailAsset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: EmailAssetUpload): Promise<EmailAsset> => unwrap(api.POST("/email-assets", { body: input })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["email-assets"] }),
+  });
+}
+/** A test of a template to real addresses, to check it in Outlook (logged in Email Logs). */
+export const useTestEmailTemplate = () =>
+  useMutation({
+    mutationFn: (input: EmailTemplateTestInput): Promise<EmailTemplateTestResult> =>
+      unwrap(api.POST("/email-templates/test", { body: input })),
+  });
 
 // ---------------------------------------------------------------- business companies
 

@@ -2,14 +2,20 @@
 // Subject, Body (rich text or plain text with {placeholders}). The placeholders of the chosen type are
 // chips that insert at the caret, and the preview fills them with fake sample values. Clone copies a
 // template; one in use by a business company, traffic alert or SOA report cannot be deleted (§13.29).
-import { useRef, useState } from "react";
-import type { EmailTemplateInput, EmailTemplateRecord, EmailTemplateRow } from "@sms/contract";
+import { useEffect, useMemo, useState } from "react";
+import type {
+  EmailTemplateInput,
+  EmailTemplatePreviewInput,
+  EmailTemplateRecord,
+  EmailTemplateRow,
+} from "@sms/contract";
 import {
   useCloneEmailTemplate,
   useEmailPlaceholders,
   useEmailTemplate,
   useSaveEmailTemplate,
   useTemplatePreview,
+  useTestEmailTemplate,
 } from "../../api/admin";
 import { useMe } from "../../api/hooks";
 import { useReference, useRestore } from "../../api/records";
@@ -22,26 +28,82 @@ import { ask, toast } from "../../ui/feedback";
 import { Button, Modal } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { fmtWhen, RecordActions } from "../reference/shared";
-import { insertAt, TEMPLATE_TYPE } from "./adminModel";
+import { MailEditor } from "../../ui/MailEditor";
+import { MailPreview } from "../../ui/MailPreview";
+import { TEMPLATE_TYPE } from "./adminModel";
 import { Kv } from "./parts";
 
 const page = pageForPath("/admin/email-templates")!;
 const TYPES = Object.entries(TEMPLATE_TYPE).map(([value, label]) => ({ value, label }));
 
-/** The filled e-mail in a sandboxed frame: template HTML never runs in the app. */
-export function MailFrame({ subject, html }: { subject: string; html: string }) {
+/** Waits until typing pauses before asking for a new preview. */
+function useSettled<T>(value: T, ms = 400): T {
+  const key = JSON.stringify(value);
+  const [settled, setSettled] = useState(key);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(key), ms);
+    return () => clearTimeout(t);
+  }, [key, ms]);
+  return useMemo(() => JSON.parse(settled) as T, [settled]);
+}
+
+/** Sends the template, filled with sample values, to real addresses to check it in Outlook (§11). */
+function TestDialog({ input, done }: { input: EmailTemplatePreviewInput; done: () => void }) {
+  const [to, setTo] = useState("");
+  const test = useTestEmailTemplate();
+  const list = to
+    .split(/[\s,;]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const valid = list.length > 0 && list.length <= 5 && list.every((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
   return (
-    <div className="mail-preview">
-      <div className="small">
-        <strong>Subject:</strong> {subject}
-      </div>
-      <iframe
-        className="mail-frame"
-        title="E-mail preview"
-        sandbox=""
-        srcDoc={`<!doctype html><meta charset="utf-8"><body style="font:13px/1.5 Inter,system-ui,sans-serif;margin:10px;color:#1f2937">${html}</body>`}
-      />
-    </div>
+    <Modal
+      title="Send a test e-mail"
+      width={480}
+      onClose={done}
+      footer={
+        <>
+          <span className="fb-spacer" />
+          <Button onClick={done}>Close</Button>
+          <Button
+            variant="primary"
+            icon="send"
+            disabled={!valid || test.isPending}
+            onClick={() =>
+              test.mutate(
+                { ...input, to: list },
+                {
+                  onSuccess: (r) =>
+                    toast({
+                      tone: r.status === "sent" ? "good" : "error",
+                      message:
+                        r.status === "sent"
+                          ? `Test sent${r.sender ? ` from ${r.sender}` : ""} with ${r.inlineImages} embedded image${r.inlineImages === 1 ? "" : "s"} (Email Logs #${r.emailLogId})`
+                          : `The test failed – see Email Logs #${r.emailLogId}`,
+                    }),
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
+                },
+              )
+            }
+          >
+            Send test
+          </Button>
+        </>
+      }
+    >
+      <p className="small">
+        Sends this template with sample values (and the picked business company&apos;s logo, address and bank) so you
+        can open it in Outlook on Windows, Outlook on the web and your phone.
+      </p>
+      <label className="ff wide">
+        <span className="ff-label">To (up to 5 addresses)</span>
+        <input type="text" value={to} placeholder="you@company.example" onChange={(e) => setTo(e.target.value)} />
+      </label>
+      <p className="muted small">
+        Trial phase: e-mails are not sent yet; the test is written to Email Logs, where you can open it as it would
+        arrive.
+      </p>
+    </Modal>
   );
 }
 
@@ -62,28 +124,19 @@ function TemplateDialog({ record, done }: { record: EmailTemplateRecord | null; 
   const save = useSaveEmailTemplate();
   const notifySaved = useNotifySaved();
   const [error, setError] = useState<string | null>(null);
-  const body = useRef<HTMLTextAreaElement>(null);
   const v = form.values;
-  const preview = useTemplatePreview({
+  const previewInput = useSettled<EmailTemplatePreviewInput>({
     emailType: v.emailType,
     subject: v.subject,
     body: v.body,
     businessCompanyId: v.businessCompanyId,
   });
+  const preview = useTemplatePreview(previewInput);
   const chips = placeholders.data?.types.find((t) => t.emailType === v.emailType)?.placeholders ?? [];
-  const insert = (key: string) => {
-    const el = body.current;
-    const r = insertAt(v.body, el?.selectionStart ?? v.body.length, el?.selectionEnd ?? v.body.length, `{${key}}`);
-    form.set("body", r.text);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(r.caret, r.caret);
-    });
-  };
   return (
     <Modal
       title={record ? `Edit ${record.name}` : "Add e-mail template"}
-      width={1040}
+      width={1280}
       onClose={done}
       footer={
         <>
@@ -125,40 +178,30 @@ function TemplateDialog({ record, done }: { record: EmailTemplateRecord | null; 
             />
             <TextField form={form} path="subject" label="Subject" required maxLength={300} />
           </div>
-          <div className="ff wide">
-            <label className="ff-label">
-              Body<span className="req">*</span>
-              <span className="muted small"> · plain text or HTML</span>
-            </label>
-            <textarea
-              ref={body}
-              className="tpl-body"
-              rows={14}
-              value={v.body}
-              maxLength={100000}
-              onChange={(e) => form.set("body", e.target.value)}
-            />
-            {form.error("body") && <span className="ff-error">{form.error("body")}</span>}
-          </div>
-          <div className="tpl-chips" aria-label="Placeholders">
-            {chips.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                className="chip"
-                title={`${p.description} – e.g. ${p.sample}`}
-                onClick={() => insert(p.key)}
-              >
-                {`{${p.key}}`}
-              </button>
-            ))}
-          </div>
+          <MailEditor
+            label="Body"
+            value={v.body}
+            onChange={(html) => form.set("body", html)}
+            placeholders={chips}
+            businessCompanyId={v.businessCompanyId}
+          />
+          {form.error("body") && <span className="ff-error">{form.error("body")}</span>}
         </div>
         <div>
-          <div className="ff-label">Preview (fake sample values)</div>
+          <div className="tpl-preview-head">
+            <span className="ff-label">Preview (sample values)</span>
+            <Button
+              small
+              icon="send"
+              disabled={!v.subject.trim() || !v.body.trim()}
+              onClick={() => void ask<void>((d) => <TestDialog input={previewInput} done={() => d()} />)}
+            >
+              Send test
+            </Button>
+          </div>
           {preview.data ? (
             <>
-              <MailFrame subject={preview.data.subject} html={preview.data.bodyHtml} />
+              <MailPreview preview={preview.data} />
               {preview.data.unknownPlaceholders.length > 0 && (
                 <p className="tone-warning small">
                   Not a placeholder of this type: {preview.data.unknownPlaceholders.map((k) => `{${k}}`).join(", ")}
@@ -219,7 +262,7 @@ function TemplateDetail({ r }: { r: EmailTemplateRow }) {
       : null,
   );
   if (!rec.data || !preview.data) return <p className="muted">Loading…</p>;
-  return <MailFrame subject={preview.data.subject} html={preview.data.bodyHtml} />;
+  return <MailPreview preview={preview.data} />;
 }
 
 function TemplateActions({ r }: { r: EmailTemplateRow }) {

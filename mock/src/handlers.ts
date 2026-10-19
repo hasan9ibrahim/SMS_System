@@ -52,6 +52,7 @@ import {
   getUser,
   listEmailPlaceholders,
   previewEmailTemplate,
+  testEmailTemplate,
   restoreAccessGroup,
   restoreDepartment,
   restoreEmailTemplate,
@@ -538,6 +539,7 @@ import {
   updateDailyTrafficAlert,
   updateScheduledReport,
 } from "./api/reports.js";
+import { downloadEmailAsset, listEmailAssets, uploadEmailAsset } from "./api/emailAssets.js";
 
 const VERSION = "0.32.0";
 MIGRATION_VERSION.value = VERSION;
@@ -1077,6 +1079,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   getUser,
   listEmailPlaceholders,
   previewEmailTemplate,
+  testEmailTemplate,
   restoreAccessGroup,
   restoreDepartment,
   restoreEmailTemplate,
@@ -1094,6 +1097,9 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   checkSmtp,
   cloneBusinessCompany,
   createBusinessCompany,
+  downloadEmailAsset,
+  listEmailAssets,
+  uploadEmailAsset,
   downloadCompanyFile,
   getBusinessCompany,
   listFormatVariables,

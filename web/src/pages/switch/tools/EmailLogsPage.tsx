@@ -1,5 +1,5 @@
 // Email Logs (§8): Info ID, Enterprise, Customer Trunk, Vendor Trunk, Email Type, Status, Rate Date,
-// File, Error, To / CC Address, Updated By / Time; the detail shows the e-mail itself.
+// File, Error, To / CC Address, Updated By / Time; the detail shows the e-mail itself, as designed (§11).
 import type { EmailLogRow } from "@sms/contract";
 import { downloadCsv } from "../../../api/masterData";
 import { useEmailLog } from "../../../api/switchTools";
@@ -7,6 +7,7 @@ import { toListQuery } from "../../../grid/filterModel";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
 import { toast } from "../../../ui/feedback";
+import { MailFrame } from "../../../ui/MailPreview";
 import { StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
@@ -42,7 +43,17 @@ function EmailView({ id }: { id: number }) {
         </div>
       )}
       {m.error && <div className="small tone-error">{m.error}</div>}
-      <pre>{m.body || "(no body kept)"}</pre>
+      {m.inlineImages.length > 0 && (
+        <div className="small muted">
+          {m.inlineImages.length} image{m.inlineImages.length === 1 ? "" : "s"} embedded in the e-mail
+        </div>
+      )}
+      {m.bodyHtml ? (
+        // The e-mail as sent (§11): the designed HTML, in a sandboxed frame.
+        <MailFrame html={m.bodyHtml} height={520} />
+      ) : (
+        <pre>{m.body || "(no body kept)"}</pre>
+      )}
     </div>
   );
 }

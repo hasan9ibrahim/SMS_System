@@ -14,6 +14,7 @@ import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
 import { EMAIL_TYPE } from "./toolsModel";
+import { MailBody } from "../../../ui/MailPreview";
 
 const page = pageForPath("/switch/notifications")!;
 
@@ -97,7 +98,7 @@ function SendRateDialog({ ids, done }: { ids: number[]; done: () => void }) {
               <div className="small">
                 <strong>Subject:</strong> {preview.data.subject}
               </div>
-              <pre>{preview.data.body}</pre>
+              <MailBody body={preview.data.body} />
             </>
           ) : (
             <span className="muted small">
@@ -150,7 +151,7 @@ function TechInfoDialog({ ids, done }: { ids: number[]; done: () => void }) {
             <div className="small">
               <strong>Subject:</strong> {preview.data.subject}
             </div>
-            <pre>{preview.data.body}</pre>
+            <MailBody body={preview.data.body} />
           </>
         ) : (
           <span className="muted small">{preview.isError ? problemText(preview.error) : "Preparing the e-mail…"}</span>

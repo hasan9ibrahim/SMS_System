@@ -551,3 +551,213 @@
   justify-content: flex-start;
   align-items: flex-start;
 }
+
+/* E-mail designer and preview (§11): the e-mail itself always renders on white, as mail apps do. */
+.mail-editor {
+  display: grid;
+  gap: 6px;
+  position: relative;
+}
+.mail-editor-head,
+.tpl-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.mail-import input,
+.mail-upload input {
+  display: none;
+}
+.mail-import {
+  cursor: pointer;
+}
+.mail-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+}
+.mail-toolbar button,
+.mail-color {
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mail-toolbar button:hover,
+.mail-color:hover {
+  background: var(--color-border);
+}
+.mail-toolbar select {
+  height: 26px;
+  max-width: 120px;
+  font: inherit;
+  font-size: 12px;
+}
+.mail-color {
+  position: relative;
+}
+.mail-color input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.mail-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--color-border);
+}
+.mail-canvas {
+  width: 100%;
+  height: 420px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  resize: vertical;
+  overflow: auto;
+}
+.mail-source {
+  min-height: 420px;
+}
+.mail-popover {
+  position: absolute;
+  z-index: 5;
+  top: 70px;
+  left: 8px;
+  right: 8px;
+  max-width: 520px;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.mail-popover-head {
+  display: flex;
+  justify-content: space-between;
+}
+.mail-upload {
+  display: block;
+  padding: 12px;
+  text-align: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.mail-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 160px;
+  overflow: auto;
+}
+.mail-assets button {
+  width: 88px;
+  height: 56px;
+  padding: 2px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  cursor: pointer;
+}
+.mail-assets img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.mail-url {
+  display: flex;
+  gap: 6px;
+}
+.mail-url input {
+  flex: 1;
+}
+.mail-views {
+  display: grid;
+  gap: 6px;
+}
+.mail-chrome {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.mail-chrome-head {
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  background: var(--color-panel);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.mail-chrome-head .muted {
+  display: inline-block;
+  min-width: 52px;
+}
+.mail-chrome.outlook .mail-chrome-head {
+  border-top: 3px solid #0f6cbd; /* Outlook blue: which view this is */
+}
+.mail-chrome .mail-preview {
+  border: 0;
+  padding: 0;
+}
+.mail-chrome .mail-frame {
+  border: 0;
+  border-radius: 0;
+}
+.mail-chrome.phone {
+  background: var(--color-page-bg);
+  padding-bottom: 8px;
+}
+.mail-issues-title {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.mail-issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+.mail-issues li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  font-size: 12px;
+}
+.mail-issue-level {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--color-border);
+  height: fit-content;
+}
+.mail-issue-level.warning {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+.mail-clients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}

@@ -2,7 +2,7 @@
 // (commercial / technical / rates / finance), Enterprise Type (customer / vendor / reciprocal), a rich
 // text body and one attachment. The audience count shows before sending; each enterprise gets its own
 // e-mail and every one shows in Email Logs. The grid lists past broadcasts.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { BroadcastAudienceInput, BroadcastInput, BroadcastRow } from "@sms/contract";
 import { useReference } from "../../../api/records";
 import { useBroadcastAudience, useMailboxes, useSendBroadcast } from "../../../api/switchTools";
@@ -10,6 +10,7 @@ import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { ask, toast } from "../../../ui/feedback";
+import { MailEditor } from "../../../ui/MailEditor";
 import { Button, Modal } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
@@ -32,16 +33,6 @@ const ENTERPRISES: { value: EnterpriseType; label: string }[] = [
   { value: "reciprocal", label: "Reciprocal" },
 ];
 const MAX_ATTACHMENT = 5 * 1024 * 1024;
-
-const TOOLS: { cmd: string; label: string; title: string }[] = [
-  { cmd: "bold", label: "B", title: "Bold" },
-  { cmd: "italic", label: "I", title: "Italic" },
-  { cmd: "underline", label: "U", title: "Underline" },
-  { cmd: "insertUnorderedList", label: "• List", title: "Bulleted list" },
-  { cmd: "insertOrderedList", label: "1. List", title: "Numbered list" },
-  { cmd: "createLink", label: "Link", title: "Insert link" },
-  { cmd: "removeFormat", label: "Clear", title: "Clear formatting" },
-];
 
 function Checks<T extends string>({
   label,
@@ -75,46 +66,6 @@ function Checks<T extends string>({
           </label>
         ))}
       </div>
-    </div>
-  );
-}
-
-function Editor({ onChange }: { onChange: (html: string) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const run = (cmd: string) => {
-    ref.current?.focus();
-    if (cmd === "createLink") {
-      const url = window.prompt("Link address", "https://");
-      if (!url || !/^(https?:|mailto:)/i.test(url)) return;
-      document.execCommand(cmd, false, url);
-    } else document.execCommand(cmd);
-    onChange(ref.current?.innerHTML ?? "");
-  };
-  return (
-    <div className="bc-editor">
-      <div className="bc-toolbar" role="toolbar" aria-label="Formatting">
-        {TOOLS.map((t) => (
-          <button
-            key={t.cmd}
-            type="button"
-            title={t.title}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => run(t.cmd)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div
-        ref={ref}
-        className="bc-body"
-        contentEditable
-        role="textbox"
-        aria-multiline
-        aria-label="Message"
-        suppressContentEditableWarning
-        onInput={() => onChange(ref.current?.innerHTML ?? "")}
-      />
     </div>
   );
 }
@@ -191,7 +142,7 @@ function ComposeDialog({ done }: { done: () => void }) {
   return (
     <Modal
       title="New broadcast"
-      width={760}
+      width={900}
       onClose={done}
       footer={
         <>
@@ -245,7 +196,7 @@ function ComposeDialog({ done }: { done: () => void }) {
         <Checks label="Enterprise Type" options={ENTERPRISES} value={enterpriseTypes} onChange={setEnterpriseTypes} />
         <div className="field bc-wide">
           <span>Message</span>
-          <Editor onChange={setHtml} />
+          <MailEditor value={html} onChange={setHtml} businessCompanyId={companyId} />
         </div>
         <label className="field bc-wide">
           <span>Attachment (one file, up to 5 MB)</span>

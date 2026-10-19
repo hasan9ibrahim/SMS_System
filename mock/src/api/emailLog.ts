@@ -2,6 +2,7 @@
 // records the message instead of sending it; a send without recipients is logged as failed.
 import type pg from "pg";
 import type { EmailLogRow, MailboxDepartment, SenderEmail } from "@sms/contract";
+import { embedImages, emailDocument, imageInfo, logoTag } from "../email/html.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -22,13 +23,17 @@ export interface EmailLogInput {
   userId?: number | null;
 }
 
-export async function logEmail(c: Db, m: EmailLogInput): Promise<"sent" | "failed"> {
+/** Logs an e-mail and returns its status; `id` receives the log row's ID when given. */
+export async function logEmail(c: Db, m: EmailLogInput, id?: { value: number }): Promise<"sent" | "failed"> {
   const error = m.error ?? (m.to.length ? null : "No recipient: the partner has no contact for this e-mail");
   const status = error ? "failed" : "sent";
-  await c.query(
+  // The e-mail as sent (§11): the designed HTML with CSS inlined; uploaded images go inline (cid).
+  const doc = emailDocument(m.body ?? "");
+  const inline = embedImages(doc).images.map((i) => (i.assetId ? `image-${i.assetId}` : `logo-${i.companyId}`));
+  const { rows } = await c.query(
     `INSERT INTO email_logs (enterprise_id, customer_trunk_id, vendor_trunk_id, email_type, status, rate_date, file_name,
-                             error, sender, to_addresses, cc_addresses, subject, body, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+                             error, sender, to_addresses, cc_addresses, subject, body, user_id, body_html, inline_images)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
     [
       m.enterpriseId ?? null,
       m.customerTrunkId ?? null,
@@ -44,8 +49,11 @@ export async function logEmail(c: Db, m: EmailLogInput): Promise<"sent" | "faile
       m.subject,
       m.body ?? "",
       m.userId ?? null,
+      doc,
+      inline,
     ],
   );
+  if (id) id.value = Number(rows[0].id);
   return status;
 }
 
@@ -134,17 +142,21 @@ export async function companyTemplate(
 
 /** The business company's own details for a document or e-mail: name, address, website and bank. */
 export interface CompanyDetails {
+  id: number;
   name: string;
   address: string;
   website: string;
   hasLogo: boolean;
+  /** The logo's pixel size, read from the uploaded file. */
+  logo: { width: number; height: number } | null;
   bank: { label: string; value: string }[];
 }
 
 export async function companyDetails(c: Db, who: MailFor): Promise<CompanyDetails | null> {
   const { rows } = await c.query(
     `SELECT bc.*, co.name AS country_name,
-            EXISTS (SELECT 1 FROM business_company_files f WHERE f.business_company_id = bc.id AND f.kind = 'logo') AS has_logo
+            (SELECT substring(f.content FROM 1 FOR 65536) FROM business_company_files f
+              WHERE f.business_company_id = bc.id AND f.kind = 'logo') AS logo_head
        FROM business_companies bc LEFT JOIN countries co ON co.iso = bc.country_iso WHERE bc.id = ${companyIdSql(who)}`,
     [idOf(who)],
   );
@@ -165,7 +177,9 @@ export async function companyDetails(c: Db, who: MailFor): Promise<CompanyDetail
   )
     .map(([label, v]) => ({ label, value: t(v) }))
     .filter((x) => x.value);
+  const logo = r.logo_head ? imageInfo(r.logo_head as Buffer) : null;
   return {
+    id: Number(r.id),
     name: t(r.name),
     address: [
       r.address_line1,
@@ -178,13 +192,14 @@ export async function companyDetails(c: Db, who: MailFor): Promise<CompanyDetail
       .filter(Boolean)
       .join(", "),
     website: t(r.website),
-    hasLogo: Boolean(r.has_logo),
+    hasLogo: r.logo_head != null,
+    logo: logo ? { width: logo.width, height: logo.height } : null,
     bank,
   };
 }
 
 /**
- * Placeholders every template can use for the sending business company (§11): {company},
+ * Placeholders every template can use for the sending business company (§11): {company}, {company_logo},
  * {company_address}, {company_website}, {bank_details} (all bank lines) and one per bank field.
  */
 export function companyPlaceholders(d: CompanyDetails | null): Record<string, string> {
@@ -193,6 +208,10 @@ export function companyPlaceholders(d: CompanyDetails | null): Record<string, st
     company: d?.name ?? "",
     company_address: d?.address ?? "",
     company_website: d?.website ?? "",
+    company_logo:
+      d?.logo != null && d.logo.height >= 16
+        ? logoTag(`/api/v1/business-companies/${d.id}/files/logo`, d.name, d.logo.width, d.logo.height)
+        : "",
     bank_beneficiary: get("Beneficiary"),
     bank_name: get("Bank"),
     bank_address: get("Bank address"),

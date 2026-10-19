@@ -2,6 +2,7 @@
 // sets), Trouble Ticket e-mails and EDR Repush. Template saves are undoable (§13.10); delete archives
 // (§13.29). Downloads, network status, captures, the route simulator and diagnosis live in their own
 // modules (edrDownloads.ts, network.ts, routeSimulator.ts).
+import { fillBody, fillText } from "../email/html.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -32,7 +33,7 @@ import { companyMailbox, logEmail } from "./emailLog.js";
 import { csvCell, notFound } from "./masterData.js";
 import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
-import { archiver, badInput, contactEmails, fill } from "./switchTools.js";
+import { archiver, badInput, contactEmails } from "./switchTools.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -275,8 +276,8 @@ async function buildTicket(pool: pg.Pool, b: TroubleTicketPreviewInput): Promise
     vendorTrunkId,
     recipients: await contactEmails(pool, enterpriseId, ["technical", "commercial"]).then((all) => all.slice(0, 4)),
     sender: await companyMailbox(pool, enterpriseId, "troubleTicket"),
-    subject: b.subject.trim() || fill(tpl[0].subject, vars),
-    body: fill(tpl[0].body, vars),
+    subject: b.subject.trim() || fillText(tpl[0].subject, vars),
+    body: fillBody(tpl[0].body, vars),
     rows,
   };
 }

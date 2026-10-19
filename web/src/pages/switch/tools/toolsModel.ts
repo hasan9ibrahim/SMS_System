@@ -28,6 +28,7 @@ export const EMAIL_TYPE: Record<EmailLogRow["emailType"], string> = {
   cleanup_summary: "Cleanup Summary",
   credential_transfer: "Credential Transfer",
   password_reminder: "Password Reminder",
+  template_test: "Template Test",
 };
 
 export const ALERT_STATE: Record<TrafficAlertRow["state"], { label: string; tone: Tone }> = {
