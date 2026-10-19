@@ -43,6 +43,20 @@ async function allDestinations(db: Db): Promise<(Dest & { id: number })[]> {
 export async function computeRouteMap(db: Db, trunkId: number, force = false) {
   const at = computedAt.get(trunkId);
   if (!force && at && Date.now() - at < TTL_MS && routeMapRows.has(trunkId)) return routeMapRows.get(trunkId)!;
+  const rows = await routeMapFor(db, trunkId);
+  routeMapRows.set(trunkId, rows);
+  computedAt.set(trunkId, Date.now());
+  // Keep the cache small: a handful of recently viewed trunks.
+  if (routeMapRows.size > 20) {
+    const oldest = [...computedAt].sort((a, b) => a[1] - b[1])[0]![0];
+    routeMapRows.delete(oldest);
+    computedAt.delete(oldest);
+  }
+  return rows;
+}
+
+/** The trunk's route map rows, computed now (no cache; also used by the live traffic simulator). */
+export async function routeMapFor(db: Db, trunkId: number): Promise<RouteMapRow[]> {
   const dests = await allDestinations(db);
   const byCode = new Map(dests.map((d) => [d.mccmnc, d]));
   const lines: ClientLine[] = await clientLines(db, dests, {
@@ -97,15 +111,7 @@ export async function computeRouteMap(db: Db, trunkId: number, force = false) {
       decidedBy: r?.decidedBy ?? null,
     };
   });
-  routeMapRows.set(trunkId, rows);
-  computedAt.set(trunkId, Date.now());
-  // Keep the cache small: a handful of recently viewed trunks.
-  if (routeMapRows.size > 20) {
-    const oldest = [...computedAt].sort((a, b) => a[1] - b[1])[0]![0];
-    routeMapRows.delete(oldest);
-    computedAt.delete(oldest);
-  }
-  return rows;
+  return rows as RouteMapRow[];
 }
 
 /** Forgets computed route maps (after a rate change or an undo). */

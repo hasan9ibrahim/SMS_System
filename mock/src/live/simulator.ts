@@ -90,6 +90,8 @@ export interface SimVendor {
   id: number;
   /** Smoothed messages per second; `tps` is the messages of the last 10 seconds per second. */
   rate?: number;
+  /** Messages the live EDR writer routed to this vendor since the last step. */
+  routed?: number;
   recent?: number[];
   lastSentAt?: number;
   name: string;
@@ -170,6 +172,11 @@ interface DestTotals {
 }
 
 export interface Simulator {
+  /**
+   * Set once live EDRs are being written (live/edrWriter.ts): revenue, cost and the vendor of each message
+   * then come from the written EDRs (routed by today's rules), not from the per-trunk averages.
+   */
+  moneyFromWriter?: boolean;
   trunks: SimTrunk[];
   vendors: SimVendor[];
   today: DayTotals;
@@ -603,7 +610,14 @@ export async function createSimulator(): Promise<Simulator> {
       },
     };
   }
-  const sim: Simulator = { ...loaded, slotIndex: 0, lastTick: Date.now() };
+  const sim: Simulator = {
+    ...loaded,
+    slotIndex: 0,
+    lastTick: Date.now(),
+    // Money comes from the live EDR writer from the first message, so nothing is counted twice while it
+    // gets ready; it turns this off again if the EDR store can't be used.
+    moneyFromWriter: process.env.SIM_WRITE_EDRS !== "0" && !process.env.NODE_TEST_CONTEXT,
+  };
   seedHistory(sim, Date.now());
   return sim;
 }
@@ -707,15 +721,19 @@ export function step(sim: Simulator, now = Date.now()) {
     t.day.attempts += n;
     t.day.submitted += ok;
     t.day.delivered += dl;
-    t.day.revenue += n * t.revenue;
-    t.day.cost += n * t.cost;
     const today = sim.today;
     today.attempts += n;
     today.submitted += ok;
     today.sent += toVendor;
     today.delivered += dl;
-    today.revenue += n * t.revenue;
-    today.cost += n * t.cost;
+    // With live EDRs the money is added when the messages are written, at the routed vendor's cost.
+    const money = !sim.moneyFromWriter;
+    if (money) {
+      t.day.revenue += n * t.revenue;
+      t.day.cost += n * t.cost;
+      today.revenue += n * t.revenue;
+      today.cost += n * t.cost;
+    }
     const c = today.clients.get(t.enterpriseId) ?? {
       name: t.enterpriseName,
       attempts: 0,
@@ -725,17 +743,25 @@ export function step(sim: Simulator, now = Date.now()) {
       delivered: 0,
     };
     c.attempts += n;
-    c.money += n * t.revenue;
-    c.margin += n * (t.revenue - t.cost);
+    if (money) {
+      c.money += n * t.revenue;
+      c.margin += n * (t.revenue - t.cost);
+    }
     c.successful += ok;
     c.delivered += dl;
     today.clients.set(t.enterpriseId, c);
   }
-  // Each message goes to one vendor, picked by the vendors' shares.
+  // Each message goes to one vendor: the one today's route rules picked (live EDR writer, a second
+  // behind), or else one picked by the vendors' shares.
   const weights = sim.vendors.map((v) => v.weight);
   const wSum = weights.reduce((a, w) => a + w, 0);
   const toVendor = new Map<SimVendor, number>();
-  if (wSum > 0)
+  if (sim.moneyFromWriter)
+    for (const v of sim.vendors) {
+      if (v.routed) toVendor.set(v, v.routed);
+      v.routed = 0;
+    }
+  else if (wSum > 0)
     for (let k = 0; k < total; k++) {
       let r = Math.random() * wSum;
       const v = sim.vendors.find((_, i) => (r -= weights[i]!) <= 0) ?? sim.vendors[0]!;
@@ -747,7 +773,8 @@ export function step(sim: Simulator, now = Date.now()) {
     v.rate = (v.rate ?? 0) * 0.8 + n * 0.2;
     quality(v, v.rate > 0.001, now);
     rollMinute(v, newMinute);
-    if (n === 0) continue;
+    // The writer has already counted these messages and their cost.
+    if (n === 0 || sim.moneyFromWriter) continue;
     const vAsr = (v.asrNow ?? 95) / 100;
     const vDlr = (v.dlrNow ?? 85) / 100;
     let ok = 0;

@@ -1,6 +1,7 @@
 // Operation handlers, keyed by operationId from contract/openapi.yaml.
 // Data comes from the PostgreSQL database seeded by the generator (npm run seed:small);
 // without it, data operations answer 503 and /me falls back to a demo user.
+import { invalidateLiveRoutes } from "./live/routing.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Health, ListId, operations } from "@sms/contract";
 import { contractVersion } from "./contract.js";
@@ -465,7 +466,13 @@ import { queryChanges, undoChange } from "./api/changes.js";
 const clearRouteCaches = () => {
   clearRoutingCostCache();
   clearRouteMaps();
+  invalidateLiveRoutes();
 };
+/** A route rule changed: live traffic follows the new routing from its next message (team trial round 1). */
+const reroutesLive =
+  (h: Handler): Handler =>
+  (request, reply) =>
+    Promise.resolve(h(request, reply)).finally(invalidateLiveRoutes);
 
 /** QBR stats need the side ("QBR Stats For"): one list per side, never both mixed. */
 const queryQbrStatsList: Handler = (request, reply) => {
@@ -723,14 +730,14 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
   queryRouteRules,
   exportRouteRules,
-  createRouteRule,
+  createRouteRule: reroutesLive(createRouteRule),
   getRouteRule,
-  updateRouteRule,
+  updateRouteRule: reroutesLive(updateRouteRule),
   getRouteRuleDependencies,
-  archiveRouteRule,
-  restoreRouteRule,
+  archiveRouteRule: reroutesLive(archiveRouteRule),
+  restoreRouteRule: reroutesLive(restoreRouteRule),
   cloneRouteRule,
-  bulkRouteRules,
+  bulkRouteRules: reroutesLive(bulkRouteRules),
   getRouteRuleTraffic,
   testRouteRule,
   simulateRoute,
