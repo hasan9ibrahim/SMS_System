@@ -1260,6 +1260,74 @@ export const topics: HelpTopic[] = [
     ],
   },
 
+  // ------------------------------------------------------------------ PCAP trace
+  {
+    id: "pcap-trace",
+    pageKey: "pcap-trace",
+    title: "PCAP trace",
+    group: "Monitoring",
+    summary:
+      "Every SMPP packet on the switch is recorded and kept 60 days. Download the 15-minute trace files, or extract a PCAP for a period and a trunk, number, message ID or IP.",
+    keywords: ["PCAP", "trace", "recording", "Wireshark", "extract", "packet capture", "past traffic"],
+    sections: [
+      {
+        id: "overview",
+        title: "What this page is for",
+        blocks: [
+          {
+            kind: "text",
+            text: "The switch records all SMPP traffic all the time, so you can look at the packets of something that already happened (a customer's complaint from yesterday, a vendor's receipts last week) without having started a capture first. For a capture from now on, use [[signaling|Signaling deck]].",
+          },
+        ],
+      },
+      {
+        id: "trace-files",
+        title: "Trace files",
+        blocks: [
+          {
+            kind: "fields",
+            fields: [
+              {
+                name: "File Name",
+                what: "`trace-YY-MM-DD-HH-MM-SS.pcap.gz`: one file per 15 minutes, named by its start (UTC). The newest file is still being written (`.pcap`, marked **recording**); the others are gzip-compressed.",
+              },
+              { name: "File Size", what: "The file's size." },
+              { name: "Update Time (UTC)", what: "When the file was closed (or last written, for the newest)." },
+              { name: "Download", what: "Click the name, the button, or double-click the row. Opens in Wireshark." },
+            ],
+          },
+          {
+            kind: "text",
+            text: "Files older than 60 days are deleted automatically. Filter by name or time under the column headers.",
+          },
+        ],
+      },
+      {
+        id: "extract",
+        title: "Extract a PCAP",
+        blocks: [
+          {
+            kind: "fields",
+            fields: [
+              { name: "From / To (UTC)", what: "The period, at most 24 hours, inside the last 60 days." },
+              { name: "Customer trunk / Vendor trunk", what: "Only that trunk's traffic. Leave **Any** for all." },
+              { name: "Number", what: "Messages with this sender or receiver." },
+              { name: "Message ID", what: "One message (ours or the vendor's) and its receipts." },
+              { name: "IP", what: "An address or range." },
+            ],
+          },
+          {
+            kind: "steps",
+            items: [
+              "Set the period and any filters (all filters must match).",
+              "Click **Extract PCAP**. The page switches to **Extracted files**, where the file is ready in a few seconds.",
+              "Download it. Extracted files are deleted 30 days after they are made unless you tick **Keep**.",
+            ],
+          },
+        ],
+      },
+    ],
+  },
   // ------------------------------------------------------------------ Signaling deck
   {
     id: "signaling",

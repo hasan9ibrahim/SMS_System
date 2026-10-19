@@ -61,6 +61,7 @@ import { NetworkDiagnosisPage } from "./monitoring/NetworkDiagnosisPage";
 import { NetworkStatusPage } from "./monitoring/NetworkStatusPage";
 import { RepushRequestsPage } from "./monitoring/RepushRequestsPage";
 import { RouteSimulatorPage } from "./monitoring/RouteSimulatorPage";
+import { PcapTracePage } from "./monitoring/PcapTracePage";
 import { SignalingPage } from "./monitoring/SignalingPage";
 import { BillingReportPage } from "./reports/BillingReportPage";
 import { DailyTrafficAlertsPage } from "./reports/DailyTrafficAlertsPage";
@@ -199,6 +200,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/monitoring/failed-edr" element={<FailedEdrPage />} />
       <Route path="/monitoring/network-status" element={<NetworkStatusPage />} />
       <Route path="/monitoring/signaling" element={<SignalingPage />} />
+      <Route path="/monitoring/pcap-trace" element={<PcapTracePage />} />
       <Route path="/monitoring/diagnosis" element={<NetworkDiagnosisPage />} />
       <Route path="/monitoring/repush" element={<RepushRequestsPage />} />
       <Route path="/routing/simulator" element={<RouteSimulatorPage />} />

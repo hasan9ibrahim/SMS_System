@@ -16,6 +16,8 @@ import type {
   RepushInput,
   RepushRequestRow,
   RouteSimulatorInput,
+  RecordingExtractInput,
+  RecordingStatus,
   RouteSimulatorResult,
   SignalingCaptureInput,
   SignalingCaptureRow,
@@ -132,6 +134,17 @@ export const useStopCapture = () =>
 export const useKeepCapture = () =>
   useWrite(({ id, keep }: { id: number; keep: boolean }): Promise<SignalingCaptureRow> =>
     unwrap(api.POST("/signaling-captures/{id}/keep", { params: { path: { id } }, body: { keep } })),
+  );
+/** Traffic recording (§9, team trial round 1): every packet kept 60 days; cut a PCAP for a past window. */
+export const useRecordingStatus = () =>
+  useQuery<RecordingStatus>({
+    queryKey: ["signaling-recording"],
+    queryFn: () => unwrap(api.GET("/signaling-recording")),
+    staleTime: 60_000,
+  });
+export const useExtractRecording = () =>
+  useWrite((body: RecordingExtractInput): Promise<SignalingCaptureRow> =>
+    unwrap(api.POST("/signaling-captures/extract", { body })),
   );
 export const downloadCapture = (id: number) =>
   downloadFrom(`/signaling-captures/${id}/file`, undefined, `capture_${id}.pcap`);

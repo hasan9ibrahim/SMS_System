@@ -106,6 +106,8 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/network-binds/query", { body })) as Promise<ListPage<Row>>;
     case "signaling_captures":
       return unwrap(api.POST("/signaling-captures/query", { body })) as Promise<ListPage<Row>>;
+    case "pcap_traces":
+      return unwrap(api.POST("/pcap-traces/query", { body })) as Promise<ListPage<Row>>;
     case "scheduled_reports":
       return unwrap(api.POST("/scheduled-reports/query", { body })) as Promise<ListPage<Row>>;
     case "daily_traffic_alerts":

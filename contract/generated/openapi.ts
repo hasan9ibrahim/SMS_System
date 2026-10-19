@@ -6088,6 +6088,83 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/pcap-traces/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * PCAP Trace: the traffic recording's files (server-side filter, sort and paging, §9.2)
+     * @description Every SMPP packet on the switch is recorded into one file per 15 minutes (gzip-compressed once the
+     *     quarter is over) and kept 60 days (team trial round 1). Columns: File Name, File Size, Download,
+     *     Update Time (UTC). The newest file is still being written.
+     */
+    post: operations["queryPcapTraces"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/pcap-traces/{id}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download one trace file of the recording */
+    get: operations["downloadPcapTrace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/signaling-captures/extract": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cut a PCAP from the traffic recording (§9)
+     * @description The file is prepared in the background and appears in the capture list (source recording); it follows
+     *     the same 30-day / Keep rule as live captures.
+     */
+    post: operations["extractRecording"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/signaling-recording": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Traffic recording: how far back files can be cut (§9) */
+    get: operations["getRecordingStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/signaling-captures/{id}/stop": {
     parameters: {
       query?: never;
@@ -14049,6 +14126,39 @@ export type components = {
         receiptsPending: number;
       }[];
     };
+    /** @description A PCAP cut from the traffic recording (§9, team trial round 1): every SMPP packet on the switch is recorded and kept 60 days. The window is at most 24 hours, inside the last 60 days. Every filter given must match (AND); none = all traffic in the window. */
+    RecordingExtractInput: {
+      from: components["schemas"]["Timestamp"];
+      to: components["schemas"]["Timestamp"];
+      ipFilter?: string | null;
+      customerTrunkId?: components["schemas"]["Id"] | null;
+      vendorTrunkId?: components["schemas"]["Id"] | null;
+      /** @description Sender or receiver (digits or alphanumeric sender ID). */
+      number?: string | null;
+      /** @description Our or the vendor's message ID; the file then holds that message and its receipts. */
+      messageId?: string | null;
+    };
+    PcapTraceRow: {
+      /** @description The quarter-hour the file starts at, as Unix seconds / 900. */
+      id: number;
+      /** @description trace-YY-MM-DD-HH-MM-SS.pcap(.gz) - the quarter's start (UTC). */
+      fileName: string;
+      sizeBytes: number;
+      startedAt: components["schemas"]["Timestamp"];
+      /** @description Update Time (UTC) - when the file was closed, or the last write while in progress. */
+      updatedAt: components["schemas"]["Timestamp"];
+      inProgress: boolean;
+    };
+    PcapTracePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["PcapTraceRow"][];
+    };
+    RecordingStatus: {
+      /** @description How long every packet is kept (60). */
+      retentionDays: number;
+      /** @description The oldest moment a file can be cut from. */
+      oldestAt: components["schemas"]["Timestamp"];
+      maxWindowHours: number;
+    };
     SignalingCaptureInput: {
       /** @description IPv4 / IPv6 address or CIDR range; null = all SMPP traffic. */
       ipFilter: string | null;
@@ -14056,6 +14166,16 @@ export type components = {
       maxFileSizeBytes: number;
     };
     SignalingCaptureRow: {
+      /**
+       * @description live: captured from now on; recording: cut from the traffic recording for a past window.
+       * @enum {string}
+       */
+      source: "live" | "recording";
+      /** @description Recording files only - the window the file covers. */
+      recordedFrom: components["schemas"]["Timestamp"] | null;
+      recordedTo: components["schemas"]["Timestamp"] | null;
+      /** @description Recording files only - what was asked for (trunk, IP, number, message ID), as text. */
+      criteria: string | null;
       /** @description Kept on purpose; otherwise the file is deleted 30 days after the capture ended (team trial round 1). */
       keep: boolean;
       /** @description Who ticked Keep. */
@@ -16836,7 +16956,8 @@ export type components = {
       | "visibility_assignments"
       | "visibility_grants"
       | "team_timeline"
-      | "cleanup_findings";
+      | "cleanup_findings"
+      | "pcap_traces";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -26396,6 +26517,106 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  queryPcapTraces: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of trace files */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PcapTracePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  downloadPcapTrace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The pcap file (gzip-compressed once its quarter is over) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/vnd.tcpdump.pcap": string;
+          "application/gzip": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  extractRecording: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecordingExtractInput"];
+      };
+    };
+    responses: {
+      /** @description Being prepared */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignalingCaptureRow"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRecordingStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Recording status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordingStatus"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
     };
   };
   stopSignalingCapture: {

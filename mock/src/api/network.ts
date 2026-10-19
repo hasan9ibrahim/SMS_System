@@ -2,10 +2,17 @@
 // In this phase the mock plays the switch: it keeps every trunk's bind status and SMPP sessions
 // (trunk_binds, bind_sessions) moving, builds pcap files from fake SMPP traffic, and answers
 // diagnosis tools with simulated output. Nothing here sends a packet.
+import { gzipSync } from "node:zlib";
 import { isIP } from "node:net";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
-import type { ListQuery, NetworkDiagnosisInput, NetworkExportInput, SignalingCaptureInput } from "@sms/contract";
+import type {
+  ListQuery,
+  NetworkDiagnosisInput,
+  NetworkExportInput,
+  RecordingExtractInput,
+  SignalingCaptureInput,
+} from "@sms/contract";
 import { db, withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { spreadsheetXml } from "../billing/files.js";
@@ -207,6 +214,7 @@ export function startNetworkStatus() {
     .catch(() => undefined);
   setInterval(() => void bindTick(pool).catch(() => undefined), 10_000).unref();
   setInterval(() => void captureTick(pool).catch(() => undefined), 1_000).unref();
+  setInterval(() => void finishRecordingCuts(pool).catch(() => undefined), 1_000).unref();
   // Capture files past their 30 days are deleted (team trial round 1); kept ones stay.
   void purgeCaptures(pool).catch(() => undefined);
   setInterval(() => void purgeCaptures(pool).catch(() => undefined), 3_600_000).unref();
@@ -348,10 +356,89 @@ export function validIpFilter(v: string): boolean {
   return Number(m[2]) <= (isIP(m[1]!) === 4 ? 32 : 128);
 }
 
+/** Traffic recording (§9, team trial round 1): every packet kept this many days. */
+export const RECORDING_DAYS = 60;
+const RECORDING_MAX_HOURS = 24;
+
+/** Files cut from the recording are ready a few seconds after the request; size follows the window. */
+async function finishRecordingCuts(pool: pg.Pool) {
+  await pool.query(
+    `UPDATE signaling_captures SET status = 'done', updated_at = now(),
+            packets = greatest(4, least(800000, (extract(epoch FROM recorded_to - recorded_from) / 60)::int
+                                   * CASE WHEN criteria IS NULL THEN 400 WHEN criteria LIKE 'message %' THEN 0 ELSE 12 END + 4)),
+            size_bytes = least(max_file_size_bytes, 24 + greatest(4, least(800000, (extract(epoch FROM recorded_to - recorded_from) / 60)::int
+                                   * CASE WHEN criteria IS NULL THEN 400 WHEN criteria LIKE 'message %' THEN 0 ELSE 12 END + 4)) * 118)
+      WHERE source = 'recording' AND status = 'running' AND now() - started_at > interval '3 seconds'`,
+  );
+}
+
+export function getRecordingStatus(_request: FastifyRequest, reply: FastifyReply) {
+  return reply.send({
+    retentionDays: RECORDING_DAYS,
+    oldestAt: new Date(Date.now() - RECORDING_DAYS * 86_400_000).toISOString(),
+    maxWindowHours: RECORDING_MAX_HOURS,
+  });
+}
+
+export function extractRecording(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as RecordingExtractInput;
+  const from = Date.parse(b.from);
+  const to = Date.parse(b.to);
+  const now = Date.now();
+  const errors: { path: string; message: string }[] = [];
+  if (!(to > from)) errors.push({ path: "/to", message: "must be after From" });
+  if (to - from > RECORDING_MAX_HOURS * 3_600_000)
+    errors.push({ path: "/to", message: `at most ${RECORDING_MAX_HOURS} hours per file` });
+  if (from < now - RECORDING_DAYS * 86_400_000)
+    errors.push({ path: "/from", message: `the recording keeps the last ${RECORDING_DAYS} days` });
+  if (to > now + 60_000) errors.push({ path: "/to", message: "cannot be in the future" });
+  const ip = b.ipFilter?.trim() || null;
+  if (ip && !validIpFilter(ip)) errors.push({ path: "/ipFilter", message: "an IPv4 / IPv6 address or range" });
+  if (errors.length) return badInput(reply, errors);
+  return withDb(reply, async (pool) => {
+    const me = await getCurrentUser();
+    const trunk = async (table: string, id: number | null | undefined) =>
+      id ? ((await pool.query(`SELECT name, host_ips FROM ${table} WHERE id = $1`, [id])).rows[0] ?? null) : null;
+    const [ct, vt] = await Promise.all([
+      trunk("customer_trunks", b.customerTrunkId),
+      trunk("vendor_trunks", b.vendorTrunkId),
+    ]);
+    if (b.customerTrunkId && !ct) return badInput(reply, [{ path: "/customerTrunkId", message: "unknown trunk" }]);
+    if (b.vendorTrunkId && !vt) return badInput(reply, [{ path: "/vendorTrunkId", message: "unknown trunk" }]);
+    const parts = [
+      b.messageId?.trim() ? `message ${b.messageId.trim()}` : null,
+      ct ? `customer trunk ${ct.name}` : null,
+      vt ? `vendor trunk ${vt.name}` : null,
+      b.number?.trim() ? `number ${b.number.trim()}` : null,
+      ip ? `IP ${ip}` : null,
+    ].filter(Boolean);
+    // The packets of a trunk come from its host; the file keeps that address for the client side.
+    const hostIp = ip ?? ((ct ?? vt)?.host_ips?.[0] as string | undefined) ?? null;
+    const stamp = (t: number) => new Date(t).toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "_");
+    const name = `recording_${stamp(from)}-${stamp(to)}${ct || vt ? `_${(ct ?? vt).name}` : ""}.pcap`;
+    const { rows } = await pool.query(
+      `INSERT INTO signaling_captures (file_name, ip_filter, max_duration_seconds, max_file_size_bytes, started_by_id,
+                                       source, recorded_from, recorded_to, criteria)
+       VALUES ($1, $2, $3, $4, $5, 'recording', $6, $7, $8) RETURNING id`,
+      [
+        name,
+        hostIp,
+        Math.round((to - from) / 1000),
+        100 * 1024 * 1024,
+        me.id,
+        new Date(from),
+        new Date(to),
+        parts.length ? parts.join(" · ") : null,
+      ],
+    );
+    return reply.code(201).send(await loadCapture(pool, Number(rows[0].id)));
+  });
+}
+
 async function captureTick(pool: pg.Pool) {
   await pool.query(
     `WITH g AS (SELECT id, (20 + floor(random() * 60)::int) * CASE WHEN ip_filter IS NULL THEN 5 ELSE 1 END AS p
-                  FROM signaling_captures WHERE status = 'running')
+                  FROM signaling_captures WHERE status = 'running' AND source = 'live')
      UPDATE signaling_captures c SET packets = c.packets + g.p,
             size_bytes = least(c.max_file_size_bytes, 24 + (c.packets + g.p) * 118),
             updated_at = now(),
@@ -416,6 +503,28 @@ export function keepSignalingCapture(request: FastifyRequest, reply: FastifyRepl
   });
 }
 
+/** One trace file of the recording (§9.2): its quarter's SMPP traffic, gzip-compressed once it is over. */
+export function downloadPcapTrace(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as Params;
+  const start = Number(id) * 900_000;
+  const now = Date.now();
+  if (!Number.isFinite(start) || start > now || start < now - (RECORDING_DAYS + 1) * 86_400_000)
+    return notFound(reply, "Trace file", id);
+  const inProgress = start + 900_000 > now;
+  const stamp = new Date(start).toISOString().slice(2, 19).replace(/[T:]/g, "-");
+  // A sample of the quarter (at most 4 MB of packets), so downloads stay quick on fake data.
+  const pcap = buildPcap(Number(id), null, start, 4 * 1024 * 1024);
+  return inProgress
+    ? reply
+        .type("application/vnd.tcpdump.pcap")
+        .header("content-disposition", `attachment; filename="trace-${stamp}.pcap"`)
+        .send(pcap)
+    : reply
+        .type("application/gzip")
+        .header("content-disposition", `attachment; filename="trace-${stamp}.pcap.gz"`)
+        .send(gzipSync(pcap));
+}
+
 export function downloadSignalingCapture(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
   return withDb(reply, async (pool) => {
@@ -425,7 +534,9 @@ export function downloadSignalingCapture(request: FastifyRequest, reply: Fastify
     return reply
       .type("application/vnd.tcpdump.pcap")
       .header("content-disposition", `attachment; filename="${c.fileName}"`)
-      .send(buildPcap(c.id, c.ipFilter, Date.parse(c.startedAt), Math.min(c.sizeBytes, 4 * 1024 * 1024)));
+      .send(
+        buildPcap(c.id, c.ipFilter, Date.parse(c.recordedFrom ?? c.startedAt), Math.min(c.sizeBytes, 4 * 1024 * 1024)),
+      );
   });
 }
 

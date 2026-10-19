@@ -30,3 +30,9 @@ END $$;
 ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS keep boolean NOT NULL DEFAULT false;
 ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS kept_by_id bigint REFERENCES users(id);
 ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS kept_at timestamptz;
+
+-- Traffic recording: PCAPs cut from the 60-day recording (migration 048, §9).
+ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'live';
+ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS recorded_from timestamptz;
+ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS recorded_to timestamptz;
+ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS criteria text;

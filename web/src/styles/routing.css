@@ -1329,3 +1329,21 @@ textarea.mono {
 .egress-skipped {
   margin-top: 8px;
 }
+
+/* PCAP Trace (§9.2): the extract filter and the files tabs (team trial round 1). */
+.recording-form {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.recording-form .capture-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.recording-form .capture-pick > :last-child {
+  width: 190px;
+}
+.capture-mode {
+  align-self: flex-start;
+  margin: 0 20px 6px;
+}

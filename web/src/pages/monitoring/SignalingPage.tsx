@@ -1,8 +1,9 @@
-// Signaling Deck and PCAP Trace (§9.2): start an SMPP capture with Filter (IP address or range), Max
-// Duration (s) and Max File Size (bytes); captured trace files list with Sr. No., File Name, File
-// Size, Download and Update Time (UTC). Running captures refresh every 2 s.
-import { useState } from "react";
+// Signaling Deck (§9.2): start an SMPP capture with Filter (IP address or range), Max Duration (s) and Max
+// File Size (bytes); trace files list with Sr. No., File Name, File Size, Download and Update Time (UTC),
+// deleted 30 days after they end unless kept (team trial round 1). Running captures refresh every 2 s.
+import { useState, type ReactNode } from "react";
 import type { SignalingCaptureRow } from "@sms/contract";
+import { fetchListPage } from "../../api/hooks";
 import { downloadCapture, useKeepCapture, useStartCapture, useStopCapture } from "../../api/observation";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
@@ -14,7 +15,7 @@ import { fmtBytes, jobTone } from "./monitorModel";
 import { useAutoRefresh } from "./parts";
 
 const page = pageForPath("/monitoring/signaling")!;
-const muted = (v: string) => <span className="muted">{v}</span>;
+export const muted = (v: string) => <span className="muted">{v}</span>;
 const download = (id: number) =>
   void downloadCapture(id).catch((e) => toast({ tone: "error", message: problemText(e) }));
 
@@ -72,6 +73,24 @@ function StartBar() {
 }
 
 export function SignalingPage() {
+  return <CaptureFiles source="live" page={page} above={<StartBar />} />;
+}
+
+/**
+ * The capture files: live captures on the Signaling deck, or files cut from the traffic recording on PCAP
+ * Trace (team trial round 1). Both are deleted 30 days after they end unless kept.
+ */
+export function CaptureFiles({
+  source,
+  page,
+  above,
+  title,
+}: {
+  source: SignalingCaptureRow["source"];
+  page: NonNullable<ReturnType<typeof pageForPath>>;
+  above: ReactNode;
+  title?: string;
+}) {
   const stop = useStopCapture();
   const keep = useKeepCapture();
   useAutoRefresh(2000);
@@ -96,9 +115,20 @@ export function SignalingPage() {
     <ListScreen<SignalingCaptureRow>
       list="signaling_captures"
       page={page}
+      {...(title ? { title } : {})}
+      queryScope={source}
+      fetchPage={(body) =>
+        fetchListPage<SignalingCaptureRow>("signaling_captures", {
+          ...body,
+          filter: {
+            logic: "and",
+            conditions: [{ field: "source", op: "in", values: [source] }, ...(body.filter ? [body.filter] : [])],
+          },
+        })
+      }
       noSelection
       historyScope={null}
-      above={<StartBar />}
+      above={above}
       columns={{
         id: { width: 80 },
         fileName: {
@@ -115,6 +145,17 @@ export function SignalingPage() {
         ipFilter: {
           width: 160,
           render: (r) => (r.ipFilter ? <span className="num">{r.ipFilter}</span> : muted("all")),
+        },
+        source: {
+          width: 230,
+          render: (r) =>
+            r.source === "recording" ? (
+              <span title={r.criteria ?? "all traffic"}>
+                Recording {fmtWhen(r.recordedFrom!)} – {fmtWhen(r.recordedTo!).slice(-5)}
+              </span>
+            ) : (
+              muted("—")
+            ),
         },
         status: {
           width: 110,
@@ -204,10 +245,23 @@ export function SignalingPage() {
               <dl className="kv">
                 <dt>Filter</dt>
                 <dd>{r.ipFilter ?? "all SMPP traffic"}</dd>
-                <dt>Limits</dt>
-                <dd>
-                  {r.maxDurationSeconds} s or {fmtBytes(r.maxFileSizeBytes)}, whichever comes first
-                </dd>
+                {r.source === "recording" ? (
+                  <>
+                    <dt>From the recording</dt>
+                    <dd>
+                      {fmtWhen(r.recordedFrom!)} – {fmtWhen(r.recordedTo!)} UTC
+                    </dd>
+                    <dt>Asked for</dt>
+                    <dd>{r.criteria ?? "all traffic in the window"}</dd>
+                  </>
+                ) : (
+                  <>
+                    <dt>Limits</dt>
+                    <dd>
+                      {r.maxDurationSeconds} s or {fmtBytes(r.maxFileSizeBytes)}, whichever comes first
+                    </dd>
+                  </>
+                )}
                 <dt>Captured</dt>
                 <dd>
                   {r.packets.toLocaleString("en-US")} packets · {fmtBytes(r.sizeBytes)}

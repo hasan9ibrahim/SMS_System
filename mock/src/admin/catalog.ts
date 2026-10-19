@@ -81,6 +81,7 @@ export const MODULES: AccessCatalog["modules"] = [
   m("edr-templates", "EDR templates", "monitoring", CRUD),
   m("network-status", "Network status", "monitoring", ["view", "start_stop"]),
   m("signaling", "Signaling deck", "monitoring", ["view", "add", "export"]),
+  m("pcap-trace", "PCAP trace", "monitoring", ["view", "add", "export"]),
   m("failed-edr", "Failed EDRs", "monitoring", READ),
   m("diagnosis", "Network diagnosis", "monitoring", ["view"]),
   m("repush", "Repush requests", "monitoring", ["view", "add", "approve"]),

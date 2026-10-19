@@ -2098,6 +2098,17 @@ export const listFields: Record<ListId, ListFields> = {
         ],
       }),
       field({ field: "expiresAt", label: "Deleted on", type: "datetime", defaultOperator: "between" }),
+      field({
+        field: "source",
+        label: "Source",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "live", label: "Live capture" },
+          { value: "recording", label: "From the recording" },
+        ],
+      }),
+      field({ field: "criteria", label: "Asked for", type: "text", defaultOperator: "like", hidden: true }),
     ],
   },
 
@@ -3067,6 +3078,17 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "summary", label: "What", type: "text", defaultOperator: "like" }),
       field({ field: "entityType", label: "Record Type", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "entityId", label: "Record ID", type: "integer", defaultOperator: "eq", hidden: true }),
+    ],
+  },
+  // PCAP Trace (§9.2, team trial round 1): the 60-day traffic recording, one file per 15 minutes.
+  pcap_traces: {
+    list: "pcap_traces",
+    defaultSort: [{ field: "startedAt", dir: "desc" }],
+    fields: [
+      field({ field: "fileName", label: "File Name", type: "text", defaultOperator: "like" }),
+      field({ field: "sizeBytes", label: "File Size", type: "integer", defaultOperator: "gte" }),
+      field({ field: "updatedAt", label: "Update Time (UTC)", type: "datetime", defaultOperator: "between" }),
+      field({ field: "startedAt", label: "From (UTC)", type: "datetime", defaultOperator: "between", hidden: true }),
     ],
   },
   // Cleanup Center (§13.19, §13.20)

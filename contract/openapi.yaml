@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.64.0
+  version: 0.66.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -8972,6 +8972,102 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/Unavailable"
+
+  /pcap-traces/query:
+    post:
+      tags: [observation]
+      operationId: queryPcapTraces
+      summary: "PCAP Trace: the traffic recording's files (server-side filter, sort and paging, §9.2)"
+      description: |
+        Every SMPP packet on the switch is recorded into one file per 15 minutes (gzip-compressed once the
+        quarter is over) and kept 60 days (team trial round 1). Columns: File Name, File Size, Download,
+        Update Time (UTC). The newest file is still being written.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of trace files
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PcapTracePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /pcap-traces/{id}/file:
+    get:
+      tags: [observation]
+      operationId: downloadPcapTrace
+      summary: "Download one trace file of the recording"
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The pcap file (gzip-compressed once its quarter is over)
+          content:
+            application/vnd.tcpdump.pcap:
+              schema:
+                type: string
+                format: binary
+            application/gzip:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /signaling-captures/extract:
+    post:
+      tags: [observation]
+      operationId: extractRecording
+      summary: "Cut a PCAP from the traffic recording (§9)"
+      description: |
+        The file is prepared in the background and appears in the capture list (source recording); it follows
+        the same 30-day / Keep rule as live captures.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordingExtractInput"
+      responses:
+        "201":
+          description: Being prepared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalingCaptureRow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /signaling-recording:
+    get:
+      tags: [observation]
+      operationId: getRecordingStatus
+      summary: "Traffic recording: how far back files can be cut (§9)"
+      responses:
+        "200":
+          description: Recording status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /signaling-captures/{id}/stop:
     post:
@@ -23289,6 +23385,85 @@ components:
                 type: integer
                 description: "Delivery receipts waiting for this session (§13.1)."
 
+    RecordingExtractInput:
+      type: object
+      additionalProperties: false
+      description: >-
+        A PCAP cut from the traffic recording (§9, team trial round 1): every SMPP packet on the switch is
+        recorded and kept 60 days. The window is at most 24 hours, inside the last 60 days. Every filter given
+        must match (AND); none = all traffic in the window.
+      required: [from, to]
+      properties:
+        from:
+          $ref: "#/components/schemas/Timestamp"
+        to:
+          $ref: "#/components/schemas/Timestamp"
+        ipFilter:
+          type: [string, "null"]
+          maxLength: 64
+        customerTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        vendorTrunkId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+        number:
+          type: [string, "null"]
+          maxLength: 32
+          description: Sender or receiver (digits or alphanumeric sender ID).
+        messageId:
+          type: [string, "null"]
+          maxLength: 64
+          description: Our or the vendor's message ID; the file then holds that message and its receipts.
+
+    PcapTraceRow:
+      type: object
+      additionalProperties: false
+      required: [id, fileName, sizeBytes, startedAt, updatedAt, inProgress]
+      properties:
+        id:
+          type: integer
+          description: The quarter-hour the file starts at, as Unix seconds / 900.
+        fileName:
+          type: string
+          description: trace-YY-MM-DD-HH-MM-SS.pcap(.gz) - the quarter's start (UTC).
+        sizeBytes:
+          type: integer
+        startedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+          description: Update Time (UTC) - when the file was closed, or the last write while in progress.
+        inProgress:
+          type: boolean
+
+    PcapTracePage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/PcapTraceRow"
+
+    RecordingStatus:
+      type: object
+      additionalProperties: false
+      required: [retentionDays, oldestAt, maxWindowHours]
+      properties:
+        retentionDays:
+          type: integer
+          description: How long every packet is kept (60).
+        oldestAt:
+          $ref: "#/components/schemas/Timestamp"
+          description: The oldest moment a file can be cut from.
+        maxWindowHours:
+          type: integer
+
     SignalingCaptureInput:
       type: object
       additionalProperties: false
@@ -23309,8 +23484,24 @@ components:
 
     SignalingCaptureRow:
       type: object
-      required: [id, fileName, ipFilter, status, sizeBytes, packets, maxDurationSeconds, maxFileSizeBytes, startedAt, updatedAt, startedBy, keep, keptBy, expiresAt]
+      required: [id, fileName, ipFilter, status, sizeBytes, packets, maxDurationSeconds, maxFileSizeBytes, startedAt, updatedAt, startedBy, keep, keptBy, expiresAt, source, recordedFrom, recordedTo, criteria]
       properties:
+        source:
+          type: string
+          enum: [live, recording]
+          description: "live: captured from now on; recording: cut from the traffic recording for a past window."
+        recordedFrom:
+          description: Recording files only - the window the file covers.
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        recordedTo:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        criteria:
+          type: [string, "null"]
+          description: Recording files only - what was asked for (trunk, IP, number, message ID), as text.
         keep:
           type: boolean
           description: Kept on purpose; otherwise the file is deleted 30 days after the capture ended (team trial round 1).
@@ -29903,7 +30094,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings, pcap_traces]
 
     FilterOperator:
       type: string

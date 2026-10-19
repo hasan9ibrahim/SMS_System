@@ -20,6 +20,7 @@ import { teamTimelineList } from "../api/team.js";
 import { cleanupFindingList } from "../api/cleanup.js";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
+  PcapTraceRow,
   Change,
   Country,
   Destination,
@@ -2471,8 +2472,10 @@ export const captureList: ListDef<SignalingCaptureRow> = {
     startedBy: { sql: "u.username" },
     keep: { sql: "c.keep" },
     expiresAt: { sql: captureExpires },
+    source: { sql: "c.source" },
+    criteria: { sql: "c.criteria" },
   },
-  search: ["fileName", "ipFilter"],
+  search: ["fileName", "ipFilter", "criteria"],
   idSql: "c.id",
   select: CAPTURE_SELECT,
   mapRow: (r) => mapCapture(r),
@@ -2490,6 +2493,10 @@ export function mapCapture(r: Record<string, unknown>): SignalingCaptureRow {
     startedAt: iso(r.started_at)!,
     updatedAt: iso(r.updated_at)!,
     startedBy: (r.started_by as string | null) ?? null,
+    source: (r.source as SignalingCaptureRow["source"] | undefined) ?? "live",
+    recordedFrom: iso(r.recorded_from as Date | null),
+    recordedTo: iso(r.recorded_to as Date | null),
+    criteria: (r.criteria as string | null) ?? null,
     keep: r.keep === true,
     keptBy: (r.kept_by as string | null) ?? null,
     expiresAt: iso(r.expires_at as Date | null),
@@ -3026,6 +3033,45 @@ export type PgListId = Exclude<
   "enterprise_report" | "edrs" | "failed_edrs" | "master_report" | "billing_report"
 >;
 
+/**
+ * PCAP Trace (§9.2, team trial round 1): every SMPP packet is recorded into one file per quarter-hour,
+ * gzip-compressed once the quarter is over, and kept 60 days. The files are listed from a series of
+ * quarters; sizes follow the platform volume and the hour of the day (fake, deterministic per quarter).
+ */
+export const RECORDING_KEEP_DAYS = 60;
+const SIM_TPS = Number(process.env.SIM_TOTAL_TPS ?? 40) || 40;
+const PCAP_TRACE_FROM = `(SELECT q.*, CASE WHEN q.in_progress
+          THEN greatest(24, (extract(epoch FROM now() - q.started_at) * ${SIM_TPS} * 1000)::bigint)
+          ELSE (900 * ${SIM_TPS} * 1000 / 2.4 * (0.55 + 0.45 * sin(pi() * extract(hour FROM q.started_at AT TIME ZONE 'UTC') / 24))
+                * (0.95 + (abs(hashtext(q.id::text)) % 100) / 1000.0))::bigint END AS size_bytes,
+        'trace-' || to_char(q.started_at AT TIME ZONE 'UTC', 'YY-MM-DD-HH24-MI-SS')
+          || CASE WHEN q.in_progress THEN '.pcap' ELSE '.pcap.gz' END AS file_name
+      FROM (SELECT (extract(epoch FROM g) / 900)::bigint AS id, g AS started_at,
+                   least(g + interval '15 minutes', now()) AS updated_at, g + interval '15 minutes' > now() AS in_progress
+              FROM generate_series(to_timestamp(floor(extract(epoch FROM now() - interval '${RECORDING_KEEP_DAYS} days') / 900) * 900),
+                                   now(), interval '15 minutes') g) q) t`;
+export const pcapTraceList: ListDef<PcapTraceRow> = {
+  fields: listFields.pcap_traces,
+  from: PCAP_TRACE_FROM,
+  columns: {
+    fileName: { sql: "t.file_name" },
+    sizeBytes: { sql: "t.size_bytes" },
+    updatedAt: { sql: "t.updated_at" },
+    startedAt: { sql: "t.started_at" },
+  },
+  search: ["fileName"],
+  idSql: "t.id",
+  select: "t.*",
+  mapRow: (r) => ({
+    id: Number(r.id),
+    fileName: r.file_name as string,
+    sizeBytes: Number(r.size_bytes),
+    startedAt: iso(r.started_at)!,
+    updatedAt: iso(r.updated_at)!,
+    inProgress: r.in_progress === true,
+  }),
+};
+
 export const listDefs: Record<PgListId, ListDef<unknown>> = {
   enterprises: enterpriseList as ListDef<unknown>,
   users: userList as ListDef<unknown>,
@@ -3094,6 +3140,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   visibility_grants: visibilityGrantList as ListDef<unknown>,
   team_timeline: teamTimelineList as ListDef<unknown>,
   cleanup_findings: cleanupFindingList as ListDef<unknown>,
+  pcap_traces: pcapTraceList as ListDef<unknown>,
 };
 
 export { emailTemplateList, userList };
