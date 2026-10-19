@@ -1,0 +1,27 @@
+# Mock server and fake data generator for a shared trial instance (build step 6).
+# The image holds two minified bundles (API server and seed tool), the SQL files and the contract; no
+# source code and no node_modules. The same image runs the API (default command) and the one-off seed job.
+FROM node:22.11.0-alpine3.20 AS build
+WORKDIR /app
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY contract/package.json contract/
+COPY mock/package.json mock/
+COPY web/package.json web/
+RUN npm ci --workspace=contract --workspace=mock --no-audit --no-fund
+COPY contract contract
+COPY mock mock
+RUN npm run bundle -w mock
+
+FROM node:22.11.0-alpine3.20
+WORKDIR /app
+COPY --from=build /app/mock/dist/index.mjs server.mjs
+COPY --from=build /app/mock/dist/cli.mjs seed.mjs
+COPY contract/openapi.yaml contract/openapi.yaml
+COPY mock/data/mccmnc.csv data/mccmnc.csv
+COPY db/postgres db/postgres
+COPY db/clickhouse db/clickhouse
+ENV NODE_ENV=production MOCK_HOST=0.0.0.0 MOCK_PORT=4010 TRUST_PROXY=1 \
+    SMS_DB_DIR=/app/db SMS_DATA_DIR=/app/data SMS_CONTRACT_FILE=/app/contract/openapi.yaml
+USER node
+EXPOSE 4010
+CMD ["node", "server.mjs"]

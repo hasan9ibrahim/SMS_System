@@ -463,12 +463,12 @@ Buttons: Trouble Ticket, Search.
 
 | Screen | Controls | Output |
 | --- | --- | --- |
-| Signaling Deck | Filter (IP address), Max Duration (s), Max File Size (bytes), Start | Captured SMPP trace files: Sr. No., File Name, File Size, Download, Update Time |
+| Signaling Deck | Live capture: Filter (IP address), Max Duration (s), Max File Size (bytes), Start; or Extract from the recording (the PCAP Trace filter) | Captured SMPP trace files: Sr. No., File Name, File Size, Download, Update Time, Keep, Deleted on, Source (live capture or recording, with its window). A file is deleted 30 days after its capture ended unless Keep is ticked (team trial round 1); kept files stay until unticked |
 | EDR Template | Add, Edit, View, Clear, Search | Info ID, Name, Updated By/Time. Form: Name\*, Column Selection\* (any EDR column) |
 | EDR Download | EDR Request, View, Refresh, Clear | EDR No, Status, File, File Type, Progress, Request Start/End Time, Error, Requested By (async CSV/XLSX export) |
 | Route Simulator | Go | Inputs: Customer Trunk ID\*, Sender ID, Receiver ID\*, MCCMNC, Source TON\*, Source NPI\*, Dest TON\*, Dest NPI\*, Service Type Routing, Message Text, Test SMS, Data coding (0–8). Live counter: coding, SMS per message, message size (chars/bits). Shows the rule, route table and vendors that would be chosen; Test SMS sends a real message |
 | Network Status | Tabs Customer / Vendor; Refresh, Clear, CSV, Excel; per-row Start / Stop | Enterprise ID, Customer/Vendor ID, Enterprise Name, Trunk Name, IP Address, Number of Connections, Status (online/offline). Start/Stop binds a vendor or kicks a customer session |
-| PCAP Trace | Clear, Search | File Name, File Size, Download, Update Time (UTC) |
+| PCAP Trace | Clear, Search; extract filter: From, To (UTC, at most 24 h), Customer trunk, Vendor trunk, Number, Message ID, IP, Extract PCAP | Every SMPP packet is recorded into one file per 15 minutes (`trace-YY-MM-DD-HH-MM-SS.pcap.gz`, the newest still being written) and kept **60 days** (team trial round 1). Trace files: File Name, File Size, Download, Update Time (UTC). Extracted files: the PCAPs cut by the filter, with the Signaling deck's columns, deleted 30 days after they are made unless kept |
 | Failed EDR Search | Search, Generate Request | Messages rejected before routing. From Date\*, To Date\*, Customer IP, Customer Msg ID, Error Code, Download File Type (csv/xlsx), Customer Enterprise, Customer Trunk |
 | Failed EDR Download | Failed EDR Request, Refresh, Clear | Failed EDR No, Status, File, File Type, Progress, Start/End Time, Error, Requested By, Action |
 | Network Diagnosis | Go | Tool: Ping, Trace Route, MTR, Telnet; Count, Destination\*, Source, Port. Runs from the switch host |
@@ -499,13 +499,13 @@ All traffic reports share one engine: pick filters and a time range, pick metric
 
 | Screen | Toolbar | Grid / form |
 | --- | --- | --- |
-| Business Company | Add, Edit, Clone, View, Delete, Clear | Grid: Info ID, Name, Description, Base Currency, TPS Limit, Updated By/Time. Form: Name\*, Description, Company Logo (PNG)*, Invoice Format File (XLSX)*, Customer Rate Format File (XLSX)*, Customer Rate File Name*, SOA Format File (XLSX)\* (with a Format File Variables help panel), Base Currency\*, TPS Limit, Website, SMPP IP, SMPP Port (shown in tech-info emails), Invoice Number (sequence start), Business Company IP; default email templates for Customer Rate\*, Invoice\*, Low Balance\*, Bind Down\*, Customer Tech Info\*, Customer Trunk Change Info\*, SOA Statement\*, Rate Upload Notification\*, Auto Upload Report – Rejected\*; address (Line 1/2, City, State, Country, ZIP); bank (Beneficiary Name, Address, Bank, Bank Address, Currency, Account Number, IBAN, Swift); one sender block per department mailbox: Name, Phone, SMTP Email\*, SMTP Secure, SMTP Host\*, SMTP Port, SMTP UserName, SMTP Password, Check SMTP Connection, Extension Number, Skype Name, OAuth Redirect URIs\*, Client ID\*, Client Secret\* |
+| Business Company | Add, Edit, Clone, View, Delete, Clear | Grid: Info ID, Name, Description, Base Currency, TPS Limit, Updated By/Time. Form: Name\*, Description, Company Logo (PNG)*, Invoice Format File (XLSX)*, Customer Rate Format File (XLSX)*, Customer Rate File Name*, SOA Format File (XLSX)\* (with a Format File Variables help panel), Base Currency\*, TPS Limit, Website, SMPP IP, SMPP Port (shown in tech-info emails), Invoice Number (sequence start), Business Company IP; default email templates for Customer Rate\*, Invoice\*, Low Balance\*, Bind Down\*, Customer Tech Info\*, Customer Trunk Change Info\*, SOA Statement\*, Rate Upload Notification\*, Auto Upload Report – Rejected\*; address (Line 1/2, City, State, Country, ZIP); bank (Beneficiary Name, Address, Bank, Bank Address, Currency, Account Number, IBAN, Swift); one sender block per department mailbox: Name, Phone, SMTP Email\*, SMTP Secure, SMTP Host\*, SMTP Port, SMTP UserName, SMTP Password, Check SMTP Connection, Extension Number, Skype Name, OAuth Redirect URIs\*, Client ID\*, Client Secret\*; Senders: which department mailbox sends each kind of e-mail (rate sheets and notices, RN replies, tech info, traffic alerts, trouble tickets, daily and scheduled reports, invoices, SOAs, payment confirmations, vendor invoice replies; defaults Rates / NOC / Billing; a missing mailbox falls back to the default department's). A partner's e-mails always use its own business company's mailboxes and default templates, and templates can show that company's address and bank (`{bank_details}`, `{bank_iban}` …); its invoices show the company's bank account (team trial round 1) |
 | Departments | Add\*, Edit, View, Delete, Delete History, Clear | Info ID, Department Name, Status, Updated By |
 | Users | Add\*, Edit, View, Delete, Change Password, Change Others Passwd, Delete History, Clear | Department, UserName, Name, Email, User Type (Wholesale / Api), Status. Change Password modal: UserName, New Password\*, Confirm Password\* |
 | Logged In Users | Clear, per-row Action (force logout) | Logged In At, User, User Type (Wholesale/Customer), IP Address, Location, Device (Tablet/Mobile/Bot/Desktop), OS, Browser |
 | GUI Access Group | Add\*, Edit, View, Delete, Delete History, Clear | Info ID, Access Group Name, Status. Defines which menus, pages and buttons a role sees |
 | Audit Trail | Clear | Info ID, IP Address, Module Name, Controller, Method, Action, Table Name, Master ID, Update Time, User (filter by user) |
-| Email Template | Add, Edit, Clone, Delete, Clear, Search | Info ID, Name, Email Type (Customer Rate, Invoice, Low Balance, Bind Down, Customer Tech Info, Trunk Change Info, SOA Statement, Rate Upload Notification, Traffic Alert, Auto Upload Report – Reject, EDR – Trouble Ticket, Send SOA). Form: Name\*, Email Type\*, Subject\*, Body\* (rich text with placeholders) |
+| Email Template | Add, Edit, Clone, Delete, Clear, Search | Info ID, Name, Email Type (Customer Rate, Invoice, Low Balance, Bind Down, Customer Tech Info, Trunk Change Info, SOA Statement, Rate Upload Notification, Traffic Alert, Auto Upload Report – Reject, EDR – Trouble Ticket, Send SOA). Form: Name\*, Email Type\*, Subject\*, Body\* (rich text with placeholders). Team trial round 1: the body is a full design — visual editor (fonts incl. web fonts with fallback, sizes, colours, cell backgrounds, images uploaded per company and embedded inline when sent, `{company_logo}`, buttons, tables, dividers, a 600 px e-mail layout) or raw HTML / imported .html; saved sanitised (no scripts, handlers, forms, frames). Preview in three views — in the system, classic Outlook for Windows (approximation of its Word engine) and phone — with a compatibility list per mail app, and Send test to real addresses. Sent e-mails have CSS inlined and an Outlook head; Email Logs show each e-mail as sent |
 | Customer Portal | Edit, View, Delete, Clear; Change Password modal | Info ID, Email, UserName, Enterprise, First Name, Last Name, Status — logins for the customer self-service portal |
 | Report Template | Add\*, Edit, Delete, Clear | Info ID, Name, Status — saved report definitions used by Schedule Report |
 
@@ -1285,7 +1285,7 @@ Deleting a trunk, enterprise, rate table, route rule, translation or HLR rule, v
 
 **Data kept forever (or for the legal retention period set by admin, minimum 7 years)**
 
-- EDRs and CDRs, with the trunk, enterprise, vendor, rate and cost as they were at send time. Each EDR stores a copy of the rate and cost it was billed at, so later rate changes or deletes don't change past billing.
+- EDRs and CDRs, with the trunk, enterprise, vendor, rate and cost as they were at send time. Each EDR stores a copy of the rate and cost it was billed at, so later rate changes or deletes don't change past billing. EDRs stay online (search, reports, Live analytics) for 12 months, then move to the archive and are kept there for the retention period (§14.3).
 - Rate table history and every rate version with its effective dates.
 - Invoices, SOAs, payments, credit notes, balance history and disputes.
 - Route rule and translation rule versions (the undo history from §13.10).
@@ -1456,6 +1456,25 @@ Decision: Elixir for the whole backend (SMPP switch, API, billing, jobs) and Typ
 - Large exports (EDR, LCR, SOA, invoices) run as background requests with progress, as in the reference platform.
 - Live widgets pushed over WebSockets instead of polling.
 
+### 14.3 Capacity and EDR retention
+
+Decided in team trial round 1 (2026-10-19).
+
+- **Capacity.** At least 1,000 TPS peak and 50 million SMS a day, with no message or EDR lost when a service restarts. Acceptance tests and server sizing are in `docs/BACKEND_TODO.md`.
+- **Speed at that volume** (p95 unless noted, over 12 months of EDRs):
+  - submit_sm_resp within 50 ms (p99);
+  - EDRs visible in reports and Live analytics within 2 s;
+  - lists, filters and record pages under 300 ms;
+  - today's reports and Live analytics under 500 ms;
+  - reports over months under 2 s.
+- **EDR retention: 12 months online, then archive.**
+  - Every EDR stays online for 12 months on the fast disks: in EDR search, EDR download, reports, Live analytics, re-rating, invoices and SOAs.
+  - After 12 months a daily background job moves the oldest day to compressed archive storage (cheap disk or object storage). The archive keeps the full EDR, with the rate and cost as billed.
+  - The archive is kept for the legal retention period set by the admin, minimum 7 years (§13.29); after that the admin may purge, as in §13.29.
+  - Archived days can be restored on request (admin, for a period and filter, e.g. one client's month) as a background job with progress. Restored rows are searchable and downloadable until the admin releases them.
+  - Hourly and daily summaries, invoices, SOAs, payments, balances, rate history and audit data stay online for good. Reports and invoices for periods older than 12 months still work from the summaries.
+  - Screens that search EDRs say when the chosen period is partly archived and offer the restore request.
+
 ## 15. Adopted GUI design
 
 Every page uses one window layout: a top menu bar, a row of page tabs, a page header, a data grid with a filter under each column, a detail panel and a status bar, in a light and a dark theme. This section fixes the look and layout only. Page fields, columns and behaviour come from the earlier sections; the names and numbers in the screenshots are placeholders.
@@ -1520,7 +1539,7 @@ Unlike other pages, the Route Rules page follows the screenshots above in layout
 | Type | Coloured dot plus Static, Dynamic (least cost), QBR (quality) or Block | list |
 | Category | Customer category, for example Direct, Promo, OTP, WHS, All | list |
 | Customer trunks | First trunks plus "+N"; hover lists all | contains |
-| Destination | MCCMNC or country, "505 · all" for a whole country; uses the destination picker (§13.21) | starts with |
+| Destination | Country · Network (MCCMNC) names, a whole country as "Country (whole country)"; the 3-digit All networks code is only the country default entry, not the whole country (decided in team trial round 1); uses the destination picker (§13.21) | starts with |
 | Vendors | Vendor split, for example "Kite\_DIR 60 · Orbit\_DIR 40", or "LCR · 6 vendors"; editable in place | vendor |
 | 24h | Volume; hover shows the per-customer breakdown with selectable time frame (§13.27) | ≥ |
 | ASR | Delivery-attempt success % | ≥ |

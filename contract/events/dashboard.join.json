@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dashboard.join.json",
+  "title": "DashboardJoinParams",
+  "description": "Client to server: the phx_join payload for topic live:dashboard. Window and threshold of the traffic movers panel (\u00a713.3); the user's saved dashboard preferences. To change them, leave and join again. refreshSeconds sets how often summary, movers and tops are pushed (team trial round 1).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "windowMinutes": {
+      "type": "integer",
+      "enum": [
+        5,
+        15,
+        30,
+        60
+      ],
+      "default": 15
+    },
+    "thresholdPct": {
+      "type": "number",
+      "minimum": 5,
+      "maximum": 500,
+      "default": 30
+    },
+    "refreshSeconds": {
+      "type": "integer",
+      "enum": [
+        1,
+        5,
+        10,
+        30,
+        60
+      ],
+      "default": 1,
+      "description": "Push period in seconds: summary every refreshSeconds, movers and tops every max(5, refreshSeconds)."
+    }
+  },
+  "examples": [
+    {
+      "windowMinutes": 15,
+      "thresholdPct": 30,
+      "refreshSeconds": 1
+    }
+  ]
+}

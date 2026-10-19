@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.json",
+  "title": "EventCommon",
+  "description": "Shared definitions for event payloads.",
+  "$defs": {
+    "Timestamp": {
+      "title": "EventTimestamp",
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC, ISO 8601."
+    },
+    "PartyRef": {
+      "title": "PartyRef",
+      "description": "An enterprise or trunk as shown in live panels.",
+      "type": "object",
+      "required": ["kind", "id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["customer_enterprise", "vendor_enterprise", "customer_trunk", "vendor_trunk"] },
+        "id": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" }
+      }
+    },
+    "Severity": {
+      "title": "Severity",
+      "type": "string",
+      "enum": ["info", "warning", "critical"],
+      "description": "Alert severity (§13.6); each has its own colour and sound."
+    }
+  }
+}

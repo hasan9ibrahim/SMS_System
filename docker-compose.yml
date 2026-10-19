@@ -1,0 +1,135 @@
+# Local data stores for the frontend phase (spec §14).
+# Values come from .env (copy .env.example). Defaults below are fake, local-only.
+#
+# Developers:          docker compose up -d                  (data stores only; run mock and web with npm)
+# Shared trial (step 6, docs/TRIAL_GUIDE.md):
+#   docker compose --profile app up -d --build               (data stores + mock + web on port ${WEB_PORT:-8080})
+#   docker compose --profile seed run --rm seed              (one-off: load the fake data; SEED_PROFILE=full|small)
+name: sms-platform
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sms_config}
+      POSTGRES_USER: ${POSTGRES_USER:-sms_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sms_dev_password}
+    # Data store ports listen on the server itself only; the network sees just the web app (WEB_PORT).
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-sms_edr}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-sms_dev}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-sms_dev_password}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./db/clickhouse/init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping | grep -q Ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ---------------------------------------------------------------- shared trial instance (build step 6)
+  # Mock server answering the contract (the Elixir backend replaces it later, same contract).
+  mock:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.mock
+    restart: unless-stopped
+    environment: &app-env
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sms_config}
+      POSTGRES_USER: ${POSTGRES_USER:-sms_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sms_dev_password}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: 8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-sms_edr}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-sms_dev}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-sms_dev_password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PLATFORM_CURRENCY: ${PLATFORM_CURRENCY:-EUR}
+      PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-UTC}
+      SIM_TOTAL_TPS: ${SIM_TOTAL_TPS:-40}
+      MOCK_SECRET_KEY: ${MOCK_SECRET_KEY:-trial-only-not-a-real-key}
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4010/api/v1/health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+
+  # The web app (production build) behind nginx; /api and /socket go to the mock.
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    environment:
+      # Optional shared team password (docs/TRIAL_GUIDE.md); empty = open.
+      TEAM_USER: ${TEAM_USER:-team}
+      TEAM_PASSWORD: ${TEAM_PASSWORD:-}
+    depends_on:
+      # nginx answers 502 until the mock listens (it loads caches for a few seconds at start).
+      mock: { condition: service_healthy }
+
+  # One-off: load the fake data (resets the schema). Full = production-like volume (takes a while; small is quick).
+  seed:
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.mock
+    environment: *app-env
+    command: ["sh", "-c", "node --max-old-space-size=6144 seed.mjs --profile ${SEED_PROFILE:-full}"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+
+volumes:
+  postgres-data:
+  clickhouse-data:
+  redis-data:

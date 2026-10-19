@@ -1,0 +1,530 @@
+// Enterprise and trunk screens (build step 4.1): record CRUD, billing, AM handover, docs,
+// trunk rules, safe delete and undo of every save. Every response is checked against the
+// contract. Needs the seeded database; without it these tests are skipped.
+import { test, after, describe } from "node:test";
+import assert from "node:assert/strict";
+import type { LightMyRequestResponse } from "fastify";
+import { buildServer, API_PREFIX } from "../src/server.js";
+import { operations } from "../src/contract.js";
+import { closeDb, db, dbReady } from "../src/db.js";
+import { deleteTestEnterprises } from "./testEnterprises.js";
+
+const app = await buildServer({ socket: false });
+const ready = await dbReady();
+const skip = ready ? false : "seeded database not available (npm run db:up && npm run seed:small)";
+const run = Date.now().toString(36);
+after(async () => {
+  // Test enterprises and their trunks must not stay active: the live simulator would send
+  // traffic for them and they would show on the dashboard and in incidents (§13.3, §13.4).
+  if (ready) await deleteTestEnterprises(`Test Enterprise ${run} %`);
+  await app.close();
+  await closeDb();
+});
+
+function check(operationId: string, res: LightMyRequestResponse) {
+  const op = operations.find((o) => o.operationId === operationId)!;
+  const status = String(res.statusCode);
+  assert.ok(status in op.responses, `${operationId} answered ${status}, which the contract does not list: ${res.body}`);
+  const validate = op.responses[status];
+  // Only JSON bodies are validated (document downloads are binary).
+  if (validate && /json/.test(String(res.headers["content-type"])))
+    assert.ok(validate(res.json()), `${operationId} ${status}: ${JSON.stringify(validate.errors)}`);
+}
+
+const call = (method: "GET" | "POST" | "PUT" | "DELETE", url: string, payload?: unknown) =>
+  app.inject({ method, url: `${API_PREFIX}${url}`, ...(payload !== undefined ? { payload: payload as object } : {}) });
+
+async function ok(operationId: string, res: Promise<LightMyRequestResponse>, status = 200) {
+  const r = await res;
+  assert.equal(r.statusCode, status, `${operationId}: ${r.body}`);
+  check(operationId, r);
+  return r.statusCode === 204 ? null : r.json();
+}
+
+const contact = (t: string) => ({ name: `${t} Person`, phone: "+100000000", emails: [`${t}@example.test`] });
+
+async function reference() {
+  return ok("getReference", call("GET", "/meta/reference"));
+}
+
+async function newEnterprise(type: "customer" | "vendor" | "reciprocal", suffix: string) {
+  const ref = await reference();
+  return ok(
+    "createEnterprise",
+    call("POST", "/enterprises", {
+      name: `Test Enterprise ${run} ${suffix}`,
+      alias: `T${run}${suffix}`.slice(0, 20),
+      type,
+      tier: "tier2",
+      status: "active",
+      businessCompanyId: ref.businessCompanies[0].id,
+      accountManagerId: ref.accountManagers[0].id,
+      address: { line1: "1 Test Street", countryId: ref.countries[0].id },
+      creditAlertPercent: { notice: 50, warning: 70, critical: 90 },
+      contacts: {
+        commercial: contact("commercial"),
+        technical: contact("technical"),
+        rates: contact("rates"),
+        finance: contact("finance"),
+      },
+    }),
+    201,
+  );
+}
+
+describe("reference data and lists", { skip }, () => {
+  test("reference data for forms", async () => {
+    const ref = await reference();
+    assert.ok(ref.countries.length > 200);
+    assert.ok(ref.timezones.includes("Europe/London"));
+    assert.ok(ref.accountManagers.length > 0);
+  });
+
+  test("trunk lists filter, sort and count the rules that run on each trunk", async () => {
+    const page = await ok(
+      "queryCustomerTrunks",
+      call("POST", "/customer-trunks/query", { sort: [{ field: "rulesCount", dir: "desc" }], limit: 50 }),
+    );
+    assert.ok(page.total > 10);
+    const top = page.rows[0];
+    const rules = await ok("getCustomerTrunkRules", call("GET", `/customer-trunks/${top.id}/rules`));
+    const running = rules.translation.filter(
+      (r: { ruleActive: boolean; enabled: boolean }) => r.ruleActive && r.enabled,
+    );
+    assert.equal(top.rulesCount, running.length);
+
+    const vendors = await ok(
+      "queryVendorTrunks",
+      call("POST", "/vendor-trunks/query", {
+        filter: { logic: "and", conditions: [{ field: "protocol", op: "in", values: ["http"] }] },
+        limit: 5,
+      }),
+    );
+    assert.ok(vendors.rows.every((r: { protocol: string }) => r.protocol === "http"));
+  });
+
+  test("Show deleted lists archived rows only when asked (§13.29)", async () => {
+    const live = await ok("queryVendorTrunks", call("POST", "/vendor-trunks/query", { limit: 1 }));
+    const archived = await ok(
+      "queryVendorTrunks",
+      call("POST", "/vendor-trunks/query", {
+        filter: { logic: "and", conditions: [{ field: "archived", op: "eq", value: true }] },
+        limit: 500,
+      }),
+    );
+    const both = await ok(
+      "queryVendorTrunks",
+      call("POST", "/vendor-trunks/query", {
+        filter: { logic: "and", conditions: [{ field: "archived", op: "in", values: [true, false] }] },
+        limit: 1,
+      }),
+    );
+    assert.ok(archived.total > 0);
+    assert.ok(archived.rows.every((r: { archived: boolean }) => r.archived));
+    assert.equal(both.total, live.total + archived.total);
+  });
+
+  test("rate tables list with active line counts", async () => {
+    const started = Date.now();
+    const page = await ok(
+      "queryRateTables",
+      call("POST", "/rate-tables/query", { sort: [{ field: "activeLines", dir: "desc" }], limit: 20 }),
+    );
+    assert.ok(page.rows[0].activeLines >= page.rows[1].activeLines);
+    assert.ok(Date.now() - started < 3000, "rate table list is fast at full volume");
+  });
+});
+
+describe("enterprise record (§5.1–5.3)", { skip }, () => {
+  test("add, edit with a field-level diff, and undo", async () => {
+    const saved = await newEnterprise("customer", "A");
+    const id = saved.record.id;
+    assert.equal(saved.change.changeType, "create");
+    assert.equal(saved.record.contacts.rates.emails[0], "rates@example.test");
+
+    const dup = await call("POST", "/enterprises", {
+      ...saved.record,
+      accountManagerId: saved.record.accountManagerId,
+    });
+    assert.equal(dup.statusCode, 400, "body with read-only fields is rejected by the contract");
+
+    const input = {
+      name: saved.record.name,
+      alias: saved.record.alias,
+      type: "reciprocal",
+      tier: saved.record.tier,
+      status: saved.record.status,
+      businessCompanyId: saved.record.businessCompanyId,
+      address: { ...saved.record.address, city: "Testville" },
+      creditAlertPercent: saved.record.creditAlertPercent,
+      contacts: { ...saved.record.contacts, finance: { ...contact("finance"), emails: ["billing@example.test"] } },
+    };
+    const edited = await ok("updateEnterprise", call("PUT", `/enterprises/${id}`, input));
+    const fields = edited.change.diff.map((d: { field: string }) => d.field).sort();
+    assert.deepEqual(fields, ["address.city", "contacts.finance.emails", "type"]);
+    assert.equal(edited.record.address.city, "Testville");
+
+    const same = await ok("updateEnterprise", call("PUT", `/enterprises/${id}`, input));
+    assert.equal(same.change, null, "saving without changes records nothing");
+
+    await ok("undoChange", call("POST", `/changes/${edited.change.id}/undo`, {}));
+    const back = await ok("getEnterprise", call("GET", `/enterprises/${id}`));
+    assert.equal(back.address.city, null);
+    assert.equal(back.type, "customer");
+    assert.deepEqual(back.contacts.finance.emails, ["finance@example.test"]);
+  });
+
+  test("name is unique, archived names included, and errors point at fields", async () => {
+    const { rows } = await db().query("SELECT name FROM enterprises WHERE deleted_at IS NOT NULL LIMIT 1");
+    const ref = await reference();
+    const res = await call("POST", "/enterprises", {
+      name: rows[0].name,
+      alias: "X",
+      type: "customer",
+      tier: "tier1",
+      status: "active",
+      businessCompanyId: 999999,
+      address: { line1: "x" },
+      creditAlertPercent: { notice: 90, warning: 70, critical: 50 },
+      contacts: { commercial: contact("a"), technical: contact("b"), rates: contact("c"), finance: contact("d") },
+      accountManagerId: ref.accountManagers[0].id,
+    });
+    assert.equal(res.statusCode, 400);
+    check("createEnterprise", res);
+    const paths = res.json().errors.map((e: { path: string }) => e.path);
+    assert.ok(paths.includes("/name"));
+    assert.ok(paths.includes("/businessCompanyId"));
+    assert.ok(paths.includes("/creditAlertPercent"));
+  });
+
+  test("billing sides, balance and undo", async () => {
+    const saved = await newEnterprise("customer", "B");
+    const id = saved.record.id;
+    const empty = await ok("getEnterpriseBilling", call("GET", `/enterprises/${id}/billing`));
+    assert.equal(empty.customer, null);
+    const wrongSide = await call("PUT", `/enterprises/${id}/billing`, {
+      vendor: { currency: "USD", billingCycleId: 1, timezone: "UTC", openingBalance: 0 },
+    });
+    assert.equal(wrongSide.statusCode, 400);
+    check("updateEnterpriseBilling", wrongSide);
+
+    const created = await ok(
+      "updateEnterpriseBilling",
+      call("PUT", `/enterprises/${id}/billing`, {
+        customer: {
+          currency: "EUR",
+          billingCycleId: 3,
+          timezone: "Europe/Paris",
+          billingType: "postpaid",
+          creditLimit: 5000,
+          openingBalance: 120.5,
+        },
+        beneficiary: { bank: "Test Bank" },
+      }),
+    );
+    assert.equal(created.record.customer.balance, 120.5);
+    assert.equal(created.record.beneficiary.bank, "Test Bank");
+    const edited = await ok(
+      "updateEnterpriseBilling",
+      call("PUT", `/enterprises/${id}/billing`, {
+        customer: {
+          ...created.record.customer,
+          creditLimit: 9000,
+          balance: undefined,
+          billingCycleName: undefined,
+          updatedBy: undefined,
+          updatedAt: undefined,
+        },
+      }),
+    );
+    assert.deepEqual(
+      edited.change.diff.map((d: { field: string }) => d.field),
+      ["billing.customer.creditLimit"],
+    );
+    await ok("undoChange", call("POST", `/changes/${edited.change.id}/undo`, {}));
+    const back = await ok("getEnterpriseBilling", call("GET", `/enterprises/${id}/billing`));
+    assert.equal(back.customer.creditLimit, 5000);
+  });
+
+  test("handover now, scheduled handover replaces a pending one, undo restores history (§13.30)", async () => {
+    const saved = await newEnterprise("vendor", "C");
+    const id = saved.record.id;
+    const ref = await reference();
+    const [, am2, am3] = ref.accountManagers;
+    const now = await ok("handOverEnterprise", call("POST", `/enterprises/${id}/handover`, { userId: am2.id }));
+    assert.equal(now.periods[0].userId, am2.id);
+    assert.equal(now.periods[0].endsAt, null);
+    assert.equal((await ok("getEnterprise", call("GET", `/enterprises/${id}`))).accountManagerId, am2.id);
+
+    const later = new Date(Date.now() + 7 * 86400_000).toISOString();
+    await ok("handOverEnterprise", call("POST", `/enterprises/${id}/handover`, { userId: am3.id, effectiveAt: later }));
+    const replaced = await ok(
+      "handOverEnterprise",
+      call("POST", `/enterprises/${id}/handover`, {
+        userId: ref.accountManagers[0].id,
+        effectiveAt: later,
+        note: "Moved",
+      }),
+    );
+    assert.equal(replaced.periods.length, 3, "the first scheduled handover was replaced, not stacked");
+    assert.equal((await ok("getEnterprise", call("GET", `/enterprises/${id}`))).accountManagerId, am2.id);
+
+    const past = await call("POST", `/enterprises/${id}/handover`, {
+      userId: am3.id,
+      effectiveAt: "2020-01-01T00:00:00Z",
+    });
+    assert.equal(past.statusCode, 400);
+    check("handOverEnterprise", past);
+
+    await ok("undoChange", call("POST", `/changes/${replaced.change.id}/undo`, {}));
+    const history = await ok("getAccountManagerHistory", call("GET", `/enterprises/${id}/account-managers`));
+    assert.equal(history[0].userId, am3.id, "the earlier scheduled handover is back");
+  });
+
+  test("docs: upload, list, download, delete archives, undo restores (§5.2)", async () => {
+    const saved = await newEnterprise("customer", "D");
+    const id = saved.record.id;
+    const body = Buffer.from("fake contract text");
+    const doc = await ok(
+      "uploadEnterpriseDoc",
+      call("POST", `/enterprises/${id}/docs`, {
+        name: "Contract",
+        fileName: "contract.txt",
+        dataBase64: body.toString("base64"),
+      }),
+      201,
+    );
+    assert.equal(doc.contentType, "text/plain");
+    assert.equal(doc.size, body.length);
+    const file = await call("GET", `/enterprises/${id}/docs/${doc.id}/file`);
+    assert.equal(file.statusCode, 200);
+    check("downloadEnterpriseDoc", file);
+    assert.equal(file.rawPayload.toString(), "fake contract text");
+    assert.match(String(file.headers["content-disposition"]), /contract\.txt/);
+
+    await ok("deleteEnterpriseDoc", call("DELETE", `/enterprises/${id}/docs/${doc.id}`), 204);
+    assert.equal((await ok("listEnterpriseDocs", call("GET", `/enterprises/${id}/docs`))).length, 0);
+    const { rows } = await db().query(
+      "SELECT id FROM changes WHERE entity_type = 'enterprise_doc' AND $1 = ANY(entity_ids) AND change_type = 'delete'",
+      [doc.id],
+    );
+    await ok("undoChange", call("POST", `/changes/${rows[0].id}/undo`, {}));
+    assert.equal((await ok("listEnterpriseDocs", call("GET", `/enterprises/${id}/docs`))).length, 1);
+  });
+
+  test("safe delete: blockers answer 409, admin override archives trunks with it, undo brings them back (§13.29)", async () => {
+    const { rows } = await db().query(
+      `SELECT e.id FROM enterprises e
+        WHERE e.deleted_at IS NULL AND EXISTS (SELECT 1 FROM invoices i WHERE i.enterprise_id = e.id AND i.payment_status <> 'paid')
+          AND EXISTS (SELECT 1 FROM customer_trunks t WHERE t.enterprise_id = e.id AND t.deleted_at IS NULL)
+        ORDER BY e.id DESC LIMIT 1`,
+    );
+    const id = rows[0].id;
+    const deps = await ok("getEnterpriseDependencies", call("GET", `/enterprises/${id}/dependencies`));
+    assert.equal(deps.blocked, true);
+    const blocked = await call("POST", `/enterprises/${id}/archive`, {});
+    assert.equal(blocked.statusCode, 409);
+    check("archiveEnterprise", blocked);
+    const noReason = await call("POST", `/enterprises/${id}/archive`, { override: true });
+    assert.equal(noReason.statusCode, 409);
+
+    const archived = await ok(
+      "archiveEnterprise",
+      call("POST", `/enterprises/${id}/archive`, { override: true, reason: "Test of override" }),
+    );
+    assert.ok(archived.record.archived);
+    assert.equal(archived.record.trunkCounts.customer, 0);
+    assert.match(archived.change.note, /Override: Test of override/);
+    const list = await ok(
+      "queryEnterprises",
+      call("POST", "/enterprises/query", {
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: id }] },
+      }),
+    );
+    assert.equal(list.total, 0, "archived enterprises leave normal lists");
+    const edit = await call("PUT", `/enterprises/${id}`, {});
+    assert.equal(edit.statusCode, 400);
+
+    await ok("undoChange", call("POST", `/changes/${archived.change.id}/undo`, {}));
+    const back = await ok("getEnterprise", call("GET", `/enterprises/${id}`));
+    assert.equal(back.archived, null);
+    assert.ok(back.trunkCounts.customer > 0, "its trunks came back with it");
+  });
+
+  test("unknown enterprise answers 404", async () => {
+    for (const [op, url] of [
+      ["getEnterprise", "/enterprises/99999999"],
+      ["getEnterpriseBilling", "/enterprises/99999999/billing"],
+      ["listEnterpriseDocs", "/enterprises/99999999/docs"],
+      ["getEnterpriseDependencies", "/enterprises/99999999/dependencies"],
+    ] as const) {
+      const res = await call("GET", url);
+      assert.equal(res.statusCode, 404);
+      check(op, res);
+    }
+  });
+});
+
+describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
+  const customerTrunk = (enterpriseId: number, suffix: string) => ({
+    enterpriseId,
+    name: `T${run}_${suffix}`,
+    protocol: "smpp",
+    billingType: "submit",
+    status: "active",
+    bindType: "TR",
+    hostIps: ["192.0.2.10", "2001:db8::1"],
+    username: `t${run}${suffix}`.slice(0, 16),
+    password: "secret1",
+    maxConnections: 2,
+    port: 2775,
+    tps: 50,
+  });
+
+  test("customer trunk: add, username reserved, edit and undo, password never returned", async () => {
+    const ent = (await newEnterprise("customer", "E")).record;
+    const saved = await ok("createCustomerTrunk", call("POST", "/customer-trunks", customerTrunk(ent.id, "a")), 201);
+    const id = saved.record.id;
+    assert.equal(saved.record.passwordSet, true);
+    assert.ok(!("password" in saved.record));
+    assert.deepEqual(saved.record.hostIps, ["192.0.2.10", "2001:db8::1"]);
+
+    const clash = await call("POST", "/customer-trunks", {
+      ...customerTrunk(ent.id, "b"),
+      username: saved.record.username,
+    });
+    assert.equal(clash.statusCode, 400);
+    check("createCustomerTrunk", clash);
+    assert.ok(clash.json().errors.some((e: { path: string }) => e.path === "/username"));
+    const noPassword = await call("POST", "/customer-trunks", { ...customerTrunk(ent.id, "c"), password: undefined });
+    assert.equal(noPassword.statusCode, 400);
+
+    const { rows: tables } = await db().query(
+      "SELECT id FROM rate_tables WHERE kind = 'customer' AND deleted_at IS NULL LIMIT 2",
+    );
+    const input = {
+      ...customerTrunk(ent.id, "a"),
+      password: undefined,
+      tps: 75,
+      rateTableIds: tables.map((t) => t.id),
+    };
+    const edited = await ok("updateCustomerTrunk", call("PUT", `/customer-trunks/${id}`, input));
+    assert.deepEqual(edited.change.diff.map((d: { field: string }) => d.field).sort(), ["rateTableIds", "tps"]);
+    await ok("undoChange", call("POST", `/changes/${edited.change.id}/undo`, {}));
+    const back = await ok("getCustomerTrunk", call("GET", `/customer-trunks/${id}`));
+    assert.equal(back.tps, 50);
+    assert.deepEqual(back.rateTableIds, []);
+
+    const pw = await ok(
+      "updateCustomerTrunk",
+      call("PUT", `/customer-trunks/${id}`, { ...input, password: "newpass" }),
+    );
+    const entry = pw.change.diff.find((d: { field: string }) => d.field === "password");
+    assert.equal(entry.after, "(changed)", "credentials stay out of the change log (§13.22)");
+  });
+
+  test("vendor trunk owns a buy rate table; HTTP needs a URL", async () => {
+    const ent = (await newEnterprise("vendor", "F")).record;
+    const ref = await reference();
+    const base = {
+      enterpriseId: ent.id,
+      name: `V${run}_a`,
+      protocol: "smpp",
+      categoryId: ref.productCategories[0].id,
+      billingType: "delivery",
+      status: "active",
+      bindType: "TR",
+      username: "vendoruser",
+      password: "pw12345",
+      host: "198.51.100.7",
+      port: 2775,
+      maxConnections: 1,
+      tps: 100,
+    };
+    const http = await call("POST", "/vendor-trunks", { ...base, protocol: "http" });
+    assert.equal(http.statusCode, 400);
+    check("createVendorTrunk", http);
+    const saved = await ok("createVendorTrunk", call("POST", "/vendor-trunks", base), 201);
+    assert.ok(saved.record.ownRateTableId);
+    const tables = await ok(
+      "queryRateTables",
+      call("POST", "/rate-tables/query", {
+        filter: { logic: "and", conditions: [{ field: "vendorTrunkId", op: "eq", value: saved.record.id }] },
+      }),
+    );
+    assert.equal(tables.rows[0].kind, "vendor");
+    const wrongEnterprise = await call("POST", "/customer-trunks", customerTrunk(ent.id, "x"));
+    assert.equal(wrongEnterprise.statusCode, 400, "a vendor enterprise can't have customer trunks");
+  });
+
+  test("rules tab: reorder, switch off, detach a direct rule, undo (§13.2)", async () => {
+    const { rows } = await db().query(
+      `SELECT t.id FROM customer_trunks t WHERE t.deleted_at IS NULL
+          AND EXISTS (SELECT 1 FROM translation_rule_targets g JOIN translation_rules r ON r.id = g.translation_rule_id
+                       WHERE r.deleted_at IS NULL AND g.trunk_kind = 'customer' AND g.target_type = 'trunk' AND g.target_id = t.id)
+          AND (SELECT count(*) FROM translation_rule_targets g JOIN translation_rules r ON r.id = g.translation_rule_id
+                WHERE r.deleted_at IS NULL AND g.trunk_kind = 'customer'
+                AND (g.target_type = 'all' OR (g.target_type = 'trunk' AND g.target_id = t.id)
+                     OR (g.target_type = 'enterprise' AND g.target_id = t.enterprise_id))) >= 3
+        ORDER BY t.id LIMIT 1`,
+    );
+    const id = rows[0].id;
+    const before = await ok("getCustomerTrunkRules", call("GET", `/customer-trunks/${id}/rules`));
+    const ids = before.translation.map((r: { ruleId: number }) => r.ruleId);
+    const reversed = [...ids].reverse();
+    const reordered = await ok(
+      "updateCustomerTrunkRules",
+      call("PUT", `/customer-trunks/${id}/rules`, {
+        translation: reversed.map((ruleId: number) => ({ ruleId, enabled: true })),
+      }),
+    );
+    assert.deepEqual(
+      reordered.record.translation.map((r: { ruleId: number }) => r.ruleId),
+      reversed,
+    );
+    const direct = before.translation.find((r: { source: { type: string } }) => r.source.type === "trunk");
+    const notDirect = before.translation.find((r: { source: { type: string } }) => r.source.type !== "trunk");
+    if (notDirect) {
+      const bad = await call("PUT", `/customer-trunks/${id}/rules`, { detachTranslationRuleIds: [notDirect.ruleId] });
+      assert.equal(bad.statusCode, 400);
+      check("updateCustomerTrunkRules", bad);
+    }
+    const detached = await ok(
+      "updateCustomerTrunkRules",
+      call("PUT", `/customer-trunks/${id}/rules`, { detachTranslationRuleIds: [direct.ruleId] }),
+    );
+    assert.ok(
+      !detached.record.translation.some(
+        (r: { ruleId: number; source: { type: string } }) => r.ruleId === direct.ruleId && r.source.type === "trunk",
+      ),
+    );
+
+    await ok("undoChange", call("POST", `/changes/${detached.change.id}/undo`, {}));
+    await ok("undoChange", call("POST", `/changes/${reordered.change.id}/undo`, {}));
+    const after = await ok("getCustomerTrunkRules", call("GET", `/customer-trunks/${id}/rules`));
+    assert.deepEqual(after, before);
+  });
+
+  test("archive and restore a trunk (§13.29)", async () => {
+    const ent = (await newEnterprise("customer", "G")).record;
+    const saved = await ok("createCustomerTrunk", call("POST", "/customer-trunks", customerTrunk(ent.id, "g")), 201);
+    const id = saved.record.id;
+    const deps = await ok("getCustomerTrunkDependencies", call("GET", `/customer-trunks/${id}/dependencies`));
+    assert.equal(deps.blocked, false);
+    const archived = await ok(
+      "archiveCustomerTrunk",
+      call("POST", `/customer-trunks/${id}/archive`, { reason: "Test" }),
+    );
+    assert.ok(archived.record.archived);
+    const reuse = await call("POST", "/customer-trunks", {
+      ...customerTrunk(ent.id, "h"),
+      username: saved.record.username,
+    });
+    assert.equal(reuse.statusCode, 400, "an archived trunk's username stays reserved");
+    const restored = await ok("restoreCustomerTrunk", call("POST", `/customer-trunks/${id}/restore`));
+    assert.equal(restored.record.archived, null);
+    const again = await call("POST", `/customer-trunks/${id}/restore`);
+    assert.equal(again.statusCode, 400);
+    check("restoreCustomerTrunk", again);
+  });
+});

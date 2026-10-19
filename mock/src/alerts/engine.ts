@@ -1,0 +1,662 @@
+// Alert engine (§13.6, §13.7): every 15 seconds the active rules are evaluated on the live traffic
+// simulator, whether or not anyone has a page open. A rule that holds opens an incident (pop-up,
+// sound and e-mail to the people it notifies), re-alerts at its repeat interval, keeps the peak, and
+// recovers when the metric is back (OK notice), followed by the rule's cooldown. Warning e-mails go out
+// in a 15-minute digest, Info in the daily summary at 07:00 UTC, Critical at once. State lives in
+// PostgreSQL, so acknowledgements and snoozes from the API take effect on the next round.
+import { fillBody, fillText } from "../email/html.js";
+import type pg from "pg";
+import type { AlertRuleRow, IncidentEvent, IncidentRow } from "@sms/contract";
+import { db } from "../db.js";
+import {
+  ALERT_RULE_FROM,
+  ALERT_RULE_SELECT,
+  INCIDENT_FROM,
+  INCIDENT_SELECT,
+  mapAlertRule,
+  mapIncident,
+} from "../lists/alertDefs.js";
+import { BASE_DELAY, MINUTES, type Simulator } from "../live/simulator.js";
+import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
+import { chRows } from "../edr.js";
+import { companyMailbox, logEmail } from "../api/emailLog.js";
+import { contactEmails } from "../api/switchTools.js";
+import { CURRENT_USER_ID } from "../api/session.js";
+import {
+  conditionLabel,
+  entitiesFor,
+  evaluate,
+  fmtMetric,
+  isActiveAt,
+  METRIC_LABEL,
+  worse,
+  type Entity,
+  type Series,
+} from "./evaluate.js";
+
+type Db = pg.Pool | pg.PoolClient;
+export const EVALUATE_EVERY_MS = 15_000;
+const PUBLIC_URL = process.env.PUBLIC_URL ?? "http://localhost:5173";
+
+let push: (topic: string, event: string, payload: object) => void = () => {};
+let rulesCache: { at: number; rules: AlertRuleRow[] } | null = null;
+let me: { departmentId: number | null } | null = null;
+let lastDigestSlot = -1;
+let lastSummaryDay = "";
+
+export function setPusher(fn: typeof push) {
+  push = fn;
+}
+/** A rule was saved: the next round reads the rules again. */
+export function invalidateRules() {
+  rulesCache = null;
+}
+
+// ---------------------------------------------------------------- live series
+
+const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+
+/** One minute of one trunk's stored EDRs. */
+interface StoredMinute {
+  n: number;
+  ok: number;
+  dl: number;
+  rev: number;
+  cost: number;
+  delay: number;
+}
+type Stored = { customers: Map<number, Map<number, StoredMinute>>; vendors: Map<number, Map<number, StoredMinute>> };
+
+/**
+ * The last two hours per trunk and minute from the EDR store, where the simulator's messages are written
+ * (team trial round 1: an alert said a margin Live analytics never showed, because the engine priced the
+ * simulator's averages). Null when the store can't be read; the simulator's own series are used then.
+ */
+export async function storedMinutes(): Promise<Stored | null> {
+  const f = await sysToPlatformFactor();
+  const q = (col: string) =>
+    chRows<{ id: number; m: number; n: string; ok: string; dl: string; rev: number; cost: number; delay: number }>(
+      `SELECT ${col} AS id, toUnixTimestamp(toStartOfMinute(start_time)) AS m, count() AS n,
+              countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
+              toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
+              toFloat64(sumIf(delivery_delay_ms, msg_status = 'DELIVRD')) / 1000 AS delay
+         FROM edr WHERE start_time >= now() - INTERVAL ${MINUTES} MINUTE AND ${col} > 0 GROUP BY id, m`,
+      10_000,
+    );
+  const [c, v] = await Promise.all([q("c_trunk_id"), q("v_trunk_id")]);
+  if (!c || !v) return null;
+  const group = (rows: NonNullable<typeof c>) => {
+    const out = new Map<number, Map<number, StoredMinute>>();
+    for (const r of rows) {
+      const byMinute = out.get(Number(r.id)) ?? new Map<number, StoredMinute>();
+      byMinute.set(Number(r.m) * 1000, {
+        n: Number(r.n),
+        ok: Number(r.ok),
+        dl: Number(r.dl),
+        rev: r.rev,
+        cost: r.cost,
+        delay: r.delay,
+      });
+      out.set(Number(r.id), byMinute);
+    }
+    return out;
+  };
+  return { customers: group(c), vendors: group(v) };
+}
+
+/** A trunk's per-minute arrays from the store, aligned with the simulator's (the last is this minute). */
+function fromStore(byMinute: Map<number, StoredMinute> | undefined, now: number) {
+  const nowMinute = Math.floor(now / 60_000) * 60_000;
+  const minutes: number[] = [];
+  const minAsr: (number | null)[] = [];
+  const minDlr: (number | null)[] = [];
+  const minDelay: number[] = [];
+  const minRevenue: number[] = [];
+  const minCost: number[] = [];
+  for (let i = MINUTES - 1; i >= 0; i--) {
+    const x = byMinute?.get(nowMinute - i * 60_000);
+    // `minutes` holds messages per second over the minute, so × 60 gives its messages back.
+    minutes.push((x?.n ?? 0) / 60);
+    minAsr.push(x?.n ? (x.ok / x.n) * 100 : null);
+    minDlr.push(x?.ok ? (x.dl / x.ok) * 100 : null);
+    minDelay.push(x?.dl ? x.delay / x.dl : 0);
+    minRevenue.push(x?.rev ?? 0);
+    minCost.push(x?.cost ?? 0);
+  }
+  return { minutes, minAsr, minDlr, minDelay, minRevenue, minCost };
+}
+
+export function seriesOf(
+  sim: Simulator,
+  stored: Stored | null = null,
+  now = Date.now(),
+): { customers: Series[]; vendors: Series[] } {
+  const live = seriesOfSim(sim);
+  if (!stored) return live;
+  return {
+    customers: live.customers.map((s) => ({ ...s, ...fromStore(stored.customers.get(s.id), now) })),
+    vendors: live.vendors.map((s) => ({ ...s, ...fromStore(stored.vendors.get(s.id), now) })),
+  };
+}
+
+function seriesOfSim(sim: Simulator): { customers: Series[]; vendors: Series[] } {
+  return {
+    customers: sim.trunks.map((t) => ({
+      kind: "customer_trunk" as const,
+      id: t.id,
+      name: t.name,
+      enterpriseId: t.enterpriseId,
+      enterpriseName: t.enterpriseName,
+      tps: t.tps,
+      minutes: t.minutes,
+      minAsr: t.minAsr,
+      minDlr: t.minDlr,
+      minDelay: t.minDelay,
+      revenue: t.revenue,
+      cost: t.cost,
+      normalTps: t.base,
+      normalAsr: t.asr,
+      normalDlr: t.dlr,
+      normalDelay: BASE_DELAY,
+    })),
+    vendors: sim.vendors.map((v) => ({
+      kind: "vendor_trunk" as const,
+      id: v.id,
+      name: v.name,
+      enterpriseId: v.enterpriseId,
+      enterpriseName: v.enterpriseName,
+      tps: v.tps,
+      minutes: v.minutes,
+      minAsr: v.minAsr,
+      minDlr: v.minDlr,
+      minDelay: v.minDelay,
+      revenue: null,
+      cost: v.cost,
+      normalTps: avg(v.minutes),
+      normalAsr: v.asr,
+      normalDlr: v.dlr,
+      normalDelay: BASE_DELAY,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------- rules and notifications
+
+async function activeRules(c: Db): Promise<AlertRuleRow[]> {
+  if (rulesCache && Date.now() - rulesCache.at < 60_000) return rulesCache.rules;
+  const { rows } = await c.query(
+    `SELECT ${ALERT_RULE_SELECT} FROM ${ALERT_RULE_FROM} WHERE r.deleted_at IS NULL AND r.status = 'active'`,
+  );
+  rulesCache = { at: Date.now(), rules: rows.map(mapAlertRule) };
+  return rulesCache.rules;
+}
+
+async function myDepartment(c: Db) {
+  if (!me) {
+    const { rows } = await c.query("SELECT department_id FROM users WHERE id = $1", [CURRENT_USER_ID]);
+    me = { departmentId: rows[0]?.department_id == null ? null : Number(rows[0].department_id) };
+  }
+  return me.departmentId;
+}
+
+/** Whether a rule's GUI notifications reach a user (both lists empty = everyone). */
+export function notifies(
+  rule: Pick<AlertRuleRow, "notifyUserIds" | "notifyDepartmentIds">,
+  userId: number,
+  departmentId: number | null,
+) {
+  if (!rule.notifyUserIds.length && !rule.notifyDepartmentIds.length) return true;
+  return (
+    rule.notifyUserIds.includes(userId) || (departmentId !== null && rule.notifyDepartmentIds.includes(departmentId))
+  );
+}
+/** SQL twin of notifies() for the bell list. */
+export const NOTIFIES_ME_SQL = (
+  userId: number,
+) => `((cardinality(r.notify_user_ids) = 0 AND cardinality(r.notify_department_ids) = 0)
+  OR ${Number(userId)} = ANY(r.notify_user_ids)
+  OR (SELECT department_id FROM users WHERE id = ${Number(userId)}) = ANY(r.notify_department_ids))`;
+
+const PARTY: Record<string, "customer_enterprise" | "vendor_enterprise" | "customer_trunk" | "vendor_trunk"> = {
+  customer: "customer_enterprise",
+  vendor: "vendor_enterprise",
+  customer_trunk: "customer_trunk",
+  vendor_trunk: "vendor_trunk",
+};
+
+export function toEvent(i: IncidentRow, rule: Pick<AlertRuleRow, "channels">, repeat = false): IncidentEvent {
+  const kind = PARTY[i.entityKind];
+  return {
+    incidentId: i.id,
+    ruleId: i.ruleId,
+    ruleName: i.ruleName,
+    state: i.state,
+    severity: i.severity,
+    message: i.message,
+    metric: i.metric,
+    currentValue: i.currentValue,
+    baselineValue: i.baselineValue,
+    peakValue: i.peakValue,
+    scope: kind && i.entityId ? [{ kind, id: i.entityId, name: i.entityName }] : [],
+    entityName: i.entityName,
+    startedAt: i.startedAt,
+    endedAt: i.endedAt,
+    acknowledgedBy: i.acknowledgedBy,
+    acknowledgedAt: i.acknowledgedAt,
+    snoozedUntil: i.snoozedUntil,
+    channels: (["popup", "sound", "email"] as const).filter((k) => rule.channels[k]),
+    repeat,
+  };
+}
+
+async function loadIncident(c: Db, id: number) {
+  const { rows } = await c.query(`SELECT ${INCIDENT_SELECT} FROM ${INCIDENT_FROM} WHERE i.id = $1`, [id]);
+  return rows[0] ? mapIncident(rows[0]) : null;
+}
+
+/** Pushes an incident change to the signed-in user when the rule notifies them (§13.6). */
+export async function pushIncident(c: Db, id: number, repeat = false) {
+  const inc = await loadIncident(c, id);
+  if (!inc) return;
+  const { rows } = await c.query(`SELECT ${ALERT_RULE_SELECT} FROM ${ALERT_RULE_FROM} WHERE r.id = $1`, [inc.ruleId]);
+  if (!rows[0]) return;
+  const rule = mapAlertRule(rows[0]);
+  if (notifies(rule, CURRENT_USER_ID, await myDepartment(c)))
+    push(`alerts:${CURRENT_USER_ID}`, "incident", toEvent(inc, rule, repeat));
+}
+
+// ---------------------------------------------------------------- e-mail (§13.7)
+
+async function recipients(c: Db, rule: AlertRuleRow, enterpriseIds: (number | null)[]) {
+  const { rows } = await c.query(
+    `SELECT DISTINCT email FROM users WHERE deleted_at IS NULL AND status = 'active'
+       AND (id = ANY($1) OR department_id = ANY($2))`,
+    [rule.notifyUserIds, rule.notifyDepartmentIds],
+  );
+  const out = new Set<string>([...rows.map((r) => r.email as string), ...rule.emailAddresses]);
+  if (rule.partnerContactType)
+    for (const e of enterpriseIds)
+      if (e) for (const x of await contactEmails(c, e, [rule.partnerContactType])) out.add(x);
+  return [...out];
+}
+
+async function template(c: Db) {
+  const { rows } = await c.query(
+    "SELECT subject, body FROM email_templates WHERE email_type = 'monitoring_alert' AND deleted_at IS NULL ORDER BY business_company_id NULLS LAST, id LIMIT 1",
+  );
+  return (
+    (rows[0] as { subject: string; body: string } | undefined) ?? {
+      subject: "[{severity}] {rule}: {entity}",
+      body: "{state_line}\n\nNow: {current} (baseline {baseline})\nStarted: {started} UTC\n{link}",
+    }
+  );
+}
+
+async function enterpriseOf(c: Db, inc: IncidentRow): Promise<number | null> {
+  if (inc.entityKind === "customer" || inc.entityKind === "vendor") return inc.entityId;
+  if (inc.entityKind === "customer_trunk" || inc.entityKind === "vendor_trunk") {
+    const table = inc.entityKind === "customer_trunk" ? "customer_trunks" : "vendor_trunks";
+    const { rows } = await c.query(`SELECT enterprise_id FROM ${table} WHERE id = $1`, [inc.entityId]);
+    return rows[0] ? Number(rows[0].enterprise_id) : null;
+  }
+  return null;
+}
+
+/** One e-mail for one or more incidents of a rule (alert, recovery or digest). */
+export async function sendIncidentEmail(
+  c: Db,
+  rule: AlertRuleRow,
+  incs: IncidentRow[],
+  kind: "alert" | "recovery" | "digest",
+) {
+  if (!incs.length) return;
+  const enterprises = await Promise.all(incs.map((i) => enterpriseOf(c, i)));
+  const to = await recipients(c, rule, enterprises);
+  const tpl = await template(c);
+  const ent = enterprises.find((e) => e) ?? null;
+  const { rows: bc } = await c.query(
+    "SELECT name FROM business_companies WHERE deleted_at IS NULL ORDER BY id LIMIT 1",
+  );
+  const company = (bc[0]?.name as string | undefined) ?? "";
+  const first = incs[0]!;
+  const f = (v: number | null) => fmtMetric(first.metric, v, PLATFORM_CURRENCY);
+  const stateLine =
+    kind === "recovery"
+      ? `Recovered: ${first.message} (back to normal at ${first.endedAt?.slice(0, 16).replace("T", " ")} UTC)`
+      : kind === "digest"
+        ? `${incs.length} incident${incs.length === 1 ? "" : "s"} for this rule:\n${incs
+            .map(
+              (i) =>
+                `- ${i.state === "recovered" ? "[recovered] " : ""}${i.message} (since ${i.startedAt.slice(11, 16)} UTC)`,
+            )
+            .join("\n")}`
+        : first.message;
+  const values = {
+    severity: kind === "recovery" ? "OK" : first.severity.toUpperCase(),
+    rule: rule.name,
+    entity: incs.length > 1 ? `${incs.length} incidents` : first.entityName,
+    metric: `${METRIC_LABEL[first.metric]} – ${conditionLabel(rule)}`,
+    current: f(first.currentValue),
+    baseline: f(first.baselineValue),
+    started: first.startedAt.slice(0, 16).replace("T", " "),
+    link: `${PUBLIC_URL}/monitoring/incidents?incident=${first.id}`,
+    company,
+    state_line: stateLine,
+  };
+  await logEmail(c, {
+    type: "monitoring_alert",
+    enterpriseId: rule.partnerContactType ? ent : null,
+    to,
+    sender: ent ? await companyMailbox(c, ent, "trafficAlert") : null,
+    subject: fillText(tpl.subject, values),
+    body: fillBody(tpl.body, values),
+  });
+  await c.query("UPDATE incidents SET emailed_at = now(), digest_pending = false WHERE id = ANY($1)", [
+    incs.map((i) => i.id),
+  ]);
+}
+
+// ---------------------------------------------------------------- one round
+
+interface OpenRow {
+  id: number;
+  key: string;
+  state: string;
+  peak: number | null;
+  lastNotified: number;
+  snoozedUntil: number | null;
+  breakdown: string | null;
+  breakdownAt: number;
+}
+/** The window in clock time (UTC) and the destinations behind it, after the rule's own message. */
+function withDetails(message: string, windowMinutes: number, now: number, breakdown: string | null): string {
+  const hm = (t: number) => new Date(t).toISOString().slice(11, 16);
+  const end = Math.floor(now / 60_000) * 60_000 + 60_000;
+  const window = windowMinutes > 0 ? ` · ${hm(end - windowMinutes * 60_000)}–${hm(now)} UTC` : "";
+  return `${message}${window}${breakdown ? ` · ${breakdown}` : ""}`;
+}
+
+const BREAKDOWN_METRICS = new Set(["margin", "margin_pct", "asr", "dlr"]);
+
+/**
+ * The countries behind a margin, ASR or DLR incident over its window, from the EDR store (team trial round 1:
+ * "share in the incident which destination, e.g. India"): up to three that pull it down — losing money, or
+ * below the entity's own ASR / DLR — worst first, with at least 10 messages.
+ */
+export async function destinationBreakdown(
+  rule: Pick<AlertRuleRow, "metric" | "windowMinutes">,
+  entity: Entity,
+): Promise<string | null> {
+  if (!BREAKDOWN_METRICS.has(rule.metric) || rule.windowMinutes <= 0) return null;
+  const cust = entity.series.filter((s) => s.kind === "customer_trunk").map((s) => s.id);
+  const vend = entity.series.filter((s) => s.kind === "vendor_trunk").map((s) => s.id);
+  if (!cust.length && !vend.length) return null;
+  const f = await sysToPlatformFactor();
+  const who = [
+    cust.length ? `c_trunk_id IN (${cust.join(",")})` : null,
+    vend.length ? `v_trunk_id IN (${vend.join(",")})` : null,
+  ]
+    .filter(Boolean)
+    .join(" OR ");
+  const rows = await chRows<{ iso: string; n: string; ok: string; dl: string; rev: number; m: number }>(
+    `SELECT c_country_iso AS iso, count() AS n, countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
+            toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(revenue_sys * ${f}) - sum(cost_sys * ${f})) AS m
+       FROM edr WHERE start_time >= toStartOfMinute(now()) - INTERVAL ${rule.windowMinutes - 1} MINUTE AND (${who})
+      GROUP BY iso`,
+    5_000,
+  );
+  if (!rows?.length) return null;
+  const { rows: names } = await db().query("SELECT iso, name FROM countries WHERE iso = ANY($1)", [
+    rows.map((r) => r.iso),
+  ]);
+  const nameOf = new Map(names.map((r) => [String(r.iso).trim(), r.name as string]));
+  const label = (iso: string) => `${nameOf.get(iso.trim()) ?? iso} (${iso.trim()})`;
+  const money = (v: number) => `${v.toFixed(2)} ${PLATFORM_CURRENCY}`;
+  const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : null);
+  const sum = (k: "n" | "ok" | "dl") => rows.reduce((a, x) => a + Number(x[k]), 0);
+  // Money: the ones losing it. ASR / DLR: the ones below the entity's own figure over the window.
+  const bar =
+    rule.metric === "margin" || rule.metric === "margin_pct"
+      ? 0
+      : rule.metric === "asr"
+        ? (pct(sum("ok"), sum("n")) ?? 0)
+        : (pct(sum("dl"), sum("ok")) ?? 0);
+  const scored = rows
+    .map((r) => {
+      const n = Number(r.n);
+      const ok = Number(r.ok);
+      const v =
+        rule.metric === "margin"
+          ? r.m
+          : rule.metric === "margin_pct"
+            ? pct(r.m, r.rev)
+            : rule.metric === "asr"
+              ? pct(ok, n)
+              : pct(Number(r.dl), ok);
+      return { r, n, v };
+    })
+    .filter((x): x is { r: (typeof rows)[number]; n: number; v: number } => x.v !== null && x.n >= 10)
+    .filter((x) => x.v < bar)
+    .sort((a, b) => a.v - b.v)
+    .slice(0, 3);
+  if (!scored.length) return null;
+  const show = (x: (typeof scored)[number]) => (rule.metric === "margin" ? money(x.v) : `${x.v.toFixed(1)} %`);
+  return `Worst: ${scored.map((x) => `${label(x.r.iso)} ${show(x)}`).join(", ")}`;
+}
+
+export const keyOf = (ruleId: number, e: Pick<Entity, "kind" | "id" | "name">) =>
+  `${ruleId}|${e.kind}|${e.id ?? e.name}`;
+
+/** Evaluates every active rule once; returns how many incidents were opened and recovered. */
+export async function evaluateRound(
+  sim: Simulator,
+  now = Date.now(),
+  c: Db = db(),
+  fromEdrStore = false,
+): Promise<{ opened: number; recovered: number }> {
+  const rules = await activeRules(c);
+  const { customers, vendors } = seriesOf(sim, fromEdrStore ? await storedMinutes() : null, now);
+  const { rows: openRows } = await c.query(
+    `SELECT id, rule_id, entity_kind, coalesce(entity_id::text, entity_name) AS ek, state, peak_value, last_notified_at, snoozed_until,
+            breakdown, breakdown_at
+       FROM incidents WHERE state <> 'recovered'`,
+  );
+  const open = new Map<string, OpenRow>(
+    openRows.map((r) => [
+      `${r.rule_id}|${r.entity_kind}|${r.ek}`,
+      {
+        id: Number(r.id),
+        key: `${r.rule_id}|${r.entity_kind}|${r.ek}`,
+        state: r.state as string,
+        peak: r.peak_value == null ? null : Number(r.peak_value),
+        lastNotified: r.last_notified_at ? (r.last_notified_at as Date).getTime() : 0,
+        snoozedUntil: r.snoozed_until ? (r.snoozed_until as Date).getTime() : null,
+        breakdown: (r.breakdown as string | null) ?? null,
+        breakdownAt: r.breakdown_at ? (r.breakdown_at as Date).getTime() : 0,
+      },
+    ]),
+  );
+  const { rows: rec } = await c.query(
+    `SELECT rule_id, entity_kind, coalesce(entity_id::text, entity_name) AS ek, max(ended_at) AS ended
+       FROM incidents WHERE ended_at > now() - interval '1 day' GROUP BY 1, 2, 3`,
+  );
+  const lastRecovered = new Map(rec.map((r) => [`${r.rule_id}|${r.entity_kind}|${r.ek}`, (r.ended as Date).getTime()]));
+  const bindRules = rules.some((r) => r.metric === "bind_status" || r.condition.type === "bind_down");
+  const down = new Set<string>();
+  if (bindRules) {
+    const { rows } = await c.query("SELECT side, trunk_id FROM trunk_binds WHERE status = 'offline'");
+    for (const r of rows) down.add(`${r.side === "customer" ? "customer_trunk" : "vendor_trunk"}|${r.trunk_id}`);
+  }
+  const seen = new Set<string>();
+  let opened = 0;
+  let recovered = 0;
+  for (const rule of rules) {
+    if (!isActiveAt(rule.activeHours, now)) continue;
+    for (const entity of entitiesFor(rule, customers, vendors)) {
+      const key = keyOf(rule.id, entity);
+      const ev = evaluate(rule, entity, down.has(`${entity.kind}|${entity.id}`), PLATFORM_CURRENCY);
+      const cur = open.get(key);
+      if (ev.firing) {
+        seen.add(key);
+        if (!cur) {
+          const quiet = lastRecovered.get(key);
+          if (quiet && now - quiet < rule.cooldownMinutes * 60_000) continue;
+          const breakdown = fromEdrStore ? await destinationBreakdown(rule, entity) : null;
+          const { rows } = await c.query(
+            `INSERT INTO incidents (rule_id, severity, metric, entity_kind, entity_id, entity_name, message, current_value,
+                                    baseline_value, peak_value, started_at, last_notified_at, digest_pending)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $8, $10, $10, $11) RETURNING id`,
+            [
+              rule.id,
+              rule.severity,
+              rule.metric,
+              entity.kind,
+              entity.id,
+              entity.name,
+              withDetails(ev.message, rule.windowMinutes, now, breakdown),
+              ev.value,
+              ev.baseline,
+              new Date(now),
+              rule.channels.email && rule.severity !== "critical",
+            ],
+          );
+          if (breakdown)
+            await c.query("UPDATE incidents SET breakdown = $2, breakdown_at = now() WHERE id = $1", [
+              rows[0].id,
+              breakdown,
+            ]);
+          const id = Number(rows[0].id);
+          await c.query("UPDATE alert_rules SET last_triggered_at = $2 WHERE id = $1", [rule.id, new Date(now)]);
+          opened++;
+          await pushIncident(c, id);
+          if (rule.channels.email && rule.severity === "critical") {
+            const inc = await loadIncident(c, id);
+            if (inc) await sendIncidentEmail(c, rule, [inc], "alert");
+          }
+        } else {
+          const peak = worse(rule, cur.peak, ev.value);
+          // The destinations behind it, refreshed every 5 minutes while it is open.
+          let breakdown = cur.breakdown;
+          if (fromEdrStore && now - cur.breakdownAt >= 5 * 60_000) {
+            breakdown = await destinationBreakdown(rule, entity);
+            await c.query("UPDATE incidents SET breakdown = $2, breakdown_at = now() WHERE id = $1", [
+              cur.id,
+              breakdown,
+            ]);
+          }
+          await c.query("UPDATE incidents SET current_value = $2, peak_value = $3, message = $4 WHERE id = $1", [
+            cur.id,
+            ev.value,
+            peak,
+            withDetails(ev.message, rule.windowMinutes, now, breakdown),
+          ]);
+          const snoozed = cur.snoozedUntil !== null && cur.snoozedUntil > now;
+          if (
+            rule.repeatMinutes &&
+            cur.state === "open" &&
+            !snoozed &&
+            now - cur.lastNotified >= rule.repeatMinutes * 60_000
+          ) {
+            await c.query("UPDATE incidents SET last_notified_at = $2 WHERE id = $1", [cur.id, new Date(now)]);
+            await pushIncident(c, cur.id, true);
+          }
+        }
+      }
+    }
+  }
+  // Everything open that no longer holds (or whose rule is off) recovers.
+  for (const [key, cur] of open) {
+    if (seen.has(key)) continue;
+    const { rows } = await c.query(
+      "UPDATE incidents SET state = 'recovered', ended_at = $2 WHERE id = $1 AND state <> 'recovered' RETURNING rule_id, emailed_at",
+      [cur.id, new Date(now)],
+    );
+    if (!rows[0]) continue;
+    recovered++;
+    const rule = rules.find((r) => r.id === Number(rows[0].rule_id));
+    if (!rule || rule.recoveryNotice) await pushIncident(c, cur.id);
+    if (rule?.channels.email && rule.recoveryNotice && rows[0].emailed_at) {
+      const inc = await loadIncident(c, cur.id);
+      if (inc) await sendIncidentEmail(c, rule, [inc], "recovery");
+    }
+  }
+  await digests(c, rules, now);
+  return { opened, recovered };
+}
+
+/** Warning e-mails every 15 minutes, Info once a day at 07:00 UTC (§13.7). */
+async function digests(c: Db, rules: AlertRuleRow[], now: number) {
+  const slot = Math.floor(now / (15 * 60_000));
+  const d = new Date(now);
+  const day = d.toISOString().slice(0, 10);
+  const severities: string[] = [];
+  if (slot !== lastDigestSlot) {
+    lastDigestSlot = slot;
+    severities.push("warning");
+  }
+  if (d.getUTCHours() >= 7 && day !== lastSummaryDay) {
+    lastSummaryDay = day;
+    severities.push("info");
+  }
+  if (!severities.length) return;
+  const { rows } = await c.query(
+    `SELECT ${INCIDENT_SELECT} FROM ${INCIDENT_FROM} WHERE i.digest_pending AND i.severity = ANY($1) ORDER BY i.started_at`,
+    [severities],
+  );
+  const byRule = new Map<number, IncidentRow[]>();
+  for (const r of rows) {
+    const inc = mapIncident(r);
+    byRule.set(inc.ruleId, [...(byRule.get(inc.ruleId) ?? []), inc]);
+  }
+  for (const [ruleId, incs] of byRule) {
+    const rule = rules.find((r) => r.id === ruleId);
+    if (rule) await sendIncidentEmail(c, rule, incs, "digest");
+    else await c.query("UPDATE incidents SET digest_pending = false WHERE id = ANY($1)", [incs.map((i) => i.id)]);
+  }
+}
+
+/** Test a rule now (no incident): per entity, the value, the baseline and whether it would fire. */
+export async function testRule(
+  rule: Omit<
+    AlertRuleRow,
+    | "id"
+    | "scopeLabel"
+    | "conditionLabel"
+    | "lastTriggeredAt"
+    | "openIncidents"
+    | "incidents30d"
+    | "updatedBy"
+    | "updatedAt"
+    | "archivedAt"
+  >,
+  sim: Simulator,
+  c: Db = db(),
+) {
+  const { customers, vendors } = seriesOf(sim, await storedMinutes());
+  const down = new Set<string>();
+  if (rule.metric === "bind_status" || rule.condition.type === "bind_down") {
+    const { rows } = await c.query("SELECT side, trunk_id FROM trunk_binds WHERE status = 'offline'");
+    for (const r of rows) down.add(`${r.side === "customer" ? "customer_trunk" : "vendor_trunk"}|${r.trunk_id}`);
+  }
+  const results = entitiesFor(rule, customers, vendors).map((e) => ({
+    name: e.name,
+    ...evaluate(rule, e, down.has(`${e.kind}|${e.id}`), PLATFORM_CURRENCY),
+  }));
+  const firing = results.filter((r) => r.firing).length;
+  const active = isActiveAt(rule.activeHours, Date.now());
+  return {
+    evaluatedAt: new Date().toISOString(),
+    firing,
+    entities: results
+      .sort((a, b) => Number(b.firing) - Number(a.firing) || b.sample - a.sample)
+      .slice(0, 50)
+      .map(({ name, value, baseline, sample, firing: f, reason }) => ({
+        name,
+        value,
+        baseline,
+        sample,
+        firing: f,
+        reason: active ? reason : `${reason} (outside the rule's active hours now)`,
+      })),
+  };
+}

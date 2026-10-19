@@ -1,0 +1,414 @@
+/* Live dashboard (§13.3). Tokens only (§15.2); colour carries meaning: green good, amber
+   warning, red problem (§15.3). Motion only under .dash-anim (animations preference). */
+.page.dash {
+  overflow: hidden;
+}
+.dash-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+.dash-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+.dash-threshold {
+  width: 56px;
+}
+.dash-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+.dash-live .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+.dash-live.on .dot {
+  background: var(--color-good);
+}
+.dash-anim .dash-live.on .dot {
+  animation: dash-blink 2s ease-in-out infinite;
+}
+.dash-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+/* ---------- panels ---------- */
+.dash-panel {
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px 12px;
+  min-width: 0;
+}
+.dash-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.dash-panel h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+.dash-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.dash-wait {
+  position: static;
+  padding: 24px 0;
+  text-align: center;
+}
+.dash-empty {
+  padding: 4px 6px;
+}
+
+/* ---------- 1. summary ---------- */
+.dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+}
+.dash-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.dash-kpi .label {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.dash-kpi .value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dash-kpi .sub {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-kpi.warn .value {
+  color: var(--color-warning);
+}
+.dash-kpi.bad .value {
+  color: var(--color-error);
+}
+.dash-topdest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.dash-topdest .chip {
+  cursor: pointer;
+  gap: 6px;
+}
+
+/* ---------- 2. movers ---------- */
+.dash-mover-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1500px) {
+  .dash-mover-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.dash-mover-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--color-border);
+}
+.dash-mover-group.good h3 {
+  border-bottom-color: var(--color-good);
+}
+.dash-mover-group.bad h3 {
+  border-bottom-color: var(--color-error);
+}
+.dash-mover-group .count {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+.dash-mover-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 252px;
+  overflow: auto;
+}
+.dash-mover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 92px 60px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dash-mover:hover {
+  background: var(--accent-soft);
+}
+.dash-mover .who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  grid-row: span 2;
+}
+.dash-mover .who > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-mover .trunk {
+  font-size: 12px;
+}
+.dash-mover .spark {
+  grid-row: span 2;
+  color: var(--color-text-secondary);
+}
+.dash-mover-group.good .spark {
+  color: var(--color-good);
+}
+.dash-mover-group.bad .spark {
+  color: var(--color-error);
+}
+.dash-mover .tps {
+  text-align: right;
+  white-space: nowrap;
+}
+.dash-mover .tps .muted {
+  font-size: 11px;
+}
+.dash-mover .chg {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dash-mover .chg.up {
+  color: var(--color-good);
+}
+.dash-mover .chg.down {
+  color: var(--color-error);
+}
+.dash-mover .ratios {
+  grid-column: 3 / span 2;
+  text-align: right;
+  font-size: 11px;
+}
+.badge-new {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--color-good);
+  color: var(--color-panel);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.dash-anim .dash-mover.is-new {
+  animation: dash-pulse 1.6s ease-out 2;
+}
+
+/* ---------- 4-6. ranked tables ---------- */
+.dash-cols {
+  display: grid;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-cols.head {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.dash-cols .r {
+  text-align: right;
+}
+.dash-cols .neg {
+  color: var(--color-error);
+}
+.dash-cols .ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.dash-cols {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.dash-cols:hover {
+  background: var(--accent-soft);
+}
+.dash-tps-row {
+  grid-template-columns: minmax(0, 1fr) 64px 56px 120px 56px;
+}
+.dash-top-row {
+  grid-template-columns: 22px minmax(0, 1fr) 88px 92px 88px 54px 54px;
+}
+.dash-dest-row {
+  grid-template-columns: 22px minmax(0, 1fr) 64px 88px 92px 88px 54px 54px;
+}
+.dash-ranked {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.dash-rank-row {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 28px;
+}
+.dash-anim .dash-rank-row {
+  transition: transform 0.5s ease;
+}
+.dash-bar {
+  position: relative;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-border) 60%, transparent);
+  overflow: hidden;
+}
+.dash-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-good);
+  opacity: 0.55;
+}
+.dash-anim .dash-bar > span {
+  transition: width 0.5s ease;
+}
+.dash-bar.warn > span {
+  background: var(--color-warning);
+  opacity: 0.8;
+}
+.dash-bar.over > span {
+  background: var(--color-error);
+  opacity: 0.85;
+}
+.dash-bar em {
+  position: relative;
+  display: block;
+  padding-right: 4px;
+  font-style: normal;
+  font-size: 11px;
+  line-height: 14px;
+  text-align: right;
+}
+.dash-cols .queue {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+.dash-named {
+  position: relative;
+}
+.dash-volbar {
+  position: absolute;
+  inset: 3px auto 3px 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+.dash-anim .dash-volbar {
+  transition: width 0.5s ease;
+}
+.dash-named .t {
+  position: relative;
+  padding-left: 4px;
+}
+
+@keyframes dash-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-good) 60%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+@keyframes dash-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-anim * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Online now (§13.18) */
+.dash-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dash-avatars {
+  display: inline-flex;
+}
+.dash-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--color-text-secondary);
+  background: var(--color-panel);
+  color: var(--color-text-secondary);
+  font-size: 9.5px;
+  font-weight: 650;
+}
+.dash-avatar:first-child {
+  margin-left: 0;
+}
+.dash-avatar.active {
+  border-color: var(--color-good);
+  color: var(--color-text);
+}
+.dash-avatar.more {
+  border-style: dashed;
+}

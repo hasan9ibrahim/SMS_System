@@ -1,0 +1,40 @@
+{
+  "name": "@sms/mock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mock server answering contract/openapi.yaml, plus the fake data generator (frontend phase)",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../.env --watch --import tsx src/index.ts",
+    "start": "node --env-file-if-exists=../.env --import tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "gen": "node --env-file-if-exists=../.env --max-old-space-size=6144 --import tsx src/generator/cli.ts",
+    "gen:small": "npm run gen -- --profile small",
+    "gen:full": "npm run gen -- --profile full",
+    "gen:csv": "npm run gen -- --profile small --target csv --out out",
+    "bundle": "esbuild src/index.ts src/generator/cli.ts --bundle --platform=node --format=esm --target=node22 --minify --legal-comments=none --outdir=dist --entry-names=[name] --out-extension:.js=.mjs --external:pg-native --external:bufferutil --external:utf-8-validate \"--banner:js=import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\"",
+    "build:mccmnc": "tsx scripts/build-mccmnc.ts data/source/mcc-mnc-table.csv data/mccmnc.csv"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.3.4",
+    "@sms/contract": "*",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "cheerio": "^1.2.0",
+    "fastify": "^5.6.1",
+    "juice": "^12.1.3",
+    "pg": "^8.13.1",
+    "pg-copy-streams": "^6.0.6",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.11.10",
+    "@types/pg-copy-streams": "^1.2.5",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

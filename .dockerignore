@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+mock/out
+.git
+.env
+docs/design
+backend
+tools

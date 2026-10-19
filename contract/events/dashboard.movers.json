@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dashboard.movers.json",
+  "title": "DashboardMoversEvent",
+  "description": "Topic live:dashboard, event \"movers\". Traffic movers panel (§13.3 item 2), pushed every 5 s: clients that started sending, increased or decreased by more than the threshold, or stopped, comparing the last window with the window before. Window and threshold come from the join parameters (dashboard.join.json).",
+  "type": "object",
+  "required": [
+    "at",
+    "windowMinutes",
+    "thresholdPct",
+    "started",
+    "increasing",
+    "decreasing",
+    "stopped"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "at": {
+      "$ref": "common.json#/$defs/Timestamp"
+    },
+    "windowMinutes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "thresholdPct": {
+      "type": "number",
+      "minimum": 0
+    },
+    "started": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MoverRow"
+      }
+    },
+    "increasing": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MoverRow"
+      }
+    },
+    "decreasing": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MoverRow"
+      }
+    },
+    "stopped": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MoverRow"
+      }
+    }
+  },
+  "$defs": {
+    "MoverRow": {
+      "title": "MoverRow",
+      "type": "object",
+      "required": [
+        "trunk",
+        "enterprise",
+        "tpsNow",
+        "tpsBefore",
+        "changePct",
+        "sparkline",
+        "asr",
+        "dlr"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "trunk": {
+          "$ref": "common.json#/$defs/PartyRef"
+        },
+        "enterprise": {
+          "$ref": "common.json#/$defs/PartyRef"
+        },
+        "tpsNow": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average TPS over the last window."
+        },
+        "tpsBefore": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average TPS over the window before."
+        },
+        "changePct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Change in %; null when there was no traffic before (started)."
+        },
+        "sparkline": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "Average TPS per minute over the last 60 minutes, oldest first."
+        },
+        "asr": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "dlr": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "at": "2026-10-16T08:00:05Z",
+      "windowMinutes": 15,
+      "thresholdPct": 30,
+      "started": [
+        {
+          "trunk": {
+            "kind": "customer_trunk",
+            "id": 101,
+            "name": "Acme_DIRECT"
+          },
+          "enterprise": {
+            "kind": "customer_enterprise",
+            "id": 7,
+            "name": "Acme Messaging"
+          },
+          "tpsNow": 12.5,
+          "tpsBefore": 0,
+          "changePct": null,
+          "sparkline": [
+            0,
+            0,
+            0,
+            10.2,
+            12.5
+          ],
+          "asr": 96.1,
+          "dlr": 88.4
+        }
+      ],
+      "increasing": [],
+      "decreasing": [],
+      "stopped": []
+    }
+  ]
+}

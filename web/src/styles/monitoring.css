@@ -1,0 +1,638 @@
+/* Live analytics (§13.4), alert rules and incidents (§13.6). Tokens only (§15.2). */
+
+.row-muted {
+  opacity: 0.62;
+}
+.row-alert {
+  box-shadow: inset 3px 0 0 var(--color-error);
+}
+
+/* ---------- Live analytics ---------- */
+.la {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.la-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0 4px 8px;
+}
+.la-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+.la-search {
+  min-width: 260px;
+  margin-left: auto;
+}
+.la-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+}
+.la-totals b {
+  font-size: 16px;
+}
+.la-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+}
+.la-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.la-table th,
+.la-table td {
+  padding: 5px 10px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  white-space: nowrap;
+  text-align: left;
+}
+.la-table th.num,
+.la-table td.num {
+  text-align: right;
+}
+.la-table td.num {
+  font-size: 14px;
+}
+/* Fixed header and sticky first column (§13.4 readable layout). */
+.la-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-panel);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+.la-table .la-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-panel);
+  min-width: 240px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.la-table thead .la-name {
+  z-index: 3;
+}
+.la-sort {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.la-spark {
+  color: var(--color-accent);
+  vertical-align: middle;
+}
+@keyframes la-flash-up {
+  from {
+    background: color-mix(in srgb, var(--color-good) 28%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+@keyframes la-flash-down {
+  from {
+    background: color-mix(in srgb, var(--color-error) 24%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+.flash-up {
+  animation: la-flash-up 1.6s ease-out;
+}
+.flash-down {
+  animation: la-flash-down 1.6s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash-up,
+  .flash-down {
+    animation: none;
+  }
+}
+
+/* ---------- Alert rules ---------- */
+.rule-form section {
+  margin-bottom: 10px;
+}
+.hours-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.id-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.id-chips > :last-child {
+  min-width: 200px;
+}
+.rule-test {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 6px;
+}
+.sound-grid {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+.sound-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---------- Incidents ---------- */
+.incident-detail {
+  display: grid;
+  gap: 8px;
+}
+.incident-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.incident-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.incident-notes li {
+  padding: 4px 8px;
+  border-left: 2px solid var(--color-border);
+}
+.note-add {
+  display: flex;
+  gap: 6px;
+}
+.note-add input {
+  flex: 1;
+}
+.snooze-select {
+  padding-right: 4px;
+}
+
+/* Live analytics drill-down table (team trial 2026-10-18): every column on screen, numbers bold. */
+.page.la-page {
+  overflow: hidden;
+}
+.la-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.la-range,
+.la-levels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+.la-levels {
+  align-items: center;
+}
+.la-presets {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-bottom: 2px;
+}
+.la-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.la-level .la-chip button {
+  margin-left: 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.la-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.la-chip.on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.la-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+.la-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
+}
+.la-live.on .la-live-dot {
+  background: var(--color-good);
+}
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.la-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+}
+.la-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.la-col-name {
+  width: 15%;
+}
+.la-col-act {
+  width: 74px;
+}
+.la-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-panel);
+  padding: 6px 4px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: normal;
+  line-height: 1.2;
+  text-align: left;
+  vertical-align: bottom;
+}
+.la-grid th.num {
+  text-align: right;
+}
+.la-grid td {
+  padding: 4px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.la-grid td.num {
+  text-align: right;
+  font-weight: 700;
+}
+.la-grid td.la-warn {
+  background: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  color: #1d1d1d;
+}
+.la-grid td.la-bad {
+  background: var(--color-error);
+  color: #fff;
+}
+.la-total td {
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
+  font-weight: 700;
+}
+.la-row:hover td:not(.la-warn):not(.la-bad) {
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-panel));
+}
+.la-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.la-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.depth-0 .la-label {
+  font-weight: 600;
+}
+.la-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: 50%;
+  background: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  padding: 0;
+}
+.la-toggle-gap {
+  flex: none;
+  width: 18px;
+}
+.la-actions {
+  display: flex;
+  gap: 4px;
+}
+.la-act {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-accent);
+  font-size: 11px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.la-cdr {
+  height: 62vh;
+  display: flex;
+  flex-direction: column;
+}
+.la-cdr-note {
+  margin-right: auto;
+}
+.la-selected td {
+  box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+.la-at {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
+}
+.la-at .btn {
+  margin-left: auto;
+}
+.la-detail {
+  flex: 0 0 38%;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+}
+.la-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.la-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.la-detail .la-row {
+  cursor: pointer;
+}
+
+/* Live analytics alignment (team trial round 1): two even header lines, chips as tall as the inputs. */
+.la-grid th .la-h1,
+.la-grid th .la-h2 {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.la-grid th .la-h2 {
+  font-weight: 500;
+  font-size: 11.5px;
+}
+.la-presets {
+  padding-bottom: 0;
+}
+.la-presets .la-chip {
+  height: 32px;
+  padding: 0 10px;
+}
+.la-hours {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.la-page .page-actions {
+  align-items: center;
+}
+.la-page .page-actions .field.inline > span {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.la-grid th {
+  font-size: 11.5px;
+}
+.la-grid td {
+  font-size: 12.5px;
+}
+.la-col-name {
+  width: 13%;
+}
+.la-hours select {
+  height: 32px;
+}
+.la-grid th {
+  padding: 6px 3px;
+}
+.la-col-name {
+  width: 11.5%;
+}
+.la-grid th .la-h1 {
+  text-overflow: clip;
+}
+
+/* Live analytics, team trial round 1 (second pass): controls on one line at one height, one-line column
+   titles, a "+" menu per row and a search box on every breakdown. */
+.la-bar .field,
+.la-page .page-actions .field {
+  margin-bottom: 0;
+}
+.la-range {
+  align-items: flex-end;
+}
+.la-range input[type="date"],
+.la-range select,
+.la-presets .la-chip,
+.la-page .page-actions select,
+.la-page .page-actions .btn {
+  height: 32px;
+  box-sizing: border-box;
+}
+.la-page .page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.la-page .page-actions .field.inline {
+  height: 32px;
+}
+.la-live {
+  height: 32px;
+}
+.la-grid th,
+.la-grid th.num {
+  white-space: normal;
+  vertical-align: bottom;
+  text-overflow: clip;
+}
+.la-grid th.la-th-name {
+  padding: 4px 6px;
+}
+.la-row-search {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+.la-search-row td {
+  background: color-mix(in srgb, var(--color-text-secondary) 6%, var(--color-panel));
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.la-by {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.la-menu {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+/* Live analytics colours (team trial round 1): only ASR, DLRs and margin are bold and coloured. */
+.la-grid td.num {
+  font-weight: 400;
+}
+.la-grid td.num.la-strong {
+  font-weight: 700;
+}
+.la-grid td.la-good {
+  color: var(--color-good);
+}
+.la-grid td.la-warn {
+  background: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  color: #1d1d1d;
+}
+.la-grid td.la-bad {
+  background: var(--color-error);
+  color: #1d1d1d;
+}
+.la-total td.num {
+  font-weight: 400;
+}
+.la-total td.num.la-strong {
+  font-weight: 700;
+}
+/* Orange and red as solid rounded boxes inside the cell, red with white text (team trial round 1). */
+.la-grid td.la-warn,
+.la-grid td.la-bad {
+  background: none;
+  padding: 2px 3px;
+}
+.la-row:hover td.la-warn,
+.la-row:hover td.la-bad {
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-panel));
+}
+.la-total td.la-warn,
+.la-total td.la-bad {
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
+}
+.la-pill {
+  display: block;
+  padding: 3px 5px;
+  border-radius: 5px;
+  text-align: right;
+}
+.la-warn .la-pill {
+  background: #ffa500;
+  color: #1d1d1d;
+}
+.la-bad .la-pill {
+  background: #f00;
+  color: #fff;
+}
+/* Sortable headers (team trial round 1). */
+.la-grid th .la-sort {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: inherit;
+}
+.la-grid th .la-sort:hover {
+  color: var(--color-accent);
+}
+.la-th-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.la-th-search .la-sort {
+  flex: none;
+  font-size: 11px;
+}

@@ -1,0 +1,251 @@
+/* Reports (§10, §13.31). Tokens only (§15.2). */
+.rp-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.rp-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.rp-quick {
+  display: flex;
+  gap: 2px;
+}
+.rp-filters {
+  display: grid;
+  grid-template-columns: repeat(2, 300px);
+  gap: 4px 18px;
+}
+.rp-totals {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 2px 4px;
+}
+.rp-total-label {
+  font-weight: 600;
+  align-self: center;
+}
+.rp-total {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.rp-hint {
+  margin: 4px 2px;
+}
+@media (max-width: 900px) {
+  .rp-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Master Report and department reports (§13.15) */
+.rp-master-settings {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.rp-master-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rp-columns-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.rp-groupby {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rp-chip .link {
+  padding: 0 2px;
+}
+.rp-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  gap: 0 12px;
+  max-height: 360px;
+  overflow: auto;
+}
+.rp-pop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: var(--border-width) solid var(--color-border);
+}
+.rp-delta {
+  font-size: 11px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.rp-views {
+  max-width: 200px;
+}
+.rp-chart {
+  padding: 10px 14px;
+}
+.rp-export,
+.rp-drill {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rp-drill p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.sales-panel {
+  display: grid;
+  gap: 8px;
+}
+.sales-am {
+  width: 240px;
+}
+.sales-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.sales-card {
+  padding: 10px 12px;
+  min-width: 0;
+}
+.sales-card h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.noc-cards {
+  grid-template-columns: 1fr 1fr 2fr;
+}
+@media (max-width: 1100px) {
+  .sales-cards,
+  .noc-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+  .noc-wide {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 640px) {
+  .sales-cards,
+  .noc-cards,
+  .rp-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+.rp-insights > summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+.rp-insights:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+/* Team report (§13.18) */
+.page.team-page {
+  overflow: hidden;
+}
+.team-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  gap: 12px;
+}
+@media (max-width: 1300px) {
+  .team-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.team-side {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.team-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.team-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.team-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: var(--border-width) solid var(--color-text-secondary);
+  flex: none;
+}
+.team-dot.on {
+  background: var(--color-good);
+  border-color: var(--color-good);
+}
+.vt-row.team-active .vt-cell:first-child {
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+.team-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+.team-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.team-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.team-timeline {
+  flex: 1;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+.team-targets {
+  max-height: 420px;
+  overflow: auto;
+  margin-top: 8px;
+}
