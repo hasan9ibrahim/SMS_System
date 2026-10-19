@@ -449,6 +449,10 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "The bell in the top menu shows the count of open incidents and the latest ones; clicking an incident there opens it on this page. New and changed incidents refresh the list by themselves (at most every 5 seconds).",
           },
+          {
+            kind: "tip",
+            text: "An incident's message ends with the window it measured in clock time (e.g. `23:49–00:49 UTC`) and, for margin, ASR and DLR, the destinations behind it, e.g. `Worst: India (IN) -9.10 EUR`. A 60-minute window can include the end of yesterday, so it can differ from Live analytics' Today, which starts at 00:00 UTC.",
+          },
         ],
       },
       {

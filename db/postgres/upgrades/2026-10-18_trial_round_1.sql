@@ -36,3 +36,7 @@ ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS source text NOT NULL DEF
 ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS recorded_from timestamptz;
 ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS recorded_to timestamptz;
 ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS criteria text;
+
+-- Incidents: the destinations behind a margin / ASR / DLR incident (migration 049, §13.6).
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS breakdown text;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS breakdown_at timestamptz;

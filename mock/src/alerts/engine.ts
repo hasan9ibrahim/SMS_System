@@ -366,7 +366,85 @@ interface OpenRow {
   peak: number | null;
   lastNotified: number;
   snoozedUntil: number | null;
+  breakdown: string | null;
+  breakdownAt: number;
 }
+/** The window in clock time (UTC) and the destinations behind it, after the rule's own message. */
+function withDetails(message: string, windowMinutes: number, now: number, breakdown: string | null): string {
+  const hm = (t: number) => new Date(t).toISOString().slice(11, 16);
+  const end = Math.floor(now / 60_000) * 60_000 + 60_000;
+  const window = windowMinutes > 0 ? ` · ${hm(end - windowMinutes * 60_000)}–${hm(now)} UTC` : "";
+  return `${message}${window}${breakdown ? ` · ${breakdown}` : ""}`;
+}
+
+const BREAKDOWN_METRICS = new Set(["margin", "margin_pct", "asr", "dlr"]);
+
+/**
+ * The countries behind a margin, ASR or DLR incident over its window, from the EDR store (team trial round 1:
+ * "share in the incident which destination, e.g. India"): up to three that pull it down — losing money, or
+ * below the entity's own ASR / DLR — worst first, with at least 10 messages.
+ */
+export async function destinationBreakdown(
+  rule: Pick<AlertRuleRow, "metric" | "windowMinutes">,
+  entity: Entity,
+): Promise<string | null> {
+  if (!BREAKDOWN_METRICS.has(rule.metric) || rule.windowMinutes <= 0) return null;
+  const cust = entity.series.filter((s) => s.kind === "customer_trunk").map((s) => s.id);
+  const vend = entity.series.filter((s) => s.kind === "vendor_trunk").map((s) => s.id);
+  if (!cust.length && !vend.length) return null;
+  const f = await sysToPlatformFactor();
+  const who = [
+    cust.length ? `c_trunk_id IN (${cust.join(",")})` : null,
+    vend.length ? `v_trunk_id IN (${vend.join(",")})` : null,
+  ]
+    .filter(Boolean)
+    .join(" OR ");
+  const rows = await chRows<{ iso: string; n: string; ok: string; dl: string; rev: number; m: number }>(
+    `SELECT c_country_iso AS iso, count() AS n, countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
+            toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(revenue_sys * ${f}) - sum(cost_sys * ${f})) AS m
+       FROM edr WHERE start_time >= toStartOfMinute(now()) - INTERVAL ${rule.windowMinutes - 1} MINUTE AND (${who})
+      GROUP BY iso`,
+    5_000,
+  );
+  if (!rows?.length) return null;
+  const { rows: names } = await db().query("SELECT iso, name FROM countries WHERE iso = ANY($1)", [
+    rows.map((r) => r.iso),
+  ]);
+  const nameOf = new Map(names.map((r) => [String(r.iso).trim(), r.name as string]));
+  const label = (iso: string) => `${nameOf.get(iso.trim()) ?? iso} (${iso.trim()})`;
+  const money = (v: number) => `${v.toFixed(2)} ${PLATFORM_CURRENCY}`;
+  const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : null);
+  const sum = (k: "n" | "ok" | "dl") => rows.reduce((a, x) => a + Number(x[k]), 0);
+  // Money: the ones losing it. ASR / DLR: the ones below the entity's own figure over the window.
+  const bar =
+    rule.metric === "margin" || rule.metric === "margin_pct"
+      ? 0
+      : rule.metric === "asr"
+        ? (pct(sum("ok"), sum("n")) ?? 0)
+        : (pct(sum("dl"), sum("ok")) ?? 0);
+  const scored = rows
+    .map((r) => {
+      const n = Number(r.n);
+      const ok = Number(r.ok);
+      const v =
+        rule.metric === "margin"
+          ? r.m
+          : rule.metric === "margin_pct"
+            ? pct(r.m, r.rev)
+            : rule.metric === "asr"
+              ? pct(ok, n)
+              : pct(Number(r.dl), ok);
+      return { r, n, v };
+    })
+    .filter((x): x is { r: (typeof rows)[number]; n: number; v: number } => x.v !== null && x.n >= 10)
+    .filter((x) => x.v < bar)
+    .sort((a, b) => a.v - b.v)
+    .slice(0, 3);
+  if (!scored.length) return null;
+  const show = (x: (typeof scored)[number]) => (rule.metric === "margin" ? money(x.v) : `${x.v.toFixed(1)} %`);
+  return `Worst: ${scored.map((x) => `${label(x.r.iso)} ${show(x)}`).join(", ")}`;
+}
+
 export const keyOf = (ruleId: number, e: Pick<Entity, "kind" | "id" | "name">) =>
   `${ruleId}|${e.kind}|${e.id ?? e.name}`;
 
@@ -380,7 +458,8 @@ export async function evaluateRound(
   const rules = await activeRules(c);
   const { customers, vendors } = seriesOf(sim, fromEdrStore ? await storedMinutes() : null, now);
   const { rows: openRows } = await c.query(
-    `SELECT id, rule_id, entity_kind, coalesce(entity_id::text, entity_name) AS ek, state, peak_value, last_notified_at, snoozed_until
+    `SELECT id, rule_id, entity_kind, coalesce(entity_id::text, entity_name) AS ek, state, peak_value, last_notified_at, snoozed_until,
+            breakdown, breakdown_at
        FROM incidents WHERE state <> 'recovered'`,
   );
   const open = new Map<string, OpenRow>(
@@ -393,6 +472,8 @@ export async function evaluateRound(
         peak: r.peak_value == null ? null : Number(r.peak_value),
         lastNotified: r.last_notified_at ? (r.last_notified_at as Date).getTime() : 0,
         snoozedUntil: r.snoozed_until ? (r.snoozed_until as Date).getTime() : null,
+        breakdown: (r.breakdown as string | null) ?? null,
+        breakdownAt: r.breakdown_at ? (r.breakdown_at as Date).getTime() : 0,
       },
     ]),
   );
@@ -421,6 +502,7 @@ export async function evaluateRound(
         if (!cur) {
           const quiet = lastRecovered.get(key);
           if (quiet && now - quiet < rule.cooldownMinutes * 60_000) continue;
+          const breakdown = fromEdrStore ? await destinationBreakdown(rule, entity) : null;
           const { rows } = await c.query(
             `INSERT INTO incidents (rule_id, severity, metric, entity_kind, entity_id, entity_name, message, current_value,
                                     baseline_value, peak_value, started_at, last_notified_at, digest_pending)
@@ -432,13 +514,18 @@ export async function evaluateRound(
               entity.kind,
               entity.id,
               entity.name,
-              ev.message,
+              withDetails(ev.message, rule.windowMinutes, now, breakdown),
               ev.value,
               ev.baseline,
               new Date(now),
               rule.channels.email && rule.severity !== "critical",
             ],
           );
+          if (breakdown)
+            await c.query("UPDATE incidents SET breakdown = $2, breakdown_at = now() WHERE id = $1", [
+              rows[0].id,
+              breakdown,
+            ]);
           const id = Number(rows[0].id);
           await c.query("UPDATE alert_rules SET last_triggered_at = $2 WHERE id = $1", [rule.id, new Date(now)]);
           opened++;
@@ -449,11 +536,20 @@ export async function evaluateRound(
           }
         } else {
           const peak = worse(rule, cur.peak, ev.value);
+          // The destinations behind it, refreshed every 5 minutes while it is open.
+          let breakdown = cur.breakdown;
+          if (fromEdrStore && now - cur.breakdownAt >= 5 * 60_000) {
+            breakdown = await destinationBreakdown(rule, entity);
+            await c.query("UPDATE incidents SET breakdown = $2, breakdown_at = now() WHERE id = $1", [
+              cur.id,
+              breakdown,
+            ]);
+          }
           await c.query("UPDATE incidents SET current_value = $2, peak_value = $3, message = $4 WHERE id = $1", [
             cur.id,
             ev.value,
             peak,
-            ev.message,
+            withDetails(ev.message, rule.windowMinutes, now, breakdown),
           ]);
           const snoozed = cur.snoozedUntil !== null && cur.snoozedUntil > now;
           if (
