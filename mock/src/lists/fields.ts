@@ -2087,6 +2087,17 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "startedAt", label: "Started", type: "datetime", defaultOperator: "between", hidden: true }),
       field({ field: "updatedAt", label: "Update Time", type: "datetime", defaultOperator: "between" }),
       field({ field: "startedBy", label: "Started By", type: "text", defaultOperator: "like" }),
+      field({
+        field: "keep",
+        label: "Keep",
+        type: "enum",
+        defaultOperator: "in",
+        enumValues: [
+          { value: "true", label: "Kept" },
+          { value: "false", label: "Expires" },
+        ],
+      }),
+      field({ field: "expiresAt", label: "Deleted on", type: "datetime", defaultOperator: "between" }),
     ],
   },
 

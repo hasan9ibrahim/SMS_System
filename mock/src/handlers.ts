@@ -502,6 +502,7 @@ import {
   startSignalingCapture,
   startTrunkBind,
   stopSignalingCapture,
+  keepSignalingCapture,
   stopTrunkBind,
 } from "./api/network.js";
 import { runRouteSimulator } from "./api/routeSimulator.js";
@@ -965,6 +966,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   querySignalingCaptures: queryList("signaling_captures"),
   startSignalingCapture,
   stopSignalingCapture,
+  keepSignalingCapture,
   downloadSignalingCapture,
   runRouteSimulator,
   runNetworkDiagnosis,

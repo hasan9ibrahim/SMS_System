@@ -12,6 +12,7 @@ import { spreadsheetXml } from "../billing/files.js";
 import {
   CAPTURE_FROM,
   CAPTURE_SELECT,
+  CAPTURE_KEEP_DAYS,
   mapCapture,
   mapNetworkBind,
   NETWORK_FROM,
@@ -206,6 +207,16 @@ export function startNetworkStatus() {
     .catch(() => undefined);
   setInterval(() => void bindTick(pool).catch(() => undefined), 10_000).unref();
   setInterval(() => void captureTick(pool).catch(() => undefined), 1_000).unref();
+  // Capture files past their 30 days are deleted (team trial round 1); kept ones stay.
+  void purgeCaptures(pool).catch(() => undefined);
+  setInterval(() => void purgeCaptures(pool).catch(() => undefined), 3_600_000).unref();
+}
+
+export function purgeCaptures(pool: pg.Pool) {
+  return pool.query(
+    `DELETE FROM signaling_captures WHERE NOT keep AND status <> 'running'
+       AND updated_at < now() - interval '${CAPTURE_KEEP_DAYS} days'`,
+  );
 }
 
 // ---------------------------------------------------------------- network status endpoints
@@ -386,6 +397,21 @@ export function stopSignalingCapture(request: FastifyRequest, reply: FastifyRepl
     if (!c) return notFound(reply, "Capture", id);
     if (c.status !== "running") return sendProblem(reply, 409, `This capture is already ${c.status}`);
     await pool.query("UPDATE signaling_captures SET status = 'stopped', updated_at = now() WHERE id = $1", [id]);
+    return loadCapture(pool, id);
+  });
+}
+
+export function keepSignalingCapture(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: number };
+  const { keep } = request.body as { keep: boolean };
+  return withDb(reply, async (pool) => {
+    const me = await getCurrentUser();
+    const { rowCount } = await pool.query(
+      `UPDATE signaling_captures SET keep = $2, kept_by_id = CASE WHEN $2 THEN $3::bigint END,
+              kept_at = CASE WHEN $2 THEN now() END WHERE id = $1`,
+      [id, keep, me.id],
+    );
+    if (!rowCount) return notFound(reply, "Capture", id);
     return loadCapture(pool, id);
   });
 }

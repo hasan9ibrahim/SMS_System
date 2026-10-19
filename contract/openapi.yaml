@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.63.0
+  version: 0.64.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -8993,6 +8993,41 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /signaling-captures/{id}/keep:
+    post:
+      tags: [observation]
+      operationId: keepSignalingCapture
+      summary: "Keep a capture file, or let it expire (§9)"
+      description: |
+        Kept files are never deleted automatically; the others are deleted 30 days after the capture ended
+        (team trial round 1). Clearing Keep on a file older than that deletes it at the next clean-up.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [keep]
+              properties:
+                keep:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalingCaptureRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -23274,8 +23309,19 @@ components:
 
     SignalingCaptureRow:
       type: object
-      required: [id, fileName, ipFilter, status, sizeBytes, packets, maxDurationSeconds, maxFileSizeBytes, startedAt, updatedAt, startedBy]
+      required: [id, fileName, ipFilter, status, sizeBytes, packets, maxDurationSeconds, maxFileSizeBytes, startedAt, updatedAt, startedBy, keep, keptBy, expiresAt]
       properties:
+        keep:
+          type: boolean
+          description: Kept on purpose; otherwise the file is deleted 30 days after the capture ended (team trial round 1).
+        keptBy:
+          type: [string, "null"]
+          description: Who ticked Keep.
+        expiresAt:
+          description: When the file is deleted; null while running or when kept.
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
         id:
           $ref: "#/components/schemas/Id"
           description: "Sr. No."

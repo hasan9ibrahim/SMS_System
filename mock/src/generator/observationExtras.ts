@@ -223,6 +223,11 @@ export async function generateObservationExtras(
       started_by_id: rng.pick(noc).id,
       started_at: new Date(at),
       updated_at: new Date(at + duration * 1000),
+      // Every sixth file kept on purpose (team trial round 1); the others older than 30 days are deleted
+      // by the clean-up. Fixed, so the random stream stays the same.
+      keep: i % 6 === 0,
+      kept_by_id: i % 6 === 0 ? noc[0]!.id : null,
+      kept_at: i % 6 === 0 ? new Date(at + duration * 1000) : null,
     });
   }
 }

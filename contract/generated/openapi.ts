@@ -6108,6 +6108,27 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/signaling-captures/{id}/keep": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Keep a capture file, or let it expire (§9)
+     * @description Kept files are never deleted automatically; the others are deleted 30 days after the capture ended
+     *     (team trial round 1). Clearing Keep on a file older than that deletes it at the next clean-up.
+     */
+    post: operations["keepSignalingCapture"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/signaling-captures/{id}/file": {
     parameters: {
       query?: never;
@@ -14035,6 +14056,12 @@ export type components = {
       maxFileSizeBytes: number;
     };
     SignalingCaptureRow: {
+      /** @description Kept on purpose; otherwise the file is deleted 30 days after the capture ended (team trial round 1). */
+      keep: boolean;
+      /** @description Who ticked Keep. */
+      keptBy: string | null;
+      /** @description When the file is deleted; null while running or when kept. */
+      expiresAt: components["schemas"]["Timestamp"] | null;
       /** @description Sr. No. */
       id: components["schemas"]["Id"];
       fileName: string;
@@ -26394,6 +26421,37 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  keepSignalingCapture: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          keep: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignalingCaptureRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

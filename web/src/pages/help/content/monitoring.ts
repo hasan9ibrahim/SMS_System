@@ -1325,8 +1325,20 @@ export const topics: HelpTopic[] = [
               { name: "File Size / Packets", what: "How much has been captured so far." },
               { name: "Update Time", what: "Last update (UTC)." },
               { name: "Started By", what: "Who started it." },
+              {
+                name: "Keep",
+                what: "Tick to keep the file for good (for example during a dispute). Untick to let it expire again.",
+              },
+              {
+                name: "Deleted on",
+                what: "When the file is deleted: 30 days after the capture ended, unless **Keep** is ticked (then it shows **Kept**).",
+              },
               { name: "Action", what: "**Stop** while running; **Download** afterwards." },
             ],
+          },
+          {
+            kind: "warning",
+            text: "Capture files hold phone numbers and message text. They are deleted 30 days after the capture ends; download what you need to share, or tick **Keep**.",
           },
           {
             kind: "text",

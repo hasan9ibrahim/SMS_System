@@ -2448,8 +2448,12 @@ export function mapNetworkBind(r: Record<string, unknown>): NetworkBindRow {
 }
 
 const ipText = (col: string) => `CASE WHEN masklen(${col}) IN (32, 128) THEN host(${col}) ELSE text(${col}) END`;
-export const CAPTURE_FROM = "signaling_captures c LEFT JOIN users u ON u.id = c.started_by_id";
-export const CAPTURE_SELECT = `c.*, ${ipText("c.ip_filter")} AS ip_text, u.username AS started_by`;
+export const CAPTURE_FROM =
+  "signaling_captures c LEFT JOIN users u ON u.id = c.started_by_id LEFT JOIN users ku ON ku.id = c.kept_by_id";
+/** Capture files are deleted 30 days after the capture ended unless kept (team trial round 1). */
+export const CAPTURE_KEEP_DAYS = 30;
+const captureExpires = `CASE WHEN c.keep OR c.status = 'running' THEN NULL ELSE c.updated_at + interval '${CAPTURE_KEEP_DAYS} days' END`;
+export const CAPTURE_SELECT = `c.*, ${ipText("c.ip_filter")} AS ip_text, u.username AS started_by, ku.username AS kept_by, ${captureExpires} AS expires_at`;
 export const captureList: ListDef<SignalingCaptureRow> = {
   fields: listFields.signaling_captures,
   from: CAPTURE_FROM,
@@ -2465,6 +2469,8 @@ export const captureList: ListDef<SignalingCaptureRow> = {
     startedAt: { sql: "c.started_at" },
     updatedAt: { sql: "c.updated_at" },
     startedBy: { sql: "u.username" },
+    keep: { sql: "c.keep" },
+    expiresAt: { sql: captureExpires },
   },
   search: ["fileName", "ipFilter"],
   idSql: "c.id",
@@ -2484,6 +2490,9 @@ export function mapCapture(r: Record<string, unknown>): SignalingCaptureRow {
     startedAt: iso(r.started_at)!,
     updatedAt: iso(r.updated_at)!,
     startedBy: (r.started_by as string | null) ?? null,
+    keep: r.keep === true,
+    keptBy: (r.kept_by as string | null) ?? null,
+    expiresAt: iso(r.expires_at as Date | null),
   };
 }
 

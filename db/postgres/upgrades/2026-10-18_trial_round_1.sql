@@ -25,3 +25,8 @@ BEGIN
     INSERT INTO upgrade_marks (name) VALUES ('priority_high_first');
   END IF;
 END $$;
+
+-- Signaling captures: Keep, and deletion 30 days after the end otherwise (migration 047, §9).
+ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS keep boolean NOT NULL DEFAULT false;
+ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS kept_by_id bigint REFERENCES users(id);
+ALTER TABLE signaling_captures ADD COLUMN IF NOT EXISTS kept_at timestamptz;

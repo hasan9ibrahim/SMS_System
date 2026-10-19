@@ -128,6 +128,11 @@ export const useStopCapture = () =>
   useWrite((id: number): Promise<SignalingCaptureRow> =>
     unwrap(api.POST("/signaling-captures/{id}/stop", { params: { path: { id } } })),
   );
+/** Keep a capture file, or let it be deleted 30 days after it ended (team trial round 1). */
+export const useKeepCapture = () =>
+  useWrite(({ id, keep }: { id: number; keep: boolean }): Promise<SignalingCaptureRow> =>
+    unwrap(api.POST("/signaling-captures/{id}/keep", { params: { path: { id } }, body: { keep } })),
+  );
 export const downloadCapture = (id: number) =>
   downloadFrom(`/signaling-captures/${id}/file`, undefined, `capture_${id}.pcap`);
 

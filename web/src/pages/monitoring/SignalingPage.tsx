@@ -3,7 +3,7 @@
 // Size, Download and Update Time (UTC). Running captures refresh every 2 s.
 import { useState } from "react";
 import type { SignalingCaptureRow } from "@sms/contract";
-import { downloadCapture, useStartCapture, useStopCapture } from "../../api/observation";
+import { downloadCapture, useKeepCapture, useStartCapture, useStopCapture } from "../../api/observation";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { toast } from "../../ui/feedback";
@@ -73,7 +73,25 @@ function StartBar() {
 
 export function SignalingPage() {
   const stop = useStopCapture();
+  const keep = useKeepCapture();
   useAutoRefresh(2000);
+  // Files are deleted 30 days after the capture ended unless kept (team trial round 1).
+  const setKeep = (r: SignalingCaptureRow, on: boolean) =>
+    keep.mutate(
+      { id: r.id, keep: on },
+      {
+        onSuccess: () => toast({ tone: "good", message: on ? `${r.fileName} is kept` : `${r.fileName} will expire` }),
+        onError: (e) => toast({ tone: "error", message: problemText(e) }),
+      },
+    );
+  const expiry = (r: SignalingCaptureRow) =>
+    r.keep ? (
+      <span title={r.keptBy ? `Kept by ${r.keptBy}` : undefined}>Kept</span>
+    ) : r.expiresAt ? (
+      fmtWhen(r.expiresAt)
+    ) : (
+      muted("after it ends")
+    );
   return (
     <ListScreen<SignalingCaptureRow>
       list="signaling_captures"
@@ -115,6 +133,21 @@ export function SignalingPage() {
         },
         updatedAt: { width: 170, render: (r) => fmtWhen(r.updatedAt) },
         startedBy: { width: 140, render: (r) => r.startedBy ?? muted("—") },
+        keep: {
+          width: 70,
+          render: (r) => (
+            <input
+              type="checkbox"
+              aria-label={`Keep ${r.fileName}`}
+              title={r.keep ? "Kept: never deleted automatically" : "Keep this file past 30 days"}
+              checked={r.keep}
+              disabled={keep.isPending}
+              onChange={(e) => setKeep(r, e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ),
+        },
+        expiresAt: { width: 170, render: expiry },
       }}
       rowActions={(r) => [
         {
@@ -133,6 +166,9 @@ export function SignalingPage() {
           hint: r.status === "running" ? "Stop this capture" : "Only running captures can be stopped",
           onSelect: () => stop.mutate(r.id, { onError: (e) => toast({ tone: "error", message: problemText(e) }) }),
         },
+        r.keep
+          ? { label: "Stop keeping", icon: "undo", onSelect: () => setKeep(r, false) }
+          : { label: "Keep", icon: "check", onSelect: () => setKeep(r, true) },
       ]}
       trailing={{
         header: "Action",
@@ -182,6 +218,14 @@ export function SignalingPage() {
                 </dd>
                 <dt>Updated</dt>
                 <dd>{fmtWhen(r.updatedAt)}</dd>
+                <dt>Deleted on</dt>
+                <dd>
+                  {expiry(r)}
+                  {r.keep && r.keptBy ? <span className="muted"> by {r.keptBy}</span> : null}{" "}
+                  <button type="button" className="link" onClick={() => setKeep(r, !r.keep)}>
+                    {r.keep ? "Stop keeping" : "Keep this file"}
+                  </button>
+                </dd>
                 <dt>Opens in</dt>
                 <dd>Wireshark (libpcap, SMPP on port 2775)</dd>
               </dl>
