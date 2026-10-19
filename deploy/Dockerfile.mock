@@ -22,6 +22,8 @@ COPY db/postgres db/postgres
 COPY db/clickhouse db/clickhouse
 ENV NODE_ENV=production MOCK_HOST=0.0.0.0 MOCK_PORT=4010 TRUST_PROXY=1 \
     SMS_DB_DIR=/app/db SMS_DATA_DIR=/app/data SMS_CONTRACT_FILE=/app/contract/openapi.yaml
+# The seed job stages its files under /app/out; the rest of /app stays read-only for the node user.
+RUN mkdir -p /app/out && chown node:node /app/out
 USER node
 EXPOSE 4010
 CMD ["node", "server.mjs"]
