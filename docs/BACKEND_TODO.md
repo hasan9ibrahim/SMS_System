@@ -74,14 +74,22 @@ backend team knows exactly what to build. Newest first.
 
 ## Decisions
 
-- 2026-10-19, **Capacity target (acceptance for the backend, §14)**: at least **1,000 TPS peak** and **50 million SMS a day** (about 580 TPS on average). The Elixir backend is accepted only when a load test against the SMPP simulator shows all of the following:
+- 2026-10-19 (latency targets tightened the same day), **Capacity target (acceptance for the backend, §14)**: at least **1,000 TPS peak** and **50 million SMS a day** (about 580 TPS on average). The Elixir backend is accepted only when a load test against the SMPP simulator shows all of the following:
   - **1,000 TPS sustained for 1 hour**, and bursts above it absorbed by the per-trunk queues, with every message billed and receipted.
   - **50 million messages in 24 hours** with their delivery receipts.
   - **No message or EDR lost** when a service restarts mid-test (durable queue between services), and the EDR count equal to the messages accepted.
-  - **submit_sm_resp within 50 ms (p99)** on the switch, and EDRs visible in reports within 5 s.
-  - The GUI stays fast at that volume: list and report queries under 1 s (p95) over 30 days of EDRs (about 1.5 billion rows).
+  - **submit_sm_resp within 50 ms (p99)** on the switch, and **EDRs visible in reports and Live analytics within 2 s** (p99; EDRs are batch-inserted every second).
+  - The GUI stays fast at that volume (p95, over 30 days of EDRs, about 1.5 billion rows): **lists, filters and record pages under 300 ms**, **today's reports and Live analytics under 500 ms**, reports over months under 2 s.
   - Sizing to plan for: about 8–10 GB of compressed EDRs a day in ClickHouse (measured on the fake data: ~8.4 GB per 50 million rows), so retention × that, plus replicas; delivery receipts written as updates to the same EDR.
-  - Measured on the mock stack so far (4 CPUs, 16 GB, 2026-10-19): the live EDR path at about 800 TPS (bounded by the fake trunks' TPS limits) wrote every message (simulator and store matched exactly), about 90 ms per one-second batch (max 300 ms); Live analytics "today" queries at 60–75 ms. This shows the store side only; the SMPP switch is not built yet. Decided by: Hasan Ibrahim.
+  - **Retention** (needed for running "forever" on fixed disks): raw EDRs kept 12 months (older ones moved to cheap storage or dropped), hourly / daily rollups kept for good, so reports over any period still work. To confirm with the team.
+  - **Production servers (proposal, to confirm with the load test):**
+    - Switch and API (Elixir): 2 servers, each 16 vCPU, 32 GB RAM, 200 GB NVMe (either carries the full load alone).
+    - ClickHouse (EDRs): 2 servers (replicas), each 32 vCPU, 128 GB RAM, 8 TB NVMe (12 months at ~8–10 GB/day plus merge headroom), or 2 TB NVMe for 3 hot months plus cheaper disk / object storage for older months.
+    - PostgreSQL (config, billing): primary + standby, each 8–16 vCPU, 64 GB RAM, 1 TB NVMe.
+    - Queue and live counters (NATS JetStream or Kafka, Redis): 3 servers, each 8 vCPU, 16 GB RAM, 500 GB NVMe (3 days of messages for replay).
+    - Network 1 Gbps outside, 10 Gbps between the database servers; backups off-site, at least the size of ClickHouse + PostgreSQL.
+    - Smallest single-server setup (no redundancy, a failure stops traffic): 32 cores, 128 GB RAM, 2 × 8 TB NVMe in RAID 1, plus an off-site backup.
+ (4 CPUs, 16 GB, 2026-10-19): the live EDR path at about 800 TPS (bounded by the fake trunks' TPS limits) wrote every message (simulator and store matched exactly), about 90 ms per one-second batch (max 300 ms); Live analytics "today" queries at 60–75 ms. This shows the store side only; the SMPP switch is not built yet. Decided by: Hasan Ibrahim.
 - 2026-10-17, Manual SOA entries (§13.31): **both options**. Each entry is either **SOA only** (default: a line on the statement, balances unchanged, the SOA shows the difference) or **Changes the balance** (it also records a real transaction of the matching type, so the balance and every balance screen change). Decided by: Hasan Ibrahim.
 - 2026-10-17, Vendor Invoice "Input From/To Date" (§7): the **window our figures were counted for** (option A): set at every check that compares, as UTC instants from midnight of the invoice From date to midnight after the To date in the invoice time zone; shown in UTC with the partner-zone time beside it. Empty when the invoice was not compared (not checked yet, or the EDRs do not hold the whole period). Decided by: Hasan Ibrahim.
 - 2026-10-17, Balance sign (§7): **Balance = Opening Balance + payments and credits − usage charges**. Positive = the partner's credit with us; negative = what the client owes us (customer side) or what we owe the vendor (vendor side). Net = customer − vendor, so negative = the partner owes us after offsetting. Opening balances follow the same sign. One rule on every screen, invoice, SOA and email; the GUI adds the direction in words ("in credit", "owes us", "we owe") and shows owed amounts in amber. Decided by: Hasan Ibrahim.
