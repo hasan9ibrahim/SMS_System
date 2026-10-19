@@ -124,7 +124,7 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.mock
     environment: *app-env
-    command: ["sh", "-c", "node --max-old-space-size=6144 --import tsx src/generator/cli.ts --profile ${SEED_PROFILE:-full}"]
+    command: ["sh", "-c", "node --max-old-space-size=6144 seed.mjs --profile ${SEED_PROFILE:-full}"]
     depends_on:
       postgres: { condition: service_healthy }
       clickhouse: { condition: service_healthy }

@@ -10,7 +10,10 @@ import { Rng } from "./rng.js";
 import type { TableSink } from "./sink.js";
 import { DAY, type Country, type Mccmnc, type World } from "./world.js";
 
-const MCCMNC_CSV = fileURLToPath(new URL("../../data/mccmnc.csv", import.meta.url));
+// SMS_DATA_DIR: where the bundled server image keeps the data files (deploy/Dockerfile.mock).
+const MCCMNC_CSV = process.env.SMS_DATA_DIR
+  ? `${process.env.SMS_DATA_DIR}/mccmnc.csv`
+  : fileURLToPath(new URL("../../data/mccmnc.csv", import.meta.url));
 
 export const CURRENCIES = [
   { iso: "USD", name: "US Dollar", symbol: "$", perUsd: 1 },

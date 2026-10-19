@@ -21,6 +21,20 @@ jobs:
           --health-cmd "pg_isready -U sms_dev -d sms_config"
           --health-interval 5s
           --health-retries 20
+      # EDR store: the tests check reports, alerts and invoices against the generated traffic.
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_DB: sms_edr
+          CLICKHOUSE_USER: sms_dev
+          CLICKHOUSE_PASSWORD: sms_dev_password
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+        ports: ["8123:8123"]
+        options: >-
+          --ulimit nofile=262144:262144
+          --health-cmd "wget -qO- http://127.0.0.1:8123/ping"
+          --health-interval 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,9 +47,12 @@ jobs:
       - name: Generated types match the contract
         run: npm run gen:check
       - run: npm run typecheck
-      - name: Seed fake data (small profile, configuration only)
-        run: npm run seed:small -- --skip-edrs
+      # The tests are written against the production-like set (30 days of EDRs), as on the trial server.
+      - name: Seed fake data (full profile, with EDRs)
+        run: npm run seed:full
       - run: npm test
       - run: npm run build
+      - name: Server bundle (image build, deploy/Dockerfile.mock)
+        run: npm run bundle -w mock
       - name: docker-compose file is valid
         run: docker compose config -q

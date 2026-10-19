@@ -13,6 +13,7 @@
     "gen:small": "npm run gen -- --profile small",
     "gen:full": "npm run gen -- --profile full",
     "gen:csv": "npm run gen -- --profile small --target csv --out out",
+    "bundle": "esbuild src/index.ts src/generator/cli.ts --bundle --platform=node --format=esm --target=node22 --minify --legal-comments=none --outdir=dist --entry-names=[name] --out-extension:.js=.mjs --external:pg-native --external:bufferutil --external:utf-8-validate \"--banner:js=import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\"",
     "build:mccmnc": "tsx scripts/build-mccmnc.ts data/source/mcc-mnc-table.csv data/mccmnc.csv"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "@types/pg": "^8.11.10",
     "@types/pg-copy-streams": "^1.2.5",
     "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }

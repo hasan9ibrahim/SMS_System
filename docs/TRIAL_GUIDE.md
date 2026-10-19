@@ -10,6 +10,10 @@ Try it, break it, and tell us what to change. Every change you ask for goes into
 
 ### Shared instance (one server for the whole team)
 
+**Recommended: from images, no source code on the server.** GitHub builds the images from `main` and the
+server pulls them; with a domain, Caddy adds HTTPS. Follow [`deploy/server/README.md`](../deploy/server/README.md).
+The steps below build from a clone of the repository instead (for a machine where the code may live).
+
 On the trial server (Docker with Compose v2, 4 CPUs, 8 GB RAM, 20 GB disk):
 
 ```bash

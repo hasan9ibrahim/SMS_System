@@ -34,7 +34,8 @@ export interface ContractOperation {
 const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 const DOC_ID = "openapi";
 
-export const openapiPath = require.resolve("@sms/contract/openapi.yaml");
+// SMS_CONTRACT_FILE: the contract in the bundled server image (deploy/Dockerfile.mock).
+export const openapiPath = process.env.SMS_CONTRACT_FILE ?? require.resolve("@sms/contract/openapi.yaml");
 export const document = parse(readFileSync(openapiPath, "utf8")) as JsonObject & {
   info: { version: string };
   paths: Record<string, Record<string, JsonObject>>;

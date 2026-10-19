@@ -13,7 +13,10 @@ import { from as copyFrom } from "pg-copy-streams";
 import { EDR_COLUMNS, type EdrWriter } from "./edr.js";
 import { PG_CONFIG, PG_SCHEMA } from "../db.js";
 
-const DB_DIR = fileURLToPath(new URL("../../../db/", import.meta.url));
+// SMS_DB_DIR: the SQL files in the bundled server image (deploy/Dockerfile.mock).
+const DB_DIR = process.env.SMS_DB_DIR
+  ? `${process.env.SMS_DB_DIR.replace(/\/$/, "")}/`
+  : fileURLToPath(new URL("../../../db/", import.meta.url));
 
 /** FK-safe load order. Every generated table must be listed. */
 export const TABLE_ORDER = [
