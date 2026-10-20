@@ -396,9 +396,20 @@ export const topics: HelpTopic[] = [
                 values: "Pick a time zone. Default `UTC`.",
               },
               {
-                name: "Rate notice period",
+                name: "Notice: increase",
                 what: "How many days' notice the partner gets for rate increases. Used by rate notices and the rate tools to flag increases that start too early.",
                 values: "0 to 90 days. Default 7.",
+              },
+              {
+                name: "Notice: decrease / Notice: new destination",
+                what: "The same for decreases and for destinations the partner had no rate for. Saves that start sooner ask for confirmation; incoming vendor RNs are flagged.",
+                values: "0 to 90 days. Default 0 (no notice).",
+              },
+              {
+                name: "'All networks' code",
+                what: "How this partner writes a country's all-networks rate in rate sheets: MCC (262), MCC0 (2620), MCC00 (26200), MCC000 (262000) or MCC* (262*).",
+                values:
+                  "Incoming RNs from the partner read that code as the country rate; rate notifications to the partner write country rates that way. Default MCC.",
               },
             ],
           },

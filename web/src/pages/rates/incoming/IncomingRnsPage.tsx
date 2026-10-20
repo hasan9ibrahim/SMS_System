@@ -27,7 +27,7 @@ import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
 import { ListLookup } from "../../../records/parts";
 import { usePageStatus, useTabNavigate, useTabTitle } from "../../../shell/tabContext";
-import { ask, toast } from "../../../ui/feedback";
+import { ask, confirmDialog, toast } from "../../../ui/feedback";
 import { Icon } from "../../../ui/Icon";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
@@ -52,12 +52,31 @@ const count = (n: number, tone: "error" | "warning") =>
 
 // ---------------------------------------------------------------- dialogs
 
+/** How a sheet column was read, in words (team trial round 2). */
+const FIELD_LABEL: Record<string, string> = {
+  mccmnc: "MCCMNC",
+  mcc: "MCC",
+  mnc: "MNC",
+  dialCode: "Dial code",
+  country: "Country",
+  network: "Network",
+  rate: "Rate",
+  currency: "Currency",
+  effective: "Effective date",
+  changeType: "Change type",
+  username: "Username (trunk)",
+  senderId: "Sender ID",
+};
+
 function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
   const intake = useIntakeRn();
   const [mode, setMode] = useState<"upload" | "email">("upload");
   const [trunkId, setTrunkId] = useState<number | null>(null);
   const [fileName, setFileName] = useState("");
   const [content, setContent] = useState("");
+  // Excel files go as base64; protected sheets are read (team trial round 2).
+  const [excel, setExcel] = useState<string | null>(null);
+  const [headerRow, setHeaderRow] = useState("");
   const [from, setFrom] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -69,7 +88,14 @@ function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
         ...(mode === "email"
           ? { fromAddress: from || null, subject: subject || null, body: body || null, mailbox: "rates" }
           : {}),
-        attachments: [{ fileName: fileName || "pasted.csv", content }],
+        attachments: [
+          {
+            fileName: fileName || "pasted.csv",
+            content: excel ?? content,
+            encoding: excel ? "base64" : "text",
+            headerRow: Number(headerRow) >= 1 ? Math.floor(Number(headerRow)) : null,
+          },
+        ],
       },
       {
         onSuccess: (r) => {
@@ -93,7 +119,7 @@ function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
       footer={
         <>
           <Button onClick={() => done(null)}>Cancel</Button>
-          <Button variant="primary" disabled={!content.trim() || intake.isPending} onClick={submit}>
+          <Button variant="primary" disabled={(!excel && !content.trim()) || intake.isPending} onClick={submit}>
             {intake.isPending ? "Reading…" : "Read and check"}
           </Button>
         </>
@@ -135,26 +161,67 @@ function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
         </div>
       )}
       <label className="field">
-        <span>Rate sheet: CSV, semicolon or tab separated (paste from Excel). Columns are found by their headers.</span>
+        <span>
+          Rate sheet: Excel (.xlsx, first sheet; protected sheets are read) or CSV, semicolon or tab separated (paste
+          from Excel). Columns are found by their headers.
+        </span>
         <input
           type="file"
-          accept=".csv,.txt,.tsv"
+          accept=".xlsx,.csv,.txt,.tsv"
           onChange={async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
             setFileName(f.name);
-            setContent(await f.text());
+            if (/\.xlsx$/i.test(f.name)) {
+              const bytes = new Uint8Array(await f.arrayBuffer());
+              let bin = "";
+              for (let i = 0; i < bytes.length; i += 0x8000)
+                bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+              setExcel(btoa(bin));
+              setContent("");
+            } else {
+              setExcel(null);
+              setContent(await f.text());
+            }
           }}
         />
       </label>
-      <textarea
-        className="rn-paste"
-        rows={8}
-        aria-label="Sheet content"
-        placeholder={"MCCMNC;Network;Rate;Effective Date\n26201;Telekom;0.0412;01/11/2026"}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-      />
+      <label className="field rn-header-row">
+        <span>Header row (empty = find it: the first row with a rate and a destination column)</span>
+        <input
+          type="number"
+          min={1}
+          max={1000}
+          step={1}
+          value={headerRow}
+          placeholder="Auto"
+          onChange={(e) => setHeaderRow(e.target.value)}
+        />
+      </label>
+      {excel ? (
+        <p className="muted small">
+          <Icon name="file" size={13} /> {fileName} will be read as an Excel workbook.{" "}
+          <button
+            type="button"
+            className="link-btn"
+            onClick={() => {
+              setExcel(null);
+              setFileName("");
+            }}
+          >
+            Remove
+          </button>
+        </p>
+      ) : (
+        <textarea
+          className="rn-paste"
+          rows={8}
+          aria-label="Sheet content"
+          placeholder={"MCCMNC;Network;Rate;Effective Date\n26201;Telekom;0.0412;01/11/2026"}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+        />
+      )}
     </Modal>
   );
 }
@@ -443,7 +510,7 @@ function RnSummary({ r }: { r: RnRow }) {
           ["Subject", r.subject],
           ["File", r.fileName],
           ["Effective", r.effectiveFrom ? shortDate(r.effectiveFrom) : null],
-          ["Lines", `${r.lines.toLocaleString("en-US")}${changeSummary(r) ? ` · ${changeSummary(r)}` : ""}`],
+          ["Rates", `${r.lines.toLocaleString("en-US")}${changeSummary(r) ? ` · ${changeSummary(r)}` : ""}`],
           [
             "Flags",
             `${r.flagged} live · ${r.noticeBreaches} notice · ${r.backdated} back-dated · ${r.turnsNegative} turn negative`,
@@ -487,11 +554,69 @@ function RnQueue() {
     );
   };
   const notPending = (r: RnRow) => (decidable(r.status) ? undefined : `${STATUS[r.status].label}: nothing to decide`);
+  // Accept several pending RNs at once (team trial round 2): each RN is still its own change.
+  const acceptMany = async (rows: RnRow[], clear: () => void) => {
+    const pending = rows.filter((r) => decidable(r.status));
+    if (!pending.length) return;
+    const flagged = pending.filter((r) => r.flagged > 0 || r.noticeBreaches > 0).length;
+    const rates = pending.reduce((n, r) => n + r.lines, 0);
+    const ok = await confirmDialog({
+      title: `Accept ${pending.length} RN${pending.length === 1 ? "" : "s"}?`,
+      message: (
+        <>
+          Every pending rate of {pending.map((r) => r.reference).join(", ")} ({rates.toLocaleString("en-US")} rates) is
+          loaded into its vendor trunk's table. Each RN is saved as its own change you can undo.
+          {flagged > 0 && (
+            <p className="tone-warning">
+              {flagged} of them {flagged === 1 ? "has" : "have"} live traffic flags or notice breaches: review them
+              first if unsure.
+            </p>
+          )}
+        </>
+      ),
+      ok: `Accept ${pending.length}`,
+    });
+    if (!ok) return;
+    let done = 0;
+    let applied = 0;
+    const failed: string[] = [];
+    for (const r of pending) {
+      try {
+        const res = await decide.mutateAsync({ id: r.id, kind: "accept", body: {} });
+        done++;
+        applied += res.applied;
+      } catch {
+        failed.push(r.reference);
+      }
+    }
+    clear();
+    toast({
+      tone: failed.length ? "warning" : "good",
+      message: `Accepted ${done} RN${done === 1 ? "" : "s"} (${applied.toLocaleString("en-US")} rates)${failed.length ? ` · not accepted: ${failed.join(", ")}` : ""}`,
+    });
+  };
   return (
     <ListScreen<RnRow>
       list="rate_notifications"
       page={page}
-      noSelection
+      selection={{
+        summary: (rows, ids) => {
+          const n = rows.filter((r) => ids.has(r.id) && decidable(r.status)).length;
+          return `${ids.size} selected · ${n} pending`;
+        },
+        bulk: (_ids, clear, rows) => {
+          const n = rows.filter((r) => decidable(r.status)).length;
+          return [
+            {
+              label: n ? `Accept ${n} pending RN${n === 1 ? "" : "s"}` : "Accept pending RNs",
+              icon: "check",
+              disabled: !n || decide.isPending,
+              hint: n ? undefined : "None of the selected RNs is pending",
+              onSelect: () => void acceptMany(rows, clear),
+            },
+          ];
+        },
+      }}
       rowActions={(r) => [
         {
           label: "Accept all",
@@ -1019,9 +1144,29 @@ function RnReview({ id }: { id: number }) {
                   ["From", rn.fromAddress],
                   ["Subject", rn.subject],
                   ["File", rn.fileName],
-                  ["Columns", rn.columns.map((c) => `${c.header} → ${c.field ?? "ignored"}`).join(" · ") || null],
+                  ["Header row", rn.headerRow === null ? null : `Row ${rn.headerRow}`],
                 ]}
               />
+              {rn.columns.length > 0 && (
+                <table className="mini-table rn-columns">
+                  <thead>
+                    <tr>
+                      <th className="num">Col</th>
+                      <th>Header in the file</th>
+                      <th>Read as</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rn.columns.map((c, i) => (
+                      <tr key={i} className={c.field ? "" : "off"}>
+                        <td className="num">{String.fromCharCode(65 + (i % 26))}</td>
+                        <td>{c.header || <span className="muted">(empty)</span>}</td>
+                        <td>{c.field ? (FIELD_LABEL[c.field] ?? c.field) : <span className="muted">ignored</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
               {rn.fileName && (
                 <a className="btn btn-sm btn-default" href={rnFileUrl(rn.id)}>
                   <Icon name="download" size={13} /> Download the original file

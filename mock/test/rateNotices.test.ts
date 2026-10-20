@@ -4,7 +4,8 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { noticeLines } from "../src/api/rateNotices.js";
+import { noticeLines, noticeText } from "../src/api/rateNotices.js";
+import { platformDateTime } from "../src/platform.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -35,7 +36,15 @@ test("notice lines: new rates, blocks and closes, without the closed old version
       after: { ...base, mccmnc: "50502", rate: 0.03, from: "2026-01-01T00:00:00Z", to: null, blocked: true },
     },
   ]);
-  assert.deepEqual(lines.get(1), ["50501: 0.02 USD from 2026-11-01", "50502: blocked"]);
+  // Dates in the platform time zone, 24-hour (team trial round 2).
+  const from = platformDateTime("2026-11-01T00:00:00Z");
+  assert.deepEqual(
+    lines.get(1)?.map((l) => noticeText(l, null)),
+    [`50501: 0.02 USD from ${from}`, "50502: blocked"],
+  );
+  // The client's "all networks" code for a country rate.
+  assert.equal(noticeText({ mccmnc: "505", senderId: null, text: "blocked" }, "mcc00"), "50500: blocked");
+  assert.equal(noticeText({ mccmnc: "505", senderId: null, text: "blocked" }, "mccStar"), "505*: blocked");
 });
 
 test(
@@ -60,6 +69,7 @@ test(
       payload: {
         items: [{ action: "set", lineId: Number(line.id), rate: Number(line.rate) * 0.9 }],
         sendNotification: true,
+        notificationNote: "Trial note: new prices from Monday.",
       },
     });
     assert.equal(res.statusCode, 200, res.body);
@@ -69,6 +79,20 @@ test(
       (await db().query("SELECT count(*) FROM email_logs WHERE email_type = 'send_rate'")).rows[0].count,
     );
     assert.equal(afterCount - before, body.notificationsSent);
+    const { rows: mail } = await db().query(
+      "SELECT body FROM email_logs WHERE email_type = 'send_rate' ORDER BY id DESC LIMIT 1",
+    );
+    assert.match(String(mail[0].body), /Trial note: new prices from Monday\./);
+    // The readable change log shows the save as a decrease of that destination (team trial round 2).
+    const log = await app.inject({
+      method: "GET",
+      url: `${API_PREFIX}/rate-tables/${line.table_id}/change-log?limit=1`,
+    });
+    assert.equal(log.statusCode, 200, log.body);
+    const entry = log.json().rows[0];
+    assert.equal(entry.changeId, body.change.id);
+    assert.equal(entry.items[0].kind, "decrease");
+    assert.ok(Math.abs(entry.items[0].changePct + 10) < 0.01);
     const undo = await app.inject({ method: "POST", url: `${API_PREFIX}/changes/${body.change.id}/undo`, payload: {} });
     assert.equal(undo.statusCode, 200, undo.body);
   },

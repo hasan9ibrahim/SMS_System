@@ -710,3 +710,7 @@ export type OpenIncidents = Schemas["OpenIncidents"];
 export type AlertSoundPrefs = Schemas["AlertSoundPrefs"];
 export type AlertRulePage = Schemas["AlertRulePage"];
 export type IncidentPage = Schemas["IncidentPage"];
+export type AllNetworksCode = Schemas["AllNetworksCode"];
+export type RateChangeLogItem = Schemas["RateChangeLogItem"];
+export type RateChangeLogEntry = Schemas["RateChangeLogEntry"];
+export type RateChangeLogPage = Schemas["RateChangeLogPage"];

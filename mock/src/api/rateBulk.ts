@@ -300,8 +300,10 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       let from = override?.effectiveFrom ? Math.max(Date.parse(override.effectiveFrom), now) : fromBase;
       let noticeBreach = false;
       let noticeAdjusted = false;
-      if (change === "increase" && t.notice) {
-        const earliest = now + t.notice.days * DAY_MS;
+      const period =
+        change === "increase" || change === "decrease" || change === "new" ? t.notice?.[change] : undefined;
+      if (period) {
+        const earliest = now + period.days * DAY_MS;
         if (from < earliest - SKEW_MS) {
           if (body.respectNotice) [from, noticeAdjusted] = [earliest, true];
           else noticeBreach = true;
@@ -310,7 +312,7 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       const effective = edit === "set" ? newRate! : cur;
       const belowCost = edit === "set" && costT !== null && newRate! < costT;
       if (belowCost) note ??= "sells below cost";
-      if (noticeBreach) note ??= `increase sooner than ${t.notice!.days} days' notice (${t.notice!.name})`;
+      if (noticeBreach) note ??= `${change} sooner than ${period!.days} days' notice (${period!.name})`;
 
       const messages = tr?.messages ?? 0;
       const toPlatform = platformPerUsd / (perUsd.get(t.currency) ?? 1);
@@ -347,7 +349,7 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
         kind: t.kind as RateBulkRow["kind"],
         currency: t.currency,
         clients: t.clients,
-        noticeDays: t.notice?.days ?? null,
+        noticeDays: t.notice?.increase?.days ?? null,
         mccmnc,
         country: d.country ?? null,
         countryIso: d.iso ?? null,
@@ -503,7 +505,8 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
     if (result === null) return sendNoticeBreach(reply, breaches);
     if (result.change && [...tables.values()].some((t) => t.kind === "vendor")) scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
-    const notificationsSent = result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id) : 0;
+    const notificationsSent =
+      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : 0;
     return { ...result, skipped, notificationsSent };
   });
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.69.0
+  version: 0.70.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1555,6 +1555,37 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /rate-tables/{id}/change-log:
+    get:
+      tags: [rates]
+      operationId: getRateChangeLog
+      summary: Readable change log of one rate table (team trial round 2)
+      description: |
+        The table's saved changes, newest first, each with its rates in plain words: destination, old and new rate,
+        what changed and from when (dates in the platform time zone are formatted by the GUI). Undo entries are
+        included. Paged with an opaque cursor.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: One page of changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateChangeLogPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /rate-tables/{id}/export:
     get:
       tags: [rates]
@@ -1874,7 +1905,7 @@ paths:
       - rates
       operationId: downloadRateNotificationFile
       summary: The RN's original file
-      description: As received.
+      description: As received (CSV text, or the Excel workbook as uploaded).
       parameters: *id001
       responses:
         '200':
@@ -1883,6 +1914,10 @@ paths:
             text/csv:
               schema:
                 type: string
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -15158,6 +15193,14 @@ components:
           minimum: 1
           maximum: 100
 
+    AllNetworksCode:
+      type: string
+      enum: [mcc, mcc0, mcc00, mcc000, mccStar]
+      default: mcc
+      description: |
+        How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
+        `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Incoming RNs from the partner read
+        that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
     EnterpriseInput:
       type: object
       description: Add/Edit form (§5.1). The account manager is set on create; later changes go through handover (§13.30).
@@ -15211,6 +15254,20 @@ components:
           minimum: 0
           maximum: 90
           description: Notice period for rate increases (§13.14, §13.32).
+        rateNoticeDaysDecrease:
+          type: integer
+          minimum: 0
+          maximum: 90
+          default: 0
+          description: Notice period for rate decreases (team trial round 2). 0 = none.
+        rateNoticeDaysNew:
+          type: integer
+          minimum: 0
+          maximum: 90
+          default: 0
+          description: Notice period for new destinations (team trial round 2). 0 = none.
+        allNetworksCode:
+          $ref: "#/components/schemas/AllNetworksCode"
         contacts:
           $ref: "#/components/schemas/Contacts"
 
@@ -15218,7 +15275,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Enterprise"
         - type: object
-          required: [bindAlert, creditAlert, creditAlertPercent, address, contacts, billingTimezone, rateNoticeDays, archived, trunkCounts]
+          required: [bindAlert, creditAlert, creditAlertPercent, address, contacts, billingTimezone, rateNoticeDays, rateNoticeDaysDecrease, rateNoticeDaysNew, allNetworksCode, archived, trunkCounts]
           properties:
             bindAlert:
               type: boolean
@@ -15240,6 +15297,12 @@ components:
               type: string
             rateNoticeDays:
               type: integer
+            rateNoticeDaysDecrease:
+              type: integer
+            rateNoticeDaysNew:
+              type: integer
+            allNetworksCode:
+              $ref: "#/components/schemas/AllNetworksCode"
             contacts:
               $ref: "#/components/schemas/Contacts"
             archived:
@@ -16397,6 +16460,10 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        notificationNote:
+          type: [string, "null"]
+          maxLength: 2000
+          description: Text added to each rate notification e-mail and sheet sent by this save (team trial round 2).
         sendNotification:
           type: boolean
           default: false
@@ -16405,6 +16472,77 @@ components:
             contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default).
             Logged in Email logs as send_rate. Vendor tables are never notified.
 
+    RateChangeLogItem:
+      type: object
+      required: [mccmnc, country, network, senderId, kind, oldRate, newRate, changePct, effectiveFrom, until]
+      properties:
+        mccmnc:
+          type: string
+        country:
+          type: [string, "null"]
+        network:
+          type: [string, "null"]
+        senderId:
+          type: [string, "null"]
+        kind:
+          type: string
+          enum: [new, increase, decrease, same, closed, withdrawn, blocked, unblocked, note]
+        oldRate:
+          type: [number, "null"]
+        newRate:
+          type: [number, "null"]
+        changePct:
+          type: [number, "null"]
+        effectiveFrom:
+          type: [string, "null"]
+          format: date-time
+          description: When the new rate starts, or when a closed rate ends.
+        until:
+          type: [string, "null"]
+          format: date-time
+    RateChangeLogEntry:
+      type: object
+      required: [changeId, at, user, changeType, note, undoOfId, currency, counts, items, itemCount]
+      properties:
+        changeId:
+          type: integer
+        at:
+          type: string
+          format: date-time
+        user:
+          type: [string, "null"]
+        changeType:
+          type: string
+          description: create, edit, undo, …
+        note:
+          type: [string, "null"]
+        undoOfId:
+          type: [integer, "null"]
+        currency:
+          type: string
+        counts:
+          type: object
+          description: "Rates per kind, e.g. increase: 3, new: 1."
+          additionalProperties:
+            type: integer
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/RateChangeLogItem"
+        itemCount:
+          type: integer
+          description: All rates in the change; `items` holds the first 200.
+    RateChangeLogPage:
+      type: object
+      required: [rows, nextCursor]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/RateChangeLogEntry"
+        nextCursor:
+          type: [string, "null"]
     RateLineChangesSaved:
       type: object
       required: [change, applied, skipped]
@@ -16433,12 +16571,17 @@ components:
               type: array
               items:
                 type: object
-                required: [mccmnc, currentRate, newRate, effectiveFrom, noticeDays, earliestAllowed, enterpriseName]
+                required: [mccmnc, change, currentRate, newRate, effectiveFrom, noticeDays, earliestAllowed, enterpriseName]
                 properties:
                   mccmnc:
                     type: string
+                  change:
+                    type: string
+                    enum: [increase, decrease, new]
+                    description: Each kind has its own notice period on the client (team trial round 2).
                   currentRate:
-                    type: number
+                    type: [number, "null"]
+                    description: Null for a new destination.
                   newRate:
                     type: number
                   effectiveFrom:
@@ -16802,6 +16945,10 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        notificationNote:
+          type: [string, "null"]
+          maxLength: 2000
+          description: Text added to each rate notification e-mail and sheet sent by this save (team trial round 2).
         sendNotification:
           type: boolean
           default: false
@@ -16995,6 +17142,7 @@ components:
         - changeId
         - fileErrors
         - columns
+        - headerRow
         - replies
         - log
         - affectedRateTableIds
@@ -17028,6 +17176,9 @@ components:
                   type: string
                 field: *id002
             description: How the file's columns were read (remembered per vendor).
+          headerRow:
+            type: [integer, "null"]
+            description: The file row the headers were read from (1 = first row); null when the file could not be read.
           replies:
             type: array
             items:
@@ -17170,8 +17321,19 @@ components:
         content:
           type: string
           minLength: 1
-          maxLength: 5000000
-          description: 'The sheet as text: CSV, semicolon or tab separated (Excel copy). Excel files wait for the backend.'
+          maxLength: 14000000
+          description: >-
+            The sheet: CSV, semicolon or tab separated text, or with `encoding: base64` an Excel file (.xlsx, first
+            sheet; protected sheets are read; workbooks that need a password to open are refused with a file error).
+        encoding:
+          type: string
+          enum: [text, base64]
+          default: text
+        headerRow:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: The row holding the column headers (1 = first row). Null = found automatically (team trial round 2).
     RnIntake:
       type: object
       description: One incoming e-mail (fake in this phase) or an upload. A file with a username column, or one tab per account, is split into one RN per trunk.
@@ -30899,6 +31061,34 @@ components:
         includeInactive:
           type: boolean
           description: Include inactive trunks.
+        destination:
+          type: string
+          maxLength: 100
+          description: Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2).
+        code:
+          type: string
+          maxLength: 20
+          description: Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start.
+        tablesMin:
+          type: integer
+          minimum: 0
+        tablesMax:
+          type: integer
+          minimum: 0
+        priceMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, in the table currency (each table's own rate).
+        priceMax:
+          type: number
+          minimum: 0
+        sysMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, converted to the platform currency.
+        sysMax:
+          type: number
+          minimum: 0
         asOf:
           $ref: "#/components/schemas/Timestamp"
         limit:
@@ -30994,6 +31184,34 @@ components:
         includeInactive:
           type: boolean
           description: Include inactive trunks.
+        destination:
+          type: string
+          maxLength: 100
+          description: Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2).
+        code:
+          type: string
+          maxLength: 20
+          description: Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start.
+        tablesMin:
+          type: integer
+          minimum: 0
+        tablesMax:
+          type: integer
+          minimum: 0
+        priceMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, in the table currency (each table's own rate).
+        priceMax:
+          type: number
+          minimum: 0
+        sysMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, converted to the platform currency.
+        sysMax:
+          type: number
+          minimum: 0
         asOf:
           $ref: "#/components/schemas/Timestamp"
         mccmnc:

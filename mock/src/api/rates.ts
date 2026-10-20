@@ -15,6 +15,7 @@ import type {
   RateTableUpdate,
 } from "@sms/contract";
 import { PLATFORM_CURRENCY } from "../currency.js";
+import { platformDateTime } from "../platform.js";
 import { withDb } from "../db.js";
 import { marginPct, trafficTodayByRateTable } from "../edr.js";
 import { listFields } from "../lists/fields.js";
@@ -608,7 +609,8 @@ export async function applyRateTableEntries(
 
 export interface Breach {
   mccmnc: string;
-  currentRate: number;
+  change: NoticeKind;
+  currentRate: number | null;
   newRate: number;
   effectiveFrom: string;
   noticeDays: number;
@@ -618,27 +620,46 @@ export interface Breach {
   table?: string;
 }
 
-/** A rate table being edited, with the longest notice period of the clients using it (§13.14). */
+export type NoticeKind = "increase" | "decrease" | "new";
+export interface NoticePeriod {
+  days: number;
+  name: string;
+}
+/** The longest notice per kind of change among a table's clients; a kind with 0 days is absent (team trial round 2). */
+export type Notice = Partial<Record<NoticeKind, NoticePeriod>>;
+
+/** A rate table being edited, with the longest notice periods of the clients using it (§13.14). */
 export interface EditTable {
   id: number;
   name: string;
   kind: string;
   currency: string;
-  notice: { days: number; name: string } | null;
+  notice: Notice | null;
 }
 
-/** Longest notice period among the clients pricing with each customer table (§13.14). */
-export async function noticePeriods(db: Db, ids: number[]): Promise<Map<number, { days: number; name: string }>> {
+/** Longest notice periods per kind among the clients pricing with each customer table (§13.14, trial round 2). */
+export async function noticePeriods(db: Db, ids: number[]): Promise<Map<number, Notice>> {
   const { rows } = await db.query(
-    `SELECT DISTINCT ON (x.rate_table_id) x.rate_table_id AS id, e.rate_notice_days AS days, e.name
+    `SELECT DISTINCT x.rate_table_id AS id, e.name, e.rate_notice_days AS increase,
+            e.rate_notice_days_decrease AS decrease, e.rate_notice_days_new AS new
        FROM customer_trunk_rate_tables x
        JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL
        JOIN enterprises e ON e.id = t.enterprise_id
-      WHERE x.rate_table_id = ANY($1) AND e.rate_notice_days > 0
-      ORDER BY x.rate_table_id, e.rate_notice_days DESC, e.name`,
+      WHERE x.rate_table_id = ANY($1)
+        AND (e.rate_notice_days > 0 OR e.rate_notice_days_decrease > 0 OR e.rate_notice_days_new > 0)
+      ORDER BY e.name`,
     [ids],
   );
-  return new Map(rows.map((r) => [Number(r.id), { days: r.days as number, name: r.name as string }]));
+  const out = new Map<number, Notice>();
+  for (const r of rows) {
+    const n = out.get(Number(r.id)) ?? {};
+    for (const k of ["increase", "decrease", "new"] as const) {
+      const days = Number(r[k]);
+      if (days > 0 && days > (n[k]?.days ?? 0)) n[k] = { days, name: r.name as string };
+    }
+    out.set(Number(r.id), n);
+  }
+  return out;
 }
 
 /**
@@ -738,17 +759,26 @@ export async function applyLineEdits(
         skipped++;
         continue;
       }
-      if (notice && cur && rate > Number(cur.rate)) {
-        const earliest = nowMs + notice.days * 86_400_000;
+      const kind: NoticeKind | null = !cur
+        ? "new"
+        : rate > Number(cur.rate)
+          ? "increase"
+          : rate < Number(cur.rate)
+            ? "decrease"
+            : null;
+      const period = kind ? notice?.[kind] : undefined;
+      if (period) {
+        const earliest = nowMs + period.days * 86_400_000;
         if (from.getTime() < earliest - SKEW_MS)
           breaches.push({
-            mccmnc: String(cur.mccmnc),
-            currentRate: Number(cur.rate),
+            mccmnc: cur ? String(cur.mccmnc) : ref ? String(ref.mccmnc) : it.mccmnc!,
+            change: kind!,
+            currentRate: cur ? Number(cur.rate) : null,
             newRate: rate,
             effectiveFrom: from.toISOString(),
-            noticeDays: notice.days,
+            noticeDays: period.days,
             earliestAllowed: new Date(earliest).toISOString(),
-            enterpriseName: notice.name,
+            enterpriseName: period.name,
             rateTableId: id,
             table: table.name,
           });
@@ -850,9 +880,9 @@ export function sendNoticeBreach(reply: FastifyReply, breaches: Breach[]) {
     .type("application/problem+json")
     .send({
       type: "about:blank",
-      title: "Increases sooner than the client's notice period",
+      title: "Changes sooner than the client's notice period",
       status: 409,
-      detail: `${breaches.length} increase${breaches.length === 1 ? "" : "s"} start before ${breaches[0]!.earliestAllowed.slice(0, 10)} (${breaches[0]!.noticeDays} days' notice for ${breaches[0]!.enterpriseName})`,
+      detail: `${breaches.length} change${breaches.length === 1 ? "" : "s"} (${[...new Set(breaches.map((x) => x.change))].join(", ")}) start before ${platformDateTime(breaches[0]!.earliestAllowed)} (${breaches[0]!.noticeDays} days' ${breaches[0]!.change} notice for ${breaches[0]!.enterpriseName})`,
       breaches,
     });
 }
@@ -933,7 +963,8 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
       );
     if (result.change && table.kind === "vendor") scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
-    const notificationsSent = result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id) : 0;
+    const notificationsSent =
+      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : 0;
     return { change: result.change, applied: result.applied, skipped, notificationsSent };
   });
 }

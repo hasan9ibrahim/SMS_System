@@ -54,3 +54,16 @@ body {
 .trunk-pick-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--color-border); cursor: pointer; }
 .trunk-pick-row:last-child { border-bottom: 0; }
 .trunk-pick-row:hover { background: color-mix(in srgb, var(--color-accent) 7%, transparent); }
+
+/* Rate Manager: readable change log, save summary, effective date (team trial round 2) */
+.rlog { list-style: none; margin: 8px 0 0; padding: 0; }
+.rlog-entry { border: 1px solid var(--color-border); border-radius: 7px; padding: 8px 10px; margin-bottom: 8px; background: var(--color-panel); }
+.rlog-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rlog-note { margin-top: 4px; color: var(--color-text-secondary); }
+.rlog-items { list-style: none; margin: 6px 0 2px; padding: 0; display: grid; gap: 3px; }
+.rlog-items .tag { min-width: 70px; display: inline-block; text-align: center; }
+.save-summary-counts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.save-summary-table { max-height: 300px; overflow: auto; margin-bottom: 8px; }
+.eff-quick { display: block; margin-top: 2px; }
+.rn-columns { margin: 6px 0 10px; }
+.rn-header-row input { max-width: 120px; }

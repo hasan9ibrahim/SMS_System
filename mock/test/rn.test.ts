@@ -10,6 +10,7 @@ import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { bestBuySettled } from "../src/api/bestbuy.js";
 import { fieldOf, matchTrunk, parseDate, readSheet, splitRows } from "../src/rn/parse.js";
+import { workbookOf } from "./xlsxFixture.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -336,6 +337,57 @@ describe("incoming RNs (§13.32)", { skip }, () => {
     assert.equal(rn.replies[0].kind, "successful");
     assert.equal(rn.replies[0].status, "sent");
     if (rn.changeId) await call("POST", `/changes/${rn.changeId}/undo`, {});
+  });
+
+  test("Excel upload: protected sheet, given header row, original file kept (team trial round 2)", async () => {
+    const t = await trunk();
+    const [a] = t.codes;
+    const book = workbookOf([
+      ["Rates – locked sheet"],
+      ["Account", t.username],
+      ["MCCMNC", "Network", "Rate"],
+      [a!.mccmnc, "x", (a!.rate * 0.95).toFixed(6)],
+    ]);
+    const res = await ok(
+      "intakeRateNotification",
+      call("POST", "/rate-notifications/intake", {
+        source: "upload",
+        vendorTrunkId: t.id,
+        attachments: [{ fileName: "rates.xlsx", content: book.toString("base64"), encoding: "base64", headerRow: 3 }],
+      }),
+      201,
+    );
+    const rn = res.created[0];
+    assert.equal(rn.lines, 1);
+    const detail = await ok("getRateNotification", call("GET", `/rate-notifications/${rn.id}`));
+    assert.equal(detail.headerRow, 3);
+    assert.deepEqual(
+      detail.columns.map((c: { field: string | null }) => c.field),
+      ["mccmnc", "network", "rate"],
+    );
+    const file = await call("GET", `/rate-notifications/${rn.id}/file`);
+    assert.match(String(file.headers["content-type"]), /spreadsheetml/);
+    assert.equal(file.rawPayload.length, book.length);
+    await call("POST", `/rate-notifications/${rn.id}/reject`, { reason: "test upload" });
+
+    const locked = await ok(
+      "intakeRateNotification",
+      call("POST", "/rate-notifications/intake", {
+        source: "upload",
+        vendorTrunkId: t.id,
+        attachments: [
+          {
+            fileName: "locked.xlsx",
+            content: Buffer.from("d0cf11e0a1b11ae1", "hex").toString("base64"),
+            encoding: "base64",
+          },
+        ],
+      }),
+      201,
+    );
+    assert.equal(locked.created[0].status, "failed");
+    const ld = await ok("getRateNotification", call("GET", `/rate-notifications/${locked.created[0].id}`));
+    assert.match(ld.fileErrors[0].message, /password/);
   });
 
   test("RN list at volume, filters and sort", async () => {

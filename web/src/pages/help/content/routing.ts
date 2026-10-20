@@ -1642,7 +1642,13 @@ export const topics: HelpTopic[] = [
               { name: "MCCMNC", what: "Tick single destinations." },
               { name: "Search", what: "Country, network or code.", values: "`%` and `_` wildcards." },
               { name: "Inactive trunks", what: "Include rates of inactive trunks." },
-              { name: "Clear filters", what: "Clears that side's filters." },
+              { name: "Clear filters", what: "Clears that side's filters, including the column filters." },
+              {
+                name: "Column filters",
+                what: "Under each header, like the other grids: Destination (country or network, wildcards), MCCMNC (starts with, or wildcards), and Tables, Price and Sys price with **≥**, **≤** or **Range** (from – to).",
+                values:
+                  "Price compares each table's own rate in its currency; Sys price the converted rate. Number filters apply when you press Enter or leave the box.",
+              },
             ],
           },
           {

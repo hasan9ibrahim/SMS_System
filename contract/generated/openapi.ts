@@ -943,6 +943,28 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rate-tables/{id}/change-log": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Readable change log of one rate table (team trial round 2)
+     * @description The table's saved changes, newest first, each with its rates in plain words: destination, old and new rate,
+     *     what changed and from when (dates in the platform time zone are formatted by the GUI). Undo entries are
+     *     included. Paged with an opaque cursor.
+     */
+    get: operations["getRateChangeLog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-tables/{id}/export": {
     parameters: {
       query?: never;
@@ -1152,7 +1174,7 @@ export type paths = {
     };
     /**
      * The RN's original file
-     * @description As received.
+     * @description As received (CSV text, or the Excel workbook as uploaded).
      */
     get: operations["downloadRateNotificationFile"];
     put?: never;
@@ -10184,6 +10206,14 @@ export type components = {
       warning: number;
       critical: number;
     };
+    /**
+     * @description How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
+     *     `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Incoming RNs from the partner read
+     *     that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
+     * @default mcc
+     * @enum {string}
+     */
+    AllNetworksCode: "mcc" | "mcc0" | "mcc00" | "mcc000" | "mccStar";
     /** @description Add/Edit form (§5.1). The account manager is set on create; later changes go through handover (§13.30). */
     EnterpriseInput: {
       name: string;
@@ -10206,6 +10236,17 @@ export type components = {
       billingTimezone?: string;
       /** @description Notice period for rate increases (§13.14, §13.32). */
       rateNoticeDays?: number;
+      /**
+       * @description Notice period for rate decreases (team trial round 2). 0 = none.
+       * @default 0
+       */
+      rateNoticeDaysDecrease: number;
+      /**
+       * @description Notice period for new destinations (team trial round 2). 0 = none.
+       * @default 0
+       */
+      rateNoticeDaysNew: number;
+      allNetworksCode?: components["schemas"]["AllNetworksCode"];
       contacts: components["schemas"]["Contacts"];
     };
     EnterpriseDetail: components["schemas"]["Enterprise"] & {
@@ -10219,6 +10260,9 @@ export type components = {
       vatNumber?: string | null;
       billingTimezone: string;
       rateNoticeDays: number;
+      rateNoticeDaysDecrease: number;
+      rateNoticeDaysNew: number;
+      allNetworksCode: components["schemas"]["AllNetworksCode"];
       contacts: components["schemas"]["Contacts"];
       archived: components["schemas"]["Archived"];
       trunkCounts: {
@@ -10774,11 +10818,62 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
+      notificationNote?: string | null;
       /**
        * @description After saving, e-mail a rate notification to each customer using a changed customer table (its rates contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default). Logged in Email logs as send_rate. Vendor tables are never notified.
        * @default false
        */
       sendNotification: boolean;
+    };
+    RateChangeLogItem: {
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      senderId: string | null;
+      /** @enum {string} */
+      kind:
+        | "new"
+        | "increase"
+        | "decrease"
+        | "same"
+        | "closed"
+        | "withdrawn"
+        | "blocked"
+        | "unblocked"
+        | "note";
+      oldRate: number | null;
+      newRate: number | null;
+      changePct: number | null;
+      /**
+       * Format: date-time
+       * @description When the new rate starts, or when a closed rate ends.
+       */
+      effectiveFrom: string | null;
+      /** Format: date-time */
+      until: string | null;
+    };
+    RateChangeLogEntry: {
+      changeId: number;
+      /** Format: date-time */
+      at: string;
+      user: string | null;
+      /** @description create, edit, undo, … */
+      changeType: string;
+      note: string | null;
+      undoOfId: number | null;
+      currency: string;
+      /** @description Rates per kind, e.g. increase: 3, new: 1. */
+      counts: {
+        [key: string]: number;
+      };
+      items: components["schemas"]["RateChangeLogItem"][];
+      /** @description All rates in the change; `items` holds the first 200. */
+      itemCount: number;
+    };
+    RateChangeLogPage: {
+      rows: components["schemas"]["RateChangeLogEntry"][];
+      nextCursor: string | null;
     };
     RateLineChangesSaved: {
       /** @description Rate notification e-mails written (when sendNotification was set). */
@@ -10792,7 +10887,13 @@ export type components = {
     NoticeBreach: components["schemas"]["Problem"] & {
       breaches: {
         mccmnc: string;
-        currentRate: number;
+        /**
+         * @description Each kind has its own notice period on the client (team trial round 2).
+         * @enum {string}
+         */
+        change: "increase" | "decrease" | "new";
+        /** @description Null for a new destination. */
+        currentRate: number | null;
         newRate: number;
         effectiveFrom: components["schemas"]["Timestamp"];
         noticeDays: number;
@@ -10952,6 +11053,8 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
+      notificationNote?: string | null;
       /**
        * @description After saving, e-mail a rate notification to each customer using a changed customer table (its rates contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default). Logged in Email logs as send_rate. Vendor tables are never notified.
        * @default false
@@ -11045,6 +11148,8 @@ export type components = {
         header: string;
         field: string | null;
       }[];
+      /** @description The file row the headers were read from (1 = first row); null when the file could not be read. */
+      headerRow: number | null;
       replies: components["schemas"]["RnReply"][];
       log: components["schemas"]["RnLogEntry"][];
       /** @description Customer tables that sent traffic over this vendor trunk to the flagged destinations in the last 7 days (Accept and update customers). */
@@ -11098,8 +11203,15 @@ export type components = {
     };
     RnAttachment: {
       fileName: string;
-      /** @description The sheet as text: CSV, semicolon or tab separated (Excel copy). Excel files wait for the backend. */
+      /** @description The sheet: CSV, semicolon or tab separated text, or with `encoding: base64` an Excel file (.xlsx, first sheet; protected sheets are read; workbooks that need a password to open are refused with a file error). */
       content: string;
+      /**
+       * @default text
+       * @enum {string}
+       */
+      encoding: "text" | "base64";
+      /** @description The row holding the column headers (1 = first row). Null = found automatically (team trial round 2). */
+      headerRow?: number | null;
     };
     /** @description One incoming e-mail (fake in this phase) or an upload. A file with a username column, or one tab per account, is split into one RN per trunk. */
     RnIntake: {
@@ -17395,6 +17507,18 @@ export type components = {
       search?: string;
       /** @description Include inactive trunks. */
       includeInactive?: boolean;
+      /** @description Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2). */
+      destination?: string;
+      /** @description Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start. */
+      code?: string;
+      tablesMin?: number;
+      tablesMax?: number;
+      /** @description Only rates at or above this, in the table currency (each table's own rate). */
+      priceMin?: number;
+      priceMax?: number;
+      /** @description Only rates at or above this, converted to the platform currency. */
+      sysMin?: number;
+      sysMax?: number;
       asOf?: components["schemas"]["Timestamp"];
       /** @default 100 */
       limit: number;
@@ -17450,6 +17574,18 @@ export type components = {
       search?: string;
       /** @description Include inactive trunks. */
       includeInactive?: boolean;
+      /** @description Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2). */
+      destination?: string;
+      /** @description Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start. */
+      code?: string;
+      tablesMin?: number;
+      tablesMax?: number;
+      /** @description Only rates at or above this, in the table currency (each table's own rate). */
+      priceMin?: number;
+      priceMax?: number;
+      /** @description Only rates at or above this, converted to the platform currency. */
+      sysMin?: number;
+      sysMax?: number;
       asOf?: components["schemas"]["Timestamp"];
       mccmnc: string;
     };
@@ -19409,6 +19545,32 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  getRateChangeLog: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of changes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateChangeLogPage"];
+        };
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
   exportRateLines: {
     parameters: {
       query?: {
@@ -19742,6 +19904,7 @@ export interface operations {
         };
         content: {
           "text/csv": string;
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
         };
       };
       401: components["responses"]["Unauthorized"];

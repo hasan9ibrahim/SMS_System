@@ -2,11 +2,11 @@
 // time zone and ticking every second. It follows the server, not this computer's clock (§15.1).
 import { useEffect, useState } from "react";
 import { useServerOffset } from "../api/hooks";
-import { useReference } from "../api/records";
+import { usePlatformTz } from "../ui/zonedTime";
 
 export function SystemClock() {
   const { data, isError } = useServerOffset();
-  const tz = useReference().data?.platformTimezone ?? "UTC";
+  const tz = usePlatformTz();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);

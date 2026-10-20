@@ -682,7 +682,11 @@ async function autoApply(moveId: number): Promise<number> {
     if (move.direction === "up" ? margin >= min : rate >= sell) continue;
     const notice = (await noticePeriods(c, [Number(t.id)])).get(Number(t.id));
     const from = new Date(
-      Math.max(Date.parse(move.lastEffective), Date.now() + (notice?.days ?? 0) * DAY_MS, Date.now()),
+      Math.max(
+        Date.parse(move.lastEffective),
+        Date.now() + (notice?.[move.direction === "up" ? "increase" : "decrease"]?.days ?? 0) * DAY_MS,
+        Date.now(),
+      ),
     );
     const edits: RateLineEdit[] = [
       { action: "set", mccmnc: move.mccmnc, senderId: null, rate, effectiveFrom: from.toISOString() },

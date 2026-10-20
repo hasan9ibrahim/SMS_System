@@ -11,7 +11,8 @@ import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
 import { DestinationTree } from "./DestinationTree";
-import { DateTimeInput } from "../../ui/DateTimeInput";
+import { nextMidnight, usePlatformTz } from "../../ui/zonedTime";
+import { EffectiveFromField, effectiveIso, RnNoteField } from "./EffectiveFrom";
 
 /** "Send RN" on rating saves (team trial round 1): ticked by default on customer tables. */
 export function SendRnCheck({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -213,8 +214,11 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   const [picked, setPicked] = useState<string[]>([]);
   const [rate, setRate] = useState("");
   const [senderId, setSenderId] = useState("");
-  const [from, setFrom] = useState("");
+  const tz = usePlatformTz();
+  // Default start: the next 00:00 in the platform time zone (team trial round 2).
+  const [from, setFrom] = useState(() => nextMidnight(tz));
   const [note, setNote] = useState("");
+  const [rnNote, setRnNote] = useState("");
   const [sendRn, setSendRn] = useState(table.kind === "customer");
   const [error, setError] = useState<string | null>(null);
   const submit = () => {
@@ -226,11 +230,12 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
       mccmnc,
       rate: value,
       ...(senderId.trim() ? { senderId: senderId.trim() } : {}),
-      ...(from ? { effectiveFrom: new Date(`${from}:00Z`).toISOString() } : {}),
+      ...(from ? { effectiveFrom: effectiveIso(from, tz)! } : {}),
       ...(note.trim() ? { rateNote: note.trim() } : {}),
     }));
+    const notify = sendRn && table.kind === "customer";
     change.mutate(
-      { items, sendNotification: sendRn && table.kind === "customer" },
+      { items, sendNotification: notify, ...(notify && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}) },
       {
         onSuccess: (r) => {
           if (r.change)
@@ -276,22 +281,14 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
           <span>Sender ID</span>
           <input value={senderId} maxLength={20} placeholder="Any" onChange={(e) => setSenderId(e.target.value)} />
         </label>
-        <label className="field">
-          <span>Effective from (UTC)</span>
-          <DateTimeInput
-            value={from}
-            min={new Date().toISOString().slice(0, 16)}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-        </label>
+        <EffectiveFromField value={from} onChange={setFrom} />
       </div>
       <label className="field">
-        <span>Rate note</span>
+        <span>Rate note (saved on the rates)</span>
         <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
       </label>
-      <p className="muted small">
-        Empty date = now. A destination that already has a rate gets a new version from that date.
-      </p>
+      {sendRn && table.kind === "customer" && <RnNoteField value={rnNote} onChange={setRnNote} />}
+      <p className="muted small">A destination that already has a rate gets a new version from that date.</p>
       {error && <p className="error-text">{error}</p>}
     </Modal>
   );

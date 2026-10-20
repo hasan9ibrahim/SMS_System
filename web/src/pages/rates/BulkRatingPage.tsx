@@ -46,7 +46,8 @@ import { formatPct, formatRate, shortDateTime } from "./format";
 import { NoticeDialog } from "./RateTableView";
 import { SendRnCheck } from "./dialogs";
 import { DestinationPickDialog } from "./DestinationTree";
-import { DateTimeInput } from "../../ui/DateTimeInput";
+import { nextMidnight, usePlatformTz } from "../../ui/zonedTime";
+import { EffectiveFromField, effectiveIso, RnNoteField } from "./EffectiveFrom";
 
 const page = pageForPath("/rates/bulk")!;
 
@@ -308,9 +309,10 @@ function ApplyDialog({
 }: {
   count: number;
   tables: number;
-  done: (v: { note: string; sendRn: boolean } | null) => void;
+  done: (v: { note: string; sendRn: boolean; rnNote: string } | null) => void;
 }) {
   const [note, setNote] = useState("");
+  const [rnNote, setRnNote] = useState("");
   const [sendRn, setSendRn] = useState(true);
   return (
     <Modal
@@ -320,7 +322,7 @@ function ApplyDialog({
         <>
           <SendRnCheck checked={sendRn} onChange={setSendRn} />
           <Button onClick={() => done(null)}>Cancel</Button>
-          <Button variant="primary" onClick={() => done({ note, sendRn })}>
+          <Button variant="primary" onClick={() => done({ note, sendRn, rnNote })}>
             Apply
           </Button>
         </>
@@ -334,6 +336,7 @@ function ApplyDialog({
         <span>Note (optional, shown in History)</span>
         <input autoFocus value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
       </label>
+      {sendRn && <RnNoteField value={rnNote} onChange={setRnNote} />}
     </Modal>
   );
 }
@@ -351,7 +354,9 @@ export function BulkRatingPage() {
   const [costSource, setCostSource] = useState<"best_buy" | "vendor_trunk">("best_buy");
   const [vendorTrunkId, setVendorTrunkId] = useState<number | null>(null);
   const [round, setRound] = useState("4");
-  const [from, setFrom] = useState("");
+  const tz = usePlatformTz();
+  // Default start: the next 00:00 in the platform time zone (team trial round 2).
+  const [from, setFrom] = useState(() => nextMidnight(tz));
   const [respectNotice, setRespectNotice] = useState(true);
   const [addMissing, setAddMissing] = useState(false);
   const [preview, setPreview] = useState<RateBulkPreview | null>(null);
@@ -437,7 +442,7 @@ export function BulkRatingPage() {
       ...(countries.length ? { countryIsos: countries } : {}),
       onlyExisting: !addMissing,
       respectNotice,
-      effectiveFrom: from ? new Date(`${from}:00Z`).toISOString() : null,
+      effectiveFrom: effectiveIso(from, tz),
       ...(overrides.length ? { overrides } : {}),
       action: {
         type,
@@ -465,11 +470,12 @@ export function BulkRatingPage() {
     }
   };
 
-  const runApply = async (note: string, sendRn: boolean, acceptNoticeBreach = false): Promise<void> => {
+  const runApply = async (note: string, sendRn: boolean, acceptNoticeBreach = false, rnNote = ""): Promise<void> => {
     try {
       const r = await apply.mutateAsync({
         items,
         sendNotification: sendRn,
+        ...(sendRn && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
       });
@@ -491,7 +497,7 @@ export function BulkRatingPage() {
         const ok = await ask<boolean>((done) => (
           <NoticeDialog breach={err.problem as unknown as NoticeBreach} done={done} />
         ));
-        if (ok) return runApply(note, sendRn, true);
+        if (ok) return runApply(note, sendRn, true, rnNote);
         return;
       }
       toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
@@ -499,10 +505,10 @@ export function BulkRatingPage() {
   };
 
   const confirmApply = async () => {
-    const v = await ask<{ note: string; sendRn: boolean }>((done) => (
+    const v = await ask<{ note: string; sendRn: boolean; rnNote: string }>((done) => (
       <ApplyDialog count={items.length} tables={new Set(items.map((i) => i.rateTableId)).size} done={done} />
     ));
-    if (v) await runApply(v.note, v.sendRn);
+    if (v) await runApply(v.note, v.sendRn, false, v.rnNote);
   };
 
   const setRate = (key: string, v: number | null) => {
@@ -793,14 +799,7 @@ export function BulkRatingPage() {
                 </select>
               </label>
             )}
-            <label className="field">
-              <span title="Empty = now. Never in the past (§13.32).">Effective from (UTC)</span>
-              <DateTimeInput
-                value={from}
-                min={new Date().toISOString().slice(0, 16)}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </label>
+            <EffectiveFromField value={from} onChange={setFrom} />
           </div>
           <div className="bulk-row">
             <label className="toggle-inline">

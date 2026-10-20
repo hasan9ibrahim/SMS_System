@@ -11,3 +11,18 @@ export const PLATFORM_DAY_START_SQL = `toStartOfDay(now('${PLATFORM_TIMEZONE}'))
 const dayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: PLATFORM_TIMEZONE });
 /** The platform-time-zone date of `t` as YYYY-MM-DD. */
 export const platformDay = (t: number) => dayFormat.format(t);
+
+const timeFormat = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PLATFORM_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+/** `t` in the platform time zone as "YYYY-MM-DD HH:MM" (24-hour; rate notifications, team trial round 2). */
+export const platformDateTime = (t: number | string | Date) => {
+  const p = Object.fromEntries(timeFormat.formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+};

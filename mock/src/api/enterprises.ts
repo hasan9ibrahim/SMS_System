@@ -75,6 +75,9 @@ const SPECS: FieldSpec[] = [
   { api: "vatNumber", col: "vat_number" },
   { api: "billingTimezone", col: "billing_timezone" },
   { api: "rateNoticeDays", col: "rate_notice_days" },
+  { api: "rateNoticeDaysDecrease", col: "rate_notice_days_decrease" },
+  { api: "rateNoticeDaysNew", col: "rate_notice_days_new" },
+  { api: "allNetworksCode", col: "all_networks_code" },
 ];
 
 const CONTACT_TYPES = ["commercial", "technical", "rates", "finance"] as const;

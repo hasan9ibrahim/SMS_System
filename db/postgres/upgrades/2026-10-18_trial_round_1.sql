@@ -74,3 +74,12 @@ ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_t
   'traffic_alert','auto_upload_rejected','daily_report','broadcast','trouble_ticket','send_soa','payment_confirmation',
   'invoice_acceptance','invoice_rejection','monitoring_alert','cleanup_summary','credential_transfer','password_reminder',
   'template_test'));
+
+-- Team trial round 2 (migration 052): notice periods per kind, "all networks" code, RN header row.
+ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS rate_notice_days_decrease integer NOT NULL DEFAULT 0
+  CHECK (rate_notice_days_decrease BETWEEN 0 AND 90);
+ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS rate_notice_days_new integer NOT NULL DEFAULT 0
+  CHECK (rate_notice_days_new BETWEEN 0 AND 90);
+ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS all_networks_code text NOT NULL DEFAULT 'mcc'
+  CHECK (all_networks_code IN ('mcc', 'mcc0', 'mcc00', 'mcc000', 'mccStar'));
+ALTER TABLE rate_notifications ADD COLUMN IF NOT EXISTS header_row integer;

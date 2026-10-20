@@ -12,7 +12,8 @@ import { downloadCsv } from "../../api/masterData";
 import { DataGrid, type ColumnOverride } from "../../grid/DataGrid";
 import { emptyState, toListQuery, type GridState } from "../../grid/filterModel";
 import { problemText } from "../routing/dialogs";
-import { HistoryList, useNotifySaved } from "../../history/undo";
+import { useNotifySaved } from "../../history/undo";
+import { RateChangeLog } from "./RateChangeLog";
 import { useDeleteRecord, ArchivedBanner } from "../../records/parts";
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
@@ -21,9 +22,10 @@ import { Button, Menu, Modal, Popover } from "../../ui/primitives";
 import { scopeUrl } from "./bulkModel";
 import { AddRatesDialog, SendRnCheck, RenameTableDialog } from "./dialogs";
 import { formatMoney, formatPct, formatRate, formatSigned, shortDate, shortDateTime } from "./format";
-import { buildItems, changeRate, merge, round6, type ChangeMode, type Pending } from "./pending";
+import { buildItems, changeRate, merge, round6, summarize, type ChangeMode, type Pending } from "./pending";
 import { useOpenTable } from "./RateManagerPage";
-import { DateTimeInput } from "../../ui/DateTimeInput";
+import { formatZoned, isoToZoned, usePlatformTz } from "../../ui/zonedTime";
+import { defaultEffectiveIso, EffectiveFromField, effectiveIso, SaveSummaryDialog } from "./EffectiveFrom";
 
 type View = "current" | "scheduled" | "closed" | "log";
 const VIEWS: View[] = ["current", "scheduled", "closed", "log"];
@@ -183,25 +185,19 @@ function ChangeByForm({ onApply, customer }: { onApply: (m: ChangeMode, v: numbe
   );
 }
 
+/** The batch's effective date, in the platform time zone (team trial round 2: default next 00:00). */
 function DateForm({ value, onApply }: { value: string | null; onApply: (iso: string | null) => void }) {
-  const [v, setV] = useState(value ? value.slice(0, 16) : "");
+  const tz = usePlatformTz();
+  const [v, setV] = useState(value ? isoToZoned(value, tz) : "");
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onApply(v ? new Date(`${v}:00Z`).toISOString() : null);
+        onApply(effectiveIso(v, tz));
       }}
     >
-      <label className="field">
-        <span>Effective from (UTC) for this batch</span>
-        <DateTimeInput
-          autoFocus
-          value={v}
-          min={new Date().toISOString().slice(0, 16)}
-          onChange={(e) => setV(e.target.value)}
-        />
-      </label>
-      <p className="muted small">Empty = now. Rates never start in the past (traffic already sent keeps its rate).</p>
+      <EffectiveFromField label="Effective from for this batch" autoFocus value={v} onChange={setV} />
+      <p className="muted small">Rates never start in the past (traffic already sent keeps its rate).</p>
       <Button small type="submit">
         Set date
       </Button>
@@ -213,7 +209,7 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
   const byTable = breach.breaches.some((b) => b.table);
   return (
     <Modal
-      title="Increases sooner than the client's notice"
+      title="Changes sooner than the client's notice"
       width={600}
       onClose={() => done(null)}
       footer={
@@ -231,6 +227,7 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
           <tr>
             {byTable && <th>Table</th>}
             <th>MCCMNC</th>
+            <th>Change</th>
             <th className="num">Now</th>
             <th className="num">New</th>
             <th>From</th>
@@ -242,7 +239,10 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
             <tr key={`${b.rateTableId ?? ""}-${b.mccmnc}-${b.effectiveFrom}`}>
               {byTable && <td>{b.table}</td>}
               <td className="num">{b.mccmnc}</td>
-              <td className="num">{formatRate(b.currentRate)}</td>
+              <td>
+                {b.change === "new" ? "New" : b.change === "decrease" ? "Decrease" : "Increase"} ({b.noticeDays} d)
+              </td>
+              <td className="num">{b.currentRate === null ? "–" : formatRate(b.currentRate)}</td>
               <td className="num">{formatRate(b.newRate)}</td>
               <td>{shortDateTime(b.effectiveFrom)}</td>
               <td>{shortDate(b.earliestAllowed)}</td>
@@ -311,7 +311,15 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
   const change = useChangeRateLines(id);
   const [grid, setGrid] = useState<GridState>(emptyState);
   const [pending, setPending] = useState<Pending>(new Map());
-  const [effectiveFrom, setEffectiveFrom] = useState<string | null>(null);
+  const tz = usePlatformTz();
+  // Chosen batch date (null = now); until one is chosen the batch starts at the next 00:00 (team trial round 2).
+  const [chosenFrom, setChosenFrom] = useState<string | null>(null);
+  const [fromChosen, setFromChosen] = useState(false);
+  const effectiveFrom = fromChosen ? chosenFrom : defaultEffectiveIso(tz);
+  const setEffectiveFrom = (v: string | null) => {
+    setChosenFrom(v);
+    setFromChosen(true);
+  };
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // "Send RN" ticked by default on customer tables (team trial round 1).
   const [sendRn, setSendRn] = useState(true);
@@ -481,8 +489,33 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       });
   };
 
-  const save = async (acceptNoticeBreach = false): Promise<void> => {
-    const items = buildItems(pending, rowsById.current, effectiveFrom);
+  /** Customer tables: the summary of the save, with the RN choice and note, comes first (team trial round 2). */
+  const confirmSave = async () => {
+    if (t?.kind !== "customer") return save();
+    const { counts, rows } = summarize(pending, rowsById.current);
+    if (!rows.length) return save();
+    const v = await ask<{ sendRn: boolean; note: string }>((done) => (
+      <SaveSummaryDialog
+        table={t.name}
+        clients={[...new Set(t.trunks.map((x) => x.enterpriseName))]}
+        counts={counts}
+        rows={rows}
+        effectiveFrom={effectiveFrom}
+        scheduledKept={!fromChosen}
+        sendRn={sendRn}
+        done={done}
+      />
+    ));
+    if (!v) return;
+    setSendRn(v.sendRn);
+    return save(false, v);
+  };
+
+  const save = async (
+    acceptNoticeBreach = false,
+    rn: { sendRn: boolean; note: string } = { sendRn, note: "" },
+  ): Promise<void> => {
+    const items = buildItems(pending, rowsById.current, effectiveFrom, Date.now(), fromChosen);
     if (!items.length) {
       setPending(new Map());
       return;
@@ -490,12 +523,14 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     try {
       const r = await change.mutateAsync({
         items,
-        sendNotification: sendRn && t?.kind === "customer",
+        sendNotification: rn.sendRn && t?.kind === "customer",
+        ...(rn.note.trim() ? { notificationNote: rn.note.trim() } : {}),
         ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
       });
       setPending(new Map());
       setSelected(new Set());
-      setEffectiveFrom(null);
+      setChosenFrom(null);
+      setFromChosen(false);
       if (r.change)
         notifySaved(
           r.change,
@@ -507,7 +542,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
         const ok = await ask<boolean>((done) => (
           <NoticeDialog breach={err.problem as unknown as NoticeBreach} done={done} />
         ));
-        if (ok) return save(true);
+        if (ok) return save(true, rn);
         return;
       }
       toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
@@ -718,9 +753,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           )}
         </div>
         {view === "log" ? (
-          <div className="rate-log">
-            <HistoryList scope={{ entityTypes: ["rate_table"], entityId: t.id }} />
-          </div>
+          <RateChangeLog tableId={t.id} />
         ) : (
           <DataGrid<RateLineRow>
             list="rate_lines"
@@ -768,7 +801,9 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               )}
             </BarAction>
             <BarAction
-              label={effectiveFrom ? `From ${shortDateTime(effectiveFrom)}` : "Effective date…"}
+              label={
+                !fromChosen ? "From next 00:00" : effectiveFrom ? `From ${formatZoned(effectiveFrom, tz)}` : "From now"
+              }
               disabled={!editable}
             >
               {(close) => (
@@ -800,7 +835,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 if (
                   await confirmDialog({
                     title: `Close ${selected.size} rate${selected.size === 1 ? "" : "s"}?`,
-                    message: `The rates end ${effectiveFrom ? `on ${shortDateTime(effectiveFrom)}` : "now"} and move to Closed; scheduled ones are withdrawn. Saved with the other changes.`,
+                    message: `The rates end ${effectiveFrom ? `on ${formatZoned(effectiveFrom, tz)} (${tz})` : "now"} and move to Closed; scheduled ones are withdrawn. Saved with the other changes.`,
                     ok: "Close rates",
                     danger: true,
                   })
@@ -831,13 +866,13 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             {pending.size > 0 && (
               <>
                 <span className="bar-note small">
-                  {pending.size} unsaved{effectiveFrom ? ` · from ${shortDateTime(effectiveFrom)}` : ""}
+                  {pending.size} unsaved · from {effectiveFrom ? formatZoned(effectiveFrom, tz) : "now"}
                 </span>
                 <button type="button" className="btn btn-sm btn-ghost bar-btn" onClick={() => setPending(new Map())}>
                   Discard
                 </button>
                 {t.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
-                <Button small variant="primary" disabled={change.isPending} onClick={() => void save()}>
+                <Button small variant="primary" disabled={change.isPending} onClick={() => void confirmSave()}>
                   Save {pending.size} change{pending.size === 1 ? "" : "s"}
                 </Button>
               </>

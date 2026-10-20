@@ -76,7 +76,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A rate is never overwritten. When you change a rate, the platform ends the old rate and starts a **new version** from the effective date you choose (empty = now). The old version stays in the table's history with its from and to dates.",
+            text: "A rate is never overwritten. When you change a rate, the platform ends the old rate and starts a **new version** from the effective date you choose. Dates and times are in the platform (system) time zone, 24-hour; by default a change starts at the next 00:00 (**Now** starts it at once). The old version stays in the table's history with its from and to dates.",
           },
           {
             kind: "list",
@@ -108,7 +108,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "When a table is used by several clients, the longest notice period among them counts.",
-              "If you save an increase that starts too soon, the platform stops and shows **Increases sooner than the client's notice**, listing each rate, its current and new rate and the earliest allowed date. You can cancel and change the date, or choose **Apply anyway** (the override is logged with the change).",
+              "If you save a change that starts sooner than the client's notice for that kind (increase, decrease or new destination, set on the enterprise), the platform stops and shows **Changes sooner than the client's notice**, listing each rate, its kind, its current and new rate and the earliest allowed date. You can cancel and change the date, or choose **Apply anyway** (the override is logged with the change).",
               "Decreases and new destinations can start at once.",
               "In [[bulk|Bulk rating]], **Respect notice periods** moves each increase to the end of its client's notice automatically.",
             ],
@@ -458,7 +458,7 @@ export const topics: HelpTopic[] = [
               "Click the rate in the **Sell Rate** column.",
               "Type the new rate and press Enter (or click away). Esc cancels.",
               "The cell is highlighted and the bulk bar shows **1 unsaved**. Make more edits if you like.",
-              "Optionally set **Effective date…** in the bulk bar (empty = now).",
+              "The batch starts at the next 00:00 (platform time zone) unless you set another date with **From next 00:00** in the bulk bar.",
               "Click **Save n changes**.",
             ],
           },
@@ -485,7 +485,7 @@ export const topics: HelpTopic[] = [
                 name: "Effective date…",
                 what: "One start date for the whole batch.",
                 values:
-                  "**Effective from (UTC) for this batch**, then **Set date**. Empty = now. Cannot be in the past. Without a date, an edited scheduled rate keeps its own start date.",
+                  "**Effective from for this batch** (platform time zone, 24-hour), then **Set date**. **Next 00:00** and **Now** fill it in one click. Cannot be in the past. While the default next 00:00 is kept, an edited scheduled rate keeps its own later start date.",
               },
               {
                 name: "Block",
@@ -539,9 +539,9 @@ export const topics: HelpTopic[] = [
                 values: 'Up to 20 characters. Empty ("Any") = the normal price.',
               },
               {
-                name: "Effective from (UTC)",
-                what: "When the new lines start.",
-                values: "Empty = now. Cannot be in the past.",
+                name: "Effective from",
+                what: "When the new rates start, in the platform time zone (24-hour).",
+                values: "Default: the next 00:00. **Now** = at once. Cannot be in the past.",
               },
               { name: "Rate note", what: "Optional remark saved on the rates (up to 500 characters)." },
               {
@@ -557,6 +557,7 @@ export const topics: HelpTopic[] = [
               "Open the table and click **Add rates**.",
               "In the tree, search for a country or network and tick what you need.",
               "Enter the **Rate**, and if needed a **Sender ID**, **Effective from** date and **Rate note**.",
+              "With **Send RN to clients** ticked, type an optional **Note on the RN**: it is added at the top of the e-mail each client gets.",
               "Click **Add n rates**. The toast says how many rates were added and how many clients got an RN; click Undo there to take it back.",
             ],
           },
@@ -664,10 +665,11 @@ export const topics: HelpTopic[] = [
               "Each new rate starts a new version from its effective date; the version before it ends at that moment. Versions that would start on or after that date are replaced.",
               'A rate equal to the current one is skipped ("Nothing changed").',
               "Blocks are applied first, then rate changes; a new version keeps the block of the rate it replaces.",
-              "On customer tables, increases that start sooner than the clients' notice period stop the save and open **Increases sooner than the client's notice**: the table lists MCCMNC, Now, New, From and Earliest with notice. Choose **Cancel** and set a later date, or **Apply anyway** (logged with the change).",
+              "On customer tables, changes that start sooner than the clients' notice period for that kind stop the save and open **Changes sooner than the client's notice**: the table lists MCCMNC, Change (with the notice days), Now, New, From and Earliest with notice. Choose **Cancel** and set a later date, or **Apply anyway** (logged with the change).",
               "If someone else saved the same rates at the same moment, you are asked to reload, review and save again.",
               "Vendor rate changes update best buy and routing costs straight away.",
               "The whole batch is one change: the toast offers Undo, and it appears in **Change log**.",
+              "On customer tables, **Save n changes** first shows a summary: counts of increases, decreases, closed and blocked rates, the effective date, the clients using the table and each rate with current → new and %. Untick **Send RN to clients** or type a **Note on the RN** there, then **Save n changes** (or **Back to editing**).",
             ],
           },
         ],
@@ -678,7 +680,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'The **Change log** view (or **History** in the header) lists every saved change on this table: who, when, what changed and any note (for example a short-notice override or "Copied 1,200 rates from …"). You can undo your own changes there; undoing someone else\'s needs that permission. The **Closed** view shows the old versions themselves with their dates. See [[undo-and-history]].',
+            text: 'The **Change log** view (or **History** in the header) lists every saved change on this table in plain words: who, when, any note, and each rate as "Country · Network (MCCMNC): old → new (+5 %) from 21 Oct 2026, 00:00", or New, Closed, Blocked, Scheduled rate withdrawn. Changes with more than 10 rates fold; click **Show the n rates**. **Technical (with undo)** shows the same changes field by field, where you can undo your own changes; undoing someone else\'s needs that permission. The **Closed** view shows the old versions themselves with their dates. See [[undo-and-history]].',
           },
         ],
       },
@@ -751,7 +753,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Rows of flagged RNs that are due soon are highlighted.",
+            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Rows of flagged RNs that are due soon are highlighted. Tick several RNs and choose **Bulk edit › Accept n pending RNs** to accept them all at once (each RN is still its own change you can undo; the confirmation warns when some have live traffic flags or notice breaches).",
           },
           {
             kind: "fields",
@@ -803,6 +805,18 @@ export const topics: HelpTopic[] = [
               {
                 name: "Upload a file / Simulate an e-mail",
                 what: "How the RN comes in.",
+              },
+              {
+                name: "Rate sheet",
+                what: "An Excel workbook (.xlsx, the first sheet is read) or CSV / semicolon / tab separated text, or paste from Excel.",
+                values:
+                  "Protected (locked) sheets are read as usual. A workbook that needs a password to open fails with a file error asking for an unlocked file.",
+              },
+              {
+                name: "Header row",
+                what: "The row with the column headers, e.g. `3` when the vendor puts a title and an account line above them.",
+                values:
+                  "Empty = found automatically: the first of the first 20 rows with a rate and a destination column.",
               },
               {
                 name: "Vendor trunk",
@@ -935,7 +949,7 @@ export const topics: HelpTopic[] = [
               "Clicking a rate shows its old → new rate, stated / applied dates, notice given versus required, traffic in 1 h / 24 h / 7 d, what was sent before receipt, the customers and any reject reason.",
               "**Replies (n)**: the replies to the vendor. Sent ones can be shown; a **draft** can be edited (subject and body) and sent with **Send reply**.",
               "**Log**: every step (received, checked, decided, replied) with user and time.",
-              "**File (n)**: sender, subject, file name, how each column was read, **Download the original file**, and the file errors line by line.",
+              "**File (n)**: sender, subject, file name, the **Header row** used, a table of every column (letter, header in the file, read as), **Download the original file**, and the file errors row by row.",
             ],
           },
         ],
@@ -1314,8 +1328,8 @@ export const topics: HelpTopic[] = [
               },
               { name: "Round to", what: "Decimals of the new rates: 2 to 6. Default 4." },
               {
-                name: "Effective from (UTC)",
-                what: "When the new rates start. Empty = now. Never in the past.",
+                name: "Effective from",
+                what: "When the new rates start, in the platform time zone. Default: the next 00:00; **Now** = at once. Never in the past.",
               },
               {
                 name: "Respect notice periods",
@@ -1418,7 +1432,7 @@ export const topics: HelpTopic[] = [
               "Click **Apply n changes** in the header.",
               "In **Apply n changes?** add an optional **Note** (shown in History) and keep or untick **Send RN to clients**.",
               "Click **Apply**. All tables change together as one change, undone as one.",
-              "If **Respect notice periods** was off and some increases start too soon, **Increases sooner than the client's notice** opens: **Apply anyway** (logged) or cancel, tick **Respect notice periods** and preview again.",
+              "If **Respect notice periods** was off and some increases start too soon, **Changes sooner than the client's notice** opens: **Apply anyway** (logged) or cancel, tick **Respect notice periods** and preview again.",
             ],
           },
           {
