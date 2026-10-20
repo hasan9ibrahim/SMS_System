@@ -144,6 +144,20 @@ describe("§13.15 Master Report", { skip }, () => {
     assert.equal(each.totals.metrics.attempts, numeric.metrics.attempts);
   });
 
+  test("Vendor Sender ID (after translation) groups and filters like the customer one (team trial round 2)", async () => {
+    const groups = await ok<MasterReportPage>(
+      "runMasterReport",
+      call("POST", "/reports/master", Q({ groupBy: ["vendorSenderGroup"], limit: 4000 })),
+    );
+    assert.ok(groups.rows.length > 0);
+    assert.ok(groups.rows.every((r) => !/^[+]?[0-9]+$/.test(String(r.dims.vendorSenderGroup!.label))));
+    const edrs = await ok<{ rows: { senderId: string; vendorSenderId: string }[] }>(
+      "queryEdrs",
+      call("POST", "/edrs/query", { limit: 5, filter: { logic: "and", conditions: [] } }),
+    );
+    assert.ok(edrs.rows.every((r) => typeof r.vendorSenderId === "string"));
+  });
+
   test("grouping, totals equal the rows, paging, labels", async () => {
     const all = await ok<MasterReportPage>(
       "runMasterReport",

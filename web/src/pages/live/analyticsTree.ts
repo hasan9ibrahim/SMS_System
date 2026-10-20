@@ -6,7 +6,13 @@
 import type { FilterCondition, MasterReportQuery, MasterReportRow, ReportDimension, ReportMetric } from "@sms/contract";
 import { drillConditions } from "../reports/masterModel";
 
-export const LEVELS: { value: ReportDimension; label: string; time?: boolean }[] = [
+export const LEVELS: {
+  value: ReportDimension;
+  label: string;
+  time?: boolean;
+  /** Offered only under a Numeric row of this level (team trial round 2: each numeric Sender ID). */
+  numericOf?: ReportDimension;
+}[] = [
   { value: "customer", label: "Customer" },
   { value: "customerTrunk", label: "Customer trunk" },
   { value: "country", label: "Customer country" },
@@ -17,9 +23,12 @@ export const LEVELS: { value: ReportDimension; label: string; time?: boolean }[]
   { value: "vendorDestination", label: "Vendor network (MCCMNC)" },
   { value: "accountManager", label: "Customer account manager" },
   { value: "vendorAccountManager", label: "Vendor account manager" },
-  // Numeric Sender IDs as one "Numeric" row; its + breaks it down by Sender ID (each) (team trial round 2).
-  { value: "senderGroup", label: "Sender ID" },
-  { value: "senderId", label: "Sender ID (each)" },
+  // Customer Sender ID = what the customer sent us; Vendor Sender ID = what we sent the vendor after translation
+  // rules. Numeric ones are one "Numeric" row; only that row's + lists them one by one (team trial round 2).
+  { value: "senderGroup", label: "Customer Sender ID" },
+  { value: "senderId", label: "Customer Sender ID (each numeric)", numericOf: "senderGroup" },
+  { value: "vendorSenderGroup", label: "Vendor Sender ID" },
+  { value: "vendorSenderId", label: "Vendor Sender ID (each numeric)", numericOf: "vendorSenderGroup" },
   { value: "productCategory", label: "Product category" },
   { value: "quarterHour", label: "15 minutes", time: true },
   { value: "hour", label: "Hour", time: true },
@@ -30,8 +39,16 @@ export const LEVELS: { value: ReportDimension; label: string; time?: boolean }[]
 const TIME = new Set<ReportDimension>(["quarterHour", "hour", "date", "week", "month"]);
 export const levelLabel = (d: ReportDimension) => LEVELS.find((l) => l.value === d)?.label ?? d;
 
-/** What a row's "+" offers: every level not already used by the row or the rows above it. */
-export const levelOptions = (used: readonly ReportDimension[]) => LEVELS.filter((l) => !used.includes(l.value));
+/**
+ * What a row's "+" offers: every level not already used by the row or the rows above it. "Each numeric" Sender ID
+ * levels only under a Numeric row of their group (`conds`: the row's and its parents' conditions).
+ */
+export const levelOptions = (used: readonly ReportDimension[], conds: readonly FilterCondition[] = []) =>
+  LEVELS.filter(
+    (l) =>
+      !used.includes(l.value) &&
+      (!l.numericOf || conds.some((c) => c.field === l.numericOf && c.op === "eq" && c.value === "Numeric")),
+  );
 
 export type Fmt = "int" | "pct" | "money" | "rate" | "sec" | "tps";
 export interface Column {

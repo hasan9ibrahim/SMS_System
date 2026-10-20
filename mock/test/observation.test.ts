@@ -385,7 +385,7 @@ describe("§9 downloads", { skip }, () => {
     const file = await call("GET", `/edr-downloads/${d.id}/file`);
     assert.equal(file.statusCode, 200);
     const lines = file.body.trim().split("\n");
-    assert.equal(lines[0], '"Start Time","DNID","Customer Trunk"');
+    assert.equal(lines[0], '"Start Time","DNID (C)","Customer Trunk"');
     assert.equal(lines.length - 1, total);
     assert.ok(lines.slice(1).every((l) => l.includes(`"${trunk}"`)));
     assert.equal((await call("POST", `/edr-downloads/${d.id}/cancel`)).statusCode, 409);

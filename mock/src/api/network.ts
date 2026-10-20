@@ -184,6 +184,33 @@ async function bindTick(pool: pg.Pool) {
   }
 }
 
+/**
+ * Vendor bind policy (team trial round 2): saving or activating a vendor trunk (perhaps with new credentials) binds
+ * every Max Connections session again; an inactive trunk is unbound. Simulated: the sessions drop and come back after
+ * the first reconnect step. Nothing is sent in this phase.
+ */
+export async function rebindVendorTrunk(pool: pg.Pool, trunkId: number): Promise<void> {
+  const { rows } = await pool.query(
+    "SELECT status, max_connections, reconnect_schedule_s FROM vendor_trunks WHERE id = $1 AND deleted_at IS NULL",
+    [trunkId],
+  );
+  const t = rows[0];
+  if (!t) return;
+  await pool.query("DELETE FROM bind_sessions WHERE side = 'vendor' AND trunk_id = $1", [trunkId]);
+  await pool.query(
+    `INSERT INTO trunk_binds (side, trunk_id, status, connections, queue, tps, since)
+     VALUES ('vendor', $1, 'offline', 0, 0, 0, now())
+     ON CONFLICT (side, trunk_id) DO UPDATE SET status = 'offline', connections = 0, tps = 0, since = now()`,
+    [trunkId],
+  );
+  if (t.status !== "active") return;
+  const firstStep = Number((t.reconnect_schedule_s as number[] | null)?.[0] ?? 5);
+  setTimeout(
+    () => void bringOnline(pool, "vendor", trunkId, Number(t.max_connections)).catch(() => undefined),
+    Math.min(firstStep, 10) * 1000,
+  ).unref();
+}
+
 async function bringOnline(
   pool: pg.Pool,
   side: Side,

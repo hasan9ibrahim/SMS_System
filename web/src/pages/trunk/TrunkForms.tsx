@@ -1,5 +1,6 @@
 // Customer trunk form (§5.4, §13.1, §13.26) and vendor trunk form (§5.5, §13.26). Field
 // names follow the reference platform; passwords are write-only (never shown, §13.22).
+import { useEffect, useState } from "react";
 import { useTabShown } from "../../api/access";
 import type { CustomerTrunkInput, RateTableRow, TrunkListRow, VendorTrunkInput } from "@sms/contract";
 import { useReference, type TrunkDetail, type TrunkKind } from "../../api/records";
@@ -124,6 +125,11 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     submitIntervalMs: 0,
     submitTimeoutS: 30,
     enquireLinkTimeoutS: 30,
+    // Bind policy defaults (team trial round 2).
+    enquireLinkIntervalS: 30,
+    reconnectScheduleS: [5, 10, 30, 60],
+    bindAlertAfterMin: 2,
+    authFailRetryMin: 15,
     msgIdType: "default",
     http: {
       url: null,
@@ -317,6 +323,38 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
           />
         </li>
       </ol>
+    </FormField>
+  );
+}
+
+/**
+ * Reconnect schedule (team trial round 2): seconds before each retry after a drop or a refused bind, typed as a
+ * list ("5, 10, 30, 60"); the last value repeats until the bind is up or the trunk is stopped.
+ */
+function ReconnectField({ form }: { form: FormApi<TrunkForm> }) {
+  const value = ((form.values as VendorTrunkInput).reconnectScheduleS ?? []).join(", ");
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const list = draft
+      .split(/[,;\s]+/)
+      .map((x) => Number(x))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 3600)
+      .slice(0, 10);
+    if (list.length) form.set("reconnectScheduleS", list);
+    else setDraft(value);
+  };
+  return (
+    <FormField label="Reconnect after" error={form.error("reconnectScheduleS")} hint="Seconds; the last one repeats">
+      <input
+        value={draft}
+        inputMode="numeric"
+        placeholder="5, 10, 30, 60"
+        aria-label="Reconnect schedule in seconds"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === "Enter" && commit()}
+      />
     </FormField>
   );
 }
@@ -551,7 +589,46 @@ export function VendorTrunkFields({
               <NumberField form={form} path="windowSize" label="Window size" min={1} max={1000} step={1} />
               <NumberField form={form} path="submitIntervalMs" label="Submit interval" min={0} step={1} suffix="ms" />
               <NumberField form={form} path="submitTimeoutS" label="Submit timeout" min={1} step={1} suffix="s" />
-              <NumberField form={form} path="enquireLinkTimeoutS" label="Enquire link" min={1} step={1} suffix="s" />
+              <NumberField
+                form={form}
+                path="enquireLinkIntervalS"
+                label="Enquire link every"
+                min={5}
+                max={3600}
+                step={1}
+                suffix="s"
+                hint="Keep-alive on an idle session"
+              />
+              <NumberField
+                form={form}
+                path="enquireLinkTimeoutS"
+                label="Enquire link response"
+                min={1}
+                step={1}
+                suffix="s"
+                hint="No answer in time drops the session; it is then retried"
+              />
+              <ReconnectField form={form} />
+              <NumberField
+                form={form}
+                path="bindAlertAfterMin"
+                label="Bind down alert after"
+                min={1}
+                max={1440}
+                step={1}
+                suffix="min"
+                hint="Short reconnects cause no alert; a refused login alerts at once"
+              />
+              <NumberField
+                form={form}
+                path="authFailRetryMin"
+                label="Retry after wrong login"
+                min={1}
+                max={1440}
+                step={1}
+                suffix="min"
+                hint="Wrong password or system ID: wait, don't lock the account. Saving retries at once."
+              />
               <SelectField
                 form={form}
                 path="msgIdType"

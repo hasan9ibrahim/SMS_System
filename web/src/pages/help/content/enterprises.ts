@@ -590,7 +590,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Auto invoicing",
                 what: "Customer side only. Create invoices automatically at the end of each billing cycle.",
-                values: "Tick box.",
+                values: "Tick box. On by default.",
               },
               {
                 name: "Send payment confirmation",
@@ -959,7 +959,7 @@ export const topics: HelpTopic[] = [
               { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
               {
                 name: "Connection",
-                what: "Our bind to the vendor now: green **Up** (all sessions bound), orange **Reconnecting** (some sessions missing, or down for less than 15 minutes while we retry) or red **Down**.",
+                what: "Our bind to the vendor now: green **Up** (all sessions bound), orange **Reconnecting** (some sessions missing, or down for less than the trunk's **Bind down alert after** time while we retry) or red **Down**.",
               },
               { name: "Bind Type", what: "TX, RX or TR." },
               {
@@ -1427,9 +1427,29 @@ export const topics: HelpTopic[] = [
                 values: "Seconds. Default 30.",
               },
               {
-                name: "Enquire link",
-                what: "How long we wait for an answer to the keep-alive check (enquire_link) before the session is treated as dead.",
+                name: "Enquire link every",
+                what: "How often an idle session sends the keep-alive check (enquire_link).",
+                values: "Seconds, 5–3600. Default 30.",
+              },
+              {
+                name: "Enquire link response",
+                what: "How long we wait for the answer to enquire_link. No answer in time drops the session, which is then retried on the reconnect schedule.",
                 values: "Seconds. Default 30.",
+              },
+              {
+                name: "Reconnect after",
+                what: "Seconds before each new bind attempt after a session drops or a bind is refused. The last value repeats until the bind is up or the trunk is stopped. An active trunk binds all its Max connections sessions when it is activated or saved, and keeps them up.",
+                values: "A list, e.g. `5, 10, 30, 60` (default): 5 s, 10 s, 30 s, then every 60 s.",
+              },
+              {
+                name: "Bind down alert after",
+                what: "The Bind Down Alert goes out, and Connection turns red **Down**, only after the trunk has had no bound session this long, so short reconnects make no noise. A refused login (wrong password or system ID) alerts at once.",
+                values: "Minutes. Default 2.",
+              },
+              {
+                name: "Retry after wrong login",
+                what: "After the vendor refuses the bind for a wrong password or system ID, wait this long before trying again: retrying quickly won't fix it and can lock the account. Saving the trunk (e.g. with new credentials) tries again at once.",
+                values: "Minutes. Default 15.",
               },
               {
                 name: "Message ID type",

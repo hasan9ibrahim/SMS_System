@@ -1,6 +1,7 @@
 // Customer and vendor trunks (§5.4, §5.5) with session affinity (§13.1), revenue and cost
 // limits (§13.26), the trunk's Rules tab (§13.2), safe delete (§13.29) and the change log
 // with undo (§13.10). Both kinds share one implementation driven by a field map.
+import { rebindVendorTrunk } from "./network.js";
 import { isIP } from "node:net";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
@@ -107,6 +108,11 @@ const VENDOR_SPECS: FieldSpec[] = [
   { api: "submitIntervalMs", col: "submit_interval_ms" },
   { api: "submitTimeoutS", col: "submit_timeout_s" },
   { api: "enquireLinkTimeoutS", col: "enquire_link_timeout_s" },
+  // Bind policy (team trial round 2): enquire_link interval, reconnect schedule, alert delay, wrong-login wait.
+  { api: "enquireLinkIntervalS", col: "enquire_link_interval_s" },
+  { api: "reconnectScheduleS", col: "reconnect_schedule_s" },
+  { api: "bindAlertAfterMin", col: "bind_alert_after_min" },
+  { api: "authFailRetryMin", col: "auth_fail_retry_min" },
   { api: "msgIdType", col: "msg_id_type" },
   ...HTTP_FIELDS.map(([api, col]) => ({ api: `http.${api}`, col })),
   { api: "windowSize", col: "window_size" },
@@ -363,6 +369,8 @@ export function createTrunk(kind: TrunkKind) {
           });
           return { id, change };
         });
+        // A new active vendor trunk binds all its sessions (team trial round 2).
+        if (kind === "vendor") await rebindVendorTrunk(pool, id);
         return reply.code(201).send({ record: await loadTrunk(pool, k, id), change });
       } catch (err) {
         if (isUniqueViolation(err)) return badInput(reply, [{ path: "/username", message: "already in use" }]);
@@ -410,6 +418,8 @@ export function updateTrunk(kind: TrunkKind) {
             ip: request.ip,
           });
         });
+        // Saved or (de)activated vendor trunk: bind all sessions again with the saved settings (team trial round 2).
+        if (kind === "vendor") await rebindVendorTrunk(pool, id);
         return { record: await loadTrunk(pool, k, id), change };
       } catch (err) {
         if (isUniqueViolation(err)) return badInput(reply, [{ path: "/username", message: "already in use" }]);

@@ -327,18 +327,21 @@ function ExpandButton({
   name,
   open,
   used,
+  conds = [],
   onPick,
   onClose,
 }: {
   name: string;
   open: ReportDimension | null;
   used: readonly ReportDimension[];
+  /** The row's and its parents' conditions (each numeric Sender ID only under a Numeric row). */
+  conds?: readonly FilterCondition[];
   onPick: (d: ReportDimension) => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
-  const options = levelOptions(used);
+  const options = levelOptions(used, conds);
   if (!open && !options.length) return <span className="la-toggle-gap" />;
   return (
     <>
@@ -478,6 +481,7 @@ function Level({
                   name={label}
                   open={next}
                   used={used}
+                  conds={childConditions(parents, r, dim)}
                   onPick={(d) => setRow(r.key, d)}
                   onClose={() => setRow(r.key, null)}
                 />

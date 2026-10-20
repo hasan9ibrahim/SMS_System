@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type pg from "pg";
 import { db, PG_SCHEMA } from "./db.js";
+import { chQuery } from "./edr.js";
 
 // SMS_DB_DIR: the SQL files in the bundled server image (deploy/Dockerfile.mock); else the repo's db/.
 const UPGRADES_DIR = join(
@@ -18,6 +19,37 @@ const UPGRADES_DIR = join(
   "upgrades",
 );
 const LOCK_KEY = 4_242_017; // pg_advisory_xact_lock key for upgrades
+const CH_MIGRATIONS_DIR = join(
+  process.env.SMS_DB_DIR ?? fileURLToPath(new URL("../../db/", import.meta.url)),
+  "clickhouse",
+  "migrations",
+);
+
+/**
+ * The EDR store's schema files, run in order (they are idempotent: IF NOT EXISTS), so a kept EDR store gets new
+ * columns too (team trial round 2: both sides of translated fields). Skipped while the EDR table does not exist.
+ */
+export async function applyChMigrations(dir = CH_MIGRATIONS_DIR): Promise<number> {
+  if (!existsSync(dir)) return 0;
+  const exists = await chQuery<{ n: number }>(
+    "SELECT count() AS n FROM system.tables WHERE database = currentDatabase() AND name = 'edr'",
+  );
+  if (!Number(exists[0]?.n)) throw new Error("EDR store not seeded yet");
+  let n = 0;
+  for (const f of readdirSync(dir)
+    .filter((x) => x.endsWith(".sql"))
+    .sort()) {
+    const sql = readFileSync(join(dir, f), "utf8").replace(/^\s*--.*$/gm, "");
+    for (const stmt of sql
+      .split(/;\s*$/m)
+      .map((x) => x.trim())
+      .filter(Boolean)) {
+      await chQuery(stmt, 120_000);
+      n++;
+    }
+  }
+  return n;
+}
 
 export interface UpgradeResult {
   applied: string[];
@@ -82,21 +114,33 @@ export async function applyUpgrades(pool: pg.Pool = db(), dir = UPGRADES_DIR): P
  */
 export async function upgradeOnStart(log: (msg: string) => void, retryMs = 60_000): Promise<void> {
   let lastError = "";
+  let pgDone = false;
+  let chDone = false;
   const attempt = async (): Promise<boolean> => {
-    try {
-      const r = await applyUpgrades();
-      log(
-        r.applied.length
-          ? `database upgraded: ${r.applied.join(", ")}`
-          : `database schema up to date (${r.upToDate.length} upgrade script(s))`,
-      );
-      return true;
-    } catch (e) {
-      const msg = (e as Error).message;
-      if (msg !== lastError) log(`database upgrade postponed: ${msg}; retrying every ${retryMs / 1000} s`);
-      lastError = msg;
-      return false;
-    }
+    const errors: string[] = [];
+    if (!pgDone)
+      try {
+        const r = await applyUpgrades();
+        log(
+          r.applied.length
+            ? `database upgraded: ${r.applied.join(", ")}`
+            : `database schema up to date (${r.upToDate.length} upgrade script(s))`,
+        );
+        pgDone = true;
+      } catch (e) {
+        errors.push((e as Error).message);
+      }
+    if (!chDone)
+      try {
+        log(`EDR store schema checked (${await applyChMigrations()} statement(s))`);
+        chDone = true;
+      } catch (e) {
+        errors.push(`EDR store: ${(e as Error).message}`);
+      }
+    const msg = errors.join("; ");
+    if (msg && msg !== lastError) log(`database upgrade postponed: ${msg}; retrying every ${retryMs / 1000} s`);
+    lastError = msg;
+    return pgDone && chDone;
   };
   if (await attempt()) return;
   const timer = setInterval(() => {

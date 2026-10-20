@@ -44,7 +44,10 @@ interface Dim {
 
 const tzl = (tz: string) => lit(tz);
 /** The Sender ID, with every numeric one (digits, optional leading +) as "Numeric". */
-export const NUMERIC_GROUP_SQL = "if(match(src_addr, '^[+]?[0-9]+$'), 'Numeric', src_addr)";
+const numericGroup = (col: string) => `if(match(${col}, '^[+]?[0-9]+$'), 'Numeric', ${col})`;
+export const NUMERIC_GROUP_SQL = numericGroup("src_addr");
+/** The same on the Sender ID sent to the vendor, after translation rules (team trial round 2). */
+export const VENDOR_NUMERIC_GROUP_SQL = numericGroup("v_src_addr");
 export const DIMS: Record<ReportDimension, Dim> = {
   // Second, minute and 15-minute buckets (Live analytics detail, team trial 2026-10-18).
   second: {
@@ -113,6 +116,12 @@ export const DIMS: Record<ReportDimension, Dim> = {
   senderGroup: {
     id: () => NUMERIC_GROUP_SQL,
     filter: () => ({ sql: NUMERIC_GROUP_SQL }),
+  },
+  // Customer Sender ID is what the customer sent us; Vendor Sender ID what we sent the vendor (team trial round 2).
+  vendorSenderId: { id: () => "v_src_addr", filter: () => EDR_COLUMNS.vendorSenderId! },
+  vendorSenderGroup: {
+    id: () => VENDOR_NUMERIC_GROUP_SQL,
+    filter: () => ({ sql: VENDOR_NUMERIC_GROUP_SQL }),
   },
   routeRule: {
     id: () => "route_rule_id",

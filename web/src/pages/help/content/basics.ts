@@ -1978,10 +1978,13 @@ export const topics: HelpTopic[] = [
                 what: "The AM at the time the message was sent.",
               },
               {
-                name: "Sender ID",
-                what: "The source address. Numeric Sender IDs (digits only, with or without +) are grouped in one **Numeric** row; its **+** → **Sender ID (each)** lists them one by one.",
+                name: "Customer Sender ID",
+                what: "The Sender ID as the customer sent it. Numeric Sender IDs (digits only, with or without +) are grouped in one **Numeric** row; only that row's **+** offers **Customer Sender ID (each numeric)**, which lists them one by one.",
               },
-              { name: "Sender ID (each)", what: "Every source address on its own row, numeric ones included." },
+              {
+                name: "Vendor Sender ID",
+                what: "The Sender ID as we sent it to the vendor, after translation rules. Numeric ones are grouped the same way; the **Numeric** row's **+** offers **Vendor Sender ID (each numeric)**.",
+              },
               { name: "Product category", what: "The traffic class (DIRECT, OTP …)." },
               { name: "15 minutes, Hour, Day, Week, Month", what: "Time buckets, shown in time order." },
             ],
