@@ -18,11 +18,14 @@ import { ensureTeamTargets, startTeamPresence } from "./api/team.js";
 import { startCleanupJobs } from "./api/cleanup.js";
 import { startSecurityJobs } from "./api/security.js";
 import { startFxRefresh } from "./api/fx.js";
+import { upgradeOnStart } from "./upgrades.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
 
 const app = await buildServer({ logger: true });
+// Schema changes of a new image are applied to a kept database before serving (team trial round 2).
+await upgradeOnStart((msg) => app.log.info(msg));
 await app.listen({ host, port });
 startBestBuyRefresh();
 startRouteTrafficRefresh();
