@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.73.0
+  version: 0.74.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1932,9 +1932,9 @@ paths:
       summary: Accept an RN or some of its lines
       description: 'Loads the accepted lines into the vendor trunk''s rate table from their applied date: the stated date, or now when
 
-        that is earlier (§13.32: never back-dated; EDRs keep their cost). Closed lines end on their date. One undoable
+        that is earlier (§13.32: never back-dated; EDRs keep their cost; the stated date stays on the line). Closed lines end on their date. One undoable
 
-        change (§13.10). Sends or drafts the Successful reply per the vendor''s setting.'
+        change (§13.10). With `rerate`, also creates a re-rating request for the back-dated period. Sends or drafts the Successful reply per the vendor''s setting.'
       parameters: *id001
       requestBody:
         required: false
@@ -16591,6 +16591,9 @@ components:
         One edit. `set`: a new rate from `effectiveFrom` for an existing line (`lineId`) or for a
         destination (`mccmnc`, optional `senderId`). `close`: end the line at `at` (default now; a
         scheduled line is removed). `block`: block or unblock the line (§6.2 IsBlock).
+        `effectiveFrom` / `at` may be in the past (team trial round 2, e.g. today 00:00): the change still applies
+        from the moment it is saved, so traffic already sent keeps its rate (§13.32); the past date is kept as the
+        line's stated date (`statedValidFrom`) and shown as its effective date. Re-rating is a separate request (§6.3).
       required: [action]
       additionalProperties: false
       properties:
@@ -17191,6 +17194,7 @@ components:
       - flagged
       - noticeBreaches
       - backdated
+      - backdatedLive
       - turnsNegative
       - status
       - autoAccepted
@@ -17246,6 +17250,11 @@ components:
           description: Increases or closes on live traffic (§13.32).
         noticeBreaches: *id003
         backdated: *id003
+        backdatedLive:
+          type: integer
+          description: >-
+            Back-dated lines whose traffic already sent since the stated date reaches RnSettings.rerateMinMessages
+            (team trial round 2). Only these can be re-rated on accept; any of them blocks auto-accept.
         turnsNegative: *id003
         status:
           $ref: '#/components/schemas/RnStatus'
@@ -17588,13 +17597,26 @@ components:
           - string
           - 'null'
           maxLength: 500
+        rerate:
+          type: boolean
+          default: false
+          description: >-
+            Accept only (team trial round 2). Back-dated lines apply from now and traffic already sent keeps its cost
+            (default, pending review). True also creates a re-rating request for the back-dated lines that affected
+            live traffic (see RnRow.backdatedLive), which another user approves as usual (§6.3 maker-checker).
     RnDecisionResult:
       type: object
       required:
       - record
       - change
       - applied
+      - reratingRequestId
       properties:
+        reratingRequestId:
+          oneOf:
+          - $ref: '#/components/schemas/Id'
+          - type: 'null'
+          description: The re-rating request created by `rerate`, else null.
         record:
           $ref: '#/components/schemas/RnDetail'
         change:
@@ -17652,6 +17674,7 @@ components:
       required:
       - liveWindow
       - minMessages
+      - rerateMinMessages
       - reminderDays
       - autoAccept
       - replyModes
@@ -17668,6 +17691,14 @@ components:
           minimum: 1
           maximum: 1000000
           description: Messages in the window to count as live.
+        rerateMinMessages:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+          default: 1
+          description: >-
+            A back-dated line counts as affecting live traffic when at least this many messages were sent since its
+            stated date (team trial round 2): only then is re-rating offered on accept, and the RN is not auto-accepted.
         reminderDays:
           type: integer
           minimum: 0

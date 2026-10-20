@@ -310,6 +310,18 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
                 onChange={(e) => setDraft({ ...s, minMessages: Math.max(1, Number(e.target.value)) })}
               />
             </label>
+            <label
+              className="field"
+              title="Back-dated rates with at least this many messages sent since their stated date need review: re-rating is offered on accept and the RN is not auto-accepted"
+            >
+              <span>Back-dated: messages sent to need review</span>
+              <input
+                type="number"
+                min={1}
+                value={s.rerateMinMessages}
+                onChange={(e) => setDraft({ ...s, rerateMinMessages: Math.max(1, Number(e.target.value)) })}
+              />
+            </label>
             <label className="field">
               <span>Due soon: days before the date</span>
               <input
@@ -539,7 +551,7 @@ function RnQueue() {
       if (!reason) return;
     }
     decide.mutate(
-      { id: r.id, kind, body: reason ? { reason } : {} },
+      { id: r.id, kind, body: { ...(reason ? { reason } : {}), rerate: false } },
       {
         onSuccess: (res) => {
           if (res.change) notifySaved(res.change, `Accepted ${res.applied} rate${res.applied === 1 ? "" : "s"}`);
@@ -582,7 +594,7 @@ function RnQueue() {
     const failed: string[] = [];
     for (const r of pending) {
       try {
-        const res = await decide.mutateAsync({ id: r.id, kind: "accept", body: {} });
+        const res = await decide.mutateAsync({ id: r.id, kind: "accept", body: { rerate: false } });
         done++;
         applied += res.applied;
       } catch {
@@ -883,6 +895,8 @@ function RnReview({ id }: { id: number }) {
   const [grid, setGrid] = useState<GridState>(emptyState);
   const [active, setActive] = useState<RnLineRow | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
+  // Back-dated rates apply from now; re-rating what was already sent is opt-in (team trial round 2).
+  const [rerate, setRerate] = useState(false);
   const [side, setSide] = useState<"replies" | "log" | "errors">("replies");
   useTabTitle(rn ? rn.reference : undefined);
   usePageStatus({
@@ -924,10 +938,23 @@ function RnReview({ id }: { id: number }) {
       if (!reason) return;
     }
     decide.mutate(
-      { id, kind, body: { ...(lineIds.length ? { lineIds } : {}), ...(reason ? { reason } : {}) } },
+      {
+        id,
+        kind,
+        body: {
+          ...(lineIds.length ? { lineIds } : {}),
+          ...(reason ? { reason } : {}),
+          rerate: kind === "accept" && rerate,
+        },
+      },
       {
         onSuccess: (r) => {
           setSelected(new Set());
+          if (r.reratingRequestId)
+            toast({
+              tone: "good",
+              message: `Re-rating request #${r.reratingRequestId} created for the back-dated rates; another user approves it`,
+            });
           if (r.change) notifySaved(r.change, `Accepted ${r.applied} rate${r.applied === 1 ? "" : "s"}`);
           else
             toast({
@@ -978,6 +1005,15 @@ function RnReview({ id }: { id: number }) {
             >
               Accept + update customers
             </Button>
+            {rn.backdatedLive > 0 && (
+              <label
+                className="toggle-inline small"
+                title="Off (default): back-dated rates apply from now and traffic already sent keeps its cost, pending review. On: also creates a re-rating request for the back-dated period, approved by another user."
+              >
+                <input type="checkbox" checked={rerate} onChange={(e) => setRerate(e.target.checked)} />
+                Re-rate back-dated traffic ({rn.backdatedLive})
+              </label>
+            )}
             <Button variant="primary" icon="check" disabled={decide.isPending} onClick={() => void run("accept", [])}>
               Accept all pending
             </Button>

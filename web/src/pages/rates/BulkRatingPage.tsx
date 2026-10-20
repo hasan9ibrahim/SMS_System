@@ -46,7 +46,7 @@ import { formatPct, formatRate, shortDateTime } from "./format";
 import { NoticeDialog } from "./RateTableView";
 import { SendRnCheck } from "./dialogs";
 import { DestinationPickDialog } from "./DestinationTree";
-import { nextMidnight, usePlatformTz } from "../../ui/zonedTime";
+import { todayMidnight, usePlatformTz } from "../../ui/zonedTime";
 import { EffectiveFromField, effectiveIso, RnNoteField } from "./EffectiveFrom";
 
 const page = pageForPath("/rates/bulk")!;
@@ -355,8 +355,8 @@ export function BulkRatingPage() {
   const [vendorTrunkId, setVendorTrunkId] = useState<number | null>(null);
   const [round, setRound] = useState("4");
   const tz = usePlatformTz();
-  // Default start: the next 00:00 in the platform time zone (team trial round 2).
-  const [from, setFrom] = useState(() => nextMidnight(tz));
+  // Default start: today 00:00 in the platform time zone; applies from the save (team trial round 2).
+  const [from, setFrom] = useState(() => todayMidnight(tz));
   const [respectNotice, setRespectNotice] = useState(true);
   const [addMissing, setAddMissing] = useState(false);
   const [preview, setPreview] = useState<RateBulkPreview | null>(null);

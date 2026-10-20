@@ -52,7 +52,12 @@ export function isoToZoned(iso: string | number, tz: string): string {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
-/** The start of the next day (00:00) in `tz`, as "YYYY-MM-DDT00:00": the default for rate changes. */
+/** The start of today (00:00) in `tz`, as "YYYY-MM-DDT00:00": the default for rate changes (team trial round 2). */
+export function todayMidnight(tz: string, now = Date.now()): string {
+  return `${isoToZoned(now, tz).slice(0, 10)}T00:00`;
+}
+
+/** The start of the next day (00:00) in `tz`, as "YYYY-MM-DDT00:00". */
 export function nextMidnight(tz: string, now = Date.now()): string {
   const today = isoToZoned(now, tz).slice(0, 10);
   const d = new Date(`${today}T00:00:00Z`);

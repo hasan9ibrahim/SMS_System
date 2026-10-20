@@ -2772,6 +2772,7 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "flagged", label: "Live Flags", type: "integer", defaultOperator: "gte" }),
       field({ field: "noticeBreaches", label: "Notice", type: "integer", defaultOperator: "gte" }),
       field({ field: "backdated", label: "Back-dated", type: "integer", defaultOperator: "gte" }),
+      field({ field: "backdatedLive", label: "Back-dated on sent traffic", type: "integer", defaultOperator: "gte" }),
       field({ field: "increases", label: "Increases", type: "integer", defaultOperator: "gte", hidden: true }),
       field({ field: "decreases", label: "Decreases", type: "integer", defaultOperator: "gte", hidden: true }),
       field({ field: "newLines", label: "New", type: "integer", defaultOperator: "gte", hidden: true }),

@@ -41,7 +41,7 @@ function blank(): Form {
     status: "active",
     businessCompanyId: 0,
     bindAlert: true,
-    creditAlert: true,
+    creditAlert: false, // ticked when a non-zero credit limit is set (team trial round 2)
     creditAlertPercent: { notice: 50, warning: 70, critical: 90 },
     address: { line1: "", line2: null, city: null, state: null, countryId: null, zip: null },
     website: null,

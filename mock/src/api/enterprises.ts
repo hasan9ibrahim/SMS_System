@@ -546,6 +546,16 @@ export function updateEnterpriseBilling(request: FastifyRequest, reply: FastifyR
             diff.push({ entity_id: id, field: `billing.${side}.${spec.api}`, before: b, after: next[spec.api] });
         }
     }
+    // Credit alert follows the customer credit limit (team trial round 2): a non-zero limit ticks it, no limit unticks
+    // it. Part of the same save, so one undo restores both.
+    const cust = input.customer ? sideValues("customer", input.customer) : null;
+    if (cust) {
+      const oldLimit = Number(before.customer?.creditLimit ?? 0);
+      const newLimit = Number(cust.creditLimit ?? 0);
+      const want = newLimit > 0 ? (oldLimit > 0 ? ent.creditAlert : true) : false;
+      if (want !== ent.creditAlert)
+        diff.push({ entity_id: id, field: "creditAlert", before: ent.creditAlert, after: want });
+    }
     if (input.beneficiary) {
       for (const spec of BENEFICIARY_SPECS) {
         const raw = getPath(input.beneficiary, spec.api);

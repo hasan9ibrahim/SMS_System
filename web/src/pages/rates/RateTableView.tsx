@@ -245,7 +245,7 @@ function ChangeByForm({
   );
 }
 
-/** The batch's effective date, in the platform time zone (team trial round 2: default next 00:00). */
+/** The batch's effective date, in the platform time zone (team trial round 2: default today 00:00). */
 function DateForm({ value, onApply }: { value: string | null; onApply: (iso: string | null) => void }) {
   const tz = usePlatformTz();
   const [v, setV] = useState(value ? isoToZoned(value, tz) : "");
@@ -373,7 +373,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
   const [pending, setPending] = useState<Pending>(new Map());
   const tz = usePlatformTz();
   const platformCurrency = usePlatformCurrency();
-  // Chosen batch date (null = now); until one is chosen the batch starts at the next 00:00 (team trial round 2).
+  // Chosen batch date (null = now); until one is chosen the batch starts at today 00:00 (team trial round 2).
   const [chosenFrom, setChosenFrom] = useState<string | null>(null);
   const [fromChosen, setFromChosen] = useState(false);
   const effectiveFrom = fromChosen ? chosenFrom : defaultEffectiveIso(tz);
@@ -585,6 +585,14 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           ) : view === "closed" ? (
             <span className="muted">
               {shortDate(r.validFrom)} – {shortDate(r.validTo)}
+            </span>
+          ) : r.statedValidFrom ? (
+            // Back-dated: shown from its stated date, applied from the save (team trial round 2, §13.32).
+            <span
+              className="muted"
+              title={`Effective ${shortDate(r.statedValidFrom)}; applied from ${shortDate(r.validFrom)}`}
+            >
+              {shortDate(r.statedValidFrom)}
             </span>
           ) : (
             <span className="muted">{shortDate(r.validFrom)}</span>
@@ -929,7 +937,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             </BarAction>
             <BarAction
               label={
-                !fromChosen ? "From next 00:00" : effectiveFrom ? `From ${formatZoned(effectiveFrom, tz)}` : "From now"
+                !fromChosen ? "From today 00:00" : effectiveFrom ? `From ${formatZoned(effectiveFrom, tz)}` : "From now"
               }
               disabled={!editable}
             >

@@ -1197,8 +1197,8 @@ export type paths = {
     /**
      * Accept an RN or some of its lines
      * @description Loads the accepted lines into the vendor trunk's rate table from their applied date: the stated date, or now when
-     *     that is earlier (§13.32: never back-dated; EDRs keep their cost). Closed lines end on their date. One undoable
-     *     change (§13.10). Sends or drafts the Successful reply per the vendor's setting.
+     *     that is earlier (§13.32: never back-dated; EDRs keep their cost; the stated date stays on the line). Closed lines end on their date. One undoable
+     *     change (§13.10). With `rerate`, also creates a re-rating request for the back-dated period. Sends or drafts the Successful reply per the vendor's setting.
      */
     post: operations["acceptRateNotification"];
     delete?: never;
@@ -10903,6 +10903,9 @@ export type components = {
      * @description One edit. `set`: a new rate from `effectiveFrom` for an existing line (`lineId`) or for a
      *     destination (`mccmnc`, optional `senderId`). `close`: end the line at `at` (default now; a
      *     scheduled line is removed). `block`: block or unblock the line (§6.2 IsBlock).
+     *     `effectiveFrom` / `at` may be in the past (team trial round 2, e.g. today 00:00): the change still applies
+     *     from the moment it is saved, so traffic already sent keeps its rate (§13.32); the past date is kept as the
+     *     line's stated date (`statedValidFrom`) and shown as its effective date. Re-rating is a separate request (§6.3).
      */
     RateLineEdit: {
       /** @enum {string} */
@@ -11209,6 +11212,8 @@ export type components = {
       flagged: number;
       noticeBreaches: number;
       backdated: number;
+      /** @description Back-dated lines whose traffic already sent since the stated date reaches RnSettings.rerateMinMessages (team trial round 2). Only these can be re-rated on accept; any of them blocks auto-accept. */
+      backdatedLive: number;
       turnsNegative: number;
       status: components["schemas"]["RnStatus"];
       autoAccepted: boolean;
@@ -11340,8 +11345,15 @@ export type components = {
       /** @description Required to reject; sent in the Rejected reply. */
       reason?: string | null;
       note?: string | null;
+      /**
+       * @description Accept only (team trial round 2). Back-dated lines apply from now and traffic already sent keeps its cost (default, pending review). True also creates a re-rating request for the back-dated lines that affected live traffic (see RnRow.backdatedLive), which another user approves as usual (§6.3 maker-checker).
+       * @default false
+       */
+      rerate: boolean;
     };
     RnDecisionResult: {
+      /** @description The re-rating request created by `rerate`, else null. */
+      reratingRequestId: components["schemas"]["Id"] | null;
       record: components["schemas"]["RnDetail"];
       change: components["schemas"]["Change"] | null;
       applied: number;
@@ -11380,6 +11392,11 @@ export type components = {
       liveWindow: "1h" | "24h" | "7d";
       /** @description Messages in the window to count as live. */
       minMessages: number;
+      /**
+       * @description A back-dated line counts as affecting live traffic when at least this many messages were sent since its stated date (team trial round 2): only then is re-rating offered on accept, and the RN is not auto-accepted.
+       * @default 1
+       */
+      rerateMinMessages: number;
       /** @description Flagged pending RNs this close to their date are due soon. */
       reminderDays: number;
       /** @description Default for vendors without their own setting: accept RNs with no flagged line. */

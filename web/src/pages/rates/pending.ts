@@ -81,7 +81,7 @@ export function buildItems(
   rowsById: ReadonlyMap<number, Pick<RateLineRow, "rate" | "validFrom" | "isBlocked">>,
   effectiveFrom: string | null,
   now = Date.now(),
-  /** False when the date is the default (next 00:00): a scheduled line then keeps its own later start. */
+  /** False when the date is the default (today 00:00): a scheduled line then keeps its own later start. */
   chosen = true,
 ): RateLineEdit[] {
   const blocks: RateLineEdit[] = [];

@@ -34,8 +34,13 @@ type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Rate table ${id} not found`);
 const badInput = (reply: FastifyReply, errors: FieldError[]) =>
   sendProblem(reply, 400, "Check the highlighted fields", { errors });
-/** Edits may start up to a minute in the past (clock skew); never earlier (§13.32). */
+/** Clock skew allowed when comparing a requested start with now. */
 const SKEW_MS = 60_000;
+/**
+ * A start in the past (e.g. today 00:00, team trial round 2) is accepted but applies from the moment of the save:
+ * traffic already sent keeps its rate (§13.32). The past date is kept as the line's stated date. At most a year back.
+ */
+const MAX_BACKDATE_MS = 366 * 86_400_000;
 
 // ---------------------------------------------------------------- traffic figures
 
@@ -680,17 +685,14 @@ export async function checkLineEdits(
     if (it.action === "set") {
       if (it.rate === undefined) errors.push({ path: `${at}/rate`, message: "required to set a rate" });
       if (it.lineId === undefined && !it.mccmnc) errors.push({ path: at, message: "give lineId or mccmnc" });
-      if (it.effectiveFrom && Date.parse(it.effectiveFrom) < nowMs - SKEW_MS)
-        errors.push({
-          path: `${at}/effectiveFrom`,
-          message: "can't be in the past (traffic already sent keeps its rate)",
-        });
+      if (it.effectiveFrom && Date.parse(it.effectiveFrom) < nowMs - MAX_BACKDATE_MS)
+        errors.push({ path: `${at}/effectiveFrom`, message: "at most a year in the past" });
     } else {
       if (it.lineId === undefined) errors.push({ path: `${at}/lineId`, message: `required to ${it.action} a rate` });
       if (it.action === "block" && it.blocked === undefined)
         errors.push({ path: `${at}/blocked`, message: "required" });
-      if (it.at && Date.parse(it.at) < nowMs - SKEW_MS)
-        errors.push({ path: `${at}/at`, message: "can't be in the past" });
+      if (it.at && Date.parse(it.at) < nowMs - MAX_BACKDATE_MS)
+        errors.push({ path: `${at}/at`, message: "at most a year in the past" });
     }
   }
   const lineIds = [...new Set(edits.flatMap(({ it }) => (it.lineId === undefined ? [] : [it.lineId])))];
@@ -748,6 +750,9 @@ export async function applyLineEdits(
       const mccmncId = ref ? (ref.mccmnc_id as number) : mccmncIds.get(it.mccmnc!)!;
       const senderId = ref ? ((ref.sender_id as string | null) ?? null) : it.senderId?.trim() || null;
       const from = it.effectiveFrom ? new Date(Math.max(Date.parse(it.effectiveFrom), nowMs)) : now;
+      // A past start applies from now; the date asked for stays on the line as its stated date (§13.32).
+      const stated =
+        it.effectiveFrom && Date.parse(it.effectiveFrom) < nowMs - SKEW_MS ? new Date(it.effectiveFrom) : null;
       const key = [id, mccmncId, senderId];
       const keySql = "rate_table_id = $1 AND mccmnc_id = $2 AND sender_id IS NOT DISTINCT FROM $3";
       const { rows: curRows } = await c.query(
@@ -813,8 +818,8 @@ export async function applyLineEdits(
       const mccmnc = ref ? (ref.mccmnc as string) : it.mccmnc!;
       const { rows: ins } = await c.query(
         `INSERT INTO rate_lines (rate_table_id, mccmnc_id, mccmnc, dial_code, sender_id, rate, currency, valid_from,
-                                is_blocked, change_type, rate_note, created_by_id, updated_by_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12) RETURNING ${LINE_COLS}`,
+                                is_blocked, change_type, rate_note, created_by_id, updated_by_id, stated_valid_from)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, $13) RETURNING ${LINE_COLS}`,
         [
           id,
           mccmncId,
@@ -828,6 +833,7 @@ export async function applyLineEdits(
           changeType,
           note ?? (it.rateNote === undefined ? (base?.rate_note ?? null) : null),
           userId,
+          stated,
         ],
       );
       diff.push({ entity_id: ins[0].id as number, field: "line", before: null, after: snap(ins[0]) });

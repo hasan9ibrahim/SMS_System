@@ -1,17 +1,18 @@
 // Shared pieces for saving rate changes (team trial round 2): the effective date in the platform time zone
-// (default: the start of the next day, 00:00), the note added to the rate notification, and the summary of
-// a customer table save shown before it is sent.
+// (default: the start of today, 00:00; a past date is fine, the change applies from the moment it is saved and
+// traffic already sent keeps its rate, §13.32), the note added to the rate notification, and the summary of a
+// customer table save shown before it is sent.
 import { useState } from "react";
 import { DateTimeInput } from "../../ui/DateTimeInput";
 import { Button, Modal } from "../../ui/primitives";
-import { formatZoned, isoToZoned, nextMidnight, usePlatformTz, zonedToIso } from "../../ui/zonedTime";
+import { formatZoned, nextMidnight, todayMidnight, usePlatformTz, zonedToIso } from "../../ui/zonedTime";
 import { formatPct, formatRate } from "./format";
 import { SendRnCheck } from "./dialogs";
 import type { SummaryKind, SummaryRow } from "./pending";
 
-/** The default start of rate changes: the next 00:00 in the platform time zone, as a UTC timestamp. */
+/** The default start of rate changes: today 00:00 in the platform time zone, as a UTC timestamp. */
 export function defaultEffectiveIso(tz: string, now = Date.now()): string {
-  return zonedToIso(nextMidnight(tz, now), tz);
+  return zonedToIso(todayMidnight(tz, now), tz);
 }
 
 /**
@@ -32,16 +33,15 @@ export function EffectiveFromField({
   const tz = usePlatformTz();
   return (
     <div className="field">
-      <span title="Rates never start in the past: traffic already sent keeps its rate (§13.32).">
+      <span title="A past date is fine: the change applies from the moment you save and traffic already sent keeps its rate (§13.32).">
         {label} <span className="muted">({tz}, 24-hour)</span>
       </span>
-      <DateTimeInput
-        autoFocus={autoFocus}
-        value={value}
-        min={isoToZoned(Date.now(), tz)}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <DateTimeInput autoFocus={autoFocus} value={value} onChange={(e) => onChange(e.target.value)} />
       <span className="eff-quick small">
+        <button type="button" className="link-btn" onClick={() => onChange(todayMidnight(tz))}>
+          Today 00:00
+        </button>
+        {" · "}
         <button type="button" className="link-btn" onClick={() => onChange(nextMidnight(tz))}>
           Next 00:00
         </button>
@@ -60,11 +60,11 @@ export function effectiveIso(value: string, tz: string): string | null {
   return value ? zonedToIso(value, tz) : null;
 }
 
-/** Initial field value: the next 00:00 in the platform time zone. */
+/** Initial field value: today 00:00 in the platform time zone. */
 export function useDefaultEffective(): [string, (v: string) => void] {
   const tz = usePlatformTz();
   const [v, setV] = useState<string | null>(null);
-  return [v ?? nextMidnight(tz), setV];
+  return [v ?? todayMidnight(tz), setV];
 }
 
 /** Text added to the rate notification e-mail and sheet (team trial round 2). */
@@ -148,6 +148,9 @@ export function SaveSummaryDialog({
       </div>
       <p className="small">
         Effective <strong>{effectiveFrom ? `${formatZoned(effectiveFrom, tz)} (${tz})` : "now"}</strong>
+        {effectiveFrom && Date.parse(effectiveFrom) < Date.now()
+          ? " · applies from the moment you save; traffic already sent keeps its rate"
+          : ""}
         {scheduledKept ? " · scheduled rates keep their own start date" : ""}
         {clients.length ? (
           <>
