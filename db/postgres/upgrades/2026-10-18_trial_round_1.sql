@@ -292,3 +292,13 @@ ALTER TABLE enterprises ALTER COLUMN credit_alert SET DEFAULT false;
 
 -- Auto invoicing on by default (migration 057, §7).
 ALTER TABLE enterprise_billing ALTER COLUMN auto_invoicing SET DEFAULT true;
+
+-- Vendor bind policy per trunk (migration 058, §5.5).
+
+ALTER TABLE vendor_trunks ADD COLUMN IF NOT EXISTS enquire_link_interval_s int NOT NULL DEFAULT 30
+  CHECK (enquire_link_interval_s BETWEEN 5 AND 3600);
+ALTER TABLE vendor_trunks ADD COLUMN IF NOT EXISTS reconnect_schedule_s int[] NOT NULL DEFAULT '{5,10,30,60}';
+ALTER TABLE vendor_trunks ADD COLUMN IF NOT EXISTS bind_alert_after_min int NOT NULL DEFAULT 2
+  CHECK (bind_alert_after_min BETWEEN 1 AND 1440);
+ALTER TABLE vendor_trunks ADD COLUMN IF NOT EXISTS auth_fail_retry_min int NOT NULL DEFAULT 15
+  CHECK (auth_fail_retry_min BETWEEN 1 AND 1440);

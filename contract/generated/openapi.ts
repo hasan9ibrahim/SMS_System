@@ -10624,7 +10624,33 @@ export type components = {
       sslType?: components["schemas"]["SslType"];
       submitIntervalMs?: number;
       submitTimeoutS?: number;
+      /** @description Response time for enquire_link; no answer within it drops the session, which is then retried. */
       enquireLinkTimeoutS?: number;
+      /**
+       * @description Bind policy (team trial round 2, SMPP v3.4 enquire_link_timer): an idle session sends enquire_link this often.
+       * @default 30
+       */
+      enquireLinkIntervalS: number;
+      /**
+       * @description Seconds before each reconnect attempt after a session drops or a bind is refused; the last value repeats until the bind is up or the trunk is stopped (default 5, 10, 30, then every 60).
+       * @default [
+       *       5,
+       *       10,
+       *       30,
+       *       60
+       *     ]
+       */
+      reconnectScheduleS: number[];
+      /**
+       * @description Bind Down Alert (and Connection = Down) only after the trunk has had no bound session this long, so short reconnects cause no noise. A refused login alerts at once.
+       * @default 2
+       */
+      bindAlertAfterMin: number;
+      /**
+       * @description After a wrong password or system ID (bind_resp 0x0E / 0x0F) the switch waits this long before trying again (retrying fast won't fix it and can lock the account). Saving the trunk retries at once.
+       * @default 15
+       */
+      authFailRetryMin: number;
       /** @enum {string} */
       msgIdType?: "default" | "decimal" | "hexadecimal";
       http?: components["schemas"]["VendorHttpSettings"];

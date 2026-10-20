@@ -204,14 +204,16 @@ export function trunkCurrencySql(kind: "customer" | "vendor", alias: string): st
 }
 
 /**
- * Live connection (team trial round 2): up when bound with every session; a vendor bind that dropped less than
- * 15 minutes ago, or is missing sessions, is reconnecting (the switch retries); otherwise down.
+ * Live connection (team trial round 2): up when bound with every session; a vendor trunk missing sessions, or down
+ * for less than its Bind down alert delay (bind_alert_after_min, default 2), is reconnecting (the switch retries on
+ * its reconnect schedule); after that it is down and the Bind Down Alert goes out.
  */
 const connectionSql = (kind: "customer" | "vendor") =>
   kind === "vendor"
     ? `(CASE WHEN tb.status = 'online' AND tb.connections >= t.max_connections THEN 'up'
              WHEN tb.status = 'online' THEN 'reconnecting'
-             WHEN tb.status = 'offline' AND t.status = 'active' AND tb.since > now() - interval '15 minutes' THEN 'reconnecting'
+             WHEN tb.status = 'offline' AND t.status = 'active'
+                  AND tb.since > now() - make_interval(mins => t.bind_alert_after_min) THEN 'reconnecting'
              ELSE 'down' END)`
     : `(CASE WHEN tb.status = 'online' THEN 'up' ELSE 'down' END)`;
 
