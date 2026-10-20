@@ -51,6 +51,9 @@ interface WriterState {
 
 let state: WriterState | null = null;
 let preparing: Promise<WriterState | null> | null = null;
+/** When the templates were last built; a failed or outdated build is retried at most once per REBUILD_MS. */
+let preparedAt = 0;
+const REBUILD_MS = 60_000;
 let writing = false;
 let seq = 0;
 
@@ -157,7 +160,9 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
   // Off with SIM_WRITE_EDRS=0, and under the test runner so tests see a fixed EDR store.
   if (process.env.SIM_WRITE_EDRS === "0" || process.env.NODE_TEST_CONTEXT) return 0;
   if (!state) {
-    preparing ??= prepare().then((s) => (state = s));
+    // Retried after a failed build (e.g. the EDR store was not up yet when the server started).
+    if (preparing && Date.now() - preparedAt >= REBUILD_MS) preparing = null;
+    preparing ??= ((preparedAt = Date.now()), prepare().then((s) => (state = s)));
     await preparing;
     // No EDR store: the simulator counts money from its own averages again.
     if (!state) {
@@ -252,9 +257,20 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
       console.log(`live EDRs written ${copies.length}, routed ${copies.filter((c) => c.route).length}`);
     return copies.length;
   } catch (err) {
-    console.warn(`live EDRs: ${(err as Error).message}`);
+    const msg = (err as Error).message;
+    console.warn(`live EDRs: ${msg}`);
     // Not written: they wait for the next round.
     for (const [p, o, n] of taken) p[o] = (p[o] ?? 0) + n;
+    // The EDR store got new columns after the templates were copied (an upgrade applied after start, e.g.
+    // migration 002): rebuild the templates from the current table on the next round.
+    if (
+      /NUMBER_OF_COLUMNS_DOESNT_MATCH|UNKNOWN_IDENTIFIER|NO_SUCH_COLUMN/.test(msg) &&
+      Date.now() - preparedAt >= REBUILD_MS
+    ) {
+      console.warn("live EDRs: the EDR store changed; rebuilding the live templates");
+      state = null;
+      preparing = null;
+    }
     return 0;
   } finally {
     writing = false;
