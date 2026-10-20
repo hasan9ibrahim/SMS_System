@@ -572,3 +572,34 @@ button.chip.accent {
 .checklist-empty {
   padding: 10px;
 }
+
+/* Column filters under the headers (team trial round 2) */
+.vt-filters {
+  position: sticky;
+  top: 40px;
+  z-index: 2;
+  display: flex;
+  height: 34px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-panel);
+}
+.vt-filters .vt-cell {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.vt-filters input,
+.vt-filters select {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  font-size: 12px;
+}
+.vt-range {
+  display: flex;
+  gap: 3px;
+  width: 100%;
+}
+.vt-range select {
+  flex: 0 0 auto;
+  width: auto;
+}

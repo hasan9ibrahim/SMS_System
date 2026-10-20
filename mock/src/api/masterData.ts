@@ -534,7 +534,7 @@ async function destinationDependencies(db: Db, id: number) {
     ),
   ]);
   return dependencies([
-    { key: "rate_lines", label: "Open or scheduled rate lines", count: lines, blocking: true, detail: null },
+    { key: "rate_lines", label: "Open or scheduled rates", count: lines, blocking: true, detail: null },
     { key: "route_rules", label: "Route rules", count: rules, blocking: true, detail: null },
     { key: "translation_rules", label: "Translation rules", count: translations, blocking: true, detail: null },
     { key: "dial_codes", label: "Dial codes", count: dialCodes, blocking: true, detail: null },

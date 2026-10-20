@@ -10,6 +10,19 @@ const paths = () => s().tabs.map((t) => t.path);
 beforeEach(() => {
   useTabs.setState({ back: {} });
   s().hydrate(1, { tabs: [], activeTabId: null });
+  // Start from Home alone (signing in also opens the Dashboard; tested below).
+  useTabs.setState({ tabs: [s().tabs[0]!], activeId: HOME_TAB_ID, splitId: null });
+});
+
+test("signing in opens the Dashboard; Home stays the pinned first tab (team trial round 3)", () => {
+  s().hydrate(1, { tabs: [], activeTabId: null });
+  assert.deepEqual(paths(), ["/", "/dashboard"]);
+  assert.equal(s().tabs.find((t) => t.id === s().activeId)!.path, "/dashboard");
+  const saved = s().open("/enterprises", { newTab: true });
+  const ws = toWorkspace(s());
+  s().hydrate(1, { ...ws, activeTabId: saved });
+  assert.deepEqual(paths(), ["/", "/dashboard", "/enterprises"], "a saved Dashboard tab is reused, not doubled");
+  assert.equal(s().tabs.find((t) => t.id === s().activeId)!.path, "/dashboard");
 });
 
 test("opening pages: new tab from Home, focus an open page, keep its filters", () => {
@@ -82,8 +95,8 @@ test("the saved workspace leaves Home out and restores in order", () => {
     ],
   );
   s().hydrate(1, ws);
-  assert.deepEqual(paths(), ["/", "/b", "/a"]);
-  assert.equal(s().activeId, b);
+  assert.deepEqual(paths(), ["/", "/b", "/dashboard", "/a"], "the Dashboard opens after the pinned tabs");
+  assert.equal(s().tabs.find((t) => t.id === s().activeId)!.path, "/dashboard");
 });
 
 test("Back: previous page in the tab (filters kept), then the tab it was opened from (trial round 1)", () => {

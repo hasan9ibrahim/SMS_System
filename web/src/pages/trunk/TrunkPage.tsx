@@ -1,6 +1,7 @@
 // Customer or vendor trunk record (§5.4, §5.5) in its own tab: General form, Rules (§13.2)
 // and History (§13.10). New trunks open from an enterprise (?enterprise=ID) or as a clone
 // of another trunk (?clone=ID: everything copied except name, username and password).
+import { useTabShown } from "../../api/access";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router";
 import type { Enterprise } from "@sms/contract";
@@ -188,6 +189,12 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
   const source = useTrunk(kind, cloneOf);
   const t = q.data;
   const [section, setSection] = useSectionTab(SECTIONS);
+  const shownTab = useTabShown();
+  // A hidden tab opened from a link falls back to General (§11, trial round 2).
+  const hiddenSection = section !== "general" && !shownTab(`${kind}-trunks.${section}`);
+  useEffect(() => {
+    if (hiddenSection) setSection("general");
+  }, [hiddenSection, setSection]);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
   const deleteRecord = useDeleteRecord();
@@ -285,7 +292,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
           ...(kind === "vendor" ? [{ key: "rates", label: "Rates", disabled: !t?.ownRateTableId }] : []),
           { key: "rules", label: "Rules", disabled: !t },
           { key: "history", label: "History", disabled: !t },
-        ]}
+        ].filter((x) => shownTab(`${kind}-trunks.${x.key}`))}
         current={section}
         onChange={setSection}
       />

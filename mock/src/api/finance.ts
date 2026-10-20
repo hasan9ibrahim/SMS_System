@@ -18,6 +18,7 @@ import type {
   TransactionDetail,
   TransactionInput,
 } from "@sms/contract";
+import { refreshRates } from "./fx.js";
 import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
@@ -96,7 +97,7 @@ export function getTransaction(request: FastifyRequest, reply: FastifyReply) {
 export async function convert(db: Db, enterpriseId: number, amount: number, currency: string, date: string) {
   const { rows } = await db.query(
     `SELECT bc.base_currency,
-            rate_per_usd_at(bc.base_currency, $3::date::timestamptz) / rate_per_usd_at($2, $3::date::timestamptz) AS rate
+            rate_per_eur_at(bc.base_currency, $3::date::timestamptz) / rate_per_eur_at($2, $3::date::timestamptz) AS rate
        FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id WHERE e.id = $1`,
     [enterpriseId, currency, date],
   );
@@ -538,16 +539,18 @@ export function createCurrency(request: FastifyRequest, reply: FastifyReply) {
         "INSERT INTO currencies (iso, name, symbol, updated_by_id) VALUES ($1, $2, $3, $4) RETURNING id",
         [body.iso, body.name.trim(), body.symbol.trim(), me.id],
       );
-      await c.query(
-        "INSERT INTO currency_rates (iso, rate_per_usd, valid_from, updated_by_id) VALUES ($1, $2, now(), $3)",
-        [body.iso, body.iso === "USD" ? 1 : body.ratePerUsd, me.id],
-      );
+      // Rates are per 1 EUR, the base currency (team trial round 2): EUR itself has no rate rows.
+      if (body.iso !== "EUR")
+        await c.query(
+          "INSERT INTO currency_rates (iso, rate_per_eur, valid_from, updated_by_id) VALUES ($1, $2, now(), $3)",
+          [body.iso, body.ratePerEur, me.id],
+        );
       const id = Number(rows[0].id);
       const change = await recordChange(c, {
         entityType: "currency",
         entityIds: [id],
         changeType: "create",
-        diff: [{ entity_id: id, field: "*", before: null, after: { iso: body.iso, ratePerUsd: body.ratePerUsd } }],
+        diff: [{ entity_id: id, field: "*", before: null, after: { iso: body.iso, ratePerEur: body.ratePerEur } }],
         note: `Added currency ${body.iso}`,
         userId: me.id,
         ip: request.ip,
@@ -600,7 +603,7 @@ export const exportCurrencies = (request: FastifyRequest, reply: FastifyReply) =
       ["currency", (r) => r.name],
       ["iso", (r) => r.iso],
       ["symbol", (r) => r.symbol],
-      ["rate_per_usd", (r) => r.ratePerUsd],
+      ["rate_per_eur", (r) => r.ratePerEur],
       ["updated_by", (r) => r.updatedBy],
     ],
     "currencies.csv",
@@ -609,7 +612,7 @@ export const exportCurrencies = (request: FastifyRequest, reply: FastifyReply) =
 /** Undo of a rate (§13.10): the earlier rate becomes the rate from now on (history is never rewritten). */
 export async function applyCurrencyRate(c: pg.PoolClient, currencyId: number, rate: unknown, userId: number) {
   await c.query(
-    `INSERT INTO currency_rates (iso, rate_per_usd, valid_from, updated_by_id)
+    `INSERT INTO currency_rates (iso, rate_per_eur, valid_from, updated_by_id)
      SELECT iso, $2, clock_timestamp(), $3 FROM currencies WHERE id = $1`,
     [currencyId, rate, userId],
   );
@@ -617,23 +620,26 @@ export async function applyCurrencyRate(c: pg.PoolClient, currencyId: number, ra
 
 export function setCurrencyRate(request: FastifyRequest, reply: FastifyReply) {
   const { iso } = request.params as { iso: string };
-  const { ratePerUsd } = request.body as CurrencyRateInput;
+  const { ratePerEur } = request.body as CurrencyRateInput;
   return withDb(reply, async (pool) => {
     const { rows } = await pool.query("SELECT id FROM currencies WHERE iso = $1 AND deleted_at IS NULL", [iso]);
     if (!rows[0]) return sendProblem(reply, 404, `Currency ${iso} not found`);
-    if (iso === "USD") return badInput(reply, [{ path: "/ratePerUsd", message: "rates are per USD; USD is always 1" }]);
+    if (iso === "EUR")
+      return badInput(reply, [
+        { path: "/ratePerEur", message: "rates are per EUR, the base currency; EUR is always 1" },
+      ]);
     const id = Number(rows[0].id);
     const before = (await load(pool, currencyRateList, id))!;
-    if (before.ratePerUsd === ratePerUsd) return { record: before, change: null };
+    if (before.ratePerEur === ratePerEur) return { record: before, change: null };
     const me = await getCurrentUser();
     const change = await inTransaction(pool, async (c) => {
-      await applyCurrencyRate(c, id, ratePerUsd, me.id);
+      await applyCurrencyRate(c, id, ratePerEur, me.id);
       return recordChange(c, {
         entityType: "currency",
         entityIds: [id],
         changeType: "edit",
-        diff: [{ entity_id: id, field: "rate", before: before.ratePerUsd, after: ratePerUsd }],
-        note: `${iso} rate ${before.ratePerUsd} → ${ratePerUsd} per USD`,
+        diff: [{ entity_id: id, field: "rate", before: before.ratePerEur, after: ratePerEur }],
+        note: `${iso} rate ${before.ratePerEur} → ${ratePerEur} per EUR`,
         userId: me.id,
         ip: request.ip,
       });
@@ -642,37 +648,21 @@ export function setCurrencyRate(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
-/** Sync Rates: the mock's "market feed" moves each rate a little (up to ±0.6 %). */
+/** Sync Rates: pulls the provider's rates now (simulated in this phase) and checks the currency alerts. */
 export function syncCurrencyRates(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
-    const { rows } = await pool.query(
-      `SELECT c.id, c.iso, cl.rate_per_usd FROM currencies c JOIN currency_latest cl ON cl.iso = c.iso
-        WHERE c.deleted_at IS NULL AND c.iso <> 'USD' ORDER BY c.iso`,
-    );
     const me = await getCurrentUser();
-    const moves = rows.map((r) => {
-      const before = Number(r.rate_per_usd);
-      const after = Number((before * (1 + (Math.random() - 0.5) * 0.012)).toFixed(8));
-      return { id: Number(r.id), iso: String(r.iso).trim(), before, after };
+    const r = await refreshRates(pool, {
+      userId: me.id,
+      ip: request.ip,
+      note: "Synced {n} exchange rates (simulated feed)",
     });
-    if (!moves.length) return { updated: 0, change: null };
-    const change = await inTransaction(pool, async (c) => {
-      for (const m of moves)
-        await c.query(
-          "INSERT INTO currency_rates (iso, rate_per_usd, valid_from, updated_by_id) VALUES ($1, $2, now(), NULL)",
-          [m.iso, m.after],
-        );
-      return recordChange(c, {
-        entityType: "currency",
-        entityIds: moves.map((m) => m.id),
-        changeType: "edit",
-        diff: moves.map((m) => ({ entity_id: m.id, field: "rate", before: m.before, after: m.after })),
-        note: `Synced ${moves.length} exchange rates from the market feed`,
-        userId: me.id,
-        ip: request.ip,
-      });
-    });
-    return { updated: moves.length, change };
+    // Sync Rates takes every rate whatever the difference, like the daily update (team trial round 3).
+    await pool.query(
+      "UPDATE fx_provider SET last_run_at = now(), last_status = 'simulated', last_message = $1 WHERE id = 1",
+      [`Sync: ${r.updated} of ${r.checked} rates updated by ${me.username} (simulated: no call to the rate API)`],
+    );
+    return { updated: r.updated, change: r.change };
   });
 }
 

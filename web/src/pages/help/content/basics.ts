@@ -51,8 +51,8 @@ export const topics: HelpTopic[] = [
               "**Live** — **Live analytics**: the traffic report that refreshes by itself while the period includes today. See [[live-analytics]].",
               "**Enterprises** — partners (customers, vendors or both) with their general info, docs, billing, account managers, and their customer and vendor trunks.",
               "**Finance** — transactions and payments, customer and vendor invoices, SOA, balances, the charges calculator, currencies and billing cycles.",
-              "**Rates** — the Rate manager with every rate table, incoming vendor rate notifications (RNs), market moves, bulk rating, product categories, countries, MCCMNC codes and the master table of dial codes.",
-              "**Routing** — route rules, the route map, LCR, re-rating, rate lookup and the route simulator.",
+              "**Rates** — the Rate manager with every rate table, incoming vendor rate notifications (RNs), market moves, bulk rating, re-rating, rate lookup, product categories, countries, MCCMNC codes and the master table of dial codes.",
+              "**Routing** — route rules, the route map, LCR and the route simulator.",
               "**Switch** — translation rules, number lists, HLR (number lookup), QBR stats, notifications, SMS to voice, traffic alerts and other switch tools.",
               "**Monitoring** — alert rules and incidents, EDR search and downloads, network status, signaling traces, failed EDRs, network diagnosis and repush requests.",
               "**Reports** — the Master report and the department reports (enterprise, sales, billing, NOC, team), scheduled reports and daily traffic e-mails.",
@@ -184,7 +184,20 @@ export const topics: HelpTopic[] = [
     group: "Getting started",
     summary:
       "Every page uses the same layout: top menu bar, tab strip, page header, filter chips, grid, detail panel and status bar.",
-    keywords: ["screen", "layout", "header", "status bar", "detail panel", "toolbar", "menu bar", "back button", "action bar", "clone", "delete", "more"],
+    keywords: [
+      "screen",
+      "layout",
+      "header",
+      "status bar",
+      "detail panel",
+      "toolbar",
+      "menu bar",
+      "back button",
+      "action bar",
+      "clone",
+      "delete",
+      "more",
+    ],
     sections: [
       {
         id: "overview",
@@ -400,6 +413,7 @@ export const topics: HelpTopic[] = [
               "Use the arrow next to **Split view** to choose the right-hand tab.",
               "Each side has a small bar with a drop-down to pick its tab. The side marked **Tabs you click open here** is the focused one: clicking a tab in the strip shows it on that side.",
               "The ⇄ button on the left bar swaps the sides. ✕ on the right bar closes split view.",
+              "Drag the bar between the two sides to give one more room. Double-click it to go back to half and half; with the bar focused, ← and → move it. The size is remembered in this browser.",
             ],
           },
         ],
@@ -728,7 +742,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Value",
-                what: "What to compare with. Text fields take text; number fields take numbers; date fields a date and time (UTC); fixed-value fields a drop-down or tick boxes. **between** asks for **From** and **to**. **is one of** takes values separated by commas. **is empty** needs no value.",
+                what: "What to compare with. Text fields take text; number fields take numbers; date fields a date from the calendar and a 24-hour time typed as HH:MM (e.g. `0930` becomes 09:30; empty = 00:00, UTC); fixed-value fields a drop-down or tick boxes. **between** asks for **From** and **to**. **is one of** takes values separated by commas. **is empty** needs no value.",
                 values:
                   "In **matches**: `re%` starts with re, `%re` ends with re, `%re%` contains re, `_` is one character.",
               },
@@ -856,6 +870,7 @@ export const topics: HelpTopic[] = [
               "After a save, a message such as **Saved · change #4521** appears for 10 seconds with an **Undo** button.",
               "**Ctrl+Z** (Cmd+Z on a Mac) on the page undoes your last change on that page. It does nothing while you are typing in a field.",
               "**Undo** in the page header does the same as Ctrl+Z. If there is nothing of yours to undo there, it says **Nothing of yours to undo here.**",
+              "Every undo first asks **Undo this change?** with a summary of what will be put back; click **Undo** to confirm or Cancel to keep it.",
               "After an undo, the message offers **Redo** for 10 seconds.",
             ],
           },
@@ -1574,7 +1589,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Home is the first tab and is always open (it is pinned and cannot be closed). It greets you by first name and gives quick access to the screens the team uses every day.",
+            text: "Home is the first tab and is always open (it is pinned and cannot be closed). It greets you by first name and gives quick access to the screens the team uses every day. After you sign in, the **Dashboard** opens; click the Home tab to come back here.",
           },
         ],
       },
@@ -1962,7 +1977,11 @@ export const topics: HelpTopic[] = [
                 name: "Customer account manager / Vendor account manager",
                 what: "The AM at the time the message was sent.",
               },
-              { name: "Sender ID", what: "The source address." },
+              {
+                name: "Sender ID",
+                what: "The source address. Numeric Sender IDs (digits only, with or without +) are grouped in one **Numeric** row; its **+** → **Sender ID (each)** lists them one by one.",
+              },
+              { name: "Sender ID (each)", what: "Every source address on its own row, numeric ones included." },
               { name: "Product category", what: "The traffic class (DIRECT, OTP …)." },
               { name: "15 minutes, Hour, Day, Week, Month", what: "Time buckets, shown in time order." },
             ],

@@ -25,7 +25,17 @@ import { runList } from "../lists/engine.js";
 import { mapRn, rnLineList, rnList, RN_FROM, RN_SELECT } from "../lists/rnDefs.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
-import { mappingOf, matchTrunk, readSheet, trunkByUsername, type SheetRow, type TrunkRef } from "../rn/parse.js";
+import {
+  mappingOf,
+  matchTrunk,
+  readSheet,
+  trunkByUsername,
+  type AllNetworks,
+  type Sheet,
+  type SheetRow,
+  type TrunkRef,
+} from "../rn/parse.js";
+import { readXlsx, SheetFileError } from "../rn/xlsx.js";
 import { scheduleBestBuyRefresh } from "./bestbuy.js";
 import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
 import { applyLineEdits, checkLineEdits, type EditTable } from "./rates.js";
@@ -47,6 +57,10 @@ interface Effective {
   modes: Record<"successful" | "failed" | "rejected", Mode>;
   replyTo: string[];
   noticeDays: number;
+  /** Decrease and new-destination notice periods (team trial round 2); 0 = none. */
+  noticeDaysDecrease: number;
+  noticeDaysNew: number;
+  allNetworks: AllNetworks;
   mapping: Record<string, string> | null;
 }
 
@@ -76,7 +90,8 @@ async function effectiveSettings(db: Db, vendorId: number | null): Promise<Effec
   const g = await globalSettings(db);
   const { rows } = vendorId
     ? await db.query(
-        `SELECT v.*, e.rate_notice_days FROM enterprises e LEFT JOIN vendor_rn_settings v ON v.enterprise_id = e.id
+        `SELECT v.*, e.rate_notice_days, e.rate_notice_days_decrease, e.rate_notice_days_new, e.all_networks_code
+           FROM enterprises e LEFT JOIN vendor_rn_settings v ON v.enterprise_id = e.id
           WHERE e.id = $1`,
         [vendorId],
       )
@@ -91,6 +106,9 @@ async function effectiveSettings(db: Db, vendorId: number | null): Promise<Effec
     },
     replyTo: (v.reply_to as string[] | null) ?? [],
     noticeDays: Number(v.rate_notice_days ?? 0),
+    noticeDaysDecrease: Number(v.rate_notice_days_decrease ?? 0),
+    noticeDaysNew: Number(v.rate_notice_days_new ?? 0),
+    allNetworks: (v.all_networks_code as AllNetworks | null) ?? "mcc",
     mapping: (v.mapping as Record<string, string> | null) ?? null,
   };
 }
@@ -225,6 +243,7 @@ async function loadRn(db: Db, id: number): Promise<RnDetail | null> {
     changeId: r.change_id === null ? null : Number(r.change_id),
     fileErrors: r.file_errors ?? [],
     columns: r.columns ?? [],
+    headerRow: r.header_row === null || r.header_row === undefined ? null : Number(r.header_row),
     replies: replies.rows.map((p) => ({
       id: Number(p.id),
       kind: p.kind,
@@ -253,6 +272,12 @@ export function downloadRnFile(request: FastifyRequest, reply: FastifyReply) {
     const { rows } = await pool.query("SELECT file_name, file_content FROM rate_notifications WHERE id = $1", [id]);
     if (!rows[0]) return notFound(reply, id);
     const name = String(rows[0].file_name ?? `rn-${id}.csv`).replace(/[^\w.-]+/g, "_");
+    const content = String(rows[0].file_content ?? "");
+    if (content.startsWith("base64:"))
+      return reply
+        .type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        .header("content-disposition", `attachment; filename="${name}"`)
+        .send(Buffer.from(content.slice(7), "base64"));
     return reply
       .type("text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${name}"`)
@@ -313,9 +338,15 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
     [rnId],
   );
   await c.query(
-    `UPDATE rate_notification_lines SET notice_breach = (change_type = 'increase' AND stated_from < $2)
+    `UPDATE rate_notification_lines SET notice_breach = ((change_type = 'increase' AND stated_from < $2)
+        OR (change_type = 'decrease' AND stated_from < $3) OR (change_type = 'new' AND stated_from < $4))
       WHERE rn_id = $1 AND decision = 'pending'`,
-    [rnId, new Date(received + ef.noticeDays * DAY_MS)],
+    [
+      rnId,
+      new Date(received + ef.noticeDays * DAY_MS),
+      new Date(received + ef.noticeDaysDecrease * DAY_MS),
+      new Date(received + ef.noticeDaysNew * DAY_MS),
+    ],
   );
 
   // Traffic on this vendor trunk per destination (EDR store; optional).
@@ -506,10 +537,10 @@ async function makeReply(c: Db, rnId: number, kind: "successful" | "failed" | "r
     subject = `Rates accepted – ${ref}${rn.trunk ? ` (${rn.trunk})` : ""}`;
     body =
       `Your rate notification ${ref}${rn.file_name ? ` (${rn.file_name})` : ""} was uploaded and accepted: ` +
-      `${accepted.length} line${accepted.length === 1 ? "" : "s"}, effective ${rn.effective_from ? day(rn.effective_from) : "now"}.`;
+      `${accepted.length} rate${accepted.length === 1 ? "" : "s"}, effective ${rn.effective_from ? day(rn.effective_from) : "now"}.`;
     if (moved.length)
       body +=
-        `\n\n${moved.length} line${moved.length === 1 ? " was" : "s were"} applied later than stated, because rates never change ` +
+        `\n\n${moved.length} rate${moved.length === 1 ? " was" : "s were"} applied later than stated, because rates never change ` +
         `traffic already sent:\n` +
         moved
           .slice(0, 50)
@@ -521,10 +552,10 @@ async function makeReply(c: Db, rnId: number, kind: "successful" | "failed" | "r
       `Your rate notification ${ref} was ${accepted.length ? "partly " : ""}rejected.\n\nRejected lines:\n` +
       rejected
         .slice(0, 200)
-        .map((l) => `  line ${l.line_no} ${l.mccmnc} ${l.new_rate ?? "closed"}: ${l.reject_reason ?? ""}`)
+        .map((l) => `  row ${l.line_no} ${l.mccmnc} ${l.new_rate ?? "closed"}: ${l.reject_reason ?? ""}`)
         .join("\n") +
       (accepted.length
-        ? `\n\n${accepted.length} other line${accepted.length === 1 ? " was" : "s were"} accepted` +
+        ? `\n\n${accepted.length} other rate${accepted.length === 1 ? " was" : "s were"} accepted` +
           (moved.length ? `; ${moved.length} applied from a later date than stated (no back-dating).` : ".")
         : "");
   } else {
@@ -534,7 +565,7 @@ async function makeReply(c: Db, rnId: number, kind: "successful" | "failed" | "r
       `We could not process ${rn.file_name ?? "your rate file"} (${ref}). Please correct and resend:\n` +
       errs
         .slice(0, 200)
-        .map((e) => `  line ${e.line}: ${e.message}`)
+        .map((e) => `  row ${e.line}: ${e.message}`)
         .join("\n");
   }
   if (tpl) {
@@ -703,7 +734,9 @@ export async function acceptLines(
       entityIds: [table.id],
       changeType: edits.length > 1 ? "bulk" : "edit",
       diff,
-      note: note?.trim() || `${rn.reference} ${auto ? "auto-accepted" : "accepted"} (${lines.length} lines)`,
+      note:
+        note?.trim() ||
+        `${rn.reference} ${auto ? "auto-accepted" : "accepted"} (${lines.length} rate${lines.length === 1 ? "" : "s"})`,
       userId,
       ip,
     });
@@ -722,7 +755,7 @@ export async function acceptLines(
     c,
     rnId,
     auto ? null : userId,
-    `${auto ? "Auto-accepted" : "Accepted"} ${lines.length} line${lines.length === 1 ? "" : "s"}` +
+    `${auto ? "Auto-accepted" : "Accepted"} ${lines.length} rate${lines.length === 1 ? "" : "s"}` +
       (change ? ` (change #${change.id})` : " (nothing to load)") +
       (note?.trim() ? `: ${note.trim()}` : ""),
   );
@@ -869,6 +902,7 @@ interface Draft {
   fileName: string;
   content: string;
   columns: { header: string; field: string | null }[];
+  headerRow: number | null;
   fatal: boolean;
 }
 
@@ -893,7 +927,7 @@ async function createRn(
     }
     const key = `${dest.mccmnc}:${row.senderId ?? ""}`;
     if (seen.has(key)) {
-      errors.push({ line: row.lineNo, message: `${dest.mccmnc} appears twice; the first line is used` });
+      errors.push({ line: row.lineNo, message: `${dest.mccmnc} appears twice; the first row is used` });
       continue;
     }
     seen.add(key);
@@ -907,8 +941,9 @@ async function createRn(
   const received = new Date();
   await c.query(
     `INSERT INTO rate_notifications (id, reference, vendor_id, vendor_trunk_id, rate_table_id, currency, source, mailbox,
-       from_address, subject, body, file_name, file_content, received_at, status, match_reason, columns, file_errors, errors)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+       from_address, subject, body, file_name, file_content, received_at, status, match_reason, columns, file_errors, errors,
+       header_row)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
     [
       id,
       reference,
@@ -929,6 +964,7 @@ async function createRn(
       JSON.stringify(d.columns),
       JSON.stringify(errors.slice(0, 2000)),
       errors.length,
+      d.headerRow,
     ],
   );
   for (const [i, { row, dest }] of lines.entries()) {
@@ -980,6 +1016,28 @@ async function createRn(
   return { id, auto: false };
 }
 
+/** Text or Excel attachment → sheet; an unreadable Excel file becomes one file error (team trial round 2). */
+function readAttachment(
+  att: RnIntake["attachments"][number],
+  mapping: Record<string, string> | null,
+  opts: { allNetworks: AllNetworks | null },
+): Sheet {
+  const o = { ...opts, headerRow: att.headerRow ?? null };
+  if (att.encoding !== "base64") return readSheet(att.content, mapping, o);
+  try {
+    return readSheet(readXlsx(Buffer.from(att.content, "base64")), mapping, o);
+  } catch (e) {
+    if (!(e instanceof SheetFileError)) throw e;
+    return {
+      columns: [],
+      headerRow: null,
+      rows: [],
+      errors: [{ line: 1, message: `Can't read the file: ${e.message}` }],
+      fatal: true,
+    };
+  }
+}
+
 export function intakeRn(request: FastifyRequest, reply: FastifyReply) {
   const mail = request.body as RnIntake;
   return withDb(reply, async (pool) => {
@@ -999,9 +1057,17 @@ export function intakeRn(request: FastifyRequest, reply: FastifyReply) {
         ? { trunk: chosen, reason: "chosen on upload" }
         : matchTrunk(trunks, { subject: mail.subject, body: mail.body, fileName: att.fileName }, senders);
       const ent = (found?.trunk as { enterpriseId?: number } | undefined)?.enterpriseId ?? senders[0] ?? null;
-      const mapping = ent ? (await effectiveSettings(pool, ent)).mapping : null;
-      const sheet = readSheet(att.content, mapping);
-      const base = { fileName: att.fileName, content: att.content, columns: sheet.columns, fatal: sheet.fatal };
+      const ef = ent ? await effectiveSettings(pool, ent) : null;
+      const sheet = readAttachment(att, ef?.mapping ?? null, { allNetworks: ef?.allNetworks ?? null });
+      // Excel files are kept as "base64:<data>" so the original can be downloaded (team trial round 2).
+      const content = att.encoding === "base64" ? `base64:${att.content}` : att.content;
+      const base = {
+        fileName: att.fileName,
+        content,
+        columns: sheet.columns,
+        headerRow: sheet.headerRow,
+        fatal: sheet.fatal,
+      };
       const withUser = sheet.rows.filter((r) => r.username);
       if (!chosen && withUser.length && sheet.columns.some((x) => x.field === "username")) {
         // One file, many trunks: split by the username column (§13.13 A step 2).

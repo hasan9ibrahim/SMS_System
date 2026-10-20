@@ -27,6 +27,7 @@ import {
 } from "./reportModel";
 import { metricQualityClass } from "../../ui/quality";
 import { tzLabel } from "../../ui/timezones";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const page = pageForPath("/reports/enterprise")!;
 
@@ -134,19 +135,11 @@ function Settings({
         </div>
         <label className="toggle-inline">
           From
-          <input
-            type="datetime-local"
-            value={draft.from}
-            onChange={(e) => e.target.value && set({ from: e.target.value })}
-          />
+          <DateTimeInput value={draft.from} onChange={(e) => e.target.value && set({ from: e.target.value })} />
         </label>
         <label className="toggle-inline">
           to
-          <input
-            type="datetime-local"
-            value={draft.to}
-            onChange={(e) => e.target.value && set({ to: e.target.value })}
-          />
+          <DateTimeInput value={draft.to} onChange={(e) => e.target.value && set({ to: e.target.value })} />
         </label>
         <div className="rp-quick">
           {QUICK.map((q) => (

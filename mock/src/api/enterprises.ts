@@ -46,6 +46,9 @@ import {
 import { maskEnterpriseDetail, refuseMasked } from "../visibility/records.js";
 import { currentViewer } from "../visibility/context.js";
 import { resolveSql } from "../visibility/sql.js";
+import { companyDetails, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
+import { fillBody, fillText } from "../email/html.js";
+import { platformDateTime } from "../platform.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -75,6 +78,9 @@ const SPECS: FieldSpec[] = [
   { api: "vatNumber", col: "vat_number" },
   { api: "billingTimezone", col: "billing_timezone" },
   { api: "rateNoticeDays", col: "rate_notice_days" },
+  { api: "rateNoticeDaysDecrease", col: "rate_notice_days_decrease" },
+  { api: "rateNoticeDaysNew", col: "rate_notice_days_new" },
+  { api: "allNetworksCode", col: "all_networks_code" },
 ];
 
 const CONTACT_TYPES = ["commercial", "technical", "rates", "finance"] as const;
@@ -626,9 +632,17 @@ export function handOverEnterprise(request: FastifyRequest, reply: FastifyReply)
     if (at < now - 60_000) errors.push({ path: "/effectiveAt", message: "can't be in the past" });
     if (input.userId === ent.accountManagerId && at <= now + 60_000)
       errors.push({ path: "/userId", message: "is already the account manager" });
+    if (input.templateId != null) {
+      const { rows: t } = await pool.query(
+        "SELECT 1 FROM email_templates WHERE id = $1 AND email_type = 'am_handover' AND deleted_at IS NULL",
+        [input.templateId],
+      );
+      if (!t[0]) errors.push({ path: "/templateId", message: "not an AM handover e-mail template" });
+    }
     if (errors.length) return badInput(reply, errors);
 
     const before = await amRows(pool, id);
+    let emailed = 0;
     const change = await inTransaction(pool, async (c) => {
       const effective = new Date(Math.max(at, now)).toISOString();
       // A new handover replaces a scheduled one that hasn't started yet.
@@ -651,6 +665,8 @@ export function handOverEnterprise(request: FastifyRequest, reply: FastifyReply)
       );
       await applyDueHandovers(c, id);
       const after = await amRows(c, id);
+      if (input.notify !== false)
+        emailed = await sendHandoverEmail(c, id, ent.accountManagerId ?? null, input, effective);
       return recordChange(c, {
         entityType: "enterprise",
         entityIds: [id],
@@ -661,8 +677,60 @@ export function handOverEnterprise(request: FastifyRequest, reply: FastifyReply)
         ip: request.ip,
       });
     });
-    return { periods: await amPeriods(pool, id), change };
+    return { periods: await amPeriods(pool, id), change, emailed };
   });
+}
+
+/**
+ * Tells the client about its new account manager (team trial round 2): the AM handover template (the one
+ * picked, else the business company's), to the commercial contact (else rates), copying both AMs, from the
+ * new AM. Logged in Email logs as am_handover. Answers how many e-mails were logged.
+ */
+async function sendHandoverEmail(
+  c: pg.PoolClient,
+  enterpriseId: number,
+  oldAmId: number | null,
+  input: HandoverRequest,
+  effective: string,
+): Promise<number> {
+  const tpl =
+    input.templateId != null
+      ? (await c.query("SELECT id, subject, body FROM email_templates WHERE id = $1", [input.templateId])).rows[0]
+      : await companyTemplate(c, { enterpriseId }, "am_handover");
+  if (!tpl) return 0;
+  const { rows: people } = await c.query(
+    `SELECT u.id, u.first_name || ' ' || u.last_name AS name, u.email, u.phone FROM users u WHERE u.id = ANY($1)`,
+    [[input.userId, oldAmId].filter((x) => x !== null)],
+  );
+  const newAm = people.find((p) => Number(p.id) === input.userId);
+  const oldAm = people.find((p) => Number(p.id) === oldAmId);
+  const { rows: e } = await c.query(
+    `SELECT e.name, (SELECT ct.emails FROM enterprise_contacts ct WHERE ct.enterprise_id = e.id
+                      AND ct.contact_type IN ('commercial', 'rates') ORDER BY ct.contact_type = 'commercial' DESC LIMIT 1) AS emails
+       FROM enterprises e WHERE e.id = $1`,
+    [enterpriseId],
+  );
+  const vars: Record<string, string> = {
+    ...companyPlaceholders(await companyDetails(c, { enterpriseId })),
+    enterprise: String(e[0]?.name ?? ""),
+    old_am: oldAm?.name ?? "your previous account manager",
+    new_am: newAm?.name ?? "",
+    new_am_email: newAm?.email ?? "",
+    new_am_phone: newAm?.phone ?? "",
+    new_am_phone_line: newAm?.phone ? ` or ${newAm.phone}` : "",
+    effective_date: platformDateTime(effective),
+    note: input.note?.trim() ?? "",
+  };
+  await logEmail(c, {
+    type: "am_handover",
+    enterpriseId,
+    to: (e[0]?.emails as string[] | null) ?? [],
+    cc: people.map((p) => String(p.email)).filter(Boolean),
+    sender: newAm?.email ?? null,
+    subject: fillText(String(tpl.subject), vars),
+    body: fillBody(String(tpl.body), vars),
+  });
+  return 1;
 }
 
 // ---------------------------------------------------------------- docs (§5.2)

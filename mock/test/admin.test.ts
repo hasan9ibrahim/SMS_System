@@ -11,7 +11,7 @@ import type { BusinessCompanyInput, BusinessCompanyRecord, Change, UserInput } f
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { MODULES, checkPermissions } from "../src/admin/catalog.js";
+import { MODULES, checkPermissions, checkTabs, effectiveAccess } from "../src/admin/catalog.js";
 import {
   decryptSecret,
   encryptSecret,
@@ -90,6 +90,25 @@ async function fails(operationId: string, res: Promise<LightMyRequestResponse>, 
 const undo = (change: Change | null) =>
   change ? ok("undoChange", call("POST", `/changes/${change.id}/undo`, {})) : null;
 const STRONG = "Long-enough-fake-passphrase-26";
+
+describe("§11 access: group plus per-user overrides (team trial round 2)", () => {
+  test("overrides replace the group's actions, No access beats Every page, tabs flip", () => {
+    const a = effectiveAccess(
+      { "*": ["view"], invoices: ["view", "edit"] },
+      ["enterprises.docs", "vendor-trunks.http"],
+      { invoices: ["view"], soa: [], "rate-manager": ["view", "edit"] },
+      { "enterprises.docs": true, "enterprises.billing": false },
+    );
+    assert.deepEqual(a.permissions.invoices, ["view"]);
+    assert.deepEqual(a.permissions["rate-manager"], ["view", "edit"]);
+    assert.deepEqual(a.denied, ["soa"]);
+    assert.deepEqual(a.hiddenTabs, ["enterprises.billing", "vendor-trunks.http"]);
+  });
+  test("tab keys come from the catalogue", () => {
+    assert.deepEqual(checkTabs(["enterprises.docs", "customer-trunks.pricing"], "/hiddenTabs"), []);
+    assert.equal(checkTabs(["enterprises.nope"], "/hiddenTabs").length, 1);
+  });
+});
 
 describe("§13.28 password and 2FA helpers", () => {
   test("hashes verify, rules report each condition", () => {
@@ -233,6 +252,8 @@ describe("§11 users, §13.28 passwords", { skip }, () => {
       state: null,
       city: null,
       zip: null,
+      permissionOverrides: {},
+      tabOverrides: {},
     };
   };
 
@@ -454,7 +475,7 @@ describe("§11 departments, access groups, templates, portal users", { skip }, (
 
   test("e-mail templates: placeholders, preview, clone, in-use templates cannot be deleted", async () => {
     const ph = await ok("listEmailPlaceholders", call("GET", "/email-templates/placeholders"));
-    assert.equal(ph.types.length, 13);
+    assert.equal(ph.types.length, 14);
     const pv = await ok(
       "previewEmailTemplate",
       call("POST", "/email-templates/preview", {

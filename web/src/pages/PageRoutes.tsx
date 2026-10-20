@@ -20,7 +20,7 @@ import { CleanupPage } from "./admin/cleanup/CleanupPage";
 import { MigrationPage } from "./admin/migration/MigrationPage";
 import { SecurityPage } from "./admin/security/SecurityPage";
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 import { PAGES } from "../nav/registry";
 import { ChangeHistoryPage } from "./ChangeHistoryPage";
 import { EnterprisePage } from "./enterprise/EnterprisePage";
@@ -104,7 +104,7 @@ const BUILT = new Set([
   "/rates/master-table",
   "/rates/mo-book",
   "/routing/map",
-  "/routing/re-rating",
+  "/rates/re-rating",
   "/switch/qbr-stats",
   "/switch/number-lists",
   "/switch/translation-rules",
@@ -141,7 +141,7 @@ const BUILT = new Set([
   "/finance/charges",
   "/reports/enterprise",
   "/routing/rules",
-  "/routing/rate-lookup",
+  "/rates/rate-lookup",
   "/admin/changes",
   "/admin/users",
   "/admin/access-groups",
@@ -183,7 +183,10 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/rates/master-table" element={<MasterTablePage />} />
       <Route path="/rates/mo-book" element={<MoBookPage />} />
       <Route path="/routing/map" element={<RouteMapPage />} />
-      <Route path="/routing/re-rating" element={<ReratingPage />} />
+      <Route path="/rates/re-rating" element={<ReratingPage />} />
+      {/* Re-rating and Rate lookup moved under Rates (team trial round 2); old tabs and links still open. */}
+      <Route path="/routing/re-rating" element={<Navigate to="/rates/re-rating" replace />} />
+      <Route path="/routing/rate-lookup" element={<Navigate to="/rates/rate-lookup" replace />} />
       <Route path="/switch/qbr-stats" element={<QbrStatsPage />} />
       <Route path="/switch/number-lists" element={<NumberListsPage />} />
       <Route path="/switch/translation-rules" element={<TranslationRulesPage />} />
@@ -242,7 +245,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/finance/charges" element={<ChargesPage />} />
       <Route path="/reports/enterprise" element={<EnterpriseReportPage />} />
       <Route
-        path="/routing/rate-lookup"
+        path="/rates/rate-lookup"
         element={
           <Suspense fallback={<div className="grid-message muted">Loading…</div>}>
             <RateLookupPage />

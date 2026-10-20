@@ -14,7 +14,8 @@ import type {
   RateTableRow,
   RateTableUpdate,
 } from "@sms/contract";
-import { PLATFORM_CURRENCY } from "../currency.js";
+import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
+import { platformDateTime } from "../platform.js";
 import { withDb } from "../db.js";
 import { marginPct, trafficTodayByRateTable } from "../edr.js";
 import { listFields } from "../lists/fields.js";
@@ -43,10 +44,10 @@ async function trafficFigures(db: Db, rows: { id: number; kind: string; currency
   const traffic = await trafficTodayByRateTable();
   if (!traffic || rows.length === 0)
     return new Map<number, { money: number | null; margin: number | null; n: number | null }>();
-  const { rows: fx } = await db.query("SELECT iso, rate_per_usd FROM currency_latest");
-  const perUsd = new Map(fx.map((r) => [String(r.iso), Number(r.rate_per_usd)]));
+  const { rows: fx } = await db.query("SELECT iso, rate_per_eur FROM currency_latest");
+  const perEur = new Map(fx.map((r) => [String(r.iso), Number(r.rate_per_eur)]));
   // Traffic money is in the platform currency; show it in the table's currency.
-  const platformPerUsd = perUsd.get(PLATFORM_CURRENCY) ?? 1;
+  const platformPerEur = perEur.get(PLATFORM_CURRENCY) ?? 1;
   return new Map(
     rows.map((r) => {
       const t = (r.kind === "customer" ? traffic.customer : traffic.vendor).get(r.id);
@@ -54,7 +55,7 @@ async function trafficFigures(db: Db, rows: { id: number; kind: string; currency
       return [
         r.id,
         {
-          money: Math.round((sys / platformPerUsd) * (perUsd.get(r.currency) ?? 1) * 100) / 100,
+          money: Math.round((sys / platformPerEur) * (perEur.get(r.currency) ?? 1) * 100) / 100,
           margin: marginPct(t),
           n: t?.messages ?? 0,
         },
@@ -121,7 +122,15 @@ const csvCell = (v: unknown) => {
 
 export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
-  const { view = "current" } = request.query as { view?: string };
+  // POST: the grid's own filter, search and sort, so Export gives exactly the rows on screen (trial round 2).
+  const body = request.method === "POST" ? ((request.body ?? {}) as ListQuery) : null;
+  const bodyConds = (body?.filter?.conditions ?? []).filter(
+    (c) => !("field" in c && (c.field === "rateTableId" || c.field === "view")),
+  );
+  const bodyView = (body?.filter?.conditions ?? []).find(
+    (c): c is { field: string; op: "eq"; value: string } => "field" in c && c.field === "view",
+  )?.value;
+  const view = String(bodyView ?? (request.query as { view?: string }).view ?? "current");
   return withDb(reply, async (pool) => {
     const { rows: t } = await pool.query("SELECT name FROM rate_tables WHERE id = $1", [id]);
     if (!t[0]) return notFound(reply, id);
@@ -132,8 +141,11 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
         conditions: [
           { field: "rateTableId", op: "eq", value: id },
           { field: "view", op: "eq", value: view },
+          ...(bodyConds.length ? [{ logic: body!.filter!.logic ?? "and", conditions: bodyConds }] : []),
         ],
       },
+      ...(body?.search ? { search: body.search } : {}),
+      ...(body?.sort ? { sort: body.sort } : {}),
       limit: 100_000,
     } as ListQuery);
     const cols: [string, string][] = [
@@ -144,7 +156,7 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
       ["Sender ID", "senderId"],
       ["Rate", "rate"],
       ["Currency", "currency"],
-      ["Sys Rate (USD)", "sysRate"],
+      [`Sys Rate (${PLATFORM_CURRENCY})`, "sysRate"],
       ["Best Buy", "bestBuy"],
       ["Best Vendor", "bestVendor"],
       ["Margin", "margin"],
@@ -159,7 +171,7 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
       const row = r as unknown as Record<string, unknown>;
       return cols.map(([, k]) => csvCell(row[k])).join(",");
     });
-    const file = `${String(t[0].name).replace(/[^\w.-]+/g, "_")}_${view}.csv`;
+    const file = `${String(t[0].name).replace(/[^\w.-]+/g, "_")}_${view}${bodyConds.length || body?.search ? "_filtered" : ""}.csv`;
     return reply
       .type("text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${file}"`)
@@ -173,12 +185,13 @@ async function loadTable(db: Db, id: number): Promise<RateTableDetail | null> {
   const { rows } = await db.query(
     `SELECT rt.*, pc.name AS category, vt.name AS vendor_trunk_name, du.username AS deleted_by,
             cb.username AS created_by, ub.username AS updated_by, ${negativeMarginSql} AS negative_lines,
-            vt.deleted_at AS trunk_deleted_at
+            vt.deleted_at AS trunk_deleted_at, ${toPlatformSql("1")} AS platform_per_unit
        FROM rate_tables rt JOIN product_categories pc ON pc.id = rt.product_category_id
        LEFT JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id
        LEFT JOIN users du ON du.id = rt.deleted_by_id
        LEFT JOIN users cb ON cb.id = rt.created_by_id
        LEFT JOIN users ub ON ub.id = rt.updated_by_id
+       LEFT JOIN currency_latest cl ON cl.iso = rt.currency
       WHERE rt.id = $1`,
     [id],
   );
@@ -223,6 +236,7 @@ async function loadTable(db: Db, id: number): Promise<RateTableDetail | null> {
     categoryId: r.product_category_id,
     category: r.category,
     currency: String(r.currency),
+    platformPerUnit: Number(r.platform_per_unit ?? 1),
     description: r.description ?? null,
     vendorTrunkId: r.vendor_trunk_id ?? null,
     vendorTrunkName: r.vendor_trunk_name ?? null,
@@ -316,7 +330,7 @@ export function createRateTable(request: FastifyRequest, reply: FastifyReply) {
           `INSERT INTO rate_lines (rate_table_id, mccmnc_id, mccmnc, dial_code, sender_id, rate, currency, valid_from,
                                   change_type, rate_note, created_by_id, updated_by_id)
            SELECT $1, l.mccmnc_id, l.mccmnc, l.dial_code, l.sender_id,
-                  round(l.rate / src.rate_per_usd * dst.rate_per_usd * (1 + $3::numeric / 100), 6), $4, now(),
+                  round(l.rate / src.rate_per_eur * dst.rate_per_eur * (1 + $3::numeric / 100), 6), $4, now(),
                   'new', 'Copied from vendor trunk ' || $5, $6, $6
              FROM rate_lines l
              JOIN currency_latest src ON src.iso = l.currency
@@ -597,7 +611,8 @@ export async function applyRateTableEntries(
 
 export interface Breach {
   mccmnc: string;
-  currentRate: number;
+  change: NoticeKind;
+  currentRate: number | null;
   newRate: number;
   effectiveFrom: string;
   noticeDays: number;
@@ -607,27 +622,46 @@ export interface Breach {
   table?: string;
 }
 
-/** A rate table being edited, with the longest notice period of the clients using it (§13.14). */
+export type NoticeKind = "increase" | "decrease" | "new";
+export interface NoticePeriod {
+  days: number;
+  name: string;
+}
+/** The longest notice per kind of change among a table's clients; a kind with 0 days is absent (team trial round 2). */
+export type Notice = Partial<Record<NoticeKind, NoticePeriod>>;
+
+/** A rate table being edited, with the longest notice periods of the clients using it (§13.14). */
 export interface EditTable {
   id: number;
   name: string;
   kind: string;
   currency: string;
-  notice: { days: number; name: string } | null;
+  notice: Notice | null;
 }
 
-/** Longest notice period among the clients pricing with each customer table (§13.14). */
-export async function noticePeriods(db: Db, ids: number[]): Promise<Map<number, { days: number; name: string }>> {
+/** Longest notice periods per kind among the clients pricing with each customer table (§13.14, trial round 2). */
+export async function noticePeriods(db: Db, ids: number[]): Promise<Map<number, Notice>> {
   const { rows } = await db.query(
-    `SELECT DISTINCT ON (x.rate_table_id) x.rate_table_id AS id, e.rate_notice_days AS days, e.name
+    `SELECT DISTINCT x.rate_table_id AS id, e.name, e.rate_notice_days AS increase,
+            e.rate_notice_days_decrease AS decrease, e.rate_notice_days_new AS new
        FROM customer_trunk_rate_tables x
        JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL
        JOIN enterprises e ON e.id = t.enterprise_id
-      WHERE x.rate_table_id = ANY($1) AND e.rate_notice_days > 0
-      ORDER BY x.rate_table_id, e.rate_notice_days DESC, e.name`,
+      WHERE x.rate_table_id = ANY($1)
+        AND (e.rate_notice_days > 0 OR e.rate_notice_days_decrease > 0 OR e.rate_notice_days_new > 0)
+      ORDER BY e.name`,
     [ids],
   );
-  return new Map(rows.map((r) => [Number(r.id), { days: r.days as number, name: r.name as string }]));
+  const out = new Map<number, Notice>();
+  for (const r of rows) {
+    const n = out.get(Number(r.id)) ?? {};
+    for (const k of ["increase", "decrease", "new"] as const) {
+      const days = Number(r[k]);
+      if (days > 0 && days > (n[k]?.days ?? 0)) n[k] = { days, name: r.name as string };
+    }
+    out.set(Number(r.id), n);
+  }
+  return out;
 }
 
 /**
@@ -652,7 +686,7 @@ export async function checkLineEdits(
           message: "can't be in the past (traffic already sent keeps its rate)",
         });
     } else {
-      if (it.lineId === undefined) errors.push({ path: `${at}/lineId`, message: `required to ${it.action} a line` });
+      if (it.lineId === undefined) errors.push({ path: `${at}/lineId`, message: `required to ${it.action} a rate` });
       if (it.action === "block" && it.blocked === undefined)
         errors.push({ path: `${at}/blocked`, message: "required" });
       if (it.at && Date.parse(it.at) < nowMs - SKEW_MS)
@@ -668,7 +702,7 @@ export async function checkLineEdits(
     const ok = new Set(rows.map((r) => Number(r.id)));
     for (const { it, at } of edits)
       if (it.lineId !== undefined && !ok.has(it.lineId))
-        errors.push({ path: `${at}/lineId`, message: `line ${it.lineId} is not in this table` });
+        errors.push({ path: `${at}/lineId`, message: `rate ${it.lineId} is not in this table` });
   }
   const codes = [
     ...new Set(
@@ -727,17 +761,26 @@ export async function applyLineEdits(
         skipped++;
         continue;
       }
-      if (notice && cur && rate > Number(cur.rate)) {
-        const earliest = nowMs + notice.days * 86_400_000;
+      const kind: NoticeKind | null = !cur
+        ? "new"
+        : rate > Number(cur.rate)
+          ? "increase"
+          : rate < Number(cur.rate)
+            ? "decrease"
+            : null;
+      const period = kind ? notice?.[kind] : undefined;
+      if (period) {
+        const earliest = nowMs + period.days * 86_400_000;
         if (from.getTime() < earliest - SKEW_MS)
           breaches.push({
-            mccmnc: String(cur.mccmnc),
-            currentRate: Number(cur.rate),
+            mccmnc: cur ? String(cur.mccmnc) : ref ? String(ref.mccmnc) : it.mccmnc!,
+            change: kind!,
+            currentRate: cur ? Number(cur.rate) : null,
             newRate: rate,
             effectiveFrom: from.toISOString(),
-            noticeDays: notice.days,
+            noticeDays: period.days,
             earliestAllowed: new Date(earliest).toISOString(),
-            enterpriseName: notice.name,
+            enterpriseName: period.name,
             rateTableId: id,
             table: table.name,
           });
@@ -839,9 +882,9 @@ export function sendNoticeBreach(reply: FastifyReply, breaches: Breach[]) {
     .type("application/problem+json")
     .send({
       type: "about:blank",
-      title: "Increases sooner than the client's notice period",
+      title: "Changes sooner than the client's notice period",
       status: 409,
-      detail: `${breaches.length} increase${breaches.length === 1 ? "" : "s"} start before ${breaches[0]!.earliestAllowed.slice(0, 10)} (${breaches[0]!.noticeDays} days' notice for ${breaches[0]!.enterpriseName})`,
+      detail: `${breaches.length} change${breaches.length === 1 ? "" : "s"} (${[...new Set(breaches.map((x) => x.change))].join(", ")}) start before ${platformDateTime(breaches[0]!.earliestAllowed)} (${breaches[0]!.noticeDays} days' ${breaches[0]!.change} notice for ${breaches[0]!.enterpriseName})`,
       breaches,
     });
 }
@@ -854,7 +897,7 @@ export const OVERLAP = Symbol("overlap");
 export const isOverlap = (err: unknown) => (err as { code?: string }).code === "23P01";
 export const overlapProblem = (reply: FastifyReply) =>
   sendProblem(reply, 400, "These rates changed while you were saving; reload, review and save again", {
-    errors: [{ path: "/items", message: "another save changed the same lines at the same time" }],
+    errors: [{ path: "/items", message: "another save changed the same rates at the same time" }],
   });
 
 export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
@@ -922,7 +965,8 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
       );
     if (result.change && table.kind === "vendor") scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
-    const notificationsSent = result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id) : 0;
+    const notificationsSent =
+      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : 0;
     return { change: result.change, applied: result.applied, skipped, notificationsSent };
   });
 }

@@ -6,6 +6,26 @@ import type { CheckItem } from "../../ui/CheckList";
 export type Show = "both" | "customer" | "vendor";
 export type SideSort = "destination" | "tables" | "minSys" | "maxSys";
 
+/** A number column filter under the header: at least, at most, or between (team trial round 2). */
+export interface RangeFilter {
+  op: "" | "gte" | "lte" | "between";
+  a: string;
+  b: string;
+}
+export const noRange = (): RangeFilter => ({ op: "", a: "", b: "" });
+
+/** The range as min / max for the request; invalid or empty values are left out. */
+export function rangeBounds(r: RangeFilter | undefined): { min?: number; max?: number } {
+  if (!r || !r.op) return {};
+  const num = (v: string) =>
+    v.trim() !== "" && Number.isFinite(Number(v.replace(",", "."))) ? Number(v.replace(",", ".")) : undefined;
+  const a = num(r.a);
+  const b = num(r.b);
+  if (r.op === "gte") return a === undefined ? {} : { min: a };
+  if (r.op === "lte") return a === undefined ? {} : { max: a };
+  return { ...(a !== undefined ? { min: a } : {}), ...(b !== undefined ? { max: b } : {}) };
+}
+
 export interface SideState {
   categoryIds: number[];
   trunkIds: number[];
@@ -15,6 +35,12 @@ export interface SideState {
   includeInactive: boolean;
   sort: SideSort;
   dir: "asc" | "desc";
+  // Column filters under the headers (team trial round 2).
+  destination: string;
+  code: string;
+  tables: RangeFilter;
+  price: RangeFilter;
+  sys: RangeFilter;
 }
 
 export const emptySide = (): SideState => ({
@@ -26,6 +52,11 @@ export const emptySide = (): SideState => ({
   includeInactive: false,
   sort: "destination",
   dir: "asc",
+  destination: "",
+  code: "",
+  tables: noRange(),
+  price: noRange(),
+  sys: noRange(),
 });
 
 const b64 = (s: string) =>
@@ -64,6 +95,19 @@ export function sideFilters(side: LookupSide, s: SideState): LookupSideFilters {
     ...(s.mccmncs.length ? { mccmncs: s.mccmncs } : s.mccs.length ? { mccs: s.mccs } : {}),
     ...(s.search.trim() ? { search: s.search.trim() } : {}),
     ...(s.includeInactive ? { includeInactive: true } : {}),
+    ...(s.destination?.trim() ? { destination: s.destination.trim() } : {}),
+    ...(s.code?.trim() ? { code: s.code.trim() } : {}),
+    ...bounds("tables", s.tables),
+    ...bounds("price", s.price),
+    ...bounds("sys", s.sys),
+  };
+}
+
+function bounds(key: "tables" | "price" | "sys", r: RangeFilter | undefined) {
+  const { min, max } = rangeBounds(r);
+  return {
+    ...(min !== undefined ? { [`${key}Min`]: key === "tables" ? Math.round(min) : min } : {}),
+    ...(max !== undefined ? { [`${key}Max`]: key === "tables" ? Math.round(max) : max } : {}),
   };
 }
 

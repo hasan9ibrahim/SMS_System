@@ -1,5 +1,6 @@
 // Customer trunk form (§5.4, §13.1, §13.26) and vendor trunk form (§5.5, §13.26). Field
 // names follow the reference platform; passwords are write-only (never shown, §13.22).
+import { useTabShown } from "../../api/access";
 import type { CustomerTrunkInput, RateTableRow, TrunkListRow, VendorTrunkInput } from "@sms/contract";
 import { useReference, type TrunkDetail, type TrunkKind } from "../../api/records";
 import {
@@ -259,7 +260,7 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
       label="Rate tables"
       wide
       error={form.error("rateTableIds")}
-      hint="In order: the first table with a line for the destination prices the message (§5.4)"
+      hint="In order: the first table with a rate for the destination prices the message (§5.4)"
     >
       <ol className="ordered-list">
         {ids.map((id, i) => (
@@ -312,7 +313,7 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
             exclude={ids}
             onChange={(r) => r && form.set("rateTableIds", [...ids, r.id])}
             labelOf={(r) => `${r.name} (${r.currency})`}
-            detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} lines`}
+            detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`}
           />
         </li>
       </ol>
@@ -330,114 +331,132 @@ export function CustomerTrunkFields({
   passwordSet: boolean;
 }) {
   const v = form.values as CustomerTrunkInput;
+  const shown = useTabShown(); // sections an access group can hide (§11, trial round 2)
   return (
     <>
       <Section title="Trunk">
         <CommonTrunkFields form={form} kind="customer" />
       </Section>
-      <Section title="Connection" note="What the client binds with">
-        <ListField
-          form={form}
-          path="hostIps"
-          label="Allowed host IPs"
-          required
-          wide
-          placeholder="192.0.2.10, 2001:db8::1"
-          hint="Binds from other addresses are refused"
-        />
-        <TextField form={form} path="username" label="Username (system_id)" required maxLength={16} nullable={false} />
-        <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
-        <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
-        <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
-        <TextField form={form} path="systemType" label="System type" maxLength={13} />
-        <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
-      </Section>
-      <Section title="Delivery receipts" note="§13.1 session affinity">
-        <SelectField
-          form={form}
-          path="dlrSessionAffinity"
-          label="Receipt routing"
-          required
-          options={[
-            { value: "strict", label: "Same session only (hold)" },
-            { value: "same_ip", label: "Any session from the same IP" },
-            { value: "same_trunk", label: "Any session of the trunk" },
-          ]}
-          hint="Receipts go at once on the session the message came from; if it is gone, on another bound receiver session of the trunk, else they wait until the customer binds again (SMPP 3.4). This setting only picks which session first."
-        />
-        <NumberField
-          form={form}
-          path="dlrHoldHours"
-          label="Hold receipts for"
-          min={0}
-          max={720}
-          step={1}
-          suffix="hours"
-        />
-        <TextField form={form} path="dlrPushUrl" label="DLR push URL" type="url" maxLength={500} />
-        <TextField form={form} path="moPushUrl" label="MO push URL" type="url" maxLength={500} />
-        <CheckField form={form} path="delayedSubmit" label="Delayed submit" />
-        <CheckField form={form} path="sendBind" label="Send bind" />
-      </Section>
-      <Section title="Routing">
-        <CheckField form={form} path="considerHlrRate" label="Consider HLR rate" />
-        <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
-        <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
-        <CheckField form={form} path="loopDetection" label="Loop detection" />
-        <SelectField
-          form={form}
-          path="defaultCoding"
-          label="Default data coding"
-          required
-          options={[
-            { value: 0, label: "0 – SMSC default (GSM 7-bit)" },
-            { value: 3, label: "3 – Latin-1" },
-          ]}
-        />
-        <FormField
-          label="Express vendor trunk"
-          hint="Bypasses routing for every message (§5.4)"
-          error={form.error("expressVendorTrunkId")}
-        >
-          <ListLookup<TrunkListRow>
-            list="vendor_trunks"
-            value={v.expressVendorTrunkId ?? null}
-            placeholder="None – route normally"
-            onChange={(r) => form.set("expressVendorTrunkId", r?.id ?? null)}
-            labelOf={(r) => r.name}
-            detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
+      {shown("customer-trunks.connection") && (
+        <Section title="Connection" note="What the client binds with">
+          <ListField
+            form={form}
+            path="hostIps"
+            label="Allowed host IPs"
+            required
+            wide
+            placeholder="192.0.2.10, 2001:db8::1"
+            hint="Binds from other addresses are refused"
           />
-        </FormField>
-        {v.expressVendorTrunkId != null && (
-          <NumberField form={form} path="expressMargin" label="Express margin" step={0.0001} />
-        )}
-      </Section>
-      <Section title="Capacity and limits" note="§13.26">
-        <NumberField
-          form={form}
-          path="tps"
-          label="TPS per session"
-          required
-          min={1}
-          max={100000}
-          step={1}
-          hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
-        />
-        <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
-        <span />
-        <NumberField
-          form={form}
-          path="revenueLimit"
-          label="Revenue limit"
-          min={0}
-          step={1}
-          hint="Traffic stops when reached"
-        />
-        <SelectField form={form} path="revenueLimitPeriod" label="Limit period" options={PERIOD} />
-      </Section>
-      <Section title="Pricing" columns={1}>
-        <RateTablesField form={form} />
-      </Section>
+          <TextField
+            form={form}
+            path="username"
+            label="Username (system_id)"
+            required
+            maxLength={16}
+            nullable={false}
+          />
+          <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
+          <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
+          <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
+          <TextField form={form} path="systemType" label="System type" maxLength={13} />
+          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
+        </Section>
+      )}
+      {shown("customer-trunks.receipts") && (
+        <Section title="Delivery receipts" note="§13.1 session affinity">
+          <SelectField
+            form={form}
+            path="dlrSessionAffinity"
+            label="Receipt routing"
+            required
+            options={[
+              { value: "strict", label: "Same session only (hold)" },
+              { value: "same_ip", label: "Any session from the same IP" },
+              { value: "same_trunk", label: "Any session of the trunk" },
+            ]}
+            hint="Receipts go at once on the session the message came from; if it is gone, on another bound receiver session of the trunk, else they wait until the customer binds again (SMPP 3.4). This setting only picks which session first."
+          />
+          <NumberField
+            form={form}
+            path="dlrHoldHours"
+            label="Hold receipts for"
+            min={0}
+            max={720}
+            step={1}
+            suffix="hours"
+          />
+          <TextField form={form} path="dlrPushUrl" label="DLR push URL" type="url" maxLength={500} />
+          <TextField form={form} path="moPushUrl" label="MO push URL" type="url" maxLength={500} />
+          <CheckField form={form} path="delayedSubmit" label="Delayed submit" />
+          <CheckField form={form} path="sendBind" label="Send bind" />
+        </Section>
+      )}
+      {shown("customer-trunks.routing") && (
+        <Section title="Routing">
+          <CheckField form={form} path="considerHlrRate" label="Consider HLR rate" />
+          <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
+          <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
+          <CheckField form={form} path="loopDetection" label="Loop detection" />
+          <SelectField
+            form={form}
+            path="defaultCoding"
+            label="Default data coding"
+            required
+            options={[
+              { value: 0, label: "0 – SMSC default (GSM 7-bit)" },
+              { value: 3, label: "3 – Latin-1" },
+            ]}
+          />
+          <FormField
+            label="Express vendor trunk"
+            hint="Bypasses routing for every message (§5.4)"
+            error={form.error("expressVendorTrunkId")}
+          >
+            <ListLookup<TrunkListRow>
+              list="vendor_trunks"
+              value={v.expressVendorTrunkId ?? null}
+              placeholder="None – route normally"
+              onChange={(r) => form.set("expressVendorTrunkId", r?.id ?? null)}
+              labelOf={(r) => r.name}
+              detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
+            />
+          </FormField>
+          {v.expressVendorTrunkId != null && (
+            <NumberField form={form} path="expressMargin" label="Express margin" step={0.0001} />
+          )}
+        </Section>
+      )}
+      {shown("customer-trunks.capacity") && (
+        <Section title="Capacity and limits" note="§13.26">
+          <NumberField
+            form={form}
+            path="tps"
+            label="TPS per session"
+            required
+            min={1}
+            max={100000}
+            step={1}
+            hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
+          />
+          <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
+          <span />
+          <NumberField
+            form={form}
+            path="revenueLimit"
+            label="Revenue limit"
+            min={0}
+            step={1}
+            hint="Traffic stops when reached"
+          />
+          <SelectField form={form} path="revenueLimitPeriod" label="Limit period" options={PERIOD} />
+        </Section>
+      )}
+      {shown("customer-trunks.pricing") && (
+        <Section title="Pricing" columns={1}>
+          <RateTablesField form={form} />
+        </Section>
+      )}
     </>
   );
 }
@@ -452,127 +471,154 @@ export function VendorTrunkFields({
   passwordSet: boolean;
 }) {
   const v = form.values as VendorTrunkInput;
+  const shown = useTabShown(); // sections an access group can hide (§11, trial round 2)
   return (
     <>
       <Section title="Trunk">
         <CommonTrunkFields form={form} kind="vendor" />
       </Section>
-      <Section title="Connection" note="How we bind to the vendor">
-        <TextField form={form} path="host" label="Host" required maxLength={255} nullable={false} />
-        <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
-        <TextField
-          form={form}
-          path="sourceHost"
-          label="Source IP"
-          maxLength={64}
-          hint="Our address the bind comes from"
-        />
-        <TextField form={form} path="username" label="Username (system_id)" required maxLength={16} nullable={false} />
-        <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
-        <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
-        <TextField form={form} path="systemType" label="System type" maxLength={13} />
-        <TextField form={form} path="serviceType" label="Service type" maxLength={6} />
-        <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
-      </Section>
-      {v.protocol === "http" ? (
-        <Section title="HTTP API" note="Generic HTTP adapter (§5.5)">
-          <TextField form={form} path="http.url" label="Submit URL" required wide type="url" maxLength={1000} />
-          <TextField form={form} path="http.successRegex" label="Success regex" />
-          <TextField form={form} path="http.messageIdRegex" label="Message ID regex" />
-          <NumberField form={form} path="http.receiverPort" label="Receiver port" min={1} max={65535} step={1} />
-          <TextArea
+      {shown("vendor-trunks.connection") && (
+        <Section title="Connection" note="How we bind to the vendor">
+          <TextField form={form} path="host" label="Host" required maxLength={255} nullable={false} />
+          <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
+          <TextField
             form={form}
-            path="http.extraHeaders"
-            label="Extra headers"
-            rows={2}
-            placeholder="Header: value, one per line"
+            path="sourceHost"
+            label="Source IP"
+            maxLength={64}
+            hint="Our address the bind comes from"
           />
-          <TextArea
+          <TextField
             form={form}
-            path="http.postData"
-            label="POST body"
-            rows={2}
-            placeholder='{"to":"{dst}","from":"{src}","text":"{text}"}'
-          />
-          <TextField form={form} path="http.callbackUrl" label="Receipt callback URL" type="url" />
-          <NumberField
-            form={form}
-            path="http.callbackIntervalS"
-            label="Callback interval"
-            min={1}
-            step={1}
-            suffix="s"
-          />
-          <TextField form={form} path="http.dlrStatusRegex" label="Receipt status regex" />
-          <TextField form={form} path="http.dlrMidRegex" label="Receipt message ID regex" />
-          <TextField form={form} path="http.dlrSuccessStats" label="Success statuses" placeholder="DELIVRD,DELIVERED" />
-          <TextField form={form} path="http.dlrFailStats" label="Failure statuses" placeholder="UNDELIV,REJECTD" />
-          <TextArea form={form} path="http.callbackExtraHeaders" label="Callback extra headers" rows={2} />
-          <TextArea form={form} path="http.callbackPostData" label="Callback POST body" rows={2} />
-        </Section>
-      ) : (
-        <Section title="SMPP session">
-          <NumberField form={form} path="windowSize" label="Window size" min={1} max={1000} step={1} />
-          <NumberField form={form} path="submitIntervalMs" label="Submit interval" min={0} step={1} suffix="ms" />
-          <NumberField form={form} path="submitTimeoutS" label="Submit timeout" min={1} step={1} suffix="s" />
-          <NumberField form={form} path="enquireLinkTimeoutS" label="Enquire link" min={1} step={1} suffix="s" />
-          <SelectField
-            form={form}
-            path="msgIdType"
-            label="Message ID type"
+            path="username"
+            label="Username (system_id)"
             required
-            options={[
-              { value: "default", label: "Default" },
-              { value: "decimal", label: "Decimal" },
-              { value: "hexadecimal", label: "Hexadecimal" },
-            ]}
+            maxLength={16}
+            nullable={false}
           />
-          <NumberField form={form} path="bindAddrTon" label="Bind address TON" min={0} max={6} step={1} />
-          <NumberField form={form} path="bindAddrNpi" label="Bind address NPI" min={0} max={18} step={1} />
-          <TextField form={form} path="bindAddrRange" label="Bind address range" maxLength={41} />
+          <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
+          <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
+          <TextField form={form} path="systemType" label="System type" maxLength={13} />
+          <TextField form={form} path="serviceType" label="Service type" maxLength={6} />
+          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
         </Section>
       )}
-      <Section title="Messages" columns={2}>
-        <MultiCheck form={form} path="allowedDataCodings" label="Allowed data codings" options={CODINGS} />
-        <MultiCheck
-          form={form}
-          path="rerouteOn"
-          label="Re-route on receipt status"
-          options={DLR_STATS.filter((s) => s.value !== "DELIVRD")}
-          hint="Failed receipts with these statuses are retried on the next vendor"
-        />
-        <MultiCheck form={form} path="allowedSrcTon" label="Allowed source TON" options={TON} />
-        <MultiCheck form={form} path="allowedDstTon" label="Allowed destination TON" options={TON} />
-        <MultiCheck form={form} path="allowedSrcNpi" label="Allowed source NPI" options={NPI} />
-        <MultiCheck form={form} path="allowedDstNpi" label="Allowed destination NPI" options={NPI} />
-        <NumberField form={form} path="maxMsgLen" label="Max message length" min={1} max={2000} step={1} />
-        <CheckField form={form} path="supportMultipart" label="Supports multipart" />
-        <NumberField form={form} path="dlrTimeoutS" label="Receipt timeout" min={0} step={60} suffix="s" />
-        <SelectField form={form} path="dlrTimeoutStat" label="Status on receipt timeout" required options={DLR_STATS} />
-      </Section>
-      <Section title="Capacity and limits" note="§13.26">
-        <NumberField
-          form={form}
-          path="tps"
-          label="TPS per session"
-          required
-          min={1}
-          max={100000}
-          step={1}
-          hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
-        />
-        <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
-        <span />
-        <NumberField
-          form={form}
-          path="costLimit"
-          label="Cost limit"
-          min={0}
-          step={1}
-          hint="Traffic stops when reached"
-        />
-        <SelectField form={form} path="costLimitPeriod" label="Limit period" options={PERIOD} />
-      </Section>
+      {v.protocol === "http"
+        ? shown("vendor-trunks.http") && (
+            <Section title="HTTP API" note="Generic HTTP adapter (§5.5)">
+              <TextField form={form} path="http.url" label="Submit URL" required wide type="url" maxLength={1000} />
+              <TextField form={form} path="http.successRegex" label="Success regex" />
+              <TextField form={form} path="http.messageIdRegex" label="Message ID regex" />
+              <NumberField form={form} path="http.receiverPort" label="Receiver port" min={1} max={65535} step={1} />
+              <TextArea
+                form={form}
+                path="http.extraHeaders"
+                label="Extra headers"
+                rows={2}
+                placeholder="Header: value, one per line"
+              />
+              <TextArea
+                form={form}
+                path="http.postData"
+                label="POST body"
+                rows={2}
+                placeholder='{"to":"{dst}","from":"{src}","text":"{text}"}'
+              />
+              <TextField form={form} path="http.callbackUrl" label="Receipt callback URL" type="url" />
+              <NumberField
+                form={form}
+                path="http.callbackIntervalS"
+                label="Callback interval"
+                min={1}
+                step={1}
+                suffix="s"
+              />
+              <TextField form={form} path="http.dlrStatusRegex" label="Receipt status regex" />
+              <TextField form={form} path="http.dlrMidRegex" label="Receipt message ID regex" />
+              <TextField
+                form={form}
+                path="http.dlrSuccessStats"
+                label="Success statuses"
+                placeholder="DELIVRD,DELIVERED"
+              />
+              <TextField form={form} path="http.dlrFailStats" label="Failure statuses" placeholder="UNDELIV,REJECTD" />
+              <TextArea form={form} path="http.callbackExtraHeaders" label="Callback extra headers" rows={2} />
+              <TextArea form={form} path="http.callbackPostData" label="Callback POST body" rows={2} />
+            </Section>
+          )
+        : shown("vendor-trunks.smpp") && (
+            <Section title="SMPP session">
+              <NumberField form={form} path="windowSize" label="Window size" min={1} max={1000} step={1} />
+              <NumberField form={form} path="submitIntervalMs" label="Submit interval" min={0} step={1} suffix="ms" />
+              <NumberField form={form} path="submitTimeoutS" label="Submit timeout" min={1} step={1} suffix="s" />
+              <NumberField form={form} path="enquireLinkTimeoutS" label="Enquire link" min={1} step={1} suffix="s" />
+              <SelectField
+                form={form}
+                path="msgIdType"
+                label="Message ID type"
+                required
+                options={[
+                  { value: "default", label: "Default" },
+                  { value: "decimal", label: "Decimal" },
+                  { value: "hexadecimal", label: "Hexadecimal" },
+                ]}
+              />
+              <NumberField form={form} path="bindAddrTon" label="Bind address TON" min={0} max={6} step={1} />
+              <NumberField form={form} path="bindAddrNpi" label="Bind address NPI" min={0} max={18} step={1} />
+              <TextField form={form} path="bindAddrRange" label="Bind address range" maxLength={41} />
+            </Section>
+          )}
+      {shown("vendor-trunks.messages") && (
+        <Section title="Messages" columns={2}>
+          <MultiCheck form={form} path="allowedDataCodings" label="Allowed data codings" options={CODINGS} />
+          <MultiCheck
+            form={form}
+            path="rerouteOn"
+            label="Re-route on receipt status"
+            options={DLR_STATS.filter((s) => s.value !== "DELIVRD")}
+            hint="Failed receipts with these statuses are retried on the next vendor"
+          />
+          <MultiCheck form={form} path="allowedSrcTon" label="Allowed source TON" options={TON} />
+          <MultiCheck form={form} path="allowedDstTon" label="Allowed destination TON" options={TON} />
+          <MultiCheck form={form} path="allowedSrcNpi" label="Allowed source NPI" options={NPI} />
+          <MultiCheck form={form} path="allowedDstNpi" label="Allowed destination NPI" options={NPI} />
+          <NumberField form={form} path="maxMsgLen" label="Max message length" min={1} max={2000} step={1} />
+          <CheckField form={form} path="supportMultipart" label="Supports multipart" />
+          <NumberField form={form} path="dlrTimeoutS" label="Receipt timeout" min={0} step={60} suffix="s" />
+          <SelectField
+            form={form}
+            path="dlrTimeoutStat"
+            label="Status on receipt timeout"
+            required
+            options={DLR_STATS}
+          />
+        </Section>
+      )}
+      {shown("vendor-trunks.capacity") && (
+        <Section title="Capacity and limits" note="§13.26">
+          <NumberField
+            form={form}
+            path="tps"
+            label="TPS per session"
+            required
+            min={1}
+            max={100000}
+            step={1}
+            hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
+          />
+          <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
+          <span />
+          <NumberField
+            form={form}
+            path="costLimit"
+            label="Cost limit"
+            min={0}
+            step={1}
+            hint="Traffic stops when reached"
+          />
+          <SelectField form={form} path="costLimitPeriod" label="Limit period" options={PERIOD} />
+        </Section>
+      )}
     </>
   );
 }

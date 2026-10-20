@@ -11,6 +11,7 @@ import type {
 } from "@sms/contract";
 import { Button, IconButton, Modal } from "../ui/primitives";
 import { OP_LABEL, isChoice, isNumeric, isTime } from "./filterModel";
+import { DateTimeInput } from "../ui/DateTimeInput";
 
 const NO_VALUE: FilterOperator[] = ["empty", "not_empty"];
 const LIST_OPS: FilterOperator[] = ["in", "not_in"];
@@ -65,6 +66,24 @@ function toValue(f: FieldDescriptor, raw: string): FilterValue {
 
 const fromValue = (f: FieldDescriptor, v: FilterValue | undefined) =>
   v === undefined ? "" : isTime(f) && typeof v === "string" ? v.slice(0, 16) : String(v);
+
+/** A value box; time fields get the 24-hour date and time input (team trial round 2). */
+function ValueInput({
+  type,
+  ...props
+}: {
+  type: string;
+  value: string;
+  onChange: (e: { target: { value: string } }) => void;
+  placeholder?: string;
+  "aria-label"?: string;
+}) {
+  if (type === "datetime-local") {
+    const { placeholder: _p, ...rest } = props;
+    return <DateTimeInput {...rest} />;
+  }
+  return <input type={type} {...props} />;
+}
 
 function ValueEditor({
   field,
@@ -136,14 +155,14 @@ function ValueEditor({
     const [a, b] = cond.values ?? [];
     return (
       <span className="fb-range">
-        <input
+        <ValueInput
           type={type}
           value={fromValue(field, a)}
           aria-label="From"
           onChange={(e) => onChange({ ...cond, values: [toValue(field, e.target.value), b ?? ""] })}
         />
         <span className="muted">to</span>
-        <input
+        <ValueInput
           type={type}
           value={fromValue(field, b)}
           aria-label="To"
@@ -173,7 +192,7 @@ function ValueEditor({
     );
   }
   return (
-    <input
+    <ValueInput
       type={type}
       value={fromValue(field, cond.value)}
       placeholder={

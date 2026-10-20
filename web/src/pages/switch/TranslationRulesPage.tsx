@@ -67,6 +67,7 @@ import {
 } from "./switchModel";
 import { TranslationTest } from "./TranslationTest";
 import { CleanupBadge } from "../admin/cleanup/CleanupBadge";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const page = pageForPath("/switch/translation-rules")!;
 const muted = (v: ReactNode) => <span className="muted">{v}</span>;
@@ -158,7 +159,16 @@ function PatternField({
 }) {
   return (
     <div className={matchCase ? "cond-field with-case" : "cond-field"}>
-      <TextField form={form} path={path} label={label} placeholder={placeholder} maxLength={500} />
+      <TextField
+        form={form}
+        path={path}
+        label={label}
+        placeholder={placeholder}
+        maxLength={500}
+        hint={
+          path === "senderPattern" ? "Keywords: \\Numeric = numeric Sender IDs, \\Alpha = with a letter" : undefined
+        }
+      />
       <Negate form={form} path={negate} />
       {matchCase && <MatchCase form={form} />}
     </div>
@@ -568,8 +578,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             hint="Apply further rules after this one (a trunk can override)"
           />
           <FormField label="Start" hint="Empty = now">
-            <input
-              type="datetime-local"
+            <DateTimeInput
               value={v.startsAt ? v.startsAt.slice(0, 16) : ""}
               onChange={(e) =>
                 form.set("startsAt", e.target.value ? new Date(`${e.target.value}Z`).toISOString() : null)
@@ -577,8 +586,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             />
           </FormField>
           <FormField label="Stop" error={form.error("stopsAt")} hint="Empty = no end (UTC)">
-            <input
-              type="datetime-local"
+            <DateTimeInput
               value={v.stopsAt ? v.stopsAt.slice(0, 16) : ""}
               onChange={(e) =>
                 form.set("stopsAt", e.target.value ? new Date(`${e.target.value}Z`).toISOString() : null)

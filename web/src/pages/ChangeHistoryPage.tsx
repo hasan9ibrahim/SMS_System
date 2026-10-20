@@ -52,7 +52,7 @@ export function ChangeHistoryPage() {
               : c.changeType === "undo"
                 ? "An undo cannot be undone here"
                 : "Only your own changes (or with the undo-others permission)",
-          onSelect: () => void undo(c.id),
+          onSelect: () => void undo(c.id, false, c),
         },
       ]}
       columns={{
@@ -85,7 +85,7 @@ export function ChangeHistoryPage() {
               <span className="muted small">undone by #{c.undoneById}</span>
             ) : (
               undoable(c) && (
-                <Button small icon="undo" onClick={() => void undo(c.id)}>
+                <Button small icon="undo" onClick={() => void undo(c.id, false, c)}>
                   Undo
                 </Button>
               )
@@ -178,7 +178,7 @@ export function ChangeHistoryPage() {
           },
         ],
         aside: undoable(c) ? (
-          <Button icon="undo" onClick={() => void undo(c.id)}>
+          <Button icon="undo" onClick={() => void undo(c.id, false, c)}>
             Undo this change
           </Button>
         ) : undefined,

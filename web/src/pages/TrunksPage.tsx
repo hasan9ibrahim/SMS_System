@@ -2,6 +2,7 @@
 // record in its own tab. "Show deleted" lists archived trunks greyed out (§13.29). Clone and delete
 // work from the list too, per row (⋯) or on a selection (team trial round 1).
 import { HoverList } from "../ui/HoverList";
+import { connectionColumn } from "./trunk/connection";
 import type { TrunkListRow } from "@sms/contract";
 import type { TrunkKind } from "../api/records";
 import { pageForPath } from "../nav/registry";
@@ -92,6 +93,7 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
       columns={{
         name: { width: 220, render: (r) => <strong>{r.name}</strong> },
         enterpriseName: { width: 220 },
+        connection: connectionColumn,
         // Pointing at the count lists the translation rules running on the trunk (team trial round 1).
         rulesCount: {
           width: 90,

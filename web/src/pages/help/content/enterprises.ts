@@ -396,9 +396,20 @@ export const topics: HelpTopic[] = [
                 values: "Pick a time zone. Default `UTC`.",
               },
               {
-                name: "Rate notice period",
+                name: "Notice: increase",
                 what: "How many days' notice the partner gets for rate increases. Used by rate notices and the rate tools to flag increases that start too early.",
                 values: "0 to 90 days. Default 7.",
+              },
+              {
+                name: "Notice: decrease / Notice: new destination",
+                what: "The same for decreases and for destinations the partner had no rate for. Saves that start sooner ask for confirmation; incoming vendor RNs are flagged.",
+                values: "0 to 90 days. Default 0 (no notice).",
+              },
+              {
+                name: "'All networks' code",
+                what: "How this partner writes a country's all-networks rate in rate sheets: MCC (262), MCC0 (2620), MCC00 (26200), MCC000 (262000) or MCC* (262*).",
+                values:
+                  "Incoming RNs from the partner read that code as the country rate; rate notifications to the partner write country rates that way. Default MCC.",
               },
             ],
           },
@@ -659,6 +670,15 @@ export const topics: HelpTopic[] = [
                 what: "**Now** hands over at once. **At a set time (UTC)** schedules it; pick the date and time, which cannot be in the past.",
               },
               { name: "Note", what: "Why the partner is handed over.", values: "Optional, up to 500 characters." },
+              {
+                name: "E-mail the client",
+                what: "Sends the client an introduction from the new AM: to the commercial contact (or the rates contact), both AMs in copy. The note can be used in the template as {note}.",
+                values: "Ticked by default.",
+              },
+              {
+                name: "Template",
+                what: "Which **AM Handover** e-mail template to use. Company default uses the business company's template. Write your own on [[email-templates|E-mail templates]] with {enterprise}, {old_am}, {new_am}, {new_am_email}, {effective_date} and {note}.",
+              },
             ],
           },
           {
@@ -782,7 +802,11 @@ export const topics: HelpTopic[] = [
               { name: "Product Category", what: "The product the trunk sells, e.g. OTP, PROMO, DIRECT." },
               { name: "Protocol", what: "SMPP or HTTP." },
               { name: "TPS", what: "TPS (messages per second) allowed per session." },
-              { name: "Status", what: "Active or Inactive." },
+              { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
+              {
+                name: "Connection",
+                what: "Whether the customer is bound now: green **Up** or red **Down**.",
+              },
               { name: "Bind Type", what: "TX (send only), RX (receive only), TR (both) or AUTO." },
               {
                 name: "Rules",
@@ -931,7 +955,11 @@ export const topics: HelpTopic[] = [
               { name: "Product Category", what: "The quality / product class of the route, e.g. DIRECT, SIM, WHS." },
               { name: "Protocol", what: "SMPP or HTTP." },
               { name: "TPS", what: "TPS (messages per second) we send per session." },
-              { name: "Status", what: "Active or Inactive." },
+              { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
+              {
+                name: "Connection",
+                what: "Our bind to the vendor now: green **Up** (all sessions bound), orange **Reconnecting** (some sessions missing, or down for less than 15 minutes while we retry) or red **Down**.",
+              },
               { name: "Bind Type", what: "TX, RX or TR." },
               {
                 name: "Rules",
@@ -1315,9 +1343,9 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Rate tables",
-                what: "The customer rate tables that price this trunk's traffic, in order. For each message, the first table that has a line for the destination sets the price.",
+                what: "The customer rate tables that price this trunk's traffic, in order. For each message, the first table that has a rate for the destination sets the price.",
                 values:
-                  "Use **Add a customer rate table…** to search and add one (only live customer tables are offered; each shows its category and number of lines). Use ↑ and ↓ to change the order and x to remove one. A table can be listed only once.",
+                  "Use **Add a customer rate table…** to search and add one (only live customer tables are offered; each shows its category and number of rates). Use ↑ and ↓ to change the order and x to remove one. A table can be listed only once.",
               },
             ],
           },

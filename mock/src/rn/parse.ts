@@ -32,6 +32,8 @@ export interface SheetRow {
 
 export interface Sheet {
   columns: { header: string; field: Field | null }[];
+  /** The row the headers were read from, 1 = first row; null when none was found. */
+  headerRow: number | null;
   rows: SheetRow[];
   errors: { line: number; message: string }[];
   /** True when the sheet can't be used at all (Failed). */
@@ -127,28 +129,76 @@ function utc(y: number, mo: number, d: number, h: number, mi: number): string | 
   return dt.toISOString();
 }
 
+/** How a partner writes "all networks" of a country (team trial round 2); see AllNetworksCode in the contract. */
+export type AllNetworks = "mcc" | "mcc0" | "mcc00" | "mcc000" | "mccStar";
+
+/** A sheet code in the partner's "all networks" form → the country code (MCC); other codes unchanged. */
+export function toCountryCode(code: string, conv: AllNetworks | null | undefined): string {
+  if (conv === "mcc0" && /^\d{3}0$/.test(code)) return code.slice(0, 3);
+  if (conv === "mcc00" && /^\d{3}00$/.test(code)) return code.slice(0, 3);
+  if (conv === "mcc000" && /^\d{3}000$/.test(code)) return code.slice(0, 3);
+  return code;
+}
+
+/** The country code (MCC) written the partner's way; network codes unchanged. */
+export function fromCountryCode(code: string, conv: AllNetworks | null | undefined): string {
+  if (code.length !== 3) return code;
+  return conv === "mcc0"
+    ? `${code}0`
+    : conv === "mcc00"
+      ? `${code}00`
+      : conv === "mcc000"
+        ? `${code}000`
+        : conv === "mccStar"
+          ? `${code}*`
+          : code;
+}
+
 const CLOSED = /^(close|closed|closing|delete|deleted|removed|remove|blocked|discontinued|stop|n\/?a|-)$/i;
 
-/** Reads a sheet. Header row = the first row that has a rate column and a destination column. */
-export function readSheet(text: string, mapping?: Record<string, string> | null): Sheet {
-  const all = splitRows(text);
+export interface ReadOptions {
+  /** The header row, 1 = first row; otherwise the first of the first 20 rows with a rate and a destination column. */
+  headerRow?: number | null;
+  /** The partner's "all networks" code, read as the country code. */
+  allNetworks?: AllNetworks | null;
+}
+
+/** Reads a sheet (text, or rows of cells from an Excel file). */
+export function readSheet(
+  input: string | string[][],
+  mapping?: Record<string, string> | null,
+  opts: ReadOptions = {},
+): Sheet {
+  const all = typeof input === "string" ? splitRows(input) : input;
   const errors: Sheet["errors"] = [];
   let headerAt = -1;
   let fields: (Field | null)[] = [];
-  for (let i = 0; i < Math.min(all.length, 20); i++) {
-    const f = all[i]!.map((h) => fieldOf(h, mapping));
-    const hasDest = f.includes("mccmnc") || (f.includes("mcc") && f.includes("mnc")) || f.includes("dialCode");
-    if (f.includes("rate") && hasDest) {
-      headerAt = i;
-      fields = f;
-      break;
+  const usable = (f: (Field | null)[]) =>
+    f.includes("rate") && (f.includes("mccmnc") || (f.includes("mcc") && f.includes("mnc")) || f.includes("dialCode"));
+  if (opts.headerRow) {
+    const f = (all[opts.headerRow - 1] ?? []).map((h) => fieldOf(h, mapping));
+    if (usable(f)) [headerAt, fields] = [opts.headerRow - 1, f];
+  } else
+    for (let i = 0; i < Math.min(all.length, 20); i++) {
+      const f = all[i]!.map((h) => fieldOf(h, mapping));
+      if (usable(f)) {
+        [headerAt, fields] = [i, f];
+        break;
+      }
     }
-  }
   if (headerAt < 0) {
-    const missing = all.slice(0, 20).some((r) => r.map((h) => fieldOf(h, mapping)).includes("rate"))
+    const scan = opts.headerRow ? all.slice(opts.headerRow - 1, opts.headerRow) : all.slice(0, 20);
+    const missing = scan.some((r) => r.map((h) => fieldOf(h, mapping)).includes("rate"))
       ? "no destination column (MCCMNC, MCC + MNC or dial code)"
       : "no rate column";
-    return { columns: [], rows: [], errors: [{ line: 1, message: `Can't read the sheet: ${missing}` }], fatal: true };
+    const where = opts.headerRow ? ` in row ${opts.headerRow}` : "";
+    return {
+      columns: [],
+      headerRow: null,
+      rows: [],
+      errors: [{ line: opts.headerRow ?? 1, message: `Can't read the sheet: ${missing}${where}` }],
+      fatal: true,
+    };
   }
   const header = all[headerAt]!;
   const columns = header.map((h, i) => ({ header: h, field: fields[i] ?? null }));
@@ -164,6 +214,7 @@ export function readSheet(text: string, mapping?: Record<string, string> | null)
     const lineNo = i + 1;
     let mccmnc = get("mccmnc").replace(/[^0-9]/g, "") || null;
     if (!mccmnc && get("mcc") && get("mnc")) mccmnc = `${get("mcc")}${get("mnc")}`.replace(/[^0-9]/g, "") || null;
+    if (mccmnc) mccmnc = toCountryCode(mccmnc, opts.allNetworks);
     const dialCode = get("dialCode").replace(/[^0-9]/g, "") || null;
     if (mccmnc && !/^\d{3,6}$/.test(mccmnc)) {
       errors.push({ line: lineNo, message: `"${mccmnc}" is not an MCCMNC` });
@@ -206,7 +257,7 @@ export function readSheet(text: string, mapping?: Record<string, string> | null)
       senderId: get("senderId") || null,
     });
   }
-  return { columns, rows, errors, fatal: rows.length === 0 };
+  return { columns, headerRow: headerAt + 1, rows, errors, fatal: rows.length === 0 };
 }
 
 /** The remembered mapping of a sheet: normalised header -> field, for the recognised columns. */

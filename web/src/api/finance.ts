@@ -3,6 +3,11 @@
 // Undo toast works (§13.10).
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  FxAlertEvent,
+  FxAlertRule,
+  FxAlertRuleInput,
+  FxProvider,
+  FxProviderUpdate,
   BillingCycleInput,
   BillingCycleSaved,
   ChangeResult,
@@ -82,8 +87,8 @@ export const useSaveCurrency = () =>
   );
 
 export const useSetRate = () =>
-  useWrite(({ iso, ratePerUsd }: { iso: string; ratePerUsd: number }): Promise<CurrencyRateSaved> =>
-    unwrap(api.PUT("/currency-rates/{iso}", { params: { path: { iso } }, body: { ratePerUsd } })),
+  useWrite(({ iso, ratePerEur }: { iso: string; ratePerEur: number }): Promise<CurrencyRateSaved> =>
+    unwrap(api.PUT("/currency-rates/{iso}", { params: { path: { iso } }, body: { ratePerEur } })),
   );
 
 export const useSyncRates = () => useWrite((): Promise<CurrencySyncResult> => unwrap(api.POST("/currency-rates/sync")));
@@ -97,3 +102,44 @@ export const useSaveBillingCycle = () =>
 
 export const calculateCharges = (body: ChargesInput): Promise<ChargesResult> =>
   unwrap(api.POST("/charges/calculate", { body }));
+
+// ---------------------------------------------------------------- exchange-rate provider and alerts (trial round 2)
+
+export function useFxProvider(enabled = true) {
+  return useQuery<FxProvider>({
+    queryKey: ["fx", "provider"],
+    queryFn: () => unwrap(api.GET("/exchange-rates/provider")),
+    enabled,
+    retry: false,
+  });
+}
+
+export const useSaveFxProvider = () =>
+  useWrite((body: FxProviderUpdate): Promise<FxProvider> => unwrap(api.PUT("/exchange-rates/provider", { body })));
+
+export function useFxAlertRules() {
+  return useQuery<FxAlertRule[]>({
+    queryKey: ["fx", "alerts"],
+    queryFn: () => unwrap(api.GET("/exchange-rates/alerts")),
+  });
+}
+
+export function useFxAlertEvents() {
+  return useQuery<FxAlertEvent[]>({
+    queryKey: ["fx", "events"],
+    queryFn: () => unwrap(api.GET("/exchange-rates/alerts/events", { params: { query: { limit: 50 } } })),
+  });
+}
+
+export const useSaveFxAlertRule = () =>
+  useWrite(({ id, input }: { id: number | null; input: FxAlertRuleInput }): Promise<FxAlertRule> =>
+    id === null
+      ? unwrap(api.POST("/exchange-rates/alerts", { body: input }))
+      : unwrap(api.PUT("/exchange-rates/alerts/{id}", { params: { path: { id } }, body: input })),
+  );
+
+export const useDeleteFxAlertRule = () =>
+  useWrite(async (id: number): Promise<void> => {
+    const r = await api.DELETE("/exchange-rates/alerts/{id}", { params: { path: { id } } });
+    if (r.error) throw new Error("Could not delete the alert");
+  });

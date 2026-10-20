@@ -134,10 +134,10 @@ describe("vendor costs and client rates (§13.16)", { skip }, () => {
     const n = await busyNetwork();
     const r = await ok("lookupRates", call("POST", "/rate-lookup", { mccmnc: n.mccmnc }));
     assert.equal(r.lookupCurrency, ref.platformCurrency);
-    const { rows } = await db().query("SELECT iso, rate_per_usd FROM currency_latest");
-    const perUsd = new Map(rows.map((x) => [String(x.iso).trim(), Number(x.rate_per_usd)]));
+    const { rows } = await db().query("SELECT iso, rate_per_eur FROM currency_latest");
+    const perEur = new Map(rows.map((x) => [String(x.iso).trim(), Number(x.rate_per_eur)]));
     for (const line of [...r.vendors.slice(0, 5), ...r.clients.slice(0, 5)]) {
-      const expected = (line.rate / perUsd.get(line.currency)!) * perUsd.get(ref.platformCurrency)!;
+      const expected = (line.rate / perEur.get(line.currency)!) * perEur.get(ref.platformCurrency)!;
       assert.ok(Math.abs(line.rateConverted - expected) < 2e-6, `${line.rate} ${line.currency}`);
     }
   });

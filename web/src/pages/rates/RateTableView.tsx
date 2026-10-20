@@ -7,10 +7,13 @@ import { useLocation } from "react-router";
 import type { NoticeBreach, RateLineRow, RateTableDetail } from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { useListFields } from "../../api/hooks";
-import { rateExportUrl, useChangeRateLines, useRateTable } from "../../api/records";
+import { useChangeRateLines, usePlatformCurrency, useRateTable } from "../../api/records";
+import { downloadCsv } from "../../api/masterData";
 import { DataGrid, type ColumnOverride } from "../../grid/DataGrid";
-import { emptyState, type GridState } from "../../grid/filterModel";
-import { HistoryList, useNotifySaved } from "../../history/undo";
+import { emptyState, toListQuery, type GridState } from "../../grid/filterModel";
+import { problemText } from "../routing/dialogs";
+import { useNotifySaved } from "../../history/undo";
+import { RateChangeLog } from "./RateChangeLog";
 import { useDeleteRecord, ArchivedBanner } from "../../records/parts";
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
@@ -19,8 +22,10 @@ import { Button, Menu, Modal, Popover } from "../../ui/primitives";
 import { scopeUrl } from "./bulkModel";
 import { AddRatesDialog, SendRnCheck, RenameTableDialog } from "./dialogs";
 import { formatMoney, formatPct, formatRate, formatSigned, shortDate, shortDateTime } from "./format";
-import { buildItems, changeRate, merge, round6, type ChangeMode, type Pending } from "./pending";
+import { buildItems, changeRate, merge, round6, summarize, type ChangeMode, type Pending } from "./pending";
 import { useOpenTable } from "./RateManagerPage";
+import { formatZoned, isoToZoned, usePlatformTz } from "../../ui/zonedTime";
+import { defaultEffectiveIso, EffectiveFromField, effectiveIso, SaveSummaryDialog } from "./EffectiveFrom";
 
 type View = "current" | "scheduled" | "closed" | "log";
 const VIEWS: View[] = ["current", "scheduled", "closed", "log"];
@@ -83,7 +88,7 @@ function Summary({ t }: { t: RateTableDetail }) {
           sub="sell below best buy today"
         />
       ) : (
-        <Card label="Closed lines" value={s.closedLines.toLocaleString("en-US")} sub="kept in the rate history" />
+        <Card label="Closed rates" value={s.closedLines.toLocaleString("en-US")} sub="kept in the rate history" />
       )}
       <Card
         label="Avg margin"
@@ -130,8 +135,21 @@ function BarAction({
   );
 }
 
-function SetRateForm({ onApply }: { onApply: (v: number) => void }) {
+/** One rate for the selection, typed in the table currency or in the platform currency (team trial round 2). */
+function SetRateForm({
+  onApply,
+  currency,
+  platformCurrency,
+  factor,
+}: {
+  onApply: (v: number) => void;
+  currency: string;
+  platformCurrency: string;
+  factor: number;
+}) {
   const [v, setV] = useState("");
+  const [eur, setEur] = useState("");
+  const same = currency === platformCurrency;
   return (
     <form
       onSubmit={(e) => {
@@ -140,9 +158,34 @@ function SetRateForm({ onApply }: { onApply: (v: number) => void }) {
       }}
     >
       <label className="field">
-        <span>New sell rate</span>
-        <input autoFocus type="number" min={0} step="0.0001" value={v} onChange={(e) => setV(e.target.value)} />
+        <span>New rate ({currency})</span>
+        <input
+          autoFocus
+          type="number"
+          min={0}
+          step="0.0001"
+          value={v}
+          onChange={(e) => {
+            setV(e.target.value);
+            setEur(e.target.value === "" ? "" : String(round6(Number(e.target.value) * factor)));
+          }}
+        />
       </label>
+      {!same && (
+        <label className="field">
+          <span>or in {platformCurrency}</span>
+          <input
+            type="number"
+            min={0}
+            step="0.0001"
+            value={eur}
+            onChange={(e) => {
+              setEur(e.target.value);
+              setV(e.target.value === "" ? "" : String(round6(Number(e.target.value) / factor)));
+            }}
+          />
+        </label>
+      )}
       <Button small type="submit">
         Apply to selection
       </Button>
@@ -150,7 +193,15 @@ function SetRateForm({ onApply }: { onApply: (v: number) => void }) {
   );
 }
 
-function ChangeByForm({ onApply, customer }: { onApply: (m: ChangeMode, v: number) => void; customer: boolean }) {
+function ChangeByForm({
+  onApply,
+  customer,
+  currency,
+}: {
+  onApply: (m: ChangeMode, v: number) => void;
+  customer: boolean;
+  currency: string;
+}) {
   const [mode, setMode] = useState<ChangeMode>("percent");
   const [v, setV] = useState("");
   return (
@@ -169,7 +220,11 @@ function ChangeByForm({ onApply, customer }: { onApply: (m: ChangeMode, v: numbe
       </div>
       <label className="field">
         <span>
-          {mode === "percent" ? "Change %" : mode === "amount" ? "Add (negative to lower)" : "Margin over best buy"}
+          {mode === "percent"
+            ? "Change %"
+            : mode === "amount"
+              ? `Add (${currency}, negative to lower)`
+              : `Margin over best buy (${currency})`}
         </span>
         <input autoFocus type="number" step="any" value={v} onChange={(e) => setV(e.target.value)} />
       </label>
@@ -180,26 +235,19 @@ function ChangeByForm({ onApply, customer }: { onApply: (m: ChangeMode, v: numbe
   );
 }
 
+/** The batch's effective date, in the platform time zone (team trial round 2: default next 00:00). */
 function DateForm({ value, onApply }: { value: string | null; onApply: (iso: string | null) => void }) {
-  const [v, setV] = useState(value ? value.slice(0, 16) : "");
+  const tz = usePlatformTz();
+  const [v, setV] = useState(value ? isoToZoned(value, tz) : "");
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onApply(v ? new Date(`${v}:00Z`).toISOString() : null);
+        onApply(effectiveIso(v, tz));
       }}
     >
-      <label className="field">
-        <span>Effective from (UTC) for this batch</span>
-        <input
-          autoFocus
-          type="datetime-local"
-          value={v}
-          min={new Date().toISOString().slice(0, 16)}
-          onChange={(e) => setV(e.target.value)}
-        />
-      </label>
-      <p className="muted small">Empty = now. Rates never start in the past (traffic already sent keeps its rate).</p>
+      <EffectiveFromField label="Effective from for this batch" autoFocus value={v} onChange={setV} />
+      <p className="muted small">Rates never start in the past (traffic already sent keeps its rate).</p>
       <Button small type="submit">
         Set date
       </Button>
@@ -211,7 +259,7 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
   const byTable = breach.breaches.some((b) => b.table);
   return (
     <Modal
-      title="Increases sooner than the client's notice"
+      title="Changes sooner than the client's notice"
       width={600}
       onClose={() => done(null)}
       footer={
@@ -229,6 +277,7 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
           <tr>
             {byTable && <th>Table</th>}
             <th>MCCMNC</th>
+            <th>Change</th>
             <th className="num">Now</th>
             <th className="num">New</th>
             <th>From</th>
@@ -240,7 +289,10 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
             <tr key={`${b.rateTableId ?? ""}-${b.mccmnc}-${b.effectiveFrom}`}>
               {byTable && <td>{b.table}</td>}
               <td className="num">{b.mccmnc}</td>
-              <td className="num">{formatRate(b.currentRate)}</td>
+              <td>
+                {b.change === "new" ? "New" : b.change === "decrease" ? "Decrease" : "Increase"} ({b.noticeDays} d)
+              </td>
+              <td className="num">{b.currentRate === null ? "–" : formatRate(b.currentRate)}</td>
               <td className="num">{formatRate(b.newRate)}</td>
               <td>{shortDateTime(b.effectiveFrom)}</td>
               <td>{shortDate(b.earliestAllowed)}</td>
@@ -309,12 +361,22 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
   const change = useChangeRateLines(id);
   const [grid, setGrid] = useState<GridState>(emptyState);
   const [pending, setPending] = useState<Pending>(new Map());
-  const [effectiveFrom, setEffectiveFrom] = useState<string | null>(null);
+  const tz = usePlatformTz();
+  const platformCurrency = usePlatformCurrency();
+  // Chosen batch date (null = now); until one is chosen the batch starts at the next 00:00 (team trial round 2).
+  const [chosenFrom, setChosenFrom] = useState<string | null>(null);
+  const [fromChosen, setFromChosen] = useState(false);
+  const effectiveFrom = fromChosen ? chosenFrom : defaultEffectiveIso(tz);
+  const setEffectiveFrom = (v: string | null) => {
+    setChosenFrom(v);
+    setFromChosen(true);
+  };
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // "Send RN" ticked by default on customer tables (team trial round 1).
   const [sendRn, setSendRn] = useState(true);
   const [active, setActive] = useState<RateLineRow | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
+  const [editingEur, setEditingEur] = useState(false);
   const [dialog, setDialog] = useState<"add" | "rename" | null>(null);
   const rowsById = useRef(new Map<number, RateLineRow>());
   const onRows = useCallback((rows: RateLineRow[]) => {
@@ -345,13 +407,14 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       visible:
         grid.visible ??
         (t?.kind === "vendor"
-          ? ["country", "network", "mccmnc", "senderId", "rate", "changeType", "validFrom"]
+          ? ["country", "network", "mccmnc", "senderId", "rate", "sysRate", "changeType", "validFrom"]
           : [
               "country",
               "network",
               "mccmnc",
               "senderId",
               "rate",
+              "sysRate",
               "bestBuy",
               "bestVendor",
               "margin",
@@ -363,11 +426,15 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     [grid, id, view, t?.kind],
   );
 
-  const commitEdit = (row: RateLineRow, text: string) => {
+  // The rate in the table currency and in the platform currency (EUR) are both editable; either one sets the
+  // other at the latest exchange rate (team trial round 2).
+  const factor = t?.platformPerUnit && t.platformPerUnit > 0 ? t.platformPerUnit : 1;
+  const commitEdit = (row: RateLineRow, text: string, inPlatform = false) => {
     setEditing(null);
-    const v = Number(text);
+    setEditingEur(false);
+    const v = Number(text.replace(",", "."));
     if (text.trim() === "" || !Number.isFinite(v) || v < 0) return;
-    setPending((p) => merge(p, [row.id], { rate: round6(v) }));
+    setPending((p) => merge(p, [row.id], { rate: round6(inPlatform ? v / factor : v) }));
   };
 
   const columns = useMemo<Partial<Record<string, ColumnOverride<RateLineRow>>>>(
@@ -377,11 +444,11 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       mccmnc: { width: 90, render: (r) => <span className="muted num">{r.mccmnc}</span> },
       senderId: { width: 100 },
       rate: {
-        width: 110,
-        ...(t?.kind === "vendor" ? { label: "Buy Rate" } : {}),
+        width: 130,
+        label: `${t?.kind === "vendor" ? "Buy" : "Sell"} Rate (${t?.currency ?? ""})`,
         render: (r) => {
           const p = pending.get(r.id);
-          if (editing === r.id)
+          if (editing === r.id && !editingEur)
             return (
               <input
                 className="cell-input num"
@@ -406,11 +473,64 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               title={editable ? "Click to edit" : undefined}
               onClick={(e) => {
                 e.stopPropagation();
-                if (editable) setEditing(r.id);
+                if (editable) {
+                  setEditingEur(false);
+                  setEditing(r.id);
+                }
               }}
             >
               {formatRate(changed ? p!.rate : r.rate)}
               {r.isBlocked || p?.blocked ? <Icon name="lock" size={12} /> : null}
+            </button>
+          );
+        },
+      },
+      sysRate: {
+        width: 120,
+        label: `Rate (${platformCurrency})`,
+        render: (r) => {
+          const p = pending.get(r.id);
+          const changed = p?.rate !== undefined && p.rate !== r.rate;
+          const value = changed ? round6(p!.rate! * factor) : r.sysRate;
+          if (editing === r.id && editingEur)
+            return (
+              <input
+                className="cell-input num"
+                autoFocus
+                defaultValue={value === null ? "" : String(value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") commitEdit(r, (e.target as HTMLInputElement).value, true);
+                  if (e.key === "Escape") {
+                    setEditing(null);
+                    setEditingEur(false);
+                  }
+                }}
+                onBlur={(e) => commitEdit(r, e.target.value, true)}
+                aria-label={`Rate in ${platformCurrency} for ${r.country} ${r.network}`}
+              />
+            );
+          if (t?.currency === platformCurrency) return <span className="num muted">{formatRate(value)}</span>;
+          return (
+            <button
+              type="button"
+              className={`cell-edit num${changed ? " changed" : ""}`}
+              disabled={!editable}
+              title={
+                editable
+                  ? `Click to edit in ${platformCurrency}; the ${t?.currency} rate follows (1 ${t?.currency} = ${factor.toFixed(6)} ${platformCurrency})`
+                  : undefined
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                if (editable) {
+                  setEditingEur(true);
+                  setEditing(r.id);
+                }
+              }}
+            >
+              {formatRate(value)}
             </button>
           );
         },
@@ -459,7 +579,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pending, editing, editable, view],
+    [pending, editing, editingEur, editable, view, factor, platformCurrency, t?.currency, t?.kind],
   );
 
   const applyToSelection = (fn: (r: RateLineRow) => number | null) => {
@@ -475,12 +595,37 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     if (skipped)
       toast({
         tone: "warning",
-        message: `${skipped} line${skipped === 1 ? "" : "s"} skipped (no best buy or below zero)`,
+        message: `${skipped} rate${skipped === 1 ? "" : "s"} skipped (no best buy or below zero)`,
       });
   };
 
-  const save = async (acceptNoticeBreach = false): Promise<void> => {
-    const items = buildItems(pending, rowsById.current, effectiveFrom);
+  /** Customer tables: the summary of the save, with the RN choice and note, comes first (team trial round 2). */
+  const confirmSave = async () => {
+    if (t?.kind !== "customer") return save();
+    const { counts, rows } = summarize(pending, rowsById.current);
+    if (!rows.length) return save();
+    const v = await ask<{ sendRn: boolean; note: string }>((done) => (
+      <SaveSummaryDialog
+        table={t.name}
+        clients={[...new Set(t.trunks.map((x) => x.enterpriseName))]}
+        counts={counts}
+        rows={rows}
+        effectiveFrom={effectiveFrom}
+        scheduledKept={!fromChosen}
+        sendRn={sendRn}
+        done={done}
+      />
+    ));
+    if (!v) return;
+    setSendRn(v.sendRn);
+    return save(false, v);
+  };
+
+  const save = async (
+    acceptNoticeBreach = false,
+    rn: { sendRn: boolean; note: string } = { sendRn, note: "" },
+  ): Promise<void> => {
+    const items = buildItems(pending, rowsById.current, effectiveFrom, Date.now(), fromChosen);
     if (!items.length) {
       setPending(new Map());
       return;
@@ -488,12 +633,14 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     try {
       const r = await change.mutateAsync({
         items,
-        sendNotification: sendRn && t?.kind === "customer",
+        sendNotification: rn.sendRn && t?.kind === "customer",
+        ...(rn.note.trim() ? { notificationNote: rn.note.trim() } : {}),
         ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
       });
       setPending(new Map());
       setSelected(new Set());
-      setEffectiveFrom(null);
+      setChosenFrom(null);
+      setFromChosen(false);
       if (r.change)
         notifySaved(
           r.change,
@@ -505,7 +652,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
         const ok = await ask<boolean>((done) => (
           <NoticeDialog breach={err.problem as unknown as NoticeBreach} done={done} />
         ));
-        if (ok) return save(true);
+        if (ok) return save(true, rn);
         return;
       }
       toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
@@ -581,9 +728,18 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           <Button icon="upload" disabled title="Rate import arrives with the import wizard (§12.1, §13.22)">
             Import
           </Button>
-          <a className="btn" href={rateExportUrl(t.id, view === "log" ? "current" : view)} download>
-            <Icon name="download" size={15} /> Export
-          </a>
+          {/* Exports the rows the filters show (team trial round 2). */}
+          <Button
+            icon="download"
+            title="Exports the rows as filtered and sorted on screen"
+            onClick={() =>
+              void downloadCsv(`/rate-tables/${t.id}/export`, toListQuery(gridState)).catch((e) =>
+                toast({ tone: "error", message: problemText(e) }),
+              )
+            }
+          >
+            Export
+          </Button>
           {t.kind === "customer" && (
             <Button icon="send" disabled title="Rate notifications go out on save with Send RN (team trial round 1)">
               Send to client
@@ -707,9 +863,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           )}
         </div>
         {view === "log" ? (
-          <div className="rate-log">
-            <HistoryList scope={{ entityTypes: ["rate_table"], entityId: t.id }} />
-          </div>
+          <RateChangeLog tableId={t.id} />
         ) : (
           <DataGrid<RateLineRow>
             list="rate_lines"
@@ -736,6 +890,9 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             <BarAction label="Set rate" disabled={!selected.size || !editable}>
               {(close) => (
                 <SetRateForm
+                  currency={t.currency}
+                  platformCurrency={platformCurrency}
+                  factor={factor}
                   onApply={(v) => {
                     applyToSelection(() => v);
                     close();
@@ -747,6 +904,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               {(close) => (
                 <ChangeByForm
                   customer={t.kind === "customer"}
+                  currency={t.currency}
                   onApply={(mode, v) => {
                     applyToSelection((r) =>
                       changeRate({ rate: pending.get(r.id)?.rate ?? r.rate, bestBuy: r.bestBuy }, mode, v),
@@ -757,7 +915,9 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               )}
             </BarAction>
             <BarAction
-              label={effectiveFrom ? `From ${shortDateTime(effectiveFrom)}` : "Effective date…"}
+              label={
+                !fromChosen ? "From next 00:00" : effectiveFrom ? `From ${formatZoned(effectiveFrom, tz)}` : "From now"
+              }
               disabled={!editable}
             >
               {(close) => (
@@ -789,7 +949,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 if (
                   await confirmDialog({
                     title: `Close ${selected.size} rate${selected.size === 1 ? "" : "s"}?`,
-                    message: `The lines end ${effectiveFrom ? `on ${shortDateTime(effectiveFrom)}` : "now"} and move to Closed; scheduled ones are withdrawn. Saved with the other changes.`,
+                    message: `The rates end ${effectiveFrom ? `on ${formatZoned(effectiveFrom, tz)} (${tz})` : "now"} and move to Closed; scheduled ones are withdrawn. Saved with the other changes.`,
                     ok: "Close rates",
                     danger: true,
                   })
@@ -820,13 +980,13 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             {pending.size > 0 && (
               <>
                 <span className="bar-note small">
-                  {pending.size} unsaved{effectiveFrom ? ` · from ${shortDateTime(effectiveFrom)}` : ""}
+                  {pending.size} unsaved · from {effectiveFrom ? formatZoned(effectiveFrom, tz) : "now"}
                 </span>
                 <button type="button" className="btn btn-sm btn-ghost bar-btn" onClick={() => setPending(new Map())}>
                   Discard
                 </button>
                 {t.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
-                <Button small variant="primary" disabled={change.isPending} onClick={() => void save()}>
+                <Button small variant="primary" disabled={change.isPending} onClick={() => void confirmSave()}>
                   Save {pending.size} change{pending.size === 1 ? "" : "s"}
                 </Button>
               </>

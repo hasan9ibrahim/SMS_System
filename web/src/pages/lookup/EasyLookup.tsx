@@ -145,7 +145,7 @@ export function EasyLookup({
           <button
             type="button"
             className={`lk-link num${v.status === "active" && v.rateConverted === r?.bestCost ? " tone-good strong" : ""}`}
-            title={`${v.matchedCode !== r?.destination.mccmnc ? `Line ${v.matchedCode}. ` : ""}Open the rate table`}
+            title={`${v.matchedCode !== r?.destination.mccmnc ? `Rate ${v.matchedCode}. ` : ""}Open the rate table`}
             onClick={() => openNew(`/rates/manager?table=${v.rateTableId}`, `Rates · ${v.vendorTrunkName}`)}
           >
             {shown(v)}
@@ -232,7 +232,7 @@ export function EasyLookup({
           <button
             type="button"
             className={`lk-link num${c.marginBest !== null && c.marginBest < 0 ? " tone-error strong" : ""}`}
-            title={`Table ${c.rateTableName}${c.matchedCode !== r?.destination.mccmnc ? `, line ${c.matchedCode}` : ""} – open in Rate Manager`}
+            title={`Table ${c.rateTableName}${c.matchedCode !== r?.destination.mccmnc ? `, rate ${c.matchedCode}` : ""} – open in Rate Manager`}
             onClick={() => openNew(`/rates/manager?table=${c.rateTableId}`, `Rates · ${c.rateTableName}`)}
           >
             {shown(c)}
@@ -284,7 +284,7 @@ export function EasyLookup({
       "Rate",
       "Currency",
       `Rate ${ccy}`,
-      "Line",
+      "Rate code",
       "Since",
       "Scheduled",
       "Scheduled from",
@@ -319,7 +319,7 @@ export function EasyLookup({
       "Sell",
       "Currency",
       `Sell ${ccy}`,
-      "Line",
+      "Rate code",
       "7 days",
       `Margin vs best ${ccy}`,
       "Margin vs best %",
@@ -498,22 +498,7 @@ export function EasyLookup({
 
       {r && (
         <div className="lk-panels">
-          <section className="lk-panel" aria-label="Vendor costs">
-            <PanelHead
-              title="Vendor costs"
-              n={r.vendors.length}
-              onCopy={() => copyRows(vendorRows(r.vendors), "Vendor costs")}
-              onCsv={() => csv(vendorRows(r.vendors), `vendor-costs-${r.destination.mccmnc}.csv`)}
-            />
-            <VirtualTable
-              label="Vendor costs"
-              rows={r.vendors}
-              columns={vendorColumns}
-              rowKey={(v) => String(v.vendorTrunkId)}
-              rowClass={(v) => (v.status === "inactive" ? "inactive" : undefined)}
-              empty="No vendor has a rate for this destination."
-            />
-          </section>
+          {/* Customer (sell) on the left, vendor (buy) on the right, as on the other views (team trial round 2). */}
           <section className="lk-panel" aria-label="Client rates">
             <PanelHead
               title="Client rates"
@@ -536,11 +521,27 @@ export function EasyLookup({
               empty={state.mine ? "None of your clients sells this destination." : "No client sells this destination."}
             />
           </section>
+          <section className="lk-panel" aria-label="Vendor costs">
+            <PanelHead
+              title="Vendor costs"
+              n={r.vendors.length}
+              onCopy={() => copyRows(vendorRows(r.vendors), "Vendor costs")}
+              onCsv={() => csv(vendorRows(r.vendors), `vendor-costs-${r.destination.mccmnc}.csv`)}
+            />
+            <VirtualTable
+              label="Vendor costs"
+              rows={r.vendors}
+              columns={vendorColumns}
+              rowKey={(v) => String(v.vendorTrunkId)}
+              rowClass={(v) => (v.status === "inactive" ? "inactive" : undefined)}
+              empty="No vendor has a rate for this destination."
+            />
+          </section>
         </div>
       )}
       {r && (
         <p className="muted small lk-foot">
-          <StatusDot tone="good" /> best cost · <sup>*</sup> the country line (all networks) or another network's line
+          <StatusDot tone="good" /> best cost · <sup>*</sup> the country rate (all networks) or another network's rate
           applies · rates converted at the latest exchange rate · margins in {ccy}.
         </p>
       )}

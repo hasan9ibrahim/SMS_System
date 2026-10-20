@@ -29,6 +29,22 @@ const call = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, 
   app.inject({ method, url: `${API_PREFIX}${url}`, ...(payload !== undefined ? { payload: payload as object } : {}) });
 
 describe("lists (§13.25)", { skip }, () => {
+  test("trunk lists show the connection: up, reconnecting (vendors only) or down (team trial round 2)", async () => {
+    for (const kind of ["customer", "vendor"] as const) {
+      const res = await call("POST", `/${kind}-trunks/query`, { limit: 200 });
+      assert.equal(res.statusCode, 200);
+      check(kind === "customer" ? "queryCustomerTrunks" : "queryVendorTrunks", res);
+      const rows = res.json().rows as { connection: string }[];
+      const allowed = kind === "vendor" ? ["up", "reconnecting", "down"] : ["up", "down"];
+      assert.ok(rows.length > 0 && rows.every((r) => allowed.includes(r.connection)));
+      const down = await call("POST", `/${kind}-trunks/query`, {
+        limit: 5,
+        filter: { logic: "and", conditions: [{ field: "connection", op: "in", values: ["down"] }] },
+      });
+      assert.ok((down.json().rows as { connection: string }[]).every((r) => r.connection === "down"));
+    }
+  });
+
   test("pages through enterprises with the cursor, no repeats, total stays", async () => {
     const seen = new Set<number>();
     let cursor: string | null = null;

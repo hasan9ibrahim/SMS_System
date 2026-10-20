@@ -1,5 +1,6 @@
 // Top menu bar (§15.1): logo, main menu with dropdowns, search / jump-to (Ctrl K), system clock, live TPS
 // pill, alert bell with count, user avatar.
+import { useCanView } from "../api/access";
 import { useEffect, useRef, useState } from "react";
 import { useMe, useUpdatePreferences } from "../api/hooks";
 import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
@@ -22,8 +23,10 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
   const open = useOpener();
   const [shown, setShown] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  const pages = pagesOf(section);
+  const canView = useCanView();
+  const pages = pagesOf(section).filter((pg) => canView(pg.key)); // §11: pages the access group allows
   const label = SECTIONS.find((s) => s.key === section)!.label;
+  if (pages.length === 0) return null;
   if (pages.length === 1) {
     const only = pages[0]!;
     return (

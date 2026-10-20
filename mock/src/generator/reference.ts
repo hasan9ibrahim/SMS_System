@@ -282,11 +282,23 @@ export async function generateReference(world: World, rng: Rng, sink: TableSink)
       rate *= 1 + rng.normal() * (c.iso === "AED" ? 0.0002 : 0.004);
     }
     days.reverse();
-    for (const d of days) {
-      hist.push(d);
-      await sink.insert("currency_rates", { id: fxId++, iso: c.iso, rate_per_usd: d.rate, valid_from: new Date(d.t) });
-    }
+    for (const d of days) hist.push(d);
     world.fx.set(c.iso, hist);
+  }
+  // Stored per 1 EUR, the base currency (team trial round 2): EUR has no rows, USD gets EUR's history inverted.
+  // The generator itself keeps converting per USD (world.fx); only the stored rates change base.
+  const eur = world.fx.get("EUR")!;
+  for (const c of CURRENCIES) {
+    if (c.iso === "EUR") continue;
+    for (const [i, e] of eur.entries()) {
+      const perUsd = c.iso === "USD" ? 1 : world.fx.get(c.iso)![i]!.rate;
+      await sink.insert("currency_rates", {
+        id: fxId++,
+        iso: c.iso,
+        rate_per_eur: Number((perUsd / e.rate).toFixed(8)),
+        valid_from: new Date(e.t),
+      });
+    }
   }
 
   let bcId = 1;

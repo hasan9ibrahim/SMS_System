@@ -43,6 +43,8 @@ interface Dim {
 }
 
 const tzl = (tz: string) => lit(tz);
+/** The Sender ID, with every numeric one (digits, optional leading +) as "Numeric". */
+export const NUMERIC_GROUP_SQL = "if(match(src_addr, '^[+]?[0-9]+$'), 'Numeric', src_addr)";
 export const DIMS: Record<ReportDimension, Dim> = {
   // Second, minute and 15-minute buckets (Live analytics detail, team trial 2026-10-18).
   second: {
@@ -107,6 +109,11 @@ export const DIMS: Record<ReportDimension, Dim> = {
     filter: () => EDR_COLUMNS.productCategory!,
   },
   senderId: { id: () => "src_addr", filter: () => EDR_COLUMNS.senderId! },
+  // Numeric Sender IDs (digits, optional +) count as one "Numeric" row; its + lists them (team trial round 2).
+  senderGroup: {
+    id: () => NUMERIC_GROUP_SQL,
+    filter: () => ({ sql: NUMERIC_GROUP_SQL }),
+  },
   routeRule: {
     id: () => "route_rule_id",
     names: { table: "route_rules r", name: "r.name", id: "r.id" },

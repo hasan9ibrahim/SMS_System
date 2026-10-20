@@ -58,7 +58,12 @@ const REFRESH = [
   { value: 15, label: "15 s" },
   { value: 30, label: "30 s" },
   { value: 60, label: "1 min" },
+  // 2, 3, 10 and 15 minutes (team trial round 2).
+  { value: 120, label: "2 min" },
+  { value: 180, label: "3 min" },
   { value: 300, label: "5 min" },
+  { value: 600, label: "10 min" },
+  { value: 900, label: "15 min" },
 ];
 /** Old ?by= values (Dashboard links) → the first level. */
 const BY: Record<string, ReportDimension> = {

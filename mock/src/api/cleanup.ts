@@ -419,7 +419,7 @@ async function rateFindings(c: Db): Promise<Draft[]> {
       kind: "rate_table_identical",
       entityType: "rate_table",
       entityIds: t.map((x) => Number(x.id)),
-      title: `${t.length} rate tables with identical current lines`,
+      title: `${t.length} rate tables with identical current rates`,
       why: `${t.map((x) => `"${x.name}"`).join(", ")} sell the same ${fmt(int(keep!.lines))} lines; every rate change has to be made ${t.length} times.`,
       suggestion: free ? "archive" : "review",
       actions: free ? ["archive", "review"] : ["review"],

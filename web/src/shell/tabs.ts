@@ -30,6 +30,8 @@ const homeTab = (): Tab => ({
   alert: false,
 });
 const newId = () => Math.random().toString(36).slice(2, 10);
+/** The page that opens after signing in (team trial round 3). */
+export const DASHBOARD_PATH = "/dashboard";
 export const defaultTitle = (path: string) => pageForPath(path)?.label ?? "Page";
 
 export interface OpenOptions {
@@ -110,9 +112,21 @@ export const useTabs = create<TabsState>((set, get) => ({
     const restored = (ws?.tabs ?? [])
       .filter((t) => t.id !== HOME_TAB_ID)
       .map((t): Tab => ({ ...t, dirty: false, alert: false }));
-    const tabs = ordered([homeTab(), ...restored]);
-    const activeId = tabs.some((t) => t.id === ws?.activeTabId) ? ws!.activeTabId! : HOME_TAB_ID;
-    set({ tabs, activeId, userId });
+    // Signing in shows the Dashboard (team trial round 3): its saved tab if there is one, else a new tab right
+    // after the pinned ones. Home stays the pinned first tab.
+    let dashboard = restored.find((t) => t.path.split("?")[0] === DASHBOARD_PATH);
+    if (!dashboard) {
+      dashboard = {
+        id: newId(),
+        path: DASHBOARD_PATH,
+        title: defaultTitle(DASHBOARD_PATH),
+        pinned: false,
+        dirty: false,
+        alert: false,
+      };
+      restored.splice(restored.filter((t) => t.pinned).length, 0, dashboard);
+    }
+    set({ tabs: ordered([homeTab(), ...restored]), activeId: dashboard.id, userId });
   },
 
   open: (path, opts = {}) => {

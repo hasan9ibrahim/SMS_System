@@ -943,6 +943,28 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rate-tables/{id}/change-log": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Readable change log of one rate table (team trial round 2)
+     * @description The table's saved changes, newest first, each with its rates in plain words: destination, old and new rate,
+     *     what changed and from when (dates in the platform time zone are formatted by the GUI). Undo entries are
+     *     included. Paged with an opaque cursor.
+     */
+    get: operations["getRateChangeLog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-tables/{id}/export": {
     parameters: {
       query?: never;
@@ -956,7 +978,12 @@ export type paths = {
      */
     get: operations["exportRateLines"];
     put?: never;
-    post?: never;
+    /**
+     * Export the rate lines as filtered on screen (team trial round 2)
+     * @description Same columns as the GET export, for exactly the rows the grid shows: its filter (including the
+     *     view condition), quick search and sort. The table is always the one in the path.
+     */
+    post: operations["exportRateLinesFiltered"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1147,7 +1174,7 @@ export type paths = {
     };
     /**
      * The RN's original file
-     * @description As received.
+     * @description As received (CSV text, or the Excel workbook as uploaded).
      */
     get: operations["downloadRateNotificationFile"];
     put?: never;
@@ -3783,7 +3810,8 @@ export type paths = {
     put?: never;
     /**
      * List current exchange rates (server-side filter, sort and paging)
-     * @description Currency Exchange (§7): the rate in force per currency (units per 1 USD), with who set it and when.
+     * @description Currency Exchange (§7): the rate in force per currency (units per 1 EUR, the base currency), with who set it
+     *     and when.
      */
     post: operations["queryCurrencyRates"];
     delete?: never;
@@ -3802,8 +3830,8 @@ export type paths = {
     get?: never;
     /**
      * Edit a currency's rate (Currency Exchange › Edit)
-     * @description Adds a new rate valid from now; earlier rates stay in the history so past amounts never move.
-     *     One undoable change.
+     * @description Adds a new rate (units per 1 EUR) valid from now; earlier rates stay in the history so past amounts never
+     *     move. One undoable change. EUR is the base and cannot be edited.
      */
     put: operations["setCurrencyRate"];
     post?: never;
@@ -3824,9 +3852,92 @@ export type paths = {
     put?: never;
     /**
      * Sync Rates (pull market rates)
-     * @description Pulls today's market rates for every currency (the mock simulates the feed) as one undoable change.
+     * @description Pulls the latest rates from the exchange-rate provider (XE Currency Data API when an account is set up;
+     *     the mock simulates it) as one undoable change, then checks the currency alerts.
      */
     post: operations["syncCurrencyRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/provider": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Exchange-rate provider settings (team trial round 2)
+     * @description Where the exchange rates come from (any rate API: XE, Open Exchange Rates, Fixer, ExchangeRate-API, the ECB
+     *     or a custom JSON URL, or manual entry), how often they are checked, the minimum change that updates a rate
+     *     and the daily update time. The API key is never returned. Administrators only.
+     */
+    get: operations["getFxProvider"];
+    /**
+     * Change the exchange-rate provider settings
+     * @description Administrators only. Logged in the audit log without the key.
+     */
+    put: operations["updateFxProvider"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/alerts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Currency alerts (team trial round 2)
+     * @description Alerts when a currency moves against EUR by more than an amount or a percentage.
+     */
+    get: operations["listFxAlertRules"];
+    put?: never;
+    /** Add a currency alert */
+    post: operations["createFxAlertRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/alerts/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Change a currency alert */
+    put: operations["updateFxAlertRule"];
+    post?: never;
+    /** Delete a currency alert */
+    delete: operations["deleteFxAlertRule"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/alerts/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Recent currency alerts that fired */
+    get: operations["listFxAlertEvents"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -9915,8 +10026,10 @@ export type components = {
         dashboard: components["schemas"]["DashboardSettings"];
         alertSounds?: components["schemas"]["AlertSoundPrefs"];
       };
-      /** @description GUI Access Group permission keys; buttons not covered are hidden (§1). */
+      /** @description GUI Access Group permission keys ("page:action"; "*" = everything) after the user's own overrides; pages without view are hidden from the menu and blocked, buttons not covered are hidden (§1). */
       permissions: string[];
+      /** @description Tabs and form sections hidden for this user ("page.tab"), group and user overrides applied. */
+      hiddenTabs: string[];
     };
     PreferencesUpdate: {
       theme?: components["schemas"]["Theme"];
@@ -10179,6 +10292,14 @@ export type components = {
       warning: number;
       critical: number;
     };
+    /**
+     * @description How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
+     *     `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Incoming RNs from the partner read
+     *     that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
+     * @default mcc
+     * @enum {string}
+     */
+    AllNetworksCode: "mcc" | "mcc0" | "mcc00" | "mcc000" | "mccStar";
     /** @description Add/Edit form (§5.1). The account manager is set on create; later changes go through handover (§13.30). */
     EnterpriseInput: {
       name: string;
@@ -10201,6 +10322,17 @@ export type components = {
       billingTimezone?: string;
       /** @description Notice period for rate increases (§13.14, §13.32). */
       rateNoticeDays?: number;
+      /**
+       * @description Notice period for rate decreases (team trial round 2). 0 = none.
+       * @default 0
+       */
+      rateNoticeDaysDecrease: number;
+      /**
+       * @description Notice period for new destinations (team trial round 2). 0 = none.
+       * @default 0
+       */
+      rateNoticeDaysNew: number;
+      allNetworksCode?: components["schemas"]["AllNetworksCode"];
       contacts: components["schemas"]["Contacts"];
     };
     EnterpriseDetail: components["schemas"]["Enterprise"] & {
@@ -10214,6 +10346,9 @@ export type components = {
       vatNumber?: string | null;
       billingTimezone: string;
       rateNoticeDays: number;
+      rateNoticeDaysDecrease: number;
+      rateNoticeDaysNew: number;
+      allNetworksCode: components["schemas"]["AllNetworksCode"];
       contacts: components["schemas"]["Contacts"];
       archived: components["schemas"]["Archived"];
       trunkCounts: {
@@ -10298,8 +10433,17 @@ export type components = {
       /** @description Default now. A future time schedules the handover. */
       effectiveAt?: components["schemas"]["Timestamp"];
       note?: string;
+      /**
+       * @description E-mail the client about the new account manager (team trial round 2), to its commercial contact (else rates), copying both AMs, from the AM handover template (Email templates, type am_handover).
+       * @default true
+       */
+      notify: boolean;
+      /** @description An am_handover template; null = the business company's default one. */
+      templateId?: components["schemas"]["Id"] | null;
     };
     HandoverSaved: {
+      /** @description Handover e-mails logged (0 or 1). */
+      emailed: number;
       periods: components["schemas"]["AmPeriod"][];
       change: components["schemas"]["Change"];
     };
@@ -10333,6 +10477,11 @@ export type components = {
     SslType: "none" | "tls1.2" | "tls1.3";
     /** @enum {string} */
     LimitPeriod: "hour" | "day" | "week" | "month" | "billing_cycle";
+    /**
+     * @description Live connection of a trunk (team trial round 2): up (bound), reconnecting (vendor: offline for under 15 minutes or with sessions missing, the switch keeps retrying), down (not bound, or stopped).
+     * @enum {string}
+     */
+    TrunkConnection: "up" | "reconnecting" | "down";
     TrunkListRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"];
@@ -10349,6 +10498,7 @@ export type components = {
       protocol: components["schemas"]["TrunkProtocol"];
       tps: number;
       status: components["schemas"]["RecordStatus"];
+      connection: components["schemas"]["TrunkConnection"];
       bindType: string;
       /** @description Translation rules running on the trunk (replaces "Translation Rule Group", §13.2). */
       rulesCount: number;
@@ -10689,6 +10839,8 @@ export type components = {
       description: string | null;
       vendorTrunkId: components["schemas"]["Id"] | null;
       vendorTrunkName: string | null;
+      /** @description Units of the platform currency (EUR by default) per 1 unit of the table currency at the latest rate, for the table-currency / EUR rate columns (team trial round 2). */
+      platformPerUnit: number;
       /** @description Customer trunks using the table, or the vendor trunk that owns it. */
       trunks: components["schemas"]["RateTableTrunk"][];
       lastImport: {
@@ -10769,11 +10921,62 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
+      notificationNote?: string | null;
       /**
        * @description After saving, e-mail a rate notification to each customer using a changed customer table (its rates contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default). Logged in Email logs as send_rate. Vendor tables are never notified.
        * @default false
        */
       sendNotification: boolean;
+    };
+    RateChangeLogItem: {
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      senderId: string | null;
+      /** @enum {string} */
+      kind:
+        | "new"
+        | "increase"
+        | "decrease"
+        | "same"
+        | "closed"
+        | "withdrawn"
+        | "blocked"
+        | "unblocked"
+        | "note";
+      oldRate: number | null;
+      newRate: number | null;
+      changePct: number | null;
+      /**
+       * Format: date-time
+       * @description When the new rate starts, or when a closed rate ends.
+       */
+      effectiveFrom: string | null;
+      /** Format: date-time */
+      until: string | null;
+    };
+    RateChangeLogEntry: {
+      changeId: number;
+      /** Format: date-time */
+      at: string;
+      user: string | null;
+      /** @description create, edit, undo, … */
+      changeType: string;
+      note: string | null;
+      undoOfId: number | null;
+      currency: string;
+      /** @description Rates per kind, e.g. increase: 3, new: 1. */
+      counts: {
+        [key: string]: number;
+      };
+      items: components["schemas"]["RateChangeLogItem"][];
+      /** @description All rates in the change; `items` holds the first 200. */
+      itemCount: number;
+    };
+    RateChangeLogPage: {
+      rows: components["schemas"]["RateChangeLogEntry"][];
+      nextCursor: string | null;
     };
     RateLineChangesSaved: {
       /** @description Rate notification e-mails written (when sendNotification was set). */
@@ -10787,7 +10990,13 @@ export type components = {
     NoticeBreach: components["schemas"]["Problem"] & {
       breaches: {
         mccmnc: string;
-        currentRate: number;
+        /**
+         * @description Each kind has its own notice period on the client (team trial round 2).
+         * @enum {string}
+         */
+        change: "increase" | "decrease" | "new";
+        /** @description Null for a new destination. */
+        currentRate: number | null;
         newRate: number;
         effectiveFrom: components["schemas"]["Timestamp"];
         noticeDays: number;
@@ -10947,6 +11156,8 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
+      notificationNote?: string | null;
       /**
        * @description After saving, e-mail a rate notification to each customer using a changed customer table (its rates contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default). Logged in Email logs as send_rate. Vendor tables are never notified.
        * @default false
@@ -11040,6 +11251,8 @@ export type components = {
         header: string;
         field: string | null;
       }[];
+      /** @description The file row the headers were read from (1 = first row); null when the file could not be read. */
+      headerRow: number | null;
       replies: components["schemas"]["RnReply"][];
       log: components["schemas"]["RnLogEntry"][];
       /** @description Customer tables that sent traffic over this vendor trunk to the flagged destinations in the last 7 days (Accept and update customers). */
@@ -11093,8 +11306,15 @@ export type components = {
     };
     RnAttachment: {
       fileName: string;
-      /** @description The sheet as text: CSV, semicolon or tab separated (Excel copy). Excel files wait for the backend. */
+      /** @description The sheet: CSV, semicolon or tab separated text, or with `encoding: base64` an Excel file (.xlsx, first sheet; protected sheets are read; workbooks that need a password to open are refused with a file error). */
       content: string;
+      /**
+       * @default text
+       * @enum {string}
+       */
+      encoding: "text" | "base64";
+      /** @description The row holding the column headers (1 = first row). Null = found automatically (team trial round 2). */
+      headerRow?: number | null;
     };
     /** @description One incoming e-mail (fake in this phase) or an upload. A file with a username column, or one tab per account, is split into one RN per trunk. */
     RnIntake: {
@@ -11892,7 +12112,7 @@ export type components = {
       status?: components["schemas"]["RecordStatus"];
       /** @description Is Continue - apply further rules after this one (a trunk can override). */
       continueAfter?: boolean;
-      /** @description Regular expression on the sender ID. */
+      /** @description Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits, optional leading +), \Alpha = Sender IDs with a letter. */
       senderPattern?: string | null;
       senderPatternNegate?: boolean;
       /** @description Match case for the Sender ID conditions (team trial round 1): on, the Sender ID pattern and the Sender ID list entries must match the exact capitals ("BANK" does not match "Bank"); off, any case matches. Records always carry it; missing in an input means on. */
@@ -12637,7 +12857,7 @@ export type components = {
       name: string;
       iso: string;
       symbol: string;
-      ratePerUsd: number;
+      ratePerEur: number;
       /** Format: date-time */
       rateUpdatedAt: string | null;
       /** @description Enterprise billing settings in this currency. */
@@ -12656,8 +12876,8 @@ export type components = {
       name: string;
       symbol: string;
       iso: string;
-      /** @description First exchange rate, units per 1 USD. */
-      ratePerUsd: number;
+      /** @description First exchange rate, units per 1 EUR (EUR is the base currency, team trial round 2). */
+      ratePerEur: number;
     };
     CurrencySaved: {
       record: components["schemas"]["CurrencyRow"];
@@ -12668,8 +12888,8 @@ export type components = {
       id: components["schemas"]["Id"];
       iso: string;
       currency: string;
-      /** @description Units of the currency per 1 USD (USD = 1). */
-      ratePerUsd: number;
+      /** @description Units of the currency per 1 EUR (EUR, the base currency, is 1; team trial round 2). */
+      ratePerEur: number;
       /** Format: date-time */
       validFrom: string | null;
       /** @description Null = market feed or seed data. */
@@ -12680,7 +12900,7 @@ export type components = {
       rows: components["schemas"]["CurrencyRateRow"][];
     };
     CurrencyRateInput: {
-      ratePerUsd: number;
+      ratePerEur: number;
     };
     CurrencyRateSaved: {
       record: components["schemas"]["CurrencyRateRow"];
@@ -12690,11 +12910,166 @@ export type components = {
       updated: number;
       change: components["schemas"]["Change"] | null;
     };
+    FxProvider: {
+      /**
+       * @description Where rates come from (team trial round 2, round 3: any platform). Presets fill the URL, authentication, rates path and base currency; `custom` takes any JSON API; `manual` = rates are typed in.
+       * @enum {string}
+       */
+      provider:
+        "xe" | "openexchangerates" | "fixer" | "exchangerate_api" | "ecb" | "custom" | "manual";
+      /** @description Display name for a custom source, e.g. "Bank feed". */
+      label: string | null;
+      /** @description The URL that returns the latest rates. `{key}` is replaced by the API key when the key goes in the path, `{base}` by the base currency. Presets have a default; custom needs one. */
+      apiUrl: string | null;
+      /**
+       * @description How the API key is sent: not at all, as a query parameter, as a header, as HTTP basic auth (account ID : key) or inside the URL ({key}).
+       * @enum {string}
+       */
+      authType: "none" | "query" | "header" | "basic" | "path";
+      /** @description Query parameter or header name for the key, e.g. app_id, access_key or Authorization. */
+      authParam: string | null;
+      /** @description Account ID or user name (basic auth, e.g. XE). */
+      accountId: string | null;
+      /** @description Dot path to the rates object in the JSON answer (currency -> rate), e.g. rates, data.rates. */
+      ratesPath: string | null;
+      /** @description The currency the source quotes against; rates are converted to per 1 EUR when they are saved. */
+      baseCurrency: string;
+      /**
+       * @description How often the source is checked: every minute, 15 minutes, hour (default), 6 hours or day. A check only changes a rate when it moved at least minChange (see minChangeMode).
+       * @enum {integer}
+       */
+      refreshMinutes: 1 | 15 | 60 | 360 | 1440;
+      /**
+       * @description Whether minChange is a % of the current rate or an amount in the currency per 1 EUR.
+       * @enum {string}
+       */
+      minChangeMode: "percent" | "amount";
+      /** @description A checked rate replaces the one in the system only when it differs by at least this much (0 = every check updates). Smaller moves wait for a bigger one or for the daily update. */
+      minChange: number;
+      /** @description Once a day at this time (HH:MM, platform time zone) every rate is updated from the source whatever the difference, so the system is never more than a day behind. Null = no daily update. */
+      dailyUpdateAt: string | null;
+      enabled: boolean;
+      /** @description True when an API key is stored. The key itself is never returned (§13.22). */
+      apiKeySet: boolean;
+      /** @description True in this phase: checks use simulated market moves and nothing is called. */
+      simulated: boolean;
+      /** @description The platform time zone dailyUpdateAt is in. */
+      timezone: string;
+      /**
+       * Format: date-time
+       * @description The last check.
+       */
+      lastRunAt: string | null;
+      /** @enum {string|null} */
+      lastStatus: "ok" | "simulated" | "error" | null;
+      /** @description What the last check did, e.g. "32 checked, 3 updated, 29 below 0.5 %". */
+      lastMessage: string | null;
+      /** Format: date-time */
+      nextRunAt: string | null;
+      /** Format: date-time */
+      lastDailyAt: string | null;
+      /** Format: date-time */
+      nextDailyAt: string | null;
+      /** @description Known sources and their defaults, for the form. */
+      presets: components["schemas"]["FxProviderPreset"][];
+      updatedBy: string | null;
+      /** Format: date-time */
+      updatedAt: string | null;
+    };
+    FxProviderPreset: {
+      provider: string;
+      label: string;
+      apiUrl: string | null;
+      /** @enum {string} */
+      authType: "none" | "query" | "header" | "basic" | "path";
+      authParam: string | null;
+      ratesPath: string | null;
+      baseCurrency: string;
+      note: string;
+    };
+    FxProviderUpdate: {
+      /**
+       * @description Where rates come from (team trial round 2, round 3: any platform). Presets fill the URL, authentication, rates path and base currency; `custom` takes any JSON API; `manual` = rates are typed in.
+       * @enum {string}
+       */
+      provider:
+        "xe" | "openexchangerates" | "fixer" | "exchangerate_api" | "ecb" | "custom" | "manual";
+      /** @description Display name for a custom source, e.g. "Bank feed". */
+      label: string | null;
+      /** @description The URL that returns the latest rates. `{key}` is replaced by the API key when the key goes in the path, `{base}` by the base currency. Presets have a default; custom needs one. */
+      apiUrl: string | null;
+      /**
+       * @description How the API key is sent: not at all, as a query parameter, as a header, as HTTP basic auth (account ID : key) or inside the URL ({key}).
+       * @enum {string}
+       */
+      authType: "none" | "query" | "header" | "basic" | "path";
+      /** @description Query parameter or header name for the key, e.g. app_id, access_key or Authorization. */
+      authParam: string | null;
+      /** @description Account ID or user name (basic auth, e.g. XE). */
+      accountId: string | null;
+      /** @description Dot path to the rates object in the JSON answer (currency -> rate), e.g. rates, data.rates. */
+      ratesPath: string | null;
+      /** @description The currency the source quotes against; rates are converted to per 1 EUR when they are saved. */
+      baseCurrency: string;
+      /**
+       * @description How often the source is checked: every minute, 15 minutes, hour (default), 6 hours or day. A check only changes a rate when it moved at least minChange (see minChangeMode).
+       * @enum {integer}
+       */
+      refreshMinutes: 1 | 15 | 60 | 360 | 1440;
+      /**
+       * @description Whether minChange is a % of the current rate or an amount in the currency per 1 EUR.
+       * @enum {string}
+       */
+      minChangeMode: "percent" | "amount";
+      /** @description A checked rate replaces the one in the system only when it differs by at least this much (0 = every check updates). Smaller moves wait for a bigger one or for the daily update. */
+      minChange: number;
+      /** @description Once a day at this time (HH:MM, platform time zone) every rate is updated from the source whatever the difference, so the system is never more than a day behind. Null = no daily update. */
+      dailyUpdateAt: string | null;
+      enabled: boolean;
+      /** @description New API key; omitted or null keeps the stored one, "" removes it. */
+      apiKey?: string | null;
+    };
+    FxAlertRuleInput: {
+      /** @description The currency; null = every currency. */
+      iso: string | null;
+      /** @description Fire when the rate against EUR moves by at least this % (up or down). */
+      thresholdPct: number | null;
+      /** @description Fire when the rate (units per 1 EUR) moves by at least this amount. At least one threshold is required. */
+      thresholdAbs: number | null;
+      /**
+       * @description `update` = since the previous rate; `day` = against the rate 24 hours before.
+       * @enum {string}
+       */
+      window: "update" | "day";
+      recipients: string[];
+      enabled: boolean;
+    };
+    FxAlertRule: components["schemas"]["FxAlertRuleInput"] & {
+      id: components["schemas"]["Id"];
+      /** Format: date-time */
+      lastTriggeredAt: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    FxAlertEvent: {
+      id: components["schemas"]["Id"];
+      ruleId: components["schemas"]["Id"];
+      iso: string;
+      /** @description Units per 1 EUR before. */
+      fromRate: number;
+      toRate: number;
+      changePct: number;
+      /** @enum {string} */
+      window: "update" | "day";
+      at: components["schemas"]["Timestamp"];
+      /** @description How many recipients got the alert e-mail (Email logs, type currency_alert). */
+      emailed: number;
+    };
     CurrencyRateHistoryRow: {
       id: components["schemas"]["Id"];
       iso: string;
       currency: string;
-      ratePerUsd: number;
+      ratePerEur: number;
       validFrom: components["schemas"]["Timestamp"];
       updatedBy: string | null;
     };
@@ -13528,21 +13903,7 @@ export type components = {
     EmailTemplateRow: {
       id: components["schemas"]["Id"];
       name: string;
-      /** @enum {string} */
-      emailType:
-        | "customer_rate"
-        | "invoice"
-        | "low_balance"
-        | "bind_down"
-        | "customer_tech_info"
-        | "trunk_change_info"
-        | "soa_statement"
-        | "rate_upload_notification"
-        | "traffic_alert"
-        | "auto_upload_rejected"
-        | "trouble_ticket"
-        | "send_soa"
-        | "monitoring_alert";
+      emailType: components["schemas"]["EmailTemplateType"];
       subject: string;
       businessCompanyId: components["schemas"]["Id"] | null;
       /** @description Null = shared by every business company. */
@@ -13557,7 +13918,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) and template_test (a test of an e-mail template, §11).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) and currency_alert (an exchange rate moved past an alert, team trial round 2).
      * @enum {string}
      */
     EmailType:
@@ -13585,7 +13946,9 @@ export type components = {
       | "cleanup_summary"
       | "credential_transfer"
       | "password_reminder"
-      | "template_test";
+      | "template_test"
+      | "currency_alert"
+      | "am_handover";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -13954,6 +14317,7 @@ export type components = {
       vendorTrunk: string | null;
       vendorIp: string;
       vendorPort: number;
+      /** @description The vendor's message ID; one per part for a multipart message, comma separated (team trial round 2). A filter on it matches any of them. */
       vendorMsgId: string;
       vendorMccmnc: string;
       vendorBillingType: string;
@@ -14378,7 +14742,7 @@ export type components = {
       durationMs: number;
     };
     /**
-     * @description Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor.
+     * @description Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderGroup = the Sender ID, with every numeric one counted as Numeric (team trial round 2).
      * @enum {string}
      */
     ReportDimension:
@@ -14401,6 +14765,7 @@ export type components = {
       | "vendorDestination"
       | "productCategory"
       | "senderId"
+      | "senderGroup"
       | "routeRule"
       | "routeType"
       | "rateTable"
@@ -14765,7 +15130,7 @@ export type components = {
       change: components["schemas"]["Change"] | null;
     };
     /**
-     * @description Email Type (§11).
+     * @description Email Type (§11). am_handover = the client is told about its new account manager (team trial round 2).
      * @enum {string}
      */
     EmailTemplateType:
@@ -14781,7 +15146,8 @@ export type components = {
       | "auto_upload_rejected"
       | "trouble_ticket"
       | "send_soa"
-      | "monitoring_alert";
+      | "monitoring_alert"
+      | "am_handover";
     UserFields: {
       /** @description Lower case letters, digits, dot, dash, underscore. */
       username: string;
@@ -14817,6 +15183,20 @@ export type components = {
       state: string | null;
       city: string | null;
       zip: string | null;
+      /**
+       * @description Per-user override of the access group (team trial round 2): page key -> the actions this user has on it instead of the group's ([] = no access). Pages not listed follow the group.
+       * @default {}
+       */
+      permissionOverrides: {
+        [key: string]: string[];
+      };
+      /**
+       * @description Per-user override of hidden tabs and sections ("page.tab" -> true shows it, false hides it).
+       * @default {}
+       */
+      tabOverrides: {
+        [key: string]: boolean;
+      };
     };
     UserInput: components["schemas"]["UserFields"] & {
       /** @description Create only - the temporary password, valid 24 hours and changed at first login (§13.28). Never returned. */
@@ -14926,6 +15306,11 @@ export type components = {
       name: string;
       status: components["schemas"]["RecordStatus"];
       description: string | null;
+      /**
+       * @description Tabs and sections the group does not see ("page.tab" keys from the catalogue; team trial round 2).
+       * @default []
+       */
+      hiddenTabs: string[];
       /** @description Page key -> allowed actions (catalogue in /access-groups/catalog); key * = every page (§1). */
       permissions: {
         [key: string]: string[];
@@ -14965,6 +15350,11 @@ export type components = {
         label: string;
         section: string;
         actions: string[];
+        /** @description Tabs and form sections of the page that can be hidden (team trial round 2), keyed "page.tab", e.g. enterprises.docs or vendor-trunks.connection. */
+        tabs?: {
+          key: string;
+          label: string;
+        }[];
       }[];
     };
     UserSessionRow: {
@@ -16680,8 +17070,13 @@ export type components = {
       backupForVendorTrunkId?: components["schemas"]["Id"] | null;
       /** @description Send the first N messages to this vendor before the normal split. */
       warmupCount?: number | null;
-      /** @enum {string|null} */
-      warmupReset?: "hour" | "day" | "week" | null;
+      /**
+       * @description When the warm-up count starts again; custom = every warmupResetHours hours (team trial round 2).
+       * @enum {string|null}
+       */
+      warmupReset?: "hour" | "day" | "week" | "custom" | null;
+      /** @description With warmupReset custom, e.g. 3 or 6. */
+      warmupResetHours?: number | null;
       /** @enum {string|null} */
       warmupPer?: "rule" | "customer_trunk" | null;
     };
@@ -16721,6 +17116,7 @@ export type components = {
       mccmncs?: string[];
       /** @description Dynamic regular expression on the MCCMNC (§13.21). */
       mccmncPattern?: string | null;
+      /** @description Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits, optional leading +), \Alpha = Sender IDs with a letter. */
       senderPattern?: string | null;
       senderPatternNegate?: boolean;
       /** @description Match case for every Sender condition (team trial round 1): on, the sender pattern (including the is one of / starts with / contains values built into it) and the sender list entries must match the exact capitals ("BANK" does not match "Bank"); off, any case matches. Receiver and content conditions are not affected. Records always carry it; missing in the input of a new rule means on (an edit keeps the stored value, like the other fields). */
@@ -17390,6 +17786,18 @@ export type components = {
       search?: string;
       /** @description Include inactive trunks. */
       includeInactive?: boolean;
+      /** @description Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2). */
+      destination?: string;
+      /** @description Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start. */
+      code?: string;
+      tablesMin?: number;
+      tablesMax?: number;
+      /** @description Only rates at or above this, in the table currency (each table's own rate). */
+      priceMin?: number;
+      priceMax?: number;
+      /** @description Only rates at or above this, converted to the platform currency. */
+      sysMin?: number;
+      sysMax?: number;
       asOf?: components["schemas"]["Timestamp"];
       /** @default 100 */
       limit: number;
@@ -17445,6 +17853,18 @@ export type components = {
       search?: string;
       /** @description Include inactive trunks. */
       includeInactive?: boolean;
+      /** @description Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2). */
+      destination?: string;
+      /** @description Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start. */
+      code?: string;
+      tablesMin?: number;
+      tablesMax?: number;
+      /** @description Only rates at or above this, in the table currency (each table's own rate). */
+      priceMin?: number;
+      priceMax?: number;
+      /** @description Only rates at or above this, converted to the platform currency. */
+      sysMin?: number;
+      sysMax?: number;
       asOf?: components["schemas"]["Timestamp"];
       mccmnc: string;
     };
@@ -19404,6 +19824,32 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  getRateChangeLog: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of changes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RateChangeLogPage"];
+        };
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
   exportRateLines: {
     parameters: {
       query?: {
@@ -19427,6 +19873,36 @@ export interface operations {
           "text/csv": string;
         };
       };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportRateLinesFiltered: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
@@ -19707,6 +20183,7 @@ export interface operations {
         };
         content: {
           "text/csv": string;
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
         };
       };
       401: components["responses"]["Unauthorized"];
@@ -23553,6 +24030,173 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  getFxProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings and the last run */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxProvider"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+    };
+  };
+  updateFxProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FxProviderUpdate"];
+      };
+    };
+    responses: {
+      /** @description The saved settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxProvider"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+    };
+  };
+  listFxAlertRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every alert rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertRule"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+    };
+  };
+  createFxAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FxAlertRuleInput"];
+      };
+    };
+    responses: {
+      /** @description The new rule */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertRule"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+    };
+  };
+  updateFxAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FxAlertRuleInput"];
+      };
+    };
+    responses: {
+      /** @description The saved rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertRule"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  deleteFxAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listFxAlertEvents: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Newest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertEvent"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
     };
   };
   queryCurrencyRateHistory: {

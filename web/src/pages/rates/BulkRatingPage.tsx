@@ -13,6 +13,7 @@ import type {
   RateBulkPreview,
   RateBulkScope,
   RateTableRow,
+  TrunkListRow,
 } from "@sms/contract";
 import { actOnMove, fetchMarketMove } from "../../api/market";
 import { moveLabel } from "./market/marketModel";
@@ -45,18 +46,20 @@ import { formatPct, formatRate, shortDateTime } from "./format";
 import { NoticeDialog } from "./RateTableView";
 import { SendRnCheck } from "./dialogs";
 import { DestinationPickDialog } from "./DestinationTree";
+import { nextMidnight, usePlatformTz } from "../../ui/zonedTime";
+import { EffectiveFromField, effectiveIso, RnNoteField } from "./EffectiveFrom";
 
 const page = pageForPath("/rates/bulk")!;
 
 const ACTIONS: { value: RateBulkAction["type"]; label: string; valueLabel?: string }[] = [
-  { value: "set", label: "Set a fixed rate", valueLabel: "New rate" },
+  { value: "set", label: "Set a fixed rate", valueLabel: "New rate (each table's currency)" },
   { value: "change_pct", label: "Change by %", valueLabel: "Change % (negative lowers)" },
-  { value: "change_amount", label: "Change by amount", valueLabel: "Add (negative lowers)" },
+  { value: "change_amount", label: "Change by amount", valueLabel: "Add (table currency, negative lowers)" },
   { value: "cost_plus_pct", label: "Cost + margin %", valueLabel: "Margin % over cost" },
-  { value: "cost_plus_amount", label: "Cost + amount", valueLabel: "Amount over cost" },
-  { value: "close", label: "Close lines" },
-  { value: "block", label: "Block lines" },
-  { value: "unblock", label: "Unblock lines" },
+  { value: "cost_plus_amount", label: "Cost + amount", valueLabel: "Amount over cost (table currency)" },
+  { value: "close", label: "Close rates" },
+  { value: "block", label: "Block rates" },
+  { value: "unblock", label: "Unblock rates" },
   { value: "none", label: "Suggested rates only (market move)" },
 ];
 const SHOWS: { value: Show; label: string }[] = [
@@ -121,6 +124,108 @@ function TablePicker({ ids, onChange }: { ids: number[]; onChange: (ids: number[
         placeholder="Add a client's rate table…"
       />
     </div>
+  );
+}
+
+/** Tick customer trunks; their sell tables join the scope (team trial round 2). */
+function TrunkPickDialog({ done }: { done: (tableIds: number[] | null) => void }) {
+  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+  const trunks = useQuery({
+    queryKey: ["list", "bulk-trunk-pick", search],
+    queryFn: () =>
+      fetchListPage<TrunkListRow>("customer_trunks", {
+        limit: 300,
+        withTotal: true,
+        ...(search.trim() ? { search: search.trim() } : {}),
+        sort: [{ field: "name", dir: "asc" }],
+      }),
+    staleTime: 30_000,
+  });
+  const rows = trunks.data?.rows ?? [];
+  const shown = rows.map((r) => r.id);
+  const allShown = shown.length > 0 && shown.every((id) => picked.includes(id));
+  const toggle = (id: number) => setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id]);
+  const apply = async () => {
+    setBusy(true);
+    try {
+      const page = await fetchListPage<RateTableRow>("rate_tables", {
+        limit: 4000,
+        withTotal: false,
+        filter: {
+          logic: "and",
+          conditions: [
+            { field: "kind", op: "in", values: ["customer"] },
+            { field: "customerTrunkId", op: "in", values: picked },
+          ],
+        },
+      });
+      if (!page.rows.length) toast({ tone: "warning", message: "These trunks have no client rate table yet." });
+      done(page.rows.map((r) => r.id));
+    } catch (e) {
+      toast({ tone: "error", message: e instanceof ApiError ? e.message : String(e) });
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      title="Pick customer trunks"
+      width={640}
+      onClose={() => done(null)}
+      footer={
+        <>
+          <span className="muted small fb-spacer">
+            {picked.length} trunk{picked.length === 1 ? "" : "s"} ticked
+          </span>
+          <Button onClick={() => done(null)}>Cancel</Button>
+          <Button variant="primary" disabled={!picked.length || busy} onClick={apply}>
+            Add their rate tables
+          </Button>
+        </>
+      }
+    >
+      <div className="bulk-row">
+        <input
+          type="search"
+          autoFocus
+          placeholder="Search trunk, client, username… (% and _ wildcards)"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search customer trunks"
+          style={{ flex: 1 }}
+        />
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={allShown}
+            disabled={!shown.length}
+            onChange={() =>
+              setPicked(allShown ? picked.filter((id) => !shown.includes(id)) : [...new Set([...picked, ...shown])])
+            }
+          />{" "}
+          Select all shown
+        </label>
+      </div>
+      <div className="trunk-pick-list" role="list" aria-label="Customer trunks">
+        {trunks.isLoading && <p className="muted small">Loading…</p>}
+        {!trunks.isLoading && !rows.length && <p className="muted small">No customer trunk matches.</p>}
+        {rows.map((r) => (
+          <label key={r.id} className="trunk-pick-row" role="listitem">
+            <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} />
+            <strong>{r.name}</strong>
+            <span className="muted small">
+              {[r.enterpriseName, r.category, r.currency].filter(Boolean).join(" · ")}
+            </span>
+          </label>
+        ))}
+      </div>
+      {trunks.data?.total != null && trunks.data.total > rows.length && (
+        <p className="muted small">
+          Showing {rows.length} of {trunks.data.total.toLocaleString("en-US")}: search to narrow the list.
+        </p>
+      )}
+    </Modal>
   );
 }
 
@@ -204,9 +309,10 @@ function ApplyDialog({
 }: {
   count: number;
   tables: number;
-  done: (v: { note: string; sendRn: boolean } | null) => void;
+  done: (v: { note: string; sendRn: boolean; rnNote: string } | null) => void;
 }) {
   const [note, setNote] = useState("");
+  const [rnNote, setRnNote] = useState("");
   const [sendRn, setSendRn] = useState(true);
   return (
     <Modal
@@ -216,7 +322,7 @@ function ApplyDialog({
         <>
           <SendRnCheck checked={sendRn} onChange={setSendRn} />
           <Button onClick={() => done(null)}>Cancel</Button>
-          <Button variant="primary" onClick={() => done({ note, sendRn })}>
+          <Button variant="primary" onClick={() => done({ note, sendRn, rnNote })}>
             Apply
           </Button>
         </>
@@ -230,6 +336,7 @@ function ApplyDialog({
         <span>Note (optional, shown in History)</span>
         <input autoFocus value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
       </label>
+      {sendRn && <RnNoteField value={rnNote} onChange={setRnNote} />}
     </Modal>
   );
 }
@@ -247,7 +354,9 @@ export function BulkRatingPage() {
   const [costSource, setCostSource] = useState<"best_buy" | "vendor_trunk">("best_buy");
   const [vendorTrunkId, setVendorTrunkId] = useState<number | null>(null);
   const [round, setRound] = useState("4");
-  const [from, setFrom] = useState("");
+  const tz = usePlatformTz();
+  // Default start: the next 00:00 in the platform time zone (team trial round 2).
+  const [from, setFrom] = useState(() => nextMidnight(tz));
   const [respectNotice, setRespectNotice] = useState(true);
   const [addMissing, setAddMissing] = useState(false);
   const [preview, setPreview] = useState<RateBulkPreview | null>(null);
@@ -333,7 +442,7 @@ export function BulkRatingPage() {
       ...(countries.length ? { countryIsos: countries } : {}),
       onlyExisting: !addMissing,
       respectNotice,
-      effectiveFrom: from ? new Date(`${from}:00Z`).toISOString() : null,
+      effectiveFrom: effectiveIso(from, tz),
       ...(overrides.length ? { overrides } : {}),
       action: {
         type,
@@ -361,11 +470,12 @@ export function BulkRatingPage() {
     }
   };
 
-  const runApply = async (note: string, sendRn: boolean, acceptNoticeBreach = false): Promise<void> => {
+  const runApply = async (note: string, sendRn: boolean, acceptNoticeBreach = false, rnNote = ""): Promise<void> => {
     try {
       const r = await apply.mutateAsync({
         items,
         sendNotification: sendRn,
+        ...(sendRn && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
       });
@@ -387,7 +497,7 @@ export function BulkRatingPage() {
         const ok = await ask<boolean>((done) => (
           <NoticeDialog breach={err.problem as unknown as NoticeBreach} done={done} />
         ));
-        if (ok) return runApply(note, sendRn, true);
+        if (ok) return runApply(note, sendRn, true, rnNote);
         return;
       }
       toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
@@ -395,10 +505,10 @@ export function BulkRatingPage() {
   };
 
   const confirmApply = async () => {
-    const v = await ask<{ note: string; sendRn: boolean }>((done) => (
+    const v = await ask<{ note: string; sendRn: boolean; rnNote: string }>((done) => (
       <ApplyDialog count={items.length} tables={new Set(items.map((i) => i.rateTableId)).size} done={done} />
     ));
-    if (v) await runApply(v.note, v.sendRn);
+    if (v) await runApply(v.note, v.sendRn, false, v.rnNote);
   };
 
   const setRate = (key: string, v: number | null) => {
@@ -430,7 +540,7 @@ export function BulkRatingPage() {
 
   usePageStatus({
     rows: preview
-      ? `${totals.rows.toLocaleString("en-US")} lines · ${totals.applying.toLocaleString("en-US")} to apply · ${totals.excluded} excluded`
+      ? `${totals.rows.toLocaleString("en-US")} rates · ${totals.applying.toLocaleString("en-US")} to apply · ${totals.excluded} excluded`
       : `${tables.length} table${tables.length === 1 ? "" : "s"} × ${mccmncs.length + countries.length ? `${mccmncs.length} MCCMNC, ${countries.length} countries` : "all destinations"}`,
     shortcuts:
       "Type a rate or a formula (=cost*1.15, =rate+0.002) in New rate · money in " +
@@ -579,6 +689,16 @@ export function BulkRatingPage() {
           <div className="field">
             <span>Clients' rate tables</span>
             <TablePicker ids={tables} onChange={setTables} />
+            <Button
+              small
+              icon="check"
+              onClick={async () => {
+                const ids = await ask<number[]>((done) => <TrunkPickDialog done={done} />);
+                if (ids) setTables([...new Set([...tables, ...ids])]);
+              }}
+            >
+              Pick customer trunks…
+            </Button>
           </div>
           <div className="field">
             <span>Destinations by MCCMNC</span>
@@ -620,7 +740,7 @@ export function BulkRatingPage() {
               {mccmncs.length + countries.length
                 ? `${mccmncs.length} MCCMNC + ${countries.length} countries`
                 : "every destination they price"}
-              {preview ? ` = ${preview.summary.lines.toLocaleString("en-US")} lines` : ""}
+              {preview ? ` = ${preview.summary.lines.toLocaleString("en-US")} rates` : ""}
             </span>
           </div>
         </section>
@@ -679,15 +799,7 @@ export function BulkRatingPage() {
                 </select>
               </label>
             )}
-            <label className="field">
-              <span title="Empty = now. Never in the past (§13.32).">Effective from (UTC)</span>
-              <input
-                type="datetime-local"
-                value={from}
-                min={new Date().toISOString().slice(0, 16)}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </label>
+            <EffectiveFromField value={from} onChange={setFrom} />
           </div>
           <div className="bulk-row">
             <label className="toggle-inline">

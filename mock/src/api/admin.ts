@@ -23,7 +23,7 @@ import type {
   UserInput,
 } from "@sms/contract";
 import { withDb } from "../db.js";
-import { ACTIONS, checkPermissions, MODULES, normalisePermissions, SECTIONS } from "../admin/catalog.js";
+import { ACTIONS, checkPermissions, checkTabs, MODULES, normalisePermissions, SECTIONS } from "../admin/catalog.js";
 import {
   hashPassword,
   newTotpSecret,
@@ -293,6 +293,8 @@ const USER_FIELDS: [keyof UserInput & string, string][] = [
   ["state", "state"],
   ["city", "city"],
   ["zip", "zip"],
+  ["permissionOverrides", "permission_overrides"],
+  ["tabOverrides", "tab_overrides"],
 ];
 
 async function checkUser(c: Db, b: UserInput, id: number | null): Promise<FieldError[]> {
@@ -308,6 +310,11 @@ async function checkUser(c: Db, b: UserInput, id: number | null): Promise<FieldE
       path: "/managerId",
       message: b.managerId === id ? "a user cannot report to themself" : "unknown user",
     });
+  // Per-user overrides of the access group (team trial round 2); [] = no access to that page.
+  for (const e of checkPermissions(b.permissionOverrides ?? {}))
+    if (!e.message.includes("needs View"))
+      errors.push({ ...e, path: e.path.replace("/permissions", "/permissionOverrides") });
+  errors.push(...checkTabs(Object.keys(b.tabOverrides ?? {}), "/tabOverrides"));
   const { rows: co } = await c.query("SELECT 1 FROM countries WHERE iso = $1", [b.countryIso]);
   if (!co[0]) errors.push({ path: "/countryIso", message: "unknown country" });
   // The username stays reserved by deleted users too (history and audit refer to it).
@@ -359,6 +366,8 @@ const users = records<UserInput, NonNullable<Awaited<ReturnType<typeof loadUser>
   values: (b) => ({
     ...b,
     username: b.username.trim().toLowerCase(),
+    permissionOverrides: b.permissionOverrides ?? {},
+    tabOverrides: b.tabOverrides ?? {},
     firstName: b.firstName.trim(),
     lastName: b.lastName.trim(),
     email: b.email.trim(),
@@ -695,7 +704,7 @@ export const restoreDepartment = departments.restore;
 const loadAccessGroup = (c: Db, id: number) =>
   one(c, ACCESS_GROUP_SELECT, ACCESS_GROUP_FROM, "g.id", id, mapAccessGroup);
 async function checkGroup(c: Db, b: AccessGroupInput, id: number | null): Promise<FieldError[]> {
-  const errors = checkPermissions(b.permissions);
+  const errors = [...checkPermissions(b.permissions), ...checkTabs(b.hiddenTabs ?? [], "/hiddenTabs")];
   const { rows } = await c.query(
     "SELECT deleted_at FROM access_groups WHERE lower(name) = lower($1) AND id <> coalesce($2, 0)",
     [b.name, id],
@@ -716,6 +725,7 @@ const groups = records<AccessGroupInput, NonNullable<Awaited<ReturnType<typeof l
     ["status", "status"],
     ["description", "description"],
     ["permissions", "permissions"],
+    ["hiddenTabs", "hidden_tabs"],
   ],
   load: loadAccessGroup,
   values: (b) => ({
@@ -723,6 +733,7 @@ const groups = records<AccessGroupInput, NonNullable<Awaited<ReturnType<typeof l
     name: b.name.trim(),
     description: trimOrNull(b.description),
     permissions: normalisePermissions(b.permissions),
+    hiddenTabs: [...new Set(b.hiddenTabs ?? [])].sort(),
   }),
   check: checkGroup,
   nameOf: (b) => b.name,
@@ -761,6 +772,7 @@ export function cloneAccessGroup(request: FastifyRequest, reply: FastifyReply) {
       status: src.status,
       description: src.description,
       permissions: src.permissions,
+      hiddenTabs: src.hiddenTabs,
     };
     const errors = await checkGroup(pool, b, null);
     if (errors.length) return badInput(reply, errors);
@@ -811,7 +823,7 @@ const COMMON: [string, string, string][] = [
   ["bank_beneficiary", "Bank beneficiary name", "Bricor Gateway Group"],
   ["bank_name", "Bank name", "Demo Bank SAL"],
   ["bank_address", "Bank address", "1 Bank Square, Demo City"],
-  ["bank_currency", "Bank account currency", "USD"],
+  ["bank_currency", "Bank account currency", "EUR"],
   ["bank_account", "Bank account number", "000123456789"],
   ["bank_iban", "IBAN", "LB00 0000 0000 0000 0000 0000 0000"],
   ["bank_swift", "SWIFT / BIC", "DEMOLBBE"],
@@ -827,13 +839,13 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["invoice_no", "Invoice number", "INV-1042"],
     ["amount", "Total", "1,250.40"],
     ["due_amount", "Amount due (after balance)", "1,250.40"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
     ["due_date", "Due date", "2026-10-30"],
   ],
   low_balance: [
     ["balance", "Current balance", "120.00"],
     ["threshold", "Alert level", "500.00"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
   ],
   bind_down: [
     ["trunk", "Trunk", "FENPHY-MAIN"],
@@ -860,7 +872,7 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["to", "Period end", "2026-09-30"],
     ["timezone", "Time zone", "UTC"],
     ["closing_balance", "Closing balance", "-3,410.25"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
     ["balance_words", "Balance in words", "you owe us"],
   ],
   rate_upload_notification: [
@@ -889,7 +901,7 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["from", "Period start", "2026-09-01"],
     ["to", "Period end", "2026-09-30"],
     ["closing_balance", "Closing balance", "-3,410.25"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
     ["balance_words", "Balance in words", "you owe us"],
   ],
   monitoring_alert: [
@@ -907,6 +919,16 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
       "FENPHY-MAIN DLR dropped from 92 % to 61 % in 15 min",
     ],
   ],
+  // The client is told about its new account manager (team trial round 2).
+  am_handover: [
+    ["old_am", "The previous account manager", "Rana Haddad"],
+    ["new_am", "The new account manager", "Karim Saad"],
+    ["new_am_email", "The new account manager's e-mail", "karim.saad@demo.example"],
+    ["new_am_phone", "The new account manager's phone", "+000 1 234 567"],
+    ["new_am_phone_line", "“ or <phone>” when the new AM has a phone, else empty", " or +000 1 234 567"],
+    ["effective_date", "When the handover takes effect (platform time zone)", "2026-11-01 00:00"],
+    ["note", "The note typed on the handover", "I look forward to working with you."],
+  ],
 };
 const TYPE_LABELS: Record<string, string> = {
   customer_rate: "Customer Rate",
@@ -922,6 +944,7 @@ const TYPE_LABELS: Record<string, string> = {
   trouble_ticket: "EDR – Trouble Ticket",
   send_soa: "Send SOA",
   monitoring_alert: "Monitoring Alert",
+  am_handover: "AM Handover",
 };
 const placeholdersOf = (type: string) =>
   [...COMMON, ...(PLACEHOLDERS[type] ?? [])].map(([key, description, sample]) => ({ key, description, sample }));

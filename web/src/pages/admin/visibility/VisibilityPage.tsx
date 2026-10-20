@@ -49,6 +49,7 @@ import {
   VIEWS,
   type VisibilityView,
 } from "./visibilityModel";
+import { DateTimeInput } from "../../../ui/DateTimeInput";
 
 const page = pageForPath("/admin/visibility")!;
 const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
@@ -612,7 +613,7 @@ function GrantDialog({ done }: { done: (v: boolean | null) => void }) {
       {!lasting && (
         <label className="field">
           <span>Until (UTC) — expires by itself</span>
-          <input type="datetime-local" value={until} onChange={(e) => setUntil(e.target.value)} />
+          <DateTimeInput value={until} onChange={(e) => setUntil(e.target.value)} />
         </label>
       )}
       <label className="field">

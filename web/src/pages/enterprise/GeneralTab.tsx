@@ -50,6 +50,9 @@ function blank(): Form {
     vatNumber: null,
     billingTimezone: "UTC",
     rateNoticeDays: 7,
+    rateNoticeDaysDecrease: 0,
+    rateNoticeDaysNew: 0,
+    allNetworksCode: "mcc",
     contacts: {
       commercial: blankContact(),
       technical: blankContact(),
@@ -85,6 +88,9 @@ export function toInput(e: EnterpriseDetail): Form {
     vatNumber: e.vatNumber ?? null,
     billingTimezone: e.billingTimezone,
     rateNoticeDays: e.rateNoticeDays,
+    rateNoticeDaysDecrease: e.rateNoticeDaysDecrease,
+    rateNoticeDaysNew: e.rateNoticeDaysNew,
+    allNetworksCode: e.allNetworksCode,
     contacts: Object.fromEntries(
       CONTACTS.map(([k]) => [
         k,
@@ -307,12 +313,46 @@ export function GeneralTab({
           <NumberField
             form={form}
             path="rateNoticeDays"
-            label="Rate notice period"
+            label="Notice: increase"
             min={0}
             max={90}
             step={1}
             suffix="days"
             hint="Notice for rate increases (§13.14)"
+          />
+          <NumberField
+            form={form}
+            path="rateNoticeDaysDecrease"
+            label="Notice: decrease"
+            min={0}
+            max={90}
+            step={1}
+            suffix="days"
+            hint="Notice for rate decreases; 0 = none"
+          />
+          <NumberField
+            form={form}
+            path="rateNoticeDaysNew"
+            label="Notice: new destination"
+            min={0}
+            max={90}
+            step={1}
+            suffix="days"
+            hint="Notice for new destinations; 0 = none"
+          />
+          <SelectField
+            form={form}
+            path="allNetworksCode"
+            label="'All networks' code"
+            required
+            options={[
+              { value: "mcc", label: "MCC (e.g. 262)" },
+              { value: "mcc0", label: "MCC0 (e.g. 2620)" },
+              { value: "mcc00", label: "MCC00 (e.g. 26200)" },
+              { value: "mcc000", label: "MCC000 (e.g. 262000)" },
+              { value: "mccStar", label: "MCC* (e.g. 262*)" },
+            ]}
+            hint="How this partner writes a country's all-networks rate in rate sheets"
           />
         </Section>
 

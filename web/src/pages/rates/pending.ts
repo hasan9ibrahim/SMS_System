@@ -49,6 +49,8 @@ export function buildItems(
   rowsById: ReadonlyMap<number, Pick<RateLineRow, "rate" | "validFrom" | "isBlocked">>,
   effectiveFrom: string | null,
   now = Date.now(),
+  /** False when the date is the default (next 00:00): a scheduled line then keeps its own later start. */
+  chosen = true,
 ): RateLineEdit[] {
   const blocks: RateLineEdit[] = [];
   const rest: RateLineEdit[] = [];
@@ -62,9 +64,53 @@ export function buildItems(
       blocks.push({ action: "block", lineId, blocked: e.blocked });
     if (e.rate !== undefined && e.rate !== row?.rate) {
       const scheduled = row && Date.parse(row.validFrom) > now ? row.validFrom : null;
-      const from = effectiveFrom ?? scheduled;
+      const from = chosen ? (effectiveFrom ?? scheduled) : (scheduled ?? effectiveFrom);
       rest.push({ action: "set", lineId, rate: e.rate, ...(from ? { effectiveFrom: from } : {}) });
     }
   }
   return [...blocks, ...rest];
+}
+
+export type SummaryKind = "increase" | "decrease" | "same" | "close" | "block" | "unblock";
+
+export interface SummaryRow {
+  lineId: number;
+  kind: SummaryKind;
+  row: Pick<RateLineRow, "mccmnc" | "country" | "network" | "senderId" | "rate"> | undefined;
+  newRate: number | null;
+  changePct: number | null;
+}
+
+/** What a save will do, for the summary shown before saving (team trial round 2). */
+export function summarize(
+  pending: Pending,
+  rowsById: ReadonlyMap<
+    number,
+    Pick<RateLineRow, "mccmnc" | "country" | "network" | "senderId" | "rate" | "isBlocked">
+  >,
+): { counts: Record<SummaryKind, number>; rows: SummaryRow[] } {
+  const counts: Record<SummaryKind, number> = { increase: 0, decrease: 0, same: 0, close: 0, block: 0, unblock: 0 };
+  const rows: SummaryRow[] = [];
+  for (const [lineId, e] of pending) {
+    const row = rowsById.get(lineId);
+    const add = (kind: SummaryKind, newRate: number | null, changePct: number | null) => {
+      counts[kind]++;
+      rows.push({ lineId, kind, row, newRate, changePct });
+    };
+    if (e.close) {
+      add("close", null, null);
+      continue;
+    }
+    if (e.blocked !== undefined && e.blocked !== row?.isBlocked) add(e.blocked ? "block" : "unblock", null, null);
+    if (e.rate !== undefined && e.rate !== row?.rate) {
+      const old = row?.rate ?? null;
+      const kind = old === null ? "same" : e.rate > old ? "increase" : e.rate < old ? "decrease" : "same";
+      add(kind, e.rate, old ? round6(((e.rate - old) / old) * 100) : null);
+    }
+  }
+  const order: SummaryKind[] = ["increase", "decrease", "close", "block", "unblock", "same"];
+  rows.sort(
+    (a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || Math.abs(b.changePct ?? 0) - Math.abs(a.changePct ?? 0),
+  );
+  return { counts, rows };
 }

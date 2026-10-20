@@ -11,6 +11,7 @@ import { ask } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { fmtSeconds, timeBounds, timeCondition, uuidKey } from "./monitorModel";
 import { DownloadsList, RequestDialog, useView, ViewTabs } from "./parts";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const page = pageForPath("/monitoring/failed-edr")!;
 const VIEWS = [
@@ -47,16 +48,11 @@ function TimeBoxes({ state, setState }: { state: GridState; setState: (s: GridSt
     <div className="edr-toolbar">
       <label className="small">
         From Date *
-        <input
-          type="datetime-local"
-          value={b.from}
-          onChange={(e) => set(e.target.value, b.to)}
-          aria-label="From (UTC)"
-        />
+        <DateTimeInput value={b.from} onChange={(e) => set(e.target.value, b.to)} aria-label="From (UTC)" />
       </label>
       <label className="small">
         To Date *
-        <input type="datetime-local" value={b.to} onChange={(e) => set(b.from, e.target.value)} aria-label="To (UTC)" />
+        <DateTimeInput value={b.to} onChange={(e) => set(b.from, e.target.value)} aria-label="To (UTC)" />
       </label>
       <span className="muted small">UTC</span>
     </div>

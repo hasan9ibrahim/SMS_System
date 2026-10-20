@@ -8,6 +8,7 @@ import { ListLookup } from "../../records/parts";
 import { toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 /** "YYYY-MM-DDTHH:mm" in UTC for a datetime-local input, and back. */
 const toLocalInput = (t: number) => new Date(t).toISOString().slice(0, 16);
@@ -56,11 +57,11 @@ export function RecordingBar({ onExtracted }: { onExtracted?: () => void }) {
     >
       <label className="small">
         From (UTC)
-        <input type="datetime-local" min={oldest} value={from} onChange={(e) => setFrom(e.target.value)} />
+        <DateTimeInput min={oldest} value={from} onChange={(e) => setFrom(e.target.value)} />
       </label>
       <label className="small">
         To (UTC)
-        <input type="datetime-local" min={oldest} value={to} onChange={(e) => setTo(e.target.value)} />
+        <DateTimeInput min={oldest} value={to} onChange={(e) => setTo(e.target.value)} />
       </label>
       <div className="small capture-pick">
         <span>Customer trunk</span>

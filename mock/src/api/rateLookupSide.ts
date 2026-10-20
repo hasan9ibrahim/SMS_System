@@ -30,7 +30,7 @@ export function searchPattern(q: string): string {
  * trunk uses it, §5.4), and the conditions on its lines valid at $1 (blocked and sender-ID lines left
  * out). Picking the tables first keeps the scan of 1.4 million lines fast. Values from $2 on are pushed.
  */
-function sideSql(f: LookupSideFilters, values: unknown[]): { tables: string; lineWhere: string } {
+function sideSql(f: LookupSideFilters, values: unknown[]): { tables: string; lineWhere: string; convWhere: string } {
   const add = (v: unknown) => {
     values.push(v);
     return `$${values.length}`;
@@ -49,16 +49,27 @@ function sideSql(f: LookupSideFilters, values: unknown[]): { tables: string; lin
   let lineWhere = `l.valid_from <= $1 AND (l.valid_to IS NULL OR l.valid_to > $1) AND NOT l.is_blocked AND l.sender_id IS NULL`;
   if (f.mccmncs?.length) lineWhere += ` AND l.mccmnc = ANY(${add(f.mccmncs)}::text[])`;
   else if (f.mccs?.length) lineWhere += ` AND substring(l.mccmnc, 1, 3) = ANY(${add(f.mccs)}::text[])`;
-  return { tables, lineWhere };
+  // Column filters under the headers (team trial round 2): code, price in the table currency, converted price.
+  if (f.code?.trim()) {
+    const c = f.code.trim();
+    lineWhere += ` AND l.mccmnc LIKE ${add(/[%_]/.test(c) ? c : `${c}%`)}`;
+  }
+  if (f.priceMin !== undefined) lineWhere += ` AND l.rate >= ${add(f.priceMin)}`;
+  if (f.priceMax !== undefined) lineWhere += ` AND l.rate <= ${add(f.priceMax)}`;
+  let convWhere = "";
+  if (f.sysMin !== undefined) convWhere += ` AND ${toPlatformSql("l.rate")} >= ${add(f.sysMin)}`;
+  if (f.sysMax !== undefined) convWhere += ` AND ${toPlatformSql("l.rate")} <= ${add(f.sysMax)}`;
+  return { tables, lineWhere, convWhere };
 }
 
 /** Per destination: tables, rate range in the table currency (when shared) and in the platform currency. */
 function groupedSql(f: LookupSideFilters, values: unknown[]): string {
-  const { tables, lineWhere } = sideSql(f, values);
+  const { tables, lineWhere, convWhere } = sideSql(f, values);
+  const conv = convWhere ? "JOIN currency_latest cl ON cl.iso = l.currency" : "";
   return `t AS (${tables}),
      g1 AS (SELECT l.mccmnc, l.currency, count(*)::int AS n, min(l.rate) AS mn, max(l.rate) AS mx
-              FROM rate_lines l JOIN t ON t.id = l.rate_table_id
-             WHERE ${lineWhere} GROUP BY 1, 2),
+              FROM rate_lines l JOIN t ON t.id = l.rate_table_id ${conv}
+             WHERE ${lineWhere}${convWhere} GROUP BY 1, 2),
      g AS (SELECT g1.mccmnc, sum(g1.n)::int AS tables, min(g1.mn) AS min_rate, max(g1.mx) AS max_rate,
                   count(*)::int AS currencies, min(trim(g1.currency)) AS currency,
                   min(${toPlatformSql("g1.mn")}) AS min_conv, max(${toPlatformSql("g1.mx")}) AS max_conv
@@ -77,12 +88,26 @@ export async function sidePage(pool: pg.Pool, input: LookupSideRequest): Promise
   const offset = input.cursor && /^\d+$/.test(input.cursor) ? Number(input.cursor) : 0;
   const values: unknown[] = [input.asOf ? new Date(input.asOf) : new Date()];
   const grouped = groupedSql(input, values);
-  let search = "";
+  const where: string[] = [];
   if (input.search?.trim()) {
     values.push(searchPattern(input.search));
     const p = `$${values.length}`;
-    search = `WHERE co.name ILIKE ${p} OR m.network ILIKE ${p} OR g.mccmnc ILIKE ${p} OR co.iso ILIKE ${p}`;
+    where.push(`(co.name ILIKE ${p} OR m.network ILIKE ${p} OR g.mccmnc ILIKE ${p} OR co.iso ILIKE ${p})`);
   }
+  if (input.destination?.trim()) {
+    values.push(searchPattern(input.destination));
+    const p = `$${values.length}`;
+    where.push(`(co.name ILIKE ${p} OR m.network ILIKE ${p} OR (co.name || ' · ' || m.network) ILIKE ${p})`);
+  }
+  if (input.tablesMin !== undefined) {
+    values.push(input.tablesMin);
+    where.push(`g.tables >= $${values.length}`);
+  }
+  if (input.tablesMax !== undefined) {
+    values.push(input.tablesMax);
+    where.push(`g.tables <= $${values.length}`);
+  }
+  const search = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const dir = input.dir === "desc" ? "DESC" : "ASC";
   const order = SORT[input.sort ?? "destination"].replaceAll("{dir}", dir);
   const { rows } = await pool.query(
@@ -122,7 +147,10 @@ export async function sidePage(pool: pg.Pool, input: LookupSideRequest): Promise
 
 export async function sideLinesFor(pool: pg.Pool, input: LookupSideLinesRequest): Promise<LookupSideLines> {
   const values: unknown[] = [input.asOf ? new Date(input.asOf) : new Date(), input.mccmnc];
-  const { tables, lineWhere } = sideSql({ ...input, mccmncs: undefined, mccs: undefined }, values);
+  const { tables, lineWhere, convWhere } = sideSql(
+    { ...input, mccmncs: undefined, mccs: undefined, code: undefined },
+    values,
+  );
   const status = input.includeInactive ? "" : "AND t.status = 'active'";
   const trunks =
     input.side === "vendor"
@@ -137,7 +165,7 @@ export async function sideLinesFor(pool: pg.Pool, input: LookupSideLinesRequest)
           x AS (SELECT l.mccmnc, l.rate_table_id AS table_id, l.rate, trim(l.currency) AS currency, l.valid_from,
                        ${toPlatformSql("l.rate")} AS conv
                   FROM rate_lines l JOIN t ON t.id = l.rate_table_id JOIN currency_latest cl ON cl.iso = l.currency
-                 WHERE l.mccmnc = $2 AND ${lineWhere})
+                 WHERE l.mccmnc = $2 AND ${lineWhere}${convWhere})
      SELECT x.*, rt.name AS table_name, pc.name AS category, (${trunks}) AS trunks, nx.rate AS next_rate, nx.valid_from AS next_from
        FROM x JOIN rate_tables rt ON rt.id = x.table_id
        LEFT JOIN product_categories pc ON pc.id = rt.product_category_id

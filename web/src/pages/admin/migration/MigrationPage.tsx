@@ -769,7 +769,7 @@ function ImportPanel({ id }: { id: number }) {
                     "Every record it created is archived and every field it updated goes back. You can redo it from History.",
                   ok: "Roll back",
                   danger: true,
-                }).then((yes) => yes && void undo(i.changeId!).then(() => void q.refetch()))
+                }).then((yes) => yes && void undo(i.changeId!, false, undefined, true).then(() => void q.refetch()))
               }
             >
               Roll back

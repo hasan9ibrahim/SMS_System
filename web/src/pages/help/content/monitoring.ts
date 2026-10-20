@@ -664,8 +664,8 @@ export const topics: HelpTopic[] = [
                 values: "One or more IDs.",
               },
               {
-                name: "Vendor Msg IDs",
-                what: "The message IDs the vendor returned to us. Exact match.",
+                name: "Vendor Msg IDs, comma separated",
+                what: "The message IDs the vendor returned to us. Exact match. A long message has one vendor ID per part, stored comma separated; any part's ID finds it.",
                 values: "One or more IDs.",
               },
               {

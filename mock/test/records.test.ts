@@ -253,11 +253,23 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     const [, am2, am3] = ref.accountManagers;
     const now = await ok("handOverEnterprise", call("POST", `/enterprises/${id}/handover`, { userId: am2.id }));
     assert.equal(now.periods[0].userId, am2.id);
+    // The client is told by e-mail from the new AM (team trial round 2).
+    assert.equal(now.emailed, 1);
+    const { rows: mails } = await db().query(
+      "SELECT sender, cc_addresses, subject FROM email_logs WHERE enterprise_id = $1 AND email_type = 'am_handover'",
+      [id],
+    );
+    assert.equal(mails.length, 1);
+    assert.ok(mails[0].cc_addresses.length >= 1);
     assert.equal(now.periods[0].endsAt, null);
     assert.equal((await ok("getEnterprise", call("GET", `/enterprises/${id}`))).accountManagerId, am2.id);
 
     const later = new Date(Date.now() + 7 * 86400_000).toISOString();
-    await ok("handOverEnterprise", call("POST", `/enterprises/${id}/handover`, { userId: am3.id, effectiveAt: later }));
+    const quiet = await ok(
+      "handOverEnterprise",
+      call("POST", `/enterprises/${id}/handover`, { userId: am3.id, effectiveAt: later, notify: false }),
+    );
+    assert.equal(quiet.emailed, 0);
     const replaced = await ok(
       "handOverEnterprise",
       call("POST", `/enterprises/${id}/handover`, {

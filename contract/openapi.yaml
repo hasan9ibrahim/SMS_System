@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.68.0
+  version: 0.73.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1555,6 +1555,37 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /rate-tables/{id}/change-log:
+    get:
+      tags: [rates]
+      operationId: getRateChangeLog
+      summary: Readable change log of one rate table (team trial round 2)
+      description: |
+        The table's saved changes, newest first, each with its rates in plain words: destination, old and new rate,
+        what changed and from when (dates in the platform time zone are formatted by the GUI). Undo entries are
+        included. Paged with an opaque cursor.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: One page of changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateChangeLogPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /rate-tables/{id}/export:
     get:
       tags: [rates]
@@ -1572,6 +1603,37 @@ paths:
             text/csv:
               schema:
                 type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+    post:
+      tags: [rates]
+      operationId: exportRateLinesFiltered
+      summary: "Export the rate lines as filtered on screen (team trial round 2)"
+      description: |
+        Same columns as the GET export, for exactly the rows the grid shows: its filter (including the
+        view condition), quick search and sort. The table is always the one in the path.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
         "401":
@@ -1843,7 +1905,7 @@ paths:
       - rates
       operationId: downloadRateNotificationFile
       summary: The RN's original file
-      description: As received.
+      description: As received (CSV text, or the Excel workbook as uploaded).
       parameters: *id001
       responses:
         '200':
@@ -1852,6 +1914,10 @@ paths:
             text/csv:
               schema:
                 type: string
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -5674,7 +5740,8 @@ paths:
       operationId: queryCurrencyRates
       summary: "List current exchange rates (server-side filter, sort and paging)"
       description: |
-        Currency Exchange (§7): the rate in force per currency (units per 1 USD), with who set it and when.
+        Currency Exchange (§7): the rate in force per currency (units per 1 EUR, the base currency), with who set it
+        and when.
       requestBody:
         required: true
         content:
@@ -5701,8 +5768,8 @@ paths:
       operationId: setCurrencyRate
       summary: "Edit a currency's rate (Currency Exchange › Edit)"
       description: |
-        Adds a new rate valid from now; earlier rates stay in the history so past amounts never move.
-        One undoable change.
+        Adds a new rate (units per 1 EUR) valid from now; earlier rates stay in the history so past amounts never
+        move. One undoable change. EUR is the base and cannot be edited.
       parameters:
         - name: iso
           in: path
@@ -5738,7 +5805,8 @@ paths:
       operationId: syncCurrencyRates
       summary: "Sync Rates (pull market rates)"
       description: |
-        Pulls today's market rates for every currency (the mock simulates the feed) as one undoable change.
+        Pulls the latest rates from the exchange-rate provider (XE Currency Data API when an account is set up;
+        the mock simulates it) as one undoable change, then checks the currency alerts.
       responses:
         "200":
           description: What changed
@@ -5751,6 +5819,145 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /exchange-rates/provider:
+    get:
+      tags: [finance]
+      operationId: getFxProvider
+      summary: Exchange-rate provider settings (team trial round 2)
+      description: |
+        Where the exchange rates come from (any rate API: XE, Open Exchange Rates, Fixer, ExchangeRate-API, the ECB
+        or a custom JSON URL, or manual entry), how often they are checked, the minimum change that updates a rate
+        and the daily update time. The API key is never returned. Administrators only.
+      responses:
+        "200":
+          description: The settings and the last run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxProvider"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [finance]
+      operationId: updateFxProvider
+      summary: Change the exchange-rate provider settings
+      description: Administrators only. Logged in the audit log without the key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FxProviderUpdate"
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxProvider"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /exchange-rates/alerts:
+    get:
+      tags: [finance]
+      operationId: listFxAlertRules
+      summary: Currency alerts (team trial round 2)
+      description: Alerts when a currency moves against EUR by more than an amount or a percentage.
+      responses:
+        "200":
+          description: Every alert rule
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FxAlertRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [finance]
+      operationId: createFxAlertRule
+      summary: Add a currency alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FxAlertRuleInput"
+      responses:
+        "201":
+          description: The new rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxAlertRule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /exchange-rates/alerts/{id}:
+    put:
+      tags: [finance]
+      operationId: updateFxAlertRule
+      summary: Change a currency alert
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FxAlertRuleInput"
+      responses:
+        "200":
+          description: The saved rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxAlertRule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [finance]
+      operationId: deleteFxAlertRule
+      summary: Delete a currency alert
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /exchange-rates/alerts/events:
+    get:
+      tags: [finance]
+      operationId: listFxAlertEvents
+      summary: Recent currency alerts that fired
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FxAlertEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /currency-rate-history/query:
     post:
       tags: [finance]
@@ -14508,7 +14715,7 @@ components:
 
     CurrentUser:
       type: object
-      required: [id, username, displayName, role, businessCompany, preferences, permissions]
+      required: [id, username, displayName, role, businessCompany, preferences, permissions, hiddenTabs]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -14545,7 +14752,14 @@ components:
               $ref: "#/components/schemas/AlertSoundPrefs"
         permissions:
           type: array
-          description: GUI Access Group permission keys; buttons not covered are hidden (§1).
+          description: >-
+            GUI Access Group permission keys ("page:action"; "*" = everything) after the user's own overrides;
+            pages without view are hidden from the menu and blocked, buttons not covered are hidden (§1).
+          items:
+            type: string
+        hiddenTabs:
+          type: array
+          description: Tabs and form sections hidden for this user ("page.tab"), group and user overrides applied.
           items:
             type: string
 
@@ -15127,6 +15341,14 @@ components:
           minimum: 1
           maximum: 100
 
+    AllNetworksCode:
+      type: string
+      enum: [mcc, mcc0, mcc00, mcc000, mccStar]
+      default: mcc
+      description: |
+        How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
+        `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Incoming RNs from the partner read
+        that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
     EnterpriseInput:
       type: object
       description: Add/Edit form (§5.1). The account manager is set on create; later changes go through handover (§13.30).
@@ -15180,6 +15402,20 @@ components:
           minimum: 0
           maximum: 90
           description: Notice period for rate increases (§13.14, §13.32).
+        rateNoticeDaysDecrease:
+          type: integer
+          minimum: 0
+          maximum: 90
+          default: 0
+          description: Notice period for rate decreases (team trial round 2). 0 = none.
+        rateNoticeDaysNew:
+          type: integer
+          minimum: 0
+          maximum: 90
+          default: 0
+          description: Notice period for new destinations (team trial round 2). 0 = none.
+        allNetworksCode:
+          $ref: "#/components/schemas/AllNetworksCode"
         contacts:
           $ref: "#/components/schemas/Contacts"
 
@@ -15187,7 +15423,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Enterprise"
         - type: object
-          required: [bindAlert, creditAlert, creditAlertPercent, address, contacts, billingTimezone, rateNoticeDays, archived, trunkCounts]
+          required: [bindAlert, creditAlert, creditAlertPercent, address, contacts, billingTimezone, rateNoticeDays, rateNoticeDaysDecrease, rateNoticeDaysNew, allNetworksCode, archived, trunkCounts]
           properties:
             bindAlert:
               type: boolean
@@ -15209,6 +15445,12 @@ components:
               type: string
             rateNoticeDays:
               type: integer
+            rateNoticeDaysDecrease:
+              type: integer
+            rateNoticeDaysNew:
+              type: integer
+            allNetworksCode:
+              $ref: "#/components/schemas/AllNetworksCode"
             contacts:
               $ref: "#/components/schemas/Contacts"
             archived:
@@ -15383,11 +15625,25 @@ components:
         note:
           type: string
           maxLength: 500
+        notify:
+          type: boolean
+          default: true
+          description: >-
+            E-mail the client about the new account manager (team trial round 2), to its commercial contact (else
+            rates), copying both AMs, from the AM handover template (Email templates, type am_handover).
+        templateId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: An am_handover template; null = the business company's default one.
 
     HandoverSaved:
       type: object
-      required: [periods, change]
+      required: [periods, change, emailed]
       properties:
+        emailed:
+          type: integer
+          description: Handover e-mails logged (0 or 1).
         periods:
           type: array
           items:
@@ -15452,9 +15708,15 @@ components:
       type: string
       enum: [hour, day, week, month, billing_cycle]
 
+    TrunkConnection:
+      type: string
+      enum: [up, reconnecting, down]
+      description: >-
+        Live connection of a trunk (team trial round 2): up (bound), reconnecting (vendor: offline for under 15
+        minutes or with sessions missing, the switch keeps retrying), down (not bound, or stopped).
     TrunkListRow:
       type: object
-      required: [id, enterpriseId, enterpriseName, name, username, categoryId, category, currency, protocol, tps, status, bindType, rulesCount, ruleNames, updatedBy, updatedAt, archived]
+      required: [id, enterpriseId, enterpriseName, name, username, categoryId, category, currency, protocol, tps, status, connection, bindType, rulesCount, ruleNames, updatedBy, updatedAt, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -15483,6 +15745,8 @@ components:
           type: integer
         status:
           $ref: "#/components/schemas/RecordStatus"
+        connection:
+          $ref: "#/components/schemas/TrunkConnection"
         bindType:
           type: string
         rulesCount:
@@ -16166,7 +16430,7 @@ components:
     RateTableDetail:
       allOf:
         - type: object
-          required: [id, name, kind, categoryId, category, currency, description, vendorTrunkId, vendorTrunkName, trunks, lastImport, archived, summary]
+          required: [id, name, kind, categoryId, category, currency, platformPerUnit, description, vendorTrunkId, vendorTrunkName, trunks, lastImport, archived, summary]
           properties:
             id:
               $ref: "#/components/schemas/Id"
@@ -16189,6 +16453,11 @@ components:
                 - type: "null"
             vendorTrunkName:
               type: [string, "null"]
+            platformPerUnit:
+              type: number
+              description: >-
+                Units of the platform currency (EUR by default) per 1 unit of the table currency at the latest
+                rate, for the table-currency / EUR rate columns (team trial round 2).
             trunks:
               type: array
               description: Customer trunks using the table, or the vendor trunk that owns it.
@@ -16366,6 +16635,10 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        notificationNote:
+          type: [string, "null"]
+          maxLength: 2000
+          description: Text added to each rate notification e-mail and sheet sent by this save (team trial round 2).
         sendNotification:
           type: boolean
           default: false
@@ -16374,6 +16647,77 @@ components:
             contact, else commercial), listing the changed lines (team trial round 1; the GUI ticks it by default).
             Logged in Email logs as send_rate. Vendor tables are never notified.
 
+    RateChangeLogItem:
+      type: object
+      required: [mccmnc, country, network, senderId, kind, oldRate, newRate, changePct, effectiveFrom, until]
+      properties:
+        mccmnc:
+          type: string
+        country:
+          type: [string, "null"]
+        network:
+          type: [string, "null"]
+        senderId:
+          type: [string, "null"]
+        kind:
+          type: string
+          enum: [new, increase, decrease, same, closed, withdrawn, blocked, unblocked, note]
+        oldRate:
+          type: [number, "null"]
+        newRate:
+          type: [number, "null"]
+        changePct:
+          type: [number, "null"]
+        effectiveFrom:
+          type: [string, "null"]
+          format: date-time
+          description: When the new rate starts, or when a closed rate ends.
+        until:
+          type: [string, "null"]
+          format: date-time
+    RateChangeLogEntry:
+      type: object
+      required: [changeId, at, user, changeType, note, undoOfId, currency, counts, items, itemCount]
+      properties:
+        changeId:
+          type: integer
+        at:
+          type: string
+          format: date-time
+        user:
+          type: [string, "null"]
+        changeType:
+          type: string
+          description: create, edit, undo, …
+        note:
+          type: [string, "null"]
+        undoOfId:
+          type: [integer, "null"]
+        currency:
+          type: string
+        counts:
+          type: object
+          description: "Rates per kind, e.g. increase: 3, new: 1."
+          additionalProperties:
+            type: integer
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/RateChangeLogItem"
+        itemCount:
+          type: integer
+          description: All rates in the change; `items` holds the first 200.
+    RateChangeLogPage:
+      type: object
+      required: [rows, nextCursor]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/RateChangeLogEntry"
+        nextCursor:
+          type: [string, "null"]
     RateLineChangesSaved:
       type: object
       required: [change, applied, skipped]
@@ -16402,12 +16746,17 @@ components:
               type: array
               items:
                 type: object
-                required: [mccmnc, currentRate, newRate, effectiveFrom, noticeDays, earliestAllowed, enterpriseName]
+                required: [mccmnc, change, currentRate, newRate, effectiveFrom, noticeDays, earliestAllowed, enterpriseName]
                 properties:
                   mccmnc:
                     type: string
+                  change:
+                    type: string
+                    enum: [increase, decrease, new]
+                    description: Each kind has its own notice period on the client (team trial round 2).
                   currentRate:
-                    type: number
+                    type: [number, "null"]
+                    description: Null for a new destination.
                   newRate:
                     type: number
                   effectiveFrom:
@@ -16771,6 +17120,10 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        notificationNote:
+          type: [string, "null"]
+          maxLength: 2000
+          description: Text added to each rate notification e-mail and sheet sent by this save (team trial round 2).
         sendNotification:
           type: boolean
           default: false
@@ -16964,6 +17317,7 @@ components:
         - changeId
         - fileErrors
         - columns
+        - headerRow
         - replies
         - log
         - affectedRateTableIds
@@ -16997,6 +17351,9 @@ components:
                   type: string
                 field: *id002
             description: How the file's columns were read (remembered per vendor).
+          headerRow:
+            type: [integer, "null"]
+            description: The file row the headers were read from (1 = first row); null when the file could not be read.
           replies:
             type: array
             items:
@@ -17139,8 +17496,19 @@ components:
         content:
           type: string
           minLength: 1
-          maxLength: 5000000
-          description: 'The sheet as text: CSV, semicolon or tab separated (Excel copy). Excel files wait for the backend.'
+          maxLength: 14000000
+          description: >-
+            The sheet: CSV, semicolon or tab separated text, or with `encoding: base64` an Excel file (.xlsx, first
+            sheet; protected sheets are read; workbooks that need a password to open are refused with a file error).
+        encoding:
+          type: string
+          enum: [text, base64]
+          default: text
+        headerRow:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: The row holding the column headers (1 = first row). Null = found automatically (team trial round 2).
     RnIntake:
       type: object
       description: One incoming e-mail (fake in this phase) or an upload. A file with a username column, or one tab per account, is split into one RN per trunk.
@@ -18972,7 +19340,9 @@ components:
         senderPattern:
           type: [string, "null"]
           maxLength: 200
-          description: Regular expression on the sender ID.
+          description: >-
+            Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits,
+            optional leading +), \Alpha = Sender IDs with a letter.
         senderPatternNegate:
           type: boolean
         senderMatchCase:
@@ -20293,7 +20663,7 @@ components:
 
     CurrencyRow:
       type: object
-      required: [id, name, iso, symbol, ratePerUsd, rateUpdatedAt, enterprises, updatedBy, updatedAt]
+      required: [id, name, iso, symbol, ratePerEur, rateUpdatedAt, enterprises, updatedBy, updatedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -20303,7 +20673,7 @@ components:
           type: string
         symbol:
           type: string
-        ratePerUsd:
+        ratePerEur:
           type: number
         rateUpdatedAt:
           type: [string, "null"]
@@ -20344,7 +20714,7 @@ components:
     CurrencyInput:
       type: object
       additionalProperties: false
-      required: [name, symbol, iso, ratePerUsd]
+      required: [name, symbol, iso, ratePerEur]
       properties:
         name:
           type: string
@@ -20357,10 +20727,10 @@ components:
         iso:
           type: string
           pattern: "^[A-Z]{3}$"
-        ratePerUsd:
+        ratePerEur:
           type: number
           exclusiveMinimum: 0
-          description: First exchange rate, units per 1 USD.
+          description: First exchange rate, units per 1 EUR (EUR is the base currency, team trial round 2).
 
     CurrencySaved:
       type: object
@@ -20375,7 +20745,7 @@ components:
 
     CurrencyRateRow:
       type: object
-      required: [id, iso, currency, ratePerUsd, validFrom, updatedBy, previousRate]
+      required: [id, iso, currency, ratePerEur, validFrom, updatedBy, previousRate]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -20384,9 +20754,9 @@ components:
           type: string
         currency:
           type: string
-        ratePerUsd:
+        ratePerEur:
           type: number
-          description: Units of the currency per 1 USD (USD = 1).
+          description: Units of the currency per 1 EUR (EUR, the base currency, is 1; team trial round 2).
         validFrom:
           type: [string, "null"]
           format: date-time
@@ -20410,9 +20780,9 @@ components:
     CurrencyRateInput:
       type: object
       additionalProperties: false
-      required: [ratePerUsd]
+      required: [ratePerEur]
       properties:
-        ratePerUsd:
+        ratePerEur:
           type: number
           exclusiveMinimum: 0
           maximum: 1000000
@@ -20439,9 +20809,280 @@ components:
             - $ref: "#/components/schemas/Change"
             - type: "null"
 
+    FxProvider:
+      type: object
+      required: [provider, label, apiUrl, authType, authParam, accountId, ratesPath, baseCurrency, apiKeySet, refreshMinutes,
+        minChangeMode, minChange, dailyUpdateAt, enabled, simulated, timezone, lastRunAt, lastStatus, lastMessage, nextRunAt,
+        lastDailyAt, nextDailyAt, presets, updatedBy, updatedAt]
+      properties:
+        provider:
+          type: string
+          enum: [xe, openexchangerates, fixer, exchangerate_api, ecb, custom, manual]
+          description: >-
+            Where rates come from (team trial round 2, round 3: any platform). Presets fill the URL, authentication,
+            rates path and base currency; `custom` takes any JSON API; `manual` = rates are typed in.
+        label:
+          type: [string, "null"]
+          maxLength: 80
+          description: Display name for a custom source, e.g. "Bank feed".
+        apiUrl:
+          type: [string, "null"]
+          maxLength: 1000
+          description: >-
+            The URL that returns the latest rates. `{key}` is replaced by the API key when the key goes in the path,
+            `{base}` by the base currency. Presets have a default; custom needs one.
+        authType:
+          type: string
+          enum: [none, query, header, basic, path]
+          description: >-
+            How the API key is sent: not at all, as a query parameter, as a header, as HTTP basic auth (account ID :
+            key) or inside the URL ({key}).
+        authParam:
+          type: [string, "null"]
+          maxLength: 100
+          description: Query parameter or header name for the key, e.g. app_id, access_key or Authorization.
+        accountId:
+          type: [string, "null"]
+          maxLength: 200
+          description: Account ID or user name (basic auth, e.g. XE).
+        ratesPath:
+          type: [string, "null"]
+          maxLength: 200
+          description: Dot path to the rates object in the JSON answer (currency -> rate), e.g. rates, data.rates.
+        baseCurrency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          description: The currency the source quotes against; rates are converted to per 1 EUR when they are saved.
+        refreshMinutes:
+          type: integer
+          enum: [1, 15, 60, 360, 1440]
+          description: >-
+            How often the source is checked: every minute, 15 minutes, hour (default), 6 hours or day. A check only
+            changes a rate when it moved at least minChange (see minChangeMode).
+        minChangeMode:
+          type: string
+          enum: [percent, amount]
+          description: Whether minChange is a % of the current rate or an amount in the currency per 1 EUR.
+        minChange:
+          type: number
+          minimum: 0
+          maximum: 1000000
+          description: >-
+            A checked rate replaces the one in the system only when it differs by at least this much (0 = every
+            check updates). Smaller moves wait for a bigger one or for the daily update.
+        dailyUpdateAt:
+          type: [string, "null"]
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: >-
+            Once a day at this time (HH:MM, platform time zone) every rate is updated from the source whatever the
+            difference, so the system is never more than a day behind. Null = no daily update.
+        enabled:
+          type: boolean
+        apiKeySet:
+          type: boolean
+          description: True when an API key is stored. The key itself is never returned (§13.22).
+        simulated:
+          type: boolean
+          description: "True in this phase: checks use simulated market moves and nothing is called."
+        timezone:
+          type: string
+          description: The platform time zone dailyUpdateAt is in.
+        lastRunAt:
+          type: [string, "null"]
+          format: date-time
+          description: The last check.
+        lastStatus:
+          type: [string, "null"]
+          enum: [ok, simulated, error, null]
+        lastMessage:
+          type: [string, "null"]
+          description: What the last check did, e.g. "32 checked, 3 updated, 29 below 0.5 %".
+        nextRunAt:
+          type: [string, "null"]
+          format: date-time
+        lastDailyAt:
+          type: [string, "null"]
+          format: date-time
+        nextDailyAt:
+          type: [string, "null"]
+          format: date-time
+        presets:
+          type: array
+          description: Known sources and their defaults, for the form.
+          items:
+            $ref: "#/components/schemas/FxProviderPreset"
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          type: [string, "null"]
+          format: date-time
+    FxProviderPreset:
+      type: object
+      required: [provider, label, apiUrl, authType, authParam, ratesPath, baseCurrency, note]
+      properties:
+        provider:
+          type: string
+        label:
+          type: string
+        apiUrl:
+          type: [string, "null"]
+        authType:
+          type: string
+          enum: [none, query, header, basic, path]
+        authParam:
+          type: [string, "null"]
+        ratesPath:
+          type: [string, "null"]
+        baseCurrency:
+          type: string
+        note:
+          type: string
+    FxProviderUpdate:
+      type: object
+      additionalProperties: false
+      required: [provider, label, apiUrl, authType, authParam, accountId, ratesPath, baseCurrency, refreshMinutes,
+        minChangeMode, minChange, dailyUpdateAt, enabled]
+      properties:
+        provider:
+          type: string
+          enum: [xe, openexchangerates, fixer, exchangerate_api, ecb, custom, manual]
+          description: >-
+            Where rates come from (team trial round 2, round 3: any platform). Presets fill the URL, authentication,
+            rates path and base currency; `custom` takes any JSON API; `manual` = rates are typed in.
+        label:
+          type: [string, "null"]
+          maxLength: 80
+          description: Display name for a custom source, e.g. "Bank feed".
+        apiUrl:
+          type: [string, "null"]
+          maxLength: 1000
+          description: >-
+            The URL that returns the latest rates. `{key}` is replaced by the API key when the key goes in the path,
+            `{base}` by the base currency. Presets have a default; custom needs one.
+        authType:
+          type: string
+          enum: [none, query, header, basic, path]
+          description: >-
+            How the API key is sent: not at all, as a query parameter, as a header, as HTTP basic auth (account ID :
+            key) or inside the URL ({key}).
+        authParam:
+          type: [string, "null"]
+          maxLength: 100
+          description: Query parameter or header name for the key, e.g. app_id, access_key or Authorization.
+        accountId:
+          type: [string, "null"]
+          maxLength: 200
+          description: Account ID or user name (basic auth, e.g. XE).
+        ratesPath:
+          type: [string, "null"]
+          maxLength: 200
+          description: Dot path to the rates object in the JSON answer (currency -> rate), e.g. rates, data.rates.
+        baseCurrency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          description: The currency the source quotes against; rates are converted to per 1 EUR when they are saved.
+        refreshMinutes:
+          type: integer
+          enum: [1, 15, 60, 360, 1440]
+          description: >-
+            How often the source is checked: every minute, 15 minutes, hour (default), 6 hours or day. A check only
+            changes a rate when it moved at least minChange (see minChangeMode).
+        minChangeMode:
+          type: string
+          enum: [percent, amount]
+          description: Whether minChange is a % of the current rate or an amount in the currency per 1 EUR.
+        minChange:
+          type: number
+          minimum: 0
+          maximum: 1000000
+          description: >-
+            A checked rate replaces the one in the system only when it differs by at least this much (0 = every
+            check updates). Smaller moves wait for a bigger one or for the daily update.
+        dailyUpdateAt:
+          type: [string, "null"]
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: >-
+            Once a day at this time (HH:MM, platform time zone) every rate is updated from the source whatever the
+            difference, so the system is never more than a day behind. Null = no daily update.
+        enabled:
+          type: boolean
+        apiKey:
+          type: [string, "null"]
+          maxLength: 500
+          description: New API key; omitted or null keeps the stored one, "" removes it.
+    FxAlertRuleInput:
+      type: object
+      additionalProperties: false
+      required: [iso, thresholdPct, thresholdAbs, window, recipients, enabled]
+      properties:
+        iso:
+          type: [string, "null"]
+          pattern: "^[A-Z]{3}$"
+          description: The currency; null = every currency.
+        thresholdPct:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          maximum: 100
+          description: Fire when the rate against EUR moves by at least this % (up or down).
+        thresholdAbs:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: Fire when the rate (units per 1 EUR) moves by at least this amount. At least one threshold is required.
+        window:
+          type: string
+          enum: [update, day]
+          description: "`update` = since the previous rate; `day` = against the rate 24 hours before."
+        recipients:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            format: email
+        enabled:
+          type: boolean
+    FxAlertRule:
+      allOf:
+        - $ref: "#/components/schemas/FxAlertRuleInput"
+        - type: object
+          required: [id, lastTriggeredAt, updatedBy, updatedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            lastTriggeredAt:
+              type: [string, "null"]
+              format: date-time
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+    FxAlertEvent:
+      type: object
+      required: [id, ruleId, iso, fromRate, toRate, changePct, window, at, emailed]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        iso:
+          type: string
+        fromRate:
+          type: number
+          description: Units per 1 EUR before.
+        toRate:
+          type: number
+        changePct:
+          type: number
+        window:
+          type: string
+          enum: [update, day]
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        emailed:
+          type: integer
+          description: How many recipients got the alert e-mail (Email logs, type currency_alert).
     CurrencyRateHistoryRow:
       type: object
-      required: [id, iso, currency, ratePerUsd, validFrom, updatedBy]
+      required: [id, iso, currency, ratePerEur, validFrom, updatedBy]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -20449,7 +21090,7 @@ components:
           type: string
         currency:
           type: string
-        ratePerUsd:
+        ratePerEur:
           type: number
         validFrom:
           $ref: "#/components/schemas/Timestamp"
@@ -22080,8 +22721,7 @@ components:
         name:
           type: string
         emailType:
-          type: string
-          enum: [customer_rate, invoice, low_balance, bind_down, customer_tech_info, trunk_change_info, soa_statement, rate_upload_notification, traffic_alert, auto_upload_rejected, trouble_ticket, send_soa, monitoring_alert]
+          $ref: "#/components/schemas/EmailTemplateType"
         subject:
           type: string
         businessCompanyId:
@@ -22117,8 +22757,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test]
-      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) and template_test (a test of an e-mail template, §11).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test, currency_alert, am_handover]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) and currency_alert (an exchange rate moved past an alert, team trial round 2).
 
     EmailLogRow:
       type: object
@@ -22965,6 +23605,9 @@ components:
           type: integer
         vendorMsgId:
           type: string
+          description: >-
+            The vendor's message ID; one per part for a multipart message, comma separated (team trial round 2).
+            A filter on it matches any of them.
         vendorMccmnc:
           type: string
         vendorBillingType:
@@ -23915,8 +24558,8 @@ components:
     # ------------------------------------------------------------- Reports (§10, §13.15)
     ReportDimension:
       type: string
-      description: "Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor."
-      enum: [second, minute, quarterHour, date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorCountry, vendorDestination, productCategory, senderId, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
+      description: "Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderGroup = the Sender ID, with every numeric one counted as Numeric (team trial round 2)."
+      enum: [second, minute, quarterHour, date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorCountry, vendorDestination, productCategory, senderId, senderGroup, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
 
     ReportMetric:
       type: string
@@ -24652,7 +25295,8 @@ components:
       - trouble_ticket
       - send_soa
       - monitoring_alert
-      description: Email Type (§11).
+      - am_handover
+      description: Email Type (§11). am_handover = the client is told about its new account manager (team trial round 2).
     UserFields:
       type: object
       required:
@@ -24764,6 +25408,27 @@ components:
           - string
           - 'null'
           maxLength: 20
+        permissionOverrides:
+          type: object
+          default: {}
+          maxProperties: 300
+          description: >-
+            Per-user override of the access group (team trial round 2): page key -> the actions this user has on
+            it instead of the group's ([] = no access). Pages not listed follow the group.
+          additionalProperties:
+            type: array
+            maxItems: 30
+            uniqueItems: true
+            items:
+              type: string
+              maxLength: 40
+        tabOverrides:
+          type: object
+          default: {}
+          maxProperties: 500
+          description: Per-user override of hidden tabs and sections ("page.tab" -> true shows it, false hides it).
+          additionalProperties:
+            type: boolean
     UserInput:
       allOf:
       - $ref: '#/components/schemas/UserFields'
@@ -25095,6 +25760,15 @@ components:
           - string
           - 'null'
           maxLength: 500
+        hiddenTabs:
+          type: array
+          default: []
+          maxItems: 500
+          uniqueItems: true
+          description: Tabs and sections the group does not see ("page.tab" keys from the catalogue; team trial round 2).
+          items:
+            type: string
+            maxLength: 80
         permissions:
           type: object
           maxProperties: 300
@@ -25210,6 +25884,19 @@ components:
                 type: array
                 items:
                   type: string
+              tabs:
+                type: array
+                description: >-
+                  Tabs and form sections of the page that can be hidden (team trial round 2), keyed
+                  "page.tab", e.g. enterprises.docs or vendor-trunks.connection.
+                items:
+                  type: object
+                  required: [key, label]
+                  properties:
+                    key:
+                      type: string
+                    label:
+                      type: string
     UserSessionRow:
       type: object
       required:
@@ -29739,7 +30426,13 @@ components:
           description: Send the first N messages to this vendor before the normal split.
         warmupReset:
           type: [string, "null"]
-          enum: [hour, day, week, null]
+          enum: [hour, day, week, custom, null]
+          description: When the warm-up count starts again; custom = every warmupResetHours hours (team trial round 2).
+        warmupResetHours:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 8760
+          description: With warmupReset custom, e.g. 3 or 6.
         warmupPer:
           type: [string, "null"]
           enum: [rule, customer_trunk, null]
@@ -29828,6 +30521,9 @@ components:
         senderPattern:
           type: [string, "null"]
           maxLength: 200
+          description: >-
+            Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits,
+            optional leading +), \Alpha = Sender IDs with a letter.
         senderPatternNegate:
           type: boolean
         senderMatchCase:
@@ -30868,6 +31564,34 @@ components:
         includeInactive:
           type: boolean
           description: Include inactive trunks.
+        destination:
+          type: string
+          maxLength: 100
+          description: Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2).
+        code:
+          type: string
+          maxLength: 20
+          description: Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start.
+        tablesMin:
+          type: integer
+          minimum: 0
+        tablesMax:
+          type: integer
+          minimum: 0
+        priceMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, in the table currency (each table's own rate).
+        priceMax:
+          type: number
+          minimum: 0
+        sysMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, converted to the platform currency.
+        sysMax:
+          type: number
+          minimum: 0
         asOf:
           $ref: "#/components/schemas/Timestamp"
         limit:
@@ -30963,6 +31687,34 @@ components:
         includeInactive:
           type: boolean
           description: Include inactive trunks.
+        destination:
+          type: string
+          maxLength: 100
+          description: Column filter on the destination (country or network name); `%` `_` wildcards (team trial round 2).
+        code:
+          type: string
+          maxLength: 20
+          description: Column filter on the MCCMNC; `%` `_` wildcards, plain digits match the start.
+        tablesMin:
+          type: integer
+          minimum: 0
+        tablesMax:
+          type: integer
+          minimum: 0
+        priceMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, in the table currency (each table's own rate).
+        priceMax:
+          type: number
+          minimum: 0
+        sysMin:
+          type: number
+          minimum: 0
+          description: Only rates at or above this, converted to the platform currency.
+        sysMax:
+          type: number
+          minimum: 0
         asOf:
           $ref: "#/components/schemas/Timestamp"
         mccmnc:

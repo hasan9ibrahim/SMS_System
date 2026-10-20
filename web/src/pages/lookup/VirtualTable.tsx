@@ -14,6 +14,8 @@ export interface VColumn<Row> {
   title?: string;
   render: (row: Row) => ReactNode;
   cellClass?: (row: Row) => string | undefined;
+  /** A filter shown under the header, like the column filters of the other grids (team trial round 2). */
+  filter?: ReactNode;
 }
 
 export function VirtualTable<Row>({
@@ -81,6 +83,15 @@ export function VirtualTable<Row>({
             </div>
           ))}
         </div>
+        {columns.some((c) => c.filter) && (
+          <div className="vt-filters" role="row">
+            {columns.map((c, i) => (
+              <div key={c.key} role="cell" className={`vt-cell${c.sticky ? " sticky" : ""}`} style={cellStyle(c, i)}>
+                {c.filter}
+              </div>
+            ))}
+          </div>
+        )}
         <div className="vt-body" style={{ height: virtualizer.getTotalSize() }}>
           {items.map((item) => {
             const row = rows[item.index]!;

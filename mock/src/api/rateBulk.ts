@@ -113,9 +113,9 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       errors.push({ path: "/action/vendorTrunkId", message: "choose the vendor trunk whose cost to use" });
     const hasDest = (body.mccmncs?.length ?? 0) + (body.countryIsos?.length ?? 0) > 0;
     if (!onlyExisting && !hasDest)
-      errors.push({ path: "/onlyExisting", message: "adding new lines needs a list of destinations" });
+      errors.push({ path: "/onlyExisting", message: "adding new rates needs a list of destinations" });
     if (!onlyExisting && a.type !== "set" && !costPlus)
-      errors.push({ path: "/onlyExisting", message: "only a fixed rate or cost + margin can add new lines" });
+      errors.push({ path: "/onlyExisting", message: "only a fixed rate or cost + margin can add new rates" });
     if (body.effectiveFrom && Date.parse(body.effectiveFrom) < now - SKEW_MS)
       errors.push({ path: "/effectiveFrom", message: "can't be in the past (traffic already sent keeps its rate)" });
     const tables = await loadTables(pool, body.rateTableIds);
@@ -187,35 +187,35 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       [mIds],
     );
     const destById = new Map(dest.map((d) => [Number(d.id), d]));
-    const { rows: fx } = await pool.query("SELECT iso, rate_per_usd FROM currency_latest");
-    const perUsd = new Map(fx.map((r) => [String(r.iso), Number(r.rate_per_usd)]));
-    const platformPerUsd = perUsd.get(PLATFORM_CURRENCY) ?? 1;
-    const toTable = (usd: number, t: TableInfo) => usd * (perUsd.get(t.currency) ?? 1);
-    const tableToPlatform = (v: number, t: TableInfo) => (v / (perUsd.get(t.currency) ?? 1)) * platformPerUsd;
+    const { rows: fx } = await pool.query("SELECT iso, rate_per_eur FROM currency_latest");
+    const perEur = new Map(fx.map((r) => [String(r.iso), Number(r.rate_per_eur)]));
+    const platformPerEur = perEur.get(PLATFORM_CURRENCY) ?? 1;
+    const toTable = (usd: number, t: TableInfo) => usd * (perEur.get(t.currency) ?? 1);
+    const tableToPlatform = (v: number, t: TableInfo) => (v / (perEur.get(t.currency) ?? 1)) * platformPerEur;
 
     const cost = new Map<string, { usd: number; vendor: string | null }>();
     if (costPlus && a.costSource === "vendor_trunk") {
       const { rows } = await pool.query(
-        `SELECT DISTINCT ON (l.mccmnc_id) l.mccmnc_id, l.rate / cl.rate_per_usd AS usd, vt.name
+        `SELECT DISTINCT ON (l.mccmnc_id) l.mccmnc_id, l.rate / cl.rate_per_eur AS usd, vt.name
            FROM rate_lines l
            JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
            JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id
            JOIN currency_latest cl ON cl.iso = l.currency
           WHERE rt.vendor_trunk_id = $1 AND l.mccmnc_id = ANY($2) AND l.sender_id IS NULL AND NOT l.is_blocked
             AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
-          ORDER BY l.mccmnc_id, l.rate / cl.rate_per_usd`,
+          ORDER BY l.mccmnc_id, l.rate / cl.rate_per_eur`,
         [a.vendorTrunkId, mIds],
       );
       for (const r of rows) cost.set(`*:${r.mccmnc_id}`, { usd: Number(r.usd), vendor: r.name });
     }
     // Best buy for margins (and for cost + margin by default).
     const { rows: bb } = await pool.query(
-      `SELECT bb.mccmnc_id, bb.product_category_id, bb.rate_usd, vt.name FROM best_buy_rates bb
+      `SELECT bb.mccmnc_id, bb.product_category_id, bb.rate_eur, vt.name FROM best_buy_rates bb
          LEFT JOIN vendor_trunks vt ON vt.id = bb.vendor_trunk_id WHERE bb.mccmnc_id = ANY($1)`,
       [mIds],
     );
     for (const r of bb)
-      cost.set(`${r.product_category_id}:${r.mccmnc_id}`, { usd: Number(r.rate_usd), vendor: r.name ?? null });
+      cost.set(`${r.product_category_id}:${r.mccmnc_id}`, { usd: Number(r.rate_eur), vendor: r.name ?? null });
 
     // Last 7 days' traffic per table and destination (generic lines only; EDRs carry no sender-ID line).
     const traffic = await trafficLast7Days([...tables.values()], [...new Set(dest.map((d) => d.mccmnc as string))]);
@@ -300,8 +300,10 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       let from = override?.effectiveFrom ? Math.max(Date.parse(override.effectiveFrom), now) : fromBase;
       let noticeBreach = false;
       let noticeAdjusted = false;
-      if (change === "increase" && t.notice) {
-        const earliest = now + t.notice.days * DAY_MS;
+      const period =
+        change === "increase" || change === "decrease" || change === "new" ? t.notice?.[change] : undefined;
+      if (period) {
+        const earliest = now + period.days * DAY_MS;
         if (from < earliest - SKEW_MS) {
           if (body.respectNotice) [from, noticeAdjusted] = [earliest, true];
           else noticeBreach = true;
@@ -310,10 +312,10 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       const effective = edit === "set" ? newRate! : cur;
       const belowCost = edit === "set" && costT !== null && newRate! < costT;
       if (belowCost) note ??= "sells below cost";
-      if (noticeBreach) note ??= `increase sooner than ${t.notice!.days} days' notice (${t.notice!.name})`;
+      if (noticeBreach) note ??= `${change} sooner than ${period!.days} days' notice (${period!.name})`;
 
       const messages = tr?.messages ?? 0;
-      const toPlatform = platformPerUsd / (perUsd.get(t.currency) ?? 1);
+      const toPlatform = platformPerEur / (perEur.get(t.currency) ?? 1);
       const revenueT = tr ? r2(tr.revenuePlatform / toPlatform) : 0;
       const marginT = tr ? r2((tr.revenuePlatform - tr.costPlatform) / toPlatform) : 0;
       let revenueChangeT = 0;
@@ -347,7 +349,7 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
         kind: t.kind as RateBulkRow["kind"],
         currency: t.currency,
         clients: t.clients,
-        noticeDays: t.notice?.days ?? null,
+        noticeDays: t.notice?.increase?.days ?? null,
         mccmnc,
         country: d.country ?? null,
         countryIso: d.iso ?? null,
@@ -503,7 +505,8 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
     if (result === null) return sendNoticeBreach(reply, breaches);
     if (result.change && [...tables.values()].some((t) => t.kind === "vendor")) scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
-    const notificationsSent = result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id) : 0;
+    const notificationsSent =
+      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : 0;
     return { ...result, skipped, notificationsSent };
   });
 }

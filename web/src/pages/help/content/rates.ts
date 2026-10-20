@@ -8,7 +8,7 @@ export const topics: HelpTopic[] = [
     title: "How rates work",
     group: "Rates",
     summary:
-      "Rate tables, rate lines, effective dates and history: how the platform knows what to charge a client and what a vendor charges us for each message.",
+      "Rate tables, rates, effective dates and history: how the platform knows what to charge a client and what a vendor charges us for each message.",
     keywords: [
       "rate table",
       "sell rate",
@@ -24,7 +24,7 @@ export const topics: HelpTopic[] = [
       "RN",
       "rate notification",
       "all networks",
-      "country line",
+      "country rate",
     ],
     sections: [
       {
@@ -50,23 +50,23 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "lines",
-        title: "Rate lines: one per destination",
+        title: "Rates: one per destination",
         blocks: [
           {
             kind: "text",
-            text: "Each price in a table is a **rate line** for one destination. A destination is an **MCCMNC** code (Mobile Country Code + Mobile Network Code) from the [[mccmnc|MCCMNC codes]] list, for example `26201` for one German network.",
+            text: "Each price in a table is a **rate** for one destination. A destination is an **MCCMNC** code (Mobile Country Code + Mobile Network Code) from the [[mccmnc|MCCMNC codes]] list, for example `26201` for one German network.",
           },
           {
             kind: "list",
             items: [
-              '**Network line**: a price for one network, e.g. "Germany · Example Mobile (26201)".',
-              '**Country line ("All networks")**: a price for the 3-digit country code, e.g. "Germany · All networks (262)". It is the fallback for every network of that country that has no line of its own.',
-              '**Sender-ID line**: a line can also name a **Sender ID** (the "from" name or number on the SMS). That price applies only to messages sent with that sender ID. Lines without a sender ID are the normal (generic) price.',
+              '**Network rate**: a price for one network, e.g. "Germany · Example Mobile (26201)".',
+              '**Country rate ("All networks")**: a price for the 3-digit country code, e.g. "Germany · All networks (262)". It is the fallback for every network of that country that has no rate of its own.',
+              '**Sender-ID rate**: a rate can also name a **Sender ID** (the "from" name or number on the SMS). That price applies only to messages sent with that sender ID. Rates without a sender ID are the normal (generic) price.',
             ],
           },
           {
             kind: "tip",
-            text: 'Ticking a whole country in the destination tree adds a line for every code of that country, including its "All networks" code. Ticking only the "All networks" row adds just the country fallback.',
+            text: 'Ticking a whole country in the destination tree adds a rate for every code of that country, including its "All networks" code. Ticking only the "All networks" row adds just the country fallback.',
           },
         ],
       },
@@ -76,14 +76,14 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A rate is never overwritten. When you change a rate, the platform ends the old line and starts a **new version** from the effective date you choose (empty = now). The old version stays in the table's history with its from and to dates.",
+            text: "A rate is never overwritten. When you change a rate, the platform ends the old rate and starts a **new version** from the effective date you choose. Dates and times are in the platform (system) time zone, 24-hour; by default a change starts at the next 00:00 (**Now** starts it at once). The old version stays in the table's history with its from and to dates.",
           },
           {
             kind: "list",
             items: [
-              "**Current**: lines valid right now.",
-              "**Scheduled**: lines that start in the future. A destination can have a current rate and a scheduled next rate at the same time.",
-              "**Closed**: lines that have ended. They are kept so old traffic can always be explained.",
+              "**Current**: rates valid right now.",
+              "**Scheduled**: rates that start in the future. A destination can have a current rate and a scheduled next rate at the same time.",
+              "**Closed**: rates that have ended. They are kept so old traffic can always be explained.",
             ],
           },
           {
@@ -108,7 +108,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "When a table is used by several clients, the longest notice period among them counts.",
-              "If you save an increase that starts too soon, the platform stops and shows **Increases sooner than the client's notice**, listing each line, its current and new rate and the earliest allowed date. You can cancel and change the date, or choose **Apply anyway** (the override is logged with the change).",
+              "If you save a change that starts sooner than the client's notice for that kind (increase, decrease or new destination, set on the enterprise), the platform stops and shows **Changes sooner than the client's notice**, listing each rate, its kind, its current and new rate and the earliest allowed date. You can cancel and change the date, or choose **Apply anyway** (the override is logged with the change).",
               "Decreases and new destinations can start at once.",
               "In [[bulk|Bulk rating]], **Respect notice periods** moves each increase to the end of its client's notice automatically.",
             ],
@@ -117,11 +117,11 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "blocked",
-        title: "Blocked lines",
+        title: "Blocked rates",
         blocks: [
           {
             kind: "text",
-            text: "A line can be **blocked** (shown with a lock icon). The price stays in the table, but traffic is not accepted at it: a blocked customer line means the client cannot send to that destination at that price, and a blocked vendor line is never used by routing. Unblock the line to use it again. A new rate on a blocked line keeps the block.",
+            text: "A rate can be **blocked** (shown with a lock icon). The price stays in the table, but traffic is not accepted at it: a blocked customer rate means the client cannot send to that destination at that price, and a blocked vendor rate is never used by routing. Unblock the rate to use it again. A new rate on a blocked rate keeps the block.",
           },
         ],
       },
@@ -144,14 +144,14 @@ export const topics: HelpTopic[] = [
             title: "Client price (sell rate)",
             items: [
               "The message's destination network is found (from the number, using the [[master-table|Master table]] dial codes, or an HLR lookup).",
-              "The customer trunk's rate tables are tried in the order they are listed on the trunk. The first table that has a line for the destination prices the message.",
-              "Inside that table the most specific line valid at send time wins: a line with the message's sender ID first, then the network's own line, then the country's \"All networks\" line.",
-              "If no line is found, or the line is blocked, the message has no price and is not accepted.",
+              "The customer trunk's rate tables are tried in the order they are listed on the trunk. The first table that has a rate for the destination prices the message.",
+              "Inside that table the most specific rate valid at send time wins: a rate with the message's sender ID first, then the network's own rate, then the country's \"All networks\" rate.",
+              "If no rate is found, or the rate is blocked, the message has no price and is not accepted.",
             ],
           },
           {
             kind: "text",
-            text: "Vendor costs work the same way per vendor trunk: the network line, else the country line (sender-ID lines and blocked lines are not used for routing). Routing then chooses a vendor using the [[route-rules|Route rules]]. You can test any destination in [[rate-lookup|Rate lookup]].",
+            text: "Vendor costs work the same way per vendor trunk: the network rate, else the country rate (sender-ID rates and blocked rates are not used for routing). Routing then chooses a vendor using the [[route-rules|Route rules]]. You can test any destination in [[rate-lookup|Rate lookup]].",
           },
         ],
       },
@@ -172,7 +172,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "**To clients**: when you save a change on a customer table with **Send RN to clients** ticked (the default), each client using the table gets one e-mail listing the changed lines (new rate and date, closed, blocked or withdrawn). It goes to the client's rates contact, or the commercial contact when there is none, from its business company's rates mailbox.",
+              "**To clients**: when you save a change on a customer table with **Send RN to clients** ticked (the default), each client using the table gets one e-mail listing the changed rates (new rate and date, closed, blocked or withdrawn). It goes to the client's rates contact, or the commercial contact when there is none, from its business company's rates mailbox.",
               "**From vendors**: vendors send us their own RNs. They arrive in [[incoming-rns|Incoming RNs]], where they are checked against live traffic and accepted or rejected.",
             ],
           },
@@ -188,7 +188,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Vendors sometimes send a new rate with a date in the past. The platform never applies it to messages already sent: the new rate starts when the RN was received (or when it is accepted, if later). The vendor's stated date is kept on the line for reference, and the line is flagged **Back-dated** so you can see how much traffic was sent in between at the old cost.",
+            text: "Vendors sometimes send a new rate with a date in the past. The platform never applies it to messages already sent: the new rate starts when the RN was received (or when it is accepted, if later). The vendor's stated date is kept on the rate for reference, and the rate is flagged **Back-dated** so you can see how much traffic was sent in between at the old cost.",
           },
           {
             kind: "warning",
@@ -281,11 +281,11 @@ export const topics: HelpTopic[] = [
               },
               { name: "Product Category", what: "The table's traffic class, e.g. DIRECT or OTP." },
               { name: "Currency", what: "The currency of every rate in the table." },
-              { name: "Active Rates", what: "How many lines are valid right now." },
-              { name: "Scheduled", what: "How many lines start in the future." },
+              { name: "Active Rates", what: "How many rates are valid right now." },
+              { name: "Scheduled", what: "How many rates start in the future." },
               {
                 name: "Neg. Margin",
-                what: "Customer tables: how many current lines sell below the best vendor cost. Shown in red when above 0. Empty for vendor tables.",
+                what: "Customer tables: how many current rates sell below the best vendor cost. Shown in red when above 0. Empty for vendor tables.",
               },
               {
                 name: "Avg Margin",
@@ -351,7 +351,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Export",
-                what: "Downloads the lines of the view you are on (Current, Scheduled or Closed; from Change log it exports Current) as a CSV file. Columns: Country, Network, MCCMNC, Dial Code, Sender ID, Rate, Currency, Sys Rate, Best Buy, Best Vendor, Margin, Margin %, Change, From Date (UTC), To Date (UTC), Blocked, Rate Note. Values you are not allowed to see stay hidden in the file.",
+                what: "Downloads the rates of the view you are on (Current, Scheduled or Closed; from Change log it exports Current) that match the grid's filters, search and sort, as a CSV file. Columns: Country, Network, MCCMNC, Dial Code, Sender ID, Rate, Currency, Sys Rate, Best Buy, Best Vendor, Margin, Margin %, Change, From Date (UTC), To Date (UTC), Blocked, Rate Note. Values you are not allowed to see stay hidden in the file.",
               },
               {
                 name: "Send to client",
@@ -373,18 +373,18 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Summary cards",
             fields: [
-              { name: "Active rates", what: "Lines valid now, and in how many countries." },
+              { name: "Active rates", what: "Rates valid now, and in how many countries." },
               {
                 name: "Scheduled changes",
-                what: "Lines that start later, the next date and how many are increases. Amber when increases are planned.",
+                what: "Rates that start later, the next date and how many are increases. Amber when increases are planned.",
               },
               {
                 name: "Negative margin",
-                what: "Customer tables: current lines that sell below today's best buy. Red when above 0.",
+                what: "Customer tables: current rates that sell below today's best buy. Red when above 0.",
               },
               {
-                name: "Closed lines",
-                what: "Vendor tables: how many ended lines are kept in the history.",
+                name: "Closed rates",
+                what: "Vendor tables: how many ended rates are kept in the history.",
               },
               {
                 name: "Avg margin",
@@ -410,14 +410,18 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Columns",
             fields: [
-              { name: "Country / Network / MCCMNC", what: "The destination of the line." },
+              { name: "Country / Network / MCCMNC", what: "The destination of the rate." },
               {
                 name: "Sender ID",
-                what: "Empty for the normal price; a value means the line only prices that sender ID.",
+                what: "Empty for the normal price; a value means the rate only prices that sender ID.",
               },
               {
-                name: "Sell Rate (Buy Rate on vendor tables)",
-                what: "The price, in the table's currency. Click it to edit. A lock icon means the line is blocked. Edited values are highlighted until you save.",
+                name: "Sell Rate (USD) (Buy Rate on vendor tables)",
+                what: "The price, in the table's currency (named in the header). Click it to edit. A lock icon means the rate is blocked. Edited values are highlighted until you save.",
+              },
+              {
+                name: "Rate (EUR)",
+                what: "The same price in EUR, the platform currency, at the latest exchange rate. Click it to type the price in EUR instead: the table-currency rate follows (and the other way round). Hover to see the exchange rate used. Plain text on tables already in EUR.",
               },
               {
                 name: "Best Buy / Best Vendor",
@@ -433,11 +437,11 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Effective",
-                what: 'When the line started. In Current, a line with a scheduled next rate shows "→ next rate from date". In Closed it shows the from – to dates.',
+                what: 'When the rate started. In Current, a rate with a scheduled next rate shows "→ next rate from date". In Closed it shows the from – to dates.',
               },
               {
                 name: "Hidden columns",
-                what: "Change %, Until, Next Rate, Next From, Blocked, Negative margin, Dial Code, Sys Rate (the rate in the platform currency), Rate Note, Updated By, Updated Time and Rate ID.",
+                what: "Change %, Until, Next Rate, Next From, Blocked, Negative margin, Dial Code, Rate Note, Updated By, Updated Time and Rate ID.",
               },
             ],
           },
@@ -458,7 +462,7 @@ export const topics: HelpTopic[] = [
               "Click the rate in the **Sell Rate** column.",
               "Type the new rate and press Enter (or click away). Esc cancels.",
               "The cell is highlighted and the bulk bar shows **1 unsaved**. Make more edits if you like.",
-              "Optionally set **Effective date…** in the bulk bar (empty = now).",
+              "The batch starts at the next 00:00 (platform time zone) unless you set another date with **From next 00:00** in the bulk bar.",
               "Click **Save n changes**.",
             ],
           },
@@ -472,28 +476,28 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Set rate",
-                what: "Gives every selected line the same rate.",
+                what: "Gives every selected rate the same rate.",
                 values: "**New sell rate**: a number of 0 or more, e.g. `0.0125`. Then **Apply to selection**.",
               },
               {
                 name: "Change by % / margin",
                 what: "Changes the selected rates relative to what they are now.",
                 values:
-                  "**By %** (**Change %**, e.g. `5` raises by 5 %, `-3` lowers by 3 %); **By amount** (**Add (negative to lower)**, e.g. `0.001`); **Best buy + margin** (customer tables; **Margin over best buy** is an amount added to the best buy rate, e.g. `0.002`). Lines with no best buy, or that would go below zero, are skipped with a warning.",
+                  "**By %** (**Change %**, e.g. `5` raises by 5 %, `-3` lowers by 3 %); **By amount** (**Add (negative to lower)**, e.g. `0.001`); **Best buy + margin** (customer tables; **Margin over best buy** is an amount added to the best buy rate, e.g. `0.002`). Rates with no best buy, or that would go below zero, are skipped with a warning.",
               },
               {
                 name: "Effective date…",
                 what: "One start date for the whole batch.",
                 values:
-                  "**Effective from (UTC) for this batch**, then **Set date**. Empty = now. Cannot be in the past. Without a date, an edited scheduled line keeps its own start date.",
+                  "**Effective from for this batch** (platform time zone, 24-hour), then **Set date**. **Next 00:00** and **Now** fill it in one click. Cannot be in the past. While the default next 00:00 is kept, an edited scheduled rate keeps its own later start date.",
               },
               {
                 name: "Block",
-                what: "Blocks the selected lines; if they are all blocked already, it unblocks them.",
+                what: "Blocks the selected rates; if they are all blocked already, it unblocks them.",
               },
               {
                 name: "Close rate",
-                what: "Ends the selected lines on the batch date (or now) after you confirm. They move to Closed when saved. A scheduled line that has not started yet is withdrawn and the version before it runs on.",
+                what: "Ends the selected rates on the batch date (or now) after you confirm. They move to Closed when saved. A scheduled rate that has not started yet is withdrawn and the version before it runs on.",
               },
               {
                 name: "Bulk rating…",
@@ -502,7 +506,7 @@ export const topics: HelpTopic[] = [
               { name: "Discard", what: "Throws away all unsaved edits." },
               {
                 name: "Send RN to clients",
-                what: "Customer tables: e-mail each client using the table the changed lines. Ticked by default.",
+                what: "Customer tables: e-mail each client using the table the changed rates. Ticked by default.",
               },
               { name: "Save n changes", what: "Saves every unsaved edit as one change you can undo." },
             ],
@@ -519,7 +523,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**Add rates** gives a price to one or many destinations at once, one line per chosen code. Use it for destinations the table does not have yet; for a destination that already has a rate, it creates a new version from the chosen date.",
+            text: "**Add rates** gives a price to one or many destinations at once, one rate per chosen code. Use it for destinations the table does not have yet; for a destination that already has a rate, it creates a new version from the chosen date.",
           },
           {
             kind: "fields",
@@ -539,11 +543,11 @@ export const topics: HelpTopic[] = [
                 values: 'Up to 20 characters. Empty ("Any") = the normal price.',
               },
               {
-                name: "Effective from (UTC)",
-                what: "When the new lines start.",
-                values: "Empty = now. Cannot be in the past.",
+                name: "Effective from",
+                what: "When the new rates start, in the platform time zone (24-hour).",
+                values: "Default: the next 00:00. **Now** = at once. Cannot be in the past.",
               },
-              { name: "Rate note", what: "Optional remark saved on the lines (up to 500 characters)." },
+              { name: "Rate note", what: "Optional remark saved on the rates (up to 500 characters)." },
               {
                 name: "Send RN to clients",
                 what: "Customer tables only. Ticked by default: clients using the table get an e-mail with the new lines.",
@@ -557,7 +561,8 @@ export const topics: HelpTopic[] = [
               "Open the table and click **Add rates**.",
               "In the tree, search for a country or network and tick what you need.",
               "Enter the **Rate**, and if needed a **Sender ID**, **Effective from** date and **Rate note**.",
-              "Click **Add n rates**. The toast says how many lines were added and how many clients got an RN; click Undo there to take it back.",
+              "With **Send RN to clients** ticked, type an optional **Note on the RN**: it is added at the top of the e-mail each client gets.",
+              "Click **Add n rates**. The toast says how many rates were added and how many clients got an RN; click Undo there to take it back.",
             ],
           },
         ],
@@ -624,7 +629,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: 'Copied lines start now, are marked New and get the note "Copied from vendor trunk …". The new table opens at once. To price clients with it, add it to their customer trunks (see [[customer-trunks|Customer trunks]]).',
+            text: 'Copied rates start now, are marked New and get the note "Copied from vendor trunk …". The new table opens at once. To price clients with it, add it to their customer trunks (see [[customer-trunks|Customer trunks]]).',
           },
           {
             kind: "tip",
@@ -663,11 +668,12 @@ export const topics: HelpTopic[] = [
             items: [
               "Each new rate starts a new version from its effective date; the version before it ends at that moment. Versions that would start on or after that date are replaced.",
               'A rate equal to the current one is skipped ("Nothing changed").',
-              "Blocks are applied first, then rate changes; a new version keeps the block of the line it replaces.",
-              "On customer tables, increases that start sooner than the clients' notice period stop the save and open **Increases sooner than the client's notice**: the table lists MCCMNC, Now, New, From and Earliest with notice. Choose **Cancel** and set a later date, or **Apply anyway** (logged with the change).",
-              "If someone else saved the same lines at the same moment, you are asked to reload, review and save again.",
+              "Blocks are applied first, then rate changes; a new version keeps the block of the rate it replaces.",
+              "On customer tables, changes that start sooner than the clients' notice period for that kind stop the save and open **Changes sooner than the client's notice**: the table lists MCCMNC, Change (with the notice days), Now, New, From and Earliest with notice. Choose **Cancel** and set a later date, or **Apply anyway** (logged with the change).",
+              "If someone else saved the same rates at the same moment, you are asked to reload, review and save again.",
               "Vendor rate changes update best buy and routing costs straight away.",
               "The whole batch is one change: the toast offers Undo, and it appears in **Change log**.",
+              "On customer tables, **Save n changes** first shows a summary: counts of increases, decreases, closed and blocked rates, the effective date, the clients using the table and each rate with current → new and %. Untick **Send RN to clients** or type a **Note on the RN** there, then **Save n changes** (or **Back to editing**).",
             ],
           },
         ],
@@ -678,7 +684,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'The **Change log** view (or **History** in the header) lists every saved change on this table: who, when, what changed and any note (for example a short-notice override or "Copied 1,200 rates from …"). You can undo your own changes there; undoing someone else\'s needs that permission. The **Closed** view shows the old versions themselves with their dates. See [[undo-and-history]].',
+            text: 'The **Change log** view (or **History** in the header) lists every saved change on this table in plain words: who, when, any note, and each rate as "Country · Network (MCCMNC): old → new (+5 %) from 21 Oct 2026, 00:00", or New, Closed, Blocked, Scheduled rate withdrawn. Changes with more than 10 rates fold; click **Show the n rates**. **Technical (with undo)** shows the same changes field by field, where you can undo your own changes; undoing someone else\'s needs that permission. The **Closed** view shows the old versions themselves with their dates. See [[undo-and-history]].',
           },
         ],
       },
@@ -751,7 +757,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Rows of flagged RNs that are due soon are highlighted.",
+            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Rows of flagged RNs that are due soon are highlighted. Tick several RNs and choose **Bulk edit › Accept n pending RNs** to accept them all at once (each RN is still its own change you can undo; the confirmation warns when some have live traffic flags or notice breaches).",
           },
           {
             kind: "fields",
@@ -765,13 +771,13 @@ export const topics: HelpTopic[] = [
                 name: "Effective",
                 what: "The earliest date stated in the sheet. Amber and bold when the RN is flagged, still pending and starts within the reminder days.",
               },
-              { name: "Lines", what: "Number of destinations in the sheet." },
+              { name: "Rates", what: "Number of destinations in the sheet." },
               {
                 name: "Live Flags",
-                what: "Lines that raise or close a destination carrying traffic (red when above 0).",
+                what: "Rates that raise or close a destination carrying traffic (red when above 0).",
               },
               { name: "Notice", what: "Increases with less notice than agreed with the vendor (amber)." },
-              { name: "Back-dated", what: "Lines whose stated date is before the RN arrived (amber)." },
+              { name: "Back-dated", what: "Rates whose stated date is before the RN arrived (amber)." },
               {
                 name: "Status",
                 what: "Pending review (amber), Accepted (green), Partly accepted (amber), Rejected (red), Failed (red: the file could not be read), Unmatched (amber: no vendor trunk found).",
@@ -785,7 +791,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "The detail panel shows **Open review**, a **File** download of the original sheet, and the RN's vendor, received time and sender, subject, file, effective date, line counts by change, flag counts and the decision.",
+            text: "The detail panel shows **Open review**, a **File** download of the original sheet, and the RN's vendor, received time and sender, subject, file, effective date, rate counts by change, flag counts and the decision.",
           },
         ],
       },
@@ -803,6 +809,18 @@ export const topics: HelpTopic[] = [
               {
                 name: "Upload a file / Simulate an e-mail",
                 what: "How the RN comes in.",
+              },
+              {
+                name: "Rate sheet",
+                what: "An Excel workbook (.xlsx, the first sheet is read) or CSV / semicolon / tab separated text, or paste from Excel.",
+                values:
+                  "Protected (locked) sheets are read as usual. A workbook that needs a password to open fails with a file error asking for an unlocked file.",
+              },
+              {
+                name: "Header row",
+                what: "The row with the column headers, e.g. `3` when the vendor puts a title and an account line above them.",
+                values:
+                  "Empty = found automatically: the first of the first 20 rows with a rate and a destination column.",
               },
               {
                 name: "Vendor trunk",
@@ -837,18 +855,18 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "Each line is compared with the trunk's current rate: **New**, **Increase**, **Decrease**, **Unchanged** or **Closed** (destination removed). Closing a destination that was never priced counts as Unchanged.",
-              "Unknown destinations, duplicates and unreadable lines are listed as file errors. A file with no usable line is **Failed**.",
-              "**Applied From** is the stated date, but never earlier than the time the RN was received. A line with an earlier stated date is **Back-dated**, with the messages and cost sent in between at the old rate.",
+              "Each rate is compared with the trunk's current rate: **New**, **Increase**, **Decrease**, **Unchanged** or **Closed** (destination removed). Closing a destination that was never priced counts as Unchanged.",
+              "Unknown destinations, duplicates and unreadable rates are listed as file errors. A file with no usable rate is **Failed**.",
+              "**Applied From** is the stated date, but never earlier than the time the RN was received. A rate with an earlier stated date is **Back-dated**, with the messages and cost sent in between at the old rate.",
               "**Notice breach**: an increase starting sooner than the notice agreed with that vendor.",
-              "**Live traffic**: for every Increase or Closed line the platform counts messages on that trunk and destination in the last hour, 24 hours and 7 days. If the count in the configured window reaches the minimum, the line is flagged **Increase on live traffic** or **Closed on live traffic**.",
+              "**Live traffic**: for every Increase or Closed rate the platform counts messages on that trunk and destination in the last hour, 24 hours and 7 days. If the count in the configured window reaches the minimum, the rate is flagged **Increase on live traffic** or **Closed on live traffic**.",
               "**Turns negative**: the margin at the new cost falls below zero.",
-              "The clients sending that traffic, and the margin now and at the new cost, are shown on each line.",
+              "The clients sending that traffic, and the margin now and at the new cost, are shown on each rate.",
             ],
           },
           {
             kind: "text",
-            text: "If auto-accept is on and the RN has no flagged line, no notice breach and no file error, it is accepted at once. Flagged RNs always wait for review. The column layout of the vendor's file is remembered for its next sheet.",
+            text: "If auto-accept is on and the RN has no flagged rate, no notice breach and no file error, it is accepted at once. Flagged RNs always wait for review. The column layout of the vendor's file is remembered for its next sheet.",
           },
         ],
       },
@@ -864,7 +882,7 @@ export const topics: HelpTopic[] = [
               { name: "Re-check", what: "Runs the check again against today's rates and traffic." },
               {
                 name: "Reject…",
-                what: "Rejects every pending line. A reason is required; it goes in the Rejected reply to the vendor.",
+                what: "Rejects every pending rate. A reason is required; it goes in the Rejected reply to the vendor.",
               },
               {
                 name: "Accept + reroute",
@@ -872,29 +890,29 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Accept + update customers",
-                what: "Accepts, then opens [[bulk|Bulk rating]] with the client tables and destinations affected by the flagged lines.",
+                what: "Accepts, then opens [[bulk|Bulk rating]] with the client tables and destinations affected by the flagged rates.",
               },
-              { name: "Accept all pending", what: "Accepts every pending line." },
+              { name: "Accept all pending", what: "Accepts every pending rate." },
             ],
           },
           {
             kind: "text",
-            text: "When the RN is **Unmatched**, a banner lets you **Assign to trunk…**; the lines are then read against that trunk's rates.",
+            text: "When the RN is **Unmatched**, a banner lets you **Assign to trunk…**; the rates are then read against that trunk's rates.",
           },
           {
             kind: "fields",
             title: "Summary cards",
             fields: [
-              { name: "Lines", what: "Total lines and the count per change (up, down, new, closed, same)." },
-              { name: "Live traffic flags", what: "Flagged lines (red), and how many turn negative." },
+              { name: "Rates", what: "Total rates and the count per change (up, down, new, closed, same)." },
+              { name: "Live traffic flags", what: "Flagged rates (red), and how many turn negative." },
               { name: "Notice breaches", what: "Short-notice increases (amber), and the days required." },
-              { name: "Back-dated", what: "Lines applied from receipt instead of their stated date (amber)." },
-              { name: "File errors", what: "Lines that could not be read (red), and how the trunk was found." },
+              { name: "Back-dated", what: "Rates applied from receipt instead of their stated date (amber)." },
+              { name: "File errors", what: "Rates that could not be read (red), and how the trunk was found." },
             ],
           },
           {
             kind: "fields",
-            title: "Line columns",
+            title: "Rate columns",
             fields: [
               { name: "Country / Network / MCCMNC", what: "The destination." },
               { name: "Change", what: "New, Increase, Decrease, Unchanged or Closed. Increase and Closed are amber." },
@@ -926,16 +944,16 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Flagged lines are on top. Rows are tinted red for live flags or negative margin, amber for notice breaches or back-dated lines. Select lines to get **Accept selected** and **Reject selected…**.",
+            text: "Flagged rates are on top. Rows are tinted red for live flags or negative margin, amber for notice breaches or back-dated rates. Select rates to get **Accept selected** and **Reject selected…**.",
           },
           {
             kind: "list",
             title: "Side panel",
             items: [
-              "Clicking a line shows its old → new rate, stated / applied dates, notice given versus required, traffic in 1 h / 24 h / 7 d, what was sent before receipt, the customers and any reject reason.",
+              "Clicking a rate shows its old → new rate, stated / applied dates, notice given versus required, traffic in 1 h / 24 h / 7 d, what was sent before receipt, the customers and any reject reason.",
               "**Replies (n)**: the replies to the vendor. Sent ones can be shown; a **draft** can be edited (subject and body) and sent with **Send reply**.",
               "**Log**: every step (received, checked, decided, replied) with user and time.",
-              "**File (n)**: sender, subject, file name, how each column was read, **Download the original file**, and the file errors line by line.",
+              "**File (n)**: sender, subject, file name, the **Header row** used, a table of every column (letter, header in the file, read as), **Download the original file**, and the file errors row by row.",
             ],
           },
         ],
@@ -948,9 +966,9 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Open the RN from the queue (sort or filter by **Live Flags** or **Status** to find urgent ones).",
-              "Look at the flagged lines on top: the traffic, customers and margin impact.",
+              "Look at the flagged rates on top: the traffic, customers and margin impact.",
               "If a vendor raises a busy destination, choose **Accept + reroute** to move traffic, or **Accept + update customers** to re-price the affected clients.",
-              "To refuse some lines, select them and choose **Reject selected…** with a reason; accept the rest with **Accept selected** or **Accept all pending**.",
+              "To refuse some rates, select them and choose **Reject selected…** with a reason; accept the rest with **Accept selected** or **Accept all pending**.",
               "Check the **Replies** tab: send any draft reply to the vendor.",
             ],
           },
@@ -963,9 +981,9 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "Accepted lines are loaded into the vendor trunk's buy table from their **Applied From** date (never earlier than now); closed lines are closed. This is one change you can undo.",
-              "Rejected lines are not loaded.",
-              "The status becomes Accepted, Partly accepted or Rejected once no line is pending.",
+              "Accepted rates are loaded into the vendor trunk's buy table from their **Applied From** date (never earlier than now); closed rates are closed. This is one change you can undo.",
+              "Rejected rates are not loaded.",
+              "The status becomes Accepted, Partly accepted or Rejected once no rate is pending.",
               "The vendor gets a **Successful** or **Rejected** reply (a **Failed** reply goes out when the file could not be read). The reply states the date really applied when it differs from the sheet.",
               "Best buy, margins and routing costs follow the new buy rates.",
             ],
@@ -995,7 +1013,7 @@ export const topics: HelpTopic[] = [
                 what: "A flagged, pending RN is marked due soon this many days before it starts (0–30).",
               },
               {
-                name: "Auto-accept RNs with no flagged line",
+                name: "Auto-accept RNs with no flagged rate",
                 what: "Accept automatically when there is no live increase or close, no notice breach and no file error.",
               },
               {
@@ -1123,7 +1141,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: '**Move** tab: the change, "x of y top vendors moved", the dates, market cost old → new, and actions: **Snooze…** (1, 7 or 30 days), **Dismiss…** (note required), **Mark handled** (note optional), **Reopen** (for a move that is not open) and **Add note** (note required). A chart shows the top vendors\' rates over the last 90 days: vendors that moved are solid lines, the cheapest ones that did not are dashed. The table lists each top vendor trunk with Tier, Old, New, Change (or "did not move"), From and a **Reroute…** link that opens the route rules using that vendor.',
+            text: '**Move** tab: the change, "x of y top vendors moved", the dates, market cost old → new, and actions: **Snooze…** (1, 7 or 30 days), **Dismiss…** (note required), **Mark handled** (note optional), **Reopen** (for a move that is not open) and **Add note** (note required). A chart shows the top vendors\' rates over the last 90 days: vendors that moved are solid rates, the cheapest ones that did not are dashed. The table lists each top vendor trunk with Tier, Old, New, Change (or "did not move"), From and a **Reroute…** link that opens the route rules using that vendor.',
           },
           {
             kind: "fields",
@@ -1223,7 +1241,7 @@ export const topics: HelpTopic[] = [
     title: "Bulk rating",
     group: "Rates",
     summary:
-      "Re-price several clients' rate tables for many destinations in one job: choose the scope and one action, review every line with its impact on last week's traffic, then apply it as one undoable change.",
+      "Re-price several clients' rate tables for many destinations in one job: choose the scope and one action, review every rate with its impact on last week's traffic, then apply it as one undoable change.",
     keywords: [
       "bulk",
       "mass update",
@@ -1242,7 +1260,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'Bulk rating changes customer (sell) rates across many tables at once, for example "raise Germany by 5 % for these ten clients" or "set every OTP table to best buy + 15 %". You see every affected line and the money impact before anything changes. It opens from the [[rate-manager|Rate manager]] (selected tables or lines), from [[incoming-rns|Incoming RNs]] and from [[market-moves|Market moves]], already filled in.',
+            text: 'Bulk rating changes customer (sell) rates across many tables at once, for example "raise Germany by 5 % for these ten clients" or "set every OTP table to best buy + 15 %". You see every affected rate and the money impact before anything changes. It opens from the [[rate-manager|Rate manager]] (selected tables or rates), from [[incoming-rns|Incoming RNs]] and from [[market-moves|Market moves]], already filled in.',
           },
           {
             kind: "text",
@@ -1259,7 +1277,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Clients' rate tables",
-                what: "The customer tables to change. Remove one with ×; add with **Add a client's rate table…**. At least one is required.",
+                what: "The customer tables to change. Remove one with ×; add with **Add a client's rate table…**, or click **Pick customer trunks…**, tick the trunks (search, **Select all shown**) and **Add their rate tables**: every client table those trunks use joins the scope. At least one is required.",
               },
               {
                 name: "Destinations by MCCMNC",
@@ -1281,7 +1299,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: 'With no destinations, the job covers every destination the tables price. The line under the buttons shows the size, e.g. "3 tables × 2 MCCMNC + 1 countries = 140 lines". A job can hold up to 20,000 lines; narrow the scope if it is larger.',
+            text: 'With no destinations, the job covers every destination the tables price. The line under the buttons shows the size, e.g. "3 tables × 2 MCCMNC + 1 countries = 140 rates". A job can hold up to 20,000 rates; narrow the scope if it is larger.',
           },
         ],
       },
@@ -1294,9 +1312,9 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Action",
-                what: "What to do to every line in scope.",
+                what: "What to do to every rate in scope.",
                 values:
-                  "**Set a fixed rate** (the default); **Change by %**; **Change by amount**; **Cost + margin %**; **Cost + amount**; **Close lines**; **Block lines**; **Unblock lines**; **Suggested rates only (market move)**. Opened from a market move, it starts on **Suggested rates only**.",
+                  "**Set a fixed rate** (the default); **Change by %**; **Change by amount**; **Cost + margin %**; **Cost + amount**; **Close rates**; **Block rates**; **Unblock rates**; **Suggested rates only (market move)**. Opened from a market move, it starts on **Suggested rates only**.",
               },
               {
                 name: "Value",
@@ -1314,8 +1332,8 @@ export const topics: HelpTopic[] = [
               },
               { name: "Round to", what: "Decimals of the new rates: 2 to 6. Default 4." },
               {
-                name: "Effective from (UTC)",
-                what: "When the new rates start. Empty = now. Never in the past.",
+                name: "Effective from",
+                what: "When the new rates start, in the platform time zone. Default: the next 00:00; **Now** = at once. Never in the past.",
               },
               {
                 name: "Respect notice periods",
@@ -1323,13 +1341,13 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Also add destinations a table lacks",
-                what: "For Set a fixed rate and Cost + actions: add a new line where a table has no rate yet. Off = only change existing lines.",
+                what: "For Set a fixed rate and Cost + actions: add a new rate where a table has no rate yet. Off = only change existing rates.",
               },
             ],
           },
           {
             kind: "text",
-            text: "Click **Preview**. Lines the action cannot price (no current rate for a % change, no cost for Cost +) are shown with a note and skipped.",
+            text: "Click **Preview**. Rates the action cannot price (no current rate for a % change, no cost for Cost +) are shown with a note and skipped.",
           },
         ],
       },
@@ -1340,10 +1358,10 @@ export const topics: HelpTopic[] = [
           {
             kind: "fields",
             fields: [
-              { name: "To apply", what: "Lines that will change, split into up, down, new, closed and (un)blocked." },
+              { name: "To apply", what: "Rates that will change, split into up, down, new, closed and (un)blocked." },
               {
                 name: "Below cost",
-                what: "Lines whose new rate is under the cost (red), plus unchanged and excluded counts.",
+                what: "Rates whose new rate is under the cost (red), plus unchanged and excluded counts.",
               },
               {
                 name: "Notice breaches",
@@ -1358,7 +1376,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "The cards update as you edit or exclude rows. Traffic figures cover normal lines only (not sender-ID lines).",
+            text: "The cards update as you edit or exclude rows. Traffic figures cover normal rates only (not sender-ID rates).",
           },
         ],
       },
@@ -1385,7 +1403,7 @@ export const topics: HelpTopic[] = [
                 what: "Untick to exclude the row; the header box acts on all shown rows. Excluded rows are faded.",
               },
               { name: "Table / Clients", what: "The rate table and its clients." },
-              { name: "Country / Network / MCCMNC / Sender ID", what: "The line's destination." },
+              { name: "Country / Network / MCCMNC / Sender ID", what: "The rate's destination." },
               { name: "Current", what: "Today's rate." },
               {
                 name: "New rate",
@@ -1397,7 +1415,7 @@ export const topics: HelpTopic[] = [
               { name: "From", what: '"Now" or the start date; amber when moved to the end of the notice period.' },
               {
                 name: "Msgs 7d / Revenue Δ 7d",
-                what: "Last week's messages and the revenue difference for this line.",
+                what: "Last week's messages and the revenue difference for this rate.",
               },
               { name: "Note", what: 'Why a row is skipped or flagged, e.g. "sells below cost" or "no cost".' },
             ],
@@ -1418,7 +1436,7 @@ export const topics: HelpTopic[] = [
               "Click **Apply n changes** in the header.",
               "In **Apply n changes?** add an optional **Note** (shown in History) and keep or untick **Send RN to clients**.",
               "Click **Apply**. All tables change together as one change, undone as one.",
-              "If **Respect notice periods** was off and some increases start too soon, **Increases sooner than the client's notice** opens: **Apply anyway** (logged) or cancel, tick **Respect notice periods** and preview again.",
+              "If **Respect notice periods** was off and some increases start too soon, **Changes sooner than the client's notice** opens: **Apply anyway** (logged) or cancel, tick **Respect notice periods** and preview again.",
             ],
           },
           {
@@ -1615,11 +1633,11 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "An **MCCMNC** code identifies a mobile network: the **MCC** (Mobile Country Code, 3 digits) plus the **MNC** (Mobile Network Code, 2–3 digits), e.g. `262` + `01` = `26201`. Rate lines, route rules, dial codes and reports all point at these codes, and every destination picker shows the names from here.",
+            text: "An **MCCMNC** code identifies a mobile network: the **MCC** (Mobile Country Code, 3 digits) plus the **MNC** (Mobile Network Code, 2–3 digits), e.g. `262` + `01` = `26201`. Rates, route rules, dial codes and reports all point at these codes, and every destination picker shows the names from here.",
           },
           {
             kind: "text",
-            text: "Each country also has an **All networks** code: the MCC alone (e.g. `262`). It is the fallback price and route for any network of the country without its own line.",
+            text: "Each country also has an **All networks** code: the MCC alone (e.g. `262`). It is the fallback price and route for any network of the country without its own rate.",
           },
         ],
       },
@@ -1669,7 +1687,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "warning",
-            text: "The MCC and MNC of a code in use (by rate lines, rules, dial codes or MO numbers) cannot change; add a new code instead.",
+            text: "The MCC and MNC of a code in use (by rates, rules, dial codes or MO numbers) cannot change; add a new code instead.",
           },
         ],
       },
@@ -1716,7 +1734,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**Delete** archives the code. It is blocked while rate lines, rules, dial codes or MO numbers use it. Administrators can restore a deleted code. See [[safe-delete]].",
+            text: "**Delete** archives the code. It is blocked while rates, rules, dial codes or MO numbers use it. Administrators can restore a deleted code. See [[safe-delete]].",
           },
         ],
       },

@@ -27,6 +27,7 @@ import {
 import { Icon } from "../../ui/Icon";
 import { DestinationPick, TrunkPick, type Picked } from "./pickers";
 import { MarginInput } from "./MarginInput";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const OPS: { value: CompareOp; label: string }[] = [
   { value: ">", label: ">" },
@@ -53,6 +54,23 @@ function regexError(p: string): string | null {
   } catch (e) {
     return (e as Error).message;
   }
+}
+
+/** Sender ID keywords (team trial round 2): \Numeric = all-digit Sender IDs, \Alpha = Sender IDs with a letter. */
+export function SenderKeywords({ setPattern }: { setPattern: (p: string) => void }) {
+  return (
+    <small className="muted sender-keywords">
+      Keywords:{" "}
+      <button type="button" className="link-btn" onClick={() => setPattern("\\Numeric")}>
+        \Numeric
+      </button>{" "}
+      = numeric Sender IDs,{" "}
+      <button type="button" className="link-btn" onClick={() => setPattern("\\Alpha")}>
+        \Alpha
+      </button>{" "}
+      = Sender IDs with a letter
+    </small>
+  );
 }
 
 /**
@@ -106,6 +124,14 @@ function PatternBuilder({
           </button>
         ))}
       </div>
+      {field === "sender" && (
+        <SenderKeywords
+          setPattern={(p) => {
+            setKind("regex");
+            setPattern(p);
+          }}
+        />
+      )}
       {kind === "regex" ? (
         <label className="field">
           <span>{CONDITION_LABELS[field]} pattern (regular expression)</span>
@@ -603,11 +629,11 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
           <div className="fgrid cols-2">
             <label className="field">
               <span>Start (UTC)</span>
-              <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+              <DateTimeInput value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             </label>
             <label className="field">
               <span>Stop (UTC)</span>
-              <input type="datetime-local" value={stopsAt} onChange={(e) => setStopsAt(e.target.value)} />
+              <DateTimeInput value={stopsAt} onChange={(e) => setStopsAt(e.target.value)} />
             </label>
           </div>
         ),

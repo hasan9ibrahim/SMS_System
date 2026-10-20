@@ -22,6 +22,19 @@ const has = (arr: string) => (c: { op: string; value?: unknown; values?: unknown
         ? `notEmpty(${arr})`
         : any;
 };
+const msgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
+  const ids = (c.values ?? [c.value]).map((v) => lit(String(v)));
+  const any = `hasAny(splitByChar(',', v_message_id), [${ids.join(",")}])`;
+  return c.op === "neq" || c.op === "not_in"
+    ? `NOT ${any}`
+    : c.op === "empty"
+      ? "v_message_id = ''"
+      : c.op === "not_empty"
+        ? "v_message_id != ''"
+        : c.op === "like"
+          ? `v_message_id ILIKE ${lit(`%${String(c.value)}%`)}`
+          : any;
+};
 const CAUSE_TEXT = `transform(command_status, [${CAUSE_CODES.map((c) => c.code).join(",")}], [${CAUSE_CODES.map((c) => lit(c.name)).join(",")}], '')`;
 
 export const EDR_COLUMNS: Record<string, ChColumn> = {
@@ -70,7 +83,8 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   vendorTrunk: named(VENDOR_TRUNKS, "v_trunk_id"),
   vendorIp: { sql: "if(v_trunk_id = 0, '', IPv4NumToString(v_ip))" },
   vendorPort: { sql: "v_port" },
-  vendorMsgId: { sql: "v_message_id" },
+  // One ID per part of a multipart message, comma separated: a filter matches any of them (team trial round 2).
+  vendorMsgId: { sql: "v_message_id", where: msgIdWhere },
   vendorMccmnc: { sql: "v_mccmnc" },
   vendorBillingType: { sql: "v_billing_type" },
   vendorRateTableId: { sql: "v_rate_table_id" },

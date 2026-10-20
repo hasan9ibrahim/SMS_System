@@ -52,6 +52,7 @@ import {
   VIEWS,
   type LcrView,
 } from "./lcrModel";
+import { DateTimeInput } from "../../../ui/DateTimeInput";
 
 const page = pageForPath("/routing/lcr")!;
 const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
@@ -332,8 +333,7 @@ function TableView() {
         <div className="field">
           <span>Point in time (UTC)</span>
           <div className="bulk-row">
-            <input
-              type="datetime-local"
+            <DateTimeInput
               value={at ? at.slice(0, 16) : ""}
               onChange={(e) => set("at", e.target.value ? new Date(`${e.target.value}:00Z`).toISOString() : null)}
             />
@@ -510,7 +510,7 @@ function ClientView() {
   const first = q.data?.pages[0];
   usePageStatus({
     rows: first
-      ? `${first.total.toLocaleString("en-US")} lines · ${rows.length.toLocaleString("en-US")} loaded`
+      ? `${first.total.toLocaleString("en-US")} rates · ${rows.length.toLocaleString("en-US")} loaded`
       : "Choose a client or account manager",
     shortcuts: `Sell rate against the three cheapest eligible vendors · ${first?.currency ?? ""}`,
   });
@@ -620,7 +620,7 @@ function ClientView() {
       {first && (
         <div className="stat-cards">
           <div className="stat-card">
-            <span className="stat-label">Lines</span>
+            <span className="stat-label">Rates</span>
             <span className="stat-value">{first.summary.lines.toLocaleString("en-US")}</span>
           </div>
           <div className="stat-card">
@@ -645,7 +645,7 @@ function ClientView() {
           rowClass={(r) => (r.belowCost ? "negative" : undefined)}
           onEndReached={() => void (q.hasNextPage && q.fetchNextPage())}
           loadingMore={q.isFetchingNextPage}
-          empty={q.isPending ? "Loading…" : "No lines"}
+          empty={q.isPending ? "Loading…" : "No rates"}
         />
       ) : (
         <div className="grid-message muted bulk-empty">Choose a client or an account manager.</div>

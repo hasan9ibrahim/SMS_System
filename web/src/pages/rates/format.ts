@@ -1,4 +1,5 @@
 // Number formats for rates and money (§15.3: tabular numbers in grids).
+import { displayTz, isoToZoned, zoneAbbr } from "../../ui/zonedCore";
 const SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", INR: "₹", AED: "AED " };
 
 /** Rates keep 4 decimals, more when the value needs them (up to 6). */
@@ -24,9 +25,16 @@ export function formatMoney(v: number | null | undefined, currency: string): str
   return `${sym}${v.toLocaleString("en-US", { maximumFractionDigits: v >= 100 ? 0 : 2 })}`;
 }
 
+// Rate dates show in the platform time zone (team trial round 2), 24-hour.
 export const shortDate = (s: string | null | undefined) =>
   s
-    ? new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
+    ? new Date(s).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: displayTz(),
+      })
     : "—";
 
-export const shortDateTime = (s: string | null | undefined) => (s ? `${s.slice(0, 16).replace("T", " ")} UTC` : "—");
+export const shortDateTime = (s: string | null | undefined) =>
+  s ? `${isoToZoned(s, displayTz()).replace("T", " ")} ${displayTz() === "UTC" ? "UTC" : zoneAbbr(s)}` : "—";

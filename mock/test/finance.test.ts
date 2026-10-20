@@ -189,14 +189,14 @@ describe("currencies, rates, billing cycles (§7)", { skip }, () => {
     await db().query("DELETE FROM currencies WHERE iso = $1", [iso]);
     const created = await ok(
       "createCurrency",
-      call("POST", "/currencies", { iso, name: "Test Crown", symbol: "T$", ratePerUsd: 2.5 }),
+      call("POST", "/currencies", { iso, name: "Test Crown", symbol: "T$", ratePerEur: 2.5 }),
       201,
     );
-    assert.equal(created.record.ratePerUsd, 2.5);
-    const dup = await call("POST", "/currencies", { iso, name: "Again", symbol: "A", ratePerUsd: 1 });
+    assert.equal(created.record.ratePerEur, 2.5);
+    const dup = await call("POST", "/currencies", { iso, name: "Again", symbol: "A", ratePerEur: 1 });
     assert.equal(dup.statusCode, 409);
-    const rate = await ok("setCurrencyRate", call("PUT", `/currency-rates/${iso}`, { ratePerUsd: 2.75 }));
-    assert.equal(rate.record.ratePerUsd, 2.75);
+    const rate = await ok("setCurrencyRate", call("PUT", `/currency-rates/${iso}`, { ratePerEur: 2.75 }));
+    assert.equal(rate.record.ratePerEur, 2.75);
     assert.equal(rate.record.previousRate, 2.5);
     const history = await ok(
       "queryCurrencyRateHistory",
@@ -214,8 +214,9 @@ describe("currencies, rates, billing cycles (§7)", { skip }, () => {
         filter: { logic: "and", conditions: [{ field: "iso", op: "eq", value: iso }] },
       }),
     );
-    assert.equal(after.rows[0].ratePerUsd, 2.5, "undo sets the earlier rate again");
-    const usd = await call("PUT", "/currency-rates/USD", { ratePerUsd: 2 });
+    assert.equal(after.rows[0].ratePerEur, 2.5, "undo sets the earlier rate again");
+    // EUR is the base currency (team trial round 2): its rate is always 1.
+    const usd = await call("PUT", "/currency-rates/EUR", { ratePerEur: 2 });
     assert.equal(usd.statusCode, 400);
     await undo(created.change);
     const gone = await ok(

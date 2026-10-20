@@ -168,12 +168,23 @@ const codeSets = new WeakMap<string[], Set<string>>();
 
 const compiled = new Map<string, RegExp | null>();
 /** Case-insensitive unless `matchCase` (Sender conditions with Match case on, team trial round 1). */
+/**
+ * Sender keywords instead of a regular expression (team trial round 2): \\Numeric = digits only (optional
+ * leading +), \\Alpha = has a letter. Anything else is a regular expression.
+ */
+export function keywordPattern(pattern: string): string | null {
+  const k = pattern.trim().toLowerCase();
+  if (k === "\\numeric") return "^\\+?[0-9]+$";
+  if (k === "\\alpha") return "[A-Za-z]";
+  return null;
+}
+
 function regex(pattern: string, value: string, matchCase = false): boolean {
   const key = matchCase ? `c:${pattern}` : `i:${pattern}`;
   let re = compiled.get(key);
   if (re === undefined) {
     try {
-      re = new RegExp(pattern, matchCase ? "" : "i");
+      re = new RegExp(keywordPattern(pattern) ?? pattern, matchCase ? "" : "i");
     } catch {
       re = null;
     }

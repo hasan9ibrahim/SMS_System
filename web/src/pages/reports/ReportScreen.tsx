@@ -45,6 +45,7 @@ import {
   type FlatRow,
   type Settings,
 } from "./masterModel";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const toLocal = (iso: string | null | undefined) => (iso ? iso.slice(0, 16) : "");
 const fromLocal = (v: string) => (v ? `${v}:00.000Z` : null);
@@ -210,8 +211,7 @@ function SettingsBar({ settings, set }: { settings: Settings; set: (s: Settings)
           and an hour range applied to every day of the period. */}
       <label className="small">
         From
-        <input
-          type="datetime-local"
+        <DateTimeInput
           value={toLocal(win.from)}
           onChange={(e) =>
             e.target.value && set({ ...settings, period: "custom", from: fromLocal(e.target.value), to: win.to })
@@ -220,8 +220,7 @@ function SettingsBar({ settings, set }: { settings: Settings; set: (s: Settings)
       </label>
       <label className="small">
         to
-        <input
-          type="datetime-local"
+        <DateTimeInput
           value={toLocal(win.to)}
           onChange={(e) =>
             e.target.value && set({ ...settings, period: "custom", from: win.from, to: fromLocal(e.target.value) })

@@ -1,5 +1,6 @@
 // The signed-in user, UI preferences and open tabs (§3, §13.5, §15.2).
 // Sign-in arrives with §13.28; until then the mock acts as one seeded user.
+import { effectiveAccess } from "../admin/catalog.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type { AlertSoundPrefs, CurrentUser, DashboardSettings, PreferencesUpdate, Workspace } from "@sms/contract";
@@ -36,12 +37,14 @@ export const demoUser: CurrentUser = {
     alertSounds: DEFAULT_ALERT_SOUNDS,
   },
   permissions: ["*"],
+  hiddenTabs: [],
 };
 
 export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser | null> {
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.first_name, u.last_name, u.is_admin, u.theme, u.open_in_new_tab, u.animations, u.dashboard_settings, u.alert_sounds,
-            g.name AS access_group, g.permissions, bc.name AS business_company
+            g.name AS access_group, g.permissions, g.hidden_tabs, u.permission_overrides, u.tab_overrides,
+            bc.name AS business_company
        FROM users u
        LEFT JOIN access_groups g ON g.id = u.access_group_id
        LEFT JOIN business_companies bc ON bc.id = u.business_company_id
@@ -50,7 +53,12 @@ export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser |
   );
   const r = rows[0];
   if (!r) return null;
-  const perms = r.permissions as Record<string, string[]> | null;
+  const access = effectiveAccess(
+    (r.permissions as Record<string, string[]> | null) ?? {},
+    (r.hidden_tabs as string[] | null) ?? [],
+    (r.permission_overrides as Record<string, string[]> | null) ?? {},
+    (r.tab_overrides as Record<string, boolean> | null) ?? {},
+  );
   return {
     id: r.id,
     username: r.username,
@@ -65,12 +73,17 @@ export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser |
       dashboard: { ...DEFAULT_DASHBOARD, ...(r.dashboard_settings ?? {}) },
       alertSounds: { ...DEFAULT_ALERT_SOUNDS, ...(r.alert_sounds ?? {}) },
     },
-    // GUI Access Group keys "page:action"; "*" = everything (§1).
+    // GUI Access Group keys "page:action"; "*" = everything (§1). The user's own overrides apply on top;
+    // "!page" = no access to that page whatever the group gives (team trial round 2).
     permissions: r.is_admin
       ? ["*"]
-      : Object.entries(perms ?? {}).flatMap(([page, actions]) =>
-          actions.map((a) => (page === "*" ? a : `${page}:${a}`)),
-        ),
+      : [
+          ...Object.entries(access.permissions).flatMap(([page, actions]) =>
+            actions.map((a) => (page === "*" ? a : `${page}:${a}`)),
+          ),
+          ...access.denied.map((page) => `!${page}`),
+        ],
+    hiddenTabs: r.is_admin ? [] : access.hiddenTabs,
   };
 }
 

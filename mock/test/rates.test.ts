@@ -97,6 +97,24 @@ describe("rate table list and record (§13.12)", { skip }, () => {
       }),
     );
     assert.ok(mine.total > 0);
+    // Bulk rating: the tables used by picked customer trunks (team trial round 2).
+    const { rows: links } = await db().query(
+      `SELECT x.customer_trunk_id AS trunk, array_agg(x.rate_table_id::int) AS tables FROM customer_trunk_rate_tables x
+         JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL
+        GROUP BY 1 LIMIT 2`,
+    );
+    const byTrunk = await ok(
+      "queryRateTables",
+      call("POST", "/rate-tables/query", {
+        limit: 100,
+        filter: {
+          logic: "and",
+          conditions: [{ field: "customerTrunkId", op: "in", values: links.map((l) => Number(l.trunk)) }],
+        },
+      }),
+    );
+    const want = new Set(links.flatMap((l) => l.tables as number[]));
+    assert.deepEqual(new Set(byTrunk.rows.map((r: { id: number }) => r.id)), want);
     const bad = await call("POST", "/rate-tables/query", { sort: [{ field: "moneyToday", dir: "desc" }] });
     assert.equal(bad.statusCode, 400, "traffic figures are not sortable");
   });

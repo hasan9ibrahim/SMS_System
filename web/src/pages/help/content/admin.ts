@@ -18,7 +18,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'Every time someone saves a record (a route rule, a rate line, a trunk, a user, a template and so on) the system writes one **change**. This page lists all of them, newest first. Use it to answer "who changed this, and when?", to see the exact before and after values, and to undo a mistake.',
+            text: 'Every time someone saves a record (a route rule, a rate, a trunk, a user, a template and so on) the system writes one **change**. This page lists all of them, newest first. Use it to answer "who changed this, and when?", to see the exact before and after values, and to undo a mistake.',
           },
           {
             kind: "text",
@@ -43,7 +43,7 @@ export const topics: HelpTopic[] = [
                 what: "What kind of save it was. **Undo** rows are highlighted.",
                 values: "Create, Edit, Clone, Delete, Reorder, Enable, Disable, Bulk, Undo, Import, Cleanup",
               },
-              { name: "Record type", what: "Which kind of record changed, e.g. Route rule, Rate line, User." },
+              { name: "Record type", what: "Which kind of record changed, e.g. Route rule, Rate, User." },
               {
                 name: "Record ID",
                 what: 'The ID of the record(s) changed. A bulk change shows the first three IDs and "+N" for the rest.',
@@ -300,6 +300,10 @@ export const topics: HelpTopic[] = [
                 name: "Allow multiple logins",
                 what: "When ticked, the user can be signed in on several devices at once. Off means one session at a time.",
               },
+              {
+                name: "Access exceptions",
+                what: "Overrides the GUI access group for this user only. Per page: Inherit, No access, View only or Full. Per tab or section: Inherit, Show or Hide. No access wins even over the group's Every page.",
+              },
               { name: "Address 1", what: "Required. Street address." },
               { name: "Address 2", what: "Optional second address line." },
               { name: "Country", what: "Required. Pick from the list.", values: "Default `AE`" },
@@ -536,6 +540,10 @@ export const topics: HelpTopic[] = [
               {
                 name: "Action boxes",
                 what: "One box per action the page has. Pages without an action show an empty cell.",
+              },
+              {
+                name: "Tabs and sections",
+                what: "Untick a tab or form section to hide it from the group, e.g. the Enterprise **Docs** tab or the vendor trunk **Connection** section. Pages without View are hidden from the menu and Ctrl K; opening one by link shows **No access**.",
               },
             ],
           },
@@ -1877,7 +1885,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Use it to move a whole platform's data in or out in one go: users, enterprises, trunks, rate tables and lines, route rules and opening balances. Imports always start with a **dry run** that writes nothing. Exports make one encrypted package. This is an admin page.",
+            text: "Use it to move a whole platform's data in or out in one go: users, enterprises, trunks, rate tables and rates, route rules and opening balances. Imports always start with a **dry run** that writes nothing. Exports make one encrypted package. This is an admin page.",
           },
           {
             kind: "text",
@@ -1941,7 +1949,7 @@ export const topics: HelpTopic[] = [
               { name: "From", what: "Where the data comes from.", values: "CSV files (default), Export package" },
               {
                 name: "Entity / File",
-                what: 'One row per entity, in the order they are loaded: Users; Enterprises and contacts; Customer trunks; Vendor trunks; Rate tables; Rate lines; Route rules; Opening balances. Choose a CSV file for each you need. **Template** downloads an empty file with our column names. Each row says how records are matched (e.g. "external ID, else name") and whether it holds credentials.',
+                what: 'One row per entity, in the order they are loaded: Users; Enterprises and contacts; Customer trunks; Vendor trunks; Rate tables; Rates; Route rules; Opening balances. Choose a CSV file for each you need. **Template** downloads an empty file with our column names. Each row says how records are matched (e.g. "external ID, else name") and whether it holds credentials.',
               },
               {
                 name: "Columns",
@@ -1949,7 +1957,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "If it exists",
-                what: "What to do when a record already exists. Rate lines and opening balances are always added.",
+                what: "What to do when a record already exists. Rates and opening balances are always added.",
                 values: "Skip (default), Update, Add new",
               },
               {
@@ -2000,8 +2008,8 @@ export const topics: HelpTopic[] = [
             title: "New export package",
             fields: [
               {
-                name: "Rate lines",
-                what: "Which rate lines go in.",
+                name: "Rates",
+                what: "Which rates go in.",
                 values: "Current and future only (default), All, with history, None",
               },
               {

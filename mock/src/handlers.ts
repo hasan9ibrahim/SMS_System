@@ -253,6 +253,16 @@ import {
   restoreRateTable,
   updateRateTable,
 } from "./api/rates.js";
+import { getRateChangeLog } from "./api/rateChangeLog.js";
+import {
+  createFxAlertRule,
+  deleteFxAlertRule,
+  getFxProvider,
+  listFxAlertEvents,
+  listFxAlertRules,
+  updateFxAlertRule,
+  updateFxProvider,
+} from "./api/fx.js";
 import { rateLookupSide, rateLookupSideLines, rateLookupSideOptions } from "./api/rateLookupSide.js";
 import {
   createSavedLookup,
@@ -613,6 +623,15 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveRateTable,
   restoreRateTable,
   exportRateLines,
+  exportRateLinesFiltered: exportRateLines,
+  getRateChangeLog,
+  getFxProvider,
+  updateFxProvider,
+  listFxAlertRules,
+  createFxAlertRule,
+  updateFxAlertRule,
+  deleteFxAlertRule,
+  listFxAlertEvents,
   queryRateLines,
   // Routing costs are cached a minute; a rate change or an undo clears them (api/rateLookup.ts).
   changeRateLines: (request, reply) => Promise.resolve(changeRateLines(request, reply)).finally(clearRouteCaches),
