@@ -211,6 +211,10 @@ describe("incoming RNs (§13.32)", { skip }, () => {
     const bad = await call("POST", "/rate-notification-lines/query", { limit: 5 });
     assert.equal(bad.statusCode, 400);
 
+    // The back-dated line affected traffic already sent (set here so the test does not depend on the seed's traffic).
+    await db().query("UPDATE rate_notification_lines SET sent_between = greatest(sent_between, 5) WHERE id = $1", [
+      backLine.id,
+    ]);
     // Accept two lines: one change, rates loaded from max(stated, now).
     const pick = ls.rows.filter((l: { mccmnc: string }) => [b!.mccmnc, c!.mccmnc].includes(l.mccmnc));
     const acc = await ok(
