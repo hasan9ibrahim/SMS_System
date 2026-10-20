@@ -3871,8 +3871,9 @@ export type paths = {
     };
     /**
      * Exchange-rate provider settings (team trial round 2)
-     * @description Where the exchange rates come from: XE Currency Data API (xe.com, a paid account with an account ID and API
-     *     key) or manual entry, and how often they refresh. The API key is never returned. Administrators only.
+     * @description Where the exchange rates come from (any rate API: XE, Open Exchange Rates, Fixer, ExchangeRate-API, the ECB
+     *     or a custom JSON URL, or manual entry), how often they are checked, the minimum change that updates a rate
+     *     and the daily update time. The API key is never returned. Administrators only.
      */
     get: operations["getFxProvider"];
     /**
@@ -12911,42 +12912,122 @@ export type components = {
     };
     FxProvider: {
       /**
-       * @description `xe` = XE Currency Data API (xecdapi.xe.com, rates per EUR); `manual` = rates are typed in.
+       * @description Where rates come from (team trial round 2, round 3: any platform). Presets fill the URL, authentication, rates path and base currency; `custom` takes any JSON API; `manual` = rates are typed in.
        * @enum {string}
        */
-      provider: "xe" | "manual";
-      /** @description The XE API account ID. */
-      accountId: string | null;
-      /** @description True when an API key is stored. The key itself is never returned (§13.22). */
-      apiKeySet: boolean;
+      provider:
+        "xe" | "openexchangerates" | "fixer" | "exchangerate_api" | "ecb" | "custom" | "manual";
+      /** @description Display name for a custom source, e.g. "Bank feed". */
+      label: string | null;
+      /** @description The URL that returns the latest rates. `{key}` is replaced by the API key when the key goes in the path, `{base}` by the base currency. Presets have a default; custom needs one. */
+      apiUrl: string | null;
       /**
-       * @description How often rates are pulled: every minute, 15 minutes, hour (default), 6 hours or day. XE's plan decides how fresh its rates are (daily, hourly or per minute); refreshing faster than the plan gains nothing.
+       * @description How the API key is sent: not at all, as a query parameter, as a header, as HTTP basic auth (account ID : key) or inside the URL ({key}).
+       * @enum {string}
+       */
+      authType: "none" | "query" | "header" | "basic" | "path";
+      /** @description Query parameter or header name for the key, e.g. app_id, access_key or Authorization. */
+      authParam: string | null;
+      /** @description Account ID or user name (basic auth, e.g. XE). */
+      accountId: string | null;
+      /** @description Dot path to the rates object in the JSON answer (currency -> rate), e.g. rates, data.rates. */
+      ratesPath: string | null;
+      /** @description The currency the source quotes against; rates are converted to per 1 EUR when they are saved. */
+      baseCurrency: string;
+      /**
+       * @description How often the source is checked: every minute, 15 minutes, hour (default), 6 hours or day. A check only changes a rate when it moved at least minChange (see minChangeMode).
        * @enum {integer}
        */
       refreshMinutes: 1 | 15 | 60 | 360 | 1440;
+      /**
+       * @description Whether minChange is a % of the current rate or an amount in the currency per 1 EUR.
+       * @enum {string}
+       */
+      minChangeMode: "percent" | "amount";
+      /** @description A checked rate replaces the one in the system only when it differs by at least this much (0 = every check updates). Smaller moves wait for a bigger one or for the daily update. */
+      minChange: number;
+      /** @description Once a day at this time (HH:MM, platform time zone) every rate is updated from the source whatever the difference, so the system is never more than a day behind. Null = no daily update. */
+      dailyUpdateAt: string | null;
       enabled: boolean;
-      /** @description True while no account is set up (or in this phase): refreshes use simulated market moves. */
+      /** @description True when an API key is stored. The key itself is never returned (§13.22). */
+      apiKeySet: boolean;
+      /** @description True in this phase: checks use simulated market moves and nothing is called. */
       simulated: boolean;
-      /** Format: date-time */
+      /** @description The platform time zone dailyUpdateAt is in. */
+      timezone: string;
+      /**
+       * Format: date-time
+       * @description The last check.
+       */
       lastRunAt: string | null;
       /** @enum {string|null} */
       lastStatus: "ok" | "simulated" | "error" | null;
+      /** @description What the last check did, e.g. "32 checked, 3 updated, 29 below 0.5 %". */
       lastMessage: string | null;
       /** Format: date-time */
       nextRunAt: string | null;
+      /** Format: date-time */
+      lastDailyAt: string | null;
+      /** Format: date-time */
+      nextDailyAt: string | null;
+      /** @description Known sources and their defaults, for the form. */
+      presets: components["schemas"]["FxProviderPreset"][];
       updatedBy: string | null;
       /** Format: date-time */
       updatedAt: string | null;
     };
-    FxProviderUpdate: {
+    FxProviderPreset: {
+      provider: string;
+      label: string;
+      apiUrl: string | null;
       /** @enum {string} */
-      provider: "xe" | "manual";
+      authType: "none" | "query" | "header" | "basic" | "path";
+      authParam: string | null;
+      ratesPath: string | null;
+      baseCurrency: string;
+      note: string;
+    };
+    FxProviderUpdate: {
+      /**
+       * @description Where rates come from (team trial round 2, round 3: any platform). Presets fill the URL, authentication, rates path and base currency; `custom` takes any JSON API; `manual` = rates are typed in.
+       * @enum {string}
+       */
+      provider:
+        "xe" | "openexchangerates" | "fixer" | "exchangerate_api" | "ecb" | "custom" | "manual";
+      /** @description Display name for a custom source, e.g. "Bank feed". */
+      label: string | null;
+      /** @description The URL that returns the latest rates. `{key}` is replaced by the API key when the key goes in the path, `{base}` by the base currency. Presets have a default; custom needs one. */
+      apiUrl: string | null;
+      /**
+       * @description How the API key is sent: not at all, as a query parameter, as a header, as HTTP basic auth (account ID : key) or inside the URL ({key}).
+       * @enum {string}
+       */
+      authType: "none" | "query" | "header" | "basic" | "path";
+      /** @description Query parameter or header name for the key, e.g. app_id, access_key or Authorization. */
+      authParam: string | null;
+      /** @description Account ID or user name (basic auth, e.g. XE). */
       accountId: string | null;
+      /** @description Dot path to the rates object in the JSON answer (currency -> rate), e.g. rates, data.rates. */
+      ratesPath: string | null;
+      /** @description The currency the source quotes against; rates are converted to per 1 EUR when they are saved. */
+      baseCurrency: string;
+      /**
+       * @description How often the source is checked: every minute, 15 minutes, hour (default), 6 hours or day. A check only changes a rate when it moved at least minChange (see minChangeMode).
+       * @enum {integer}
+       */
+      refreshMinutes: 1 | 15 | 60 | 360 | 1440;
+      /**
+       * @description Whether minChange is a % of the current rate or an amount in the currency per 1 EUR.
+       * @enum {string}
+       */
+      minChangeMode: "percent" | "amount";
+      /** @description A checked rate replaces the one in the system only when it differs by at least this much (0 = every check updates). Smaller moves wait for a bigger one or for the daily update. */
+      minChange: number;
+      /** @description Once a day at this time (HH:MM, platform time zone) every rate is updated from the source whatever the difference, so the system is never more than a day behind. Null = no daily update. */
+      dailyUpdateAt: string | null;
+      enabled: boolean;
       /** @description New API key; omitted or null keeps the stored one, "" removes it. */
       apiKey?: string | null;
-      /** @enum {integer} */
-      refreshMinutes: 1 | 15 | 60 | 360 | 1440;
-      enabled: boolean;
     };
     FxAlertRuleInput: {
       /** @description The currency; null = every currency. */

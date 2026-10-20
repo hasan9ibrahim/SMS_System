@@ -120,3 +120,39 @@ export function DateTimeInput({
     </span>
   );
 }
+
+/** A time of day in 24-hour HH:MM, typed (e.g. "6" → 06:00, "1530" → 15:30); commits on blur or Enter. */
+export function TimeInput({
+  value,
+  onChange,
+  disabled,
+  "aria-label": ariaLabel,
+}: {
+  value: string;
+  onChange: (hhmm: string) => void;
+  disabled?: boolean;
+  "aria-label"?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const t = normalizeTime(draft);
+    if (t) onChange(t);
+    else setDraft(value);
+  };
+  return (
+    <input
+      className="time-input num"
+      inputMode="numeric"
+      placeholder="HH:MM"
+      maxLength={5}
+      size={5}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && commit()}
+    />
+  );
+}

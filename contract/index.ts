@@ -715,6 +715,7 @@ export type RateChangeLogItem = Schemas["RateChangeLogItem"];
 export type RateChangeLogEntry = Schemas["RateChangeLogEntry"];
 export type RateChangeLogPage = Schemas["RateChangeLogPage"];
 export type FxProvider = Schemas["FxProvider"];
+export type FxProviderPreset = Schemas["FxProviderPreset"];
 export type FxProviderUpdate = Schemas["FxProviderUpdate"];
 export type FxAlertRule = Schemas["FxAlertRule"];
 export type FxAlertRuleInput = Schemas["FxAlertRuleInput"];

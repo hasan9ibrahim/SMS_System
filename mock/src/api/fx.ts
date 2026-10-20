@@ -1,10 +1,19 @@
-// Exchange rates against EUR, the base currency (team trial round 2): the provider (XE Currency Data API from
-// xe.com, or manual entry), the scheduled refresh, and currency alerts when a rate moves by an amount or a %.
-// This phase never calls XE: a refresh simulates small market moves, also when an account is set up. The API
-// key is admin-only, stored encrypted and never returned (§13.22).
+// Exchange rates against EUR, the base currency (team trial round 2): the source (any rate API: XE, Open
+// Exchange Rates, Fixer, ExchangeRate-API, the ECB, a custom JSON URL, or manual entry; round 3), the hourly
+// check that only changes rates which moved at least the minimum change, the daily update that takes every
+// rate whatever the difference, and currency alerts. This phase never calls a rate API: checks simulate small
+// market moves. The API key is admin-only, stored encrypted and never returned (§13.22).
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
-import type { FxAlertEvent, FxAlertRule, FxAlertRuleInput, FxProvider, FxProviderUpdate } from "@sms/contract";
+import type {
+  FxAlertEvent,
+  FxAlertRule,
+  FxAlertRuleInput,
+  FxProvider,
+  FxProviderPreset,
+  FxProviderUpdate,
+} from "@sms/contract";
+import { dailyMoments, PLATFORM_TIMEZONE } from "../platform.js";
 import { decryptSecret, encryptSecret } from "../admin/passwords.js";
 import { db, withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
@@ -18,6 +27,90 @@ type Db = pg.Pool | pg.PoolClient;
 const forbidden = (reply: FastifyReply) =>
   sendProblem(reply, 403, "Only administrators can see or change the exchange-rate provider");
 
+// ---------------------------------------------------------------- sources
+
+/** Known rate APIs and their defaults (team trial round 3: any platform, not only XE). */
+export const FX_PRESETS: FxProviderPreset[] = [
+  {
+    provider: "xe",
+    label: "XE Currency Data API (xe.com)",
+    apiUrl: "https://xecdapi.xe.com/v1/convert_from.json?from={base}&to=*",
+    authType: "basic",
+    authParam: null,
+    ratesPath: "to",
+    baseCurrency: "EUR",
+    note: "Paid. Account ID and API key (basic auth). Plan decides freshness: daily, hourly or every minute.",
+  },
+  {
+    provider: "openexchangerates",
+    label: "Open Exchange Rates",
+    apiUrl: "https://openexchangerates.org/api/latest.json",
+    authType: "query",
+    authParam: "app_id",
+    ratesPath: "rates",
+    baseCurrency: "USD",
+    note: "Free plan quotes against USD, hourly; paid plans allow EUR and faster updates.",
+  },
+  {
+    provider: "fixer",
+    label: "Fixer (fixer.io)",
+    apiUrl: "https://data.fixer.io/api/latest",
+    authType: "query",
+    authParam: "access_key",
+    ratesPath: "rates",
+    baseCurrency: "EUR",
+    note: "Quotes against EUR. Hourly to every minute depending on the plan.",
+  },
+  {
+    provider: "exchangerate_api",
+    label: "ExchangeRate-API",
+    apiUrl: "https://v6.exchangerate-api.com/v6/{key}/latest/{base}",
+    authType: "path",
+    authParam: null,
+    ratesPath: "conversion_rates",
+    baseCurrency: "EUR",
+    note: "Key in the URL. Daily on the free plan, hourly or faster on paid plans.",
+  },
+  {
+    provider: "ecb",
+    label: "European Central Bank (free)",
+    apiUrl: "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml",
+    authType: "none",
+    authParam: null,
+    ratesPath: null,
+    baseCurrency: "EUR",
+    note: "Free reference rates against EUR, published once a working day around 16:00 CET (XML).",
+  },
+  {
+    provider: "custom",
+    label: "Custom JSON API",
+    apiUrl: null,
+    authType: "query",
+    authParam: "access_key",
+    ratesPath: "rates",
+    baseCurrency: "EUR",
+    note: "Any API that returns a JSON object of currency -> rate. Set the URL, how the key is sent and the path.",
+  },
+  {
+    provider: "manual",
+    label: "Manual (rates typed in)",
+    apiUrl: null,
+    authType: "none",
+    authParam: null,
+    ratesPath: null,
+    baseCurrency: "EUR",
+    note: "No automatic checks; rates are typed in on Currencies.",
+  },
+];
+
+/** Whether a checked rate differs enough from the one in the system to replace it. */
+export function bigEnough(mode: "percent" | "amount", min: number, current: number, checked: number): boolean {
+  if (!(min > 0)) return checked !== current;
+  const diff = Math.abs(checked - current);
+  if (mode === "amount") return diff >= min - 1e-12;
+  return current > 0 && (diff / current) * 100 >= min - 1e-9;
+}
+
 // ---------------------------------------------------------------- refresh
 
 export interface RateMove {
@@ -27,24 +120,35 @@ export interface RateMove {
   after: number;
 }
 
+export interface RefreshResult {
+  checked: number;
+  updated: number;
+  change: Change | null;
+}
+
 /**
- * Pulls new rates (simulated: each currency moves up to ±0.6 % against EUR), saves them as one undoable
- * change and checks the currency alerts. Shared by Sync Rates and the scheduled refresh.
+ * Checks the source (simulated: each currency moves up to ±0.6 % against EUR) and saves the rates that moved
+ * at least the minimum change, or all of them when `force` (daily update, Sync Rates), as one undoable change,
+ * then checks the currency alerts. Shared by Sync Rates, the hourly check and the daily update.
  */
 export async function refreshRates(
   pool: pg.Pool,
   by: { userId: number | null; ip: string | null; note: string },
-): Promise<{ updated: number; change: Change | null }> {
+  opts: { force: boolean; mode?: "percent" | "amount"; min?: number } = { force: true },
+): Promise<RefreshResult> {
   const { rows } = await pool.query(
     `SELECT c.id, c.iso, cl.rate_per_eur FROM currencies c JOIN currency_latest cl ON cl.iso = c.iso
       WHERE c.deleted_at IS NULL AND c.iso <> 'EUR' ORDER BY c.iso`,
   );
-  const moves: RateMove[] = rows.map((r) => {
+  const checked: RateMove[] = rows.map((r) => {
     const before = Number(r.rate_per_eur);
     const after = Number((before * (1 + (Math.random() - 0.5) * 0.012)).toFixed(8));
     return { id: Number(r.id), iso: String(r.iso).trim(), before, after };
   });
-  if (!moves.length) return { updated: 0, change: null };
+  const moves = checked.filter(
+    (m) => m.after !== m.before && (opts.force || bigEnough(opts.mode ?? "percent", opts.min ?? 0, m.before, m.after)),
+  );
+  if (!moves.length) return { checked: checked.length, updated: 0, change: null };
   const change = await inTransaction(pool, async (c) => {
     for (const m of moves)
       await c.query(
@@ -56,14 +160,14 @@ export async function refreshRates(
       entityIds: moves.map((m) => m.id),
       changeType: "edit",
       diff: moves.map((m) => ({ entity_id: m.id, field: "rate", before: m.before, after: m.after })),
-      note: by.note,
+      note: by.note.replace("{n}", String(moves.length)),
       userId: by.userId ?? (await systemUser(c)),
       ip: by.ip,
     });
     await checkFxAlerts(c, moves);
     return ch;
   });
-  return { updated: moves.length, change };
+  return { checked: checked.length, updated: moves.length, change };
 }
 
 async function systemUser(c: Db): Promise<number> {
@@ -73,28 +177,45 @@ async function systemUser(c: Db): Promise<number> {
 
 // ---------------------------------------------------------------- provider
 
-async function loadProvider(c: Db): Promise<FxProvider> {
+const sourceLabel = (p: { provider: string; label: string | null }) =>
+  p.provider === "custom" && p.label
+    ? p.label
+    : (FX_PRESETS.find((x) => x.provider === p.provider)?.label ?? p.provider);
+
+async function loadProvider(c: Db, now = Date.now()): Promise<FxProvider> {
   const { rows } = await c.query(
     `SELECT p.*, u.username AS updated_by FROM fx_provider p LEFT JOIN users u ON u.id = p.updated_by_id WHERE p.id = 1`,
   );
-  const p = rows[0] ?? { provider: "xe", refresh_minutes: 60, enabled: true };
+  const p = rows[0] ?? { provider: "xe", refresh_minutes: 60, enabled: true, auth_type: "basic", base_currency: "EUR" };
   const keySet = !!p.api_key_enc && !!decryptSecret(String(p.api_key_enc));
   const last = p.last_run_at ? new Date(p.last_run_at).getTime() : null;
+  const auto = !!p.enabled && p.provider !== "manual";
+  const daily = (p.daily_update_at as string | null) ?? null;
   return {
     provider: p.provider,
+    label: p.label ?? null,
+    apiUrl: p.api_url ?? null,
+    authType: p.auth_type ?? "none",
+    authParam: p.auth_param ?? null,
     accountId: p.account_id ?? null,
+    ratesPath: p.rates_path ?? null,
+    baseCurrency: String(p.base_currency ?? "EUR").trim(),
     apiKeySet: keySet,
     refreshMinutes: Number(p.refresh_minutes) as FxProvider["refreshMinutes"],
+    minChangeMode: p.min_change_mode ?? "percent",
+    minChange: Number(p.min_change ?? 0),
+    dailyUpdateAt: daily,
     enabled: !!p.enabled,
-    // No call to XE in this phase: always simulated.
+    // No call to any rate API in this phase: always simulated.
     simulated: true,
+    timezone: PLATFORM_TIMEZONE,
     lastRunAt: iso(p.last_run_at),
     lastStatus: p.last_status ?? null,
     lastMessage: p.last_message ?? null,
-    nextRunAt:
-      p.enabled && p.provider === "xe"
-        ? new Date((last ?? Date.now()) + Number(p.refresh_minutes) * 60_000).toISOString()
-        : null,
+    nextRunAt: auto ? new Date((last ?? now) + Number(p.refresh_minutes) * 60_000).toISOString() : null,
+    lastDailyAt: iso(p.last_daily_at),
+    nextDailyAt: auto && daily ? new Date(dailyMoments(daily, now).next).toISOString() : null,
+    presets: FX_PRESETS,
     updatedBy: p.updated_by ?? null,
     updatedAt: iso(p.updated_at),
   };
@@ -107,15 +228,34 @@ export function getFxProvider(_request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
+export function checkProvider(b: FxProviderUpdate): { path: string; message: string }[] {
+  const errors: { path: string; message: string }[] = [];
+  if (b.provider !== "manual" && b.provider !== "ecb" && !b.apiUrl?.trim())
+    errors.push({ path: "/apiUrl", message: "required: the URL that returns the latest rates" });
+  if (b.apiUrl?.trim() && !/^https?:\/\/\S+$/.test(b.apiUrl.trim()))
+    errors.push({ path: "/apiUrl", message: "an http(s) URL" });
+  if (b.authType === "path" && b.apiUrl && !b.apiUrl.includes("{key}"))
+    errors.push({ path: "/apiUrl", message: "put {key} where the API key goes" });
+  if ((b.authType === "query" || b.authType === "header") && !b.authParam?.trim())
+    errors.push({ path: "/authParam", message: `the ${b.authType === "query" ? "parameter" : "header"} name` });
+  if (b.provider === "custom" && !b.label?.trim()) errors.push({ path: "/label", message: "name the source" });
+  if (b.minChangeMode === "percent" && b.minChange > 100) errors.push({ path: "/minChange", message: "at most 100 %" });
+  return errors;
+}
+
 export function updateFxProvider(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as FxProviderUpdate;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     if (!isAdmin(me)) return forbidden(reply);
+    const errors = checkProvider(b);
+    if (errors.length) return sendProblem(reply, 400, "Check the highlighted fields", { errors });
     const key = b.apiKey === undefined || b.apiKey === null ? undefined : b.apiKey.trim();
     await pool.query(
       `UPDATE fx_provider SET provider = $1, account_id = $2, refresh_minutes = $3, enabled = $4,
-              api_key_enc = CASE WHEN $5::boolean THEN $6 ELSE api_key_enc END, updated_by_id = $7, updated_at = now()
+              api_key_enc = CASE WHEN $5::boolean THEN $6 ELSE api_key_enc END, updated_by_id = $7, updated_at = now(),
+              label = $8, api_url = $9, auth_type = $10, auth_param = $11, rates_path = $12, base_currency = $13,
+              min_change_mode = $14, min_change = $15, daily_update_at = $16
         WHERE id = 1`,
       [
         b.provider,
@@ -125,39 +265,65 @@ export function updateFxProvider(request: FastifyRequest, reply: FastifyReply) {
         key !== undefined,
         key ? encryptSecret(key) : null,
         me.id,
+        b.label?.trim() || null,
+        b.apiUrl?.trim() || null,
+        b.authType,
+        b.authParam?.trim() || null,
+        b.ratesPath?.trim() || null,
+        b.baseCurrency,
+        b.minChangeMode,
+        b.minChange,
+        b.dailyUpdateAt,
       ],
     );
     return loadProvider(pool);
   });
 }
 
-/** One scheduled refresh when it is due (checked every minute). */
-export async function runFxRefresh(pool: pg.Pool, now = Date.now()): Promise<boolean> {
-  const p = await loadProvider(pool);
-  if (!p.enabled || p.provider !== "xe") return false;
-  if (p.lastRunAt && now - Date.parse(p.lastRunAt) < p.refreshMinutes * 60_000 - 5_000) return false;
+/**
+ * The scheduler (checked every minute): the daily update when its time has passed today and it has not run
+ * since, otherwise a check when one is due. A check only changes rates that moved at least the minimum change.
+ */
+export async function runFxRefresh(pool: pg.Pool, now = Date.now()): Promise<"daily" | "check" | null> {
+  const p = await loadProvider(pool, now);
+  if (!p.enabled || p.provider === "manual") return null;
+  const source = sourceLabel(p);
+  const dailyDue =
+    p.dailyUpdateAt !== null &&
+    (() => {
+      const { last } = dailyMoments(p.dailyUpdateAt!, now);
+      return !p.lastDailyAt || Date.parse(p.lastDailyAt) < last;
+    })();
+  const checkDue = !p.lastRunAt || now - Date.parse(p.lastRunAt) >= p.refreshMinutes * 60_000 - 5_000;
+  if (!dailyDue && !checkDue) return null;
+  const threshold = p.minChangeMode === "percent" ? `${p.minChange} %` : `${p.minChange} per EUR`;
   try {
-    const r = await refreshRates(pool, {
-      userId: null,
-      ip: null,
-      note: `Scheduled refresh of ${"{n}"} exchange rates (simulated XE feed)`,
-    });
-    await pool.query(
-      "UPDATE fx_provider SET last_run_at = now(), last_status = 'simulated', last_message = $1 WHERE id = 1",
-      [`${r.updated} rates updated (simulated: no call to XE in this phase)`],
+    const r = await refreshRates(
+      pool,
+      {
+        userId: null,
+        ip: null,
+        note: dailyDue
+          ? `Daily update of {n} exchange rates (simulated ${source} feed)`
+          : `{n} exchange rates moved ≥ ${threshold} (simulated ${source} feed)`,
+      },
+      { force: dailyDue, mode: p.minChangeMode, min: p.minChange },
     );
-    if (r.change)
-      await pool.query("UPDATE changes SET note = replace(note, '{n}', $2) WHERE id = $1", [
-        r.change.id,
-        String(r.updated),
-      ]);
+    const message = dailyDue
+      ? `Daily update: ${r.updated} of ${r.checked} rates updated (simulated: no call to ${source})`
+      : `${r.checked} checked, ${r.updated} updated, ${r.checked - r.updated} below ${threshold} (simulated)`;
+    await pool.query(
+      `UPDATE fx_provider SET last_run_at = to_timestamp($2 / 1000.0), last_status = 'simulated', last_message = $1,
+              last_daily_at = CASE WHEN $3::boolean THEN to_timestamp($2 / 1000.0) ELSE last_daily_at END WHERE id = 1`,
+      [message, now, dailyDue],
+    );
   } catch (e) {
     await pool.query(
-      "UPDATE fx_provider SET last_run_at = now(), last_status = 'error', last_message = $1 WHERE id = 1",
-      [String((e as Error).message).slice(0, 300)],
+      "UPDATE fx_provider SET last_run_at = to_timestamp($2 / 1000.0), last_status = 'error', last_message = $1 WHERE id = 1",
+      [String((e as Error).message).slice(0, 300), now],
     );
   }
-  return true;
+  return dailyDue ? "daily" : "check";
 }
 
 export function startFxRefresh() {

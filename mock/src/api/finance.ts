@@ -655,13 +655,14 @@ export function syncCurrencyRates(request: FastifyRequest, reply: FastifyReply) 
     const r = await refreshRates(pool, {
       userId: me.id,
       ip: request.ip,
-      note: "Synced exchange rates (simulated XE feed)",
+      note: "Synced {n} exchange rates (simulated feed)",
     });
+    // Sync Rates takes every rate whatever the difference, like the daily update (team trial round 3).
     await pool.query(
       "UPDATE fx_provider SET last_run_at = now(), last_status = 'simulated', last_message = $1 WHERE id = 1",
-      [`${r.updated} rates updated by ${me.username} (simulated: no call to XE in this phase)`],
+      [`Sync: ${r.updated} of ${r.checked} rates updated by ${me.username} (simulated: no call to the rate API)`],
     );
-    return r;
+    return { updated: r.updated, change: r.change };
   });
 }
 

@@ -1833,6 +1833,11 @@ export const topics: HelpTopic[] = [
       "rate per EUR",
       "XE",
       "xe.com",
+      "Open Exchange Rates",
+      "Fixer",
+      "ECB",
+      "minimum change",
+      "daily update",
       "currency alert",
       "sync rates",
       "exchange history",
@@ -1955,30 +1960,53 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Source",
-                what: "**XE Currency Data API (xe.com)**: the platform pulls every currency per 1 EUR from XE on the schedule. **Manual**: rates are typed in on Currency Exchange.",
-                values: "XE needs a paid XE Currency Data account (account ID and API key).",
+                what: "Any rate API: **XE**, **Open Exchange Rates**, **Fixer**, **ExchangeRate-API**, the **European Central Bank** (free, daily), a **Custom JSON API**, or **Manual** (rates typed in on Currency Exchange). Picking a source fills its URL, key placement, rates path and base currency; the note under the box says how often that source updates.",
+              },
+              { name: "Source name", what: "Custom only: a name for the source, e.g. `Bank feed`." },
+              {
+                name: "API URL",
+                what: "The address that returns the latest rates. `{key}` is replaced by the API key, `{base}` by the base currency.",
               },
               {
-                name: "Refresh",
-                what: "How often rates are pulled: every minute, 15 minutes, hour, 6 hours or once a day.",
-                values:
-                  "Default every hour. XE's plan decides how fresh its rates are (daily, hourly or every minute), so refreshing faster than the plan gains nothing.",
+                name: "API key sent as",
+                what: "No key, a query parameter (name it, e.g. `app_id`), a header (name it, e.g. `apikey`), basic auth (account ID and key, as XE) or inside the URL (`{key}`).",
               },
-              { name: "XE account ID", what: "The account ID from XE." },
               {
-                name: "XE API key",
-                what: "The key from XE. It is stored encrypted and never shown again; leave the box empty to keep it.",
+                name: "API key",
+                what: "Stored encrypted and never shown again; leave the box empty to keep it.",
               },
-              { name: "Refresh automatically", what: "Off = rates change only with Sync Rates or by hand." },
               {
-                name: "Last refresh / Next refresh",
-                what: "When rates were last pulled and the result, and when the next pull is due.",
+                name: "Rates path in the answer",
+                what: "Where the currency → rate list sits in the JSON answer, e.g. `rates` or `data.rates`.",
+              },
+              {
+                name: "Source quotes against",
+                what: "The currency the source's rates are per (often USD on free plans). They are converted to per 1 EUR when saved.",
+              },
+              {
+                name: "Check the source",
+                what: "How often the source is checked: every minute, 15 minutes, hour (default), 6 hours or once a day. A check does not change a rate unless it moved at least the minimum change.",
+              },
+              {
+                name: "Update a rate only when it moved at least",
+                what: "The minimum difference from the rate in the system, as **% of the current rate** or **units per 1 EUR**. Smaller moves are ignored until a bigger one or the daily update. 0 = every check updates.",
+                values: "Default 0.5 %.",
+              },
+              {
+                name: "Daily update",
+                what: "Every day at this time (platform time zone) every rate is taken from the source whatever the difference, so no rate is more than a day old. Untick to rely on the checks only.",
+                values: "Default 06:00.",
+              },
+              { name: "Check automatically", what: "Off = rates change only with Sync Rates or by hand." },
+              {
+                name: "Last check / Next check / Last and next daily update",
+                what: "When the source was last checked and what it did (e.g. `32 checked, 3 updated, 29 below 0.5 %`), and when the next check and daily update are due.",
               },
             ],
           },
           {
             kind: "tip",
-            text: "In the trial, refreshes are simulated (small market moves) and nothing is sent to XE, even with an account set up.",
+            text: "**Sync Rates** on Currency Exchange takes every rate at once, like the daily update. In the trial, checks are simulated (small market moves) and nothing is sent to the rate API, even with an account set up.",
           },
           {
             kind: "fields",

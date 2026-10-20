@@ -26,3 +26,27 @@ export const platformDateTime = (t: number | string | Date) => {
   const p = Object.fromEntries(timeFormat.formatToParts(new Date(t)).map((x) => [x.type, x.value]));
   return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
 };
+
+/** The instant the platform clock shows `hhmm` on platform day `day` (YYYY-MM-DD); DST-safe to the minute. */
+export function platformInstant(day: string, hhmm: string): number {
+  const [y, mo, d] = day.split("-").map(Number) as [number, number, number];
+  const [h, mi] = hhmm.split(":").map(Number) as [number, number];
+  const want = Date.UTC(y, mo - 1, d, h, mi);
+  let t = want;
+  // Two passes settle the offset, also across a DST change.
+  for (let i = 0; i < 2; i++) {
+    const shown = platformDateTime(t);
+    const [sd, st] = shown.split(" ") as [string, string];
+    const [sy, smo, sdd] = sd.split("-").map(Number) as [number, number, number];
+    const [sh, smi] = st.split(":").map(Number) as [number, number];
+    t += want - Date.UTC(sy, smo - 1, sdd, sh, smi);
+  }
+  return t;
+}
+
+/** The last and next time the platform clock shows `hhmm` around `now` (daily jobs, team trial round 3). */
+export function dailyMoments(hhmm: string, now = Date.now()): { last: number; next: number } {
+  const today = platformInstant(platformDay(now), hhmm);
+  if (today <= now) return { last: today, next: platformInstant(platformDay(now + 86_400_000), hhmm) };
+  return { last: platformInstant(platformDay(now - 86_400_000), hhmm), next: today };
+}
