@@ -159,7 +159,16 @@ function PatternField({
 }) {
   return (
     <div className={matchCase ? "cond-field with-case" : "cond-field"}>
-      <TextField form={form} path={path} label={label} placeholder={placeholder} maxLength={500} />
+      <TextField
+        form={form}
+        path={path}
+        label={label}
+        placeholder={placeholder}
+        maxLength={500}
+        hint={
+          path === "senderPattern" ? "Keywords: \\Numeric = numeric Sender IDs, \\Alpha = with a letter" : undefined
+        }
+      />
       <Negate form={form} path={negate} />
       {matchCase && <MatchCase form={form} />}
     </div>

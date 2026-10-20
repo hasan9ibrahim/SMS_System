@@ -169,7 +169,7 @@ async function vendorsOf(db: Db, ids: number[]) {
   const [v, w] = await Promise.all([
     db.query(
       `SELECT route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per,
-              backup_for_vendor_trunk_id
+              warmup_reset_hours, backup_for_vendor_trunk_id
          FROM route_rule_vendors WHERE route_rule_id = ANY($1) ORDER BY route_rule_id, level, is_backup, share_pct DESC NULLS LAST, id`,
       [ids],
     ),
@@ -193,6 +193,8 @@ async function vendorsOf(db: Db, ids: number[]) {
         : { backupForVendorTrunkId: Number(r.backup_for_vendor_trunk_id) }),
       warmupCount: r.warmup_count ?? null,
       warmupReset: r.warmup_reset ?? null,
+      // Custom reset period in hours (team trial round 2), only with warmupReset custom.
+      ...(r.warmup_reset === "custom" ? { warmupResetHours: r.warmup_reset_hours ?? null } : {}),
       warmupPer: r.warmup_per ?? null,
     });
     vendors.set(r.route_rule_id, list);
@@ -328,6 +330,7 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
       isBackup: v.isBackup ?? false,
       warmupCount: v.warmupCount ?? null,
       warmupReset: v.warmupCount ? (v.warmupReset ?? "day") : null,
+      ...(v.warmupCount && v.warmupReset === "custom" ? { warmupResetHours: v.warmupResetHours ?? null } : {}),
       warmupPer: v.warmupCount ? (v.warmupPer ?? "rule") : null,
     }))
     .sort(
@@ -433,6 +436,8 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
   r.vendors.forEach((v, i) => {
     if (v.level > r.maxRouteLevel)
       errors.push({ path: `/vendors/${i}/level`, message: `above the max route level ${r.maxRouteLevel}` });
+    if (v.warmupCount && v.warmupReset === "custom" && !v.warmupResetHours)
+      errors.push({ path: `/vendors/${i}/warmupResetHours`, message: "give the reset period in hours" });
   });
   if (r.huntPolicy === "percentage" && r.routeType !== "dynamic") {
     const levels = new Map<number, number>();
@@ -466,8 +471,8 @@ async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]
   for (const v of vendors)
     await c.query(
       `INSERT INTO route_rule_vendors (route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per,
-                                       backup_for_vendor_trunk_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                                       backup_for_vendor_trunk_id, warmup_reset_hours)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         id,
         v.level,
@@ -478,6 +483,7 @@ async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]
         v.warmupReset ?? null,
         v.warmupPer ?? null,
         v.isBackup ? (v.backupForVendorTrunkId ?? null) : null,
+        v.warmupReset === "custom" ? (v.warmupResetHours ?? null) : null,
       ],
     );
 }

@@ -660,13 +660,27 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
         const dlr = Math.min(0.995, Math.max(0.2, v.quality.dlr + destQ * 0.16));
         const success = rng.chance(asr);
         const respAt = submitAt + Math.round(rng.logNormal(success ? 120 : 300, 0.6));
-        const vMsgId = !success
+        const firstId = !success
           ? ""
           : v.msgIdType === "decimal"
             ? String(1e9 + seq * 7 + attempt)
             : v.msgIdType === "hexadecimal"
               ? (seq * 7 + attempt).toString(16).toUpperCase()
               : rng.hex(20);
+        // One vendor ID per part of a multipart message, comma separated (team trial round 2); derived from the
+        // first so the random sequence (and the rest of the seed) does not change.
+        const vMsgId =
+          !firstId || msgCount === 1
+            ? firstId
+            : Array.from({ length: msgCount }, (_, i) =>
+                i === 0
+                  ? firstId
+                  : v.msgIdType === "decimal"
+                    ? String(Number(firstId) + i * 3)
+                    : v.msgIdType === "hexadecimal"
+                      ? ((seq * 7 + attempt) * 4 + i).toString(16).toUpperCase()
+                      : `${firstId.slice(0, -2)}${(parseInt(firstId.slice(-2), 16) ^ i).toString(16).padStart(2, "0")}`,
+              ).join(",");
 
         let status = "";
         let deliveryAt: number | null = null;

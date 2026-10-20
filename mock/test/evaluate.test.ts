@@ -10,6 +10,7 @@ import {
   conditionChecks,
   decide,
   destinationHit,
+  keywordPattern,
   matches,
   quickMatch,
   rulesForDestination,
@@ -308,4 +309,22 @@ test("Match case for every Sender condition: exact capitals when on, any case wh
   assert.match(checks.find((c) => c.condition === "Sender list")!.detail, /any case/);
   // Receiver and content conditions keep ignoring case.
   assert.equal(on({ senderPattern: null, contentPattern: "CODE" }, { content: "code 1234" }), true);
+});
+
+test("Sender ID keywords: \\Numeric and \\Alpha (team trial round 2)", () => {
+  assert.equal(keywordPattern("\\Numeric"), "^\\+?[0-9]+$");
+  assert.equal(keywordPattern(" \\numeric "), "^\\+?[0-9]+$");
+  assert.equal(keywordPattern("^TEST"), null);
+  const base = { customerTrunkMode: "all", mccmncMode: "all", senderPatternNegate: false };
+  const r = rule({ ...base, senderPattern: "\\Numeric" });
+  const hit = (x: unknown, sender: string) => {
+    const m = msg({ sender });
+    return quickMatch(x as never, m) && matches(conditionChecks(x as never, m), "all");
+  };
+  assert.ok(hit(r, "447700900123"));
+  assert.ok(hit(r, "+447700900123"));
+  assert.ok(!hit(r, "BANK1"));
+  const alpha = rule({ ...base, senderPattern: "\\Alpha" });
+  assert.ok(hit(alpha, "BANK1"));
+  assert.ok(!hit(alpha, "12345"));
 });

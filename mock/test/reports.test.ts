@@ -120,6 +120,30 @@ const Q = (over: Partial<MasterReportQuery>): MasterReportQuery => ({
 });
 
 describe("§13.15 Master Report", { skip }, () => {
+  test("numeric Sender IDs group as Numeric and drill down by Sender ID (team trial round 2)", async () => {
+    const groups = await ok<MasterReportPage>(
+      "runMasterReport",
+      call("POST", "/reports/master", Q({ groupBy: ["senderGroup"], limit: 4000 })),
+    );
+    assert.ok(groups.rows.every((r) => !/^[+]?[0-9]+$/.test(String(r.dims.senderGroup!.label))));
+    const numeric = groups.rows.find((r) => r.dims.senderGroup!.label === "Numeric");
+    if (!numeric) return;
+    const each = await ok<MasterReportPage>(
+      "runMasterReport",
+      call(
+        "POST",
+        "/reports/master",
+        Q({
+          groupBy: ["senderId"],
+          limit: 4000,
+          filter: { logic: "and", conditions: [{ field: "senderGroup", op: "eq", value: "Numeric" }] },
+        }),
+      ),
+    );
+    assert.ok(each.rows.length > 0 && each.rows.every((r) => /^[+]?[0-9]+$/.test(String(r.dims.senderId!.label))));
+    assert.equal(each.totals.metrics.attempts, numeric.metrics.attempts);
+  });
+
   test("grouping, totals equal the rows, paging, labels", async () => {
     const all = await ok<MasterReportPage>(
       "runMasterReport",

@@ -181,12 +181,63 @@ export function PermissionMatrix({
   );
 }
 
+/** Tabs and form sections the group sees (team trial round 2): untick to hide, e.g. the Enterprise Docs tab. */
+export function TabVisibility({
+  catalog,
+  hidden,
+  onChange,
+}: {
+  catalog: AccessCatalog;
+  hidden: string[];
+  onChange?: (h: string[]) => void;
+}) {
+  const withTabs = catalog.modules.filter((m) => m.tabs?.length);
+  const set = new Set(hidden);
+  return (
+    <div className="tab-visibility">
+      <h3>Tabs and sections</h3>
+      <p className="muted small">
+        Untick a tab or section to hide it from this group. Each user can be given an exception.
+      </p>
+      <div className="tab-vis-grid">
+        {withTabs.map((m) => (
+          <fieldset key={m.key}>
+            <legend>{m.label}</legend>
+            {m.tabs!.map((t) => (
+              <label key={t.key} className="toggle-inline">
+                <input
+                  type="checkbox"
+                  checked={!set.has(t.key)}
+                  disabled={!onChange}
+                  onChange={(e) => {
+                    const next = new Set(set);
+                    if (e.target.checked) next.delete(t.key);
+                    else next.add(t.key);
+                    onChange?.([...next].sort());
+                  }}
+                />
+                {t.label}
+              </label>
+            ))}
+          </fieldset>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function GroupDialog({ row, done }: { row: AccessGroupRow | null; done: () => void }) {
   const catalog = useAccessCatalog();
   const form = useForm<AccessGroupInput>(
     row
-      ? { name: row.name, status: row.status, description: row.description, permissions: row.permissions }
-      : { name: "", status: "active", description: null, permissions: { dashboard: ["view"] } },
+      ? {
+          name: row.name,
+          status: row.status,
+          description: row.description,
+          permissions: row.permissions,
+          hiddenTabs: row.hiddenTabs,
+        }
+      : { name: "", status: "active", description: null, permissions: { dashboard: ["view"] }, hiddenTabs: [] },
   );
   const save = useSaveAccessGroup();
   const notifySaved = useNotifySaved();
@@ -242,11 +293,18 @@ function GroupDialog({ row, done }: { row: AccessGroupRow | null; done: () => vo
         <TextField form={form} path="description" label="Description" maxLength={500} />
       </div>
       {catalog.data ? (
-        <PermissionMatrix
-          catalog={catalog.data}
-          value={form.values.permissions}
-          onChange={(p) => form.set("permissions", p)}
-        />
+        <>
+          <PermissionMatrix
+            catalog={catalog.data}
+            value={form.values.permissions}
+            onChange={(p) => form.set("permissions", p)}
+          />
+          <TabVisibility
+            catalog={catalog.data}
+            hidden={form.values.hiddenTabs}
+            onChange={(h) => form.set("hiddenTabs", h)}
+          />
+        </>
       ) : (
         <p className="muted">Loading pages…</p>
       )}
@@ -259,7 +317,10 @@ const openDialog = (row: AccessGroupRow | null) => ask<void>((d) => <GroupDialog
 function MatrixView({ r }: { r: AccessGroupRow }) {
   const catalog = useAccessCatalog();
   return catalog.data ? (
-    <PermissionMatrix catalog={catalog.data} value={r.permissions} />
+    <>
+      <PermissionMatrix catalog={catalog.data} value={r.permissions} />
+      {r.hiddenTabs.length > 0 && <TabVisibility catalog={catalog.data} hidden={r.hiddenTabs} />}
+    </>
   ) : (
     <p className="muted">Loading…</p>
   );

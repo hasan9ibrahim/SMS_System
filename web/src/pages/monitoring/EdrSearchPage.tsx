@@ -159,7 +159,8 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
         key={`v${ids("vendorMsgId")}`}
         className="edr-ids"
         defaultValue={ids("vendorMsgId")}
-        placeholder="Vendor Msg IDs"
+        placeholder="Vendor Msg IDs, comma separated"
+        title="A long message has one vendor ID per part; any of them finds it (team trial round 2)"
         aria-label="Vendor Msg IDs"
         onBlur={(e) => e.target.value !== ids("vendorMsgId") && setIds("vendorMsgId", e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && setIds("vendorMsgId", e.currentTarget.value)}
@@ -536,7 +537,15 @@ export function EdrSearchPage() {
         vendorTrunk: { width: 170, render: (r) => r.vendorTrunk ?? muted("—") },
         vendorMsgId: {
           width: 150,
-          render: (r) => (r.vendorMsgId ? <span className="num small">{r.vendorMsgId}</span> : muted("—")),
+          // One ID per part for a long message, comma separated (team trial round 2).
+          render: (r) =>
+            r.vendorMsgId ? (
+              <span className="num small" title={r.vendorMsgId.split(",").join("\n")}>
+                {r.vendorMsgId}
+              </span>
+            ) : (
+              muted("—")
+            ),
         },
         causeCode: {
           width: 200,

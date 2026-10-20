@@ -4,9 +4,10 @@
 // on one or many selected users; QR 2FA enrols with a code from the app. Delete is blocked while the
 // user is account manager of live enterprises (§13.29). Saves are undoable (§13.10).
 import { useState } from "react";
-import type { AccessGroupRow, DepartmentRow, UserInput, UserRow } from "@sms/contract";
+import type { AccessCatalog, AccessGroupRow, DepartmentRow, UserInput, UserRow } from "@sms/contract";
 import {
   setupTotp,
+  useAccessCatalog,
   useAllRows,
   useConfirmTotp,
   useDisableTotp,
@@ -57,6 +58,8 @@ const blank = (): UserInput => ({
   city: null,
   zip: null,
   password: null,
+  permissionOverrides: {},
+  tabOverrides: {},
 });
 
 const inputOf = (r: UserRow): UserInput => ({
@@ -82,12 +85,15 @@ const inputOf = (r: UserRow): UserInput => ({
   state: r.state,
   city: r.city,
   zip: r.zip,
+  permissionOverrides: r.permissionOverrides,
+  tabOverrides: r.tabOverrides,
 });
 
 function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
   const ref = useReference();
   const departments = useAllRows<DepartmentRow>("departments");
   const groups = useAllRows<AccessGroupRow>("access_groups");
+  const catalog = useAccessCatalog();
   const form = useForm<UserInput>(row ? inputOf(row) : blank());
   const save = useSaveUser();
   const notifySaved = useNotifySaved();
@@ -222,6 +228,14 @@ function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
       <TextField form={form} path="state" label="State" maxLength={100} />
       <TextField form={form} path="city" label="City" maxLength={100} />
       <TextField form={form} path="zip" label="Zip Code" maxLength={20} />
+      <AccessOverrides
+        catalog={catalog.data}
+        group={groups.data?.find((g) => g.id === v.accessGroupId) ?? null}
+        perms={v.permissionOverrides}
+        tabs={v.tabOverrides}
+        onPerms={(x) => form.set("permissionOverrides", x)}
+        onTabs={(x) => form.set("tabOverrides", x)}
+      />
       {!row && (
         <>
           <TextField
@@ -242,6 +256,117 @@ function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
         </>
       )}
     </RecordDialog>
+  );
+}
+
+type Level = "inherit" | "none" | "view" | "full" | "custom";
+
+/** Per-user exceptions to the access group (team trial round 2, §11): a page or tab can be opened or closed for one
+ *  user without a new group. Pages and tabs left on Inherit follow the group. */
+function AccessOverrides({
+  catalog,
+  group,
+  perms,
+  tabs,
+  onPerms,
+  onTabs,
+}: {
+  catalog: AccessCatalog | undefined;
+  group: AccessGroupRow | null;
+  perms: Record<string, string[]>;
+  tabs: Record<string, boolean>;
+  onPerms: (x: Record<string, string[]>) => void;
+  onTabs: (x: Record<string, boolean>) => void;
+}) {
+  const count = Object.keys(perms).length + Object.keys(tabs).length;
+  const [open, setOpen] = useState(count > 0);
+  if (!catalog) return null;
+  const levelOf = (key: string, all: string[]): Level => {
+    const a = perms[key];
+    if (!a) return "inherit";
+    if (a.length === 0) return "none";
+    if (a.length === 1 && a[0] === "view") return "view";
+    if (all.every((x) => a.includes(x))) return "full";
+    return "custom";
+  };
+  const groupHidden = new Set(group?.hiddenTabs ?? []);
+  const groupHas = (page: string) => {
+    const p = group?.permissions ?? {};
+    return !!(p["*"]?.includes("view") || p[page]?.includes("view"));
+  };
+  return (
+    <div className="ff wide access-overrides">
+      <span className="ff-label">
+        Access exceptions{" "}
+        <button type="button" className="link-btn" onClick={() => setOpen(!open)}>
+          {open ? "Hide" : count ? `Show (${count})` : "Add…"}
+        </button>
+      </span>
+      {open && (
+        <>
+          <p className="muted small">
+            Override the access group for this user only. Inherit follows {group ? group.name : "the group"}.
+          </p>
+          <div className="tab-vis-grid">
+            {catalog.sections.map((sec) => {
+              const mods = catalog.modules.filter((m) => m.section === sec.key);
+              if (!mods.length) return null;
+              return (
+                <fieldset key={sec.key}>
+                  <legend>{sec.label}</legend>
+                  {mods.map((m) => {
+                    const level = levelOf(m.key, m.actions);
+                    return (
+                      <div key={m.key}>
+                        <label className="override-row">
+                          <span>{m.label}</span>
+                          <select
+                            value={level}
+                            onChange={(e) => {
+                              const next = { ...perms };
+                              const l = e.target.value as Level;
+                              if (l === "inherit") delete next[m.key];
+                              else if (l === "none") next[m.key] = [];
+                              else if (l === "view") next[m.key] = ["view"];
+                              else if (l === "full") next[m.key] = [...m.actions];
+                              onPerms(next);
+                            }}
+                          >
+                            <option value="inherit">Inherit ({groupHas(m.key) ? "open" : "closed"})</option>
+                            <option value="none">No access</option>
+                            <option value="view">View only</option>
+                            <option value="full">Full</option>
+                            {level === "custom" && <option value="custom">Custom</option>}
+                          </select>
+                        </label>
+                        {m.tabs?.map((t) => (
+                          <label key={t.key} className="override-row override-tab">
+                            <span>{t.label}</span>
+                            <select
+                              value={t.key in tabs ? (tabs[t.key] ? "show" : "hide") : "inherit"}
+                              onChange={(e) => {
+                                const next = { ...tabs };
+                                if (e.target.value === "inherit") delete next[t.key];
+                                else next[t.key] = e.target.value === "show";
+                                onTabs(next);
+                              }}
+                            >
+                              <option value="inherit">Inherit ({groupHidden.has(t.key) ? "hidden" : "shown"})</option>
+                              <option value="show">Show</option>
+                              <option value="hide">Hide</option>
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </fieldset>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

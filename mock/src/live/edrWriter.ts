@@ -224,7 +224,7 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
           if(isNull(submit_resp_time), NULL, addMilliseconds(assumeNotNull(submit_resp_time), ${shift})) AS submit_resp_time,
           if(isNull(delivery_time), NULL, addMilliseconds(assumeNotNull(delivery_time), ${shift})) AS delivery_time,
           ${id()} AS c_message_id,
-          if(v_message_id = '', '', ${id()}) AS v_message_id,
+          if(v_message_id = '', '', arrayStringConcat(arrayMap(i -> ${id()}, range(greatest(toUInt32(msg_count), 1))), ',')) AS v_message_id,
           ${routed("toUInt32(m_vt)", "v_trunk_id")} AS v_trunk_id,
           ${routed("toUInt32(m_ve)", "v_enterprise_id")} AS v_enterprise_id,
           ${routed("toString(m_vbt)", "toString(v_billing_type)")} AS v_billing_type,

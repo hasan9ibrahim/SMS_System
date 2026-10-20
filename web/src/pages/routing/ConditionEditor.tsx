@@ -56,6 +56,23 @@ function regexError(p: string): string | null {
   }
 }
 
+/** Sender ID keywords (team trial round 2): \Numeric = all-digit Sender IDs, \Alpha = Sender IDs with a letter. */
+export function SenderKeywords({ setPattern }: { setPattern: (p: string) => void }) {
+  return (
+    <small className="muted sender-keywords">
+      Keywords:{" "}
+      <button type="button" className="link-btn" onClick={() => setPattern("\\Numeric")}>
+        \Numeric
+      </button>{" "}
+      = numeric Sender IDs,{" "}
+      <button type="button" className="link-btn" onClick={() => setPattern("\\Alpha")}>
+        \Alpha
+      </button>{" "}
+      = Sender IDs with a letter
+    </small>
+  );
+}
+
 /**
  * Values instead of a regex (team trial round 1): type a Sender ID, receiver or phrase and press + (or
  * Enter); "Regex" keeps the free pattern for anything else.
@@ -107,6 +124,14 @@ function PatternBuilder({
           </button>
         ))}
       </div>
+      {field === "sender" && (
+        <SenderKeywords
+          setPattern={(p) => {
+            setKind("regex");
+            setPattern(p);
+          }}
+        />
+      )}
       {kind === "regex" ? (
         <label className="field">
           <span>{CONDITION_LABELS[field]} pattern (regular expression)</span>

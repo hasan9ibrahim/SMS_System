@@ -1,6 +1,7 @@
 // Translation engine (§6.4, §13.2 Test): runs a sample message through translation rules and
 // reports every check and change. Pure: lists, the receiver's network and randomness come in
 // through the context, so the same code serves the rule Test, the trunk Rules tab Test and tests.
+import { keywordPattern } from "./evaluate.js";
 import type {
   ContentWordRule,
   DlrMapEntry,
@@ -63,7 +64,7 @@ function patternCheck(
   matchCase = true,
 ): Check | null {
   if (!pattern) return null;
-  const re = compile(pattern, matchCase ? "" : "i");
+  const re = compile(keywordPattern(pattern) ?? pattern, matchCase ? "" : "i");
   if (!re) return { condition: name, ok: false, detail: `invalid pattern ${pattern}` };
   const hit = re.test(value);
   return {

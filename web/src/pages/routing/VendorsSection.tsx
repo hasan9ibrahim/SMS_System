@@ -393,7 +393,7 @@ export function VendorsSection({
                                     warmupPer: v.warmupPer ?? "rule",
                                     warmupReset: v.warmupReset ?? null,
                                   }
-                                : { warmupCount: null, warmupPer: null, warmupReset: null },
+                                : { warmupCount: null, warmupPer: null, warmupReset: null, warmupResetHours: null },
                             );
                           }}
                         />
@@ -416,15 +416,34 @@ export function VendorsSection({
                           aria-label="Warm-up resets"
                           disabled={!v.warmupCount}
                           value={v.warmupReset ?? ""}
-                          onChange={(e) =>
-                            setVendor(i, { warmupReset: (e.target.value || null) as RouteVendor["warmupReset"] })
-                          }
+                          onChange={(e) => {
+                            const r = (e.target.value || null) as RouteVendor["warmupReset"];
+                            setVendor(i, {
+                              warmupReset: r,
+                              warmupResetHours: r === "custom" ? (v.warmupResetHours ?? 12) : null,
+                            });
+                          }}
                         >
                           <option value="">Never</option>
                           <option value="hour">Hourly</option>
                           <option value="day">Daily</option>
                           <option value="week">Weekly</option>
+                          <option value="custom">Every … hours</option>
                         </select>
+                        {/* Custom reset period (team trial round 2), 1–8760 hours. */}
+                        {v.warmupReset === "custom" && (
+                          <input
+                            className="num w-num"
+                            type="number"
+                            min={1}
+                            max={8760}
+                            step={1}
+                            aria-label="Warm-up reset hours"
+                            title="Reset the warm-up count every this many hours"
+                            value={v.warmupResetHours ?? ""}
+                            onChange={(e) => setVendor(i, { warmupResetHours: numOrNull(e.target.value) })}
+                          />
+                        )}
                       </td>
                       <td>
                         <button

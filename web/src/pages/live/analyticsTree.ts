@@ -17,7 +17,9 @@ export const LEVELS: { value: ReportDimension; label: string; time?: boolean }[]
   { value: "vendorDestination", label: "Vendor network (MCCMNC)" },
   { value: "accountManager", label: "Customer account manager" },
   { value: "vendorAccountManager", label: "Vendor account manager" },
-  { value: "senderId", label: "Sender ID" },
+  // Numeric Sender IDs as one "Numeric" row; its + breaks it down by Sender ID (each) (team trial round 2).
+  { value: "senderGroup", label: "Sender ID" },
+  { value: "senderId", label: "Sender ID (each)" },
   { value: "productCategory", label: "Product category" },
   { value: "quarterHour", label: "15 minutes", time: true },
   { value: "hour", label: "Hour", time: true },

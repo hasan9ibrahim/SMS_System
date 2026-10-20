@@ -1,7 +1,8 @@
 // Account manager history and Hand over (§13.30): results before the handover stay with the
 // previous AM. A handover is immediate or scheduled; a new one replaces a pending one.
 import { useState } from "react";
-import type { EnterpriseDetail } from "@sms/contract";
+import type { EmailTemplateRow, EnterpriseDetail } from "@sms/contract";
+import { useAllRows } from "../../api/admin";
 import { ApiError } from "../../api/client";
 import { useAmHistory, useHandover, useReference } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
@@ -19,6 +20,13 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
   const [when, setWhen] = useState<"now" | "later">("now");
   const [at, setAt] = useState("");
   const [note, setNote] = useState("");
+  // Team trial round 2: the client is told by e-mail, from the new AM, with an am_handover template.
+  const [notify, setNotify] = useState(true);
+  const [templateId, setTemplateId] = useState<number | null>(null);
+  const templates = useAllRows<EmailTemplateRow>("email_templates", {
+    logic: "and",
+    conditions: [{ field: "emailType", op: "eq", value: "am_handover" }],
+  });
   const [error, setError] = useState<string | null>(null);
   const submit = () => {
     if (!userId) return setError("Choose the new account manager.");
@@ -28,10 +36,13 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
         userId,
         ...(when === "later" ? { effectiveAt: new Date(`${at}:00Z`).toISOString() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
+        notify,
+        ...(notify && templateId ? { templateId } : {}),
       },
       {
         onSuccess: (r) => {
-          notifySaved(r.change, when === "now" ? "Handed over" : "Handover scheduled");
+          const msg = when === "now" ? "Handed over" : "Handover scheduled";
+          notifySaved(r.change, r.emailed ? `${msg} · client e-mailed` : msg);
           onClose();
         },
         onError: (e) => {
@@ -88,6 +99,30 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
         <span>Note</span>
         <textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
+      <label className="toggle-inline">
+        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> E-mail the client
+      </label>
+      {notify && (
+        <label className="field">
+          <span>Template</span>
+          <select
+            value={templateId ?? ""}
+            onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Company default</option>
+            {templates.data?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.businessCompany ? ` (${t.businessCompany})` : ""}
+              </option>
+            ))}
+          </select>
+          <span className="muted small">
+            Sent from the new AM to the commercial contact, both AMs in copy. Edit templates in Admin › E-mail
+            templates.
+          </span>
+        </label>
+      )}
       <p className="muted small">
         Revenue, cost and margin before the handover stay credited to{" "}
         {enterprise.accountManagerName ?? "the current AM"}. A scheduled handover replaces one that hasn't started yet.

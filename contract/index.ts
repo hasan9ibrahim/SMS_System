@@ -719,3 +719,4 @@ export type FxProviderUpdate = Schemas["FxProviderUpdate"];
 export type FxAlertRule = Schemas["FxAlertRule"];
 export type FxAlertRuleInput = Schemas["FxAlertRuleInput"];
 export type FxAlertEvent = Schemas["FxAlertEvent"];
+export type TrunkConnection = Schemas["TrunkConnection"];

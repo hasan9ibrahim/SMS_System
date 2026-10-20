@@ -10025,8 +10025,10 @@ export type components = {
         dashboard: components["schemas"]["DashboardSettings"];
         alertSounds?: components["schemas"]["AlertSoundPrefs"];
       };
-      /** @description GUI Access Group permission keys; buttons not covered are hidden (§1). */
+      /** @description GUI Access Group permission keys ("page:action"; "*" = everything) after the user's own overrides; pages without view are hidden from the menu and blocked, buttons not covered are hidden (§1). */
       permissions: string[];
+      /** @description Tabs and form sections hidden for this user ("page.tab"), group and user overrides applied. */
+      hiddenTabs: string[];
     };
     PreferencesUpdate: {
       theme?: components["schemas"]["Theme"];
@@ -10430,8 +10432,17 @@ export type components = {
       /** @description Default now. A future time schedules the handover. */
       effectiveAt?: components["schemas"]["Timestamp"];
       note?: string;
+      /**
+       * @description E-mail the client about the new account manager (team trial round 2), to its commercial contact (else rates), copying both AMs, from the AM handover template (Email templates, type am_handover).
+       * @default true
+       */
+      notify: boolean;
+      /** @description An am_handover template; null = the business company's default one. */
+      templateId?: components["schemas"]["Id"] | null;
     };
     HandoverSaved: {
+      /** @description Handover e-mails logged (0 or 1). */
+      emailed: number;
       periods: components["schemas"]["AmPeriod"][];
       change: components["schemas"]["Change"];
     };
@@ -10465,6 +10476,11 @@ export type components = {
     SslType: "none" | "tls1.2" | "tls1.3";
     /** @enum {string} */
     LimitPeriod: "hour" | "day" | "week" | "month" | "billing_cycle";
+    /**
+     * @description Live connection of a trunk (team trial round 2): up (bound), reconnecting (vendor: offline for under 15 minutes or with sessions missing, the switch keeps retrying), down (not bound, or stopped).
+     * @enum {string}
+     */
+    TrunkConnection: "up" | "reconnecting" | "down";
     TrunkListRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"];
@@ -10481,6 +10497,7 @@ export type components = {
       protocol: components["schemas"]["TrunkProtocol"];
       tps: number;
       status: components["schemas"]["RecordStatus"];
+      connection: components["schemas"]["TrunkConnection"];
       bindType: string;
       /** @description Translation rules running on the trunk (replaces "Translation Rule Group", §13.2). */
       rulesCount: number;
@@ -12094,7 +12111,7 @@ export type components = {
       status?: components["schemas"]["RecordStatus"];
       /** @description Is Continue - apply further rules after this one (a trunk can override). */
       continueAfter?: boolean;
-      /** @description Regular expression on the sender ID. */
+      /** @description Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits, optional leading +), \Alpha = Sender IDs with a letter. */
       senderPattern?: string | null;
       senderPatternNegate?: boolean;
       /** @description Match case for the Sender ID conditions (team trial round 1): on, the Sender ID pattern and the Sender ID list entries must match the exact capitals ("BANK" does not match "Bank"); off, any case matches. Records always carry it; missing in an input means on. */
@@ -13863,7 +13880,8 @@ export type components = {
       | "credential_transfer"
       | "password_reminder"
       | "template_test"
-      | "currency_alert";
+      | "currency_alert"
+      | "am_handover";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -14232,6 +14250,7 @@ export type components = {
       vendorTrunk: string | null;
       vendorIp: string;
       vendorPort: number;
+      /** @description The vendor's message ID; one per part for a multipart message, comma separated (team trial round 2). A filter on it matches any of them. */
       vendorMsgId: string;
       vendorMccmnc: string;
       vendorBillingType: string;
@@ -14656,7 +14675,7 @@ export type components = {
       durationMs: number;
     };
     /**
-     * @description Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor.
+     * @description Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderGroup = the Sender ID, with every numeric one counted as Numeric (team trial round 2).
      * @enum {string}
      */
     ReportDimension:
@@ -14679,6 +14698,7 @@ export type components = {
       | "vendorDestination"
       | "productCategory"
       | "senderId"
+      | "senderGroup"
       | "routeRule"
       | "routeType"
       | "rateTable"
@@ -15043,7 +15063,7 @@ export type components = {
       change: components["schemas"]["Change"] | null;
     };
     /**
-     * @description Email Type (§11).
+     * @description Email Type (§11). am_handover = the client is told about its new account manager (team trial round 2).
      * @enum {string}
      */
     EmailTemplateType:
@@ -15059,7 +15079,8 @@ export type components = {
       | "auto_upload_rejected"
       | "trouble_ticket"
       | "send_soa"
-      | "monitoring_alert";
+      | "monitoring_alert"
+      | "am_handover";
     UserFields: {
       /** @description Lower case letters, digits, dot, dash, underscore. */
       username: string;
@@ -15095,6 +15116,20 @@ export type components = {
       state: string | null;
       city: string | null;
       zip: string | null;
+      /**
+       * @description Per-user override of the access group (team trial round 2): page key -> the actions this user has on it instead of the group's ([] = no access). Pages not listed follow the group.
+       * @default {}
+       */
+      permissionOverrides: {
+        [key: string]: string[];
+      };
+      /**
+       * @description Per-user override of hidden tabs and sections ("page.tab" -> true shows it, false hides it).
+       * @default {}
+       */
+      tabOverrides: {
+        [key: string]: boolean;
+      };
     };
     UserInput: components["schemas"]["UserFields"] & {
       /** @description Create only - the temporary password, valid 24 hours and changed at first login (§13.28). Never returned. */
@@ -15204,6 +15239,11 @@ export type components = {
       name: string;
       status: components["schemas"]["RecordStatus"];
       description: string | null;
+      /**
+       * @description Tabs and sections the group does not see ("page.tab" keys from the catalogue; team trial round 2).
+       * @default []
+       */
+      hiddenTabs: string[];
       /** @description Page key -> allowed actions (catalogue in /access-groups/catalog); key * = every page (§1). */
       permissions: {
         [key: string]: string[];
@@ -15243,6 +15283,11 @@ export type components = {
         label: string;
         section: string;
         actions: string[];
+        /** @description Tabs and form sections of the page that can be hidden (team trial round 2), keyed "page.tab", e.g. enterprises.docs or vendor-trunks.connection. */
+        tabs?: {
+          key: string;
+          label: string;
+        }[];
       }[];
     };
     UserSessionRow: {
@@ -16958,8 +17003,13 @@ export type components = {
       backupForVendorTrunkId?: components["schemas"]["Id"] | null;
       /** @description Send the first N messages to this vendor before the normal split. */
       warmupCount?: number | null;
-      /** @enum {string|null} */
-      warmupReset?: "hour" | "day" | "week" | null;
+      /**
+       * @description When the warm-up count starts again; custom = every warmupResetHours hours (team trial round 2).
+       * @enum {string|null}
+       */
+      warmupReset?: "hour" | "day" | "week" | "custom" | null;
+      /** @description With warmupReset custom, e.g. 3 or 6. */
+      warmupResetHours?: number | null;
       /** @enum {string|null} */
       warmupPer?: "rule" | "customer_trunk" | null;
     };
@@ -16999,6 +17049,7 @@ export type components = {
       mccmncs?: string[];
       /** @description Dynamic regular expression on the MCCMNC (§13.21). */
       mccmncPattern?: string | null;
+      /** @description Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits, optional leading +), \Alpha = Sender IDs with a letter. */
       senderPattern?: string | null;
       senderPatternNegate?: boolean;
       /** @description Match case for every Sender condition (team trial round 1): on, the sender pattern (including the is one of / starts with / contains values built into it) and the sender list entries must match the exact capitals ("BANK" does not match "Bank"); off, any case matches. Receiver and content conditions are not affected. Records always carry it; missing in the input of a new rule means on (an edit keeps the stored value, like the other fields). */

@@ -32,14 +32,63 @@ export const SECTIONS: AccessCatalog["sections"] = [
 
 const CRUD = ["view", "add", "edit", "delete", "export"];
 const READ = ["view", "export"];
-const m = (key: string, label: string, section: string, actions: string[]) => ({ key, label, section, actions });
+const m = (key: string, label: string, section: string, actions: string[], tabs?: [string, string][]) => ({
+  key,
+  label,
+  section,
+  actions,
+  ...(tabs ? { tabs: tabs.map(([k, l]) => ({ key: `${key}.${k}`, label: l })) } : {}),
+});
 
 export const MODULES: AccessCatalog["modules"] = [
   m("dashboard", "Dashboard", "dashboard", ["view"]),
   m("live-analytics", "Live analytics", "live", ["view"]),
-  m("enterprises", "Enterprises", "enterprises", [...CRUD, "import"]),
-  m("customer-trunks", "Customer trunks", "enterprises", [...CRUD, "send"]),
-  m("vendor-trunks", "Vendor trunks", "enterprises", [...CRUD, "start_stop"]),
+  // Tabs and form sections that a group or user can be kept from seeing (team trial round 2).
+  m(
+    "enterprises",
+    "Enterprises",
+    "enterprises",
+    [...CRUD, "import"],
+    [
+      ["docs", "Docs tab"],
+      ["billing", "Billing tab"],
+      ["customer-trunks", "Customer trunks tab"],
+      ["vendor-trunks", "Vendor trunks tab"],
+      ["account-managers", "Account managers tab"],
+      ["history", "History tab"],
+    ],
+  ),
+  m(
+    "customer-trunks",
+    "Customer trunks",
+    "enterprises",
+    [...CRUD, "send"],
+    [
+      ["connection", "Connection section"],
+      ["receipts", "Delivery receipts section"],
+      ["routing", "Routing section"],
+      ["capacity", "Capacity and limits section"],
+      ["pricing", "Pricing section"],
+      ["rules", "Rules tab"],
+      ["history", "History tab"],
+    ],
+  ),
+  m(
+    "vendor-trunks",
+    "Vendor trunks",
+    "enterprises",
+    [...CRUD, "start_stop"],
+    [
+      ["connection", "Connection section"],
+      ["http", "HTTP API section"],
+      ["smpp", "SMPP session section"],
+      ["messages", "Messages section"],
+      ["capacity", "Capacity and limits section"],
+      ["rates", "Rates tab"],
+      ["rules", "Rules tab"],
+      ["history", "History tab"],
+    ],
+  ),
   m("transactions", "Transactions", "finance", CRUD),
   m("invoices", "Invoices", "finance", [...CRUD, "send", "approve"]),
   m("vendor-invoices", "Vendor invoices", "finance", [...CRUD, "send"]),
@@ -128,6 +177,41 @@ export function checkPermissions(perms: Record<string, string[]>): { path: strin
       errors.push({ path: `/permissions/${key}`, message: "every other action needs View" });
   }
   return errors;
+}
+
+const TAB_KEYS = new Set(MODULES.flatMap((x) => (x.tabs ?? []).map((t) => t.key)));
+
+/** Field errors for hidden tabs: keys must come from the catalogue. */
+export function checkTabs(keys: Iterable<string>, path: string): { path: string; message: string }[] {
+  return [...keys].filter((k) => !TAB_KEYS.has(k)).map((k) => ({ path: `${path}/${k}`, message: "unknown tab" }));
+}
+
+/**
+ * What a user may do: the group's permissions with the user's own page overrides on top ([] = no access), and
+ * the hidden tabs (the group's, plus the user's false, minus the user's true) (team trial round 2).
+ */
+export function effectiveAccess(
+  group: Record<string, string[]>,
+  groupHidden: string[],
+  overrides: Record<string, string[]>,
+  tabOverrides: Record<string, boolean>,
+): { permissions: Record<string, string[]>; denied: string[]; hiddenTabs: string[] } {
+  const permissions: Record<string, string[]> = { ...group };
+  // "No access" on a page also beats the group's Every page.
+  const denied: string[] = [];
+  for (const [page, actions] of Object.entries(overrides)) {
+    if (actions.length) permissions[page] = actions;
+    else {
+      delete permissions[page];
+      denied.push(page);
+    }
+  }
+  const hidden = new Set(groupHidden);
+  for (const [tab, show] of Object.entries(tabOverrides)) {
+    if (show) hidden.delete(tab);
+    else hidden.add(tab);
+  }
+  return { permissions, denied, hiddenTabs: [...hidden].sort() };
 }
 
 /** Drops pages with no actions and sorts actions in catalogue order. */

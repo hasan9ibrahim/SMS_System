@@ -559,6 +559,10 @@ export const topics: HelpTopic[] = [
                 values: "Ticked by default.",
               },
               {
+                name: "Keywords \\Numeric and \\Alpha",
+                what: "Sender only. `\\Numeric` matches numeric Sender IDs (digits, optional +); `\\Alpha` matches Sender IDs with at least one letter. Click the keyword under the Sender buttons to use it; it switches to Regex. Translation rules accept the same keywords.",
+              },
+              {
                 name: "Is one of",
                 what: "Sender and Receiver. The whole value must be one of the values you add.",
                 values: "e.g. Sender is one of `BANK`, `OTP`.",
@@ -757,8 +761,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Resets",
-                what: "Warm-up only: when the count starts again.",
-                values: "Never, Hourly, Daily, Weekly.",
+                what: "Warm-up only: when the count starts again. **Every … hours** shows a box for your own period, e.g. 6.",
+                values: "Never, Hourly, Daily, Weekly, Every … hours (1–8760).",
               },
               { name: "×", what: "Removes the vendor and its backups." },
             ],

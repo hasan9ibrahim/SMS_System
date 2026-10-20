@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.71.0
+  version: 0.72.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14714,7 +14714,7 @@ components:
 
     CurrentUser:
       type: object
-      required: [id, username, displayName, role, businessCompany, preferences, permissions]
+      required: [id, username, displayName, role, businessCompany, preferences, permissions, hiddenTabs]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -14751,7 +14751,14 @@ components:
               $ref: "#/components/schemas/AlertSoundPrefs"
         permissions:
           type: array
-          description: GUI Access Group permission keys; buttons not covered are hidden (§1).
+          description: >-
+            GUI Access Group permission keys ("page:action"; "*" = everything) after the user's own overrides;
+            pages without view are hidden from the menu and blocked, buttons not covered are hidden (§1).
+          items:
+            type: string
+        hiddenTabs:
+          type: array
+          description: Tabs and form sections hidden for this user ("page.tab"), group and user overrides applied.
           items:
             type: string
 
@@ -15617,11 +15624,25 @@ components:
         note:
           type: string
           maxLength: 500
+        notify:
+          type: boolean
+          default: true
+          description: >-
+            E-mail the client about the new account manager (team trial round 2), to its commercial contact (else
+            rates), copying both AMs, from the AM handover template (Email templates, type am_handover).
+        templateId:
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
+          description: An am_handover template; null = the business company's default one.
 
     HandoverSaved:
       type: object
-      required: [periods, change]
+      required: [periods, change, emailed]
       properties:
+        emailed:
+          type: integer
+          description: Handover e-mails logged (0 or 1).
         periods:
           type: array
           items:
@@ -15686,9 +15707,15 @@ components:
       type: string
       enum: [hour, day, week, month, billing_cycle]
 
+    TrunkConnection:
+      type: string
+      enum: [up, reconnecting, down]
+      description: >-
+        Live connection of a trunk (team trial round 2): up (bound), reconnecting (vendor: offline for under 15
+        minutes or with sessions missing, the switch keeps retrying), down (not bound, or stopped).
     TrunkListRow:
       type: object
-      required: [id, enterpriseId, enterpriseName, name, username, categoryId, category, currency, protocol, tps, status, bindType, rulesCount, ruleNames, updatedBy, updatedAt, archived]
+      required: [id, enterpriseId, enterpriseName, name, username, categoryId, category, currency, protocol, tps, status, connection, bindType, rulesCount, ruleNames, updatedBy, updatedAt, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -15717,6 +15744,8 @@ components:
           type: integer
         status:
           $ref: "#/components/schemas/RecordStatus"
+        connection:
+          $ref: "#/components/schemas/TrunkConnection"
         bindType:
           type: string
         rulesCount:
@@ -19310,7 +19339,9 @@ components:
         senderPattern:
           type: [string, "null"]
           maxLength: 200
-          description: Regular expression on the sender ID.
+          description: >-
+            Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits,
+            optional leading +), \Alpha = Sender IDs with a letter.
         senderPatternNegate:
           type: boolean
         senderMatchCase:
@@ -22586,7 +22617,7 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test, currency_alert]
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test, currency_alert, am_handover]
       description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) and currency_alert (an exchange rate moved past an alert, team trial round 2).
 
     EmailLogRow:
@@ -23434,6 +23465,9 @@ components:
           type: integer
         vendorMsgId:
           type: string
+          description: >-
+            The vendor's message ID; one per part for a multipart message, comma separated (team trial round 2).
+            A filter on it matches any of them.
         vendorMccmnc:
           type: string
         vendorBillingType:
@@ -24384,8 +24418,8 @@ components:
     # ------------------------------------------------------------- Reports (§10, §13.15)
     ReportDimension:
       type: string
-      description: "Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor."
-      enum: [second, minute, quarterHour, date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorCountry, vendorDestination, productCategory, senderId, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
+      description: "Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderGroup = the Sender ID, with every numeric one counted as Numeric (team trial round 2)."
+      enum: [second, minute, quarterHour, date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorCountry, vendorDestination, productCategory, senderId, senderGroup, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
 
     ReportMetric:
       type: string
@@ -25121,7 +25155,8 @@ components:
       - trouble_ticket
       - send_soa
       - monitoring_alert
-      description: Email Type (§11).
+      - am_handover
+      description: Email Type (§11). am_handover = the client is told about its new account manager (team trial round 2).
     UserFields:
       type: object
       required:
@@ -25233,6 +25268,27 @@ components:
           - string
           - 'null'
           maxLength: 20
+        permissionOverrides:
+          type: object
+          default: {}
+          maxProperties: 300
+          description: >-
+            Per-user override of the access group (team trial round 2): page key -> the actions this user has on
+            it instead of the group's ([] = no access). Pages not listed follow the group.
+          additionalProperties:
+            type: array
+            maxItems: 30
+            uniqueItems: true
+            items:
+              type: string
+              maxLength: 40
+        tabOverrides:
+          type: object
+          default: {}
+          maxProperties: 500
+          description: Per-user override of hidden tabs and sections ("page.tab" -> true shows it, false hides it).
+          additionalProperties:
+            type: boolean
     UserInput:
       allOf:
       - $ref: '#/components/schemas/UserFields'
@@ -25564,6 +25620,15 @@ components:
           - string
           - 'null'
           maxLength: 500
+        hiddenTabs:
+          type: array
+          default: []
+          maxItems: 500
+          uniqueItems: true
+          description: Tabs and sections the group does not see ("page.tab" keys from the catalogue; team trial round 2).
+          items:
+            type: string
+            maxLength: 80
         permissions:
           type: object
           maxProperties: 300
@@ -25679,6 +25744,19 @@ components:
                 type: array
                 items:
                   type: string
+              tabs:
+                type: array
+                description: >-
+                  Tabs and form sections of the page that can be hidden (team trial round 2), keyed
+                  "page.tab", e.g. enterprises.docs or vendor-trunks.connection.
+                items:
+                  type: object
+                  required: [key, label]
+                  properties:
+                    key:
+                      type: string
+                    label:
+                      type: string
     UserSessionRow:
       type: object
       required:
@@ -30208,7 +30286,13 @@ components:
           description: Send the first N messages to this vendor before the normal split.
         warmupReset:
           type: [string, "null"]
-          enum: [hour, day, week, null]
+          enum: [hour, day, week, custom, null]
+          description: When the warm-up count starts again; custom = every warmupResetHours hours (team trial round 2).
+        warmupResetHours:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 8760
+          description: With warmupReset custom, e.g. 3 or 6.
         warmupPer:
           type: [string, "null"]
           enum: [rule, customer_trunk, null]
@@ -30297,6 +30381,9 @@ components:
         senderPattern:
           type: [string, "null"]
           maxLength: 200
+          description: >-
+            Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits,
+            optional leading +), \Alpha = Sender IDs with a letter.
         senderPatternNegate:
           type: boolean
         senderMatchCase:

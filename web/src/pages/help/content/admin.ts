@@ -300,6 +300,10 @@ export const topics: HelpTopic[] = [
                 name: "Allow multiple logins",
                 what: "When ticked, the user can be signed in on several devices at once. Off means one session at a time.",
               },
+              {
+                name: "Access exceptions",
+                what: "Overrides the GUI access group for this user only. Per page: Inherit, No access, View only or Full. Per tab or section: Inherit, Show or Hide. No access wins even over the group's Every page.",
+              },
               { name: "Address 1", what: "Required. Street address." },
               { name: "Address 2", what: "Optional second address line." },
               { name: "Country", what: "Required. Pick from the list.", values: "Default `AE`" },
@@ -536,6 +540,10 @@ export const topics: HelpTopic[] = [
               {
                 name: "Action boxes",
                 what: "One box per action the page has. Pages without an action show an empty cell.",
+              },
+              {
+                name: "Tabs and sections",
+                what: "Untick a tab or form section to hide it from the group, e.g. the Enterprise **Docs** tab or the vendor trunk **Connection** section. Pages without View are hidden from the menu and Ctrl K; opening one by link shows **No access**.",
               },
             ],
           },

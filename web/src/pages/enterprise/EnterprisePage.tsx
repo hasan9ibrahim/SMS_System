@@ -1,7 +1,9 @@
 // Enterprise record (§5.1–5.5) in its own tab: "Name – Alias (ID)" picker, sections General,
 // Docs, Billing, Customer trunks, Vendor trunks, Account managers and History. Each section's
 // main action is the page's one filled button (§15.3); unsaved edits mark the tab (§13.5).
-import { useCallback, useRef, useState } from "react";
+import { useTabShown } from "../../api/access";
+import { connectionColumn } from "../trunk/connection";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import type { TrunkListRow } from "@sms/contract";
 import { useEnterprise } from "../../api/records";
@@ -75,6 +77,12 @@ export function EnterprisePage() {
   const q = useEnterprise(id !== null && Number.isInteger(id) && id > 0 ? id : null);
   const e = q.data;
   const [section, setSection] = useSectionTab(SECTIONS);
+  const shownTab = useTabShown();
+  // A hidden tab opened from a link falls back to General (§11, trial round 2).
+  const hiddenSection = section !== "general" && !shownTab(`enterprises.${section}`);
+  useEffect(() => {
+    if (hiddenSection) setSection("general");
+  }, [hiddenSection, setSection]);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
   const anyDirty = Object.values(dirty).some(Boolean);
@@ -120,7 +128,7 @@ export function EnterprisePage() {
     ...(hasVendor ? [{ key: "vendor-trunks", label: "Vendor trunks", count: e?.trunkCounts.vendor ?? null }] : []),
     { key: "account-managers", label: "Account managers", disabled: id === null },
     { key: "history", label: "History", disabled: id === null },
-  ];
+  ].filter((t) => shownTab(`enterprises.${t.key}`)); // tabs an access group can hide (§11, trial round 2)
   const props = (key: string): SectionProps => ({
     slot: key === section ? slot : null,
     onDirty: onDirty[key as keyof typeof onDirty] ?? (() => {}),
@@ -210,7 +218,7 @@ export function EnterprisePage() {
             list="customer_trunks"
             fixed={{ enterpriseId: { field: "enterpriseId", op: "eq", value: e.id } }}
             hide={["enterpriseName"]}
-            columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> } }}
+            columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> }, connection: connectionColumn }}
             onOpen={openTrunk("customer")}
             toolbar={
               <HeaderAction slot={slot}>
@@ -237,7 +245,7 @@ export function EnterprisePage() {
             list="vendor_trunks"
             fixed={{ enterpriseId: { field: "enterpriseId", op: "eq", value: e.id } }}
             hide={["enterpriseName"]}
-            columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> } }}
+            columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> }, connection: connectionColumn }}
             onOpen={openTrunk("vendor")}
             toolbar={
               <HeaderAction slot={slot}>

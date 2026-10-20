@@ -1,5 +1,7 @@
 // Search or jump to (Ctrl K, §15.1): pages from the menu registry, and records (enterprises,
 // trunks, rate tables, route rules, users) from GET /search.
+import { can } from "../api/accessCore";
+import { useMe } from "../api/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { create } from "zustand";
@@ -61,9 +63,9 @@ interface Item {
 
 const sectionLabel = (pg: PageDef) => SECTIONS.find((s) => s.key === pg.section)!.label;
 
-function matchPages(q: string): Item[] {
+function matchPages(q: string, permissions: readonly string[] | undefined): Item[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const all = [HOME, ...PAGES];
+  const all = [HOME, ...PAGES].filter((pg) => can(permissions, pg.key)); // §11: only pages the user may open
   const scored = all
     .map((pg) => {
       const hay = `${pg.label} ${sectionLabel(pg)} ${pg.summary} ${pg.spec}`.toLowerCase();
@@ -92,6 +94,7 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const records = useRecordSearch(debounced);
+  const permissions = useMe().data?.permissions;
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 150);
@@ -106,7 +109,7 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
   }, [open]);
 
   const items = useMemo<Item[]>(() => {
-    const pages = matchPages(q);
+    const pages = matchPages(q, permissions);
     const hits: Item[] = (q.trim() && records.data ? records.data.hits : []).map((h) => ({
       key: `${h.kind}:${h.id}`,
       icon: KIND[h.kind].icon,
@@ -116,7 +119,7 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
       group: "Records",
     }));
     return [...pages, ...hits];
-  }, [q, records.data]);
+  }, [q, records.data, permissions]);
 
   useEffect(() => setIndex((i) => Math.min(i, Math.max(0, items.length - 1))), [items.length]);
 

@@ -133,6 +133,26 @@ describe("§9 helpers", () => {
 });
 
 describe("§9 EDR search", { skip }, () => {
+  test("vendor Msg IDs: a long message keeps one ID per part, any of them finds it (team trial round 2)", async () => {
+    const page = await ok<EdrPage>(
+      "queryEdrs",
+      call("POST", "/edrs/query", {
+        limit: 200,
+        filter: { logic: "and", conditions: [DAY, { field: "vendorMsgId", op: "not_empty" }] },
+      }),
+    );
+    const row = page.rows.find((r) => r.vendorMsgId?.includes(",")) ?? page.rows.find((r) => r.vendorMsgId)!;
+    const ids = row.vendorMsgId!.split(",");
+    const found = await ok<EdrPage>(
+      "queryEdrs",
+      call("POST", "/edrs/query", {
+        limit: 10,
+        filter: { logic: "and", conditions: [DAY, { field: "vendorMsgId", op: "in", values: [ids.at(-1)!, "nope"] }] },
+      }),
+    );
+    assert.ok(found.rows.some((r) => r.id === row.id));
+  });
+
   test("filters, name filters as IDs, sort by name, quick search", async () => {
     const page = await ok<EdrPage>(
       "queryEdrs",

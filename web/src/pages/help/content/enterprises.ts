@@ -670,6 +670,15 @@ export const topics: HelpTopic[] = [
                 what: "**Now** hands over at once. **At a set time (UTC)** schedules it; pick the date and time, which cannot be in the past.",
               },
               { name: "Note", what: "Why the partner is handed over.", values: "Optional, up to 500 characters." },
+              {
+                name: "E-mail the client",
+                what: "Sends the client an introduction from the new AM: to the commercial contact (or the rates contact), both AMs in copy. The note can be used in the template as {note}.",
+                values: "Ticked by default.",
+              },
+              {
+                name: "Template",
+                what: "Which **AM Handover** e-mail template to use. Company default uses the business company's template. Write your own on [[email-templates|E-mail templates]] with {enterprise}, {old_am}, {new_am}, {new_am_email}, {effective_date} and {note}.",
+              },
             ],
           },
           {
@@ -793,7 +802,11 @@ export const topics: HelpTopic[] = [
               { name: "Product Category", what: "The product the trunk sells, e.g. OTP, PROMO, DIRECT." },
               { name: "Protocol", what: "SMPP or HTTP." },
               { name: "TPS", what: "TPS (messages per second) allowed per session." },
-              { name: "Status", what: "Active or Inactive." },
+              { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
+              {
+                name: "Connection",
+                what: "Whether the customer is bound now: green **Up** or red **Down**.",
+              },
               { name: "Bind Type", what: "TX (send only), RX (receive only), TR (both) or AUTO." },
               {
                 name: "Rules",
@@ -942,7 +955,11 @@ export const topics: HelpTopic[] = [
               { name: "Product Category", what: "The quality / product class of the route, e.g. DIRECT, SIM, WHS." },
               { name: "Protocol", what: "SMPP or HTTP." },
               { name: "TPS", what: "TPS (messages per second) we send per session." },
-              { name: "Status", what: "Active or Inactive." },
+              { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
+              {
+                name: "Connection",
+                what: "Our bind to the vendor now: green **Up** (all sessions bound), orange **Reconnecting** (some sessions missing, or down for less than 15 minutes while we retry) or red **Down**.",
+              },
               { name: "Bind Type", what: "TX, RX or TR." },
               {
                 name: "Rules",

@@ -126,7 +126,20 @@ function trunkFields(list: "customer_trunks" | "vendor_trunks"): ListFields {
         ],
       }),
       field({ field: "tps", label: "TPS", type: "integer", defaultOperator: "gte" }),
-      field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
+      // "State" = active / inactive; "Connection" = live bind (team trial round 2).
+      field({ field: "status", label: "State", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
+      field({
+        field: "connection",
+        label: "Connection",
+        type: "enum",
+        defaultOperator: "in",
+        sortable: false,
+        enumValues: [
+          { value: "up", label: "Up" },
+          ...(customer ? [] : [{ value: "reconnecting", label: "Reconnecting" }]),
+          { value: "down", label: "Down" },
+        ],
+      }),
       field({
         field: "bindType",
         label: "Bind Type",
@@ -1355,6 +1368,7 @@ export const listFields: Record<ListId, ListFields> = {
           ["trouble_ticket", "EDR – Trouble Ticket"],
           ["send_soa", "Send SOA"],
           ["monitoring_alert", "Monitoring Alert"],
+          ["am_handover", "AM Handover"],
         ].map(([value, label]) => ({ value: value!, label: label! })),
       }),
       field({ field: "subject", label: "Subject", type: "text", defaultOperator: "like" }),
@@ -1415,6 +1429,8 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "invoice_acceptance", label: "Invoice Acceptance" },
           { value: "invoice_rejection", label: "Invoice Rejection" },
           { value: "monitoring_alert", label: "Monitoring Alert" },
+          { value: "currency_alert", label: "Currency Alert" },
+          { value: "am_handover", label: "AM Handover" },
         ],
       }),
       field({
@@ -2147,6 +2163,13 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "vendorDestination", label: "Vendor Destination", type: "text", defaultOperator: "like" }),
       field({ field: "productCategory", label: "Product Category", type: "text", defaultOperator: "like" }),
       field({ field: "senderId", label: "Sender ID", type: "text", defaultOperator: "like" }),
+      field({
+        field: "senderGroup",
+        label: "Sender ID (numeric grouped)",
+        type: "text",
+        defaultOperator: "eq",
+        hidden: true,
+      }),
       field({ field: "routeRule", label: "Route Rule", type: "text", defaultOperator: "like" }),
       field({ field: "routeType", label: "Route Type", type: "text", defaultOperator: "eq" }),
       field({ field: "rateTable", label: "Rate Table", type: "text", defaultOperator: "like" }),

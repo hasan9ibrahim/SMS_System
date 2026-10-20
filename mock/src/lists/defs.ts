@@ -203,6 +203,18 @@ export function trunkCurrencySql(kind: "customer" | "vendor", alias: string): st
     '${PLATFORM_CURRENCY}')`;
 }
 
+/**
+ * Live connection (team trial round 2): up when bound with every session; a vendor bind that dropped less than
+ * 15 minutes ago, or is missing sessions, is reconnecting (the switch retries); otherwise down.
+ */
+const connectionSql = (kind: "customer" | "vendor") =>
+  kind === "vendor"
+    ? `(CASE WHEN tb.status = 'online' AND tb.connections >= t.max_connections THEN 'up'
+             WHEN tb.status = 'online' THEN 'reconnecting'
+             WHEN tb.status = 'offline' AND t.status = 'active' AND tb.since > now() - interval '15 minutes' THEN 'reconnecting'
+             ELSE 'down' END)`
+    : `(CASE WHEN tb.status = 'online' THEN 'up' ELSE 'down' END)`;
+
 function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
   const table = kind === "customer" ? "customer_trunks" : "vendor_trunks";
   return {
@@ -210,11 +222,13 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
     from: `${table} t
       JOIN enterprises e ON e.id = t.enterprise_id
       LEFT JOIN product_categories pc ON pc.id = t.product_category_id
-      LEFT JOIN users ub ON ub.id = t.updated_by_id`,
+      LEFT JOIN users ub ON ub.id = t.updated_by_id
+      LEFT JOIN trunk_binds tb ON tb.side = '${kind}' AND tb.trunk_id = t.id`,
     baseWhere: "t.deleted_at IS NULL",
     archivedField: "archived",
     columns: {
       id: { sql: "t.id" },
+      connection: { sql: connectionSql(kind) },
       name: visCol(trunkMask("t", kind === "customer" ? "Customer trunk" : "Vendor trunk")),
       enterpriseName: visCol(enterpriseMask("e")),
       enterpriseId: { sql: "t.enterprise_id" },
@@ -235,7 +249,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
     search: ["name", "username", "enterpriseName"],
     idSql: "t.id",
     select: `t.id, t.enterprise_id, e.name AS enterprise_name, t.name, t.username, t.product_category_id, pc.name AS category,
-      ${trunkCurrencySql(kind, "t")} AS currency, t.protocol, t.tps, t.status, t.bind_type, ${rulesCountSql(kind)} AS rules_count, ${ruleNamesSql(kind)} AS rule_names, ub.username AS updated_by,
+      ${trunkCurrencySql(kind, "t")} AS currency, t.protocol, t.tps, t.status, ${connectionSql(kind)} AS connection, t.bind_type, ${rulesCountSql(kind)} AS rules_count, ${ruleNamesSql(kind)} AS rule_names, ub.username AS updated_by,
       t.updated_at, t.deleted_at`,
     mapRow: (r) => ({
       id: r.id as number,
@@ -249,6 +263,7 @@ function trunkList(kind: "customer" | "vendor"): ListDef<TrunkListRow> {
       protocol: r.protocol as TrunkListRow["protocol"],
       tps: r.tps as number,
       status: r.status as TrunkListRow["status"],
+      connection: r.connection as TrunkListRow["connection"],
       bindType: r.bind_type as string,
       rulesCount: r.rules_count as number,
       ruleNames: (r.rule_names as string[]) ?? [],

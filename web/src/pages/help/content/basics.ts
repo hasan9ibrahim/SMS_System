@@ -1977,7 +1977,11 @@ export const topics: HelpTopic[] = [
                 name: "Customer account manager / Vendor account manager",
                 what: "The AM at the time the message was sent.",
               },
-              { name: "Sender ID", what: "The source address." },
+              {
+                name: "Sender ID",
+                what: "The source address. Numeric Sender IDs (digits only, with or without +) are grouped in one **Numeric** row; its **+** → **Sender ID (each)** lists them one by one.",
+              },
+              { name: "Sender ID (each)", what: "Every source address on its own row, numeric ones included." },
               { name: "Product category", what: "The traffic class (DIRECT, OTP …)." },
               { name: "15 minutes, Hour, Day, Week, Month", what: "Time buckets, shown in time order." },
             ],

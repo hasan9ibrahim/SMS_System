@@ -1,6 +1,8 @@
 // One tab's page. Every open tab stays mounted (hidden when not shown), so filters, scroll
 // position and drafts survive switching tabs (§13.5). Errors stay inside their tab.
 import { Component, memo, type ErrorInfo, type ReactNode } from "react";
+import { useCan } from "../api/access";
+import { pageForPath } from "../nav/registry";
 import { PageRoutes } from "../pages/PageRoutes";
 import { TabProvider } from "./tabContext";
 import { useTabs, type Tab } from "./tabs";
@@ -29,6 +31,20 @@ class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error
     }
     return this.props.children;
   }
+}
+
+/** A page the user's access group (or own override) doesn't allow shows a notice instead (§11, trial round 2). */
+function AccessGuard({ path, children }: { path: string; children: ReactNode }) {
+  const page = pageForPath(path.split("?")[0]!);
+  const allowed = useCan(page?.key ?? "home");
+  if (allowed) return <>{children}</>;
+  return (
+    <div className="page">
+      <div className="grid-message">
+        No access to {page?.label ?? "this page"}. Ask an administrator to change your GUI access group.
+      </div>
+    </div>
+  );
 }
 
 export const TabPane = memo(function TabPane({
@@ -67,7 +83,9 @@ export const TabPane = memo(function TabPane({
       {side && <SplitPaneBar side={side} tab={tab} focused={focused} />}
       <TabProvider value={{ tab, active: focused, popout }}>
         <TabErrorBoundary>
-          <PageRoutes path={tab.path} />
+          <AccessGuard path={tab.path}>
+            <PageRoutes path={tab.path} />
+          </AccessGuard>
         </TabErrorBoundary>
       </TabProvider>
     </div>
