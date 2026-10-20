@@ -10657,13 +10657,20 @@ export type components = {
       tps?: number;
       overflowBuffer?: number;
       windowSize?: number;
-      allowedDataCodings?: (0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 13 | 14)[];
+      /** @description Data codings the vendor accepts. null = Any (no restriction, the default for a new trunk). */
+      allowedDataCodings?: (0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 13 | 14)[] | null;
       rerouteOn?: ("EXPIRED" | "DELETED" | "UNDELIV" | "UNKNOWN" | "REJECTD")[];
-      allowedSrcTon?: number[];
-      allowedDstTon?: number[];
-      allowedSrcNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[];
-      allowedDstNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[];
-      maxMsgLen?: number;
+      /** @description Source TON values the vendor accepts. null = Any (no restriction; the default for a new trunk). */
+      allowedSrcTon?: number[] | null;
+      /** @description Destination TON values the vendor accepts. null = Any (no restriction; default [1]). */
+      allowedDstTon?: number[] | null;
+      /** @description Source NPI values the vendor accepts. null = Any (no restriction; the default for a new trunk). */
+      allowedSrcNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[] | null;
+      /** @description Destination NPI values the vendor accepts. null = Any (no restriction; default [1]). */
+      allowedDstNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[] | null;
+      /** @description The longest message the vendor takes. null = Any length (the default for a new trunk). */
+      maxMsgLen?: number | null;
+      /** @description The vendor accepts long messages in several parts. Default true. */
       supportMultipart?: boolean;
       dlrTimeoutS?: number;
       /** @enum {string} */
