@@ -343,14 +343,15 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         tps: v.tps,
         overflow_buffer: rng.pick([0, 1000, 5000, 10000]),
         window_size: rng.pick([1, 5, 10, 20, 50]),
-        // null = Any (the default for a new trunk); some vendors keep a restricted list (§5.5).
-        allowed_data_codings: rng.chance(0.7) ? null : rng.chance(0.8) ? [0, 1, 3, 8] : [0, 3, 8],
+        // null = Any (the default for a new trunk); some vendors keep a restricted list (§5.5). Same number of
+        // random draws as before, so the rest of the seeded world does not shift.
+        allowed_data_codings: rng.chance(0.8) ? null : [0, 3, 8],
         reroute_on: v.rerouteOn,
-        allowed_src_ton: rng.chance(0.8) ? null : [0, 1, 2, 5],
+        allowed_src_ton: v.id % 5 === 0 ? [0, 1, 2, 5] : null,
         allowed_dst_ton: [1],
-        allowed_src_npi: rng.chance(0.8) ? null : [0, 1],
+        allowed_src_npi: v.id % 5 === 0 ? [0, 1] : null,
         allowed_dst_npi: [1],
-        max_msg_len: rng.chance(0.7) ? null : rng.pick([160, 153, 255]),
+        max_msg_len: rng.pick([null, null, 160, 153]),
         support_multipart: rng.chance(0.9),
         dlr_timeout_s: rng.pick([3600, 86400, 172800]),
         dlr_timeout_stat: rng.weighted(["UNKNOWN", "EXPIRED", "DELIVRD"], [70, 25, 5]),
