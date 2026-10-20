@@ -75,8 +75,16 @@ test("detail rows and the moment they open", () => {
 test("a row's + offers every level not used above it; headers are one line (team trial round 1)", () => {
   const opts = levelOptions(["customer", "customerTrunk"]).map((l) => l.value);
   assert.ok(!opts.includes("customer") && !opts.includes("customerTrunk"));
-  assert.ok(opts.includes("vendor") && opts.includes("senderId") && opts.includes("hour"));
+  assert.ok(opts.includes("vendor") && opts.includes("senderGroup") && opts.includes("vendorSenderGroup"));
+  assert.ok(opts.includes("hour"));
   assert.equal(levelOptions([]).length, opts.length + 2);
+  // Each numeric Sender ID only under a Numeric row of its side (team trial round 2).
+  assert.ok(!opts.includes("senderId") && !opts.includes("vendorSenderId"));
+  const underNumeric = levelOptions(["senderGroup"], [{ field: "senderGroup", op: "eq", value: "Numeric" }]);
+  assert.ok(underNumeric.some((l) => l.value === "senderId"));
+  assert.ok(!underNumeric.some((l) => l.value === "vendorSenderId"));
+  const underAlpha = levelOptions(["senderGroup"], [{ field: "senderGroup", op: "eq", value: "BANK" }]);
+  assert.ok(!underAlpha.some((l) => l.value === "senderId"));
   assert.equal(COLUMNS.find((c) => c.metric === "submitted")?.label, "Submitted");
   assert.equal(COLUMNS.find((c) => c.metric === "tpsNow")?.label, "TPS");
   assert.ok(!COLUMNS.some((c) => c.metric === "hlrPorted"), "TPS replaced HLR ported");

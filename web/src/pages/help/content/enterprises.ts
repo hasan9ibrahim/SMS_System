@@ -590,7 +590,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Auto invoicing",
                 what: "Customer side only. Create invoices automatically at the end of each billing cycle.",
-                values: "Tick box.",
+                values: "Tick box. On by default.",
               },
               {
                 name: "Send payment confirmation",

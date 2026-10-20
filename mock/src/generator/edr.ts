@@ -117,6 +117,7 @@ export const EDR_COLUMNS = [
   "hlr_is_accomplished",
   "hlr_error_code",
   "hlr_cost_sys",
+  "v_src_addr",
 ] as const;
 
 export interface EdrWriter {
@@ -162,6 +163,13 @@ const dt = (t: number) => {
   return `${dtDayStr} ${p2(Math.floor(sec / 3600))}:${p2(Math.floor(sec / 60) % 60)}:${p2(sec % 60)}.${msPart < 10 ? "00" : msPart < 100 ? "0" : ""}${msPart}`;
 };
 const dec = (x: number) => x.toFixed(6);
+/**
+ * The Sender ID sent to the vendor (team trial round 2): vendor trunks with egress translation rules turn numeric
+ * Sender IDs into the trunk's own short number, like the "Random numeric sender" / template rules; others pass the
+ * customer's Sender ID on unchanged. Deterministic (no random draws), so the EDR stream stays as before.
+ */
+const vendorSender = (sender: string, v: { id: number; translationRuleIds: number[] }) =>
+  v.translationRuleIds.length && /^\+?[0-9]+$/.test(sender) ? String(10000 + ((v.id * 7919) % 90000)) : sender;
 const dec8 = (x: number) => x.toFixed(8);
 
 /** Diurnal shape of A2P traffic (UTC hour), weekday factor and slow growth. */
@@ -575,6 +583,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
           hlrProvider ? "1" : "0",
           "0",
           dec(hlrCost),
+          "", // not sent to a vendor
         ];
         lines.push(row.join("\t"));
         if (lines.length >= chunkRows) await flush();
@@ -644,6 +653,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
             hlrProvider ? "1" : "0",
             "0",
             dec(attempt === 1 ? hlrCost : 0),
+            "", // not sent to a vendor
           ];
           lines.push(row.join("\t"));
           break;
@@ -778,6 +788,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
           hlrProvider ? "1" : "0",
           "0",
           dec(attempt === 1 ? hlrCost : 0),
+          esc(vendorSender(sender, v)),
         ];
         lines.push(row.join("\t"));
         if (!retry) break;

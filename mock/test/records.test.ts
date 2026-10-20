@@ -225,6 +225,8 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.equal(created.record.customer.balance, 120.5);
     // A non-zero credit limit ticks the credit alert, in the same change (team trial round 2).
     assert.equal((await ok("getEnterprise", call("GET", `/enterprises/${id}`))).creditAlert, true);
+    // Unticked by hand while the limit is set, it stays off when the limit changes (team trial round 2).
+    await db().query("UPDATE enterprises SET credit_alert = false WHERE id = $1", [id]);
     assert.equal(created.record.beneficiary.bank, "Test Bank");
     const edited = await ok(
       "updateEnterpriseBilling",
@@ -243,6 +245,7 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
       edited.change.diff.map((d: { field: string }) => d.field),
       ["billing.customer.creditLimit"],
     );
+    assert.equal((await ok("getEnterprise", call("GET", `/enterprises/${id}`))).creditAlert, false);
     await ok("undoChange", call("POST", `/changes/${edited.change.id}/undo`, {}));
     const back = await ok("getEnterpriseBilling", call("GET", `/enterprises/${id}/billing`));
     assert.equal(back.customer.creditLimit, 5000);

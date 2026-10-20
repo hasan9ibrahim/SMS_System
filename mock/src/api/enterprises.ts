@@ -478,7 +478,7 @@ function sideValues(side: Side, input: BillingSideInput): Record<string, unknown
     billingType,
     creditLimit: customer && billingType === "postpaid" ? (input.creditLimit ?? null) : null,
     openingBalance: input.openingBalance,
-    autoInvoicing: customer ? (input.autoInvoicing ?? false) : false,
+    autoInvoicing: customer ? (input.autoInvoicing ?? true) : false, // on by default (team trial round 2)
     sendPaymentConfirmation: input.sendPaymentConfirmation ?? false,
     description: input.description?.trim() || null,
   };

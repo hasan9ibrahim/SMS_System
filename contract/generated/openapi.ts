@@ -14310,6 +14310,19 @@ export type components = {
       dnid: string;
       /** @description Routed Dest Addr (after translation). */
       routedDnid: string;
+      /** @description Sender ID as sent to the vendor, after translation rules (team trial round 2); senderId is as the customer sent it. */
+      vendorSenderId: string;
+      /** @description Content as sent to the vendor, after translation rules. */
+      vendorMessageText: string;
+      vendorSrcTon: number;
+      vendorSrcNpi: number;
+      vendorDstTon: number;
+      vendorDstNpi: number;
+      vendorCoding: number;
+      /** @description registered_delivery as sent to the vendor; registeredDelivery is as the customer asked. */
+      vendorRegisteredDelivery: number;
+      /** @description Error code reported to the customer after DLR mapping; deliveryError is as the vendor reported it. */
+      customerDeliveryError: string;
       messageText: string;
       customerMccmnc: string;
       mcc: string;
@@ -14759,7 +14772,7 @@ export type components = {
       durationMs: number;
     };
     /**
-     * @description Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderGroup = the Sender ID, with every numeric one counted as Numeric (team trial round 2).
+     * @description Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderId / senderGroup = the Sender ID the customer sent (senderGroup counts every numeric one as Numeric); vendorSenderId / vendorSenderGroup = the same for the Sender ID sent to the vendor after translation rules (team trial round 2).
      * @enum {string}
      */
     ReportDimension:
@@ -14783,6 +14796,8 @@ export type components = {
       | "productCategory"
       | "senderId"
       | "senderGroup"
+      | "vendorSenderId"
+      | "vendorSenderGroup"
       | "routeRule"
       | "routeType"
       | "rateTable"

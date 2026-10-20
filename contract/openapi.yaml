@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.74.0
+  version: 0.75.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23522,7 +23522,7 @@ components:
     EdrRow:
       type: object
       description: "One message attempt with both legs (§9.1 EDR schema)."
-      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, senderId, dnid, routedDnid, messageText, customerMccmnc, mcc, mnc, country, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeRuleGroupId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, networkError, registeredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrCostSys]
+      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, vendorSrcTon, vendorSrcNpi, vendorDstTon, vendorDstNpi, vendorCoding, senderId, vendorSenderId, dnid, routedDnid, messageText, vendorMessageText, customerMccmnc, mcc, mnc, country, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeRuleGroupId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, customerDeliveryError, networkError, registeredDelivery, vendorRegisteredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrCostSys]
       properties:
         id:
           type: string
@@ -23590,6 +23590,28 @@ components:
         routedDnid:
           type: string
           description: "Routed Dest Addr (after translation)."
+        vendorSenderId:
+          type: string
+          description: Sender ID as sent to the vendor, after translation rules (team trial round 2); senderId is as the customer sent it.
+        vendorMessageText:
+          type: string
+          description: Content as sent to the vendor, after translation rules.
+        vendorSrcTon:
+          type: integer
+        vendorSrcNpi:
+          type: integer
+        vendorDstTon:
+          type: integer
+        vendorDstNpi:
+          type: integer
+        vendorCoding:
+          type: integer
+        vendorRegisteredDelivery:
+          type: integer
+          description: registered_delivery as sent to the vendor; registeredDelivery is as the customer asked.
+        customerDeliveryError:
+          type: string
+          description: Error code reported to the customer after DLR mapping; deliveryError is as the vendor reported it.
         messageText:
           type: string
         customerMccmnc:
@@ -24589,8 +24611,8 @@ components:
     # ------------------------------------------------------------- Reports (§10, §13.15)
     ReportDimension:
       type: string
-      description: "Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderGroup = the Sender ID, with every numeric one counted as Numeric (team trial round 2)."
-      enum: [second, minute, quarterHour, date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorCountry, vendorDestination, productCategory, senderId, senderGroup, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
+      description: "Master Report group-by fields (§13.15, §13.4). destination = customer MCCMNC (country · network); second, minute and quarterHour = 1-second, 1-minute and 15-minute buckets; vendorCountry = the country of the MCCMNC sent to the vendor; senderId / senderGroup = the Sender ID the customer sent (senderGroup counts every numeric one as Numeric); vendorSenderId / vendorSenderGroup = the same for the Sender ID sent to the vendor after translation rules (team trial round 2)."
+      enum: [second, minute, quarterHour, date, hour, week, month, customer, customerTrunk, customerIp, vendor, vendorTrunk, vendorIp, country, destination, vendorCountry, vendorDestination, productCategory, senderId, senderGroup, vendorSenderId, vendorSenderGroup, routeRule, routeType, rateTable, accountManager, vendorAccountManager, businessCompany, currency, msgType, hlrProvider, errorCode, deliveryStatus]
 
     ReportMetric:
       type: string

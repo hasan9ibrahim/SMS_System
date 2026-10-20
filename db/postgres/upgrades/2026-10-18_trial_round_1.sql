@@ -289,3 +289,6 @@ UPDATE rate_notifications n SET backdated_live = s.c
 
 -- Credit alert off until a credit limit is set (migration 056, §5.1).
 ALTER TABLE enterprises ALTER COLUMN credit_alert SET DEFAULT false;
+
+-- Auto invoicing on by default (migration 057, §7).
+ALTER TABLE enterprise_billing ALTER COLUMN auto_invoicing SET DEFAULT true;
