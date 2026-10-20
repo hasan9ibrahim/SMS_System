@@ -39,6 +39,38 @@ export function merge(pending: Pending, ids: Iterable<number>, edit: PendingEdit
   return next;
 }
 
+/** Edits that change something: a rate typed back to its current value, or a cell opened and left, is not a change. */
+export function changeCount(
+  pending: Pending,
+  rowsById: ReadonlyMap<number, Pick<RateLineRow, "rate" | "isBlocked">>,
+): number {
+  let n = 0;
+  for (const [lineId, e] of pending) {
+    const row = rowsById.get(lineId);
+    if (
+      e.close ||
+      (e.blocked !== undefined && e.blocked !== row?.isBlocked) ||
+      (e.rate !== undefined && e.rate !== row?.rate)
+    )
+      n++;
+  }
+  return n;
+}
+
+/** Sets the rate of one line, or drops the edit when it is back to the current rate. */
+export function setRate(
+  pending: Pending,
+  row: Pick<RateLineRow, "id" | "rate">,
+  rate: number,
+): Map<number, PendingEdit> {
+  const next = new Map(pending);
+  const { rate: _old, ...rest } = next.get(row.id) ?? {};
+  const edit: PendingEdit = rate === row.rate ? rest : { ...rest, rate };
+  if (Object.keys(edit).length) next.set(row.id, edit);
+  else next.delete(row.id);
+  return next;
+}
+
 /**
  * The request items. Blocks go before rate changes, because a new rate opens a new version
  * that inherits the block flag of the line it replaces. A scheduled line keeps its own start

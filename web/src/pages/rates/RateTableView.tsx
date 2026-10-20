@@ -22,7 +22,17 @@ import { Button, Menu, Modal, Popover } from "../../ui/primitives";
 import { scopeUrl } from "./bulkModel";
 import { AddRatesDialog, SendRnCheck, RenameTableDialog } from "./dialogs";
 import { formatMoney, formatPct, formatRate, formatSigned, shortDate, shortDateTime } from "./format";
-import { buildItems, changeRate, merge, round6, summarize, type ChangeMode, type Pending } from "./pending";
+import {
+  buildItems,
+  changeCount,
+  changeRate,
+  merge,
+  round6,
+  setRate,
+  summarize,
+  type ChangeMode,
+  type Pending,
+} from "./pending";
 import { useOpenTable } from "./RateManagerPage";
 import { formatZoned, isoToZoned, usePlatformTz } from "../../ui/zonedTime";
 import { defaultEffectiveIso, EffectiveFromField, effectiveIso, SaveSummaryDialog } from "./EffectiveFrom";
@@ -379,6 +389,8 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
   const [editingEur, setEditingEur] = useState(false);
   const [dialog, setDialog] = useState<"add" | "rename" | null>(null);
   const rowsById = useRef(new Map<number, RateLineRow>());
+  // What a save would change; the bar, the tab title and the summary all count the same (team trial round 2).
+  const changes = changeCount(pending, rowsById.current);
   const onRows = useCallback((rows: RateLineRow[]) => {
     for (const r of rows) rowsById.current.set(r.id, r);
   }, []);
@@ -386,10 +398,10 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
 
   // Inside a vendor trunk the tab keeps the trunk's title.
   useTabTitle(t && !embedded ? `Rates · ${t.name}` : undefined);
-  useTabDirty(pending.size > 0);
+  useTabDirty(changes > 0);
   usePageStatus({
     rows: t
-      ? `${t.name} · ${t.summary.activeRates.toLocaleString("en-US")} active rates${pending.size ? ` · ${pending.size} unsaved` : ""}`
+      ? `${t.name} · ${t.summary.activeRates.toLocaleString("en-US")} active rates${changes ? ` · ${changes} unsaved` : ""}`
       : "",
     shortcuts: "Click a sell rate to edit · Space select · Enter keeps the edit · Esc cancels",
   });
@@ -434,7 +446,8 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     setEditingEur(false);
     const v = Number(text.replace(",", "."));
     if (text.trim() === "" || !Number.isFinite(v) || v < 0) return;
-    setPending((p) => merge(p, [row.id], { rate: round6(inPlatform ? v / factor : v) }));
+    // Typing the current rate back (or leaving a cell unchanged) is no change (team trial round 2).
+    setPending((p) => setRate(p, row, round6(inPlatform ? v / factor : v)));
   };
 
   const columns = useMemo<Partial<Record<string, ColumnOverride<RateLineRow>>>>(
@@ -750,7 +763,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           </Button>
           <MoreMenu t={t} onRename={() => setDialog("rename")} />
           <Button
-            variant={pending.size ? "default" : "primary"}
+            variant={changes ? "default" : "primary"}
             icon="plus"
             disabled={!!t.archived}
             onClick={() => setDialog("add")}
@@ -884,7 +897,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             }}
           />
         )}
-        {(selected.size > 0 || pending.size > 0) && view !== "log" && (
+        {(selected.size > 0 || changes > 0) && view !== "log" && (
           <div className="bulk-bar" role="toolbar" aria-label="Bulk actions">
             <strong>{selected.size} selected</strong>
             <BarAction label="Set rate" disabled={!selected.size || !editable}>
@@ -977,17 +990,17 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               Bulk rating…
             </button>
             <span className="fb-spacer" />
-            {pending.size > 0 && (
+            {changes > 0 && (
               <>
                 <span className="bar-note small">
-                  {pending.size} unsaved · from {effectiveFrom ? formatZoned(effectiveFrom, tz) : "now"}
+                  {changes} unsaved · from {effectiveFrom ? formatZoned(effectiveFrom, tz) : "now"}
                 </span>
                 <button type="button" className="btn btn-sm btn-ghost bar-btn" onClick={() => setPending(new Map())}>
                   Discard
                 </button>
                 {t.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
                 <Button small variant="primary" disabled={change.isPending} onClick={() => void confirmSave()}>
-                  Save {pending.size} change{pending.size === 1 ? "" : "s"}
+                  Save {changes} change{changes === 1 ? "" : "s"}
                 </Button>
               </>
             )}

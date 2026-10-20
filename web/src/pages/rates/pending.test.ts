@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildItems, changeRate, merge, summarize } from "./pending";
+import { buildItems, changeCount, changeRate, merge, setRate, summarize } from "./pending";
 
 test("change by percent, amount or margin over best buy", () => {
   assert.equal(changeRate({ rate: 0.05, bestBuy: 0.04 }, "percent", 10), 0.055);
@@ -61,4 +61,19 @@ test("default date keeps a scheduled line's own later start", () => {
   assert.equal((def[0] as { effectiveFrom?: string }).effectiveFrom, "2026-11-15T00:00:00Z");
   const chosen = buildItems(pending, rows, "2026-10-21T00:00:00Z", now, true);
   assert.equal((chosen[0] as { effectiveFrom?: string }).effectiveFrom, "2026-10-21T00:00:00Z");
+});
+
+test("only real changes count; typing the current rate back drops the edit (team trial round 2)", () => {
+  const rows = new Map([
+    [1, { id: 1, rate: 0.05, isBlocked: false }],
+    [2, { id: 2, rate: 0.08897, isBlocked: false }],
+  ]);
+  let p = setRate(new Map(), rows.get(1)!, 0.05);
+  assert.equal(p.size, 0, "leaving a cell unchanged is no edit");
+  p = setRate(p, rows.get(2)!, 0.086781);
+  p = merge(p, [1], { blocked: false });
+  assert.equal(changeCount(p, rows), 1, "unblocking an unblocked line is no change");
+  p = setRate(p, rows.get(2)!, 0.08897);
+  assert.equal(changeCount(p, rows), 0);
+  assert.equal(p.has(2), false);
 });
