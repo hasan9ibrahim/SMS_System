@@ -22721,8 +22721,7 @@ components:
         name:
           type: string
         emailType:
-          type: string
-          enum: [customer_rate, invoice, low_balance, bind_down, customer_tech_info, trunk_change_info, soa_statement, rate_upload_notification, traffic_alert, auto_upload_rejected, trouble_ticket, send_soa, monitoring_alert]
+          $ref: "#/components/schemas/EmailTemplateType"
         subject:
           type: string
         businessCompanyId:

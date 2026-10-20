@@ -475,7 +475,7 @@ describe("§11 departments, access groups, templates, portal users", { skip }, (
 
   test("e-mail templates: placeholders, preview, clone, in-use templates cannot be deleted", async () => {
     const ph = await ok("listEmailPlaceholders", call("GET", "/email-templates/placeholders"));
-    assert.equal(ph.types.length, 13);
+    assert.equal(ph.types.length, 14);
     const pv = await ok(
       "previewEmailTemplate",
       call("POST", "/email-templates/preview", {

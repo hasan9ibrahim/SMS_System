@@ -13903,21 +13903,7 @@ export type components = {
     EmailTemplateRow: {
       id: components["schemas"]["Id"];
       name: string;
-      /** @enum {string} */
-      emailType:
-        | "customer_rate"
-        | "invoice"
-        | "low_balance"
-        | "bind_down"
-        | "customer_tech_info"
-        | "trunk_change_info"
-        | "soa_statement"
-        | "rate_upload_notification"
-        | "traffic_alert"
-        | "auto_upload_rejected"
-        | "trouble_ticket"
-        | "send_soa"
-        | "monitoring_alert";
+      emailType: components["schemas"]["EmailTemplateType"];
       subject: string;
       businessCompanyId: components["schemas"]["Id"] | null;
       /** @description Null = shared by every business company. */
