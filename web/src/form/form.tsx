@@ -221,7 +221,8 @@ export function NumberField<T>({
   max,
   step,
   suffix,
-}: BaseProps<T> & { min?: number; max?: number; step?: number; suffix?: string }) {
+  placeholder,
+}: BaseProps<T> & { min?: number; max?: number; step?: number; suffix?: string; placeholder?: string }) {
   const id = useId();
   const v = form.get(path);
   return (
@@ -235,6 +236,7 @@ export function NumberField<T>({
           min={min}
           max={max}
           step={step ?? "any"}
+          placeholder={placeholder}
           disabled={disabled}
           required={required}
           aria-invalid={!!form.error(path)}
@@ -390,16 +392,34 @@ export function MultiCheck<T>({
   disabled,
   wide,
   options,
-}: Omit<BaseProps<T>, "required"> & { options: Option[] }) {
-  const list = (form.get(path) as (string | number)[] | null) ?? [];
+  any,
+}: Omit<BaseProps<T>, "required"> & {
+  options: Option[];
+  /** Offers "Any": null means no restriction (e.g. vendor trunk data codings, TON, NPI, §5.5). */
+  any?: boolean;
+}) {
+  const value = form.get(path) as (string | number)[] | null;
+  const isAny = !!any && value == null;
+  const list = value ?? [];
   return (
     <FormField label={label} error={form.error(path)} hint={hint} wide={wide}>
       <div className="multi-check">
+        {any && (
+          <label className="toggle-inline">
+            <input
+              type="checkbox"
+              disabled={disabled}
+              checked={isAny}
+              onChange={(e) => form.set(path, e.target.checked ? null : [])}
+            />
+            Any
+          </label>
+        )}
         {options.map((o) => (
           <label key={o.value} className="toggle-inline">
             <input
               type="checkbox"
-              disabled={disabled}
+              disabled={disabled || isAny}
               checked={list.includes(o.value)}
               onChange={(e) =>
                 form.set(

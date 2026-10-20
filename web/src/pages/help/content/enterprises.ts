@@ -1553,7 +1553,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Allowed data codings",
                 what: "Text encodings the vendor accepts (0 = GSM 7-bit, 3 = Latin-1, 8 = Unicode, and others).",
-                values: "Tick any of 0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14. Default 0, 1, 3, 8.",
+                values: "**Any** (no restriction), or tick any of 0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14. Default Any.",
               },
               {
                 name: "Re-route on receipt status",
@@ -1563,27 +1563,27 @@ export const topics: HelpTopic[] = [
               {
                 name: "Allowed source TON",
                 what: "Sender number types the vendor accepts (TON = type of number: 0 unknown, 1 international, 2 national, 5 alphanumeric…).",
-                values: "Tick 0–6. Default 0, 1, 2, 5.",
+                values: "**Any**, or tick 0–6. Default Any.",
               },
               {
                 name: "Allowed destination TON",
                 what: "Receiver number types the vendor accepts.",
-                values: "Default 1.",
+                values: "**Any**, or tick 0–6. Default 1.",
               },
               {
                 name: "Allowed source NPI",
                 what: "Sender numbering plans the vendor accepts (NPI = numbering plan indicator: 0 unknown, 1 ISDN/E.164…).",
-                values: "Default 0, 1.",
+                values: "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default Any.",
               },
               {
                 name: "Allowed destination NPI",
                 what: "Receiver numbering plans the vendor accepts.",
-                values: "Default 1.",
+                values: "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default 1.",
               },
               {
                 name: "Max message length",
                 what: "The longest message the vendor takes.",
-                values: "1–2000 characters. Default 160.",
+                values: "Empty = **Any** length, or 1–2000 characters. Default Any.",
               },
               {
                 name: "Supports multipart",

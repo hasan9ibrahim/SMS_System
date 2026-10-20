@@ -463,6 +463,28 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     check("createVendorTrunk", http);
     const saved = await ok("createVendorTrunk", call("POST", "/vendor-trunks", base), 201);
     assert.ok(saved.record.ownRateTableId);
+    // New vendor trunks allow any data coding, source TON/NPI and length; multipart on (§5.5).
+    assert.equal(saved.record.allowedDataCodings, null);
+    assert.equal(saved.record.allowedSrcTon, null);
+    assert.equal(saved.record.allowedSrcNpi, null);
+    assert.equal(saved.record.maxMsgLen, null);
+    assert.deepEqual(saved.record.allowedDstTon, [1]);
+    assert.equal(saved.record.supportMultipart, true);
+    const restricted = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, {
+        ...base,
+        password: undefined,
+        allowedDataCodings: [0, 8],
+        maxMsgLen: 160,
+      }),
+    );
+    assert.deepEqual(restricted.record.allowedDataCodings, [0, 8]);
+    const anyAgain = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, allowedDataCodings: null }),
+    );
+    assert.equal(anyAgain.record.allowedDataCodings, null);
     const tables = await ok(
       "queryRateTables",
       call("POST", "/rate-tables/query", {

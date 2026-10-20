@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.76.0
+  version: 0.77.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -16056,7 +16056,8 @@ components:
           minimum: 1
           maximum: 1000
         allowedDataCodings:
-          type: array
+          type: [array, "null"]
+          description: Data codings the vendor accepts. null = Any (no restriction, the default for a new trunk).
           items:
             type: integer
             enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14]
@@ -16066,33 +16067,39 @@ components:
             type: string
             enum: [EXPIRED, DELETED, UNDELIV, UNKNOWN, REJECTD]
         allowedSrcTon:
-          type: array
+          type: [array, "null"]
+          description: Source TON values the vendor accepts. null = Any (no restriction; the default for a new trunk).
           items:
             type: integer
             minimum: 0
             maximum: 6
         allowedDstTon:
-          type: array
+          type: [array, "null"]
+          description: Destination TON values the vendor accepts. null = Any (no restriction; default [1]).
           items:
             type: integer
             minimum: 0
             maximum: 6
         allowedSrcNpi:
-          type: array
+          type: [array, "null"]
+          description: Source NPI values the vendor accepts. null = Any (no restriction; the default for a new trunk).
           items:
             type: integer
             enum: [0, 1, 3, 4, 6, 8, 9, 10, 14, 18]
         allowedDstNpi:
-          type: array
+          type: [array, "null"]
+          description: Destination NPI values the vendor accepts. null = Any (no restriction; default [1]).
           items:
             type: integer
             enum: [0, 1, 3, 4, 6, 8, 9, 10, 14, 18]
         maxMsgLen:
-          type: integer
+          type: [integer, "null"]
+          description: The longest message the vendor takes. null = Any length (the default for a new trunk).
           minimum: 1
           maximum: 2000
         supportMultipart:
           type: boolean
+          description: The vendor accepts long messages in several parts. Default true.
         dlrTimeoutS:
           type: integer
           minimum: 0

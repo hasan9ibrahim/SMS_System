@@ -148,13 +148,13 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
       callbackPostData: null,
     },
     windowSize: 10,
-    allowedDataCodings: [0, 1, 3, 8],
+    allowedDataCodings: null,
     rerouteOn: [],
-    allowedSrcTon: [0, 1, 2, 5],
+    allowedSrcTon: null,
     allowedDstTon: [1],
-    allowedSrcNpi: [0, 1],
+    allowedSrcNpi: null,
     allowedDstNpi: [1],
-    maxMsgLen: 160,
+    maxMsgLen: null,
     supportMultipart: true,
     dlrTimeoutS: 172800,
     dlrTimeoutStat: "UNKNOWN",
@@ -647,7 +647,7 @@ export function VendorTrunkFields({
           )}
       {shown("vendor-trunks.messages") && (
         <Section title="Messages" columns={2}>
-          <MultiCheck form={form} path="allowedDataCodings" label="Allowed data codings" options={CODINGS} />
+          <MultiCheck form={form} path="allowedDataCodings" any label="Allowed data codings" options={CODINGS} />
           <MultiCheck
             form={form}
             path="rerouteOn"
@@ -655,11 +655,20 @@ export function VendorTrunkFields({
             options={DLR_STATS.filter((s) => s.value !== "DELIVRD")}
             hint="Failed receipts with these statuses are retried on the next vendor"
           />
-          <MultiCheck form={form} path="allowedSrcTon" label="Allowed source TON" options={TON} />
-          <MultiCheck form={form} path="allowedDstTon" label="Allowed destination TON" options={TON} />
-          <MultiCheck form={form} path="allowedSrcNpi" label="Allowed source NPI" options={NPI} />
-          <MultiCheck form={form} path="allowedDstNpi" label="Allowed destination NPI" options={NPI} />
-          <NumberField form={form} path="maxMsgLen" label="Max message length" min={1} max={2000} step={1} />
+          <MultiCheck form={form} path="allowedSrcTon" any label="Allowed source TON" options={TON} />
+          <MultiCheck form={form} path="allowedDstTon" any label="Allowed destination TON" options={TON} />
+          <MultiCheck form={form} path="allowedSrcNpi" any label="Allowed source NPI" options={NPI} />
+          <MultiCheck form={form} path="allowedDstNpi" any label="Allowed destination NPI" options={NPI} />
+          <NumberField
+            form={form}
+            path="maxMsgLen"
+            label="Max message length"
+            min={1}
+            max={2000}
+            step={1}
+            placeholder="Any"
+            hint="Empty = any length"
+          />
           <CheckField form={form} path="supportMultipart" label="Supports multipart" />
           <NumberField form={form} path="dlrTimeoutS" label="Receipt timeout" min={0} step={60} suffix="s" />
           <SelectField

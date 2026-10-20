@@ -302,3 +302,11 @@ ALTER TABLE vendor_trunks ADD COLUMN IF NOT EXISTS bind_alert_after_min int NOT 
   CHECK (bind_alert_after_min BETWEEN 1 AND 1440);
 ALTER TABLE vendor_trunks ADD COLUMN IF NOT EXISTS auth_fail_retry_min int NOT NULL DEFAULT 15
   CHECK (auth_fail_retry_min BETWEEN 1 AND 1440);
+
+-- Vendor trunk "Any" for allowed data codings, TON and NPI (migration 059, §5.5).
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_data_codings DROP NOT NULL, ALTER COLUMN allowed_data_codings SET DEFAULT NULL;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_src_ton DROP NOT NULL, ALTER COLUMN allowed_src_ton SET DEFAULT NULL;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_src_npi DROP NOT NULL, ALTER COLUMN allowed_src_npi SET DEFAULT NULL;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_ton DROP NOT NULL;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_npi DROP NOT NULL;
+ALTER TABLE vendor_trunks ALTER COLUMN max_msg_len DROP NOT NULL, ALTER COLUMN max_msg_len SET DEFAULT NULL;
