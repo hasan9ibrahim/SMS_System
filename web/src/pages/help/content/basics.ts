@@ -1589,7 +1589,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Home is the first tab and is always open (it is pinned and cannot be closed). It greets you by first name and gives quick access to the screens the team uses every day.",
+            text: "Home is the first tab and is always open (it is pinned and cannot be closed). It greets you by first name and gives quick access to the screens the team uses every day. After you sign in, the **Dashboard** opens; click the Home tab to come back here.",
           },
         ],
       },
