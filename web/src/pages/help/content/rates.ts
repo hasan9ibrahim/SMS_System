@@ -76,7 +76,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A rate is never overwritten. When you change a rate, the platform ends the old rate and starts a **new version** from the effective date you choose. Dates and times are in the platform (system) time zone, 24-hour; by default a change starts at the next 00:00 (**Now** starts it at once). The old version stays in the table's history with its from and to dates.",
+            text: "A rate is never overwritten. When you change a rate, the platform ends the old rate and starts a **new version** from the effective date you choose. Dates and times are in the platform (system) time zone, 24-hour; by default a change is dated today 00:00 (**Next 00:00** and **Now** are one click away). A date in the past is fine: the change still applies from the moment you save, so traffic already sent keeps its rate; the past date is shown as the rate's effective date. Re-rating past traffic is a separate request ([[re-rating|Re-rating]]). The old version stays in the table's history with its from and to dates.",
           },
           {
             kind: "list",
@@ -462,7 +462,7 @@ export const topics: HelpTopic[] = [
               "Click the rate in the **Sell Rate** column.",
               "Type the new rate and press Enter (or click away). Esc cancels.",
               "The cell is highlighted and the bulk bar shows **1 unsaved**. Make more edits if you like.",
-              "The batch starts at the next 00:00 (platform time zone) unless you set another date with **From next 00:00** in the bulk bar.",
+              "The batch is dated today 00:00 (platform time zone) unless you set another date with **From today 00:00** in the bulk bar; it applies from the moment you save.",
               "Click **Save n changes**.",
             ],
           },
@@ -489,7 +489,7 @@ export const topics: HelpTopic[] = [
                 name: "Effective date…",
                 what: "One start date for the whole batch.",
                 values:
-                  "**Effective from for this batch** (platform time zone, 24-hour), then **Set date**. **Next 00:00** and **Now** fill it in one click. Cannot be in the past. While the default next 00:00 is kept, an edited scheduled rate keeps its own later start date.",
+                  "**Effective from for this batch** (platform time zone, 24-hour), then **Set date**. **Today 00:00**, **Next 00:00** and **Now** fill it in one click. A past date is shown as the effective date but applies from the save (at most a year back). While the default today 00:00 is kept, an edited scheduled rate keeps its own later start date.",
               },
               {
                 name: "Block",
@@ -545,7 +545,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Effective from",
                 what: "When the new rates start, in the platform time zone (24-hour).",
-                values: "Default: the next 00:00. **Now** = at once. Cannot be in the past.",
+                values:
+                  "Default: today 00:00. **Now** = at once. A past date applies from the save; traffic already sent keeps its rate.",
               },
               { name: "Rate note", what: "Optional remark saved on the rates (up to 500 characters)." },
               {
@@ -866,7 +867,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "If auto-accept is on and the RN has no flagged rate, no notice breach and no file error, it is accepted at once. Flagged RNs always wait for review. The column layout of the vendor's file is remembered for its next sheet.",
+            text: "If auto-accept is on and the RN has no flagged rate, no notice breach, no file error and no back-dated rate that affected traffic already sent, it is accepted at once. Flagged RNs always wait for review. The column layout of the vendor's file is remembered for its next sheet.",
           },
         ],
       },
@@ -892,7 +893,14 @@ export const topics: HelpTopic[] = [
                 name: "Accept + update customers",
                 what: "Accepts, then opens [[bulk|Bulk rating]] with the client tables and destinations affected by the flagged rates.",
               },
-              { name: "Accept all pending", what: "Accepts every pending rate." },
+              {
+                name: "Accept all pending",
+                what: "Accepts every pending rate. Back-dated rates apply from now and keep their stated date; traffic already sent keeps its cost.",
+              },
+              {
+                name: "Re-rate back-dated traffic",
+                what: "Shown when back-dated rates affected traffic already sent (see the setting). Off by default: nothing is re-rated (pending review). Ticked: accepting also creates a [[re-rating|re-rating request]] for those destinations from the stated date, which another user approves.",
+              },
             ],
           },
           {
@@ -1008,6 +1016,10 @@ export const topics: HelpTopic[] = [
                 values: "Last hour, Last 24 hours or Last 7 days.",
               },
               { name: "Messages to count as live", what: "Minimum messages in the window. At least 1." },
+              {
+                name: "Back-dated: messages sent to need review",
+                what: "A back-dated rate counts as affecting live traffic when at least this many messages were sent since its stated date. Only then is re-rating offered on accept, and the RN is never auto-accepted. Default 1.",
+              },
               {
                 name: "Due soon: days before the date",
                 what: "A flagged, pending RN is marked due soon this many days before it starts (0–30).",
@@ -1333,7 +1345,7 @@ export const topics: HelpTopic[] = [
               { name: "Round to", what: "Decimals of the new rates: 2 to 6. Default 4." },
               {
                 name: "Effective from",
-                what: "When the new rates start, in the platform time zone. Default: the next 00:00; **Now** = at once. Never in the past.",
+                what: "When the new rates start, in the platform time zone. Default: today 00:00; **Now** = at once. A past date applies from the save; traffic already sent keeps its rate.",
               },
               {
                 name: "Respect notice periods",

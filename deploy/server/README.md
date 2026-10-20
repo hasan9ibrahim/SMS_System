@@ -100,7 +100,10 @@ docker compose pull && docker compose up -d
 
 Press **Ctrl+Shift+R** in the browser. To pin or roll back, set `IMAGE_TAG=<commit SHA>` in `.env`.
 
-When an update notes a database change, keep the data and run its upgrade script from the image, e.g.:
+Database changes are applied automatically: when the `mock` container starts it runs the upgrade scripts in
+`db/postgres/upgrades/` that changed since they last ran, keeping all data (check with
+`docker compose logs mock | grep "database"`: "database upgraded: …" or "database schema up to date"). If the
+database is not reachable or not seeded yet, it retries every minute. To run a script by hand anyway:
 
 ```bash
 docker compose exec -T mock cat db/postgres/upgrades/2026-10-18_trial_round_1.sql \

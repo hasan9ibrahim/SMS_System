@@ -11,7 +11,7 @@ import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
 import { DestinationTree } from "./DestinationTree";
-import { nextMidnight, usePlatformTz } from "../../ui/zonedTime";
+import { todayMidnight, usePlatformTz } from "../../ui/zonedTime";
 import { EffectiveFromField, effectiveIso, RnNoteField } from "./EffectiveFrom";
 
 /** "Send RN" on rating saves (team trial round 1): ticked by default on customer tables. */
@@ -216,8 +216,8 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   const [senderId, setSenderId] = useState("");
   const tz = usePlatformTz();
   const platformCurrency = usePlatformCurrency();
-  // Default start: the next 00:00 in the platform time zone (team trial round 2).
-  const [from, setFrom] = useState(() => nextMidnight(tz));
+  // Default start: today 00:00 in the platform time zone; applies from the save (team trial round 2).
+  const [from, setFrom] = useState(() => todayMidnight(tz));
   const [note, setNote] = useState("");
   const [rnNote, setRnNote] = useState("");
   const [sendRn, setSendRn] = useState(table.kind === "customer");

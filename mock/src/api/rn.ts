@@ -3,6 +3,7 @@
 // rate, and increases or closes are checked against live traffic on that trunk. Accepting loads the
 // lines into the trunk's rate table as one undoable change (§13.10), never back-dated (§13.32); the
 // vendor gets a Successful, Failed or Rejected reply, sent at once or kept as a draft per vendor.
+import { insertReratingRequest } from "./rerating.js";
 import { appendText, fillBody, fillText } from "../email/html.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
@@ -74,6 +75,7 @@ async function globalSettings(db: Db) {
 const toSettings = (r: Record<string, unknown>): RnSettings => ({
   liveWindow: r.live_window as RnSettings["liveWindow"],
   minMessages: Number(r.min_messages),
+  rerateMinMessages: Number(r.rerate_min_messages ?? 1),
   reminderDays: Number(r.reminder_days),
   autoAccept: r.auto_accept as boolean,
   replyModes: {
@@ -123,7 +125,8 @@ export function updateRnSettings(request: FastifyRequest, reply: FastifyReply) {
     const me = await getCurrentUser();
     await pool.query(
       `UPDATE rn_settings SET live_window = $1, min_messages = $2, reminder_days = $3, auto_accept = $4,
-         reply_successful = $5, reply_failed = $6, reply_rejected = $7, updated_by_id = $8, updated_at = now() WHERE id = 1`,
+         reply_successful = $5, reply_failed = $6, reply_rejected = $7, updated_by_id = $8, updated_at = now(),
+         rerate_min_messages = $9 WHERE id = 1`,
       [
         b.liveWindow,
         b.minMessages,
@@ -133,6 +136,7 @@ export function updateRnSettings(request: FastifyRequest, reply: FastifyReply) {
         b.replyModes.failed,
         b.replyModes.rejected,
         me.id,
+        b.rerateMinMessages,
       ],
     );
     return toSettings(await globalSettings(pool));
@@ -457,6 +461,7 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
     `UPDATE rate_notifications n SET notice_days = $2, affected_rate_table_ids = $3, checked_at = now(), updated_at = now(),
        lines = s.lines, new_lines = s.new_lines, increases = s.increases, decreases = s.decreases, unchanged = s.unchanged,
        closed = s.closed, flagged = s.flagged, notice_breaches = s.notice_breaches, backdated = s.backdated,
+       backdated_live = s.backdated_live,
        turns_negative = s.turns_negative, effective_from = s.effective_from
        FROM (SELECT count(*)::int AS lines,
                     count(*) FILTER (WHERE change_type = 'new')::int AS new_lines,
@@ -467,11 +472,12 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
                     count(*) FILTER (WHERE flagged)::int AS flagged,
                     count(*) FILTER (WHERE notice_breach)::int AS notice_breaches,
                     count(*) FILTER (WHERE backdated)::int AS backdated,
+                    count(*) FILTER (WHERE backdated AND sent_between >= $4)::int AS backdated_live,
                     count(*) FILTER (WHERE turns_negative)::int AS turns_negative,
                     min(stated_from) AS effective_from
                FROM rate_notification_lines WHERE rn_id = $1) s
       WHERE n.id = $1`,
-    [rnId, ef.noticeDays, [...affectedTables]],
+    [rnId, ef.noticeDays, [...affectedTables], Number(settings.rerate_min_messages ?? 1)],
   );
 }
 
@@ -694,7 +700,8 @@ export async function acceptLines(
   const now = new Date();
   const edits: RateLineEdit[] = [];
   for (const l of lines) {
-    const from = new Date(Math.max((l.stated_from as Date).getTime(), now.getTime()));
+    // The stated date goes with the edit: a past one applies from now and stays on the line (§13.32).
+    const from = l.stated_from as Date;
     if (l.change_type === "closed") {
       if (l.current_line_id) edits.push({ action: "close", lineId: Number(l.current_line_id), at: from.toISOString() });
     } else if (l.change_type !== "unchanged" && l.new_rate !== null) {
@@ -760,7 +767,29 @@ export async function acceptLines(
       (note?.trim() ? `: ${note.trim()}` : ""),
   );
   if (rn.kind === "vendor" && change) scheduleBestBuyRefresh();
-  return { change, applied: lines.length };
+  // What a re-rating would cover: the back-dated lines, from the earliest stated date (team trial round 2).
+  const { rows: st } = await c.query("SELECT rerate_min_messages FROM rn_settings WHERE id = 1");
+  const minSent = Number(st[0]?.rerate_min_messages ?? 1);
+  const back = lines.filter(
+    (l) =>
+      l.change_type !== "unchanged" &&
+      l.backdated &&
+      Number(l.sent_between ?? 0) >= minSent &&
+      (l.stated_from as Date).getTime() < now.getTime() - 60_000,
+  );
+  const backdated = back.length
+    ? {
+        from: new Date(Math.min(...back.map((l) => (l.stated_from as Date).getTime()))),
+        mccmncs: [...new Set(back.map((l) => String(l.mccmnc)))],
+      }
+    : null;
+  return {
+    change,
+    applied: lines.length,
+    backdated,
+    rateTableId: Number(rn.rate_table_id),
+    reference: String(rn.reference),
+  };
 }
 
 async function afterDecision(c: pg.PoolClient, rnId: number, userId: number | null) {
@@ -785,8 +814,39 @@ function decide(kind: "accept" | "reject") {
         const out = await inTransaction(pool, async (c) => {
           if (kind === "accept") {
             const r = await acceptLines(c, id, body.lineIds ?? null, me.id, request.ip, false, body.note);
+            // Re-rate back-dated traffic only when asked: a request another user approves (team trial round 2, §6.3).
+            let reratingRequestId: number | null = null;
+            if (body.rerate && r.backdated) {
+              const { rows: v } = await c.query(
+                `SELECT vt.enterprise_id FROM rate_notifications n JOIN vendor_trunks vt ON vt.id = n.vendor_trunk_id
+                  WHERE n.id = $1`,
+                [id],
+              );
+              const day = (d: Date) => d.toISOString().slice(0, 10);
+              const req = await insertReratingRequest(
+                c,
+                {
+                  description: `${r.reference}: back-dated rates from ${day(r.backdated.from)}`,
+                  startDate: day(r.backdated.from),
+                  endDate: day(new Date()),
+                  side: "vendor",
+                  enterpriseIds: v[0] ? [Number(v[0].enterprise_id)] : [],
+                  rateTableId: r.rateTableId,
+                  reason: "rate_correction",
+                  mccmncs: r.backdated.mccmncs,
+                  senderId: null,
+                  noNote: false,
+                  priority: "P2",
+                },
+                me.id,
+                request.ip,
+                `Re-rating requested on accepting ${r.reference}`,
+              );
+              reratingRequestId = req.id;
+              await log(c, id, me.id, `Re-rating request #${req.id} created for the back-dated lines`);
+            }
             await afterDecision(c, id, me.id);
-            return r;
+            return { ...r, reratingRequestId };
           }
           const { rows: ls } = await c.query(
             `UPDATE rate_notification_lines SET decision = 'rejected', reject_reason = $3
@@ -801,9 +861,14 @@ function decide(kind: "accept" | "reject") {
           );
           await log(c, id, me.id, `Rejected ${ls.length} line${ls.length === 1 ? "" : "s"}: ${body.reason!.trim()}`);
           await afterDecision(c, id, me.id);
-          return { change: null, applied: ls.length };
+          return { change: null, applied: ls.length, reratingRequestId: null };
         });
-        return { record: await loadRn(pool, id), change: out.change, applied: out.applied };
+        return {
+          record: await loadRn(pool, id),
+          change: out.change,
+          applied: out.applied,
+          reratingRequestId: out.reratingRequestId,
+        };
       } catch (err) {
         if (err instanceof DecisionError)
           return err.status === 400
@@ -1005,10 +1070,19 @@ async function createRn(
     [d.trunk!.enterpriseId, JSON.stringify(mappingOf(d.columns as never))],
   );
   const ef = await effectiveSettings(c, d.trunk!.enterpriseId);
-  const { rows: n } = await c.query("SELECT flagged, notice_breaches, errors FROM rate_notifications WHERE id = $1", [
-    id,
-  ]);
-  if (ef.autoAccept && n[0].flagged === 0 && n[0].notice_breaches === 0 && n[0].errors === 0) {
+  const { rows: n } = await c.query(
+    "SELECT flagged, notice_breaches, errors, backdated_live FROM rate_notifications WHERE id = $1",
+    [id],
+  );
+  // Auto-accept only when nothing needs review: no live-traffic flag, notice breach, error, or back-dated rate that
+  // affected traffic already sent (team trial round 2).
+  if (
+    ef.autoAccept &&
+    n[0].flagged === 0 &&
+    n[0].notice_breaches === 0 &&
+    n[0].errors === 0 &&
+    n[0].backdated_live === 0
+  ) {
     await acceptLines(c, id, null, userId, ip, true);
     await afterDecision(c, id, null);
     return { id, auto: true };

@@ -223,6 +223,8 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
       }),
     );
     assert.equal(created.record.customer.balance, 120.5);
+    // A non-zero credit limit ticks the credit alert, in the same change (team trial round 2).
+    assert.equal((await ok("getEnterprise", call("GET", `/enterprises/${id}`))).creditAlert, true);
     assert.equal(created.record.beneficiary.bank, "Test Bank");
     const edited = await ok(
       "updateEnterpriseBilling",

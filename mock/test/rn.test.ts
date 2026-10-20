@@ -205,17 +205,42 @@ describe("incoming RNs (§13.32)", { skip }, () => {
     const ls = await lines(rn.id);
     const backLine = ls.rows.find((l: { mccmnc: string }) => l.mccmnc === c!.mccmnc);
     assert.equal(backLine.backdated, true);
+    // Counts as affecting live traffic only with messages sent since the stated date (team trial round 2).
+    assert.equal(rn.backdatedLive, backLine.sentBetween >= 1 ? 1 : 0);
     assert.ok(Date.parse(backLine.appliedFrom) >= Date.parse(rn.receivedAt) - 1000, "never before receipt");
     const bad = await call("POST", "/rate-notification-lines/query", { limit: 5 });
     assert.equal(bad.statusCode, 400);
 
+    // The back-dated line affected traffic already sent (set here so the test does not depend on the seed's traffic).
+    await db().query("UPDATE rate_notification_lines SET sent_between = greatest(sent_between, 5) WHERE id = $1", [
+      backLine.id,
+    ]);
     // Accept two lines: one change, rates loaded from max(stated, now).
     const pick = ls.rows.filter((l: { mccmnc: string }) => [b!.mccmnc, c!.mccmnc].includes(l.mccmnc));
     const acc = await ok(
       "acceptRateNotification",
-      call("POST", `/rate-notifications/${rn.id}/accept`, { lineIds: pick.map((l: { id: number }) => l.id) }),
+      call("POST", `/rate-notifications/${rn.id}/accept`, {
+        lineIds: pick.map((l: { id: number }) => l.id),
+        rerate: true,
+      }),
     );
     assert.equal(acc.applied, 2);
+    // Re-rating is opt-in: a request for the back-dated period, approved by another user (team trial round 2).
+    assert.ok(acc.reratingRequestId);
+    const { rows: rr } = await db().query(
+      "SELECT side, rate_table_id, mccmncs, request_status FROM rerating_requests WHERE id = $1",
+      [acc.reratingRequestId],
+    );
+    assert.equal(rr[0].side, "vendor");
+    assert.equal(Number(rr[0].rate_table_id), t.tableId);
+    assert.deepEqual(rr[0].mccmncs, [c!.mccmnc]);
+    await db().query("DELETE FROM rerating_requests WHERE id = $1", [acc.reratingRequestId]);
+    const { rows: stated } = await db().query(
+      `SELECT stated_valid_from FROM rate_lines WHERE rate_table_id = $1 AND mccmnc = $2 AND sender_id IS NULL
+          AND valid_from <= now() AND (valid_to IS NULL OR valid_to > now())`,
+      [t.tableId, c!.mccmnc],
+    );
+    assert.ok(stated[0].stated_valid_from, "the stated date stays on the line");
     assert.equal(acc.record.status, "pending", "other lines still pending");
     assert.deepEqual(acc.change.entityIds, [t.tableId]);
     const { rows: now } = await db().query(

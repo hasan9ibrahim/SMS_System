@@ -425,7 +425,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Credit alert",
                 what: "Send alerts as the partner uses up its credit limit.",
-                values: "Tick box. On by default.",
+                values:
+                  "Tick box. Off by default; ticked automatically when a non-zero credit limit is saved on the Billing tab, and cleared when the limit is removed. You can still untick it.",
               },
               {
                 name: "Notice at",

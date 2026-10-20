@@ -251,43 +251,52 @@ export function previewRerating(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
+/** Records a request awaiting another user's approval (maker-checker); also used by RN accept with re-rate. */
+export async function insertReratingRequest(
+  c: pg.PoolClient,
+  input: ReratingInput,
+  userId: number,
+  ip: string | null,
+  note?: string,
+) {
+  const { rows } = await c.query(
+    `INSERT INTO rerating_requests (side, description, start_date, end_date, enterprise_ids, rate_table_id, reason,
+       mccmncs, sender_id, no_note, priority, requested_by_id, updated_by_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'rate_correction', $7, $8, $9, $10, $11, $11) RETURNING id`,
+    [
+      input.side,
+      input.description,
+      input.startDate,
+      input.endDate,
+      input.enterpriseIds,
+      input.rateTableId,
+      input.mccmncs,
+      input.senderId,
+      input.noNote,
+      input.priority,
+      userId,
+    ],
+  );
+  const id = rows[0].id as number;
+  const change = await recordChange(c, {
+    entityType: "rerating_request",
+    entityIds: [id],
+    changeType: "create",
+    diff: [{ entity_id: id, field: "*", before: null, after: input }],
+    note: note ?? `Requested re-rating #${id}`,
+    userId,
+    ip,
+  });
+  return { id, change };
+}
+
 export function createReratingRequest(request: FastifyRequest, reply: FastifyReply) {
   const input = normalise(request.body as ReratingInput);
   return withDb(reply, async (pool) => {
     const { errors } = await checkInput(pool, input);
     if (errors.length) return sendProblem(reply, 400, "Check the highlighted fields", { errors });
     const me = await getCurrentUser();
-    const { id, change } = await inTransaction(pool, async (c) => {
-      const { rows } = await c.query(
-        `INSERT INTO rerating_requests (side, description, start_date, end_date, enterprise_ids, rate_table_id, reason,
-           mccmncs, sender_id, no_note, priority, requested_by_id, updated_by_id)
-         VALUES ($1, $2, $3, $4, $5, $6, 'rate_correction', $7, $8, $9, $10, $11, $11) RETURNING id`,
-        [
-          input.side,
-          input.description,
-          input.startDate,
-          input.endDate,
-          input.enterpriseIds,
-          input.rateTableId,
-          input.mccmncs,
-          input.senderId,
-          input.noNote,
-          input.priority,
-          me.id,
-        ],
-      );
-      const id = rows[0].id as number;
-      const change = await recordChange(c, {
-        entityType: "rerating_request",
-        entityIds: [id],
-        changeType: "create",
-        diff: [{ entity_id: id, field: "*", before: null, after: input }],
-        note: `Requested re-rating #${id}`,
-        userId: me.id,
-        ip: request.ip,
-      });
-      return { id, change };
-    });
+    const { id, change } = await inTransaction(pool, (c) => insertReratingRequest(c, input, me.id, request.ip));
     return reply.code(201).send({ record: await loadDetail(pool, id), change });
   });
 }

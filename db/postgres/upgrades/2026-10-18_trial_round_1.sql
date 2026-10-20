@@ -68,12 +68,7 @@ CREATE INDEX IF NOT EXISTS email_assets_company_idx ON email_assets (business_co
 ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS body_html text;
 ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS inline_images text[] NOT NULL DEFAULT '{}';
 
-ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_email_type_check;
-ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_type IN ('send_rate','send_tech_info','invoice',
-  'check_smtp','bind_down_alert','otp','forgot_password','auto_upload_rate','credit_alert','balance_alert','schedule_report_alert',
-  'traffic_alert','auto_upload_rejected','daily_report','broadcast','trouble_ticket','send_soa','payment_confirmation',
-  'invoice_acceptance','invoice_rejection','monitoring_alert','cleanup_summary','credential_transfer','password_reminder',
-  'template_test'));
+-- (email_logs type check: set once, with every type, further down)
 
 -- Team trial round 2 (migration 052): notice periods per kind, "all networks" code, RN header row.
 ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS rate_notice_days_decrease integer NOT NULL DEFAULT 0
@@ -224,12 +219,7 @@ CREATE TABLE IF NOT EXISTS fx_provider (
 );
 INSERT INTO fx_provider (id) VALUES (1) ON CONFLICT DO NOTHING;
 
-ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_email_type_check;
-ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_type IN ('send_rate','send_tech_info','invoice',
-  'check_smtp','bind_down_alert','otp','forgot_password','auto_upload_rate','credit_alert','balance_alert','schedule_report_alert',
-  'traffic_alert','auto_upload_rejected','daily_report','broadcast','trouble_ticket','send_soa','payment_confirmation',
-  'invoice_acceptance','invoice_rejection','monitoring_alert','cleanup_summary','credential_transfer','password_reminder',
-  'template_test','currency_alert'));
+-- (email_logs type check: set once, with every type, further down)
 
 -- Team trial round 2 (migration 054): hidden tabs, per-user overrides, AM handover e-mail, custom warm-up reset.
 -- Team trial round 2, group D: hidden tabs per access group and per-user overrides (§11), the AM handover
@@ -287,3 +277,15 @@ UPDATE fx_provider
    SET api_url = COALESCE(api_url, 'https://xecdapi.xe.com/v1/convert_from.json?from={base}&to=*'),
        rates_path = COALESCE(rates_path, 'to')
  WHERE provider = 'xe';
+
+-- Back-dated RN lines that affected live traffic (migration 056, §13.32).
+
+ALTER TABLE rn_settings ADD COLUMN IF NOT EXISTS rerate_min_messages int NOT NULL DEFAULT 1
+  CHECK (rerate_min_messages BETWEEN 1 AND 1000000);
+ALTER TABLE rate_notifications ADD COLUMN IF NOT EXISTS backdated_live int NOT NULL DEFAULT 0;
+UPDATE rate_notifications n SET backdated_live = s.c
+  FROM (SELECT rn_id, count(*)::int AS c FROM rate_notification_lines WHERE backdated AND sent_between >= 1 GROUP BY rn_id) s
+ WHERE s.rn_id = n.id AND n.backdated_live = 0;
+
+-- Credit alert off until a credit limit is set (migration 056, §5.1).
+ALTER TABLE enterprises ALTER COLUMN credit_alert SET DEFAULT false;

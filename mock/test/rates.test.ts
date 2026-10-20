@@ -217,6 +217,42 @@ describe("rate edits (§13.12, §13.10)", { skip }, () => {
     assert.equal(Number(redo[0].rate), newRate, "undoing the undo applies the rate again");
   });
 
+  test("a past effective date (today 00:00) applies from the save and keeps the stated date (team trial round 2)", async () => {
+    const id = await freeSellTable();
+    const before = (await lines(id)).rows.find(
+      (r: { senderId: string | null; validTo: string | null }) => r.senderId === null && !r.validTo,
+    );
+    const midnight = new Date();
+    midnight.setUTCHours(0, 0, 0, 0);
+    const started = Date.now();
+    const saved = await ok(
+      "changeRateLines",
+      call("POST", `/rate-tables/${id}/lines/changes`, {
+        items: [
+          {
+            action: "set",
+            lineId: before.id,
+            rate: Math.round(before.rate * 0.97 * 1e6) / 1e6,
+            effectiveFrom: midnight.toISOString(),
+          },
+        ],
+      }),
+    );
+    assert.equal(saved.applied, 1);
+    const { rows } = await db().query(
+      `SELECT valid_from, stated_valid_from FROM rate_lines WHERE rate_table_id = $1 AND mccmnc = $2
+          AND sender_id IS NULL AND valid_to IS NULL`,
+      [id, before.mccmnc],
+    );
+    assert.ok(rows[0].valid_from.getTime() >= started - 2000, "applies from now: traffic already sent keeps its rate");
+    assert.equal(rows[0].stated_valid_from.toISOString(), midnight.toISOString(), "shown as effective from 00:00");
+    const tooOld = await call("POST", `/rate-tables/${id}/lines/changes`, {
+      items: [{ action: "set", lineId: before.id, rate: 1, effectiveFrom: "2020-01-01T00:00:00Z" }],
+    });
+    assert.equal(tooOld.statusCode, 400);
+    await undo(saved.change.id);
+  });
+
   test("setting a destination twice in one batch undoes cleanly", async () => {
     const id = await freeSellTable();
     const before = (await lines(id)).rows.find((r: { senderId: string | null }) => r.senderId === null);
