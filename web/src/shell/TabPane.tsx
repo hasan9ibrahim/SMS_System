@@ -37,6 +37,7 @@ export const TabPane = memo(function TabPane({
   focused,
   popout = false,
   side = null,
+  leftShare = 0.5,
 }: {
   tab: Tab;
   shown: boolean;
@@ -44,6 +45,8 @@ export const TabPane = memo(function TabPane({
   popout?: boolean;
   /** Its side in split view, or null (team trial round 1). */
   side?: "left" | "right" | null;
+  /** Share of the width the left side takes in split view, 0–1 (dragged by the user, trial round 2). */
+  leftShare?: number;
 }) {
   return (
     <div
@@ -51,7 +54,13 @@ export const TabPane = memo(function TabPane({
       role="tabpanel"
       aria-label={tab.title}
       hidden={!shown}
-      style={side ? { order: side === "left" ? 1 : 2 } : undefined}
+      style={
+        side
+          ? side === "left"
+            ? { order: 1, flex: `0 0 ${(leftShare * 100).toFixed(2)}%` }
+            : { order: 2, flex: "1 1 0" }
+          : undefined
+      }
       // In split view a click in the other pane focuses it, so the tab strip then fills that side.
       onMouseDownCapture={side && !focused ? () => useTabs.getState().activate(tab.id) : undefined}
     >

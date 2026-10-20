@@ -1085,8 +1085,8 @@ export const topics: HelpTopic[] = [
             title: "Rates & routing",
             fields: [
               {
-                name: "Rate tables / Line changes",
-                what: "Rate tables they changed and the number of rate lines changed.",
+                name: "Rate tables / Rate changes",
+                what: "Rate tables they changed and the number of rates changed.",
               },
               { name: "RNs accepted / RNs rejected", what: "Vendor rate notifications they decided." },
               {

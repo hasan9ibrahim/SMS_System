@@ -1315,9 +1315,9 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Rate tables",
-                what: "The customer rate tables that price this trunk's traffic, in order. For each message, the first table that has a line for the destination sets the price.",
+                what: "The customer rate tables that price this trunk's traffic, in order. For each message, the first table that has a rate for the destination sets the price.",
                 values:
-                  "Use **Add a customer rate table…** to search and add one (only live customer tables are offered; each shows its category and number of lines). Use ↑ and ↓ to change the order and x to remove one. A table can be listed only once.",
+                  "Use **Add a customer rate table…** to search and add one (only live customer tables are offered; each shows its category and number of rates). Use ↑ and ↓ to change the order and x to remove one. A table can be listed only once.",
               },
             ],
           },

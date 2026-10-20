@@ -1,5 +1,5 @@
 // Main window layout (§15.1): top menu bar, page tab strip, the open pages, status bar.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useMe } from "../api/hooks";
 import { startLive } from "../live/store";
 import { FeedbackLayer } from "../ui/feedback";
@@ -91,6 +91,65 @@ function usePaletteShortcut() {
   }, []);
 }
 
+const SHARE_KEY = "sms.splitShare";
+/** The left side's share of split view, kept per browser (team trial round 2). */
+function useSplitShare(): [number, (v: number) => void] {
+  const [share, setShare] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(SHARE_KEY));
+      return v >= 0.15 && v <= 0.85 ? v : 0.5;
+    } catch {
+      return 0.5;
+    }
+  });
+  const set = (v: number) => {
+    const clamped = Math.min(0.85, Math.max(0.15, v));
+    setShare(clamped);
+    try {
+      localStorage.setItem(SHARE_KEY, String(clamped));
+    } catch {
+      /* private window */
+    }
+  };
+  return [share, set];
+}
+
+/** The bar between the two sides: drag to resize, double-click for half and half, arrows by 2 %. */
+function SplitDivider({ share, onChange }: { share: number; onChange: (v: number) => void }) {
+  const start = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const host = e.currentTarget.parentElement!;
+    const rect = host.getBoundingClientRect();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    document.body.classList.add("resizing-split");
+    const move = (ev: PointerEvent) => onChange((ev.clientX - rect.left) / rect.width);
+    const up = () => {
+      document.body.classList.remove("resizing-split");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  return (
+    <div
+      className="split-divider"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize split view"
+      aria-valuenow={Math.round(share * 100)}
+      tabIndex={0}
+      title="Drag to resize · double-click for half and half"
+      style={{ left: `${share * 100}%` }}
+      onPointerDown={start}
+      onDoubleClick={() => onChange(0.5)}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") onChange(share - 0.02);
+        if (e.key === "ArrowRight") onChange(share + 0.02);
+      }}
+    />
+  );
+}
+
 export function Shell() {
   const ready = useBootstrap();
   useThemeSync();
@@ -102,6 +161,7 @@ export function Shell() {
   const splitId = useTabs((s) => s.splitId);
   const split = splitId && splitId !== activeId && tabs.some((t) => t.id === splitId) ? splitId : null;
   const splitLeft = useTabs((s) => s.splitLeft);
+  const [splitShare, setSplitShare] = useSplitShare();
   // Split view sides (team trial round 1): the focused tab and the other one, each on its own side.
   const sideOf = (id: string): "left" | "right" | null =>
     !split
@@ -139,11 +199,13 @@ export function Shell() {
               shown={t.id === activeId || t.id === split}
               focused={t.id === activeId}
               side={sideOf(t.id)}
+              leftShare={splitShare}
             />
           ))
         ) : (
           <div className="grid-message muted">Opening your workspace…</div>
         )}
+        {split && <SplitDivider share={splitShare} onChange={setSplitShare} />}
       </main>
       <StatusBar tabId={activeId} />
       <CommandPalette />

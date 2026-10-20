@@ -613,6 +613,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveRateTable,
   restoreRateTable,
   exportRateLines,
+  exportRateLinesFiltered: exportRateLines,
   queryRateLines,
   // Routing costs are cached a minute; a rate change or an undo clears them (api/rateLookup.ts).
   changeRateLines: (request, reply) => Promise.resolve(changeRateLines(request, reply)).finally(clearRouteCaches),

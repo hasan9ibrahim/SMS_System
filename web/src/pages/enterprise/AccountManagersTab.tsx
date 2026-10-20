@@ -7,6 +7,7 @@ import { useAmHistory, useHandover, useReference } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
 import { Button, Modal } from "../../ui/primitives";
 import { HeaderAction, type SectionProps } from "../../records/parts";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const utc = (s: string) => `${s.slice(0, 16).replace("T", " ")} UTC`;
 
@@ -75,8 +76,7 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
         </label>
         <label className="toggle-inline">
           <input type="radio" checked={when === "later"} onChange={() => setWhen("later")} /> At a set time (UTC)
-          <input
-            type="datetime-local"
+          <DateTimeInput
             value={at}
             disabled={when !== "later"}
             min={new Date().toISOString().slice(0, 16)}
@@ -128,8 +128,8 @@ export function AccountManagersTab({ enterprise, slot }: SectionProps & { enterp
                 return (
                   <tr key={`${p.userId}-${p.startsAt}`}>
                     <td className="strong">{p.userName}</td>
-                    <td className="num">{utc(p.startsAt)}</td>
-                    <td className="num">{p.endsAt ? utc(p.endsAt) : "—"}</td>
+                    <td className="tnum">{utc(p.startsAt)}</td>
+                    <td className="tnum">{p.endsAt ? utc(p.endsAt) : "—"}</td>
                     <td className="muted">{p.note ?? ""}</td>
                     <td>
                       {current && <span className="tag tag-accent">Current</span>}

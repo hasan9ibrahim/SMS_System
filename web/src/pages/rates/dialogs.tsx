@@ -11,13 +11,14 @@ import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
 import { DestinationTree } from "./DestinationTree";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 /** "Send RN" on rating saves (team trial round 1): ticked by default on customer tables. */
 export function SendRnCheck({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label
       className="toggle-inline send-rn"
-      title="E-mail a rate notification with the changed lines to each client using the table (Email logs)"
+      title="E-mail a rate notification with the changed rates to each client using the table (Email logs)"
     >
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       Send RN to clients
@@ -277,8 +278,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
         </label>
         <label className="field">
           <span>Effective from (UTC)</span>
-          <input
-            type="datetime-local"
+          <DateTimeInput
             value={from}
             min={new Date().toISOString().slice(0, 16)}
             onChange={(e) => setFrom(e.target.value)}

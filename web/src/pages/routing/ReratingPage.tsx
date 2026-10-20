@@ -22,7 +22,7 @@ import { Button, Modal } from "../../ui/primitives";
 import { problemText } from "./dialogs";
 import { DestinationPick, MultiPick, type Picked } from "./pickers";
 
-const page = pageForPath("/routing/re-rating")!;
+const page = pageForPath("/rates/re-rating")!;
 
 const REQUEST: Record<ReratingRequest["requestStatus"], [string, string]> = {
   pending_approval: ["Pending Approval", "warning"],

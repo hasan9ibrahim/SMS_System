@@ -167,7 +167,7 @@ function columnsFor(section: Section, r: TeamReport, onOpen: (row: TeamMemberRow
         name,
         dept,
         num("tables", "Rate tables", (x) => int(x.rates.rateTablesChanged)),
-        num("lines", "Line changes", (x) => int(x.rates.rateLineChanges)),
+        num("lines", "Rate changes", (x) => int(x.rates.rateLineChanges)),
         num("rnOk", "RNs accepted", (x) => int(x.rates.rnAccepted), 110),
         num("rnNo", "RNs rejected", (x) => int(x.rates.rnRejected), 110),
         num("moves", "Market moves", (x) => int(x.rates.marketMovesHandled), 110),

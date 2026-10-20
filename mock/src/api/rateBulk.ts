@@ -113,9 +113,9 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       errors.push({ path: "/action/vendorTrunkId", message: "choose the vendor trunk whose cost to use" });
     const hasDest = (body.mccmncs?.length ?? 0) + (body.countryIsos?.length ?? 0) > 0;
     if (!onlyExisting && !hasDest)
-      errors.push({ path: "/onlyExisting", message: "adding new lines needs a list of destinations" });
+      errors.push({ path: "/onlyExisting", message: "adding new rates needs a list of destinations" });
     if (!onlyExisting && a.type !== "set" && !costPlus)
-      errors.push({ path: "/onlyExisting", message: "only a fixed rate or cost + margin can add new lines" });
+      errors.push({ path: "/onlyExisting", message: "only a fixed rate or cost + margin can add new rates" });
     if (body.effectiveFrom && Date.parse(body.effectiveFrom) < now - SKEW_MS)
       errors.push({ path: "/effectiveFrom", message: "can't be in the past (traffic already sent keeps its rate)" });
     const tables = await loadTables(pool, body.rateTableIds);

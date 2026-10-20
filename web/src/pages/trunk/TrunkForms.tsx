@@ -259,7 +259,7 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
       label="Rate tables"
       wide
       error={form.error("rateTableIds")}
-      hint="In order: the first table with a line for the destination prices the message (§5.4)"
+      hint="In order: the first table with a rate for the destination prices the message (§5.4)"
     >
       <ol className="ordered-list">
         {ids.map((id, i) => (
@@ -312,7 +312,7 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
             exclude={ids}
             onChange={(r) => r && form.set("rateTableIds", [...ids, r.id])}
             labelOf={(r) => `${r.name} (${r.currency})`}
-            detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} lines`}
+            detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`}
           />
         </li>
       </ol>

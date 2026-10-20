@@ -9,7 +9,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import type { Change, ChangeField, FilterGroup, ListQuery, UndoConflict } from "@sms/contract";
 import { api, ApiError, unwrap } from "../api/client";
 import { fetchListPage, useMe } from "../api/hooks";
-import { ask, toast } from "../ui/feedback";
+import { ask, confirmDialog, toast } from "../ui/feedback";
 import { Button, Modal } from "../ui/primitives";
 import { Icon } from "../ui/Icon";
 
@@ -98,7 +98,24 @@ function ConflictDialog({
 export function useUndo() {
   const qc = useQueryClient();
   const run = useCallback(
-    async (changeId: number, quiet = false): Promise<Change | null> => {
+    async (changeId: number, quiet = false, change?: Change, confirmed = false): Promise<Change | null> => {
+      // Ask first (team trial round 2); Redo (quiet) is the user's own just-made choice.
+      if (!quiet && !confirmed) {
+        const ok = await confirmDialog({
+          title: "Undo this change?",
+          message: (
+            <>
+              <p>
+                Change #{changeId}
+                {change ? `: ${describeDiff(change.diff, 3)}` : ""}
+              </p>
+              <p className="muted small">The values go back to what they were before it. You can redo it afterwards.</p>
+            </>
+          ),
+          ok: "Undo",
+        });
+        if (!ok) return null;
+      }
       const call = (body: { resolution?: "restore_mine" | "keep_current" }) =>
         unwrap(api.POST("/changes/{id}/undo", { params: { path: { id: changeId } }, body }));
       try {
@@ -144,7 +161,7 @@ export function useNotifySaved() {
       toast({
         tone: "good",
         message: `${message} · change #${change.id}`,
-        action: { label: "Undo", run: () => void undo(change.id) },
+        action: { label: "Undo", run: () => void undo(change.id, false, change) },
         timeoutMs: 10_000,
       }),
     [undo],
@@ -172,7 +189,7 @@ export function useUndoLast(scope: HistoryScope | null) {
       toast({ tone: "info", message: "Nothing of yours to undo here." });
       return;
     }
-    await undo(change.id);
+    await undo(change.id, false, change);
   }, [last, undo]);
   return { last: last.data ?? null, undoLast };
 }
@@ -255,7 +272,7 @@ export function HistoryList({ scope }: { scope: HistoryScope }) {
             change={c}
             meId={me?.id}
             canUndoOthers={canUndoOthers}
-            onUndo={(ch) => void undo(ch.id)}
+            onUndo={(ch) => void undo(ch.id, false, ch)}
           />
         ))}
       </ul>

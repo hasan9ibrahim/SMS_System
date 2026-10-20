@@ -179,7 +179,7 @@ const importCodes = () =>
       </p>
     ),
     replaceHint:
-      "Codes missing from the file are archived, except those still used by rate lines, rules, dial codes or MO numbers, which are kept and listed.",
+      "Codes missing from the file are archived, except those still used by rates, rules, dial codes or MO numbers, which are kept and listed.",
   });
 
 export function MccmncPage() {

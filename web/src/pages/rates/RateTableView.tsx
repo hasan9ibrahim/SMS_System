@@ -7,9 +7,11 @@ import { useLocation } from "react-router";
 import type { NoticeBreach, RateLineRow, RateTableDetail } from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { useListFields } from "../../api/hooks";
-import { rateExportUrl, useChangeRateLines, useRateTable } from "../../api/records";
+import { useChangeRateLines, useRateTable } from "../../api/records";
+import { downloadCsv } from "../../api/masterData";
 import { DataGrid, type ColumnOverride } from "../../grid/DataGrid";
-import { emptyState, type GridState } from "../../grid/filterModel";
+import { emptyState, toListQuery, type GridState } from "../../grid/filterModel";
+import { problemText } from "../routing/dialogs";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { useDeleteRecord, ArchivedBanner } from "../../records/parts";
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
@@ -21,6 +23,7 @@ import { AddRatesDialog, SendRnCheck, RenameTableDialog } from "./dialogs";
 import { formatMoney, formatPct, formatRate, formatSigned, shortDate, shortDateTime } from "./format";
 import { buildItems, changeRate, merge, round6, type ChangeMode, type Pending } from "./pending";
 import { useOpenTable } from "./RateManagerPage";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 type View = "current" | "scheduled" | "closed" | "log";
 const VIEWS: View[] = ["current", "scheduled", "closed", "log"];
@@ -83,7 +86,7 @@ function Summary({ t }: { t: RateTableDetail }) {
           sub="sell below best buy today"
         />
       ) : (
-        <Card label="Closed lines" value={s.closedLines.toLocaleString("en-US")} sub="kept in the rate history" />
+        <Card label="Closed rates" value={s.closedLines.toLocaleString("en-US")} sub="kept in the rate history" />
       )}
       <Card
         label="Avg margin"
@@ -191,9 +194,8 @@ function DateForm({ value, onApply }: { value: string | null; onApply: (iso: str
     >
       <label className="field">
         <span>Effective from (UTC) for this batch</span>
-        <input
+        <DateTimeInput
           autoFocus
-          type="datetime-local"
           value={v}
           min={new Date().toISOString().slice(0, 16)}
           onChange={(e) => setV(e.target.value)}
@@ -475,7 +477,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     if (skipped)
       toast({
         tone: "warning",
-        message: `${skipped} line${skipped === 1 ? "" : "s"} skipped (no best buy or below zero)`,
+        message: `${skipped} rate${skipped === 1 ? "" : "s"} skipped (no best buy or below zero)`,
       });
   };
 
@@ -581,9 +583,18 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           <Button icon="upload" disabled title="Rate import arrives with the import wizard (§12.1, §13.22)">
             Import
           </Button>
-          <a className="btn" href={rateExportUrl(t.id, view === "log" ? "current" : view)} download>
-            <Icon name="download" size={15} /> Export
-          </a>
+          {/* Exports the rows the filters show (team trial round 2). */}
+          <Button
+            icon="download"
+            title="Exports the rows as filtered and sorted on screen"
+            onClick={() =>
+              void downloadCsv(`/rate-tables/${t.id}/export`, toListQuery(gridState)).catch((e) =>
+                toast({ tone: "error", message: problemText(e) }),
+              )
+            }
+          >
+            Export
+          </Button>
           {t.kind === "customer" && (
             <Button icon="send" disabled title="Rate notifications go out on save with Send RN (team trial round 1)">
               Send to client
@@ -789,7 +800,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 if (
                   await confirmDialog({
                     title: `Close ${selected.size} rate${selected.size === 1 ? "" : "s"}?`,
-                    message: `The lines end ${effectiveFrom ? `on ${shortDateTime(effectiveFrom)}` : "now"} and move to Closed; scheduled ones are withdrawn. Saved with the other changes.`,
+                    message: `The rates end ${effectiveFrom ? `on ${shortDateTime(effectiveFrom)}` : "now"} and move to Closed; scheduled ones are withdrawn. Saved with the other changes.`,
                     ok: "Close rates",
                     danger: true,
                   })

@@ -956,7 +956,12 @@ export type paths = {
      */
     get: operations["exportRateLines"];
     put?: never;
-    post?: never;
+    /**
+     * Export the rate lines as filtered on screen (team trial round 2)
+     * @description Same columns as the GET export, for exactly the rows the grid shows: its filter (including the
+     *     view condition), quick search and sort. The table is always the one in the path.
+     */
+    post: operations["exportRateLinesFiltered"];
     delete?: never;
     options?: never;
     head?: never;
@@ -19427,6 +19432,36 @@ export interface operations {
           "text/csv": string;
         };
       };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  exportRateLinesFiltered: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8, header row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];

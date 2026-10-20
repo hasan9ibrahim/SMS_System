@@ -1638,3 +1638,26 @@ body.resizing-rows {
   flex-wrap: wrap;
   gap: 12px;
 }
+/* Split view: drag the bar between the sides to size them (team trial round 2). */
+.split-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  margin-left: -4px;
+  z-index: 5;
+  cursor: col-resize;
+  background: transparent;
+}
+.split-divider:hover,
+.split-divider:focus-visible {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  outline: none;
+}
+body.resizing-split {
+  cursor: col-resize;
+  user-select: none;
+}
+body.resizing-split iframe {
+  pointer-events: none;
+}

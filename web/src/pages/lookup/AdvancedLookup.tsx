@@ -28,6 +28,7 @@ import { Button, Modal, Popover } from "../../ui/primitives";
 import { MultiPick, RefMulti, TrunkPick, type Picked } from "../routing/pickers";
 import { filterCount, money, parseDestinations, signed, toDelimited } from "./lookupModel";
 import { VirtualTable, type VColumn } from "./VirtualTable";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const VIEWS: { value: MatrixView; label: string }[] = [
   { value: "vendor_costs", label: "Vendor costs" },
@@ -718,8 +719,7 @@ export function AdvancedLookup({
           </Popover>
           <label className="toggle-inline" title="Rates valid at this time (UTC); empty = now">
             As of
-            <input
-              type="datetime-local"
+            <DateTimeInput
               value={draft.asOf ? draft.asOf.slice(0, 16) : ""}
               onChange={(e) =>
                 set({ asOf: e.target.value ? new Date(`${e.target.value}:00Z`).toISOString() : undefined })

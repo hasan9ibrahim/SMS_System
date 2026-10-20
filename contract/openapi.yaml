@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.68.0
+  version: 0.69.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1572,6 +1572,37 @@ paths:
             text/csv:
               schema:
                 type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+    post:
+      tags: [rates]
+      operationId: exportRateLinesFiltered
+      summary: "Export the rate lines as filtered on screen (team trial round 2)"
+      description: |
+        Same columns as the GET export, for exactly the rows the grid shows: its filter (including the
+        view condition), quick search and sort. The table is always the one in the path.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: CSV file, UTF-8, header row
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
         "401":

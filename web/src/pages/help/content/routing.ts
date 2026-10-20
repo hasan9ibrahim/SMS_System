@@ -1154,7 +1154,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Country / Network / MCCMNC",
-                what: 'The destination. "All networks" is the country\'s default line.',
+                what: 'The destination. "All networks" is the country\'s default rate.',
               },
               {
                 name: "Sell rate",
@@ -1188,7 +1188,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "Every destination with a sell line on the trunk's rate tables is run through the live route rules in order, the same way as the Simulator.",
+              "Every destination with a sell rate on the trunk's rate tables is run through the live route rules in order, the same way as the Simulator.",
               "It is the steady-state route: a message with no receiver number or content, so number whitelists, warm-up and content conditions do not apply.",
               "The map is worked out once a minute per trunk; filters and sorting then run on the server.",
             ],
@@ -1328,13 +1328,13 @@ export const topics: HelpTopic[] = [
               { name: "LCR profile", what: "Use a profile's picks for the LCR positions.", values: "Optional." },
               {
                 name: "Show",
-                what: "**Below cost only** shows lines sold under the cheapest vendor. Sort by **Lowest margin first**, **Most traffic first** or **By destination**. Search narrows the lines.",
+                what: "**Below cost only** shows rates sold under the cheapest vendor. Sort by **Lowest margin first**, **Most traffic first** or **By destination**. Search narrows the rates.",
               },
             ],
           },
           {
             kind: "text",
-            text: "Cards show the number of **Lines**, how many are **Below cost** (red) and the **Average margin at LCR 1**. The table lists Client trunk, Country, Network, MCCMNC, **Sell**, then **LCR 1–3** (the three cheapest eligible vendors with their cost) and **Margin 1–3** (red when negative), and **Msgs 7d**. Below-cost lines are highlighted. More lines load as you scroll.",
+            text: "Cards show the number of **Rates**, how many are **Below cost** (red) and the **Average margin at LCR 1**. The table lists Client trunk, Country, Network, MCCMNC, **Sell**, then **LCR 1–3** (the three cheapest eligible vendors with their cost) and **Margin 1–3** (red when negative), and **Msgs 7d**. Below-cost rates are highlighted. More rates load as you scroll.",
           },
         ],
       },
@@ -1579,7 +1579,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "Each message is priced with the table's line valid at its send time. A back-dated line counts from its stated date.",
+              "Each message is priced with the table's rate valid at its send time. A back-dated rate counts from its stated date.",
               "Customer side: a lower amount becomes a credit note to the customer, a higher one a debit note.",
               "Vendor side: a higher cost becomes a credit note to the vendor, a lower one a debit note.",
               "Notes are posted to [[transactions|Transactions]] as Reprocess entries, unless **Don't add credit/debit note** is ticked.",
@@ -1701,7 +1701,7 @@ export const topics: HelpTopic[] = [
               { name: "Tier", what: "T1, T2, T3." },
               {
                 name: "Rate",
-                what: "Click to open the rate table in Rate manager. The best active cost is green. * means the country line or another network's line applies.",
+                what: "Click to open the rate table in Rate manager. The best active cost is green. * means the country rate or another network's rate applies.",
               },
               {
                 name: "Since / Scheduled",

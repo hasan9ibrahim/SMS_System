@@ -343,6 +343,15 @@ export const rateTableList: ListDef<RateTableRow> = {
               OR EXISTS (SELECT 1 FROM enterprises e WHERE e.id = vt.enterprise_id AND e.account_manager_id = ANY(${p(ids)}::bigint[])))`;
       },
     },
+    // Tables used by these customer trunks (bulk rating, pick by trunk; team trial round 2).
+    customerTrunkId: {
+      sql: "NULL",
+      where: (op, c, p) => {
+        const ids = op === "in" ? (c.values ?? []).map(Number) : [Number(c.value)];
+        return `EXISTS (SELECT 1 FROM customer_trunk_rate_tables x
+                   WHERE x.rate_table_id = rt.id AND x.customer_trunk_id = ANY(${p(ids)}::bigint[]))`;
+      },
+    },
     vendorTrunkName: visCol(trunkMask("vt", "Vendor trunk")),
     vendorTrunkId: { sql: "rt.vendor_trunk_id" },
     trunkCount: {

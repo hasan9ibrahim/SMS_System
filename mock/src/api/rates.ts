@@ -121,7 +121,15 @@ const csvCell = (v: unknown) => {
 
 export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
-  const { view = "current" } = request.query as { view?: string };
+  // POST: the grid's own filter, search and sort, so Export gives exactly the rows on screen (trial round 2).
+  const body = request.method === "POST" ? ((request.body ?? {}) as ListQuery) : null;
+  const bodyConds = (body?.filter?.conditions ?? []).filter(
+    (c) => !("field" in c && (c.field === "rateTableId" || c.field === "view")),
+  );
+  const bodyView = (body?.filter?.conditions ?? []).find(
+    (c): c is { field: string; op: "eq"; value: string } => "field" in c && c.field === "view",
+  )?.value;
+  const view = String(bodyView ?? (request.query as { view?: string }).view ?? "current");
   return withDb(reply, async (pool) => {
     const { rows: t } = await pool.query("SELECT name FROM rate_tables WHERE id = $1", [id]);
     if (!t[0]) return notFound(reply, id);
@@ -132,8 +140,11 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
         conditions: [
           { field: "rateTableId", op: "eq", value: id },
           { field: "view", op: "eq", value: view },
+          ...(bodyConds.length ? [{ logic: body!.filter!.logic ?? "and", conditions: bodyConds }] : []),
         ],
       },
+      ...(body?.search ? { search: body.search } : {}),
+      ...(body?.sort ? { sort: body.sort } : {}),
       limit: 100_000,
     } as ListQuery);
     const cols: [string, string][] = [
@@ -159,7 +170,7 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
       const row = r as unknown as Record<string, unknown>;
       return cols.map(([, k]) => csvCell(row[k])).join(",");
     });
-    const file = `${String(t[0].name).replace(/[^\w.-]+/g, "_")}_${view}.csv`;
+    const file = `${String(t[0].name).replace(/[^\w.-]+/g, "_")}_${view}${bodyConds.length || body?.search ? "_filtered" : ""}.csv`;
     return reply
       .type("text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${file}"`)
@@ -652,7 +663,7 @@ export async function checkLineEdits(
           message: "can't be in the past (traffic already sent keeps its rate)",
         });
     } else {
-      if (it.lineId === undefined) errors.push({ path: `${at}/lineId`, message: `required to ${it.action} a line` });
+      if (it.lineId === undefined) errors.push({ path: `${at}/lineId`, message: `required to ${it.action} a rate` });
       if (it.action === "block" && it.blocked === undefined)
         errors.push({ path: `${at}/blocked`, message: "required" });
       if (it.at && Date.parse(it.at) < nowMs - SKEW_MS)
@@ -668,7 +679,7 @@ export async function checkLineEdits(
     const ok = new Set(rows.map((r) => Number(r.id)));
     for (const { it, at } of edits)
       if (it.lineId !== undefined && !ok.has(it.lineId))
-        errors.push({ path: `${at}/lineId`, message: `line ${it.lineId} is not in this table` });
+        errors.push({ path: `${at}/lineId`, message: `rate ${it.lineId} is not in this table` });
   }
   const codes = [
     ...new Set(
@@ -854,7 +865,7 @@ export const OVERLAP = Symbol("overlap");
 export const isOverlap = (err: unknown) => (err as { code?: string }).code === "23P01";
 export const overlapProblem = (reply: FastifyReply) =>
   sendProblem(reply, 400, "These rates changed while you were saving; reload, review and save again", {
-    errors: [{ path: "/items", message: "another save changed the same lines at the same time" }],
+    errors: [{ path: "/items", message: "another save changed the same rates at the same time" }],
   });
 
 export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {

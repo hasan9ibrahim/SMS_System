@@ -893,7 +893,7 @@ async function createRn(
     }
     const key = `${dest.mccmnc}:${row.senderId ?? ""}`;
     if (seen.has(key)) {
-      errors.push({ line: row.lineNo, message: `${dest.mccmnc} appears twice; the first line is used` });
+      errors.push({ line: row.lineNo, message: `${dest.mccmnc} appears twice; the first row is used` });
       continue;
     }
     seen.add(key);

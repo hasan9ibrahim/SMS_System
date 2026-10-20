@@ -27,6 +27,7 @@ import {
 import { Icon } from "../../ui/Icon";
 import { DestinationPick, TrunkPick, type Picked } from "./pickers";
 import { MarginInput } from "./MarginInput";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const OPS: { value: CompareOp; label: string }[] = [
   { value: ">", label: ">" },
@@ -603,11 +604,11 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
           <div className="fgrid cols-2">
             <label className="field">
               <span>Start (UTC)</span>
-              <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+              <DateTimeInput value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             </label>
             <label className="field">
               <span>Stop (UTC)</span>
-              <input type="datetime-local" value={stopsAt} onChange={(e) => setStopsAt(e.target.value)} />
+              <DateTimeInput value={stopsAt} onChange={(e) => setStopsAt(e.target.value)} />
             </label>
           </div>
         ),

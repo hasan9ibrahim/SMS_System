@@ -29,6 +29,7 @@ import {
 } from "./monitorModel";
 import { RequestDialog } from "./parts";
 import { DestinationTree } from "../rates/DestinationTree";
+import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const page = pageForPath("/monitoring/edr")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -96,8 +97,7 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
     <div className="edr-toolbar">
       <label className="small">
         From
-        <input
-          type="datetime-local"
+        <DateTimeInput
           value={bounds.from}
           onChange={(e) => setTime(e.target.value, bounds.to)}
           aria-label="From (UTC)"
@@ -105,12 +105,7 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
       </label>
       <label className="small">
         To
-        <input
-          type="datetime-local"
-          value={bounds.to}
-          onChange={(e) => setTime(bounds.from, e.target.value)}
-          aria-label="To (UTC)"
-        />
+        <DateTimeInput value={bounds.to} onChange={(e) => setTime(bounds.from, e.target.value)} aria-label="To (UTC)" />
       </label>
       <span className="muted small">UTC</span>
       <label className="toggle-inline small">

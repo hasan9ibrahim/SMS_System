@@ -26,3 +26,31 @@ body {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
+/* 24-hour date and time field (ui/DateTimeInput, team trial round 2) */
+.dt-input {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.dt-input input[type="date"] {
+  min-width: 0;
+}
+.dt-input .dt-time {
+  width: 62px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dt-input .dt-time.invalid {
+  border-color: var(--color-error);
+}
+/* Tabular figures without right alignment (dates and times in left-aligned columns). */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bulk rating: pick customer trunks (team trial round 2) */
+.trunk-pick-list { max-height: 360px; overflow: auto; border: 1px solid var(--color-border); border-radius: 7px; margin-top: 8px; }
+.trunk-pick-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--color-border); cursor: pointer; }
+.trunk-pick-row:last-child { border-bottom: 0; }
+.trunk-pick-row:hover { background: color-mix(in srgb, var(--color-accent) 7%, transparent); }

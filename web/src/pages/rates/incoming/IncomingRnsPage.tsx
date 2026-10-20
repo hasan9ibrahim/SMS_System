@@ -163,7 +163,7 @@ function ReasonDialog({ count: n, done }: { count: number; done: (reason: string
   const [reason, setReason] = useState("");
   return (
     <Modal
-      title={`Reject ${n.toLocaleString("en-US")} line${n === 1 ? "" : "s"}`}
+      title={`Reject ${n.toLocaleString("en-US")} rate${n === 1 ? "" : "s"}`}
       onClose={() => done(null)}
       footer={
         <>
@@ -259,7 +259,7 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
                 checked={s.autoAccept}
                 onChange={(e) => setDraft({ ...s, autoAccept: e.target.checked })}
               />
-              Auto-accept RNs with no flagged line (no live increase or close, no notice breach, no errors)
+              Auto-accept RNs with no flagged rate (no live increase or close, no notice breach, no errors)
             </label>
             {(["successful", "failed", "rejected"] as const).map((k) => (
               <label key={k} className="field">
@@ -475,11 +475,11 @@ function RnQueue() {
       { id: r.id, kind, body: reason ? { reason } : {} },
       {
         onSuccess: (res) => {
-          if (res.change) notifySaved(res.change, `Accepted ${res.applied} line${res.applied === 1 ? "" : "s"}`);
+          if (res.change) notifySaved(res.change, `Accepted ${res.applied} rate${res.applied === 1 ? "" : "s"}`);
           else
             toast({
               tone: "good",
-              message: `${kind === "accept" ? "Accepted" : "Rejected"} ${res.applied} line${res.applied === 1 ? "" : "s"}`,
+              message: `${kind === "accept" ? "Accepted" : "Rejected"} ${res.applied} rate${res.applied === 1 ? "" : "s"}`,
             });
         },
         onError: fail,
@@ -498,14 +498,14 @@ function RnQueue() {
           icon: "check",
           main: true,
           disabled: !decidable(r.status) || decide.isPending,
-          hint: notPending(r) ?? "Accept all pending lines",
+          hint: notPending(r) ?? "Accept all pending rates",
           onSelect: () => void decideAll(r, "accept"),
         },
         {
           label: "Reject…",
           icon: "x",
           disabled: !decidable(r.status) || decide.isPending,
-          hint: notPending(r) ?? "Reject all pending lines",
+          hint: notPending(r) ?? "Reject all pending rates",
           onSelect: () => void decideAll(r, "reject"),
         },
         {
@@ -762,7 +762,7 @@ function RnReview({ id }: { id: number }) {
   useTabTitle(rn ? rn.reference : undefined);
   usePageStatus({
     rows: rn ? `${rn.lines.toLocaleString("en-US")} lines · ${STATUS[rn.status].label}` : "Loading…",
-    shortcuts: "Select lines to accept or reject them; flagged lines are on top",
+    shortcuts: "Select rates to accept or reject them; flagged rates are on top",
   });
   const gridState: GridState = useMemo(
     () => ({
@@ -803,11 +803,11 @@ function RnReview({ id }: { id: number }) {
       {
         onSuccess: (r) => {
           setSelected(new Set());
-          if (r.change) notifySaved(r.change, `Accepted ${r.applied} line${r.applied === 1 ? "" : "s"}`);
+          if (r.change) notifySaved(r.change, `Accepted ${r.applied} rate${r.applied === 1 ? "" : "s"}`);
           else
             toast({
               tone: "good",
-              message: `${kind === "accept" ? "Accepted" : "Rejected"} ${r.applied} line${r.applied === 1 ? "" : "s"}`,
+              message: `${kind === "accept" ? "Accepted" : "Rejected"} ${r.applied} rate${r.applied === 1 ? "" : "s"}`,
             });
           if (then) navigate(then, { newTab: true });
         },
@@ -862,7 +862,7 @@ function RnReview({ id }: { id: number }) {
 
       {rn.status === "unmatched" && (
         <div className="rn-banner">
-          <Icon name="alert" /> No vendor trunk was found for this RN. Assign it to read the lines against that trunk's
+          <Icon name="alert" /> No vendor trunk was found for this RN. Assign it to read the rates against that trunk's
           rates:
           <ListLookup<{ id: number; name: string }>
             list="vendor_trunks"
@@ -876,7 +876,7 @@ function RnReview({ id }: { id: number }) {
 
       <div className="stat-cards">
         <div className="stat-card">
-          <span className="stat-label">Lines</span>
+          <span className="stat-label">Rates</span>
           <span className="stat-value">{rn.lines.toLocaleString("en-US")}</span>
           <span className="muted small">{changeSummary(rn) || "—"}</span>
         </div>
@@ -903,7 +903,7 @@ function RnReview({ id }: { id: number }) {
       </div>
 
       <div className="rn-body">
-        <section className="rate-grid-card" aria-label="Lines">
+        <section className="rate-grid-card" aria-label="Rates">
           {fields.data && (
             <DataGrid<RnLineRow>
               list="rate_notification_lines"
@@ -934,7 +934,7 @@ function RnReview({ id }: { id: number }) {
             />
           )}
           {selected.size > 0 && (
-            <div className="bulk-bar" role="toolbar" aria-label="Line actions">
+            <div className="bulk-bar" role="toolbar" aria-label="Rate actions">
               <strong>{selected.size} selected</strong>
               <button
                 type="button"
@@ -1031,12 +1031,12 @@ function RnReview({ id }: { id: number }) {
                 <ul className="rn-errors">
                   {rn.fileErrors.map((e, i) => (
                     <li key={i}>
-                      <span className="muted">line {e.line}</span> {e.message}
+                      <span className="muted">row {e.line}</span> {e.message}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="muted small">Every line was read.</p>
+                <p className="muted small">Every row was read.</p>
               )}
             </>
           )}

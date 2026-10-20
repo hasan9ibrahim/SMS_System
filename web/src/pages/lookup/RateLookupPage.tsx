@@ -27,7 +27,7 @@ const SHOW: { value: Show; label: string }[] = [
   { value: "vendor", label: "Vendor" },
 ];
 
-const page = pageForPath("/routing/rate-lookup")!;
+const page = pageForPath("/rates/rate-lookup")!;
 
 function EasyStatus() {
   usePageStatus({

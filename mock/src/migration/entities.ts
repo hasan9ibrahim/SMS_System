@@ -132,7 +132,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
   },
   {
     entity: "rate_lines",
-    label: "Rate lines",
+    label: "Rates",
     sensitivity: "business",
     importable: true,
     order: 6,
