@@ -3810,7 +3810,8 @@ export type paths = {
     put?: never;
     /**
      * List current exchange rates (server-side filter, sort and paging)
-     * @description Currency Exchange (§7): the rate in force per currency (units per 1 USD), with who set it and when.
+     * @description Currency Exchange (§7): the rate in force per currency (units per 1 EUR, the base currency), with who set it
+     *     and when.
      */
     post: operations["queryCurrencyRates"];
     delete?: never;
@@ -3829,8 +3830,8 @@ export type paths = {
     get?: never;
     /**
      * Edit a currency's rate (Currency Exchange › Edit)
-     * @description Adds a new rate valid from now; earlier rates stay in the history so past amounts never move.
-     *     One undoable change.
+     * @description Adds a new rate (units per 1 EUR) valid from now; earlier rates stay in the history so past amounts never
+     *     move. One undoable change. EUR is the base and cannot be edited.
      */
     put: operations["setCurrencyRate"];
     post?: never;
@@ -3851,9 +3852,91 @@ export type paths = {
     put?: never;
     /**
      * Sync Rates (pull market rates)
-     * @description Pulls today's market rates for every currency (the mock simulates the feed) as one undoable change.
+     * @description Pulls the latest rates from the exchange-rate provider (XE Currency Data API when an account is set up;
+     *     the mock simulates it) as one undoable change, then checks the currency alerts.
      */
     post: operations["syncCurrencyRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/provider": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Exchange-rate provider settings (team trial round 2)
+     * @description Where the exchange rates come from: XE Currency Data API (xe.com, a paid account with an account ID and API
+     *     key) or manual entry, and how often they refresh. The API key is never returned. Administrators only.
+     */
+    get: operations["getFxProvider"];
+    /**
+     * Change the exchange-rate provider settings
+     * @description Administrators only. Logged in the audit log without the key.
+     */
+    put: operations["updateFxProvider"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/alerts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Currency alerts (team trial round 2)
+     * @description Alerts when a currency moves against EUR by more than an amount or a percentage.
+     */
+    get: operations["listFxAlertRules"];
+    put?: never;
+    /** Add a currency alert */
+    post: operations["createFxAlertRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/alerts/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Change a currency alert */
+    put: operations["updateFxAlertRule"];
+    post?: never;
+    /** Delete a currency alert */
+    delete: operations["deleteFxAlertRule"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/exchange-rates/alerts/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Recent currency alerts that fired */
+    get: operations["listFxAlertEvents"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -10738,6 +10821,8 @@ export type components = {
       description: string | null;
       vendorTrunkId: components["schemas"]["Id"] | null;
       vendorTrunkName: string | null;
+      /** @description Units of the platform currency (EUR by default) per 1 unit of the table currency at the latest rate, for the table-currency / EUR rate columns (team trial round 2). */
+      platformPerUnit: number;
       /** @description Customer trunks using the table, or the vendor trunk that owns it. */
       trunks: components["schemas"]["RateTableTrunk"][];
       lastImport: {
@@ -12754,7 +12839,7 @@ export type components = {
       name: string;
       iso: string;
       symbol: string;
-      ratePerUsd: number;
+      ratePerEur: number;
       /** Format: date-time */
       rateUpdatedAt: string | null;
       /** @description Enterprise billing settings in this currency. */
@@ -12773,8 +12858,8 @@ export type components = {
       name: string;
       symbol: string;
       iso: string;
-      /** @description First exchange rate, units per 1 USD. */
-      ratePerUsd: number;
+      /** @description First exchange rate, units per 1 EUR (EUR is the base currency, team trial round 2). */
+      ratePerEur: number;
     };
     CurrencySaved: {
       record: components["schemas"]["CurrencyRow"];
@@ -12785,8 +12870,8 @@ export type components = {
       id: components["schemas"]["Id"];
       iso: string;
       currency: string;
-      /** @description Units of the currency per 1 USD (USD = 1). */
-      ratePerUsd: number;
+      /** @description Units of the currency per 1 EUR (EUR, the base currency, is 1; team trial round 2). */
+      ratePerEur: number;
       /** Format: date-time */
       validFrom: string | null;
       /** @description Null = market feed or seed data. */
@@ -12797,7 +12882,7 @@ export type components = {
       rows: components["schemas"]["CurrencyRateRow"][];
     };
     CurrencyRateInput: {
-      ratePerUsd: number;
+      ratePerEur: number;
     };
     CurrencyRateSaved: {
       record: components["schemas"]["CurrencyRateRow"];
@@ -12807,11 +12892,86 @@ export type components = {
       updated: number;
       change: components["schemas"]["Change"] | null;
     };
+    FxProvider: {
+      /**
+       * @description `xe` = XE Currency Data API (xecdapi.xe.com, rates per EUR); `manual` = rates are typed in.
+       * @enum {string}
+       */
+      provider: "xe" | "manual";
+      /** @description The XE API account ID. */
+      accountId: string | null;
+      /** @description True when an API key is stored. The key itself is never returned (§13.22). */
+      apiKeySet: boolean;
+      /**
+       * @description How often rates are pulled: every minute, 15 minutes, hour (default), 6 hours or day. XE's plan decides how fresh its rates are (daily, hourly or per minute); refreshing faster than the plan gains nothing.
+       * @enum {integer}
+       */
+      refreshMinutes: 1 | 15 | 60 | 360 | 1440;
+      enabled: boolean;
+      /** @description True while no account is set up (or in this phase): refreshes use simulated market moves. */
+      simulated: boolean;
+      /** Format: date-time */
+      lastRunAt: string | null;
+      /** @enum {string|null} */
+      lastStatus: "ok" | "simulated" | "error" | null;
+      lastMessage: string | null;
+      /** Format: date-time */
+      nextRunAt: string | null;
+      updatedBy: string | null;
+      /** Format: date-time */
+      updatedAt: string | null;
+    };
+    FxProviderUpdate: {
+      /** @enum {string} */
+      provider: "xe" | "manual";
+      accountId: string | null;
+      /** @description New API key; omitted or null keeps the stored one, "" removes it. */
+      apiKey?: string | null;
+      /** @enum {integer} */
+      refreshMinutes: 1 | 15 | 60 | 360 | 1440;
+      enabled: boolean;
+    };
+    FxAlertRuleInput: {
+      /** @description The currency; null = every currency. */
+      iso: string | null;
+      /** @description Fire when the rate against EUR moves by at least this % (up or down). */
+      thresholdPct: number | null;
+      /** @description Fire when the rate (units per 1 EUR) moves by at least this amount. At least one threshold is required. */
+      thresholdAbs: number | null;
+      /**
+       * @description `update` = since the previous rate; `day` = against the rate 24 hours before.
+       * @enum {string}
+       */
+      window: "update" | "day";
+      recipients: string[];
+      enabled: boolean;
+    };
+    FxAlertRule: components["schemas"]["FxAlertRuleInput"] & {
+      id: components["schemas"]["Id"];
+      /** Format: date-time */
+      lastTriggeredAt: string | null;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+    };
+    FxAlertEvent: {
+      id: components["schemas"]["Id"];
+      ruleId: components["schemas"]["Id"];
+      iso: string;
+      /** @description Units per 1 EUR before. */
+      fromRate: number;
+      toRate: number;
+      changePct: number;
+      /** @enum {string} */
+      window: "update" | "day";
+      at: components["schemas"]["Timestamp"];
+      /** @description How many recipients got the alert e-mail (Email logs, type currency_alert). */
+      emailed: number;
+    };
     CurrencyRateHistoryRow: {
       id: components["schemas"]["Id"];
       iso: string;
       currency: string;
-      ratePerUsd: number;
+      ratePerEur: number;
       validFrom: components["schemas"]["Timestamp"];
       updatedBy: string | null;
     };
@@ -13674,7 +13834,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) and template_test (a test of an e-mail template, §11).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) and currency_alert (an exchange rate moved past an alert, team trial round 2).
      * @enum {string}
      */
     EmailType:
@@ -13702,7 +13862,8 @@ export type components = {
       | "cleanup_summary"
       | "credential_transfer"
       | "password_reminder"
-      | "template_test";
+      | "template_test"
+      | "currency_alert";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -23751,6 +23912,173 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  getFxProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings and the last run */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxProvider"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+    };
+  };
+  updateFxProvider: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FxProviderUpdate"];
+      };
+    };
+    responses: {
+      /** @description The saved settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxProvider"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+    };
+  };
+  listFxAlertRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every alert rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertRule"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+    };
+  };
+  createFxAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FxAlertRuleInput"];
+      };
+    };
+    responses: {
+      /** @description The new rule */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertRule"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+    };
+  };
+  updateFxAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FxAlertRuleInput"];
+      };
+    };
+    responses: {
+      /** @description The saved rule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertRule"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  deleteFxAlertRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listFxAlertEvents: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Newest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FxAlertEvent"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
     };
   };
   queryCurrencyRateHistory: {

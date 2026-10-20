@@ -127,7 +127,7 @@ describe("market moves (§13.14)", { skip }, () => {
          JOIN currency_latest cl ON cl.iso = l.currency
         WHERE l.mccmnc_id = $1 AND l.sender_id IS NULL AND NOT l.is_blocked AND l.valid_from <= now()
           AND (l.valid_to IS NULL OR l.valid_to > now())
-        ORDER BY l.rate / cl.rate_per_usd LIMIT 2`,
+        ORDER BY l.rate / cl.rate_per_eur LIMIT 2`,
       [dest.mccmnc_id],
     );
     assert.equal(v.length, 2);

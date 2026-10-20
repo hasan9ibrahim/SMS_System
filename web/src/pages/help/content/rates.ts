@@ -416,8 +416,12 @@ export const topics: HelpTopic[] = [
                 what: "Empty for the normal price; a value means the rate only prices that sender ID.",
               },
               {
-                name: "Sell Rate (Buy Rate on vendor tables)",
-                what: "The price, in the table's currency. Click it to edit. A lock icon means the rate is blocked. Edited values are highlighted until you save.",
+                name: "Sell Rate (USD) (Buy Rate on vendor tables)",
+                what: "The price, in the table's currency (named in the header). Click it to edit. A lock icon means the rate is blocked. Edited values are highlighted until you save.",
+              },
+              {
+                name: "Rate (EUR)",
+                what: "The same price in EUR, the platform currency, at the latest exchange rate. Click it to type the price in EUR instead: the table-currency rate follows (and the other way round). Hover to see the exchange rate used. Plain text on tables already in EUR.",
               },
               {
                 name: "Best Buy / Best Vendor",
@@ -437,7 +441,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Hidden columns",
-                what: "Change %, Until, Next Rate, Next From, Blocked, Negative margin, Dial Code, Sys Rate (the rate in the platform currency), Rate Note, Updated By, Updated Time and Rate ID.",
+                what: "Change %, Until, Next Rate, Next From, Blocked, Negative margin, Dial Code, Rate Note, Updated By, Updated Time and Rate ID.",
               },
             ],
           },

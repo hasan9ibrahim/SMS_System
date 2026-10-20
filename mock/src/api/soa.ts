@@ -293,11 +293,11 @@ export async function buildStatement(
   const vend = sides.find((s) => s.side === "vendor");
   let net: SoaStatement["net"] = null;
   if (cust && vend) {
-    const { rows: r } = await c.query("SELECT iso, rate_per_usd FROM currency_latest WHERE iso = ANY($1)", [
+    const { rows: r } = await c.query("SELECT iso, rate_per_eur FROM currency_latest WHERE iso = ANY($1)", [
       [cust.currency, vend.currency],
     ]);
     const rate = (iso: string) =>
-      iso === "USD" ? 1 : Number(r.find((x) => String(x.iso).trim() === iso)?.rate_per_usd ?? 1);
+      iso === "EUR" ? 1 : Number(r.find((x) => String(x.iso).trim() === iso)?.rate_per_eur ?? 1);
     net = {
       amount: money(cust.closingBalance - (vend.closingBalance * rate(cust.currency)) / rate(vend.currency)),
       currency: cust.currency,

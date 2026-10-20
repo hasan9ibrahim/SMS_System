@@ -53,11 +53,11 @@ export interface UsageLine {
   amount: number;
 }
 
-/** Units of `iso` per USD at the latest rate, for each currency asked. */
-async function ratesPerUsd(db: Db, isos: string[]): Promise<Map<string, number>> {
-  const { rows } = await db.query("SELECT iso, rate_per_usd FROM currency_latest WHERE iso = ANY($1)", [isos]);
-  const m = new Map(rows.map((r) => [String(r.iso).trim(), Number(r.rate_per_usd)]));
-  m.set("USD", 1);
+/** Units of `iso` per EUR (the base) at the latest rate, for each currency asked. */
+async function ratesPerEur(db: Db, isos: string[]): Promise<Map<string, number>> {
+  const { rows } = await db.query("SELECT iso, rate_per_eur FROM currency_latest WHERE iso = ANY($1)", [isos]);
+  const m = new Map(rows.map((r) => [String(r.iso).trim(), Number(r.rate_per_eur)]));
+  m.set("EUR", 1);
   return m;
 }
 
@@ -92,7 +92,7 @@ export async function usageLines(
     30_000,
   );
   if (!rows) return null;
-  const rates = await ratesPerUsd(db, [currency, ...new Set(rows.map((r) => r.cur))]);
+  const rates = await ratesPerEur(db, [currency, ...new Set(rows.map((r) => r.cur))]);
   const target = rates.get(currency) ?? 1;
   const out = new Map<string, UsageLine>();
   for (const r of rows) {

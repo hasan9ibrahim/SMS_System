@@ -1111,7 +1111,7 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
           const amount = Number(v.amount);
           const { rows: fx } = await c.query(
             `SELECT bc.base_currency,
-                    rate_per_usd_at(bc.base_currency, $3::date::timestamptz) / rate_per_usd_at($2, $3::date::timestamptz) AS rate
+                    rate_per_eur_at(bc.base_currency, $3::date::timestamptz) / rate_per_eur_at($2, $3::date::timestamptz) AS rate
                FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id WHERE e.id = $1`,
             [ent, v.currency, v.date],
           );

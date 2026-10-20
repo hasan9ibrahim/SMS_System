@@ -525,7 +525,7 @@ async function computeClientView(c: Db, b: LcrClientQuery, at: Date): Promise<Lc
        LEFT JOIN qbr_stats q ON q.side = 'vendor' AND q.trunk_id = vt.id AND q.mccmnc_id = l.mccmnc_id
       WHERE l.mccmnc_id = ANY($1) AND l.sender_id IS NULL AND NOT l.is_blocked
         AND l.valid_from <= $2 AND (l.valid_to IS NULL OR l.valid_to > $2)
-      ORDER BY l.mccmnc_id, vt.id, l.rate / cl.rate_per_usd`,
+      ORDER BY l.mccmnc_id, vt.id, l.rate / cl.rate_per_eur`,
     [destIds, at],
   );
   const tps = tpsNow();
@@ -598,7 +598,7 @@ async function computeClientView(c: Db, b: LcrClientQuery, at: Date): Promise<Lc
 
 const CHANGE_FROM = `lcr_changes ch JOIN mccmnc m ON m.id = ch.mccmnc_id JOIN countries co ON co.id = m.country_id
   LEFT JOIN vendor_trunks ov ON ov.id = ch.old_vendor_id LEFT JOIN vendor_trunks nv ON nv.id = ch.new_vendor_id`;
-const PLATFORM = `(SELECT rate_per_usd FROM currency_latest WHERE iso = '${PLATFORM_CURRENCY}')`;
+const PLATFORM = `(SELECT rate_per_eur FROM currency_latest WHERE iso = '${PLATFORM_CURRENCY}')`;
 export const lcrChangeList: ListDef<import("@sms/contract").LcrChangeRow> = {
   fields: listFields.lcr_changes,
   from: CHANGE_FROM,
@@ -611,14 +611,14 @@ export const lcrChangeList: ListDef<import("@sms/contract").LcrChangeRow> = {
     kind: { sql: "ch.kind" },
     oldVendor: { sql: "ov.name" },
     newVendor: { sql: "nv.name" },
-    oldCost: { sql: `(ch.old_cost_usd * ${PLATFORM})` },
-    newCost: { sql: `(ch.new_cost_usd * ${PLATFORM})` },
+    oldCost: { sql: `(ch.old_cost_eur * ${PLATFORM})` },
+    newCost: { sql: `(ch.new_cost_eur * ${PLATFORM})` },
     changePct: { sql: "ch.change_pct" },
   },
   search: ["country", "network", "mccmnc", "oldVendor", "newVendor"],
   idSql: "ch.id",
   select: `ch.*, m.mccmnc, m.network, m.is_all_networks, co.name AS country, ov.name AS old_vendor, nv.name AS new_vendor,
-    ch.old_cost_usd * ${PLATFORM} AS old_cost, ch.new_cost_usd * ${PLATFORM} AS new_cost,
+    ch.old_cost_eur * ${PLATFORM} AS old_cost, ch.new_cost_eur * ${PLATFORM} AS new_cost,
     (SELECT mm.id FROM market_moves mm WHERE mm.mccmnc_id = ch.mccmnc_id
       AND ch.detected_at BETWEEN mm.first_effective - interval '7 days' AND mm.last_effective + interval '7 days'
       ORDER BY mm.detected_at DESC LIMIT 1) AS market_move_id`,
@@ -674,13 +674,13 @@ export function updateLcrAlertSettings(request: FastifyRequest, reply: FastifyRe
 /** Cheapest live vendor per destination at a time (vendor lines valid then, latest exchange rates). */
 async function cheapestAt(c: Db, at: Date) {
   const { rows } = await c.query(
-    `SELECT DISTINCT ON (l.mccmnc_id) l.mccmnc_id, rt.vendor_trunk_id, l.rate / cl.rate_per_usd AS usd
+    `SELECT DISTINCT ON (l.mccmnc_id) l.mccmnc_id, rt.vendor_trunk_id, l.rate / cl.rate_per_eur AS usd
        FROM rate_lines l
        JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
        JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id AND vt.deleted_at IS NULL AND vt.status = 'active'
        JOIN currency_latest cl ON cl.iso = l.currency
       WHERE l.sender_id IS NULL AND NOT l.is_blocked AND l.valid_from <= $1 AND (l.valid_to IS NULL OR l.valid_to > $1)
-      ORDER BY l.mccmnc_id, l.rate / cl.rate_per_usd, rt.vendor_trunk_id`,
+      ORDER BY l.mccmnc_id, l.rate / cl.rate_per_eur, rt.vendor_trunk_id`,
     [at],
   );
   return new Map(rows.map((r) => [Number(r.mccmnc_id), { vt: Number(r.vendor_trunk_id), usd: Number(r.usd) }]));
@@ -691,9 +691,9 @@ export async function checkLcrChanges(at = new Date(), c: Db = db()): Promise<nu
   const { rows: s } = await c.query("SELECT * FROM lcr_alert_settings WHERE id = 1");
   const settings = toAlertSettings(s[0]);
   if (!settings.enabled) return 0;
-  const { rows: snap } = await c.query("SELECT mccmnc_id, vendor_trunk_id, cost_usd FROM lcr_snapshot");
+  const { rows: snap } = await c.query("SELECT mccmnc_id, vendor_trunk_id, cost_eur FROM lcr_snapshot");
   const before = new Map(
-    snap.map((r) => [Number(r.mccmnc_id), { vt: Number(r.vendor_trunk_id), usd: Number(r.cost_usd) }]),
+    snap.map((r) => [Number(r.mccmnc_id), { vt: Number(r.vendor_trunk_id), usd: Number(r.cost_eur) }]),
   );
   const now = await cheapestAt(c, at);
   const ch = {
@@ -723,15 +723,15 @@ export async function checkLcrChanges(at = new Date(), c: Db = db()): Promise<nu
   }
   if (ch.m.length)
     await c.query(
-      `INSERT INTO lcr_changes (mccmnc_id, kind, old_vendor_id, new_vendor_id, old_cost_usd, new_cost_usd, change_pct, detected_at)
+      `INSERT INTO lcr_changes (mccmnc_id, kind, old_vendor_id, new_vendor_id, old_cost_eur, new_cost_eur, change_pct, detected_at)
        SELECT *, $8 FROM unnest($1::bigint[], $2::text[], $3::bigint[], $4::bigint[], $5::numeric[], $6::numeric[], $7::numeric[])`,
       [ch.m, ch.kind, ch.ov, ch.nv, ch.oc, ch.nc, ch.pct, at],
     );
   const ids = [...now.keys()];
   await c.query(
-    `INSERT INTO lcr_snapshot (mccmnc_id, vendor_trunk_id, cost_usd, checked_at)
+    `INSERT INTO lcr_snapshot (mccmnc_id, vendor_trunk_id, cost_eur, checked_at)
      SELECT m, v, u, $4 FROM unnest($1::bigint[], $2::bigint[], $3::numeric[]) AS x(m, v, u)
-     ON CONFLICT (mccmnc_id) DO UPDATE SET vendor_trunk_id = EXCLUDED.vendor_trunk_id, cost_usd = EXCLUDED.cost_usd,
+     ON CONFLICT (mccmnc_id) DO UPDATE SET vendor_trunk_id = EXCLUDED.vendor_trunk_id, cost_eur = EXCLUDED.cost_eur,
        checked_at = EXCLUDED.checked_at`,
     [ids, ids.map((m) => now.get(m)!.vt), ids.map((m) => now.get(m)!.usd), at],
   );

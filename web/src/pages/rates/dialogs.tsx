@@ -215,6 +215,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   const [rate, setRate] = useState("");
   const [senderId, setSenderId] = useState("");
   const tz = usePlatformTz();
+  const platformCurrency = usePlatformCurrency();
   // Default start: the next 00:00 in the platform time zone (team trial round 2).
   const [from, setFrom] = useState(() => nextMidnight(tz));
   const [note, setNote] = useState("");
@@ -276,6 +277,11 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
             Rate ({table.currency})<span className="req">*</span>
           </span>
           <input type="number" min={0} step="0.0001" value={rate} onChange={(e) => setRate(e.target.value)} />
+          {rate !== "" && table.currency !== platformCurrency && Number.isFinite(Number(rate)) && (
+            <span className="muted small">
+              = {(Number(rate) * table.platformPerUnit).toFixed(6)} {platformCurrency}
+            </span>
+          )}
         </label>
         <label className="field">
           <span>Sender ID</span>

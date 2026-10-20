@@ -52,11 +52,11 @@ import { EffectiveFromField, effectiveIso, RnNoteField } from "./EffectiveFrom";
 const page = pageForPath("/rates/bulk")!;
 
 const ACTIONS: { value: RateBulkAction["type"]; label: string; valueLabel?: string }[] = [
-  { value: "set", label: "Set a fixed rate", valueLabel: "New rate" },
+  { value: "set", label: "Set a fixed rate", valueLabel: "New rate (each table's currency)" },
   { value: "change_pct", label: "Change by %", valueLabel: "Change % (negative lowers)" },
-  { value: "change_amount", label: "Change by amount", valueLabel: "Add (negative lowers)" },
+  { value: "change_amount", label: "Change by amount", valueLabel: "Add (table currency, negative lowers)" },
   { value: "cost_plus_pct", label: "Cost + margin %", valueLabel: "Margin % over cost" },
-  { value: "cost_plus_amount", label: "Cost + amount", valueLabel: "Amount over cost" },
+  { value: "cost_plus_amount", label: "Cost + amount", valueLabel: "Amount over cost (table currency)" },
   { value: "close", label: "Close rates" },
   { value: "block", label: "Block rates" },
   { value: "unblock", label: "Unblock rates" },

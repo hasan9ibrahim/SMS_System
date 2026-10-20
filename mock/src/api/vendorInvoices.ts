@@ -1142,7 +1142,7 @@ export function summariseVendorInvoices(request: FastifyRequest, reply: FastifyR
   const endDay = `${Math.floor(end / 12)}-${String((end % 12) + 1).padStart(2, "0")}-01`;
   return withDb(reply, async (pool): Promise<VendorInvoiceSummary> => {
     const conv = (amount: string) =>
-      `${amount} / rate_per_usd_at(v.currency, v.invoice_date::timestamptz) * rate_per_usd_at('${PLATFORM_CURRENCY}', v.invoice_date::timestamptz)`;
+      `${amount} / rate_per_eur_at(v.currency, v.invoice_date::timestamptz) * rate_per_eur_at('${PLATFORM_CURRENCY}', v.invoice_date::timestamptz)`;
     const { rows } = await pool.query(
       `SELECT to_char(v.invoice_date, 'YYYY-MM') AS month, count(*)::int AS invoices,
               count(*) FILTER (WHERE v.comparison = 'match')::int AS match,

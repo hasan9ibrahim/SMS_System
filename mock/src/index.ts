@@ -17,6 +17,7 @@ import { startLcrChecks } from "./api/lcr.js";
 import { ensureTeamTargets, startTeamPresence } from "./api/team.js";
 import { startCleanupJobs } from "./api/cleanup.js";
 import { startSecurityJobs } from "./api/security.js";
+import { startFxRefresh } from "./api/fx.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -44,3 +45,4 @@ startTeamPresence();
 // Cleanup Center (§13.19): the scan shortly after start, then nightly, and the weekly summary.
 startCleanupJobs();
 startSecurityJobs();
+startFxRefresh();

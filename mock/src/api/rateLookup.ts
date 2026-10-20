@@ -232,7 +232,7 @@ const valid = (alias: string, at: string) =>
 
 /** Next version of a line after the one valid at `at` (§13.12 scheduled change). */
 const NEXT = `LEFT JOIN LATERAL (
-    SELECT n.rate, ${toPlatformSql("n.rate", "ncl.rate_per_usd")} AS conv, n.valid_from FROM rate_lines n
+    SELECT n.rate, ${toPlatformSql("n.rate", "ncl.rate_per_eur")} AS conv, n.valid_from FROM rate_lines n
       JOIN currency_latest ncl ON ncl.iso = n.currency
      WHERE n.rate_table_id = x.table_id AND n.mccmnc = x.code AND n.sender_id IS NOT DISTINCT FROM x.sender_id
        AND n.valid_from > $4 AND NOT n.is_blocked
@@ -299,7 +299,7 @@ export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<Ve
          JOIN product_categories pc ON pc.id = rt.product_category_id
          JOIN currency_latest cl ON cl.iso = l.currency
         WHERE true ${extra}
-        ORDER BY d.req, rt.id, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_usd) x
+        ORDER BY d.req, rt.id, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
      ${NEXT}`,
     values,
   );
@@ -341,7 +341,7 @@ export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<Cl
          LEFT JOIN users am ON am.id = e.account_manager_id
          JOIN currency_latest cl ON cl.iso = l.currency
         WHERE true ${extra}
-        ORDER BY d.req, ct.id, ctr.position, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_usd) x
+        ORDER BY d.req, ct.id, ctr.position, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
      ${NEXT}`,
     values,
   );

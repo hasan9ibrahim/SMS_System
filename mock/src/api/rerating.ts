@@ -422,7 +422,7 @@ export async function processRerating(pool: pg.Pool, id: number, userId: number)
           const { rows } = await c.query(
             `INSERT INTO transactions (enterprise_id, side, payment_mode, payment_type, transaction_type, amount, currency,
                amount_base, payment_date, description, created_by_id, updated_by_id)
-             SELECT $1, $2, NULL, $3, 'reprocess', $4, $5, round($4 / cl.rate_per_usd, 2), current_date, $6, $7, $7
+             SELECT $1, $2, NULL, $3, 'reprocess', $4, $5, round($4 / cl.rate_per_eur, 2), current_date, $6, $7, $7
                FROM currency_latest cl WHERE cl.iso = $5
              RETURNING id`,
             [

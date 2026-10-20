@@ -67,3 +67,10 @@ body {
 .eff-quick { display: block; margin-top: 2px; }
 .rn-columns { margin: 6px 0 10px; }
 .rn-header-row input { max-width: 120px; }
+
+/* Currencies: rate source and alerts (team trial round 2) */
+.fx-settings { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.3fr); gap: 14px; margin-top: 10px; align-items: start; }
+.fx-card { border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-panel); padding: 12px 14px; }
+.fx-card h2 { font-size: 14px; margin: 0 0 6px; }
+.fx-card h3 { font-size: 13px; margin: 14px 0 6px; }
+@media (max-width: 1100px) { .fx-settings { grid-template-columns: 1fr; } }

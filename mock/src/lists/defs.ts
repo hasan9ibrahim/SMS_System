@@ -271,7 +271,7 @@ export const negativeMarginSql = `(CASE WHEN rt.kind = 'customer' THEN (SELECT c
    JOIN best_buy_rates bb ON bb.mccmnc_id = l.mccmnc_id AND bb.product_category_id = rt.product_category_id
   WHERE l.rate_table_id = rt.id AND l.sender_id IS NULL AND NOT l.is_blocked
     AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
-    AND l.rate < bb.rate_usd * (SELECT cl.rate_per_usd FROM currency_latest cl WHERE cl.iso = rt.currency)) END)`;
+    AND l.rate < bb.rate_eur * (SELECT cl.rate_per_eur FROM currency_latest cl WHERE cl.iso = rt.currency)) END)`;
 // Trunks using a table: customer trunks for a sell table, the owning trunk for a buy table.
 const usersSql = (col: string, sep: string | null) => {
   // Names for the cell and its hover list: up to 100, sorted (team trial round 1).
@@ -400,7 +400,7 @@ export const rateTableList: ListDef<RateTableRow> = {
 // ---------------------------------------------------------------- rate lines (§13.12 rate grid)
 
 const VALID_NOW = "l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())";
-const bestBuySql = "(bb.rate_usd * cl.rate_per_usd)";
+const bestBuySql = "(bb.rate_eur * cl.rate_per_eur)";
 const marginSql = `(l.rate - ${bestBuySql})`;
 const marginPctSql = `(CASE WHEN l.rate > 0 THEN (l.rate - ${bestBuySql}) / l.rate * 100 END)`;
 const changeTypeSql = `(CASE WHEN prev.rate IS NULL THEN 'new' WHEN l.rate > prev.rate THEN 'increase'
@@ -2740,7 +2740,7 @@ export function mapReconRule(r: Record<string, unknown>): ReconRuleRow {
   };
 }
 
-const currencyRateSql = "(SELECT cl.rate_per_usd FROM currency_latest cl WHERE cl.iso = c.iso)";
+const currencyRateSql = "(SELECT cl.rate_per_eur FROM currency_latest cl WHERE cl.iso = c.iso)";
 const currencyRateAtSql =
   "(SELECT max(r.valid_from) FROM currency_rates r WHERE r.iso = c.iso AND r.valid_from <= now())";
 const currencyEnterprisesSql = "(SELECT count(*)::int FROM enterprise_billing b WHERE b.currency = c.iso)";
@@ -2754,7 +2754,7 @@ export const currencyList: ListDef<CurrencyRow> = {
     name: { sql: "c.name" },
     iso: { sql: "c.iso" },
     symbol: { sql: "c.symbol" },
-    ratePerUsd: { sql: currencyRateSql },
+    ratePerEur: { sql: currencyRateSql },
     rateUpdatedAt: { sql: currencyRateAtSql },
     enterprises: { sql: currencyEnterprisesSql },
     updatedBy: { sql: "ub.username" },
@@ -2769,7 +2769,7 @@ export const currencyList: ListDef<CurrencyRow> = {
     name: r.name as string,
     iso: String(r.iso).trim(),
     symbol: r.symbol as string,
-    ratePerUsd: Number(r.rate),
+    ratePerEur: Number(r.rate),
     rateUpdatedAt: iso(r.rate_at),
     enterprises: Number(r.enterprises),
     updatedBy: (r.updated_by as string | null) ?? null,
@@ -2777,10 +2777,10 @@ export const currencyList: ListDef<CurrencyRow> = {
   }),
 };
 
-/** The rate in force per currency (USD = 1, no row), the one before it and who set it. */
-const rateNow = `LEFT JOIN LATERAL (SELECT r.rate_per_usd, r.valid_from, r.updated_by_id FROM currency_rates r
+/** The rate in force per currency (units per EUR; EUR = 1, no row), the one before it and who set it. */
+const rateNow = `LEFT JOIN LATERAL (SELECT r.rate_per_eur, r.valid_from, r.updated_by_id FROM currency_rates r
     WHERE r.iso = c.iso AND r.valid_from <= now() ORDER BY r.valid_from DESC LIMIT 1) cur ON true
-  LEFT JOIN LATERAL (SELECT r.rate_per_usd FROM currency_rates r
+  LEFT JOIN LATERAL (SELECT r.rate_per_eur FROM currency_rates r
     WHERE r.iso = c.iso AND r.valid_from < cur.valid_from ORDER BY r.valid_from DESC LIMIT 1) prev ON true
   LEFT JOIN users ub ON ub.id = cur.updated_by_id`;
 
@@ -2792,19 +2792,19 @@ export const currencyRateList: ListDef<CurrencyRateRow> = {
     id: { sql: "c.id" },
     iso: { sql: "c.iso" },
     currency: { sql: "c.name" },
-    ratePerUsd: { sql: "COALESCE(cur.rate_per_usd, 1)" },
+    ratePerEur: { sql: "COALESCE(cur.rate_per_eur, 1)" },
     validFrom: { sql: "cur.valid_from" },
     updatedBy: { sql: "ub.username" },
   },
   search: ["iso", "currency"],
   idSql: "c.id",
-  select: `c.id, c.iso, c.name, COALESCE(cur.rate_per_usd, 1) AS rate, cur.valid_from, ub.username AS updated_by,
-    prev.rate_per_usd AS previous_rate`,
+  select: `c.id, c.iso, c.name, COALESCE(cur.rate_per_eur, 1) AS rate, cur.valid_from, ub.username AS updated_by,
+    prev.rate_per_eur AS previous_rate`,
   mapRow: (r) => ({
     id: Number(r.id),
     iso: String(r.iso).trim(),
     currency: r.name as string,
-    ratePerUsd: Number(r.rate),
+    ratePerEur: Number(r.rate),
     validFrom: iso(r.valid_from),
     updatedBy: (r.updated_by as string | null) ?? null,
     previousRate: r.previous_rate === null ? null : Number(r.previous_rate),
@@ -2818,18 +2818,18 @@ export const currencyRateHistoryList: ListDef<CurrencyRateHistoryRow> = {
     id: { sql: "r.id" },
     iso: { sql: "r.iso" },
     currency: { sql: "c.name" },
-    ratePerUsd: { sql: "r.rate_per_usd" },
+    ratePerEur: { sql: "r.rate_per_eur" },
     validFrom: { sql: "r.valid_from" },
     updatedBy: { sql: "ub.username" },
   },
   search: ["iso", "currency", "updatedBy"],
   idSql: "r.id",
-  select: "r.id, r.iso, c.name, r.rate_per_usd, r.valid_from, ub.username AS updated_by",
+  select: "r.id, r.iso, c.name, r.rate_per_eur, r.valid_from, ub.username AS updated_by",
   mapRow: (r) => ({
     id: Number(r.id),
     iso: String(r.iso).trim(),
     currency: r.name as string,
-    ratePerUsd: Number(r.rate_per_usd),
+    ratePerEur: Number(r.rate_per_eur),
     validFrom: iso(r.valid_from)!,
     updatedBy: (r.updated_by as string | null) ?? null,
   }),
@@ -2898,7 +2898,7 @@ export const BALANCE_FROM = `enterprises e
     LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
     LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
 const netSql = `round(COALESCE(bal.customer, 0)
-    - COALESCE(bal.vendor * COALESCE(ccl.rate_per_usd, vcl.rate_per_usd) / vcl.rate_per_usd, 0), 2)`;
+    - COALESCE(bal.vendor * COALESCE(ccl.rate_per_eur, vcl.rate_per_eur) / vcl.rate_per_eur, 0), 2)`;
 /** Credit used: what the client owes us (a negative balance) as a share of the limit, never below 0. */
 const creditUsedSql = `CASE WHEN cb.credit_limit > 0 THEN GREATEST(0, round(-bal.customer / cb.credit_limit * 100, 1)) END`;
 

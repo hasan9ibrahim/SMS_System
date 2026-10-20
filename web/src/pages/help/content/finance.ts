@@ -174,7 +174,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "Exchange rates are stored as units per 1 USD. Converting from one currency to another goes through USD.",
+              "Exchange rates are stored as units per 1 EUR, the base currency (EUR = 1). Converting from one currency to another goes through EUR.",
               "A new rate starts from the moment it is saved. Earlier rates are kept, so amounts already converted never move.",
               "A payment's **Final Amount** is its amount converted to the base currency of the enterprise's business company, at the rate in force on the payment date.",
               "Totals across partners and companies (for example the [[charges|Charges calculator]] totals and the vendor invoice monthly summary) are in the **platform currency**. In the trial the platform currency is the euro (`EUR`).",
@@ -1830,7 +1830,10 @@ export const topics: HelpTopic[] = [
       "currencies",
       "exchange rate",
       "FX",
-      "rate per USD",
+      "rate per EUR",
+      "XE",
+      "xe.com",
+      "currency alert",
       "sync rates",
       "exchange history",
       "ISO",
@@ -1868,7 +1871,7 @@ export const topics: HelpTopic[] = [
               { name: "Currency", what: "The name, e.g. `Swiss Franc`." },
               { name: "ISO", what: "The three-letter code, e.g. `CHF`." },
               { name: "Symbol", what: "e.g. `Fr.`" },
-              { name: "Rate per USD", what: "How many units of this currency make 1 USD, at the rate in force." },
+              { name: "Rate per EUR", what: "How many units of this currency make 1 EUR, at the rate in force." },
               { name: "Enterprises", what: "How many enterprise billing settings use this currency." },
               { name: "Updated By", what: "Who last changed it (**seed data** for the starting list)." },
             ],
@@ -1891,7 +1894,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Rate",
                 what: "New currencies only: the starting rate.",
-                values: "Units per 1 USD, e.g. `0.88`.",
+                values: "Units per 1 EUR, e.g. `1.0870` for USD.",
               },
             ],
           },
@@ -1905,7 +1908,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "Header buttons",
             items: [
-              "**Sync Rates** (the accent button): pulls today's market rate for every currency. You confirm first.",
+              "**Sync Rates** (the accent button): pulls the latest rate for every currency from the rate source now (see **Rate source & alerts**), then checks the currency alerts. You confirm first.",
               "**Exchange history**: switches to the history view.",
               "**Undo** and **History**.",
             ],
@@ -1918,7 +1921,7 @@ export const topics: HelpTopic[] = [
               { name: "ISO", what: "The code." },
               { name: "Currency", what: "The name." },
               {
-                name: "Rate (per USD)",
+                name: "Rate (per EUR)",
                 what: "The rate in force. The change from the previous rate is shown in brackets, e.g. `(+0.35 %)`.",
               },
               { name: "Updated Time", what: "Since when the rate applies (**base** for the starting rate)." },
@@ -1931,10 +1934,68 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Rate",
-                what: "The new rate, in units of this currency per 1 USD. The hint shows the current rate and the change in %.",
-                values: "e.g. `0.9215`. USD is always 1 and cannot be edited.",
+                what: "The new rate, in units of this currency per 1 EUR. The hint shows the current rate and the change in %.",
+                values: "e.g. `1.0870` for USD. EUR is the base, always 1, and cannot be edited.",
               },
             ],
+          },
+        ],
+      },
+      {
+        id: "rate-source",
+        title: "Rate source & alerts",
+        blocks: [
+          {
+            kind: "text",
+            text: "The fourth view, **Rate source & alerts**, sets where the rates come from and who is told when a currency moves.",
+          },
+          {
+            kind: "fields",
+            title: "Rate source (administrators only)",
+            fields: [
+              {
+                name: "Source",
+                what: "**XE Currency Data API (xe.com)**: the platform pulls every currency per 1 EUR from XE on the schedule. **Manual**: rates are typed in on Currency Exchange.",
+                values: "XE needs a paid XE Currency Data account (account ID and API key).",
+              },
+              {
+                name: "Refresh",
+                what: "How often rates are pulled: every minute, 15 minutes, hour, 6 hours or once a day.",
+                values:
+                  "Default every hour. XE's plan decides how fresh its rates are (daily, hourly or every minute), so refreshing faster than the plan gains nothing.",
+              },
+              { name: "XE account ID", what: "The account ID from XE." },
+              {
+                name: "XE API key",
+                what: "The key from XE. It is stored encrypted and never shown again; leave the box empty to keep it.",
+              },
+              { name: "Refresh automatically", what: "Off = rates change only with Sync Rates or by hand." },
+              {
+                name: "Last refresh / Next refresh",
+                what: "When rates were last pulled and the result, and when the next pull is due.",
+              },
+            ],
+          },
+          {
+            kind: "tip",
+            text: "In the trial, refreshes are simulated (small market moves) and nothing is sent to XE, even with an account set up.",
+          },
+          {
+            kind: "fields",
+            title: "Currency alerts",
+            fields: [
+              { name: "Currency", what: "One currency, or **Any currency**." },
+              { name: "Compared with", what: "**The previous rate** or **The rate 24 hours before**." },
+              {
+                name: "Moves by at least (%) / or by at least (amount)",
+                what: "The alert fires when the rate against EUR moves up or down by at least the % or the amount (units per 1 EUR). At least one is required.",
+              },
+              { name: "E-mail to", what: "Who gets the alert e-mail (Email logs type Currency Alert)." },
+            ],
+          },
+          {
+            kind: "text",
+            text: "Alerts are checked every time rates are refreshed or synced. **Fired recently** lists each alert with the old and new rate, the change and how many e-mails went out.",
           },
         ],
       },
@@ -1944,7 +2005,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Every rate ever set, newest first: **ISO**, **Currency**, **Rate (per USD)**, **Time** and **User**. Filter **ISO** to see one currency's history.",
+            text: "Every rate ever set, newest first: **ISO**, **Currency**, **Rate (per EUR)**, **Time** and **User**. Filter **ISO** to see one currency's history.",
           },
         ],
       },
@@ -1985,7 +2046,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "All rates are per 1 USD. To convert between two other currencies, the amount goes through USD.",
+              "All rates are per 1 EUR, the base currency. To convert between two other currencies, the amount goes through EUR.",
               "A new rate applies from the moment it is saved. Earlier rates stay in the history, so amounts already converted keep their rate.",
               "**Undo** on a rate change sets the earlier rate again from now on; the history is never rewritten.",
               "Currencies cannot be deleted from this page.",

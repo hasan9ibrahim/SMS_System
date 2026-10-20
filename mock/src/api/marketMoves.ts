@@ -95,10 +95,10 @@ export function updateMarketMoveSettings(request: FastifyRequest, reply: Fastify
 // ---------------------------------------------------------------- list
 
 const DEST_JOIN = "JOIN mccmnc m ON m.id = mm.mccmnc_id JOIN countries co ON co.id = m.country_id";
-const PLATFORM = `(SELECT rate_per_usd FROM currency_latest WHERE iso = '${PLATFORM_CURRENCY}')`;
+const PLATFORM = `(SELECT rate_per_eur FROM currency_latest WHERE iso = '${PLATFORM_CURRENCY}')`;
 const MOVE_FROM = `market_moves mm ${DEST_JOIN} LEFT JOIN users hb ON hb.id = mm.handled_by_id`;
 const MOVE_SELECT = `mm.*, m.mccmnc, m.network, co.name AS country, co.iso, hb.username AS handled_by,
-  mm.old_cost_usd * ${PLATFORM} AS old_cost, mm.new_cost_usd * ${PLATFORM} AS new_cost`;
+  mm.old_cost_eur * ${PLATFORM} AS old_cost, mm.new_cost_eur * ${PLATFORM} AS new_cost`;
 
 function mapMove(r: Record<string, unknown>): MarketMoveRow {
   const num = (v: unknown) => (v == null ? null : Number(v));
@@ -145,7 +145,7 @@ export const marketMoveList: ListDef<MarketMoveRow> = {
     topCount: { sql: "mm.top_count" },
     firstEffective: { sql: "mm.first_effective" },
     lastEffective: { sql: "mm.last_effective" },
-    newCost: { sql: `(mm.new_cost_usd * ${PLATFORM})` },
+    newCost: { sql: `(mm.new_cost_eur * ${PLATFORM})` },
     affectedClients: { sql: "mm.affected_clients" },
     volume7d: { sql: "mm.volume_7d" },
     urgent: { sql: "mm.urgent" },
@@ -191,9 +191,9 @@ export function getMarketMoveSummary(_request: FastifyRequest, reply: FastifyRep
 
 // ---------------------------------------------------------------- detail
 
-async function perUsd(c: Db): Promise<Map<string, number>> {
-  const { rows } = await c.query("SELECT iso, rate_per_usd FROM currency_latest");
-  return new Map(rows.map((r) => [String(r.iso), Number(r.rate_per_usd)]));
+async function perEur(c: Db): Promise<Map<string, number>> {
+  const { rows } = await c.query("SELECT iso, rate_per_eur FROM currency_latest");
+  return new Map(rows.map((r) => [String(r.iso), Number(r.rate_per_eur)]));
 }
 
 /** Customer tables (used by a live trunk) with a current generic line for the destination. */
@@ -243,7 +243,7 @@ async function loadMove(c: Db, id: number): Promise<MarketMoveDetail | null> {
   const r = rows[0];
   if (!r) return null;
   const row = mapMove(r);
-  const fx = await perUsd(c);
+  const fx = await perEur(c);
   const platform = fx.get(PLATFORM_CURRENCY) ?? 1;
   const settings = await loadSettings(c);
   const { rows: vs } = await c.query(
@@ -251,13 +251,13 @@ async function loadMove(c: Db, id: number): Promise<MarketMoveDetail | null> {
             (SELECT rt.id FROM rate_tables rt WHERE rt.vendor_trunk_id = vt.id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
               ORDER BY rt.id LIMIT 1) AS table_id
        FROM market_move_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id JOIN enterprises e ON e.id = vt.enterprise_id
-      WHERE v.move_id = $1 ORDER BY v.moved DESC, v.new_rate_usd NULLS LAST`,
+      WHERE v.move_id = $1 ORDER BY v.moved DESC, v.new_rate_eur NULLS LAST`,
     [id],
   );
   const tableIds = vs.map((v) => v.table_id).filter((x) => x !== null);
   const { rows: pts } = tableIds.length
     ? await c.query(
-        `SELECT l.rate_table_id, l.valid_from, l.rate / cl.rate_per_usd AS usd FROM rate_lines l
+        `SELECT l.rate_table_id, l.valid_from, l.rate / cl.rate_per_eur AS usd FROM rate_lines l
            JOIN currency_latest cl ON cl.iso = l.currency
           WHERE l.rate_table_id = ANY($1) AND l.mccmnc_id = $2 AND l.sender_id IS NULL
             AND (l.valid_to IS NULL OR l.valid_to >= now() - interval '90 days')
@@ -267,8 +267,8 @@ async function loadMove(c: Db, id: number): Promise<MarketMoveDetail | null> {
     : { rows: [] };
   const since = Date.now() - 90 * DAY_MS;
   const vendors: MarketMoveVendor[] = vs.map((v) => {
-    const old = v.old_rate_usd === null ? null : Number(v.old_rate_usd) * platform;
-    const next = v.new_rate_usd === null ? null : Number(v.new_rate_usd) * platform;
+    const old = v.old_rate_eur === null ? null : Number(v.old_rate_eur) * platform;
+    const next = v.new_rate_eur === null ? null : Number(v.new_rate_eur) * platform;
     return {
       vendorTrunkId: Number(v.vendor_trunk_id),
       vendorTrunk: v.trunk,
@@ -305,8 +305,8 @@ async function loadMove(c: Db, id: number): Promise<MarketMoveDetail | null> {
   const clients: MarketMoveClient[] = tables.map((t) => {
     const k = fx.get(t.currency) ?? 1;
     const sell = Number(t.rate);
-    const oldCost = r.old_cost_usd === null ? null : Number(r.old_cost_usd) * k;
-    const newCost = r.new_cost_usd === null ? null : Number(r.new_cost_usd) * k;
+    const oldCost = r.old_cost_eur === null ? null : Number(r.old_cost_eur) * k;
+    const newCost = r.new_cost_eur === null ? null : Number(r.new_cost_eur) * k;
     const margin = (cost: number | null) => (cost === null || sell <= 0 ? null : r2(((sell - cost) / sell) * 100));
     const notice = Number(t.notice_days ?? 0);
     const rule = ruleFor(rules, t);
@@ -410,7 +410,7 @@ interface Candidate {
 async function loadCandidates(c: Db, s: MarketMoveSettings): Promise<Map<number, Candidate>> {
   const { rows: top } = await c.query(
     `WITH cur AS (
-       SELECT l.mccmnc_id AS m, l.mccmnc, rt.vendor_trunk_id AS vt, e.tier, l.rate / cl.rate_per_usd AS usd
+       SELECT l.mccmnc_id AS m, l.mccmnc, rt.vendor_trunk_id AS vt, e.tier, l.rate / cl.rate_per_eur AS usd
          FROM rate_lines l
          JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
          JOIN vendor_trunks v ON v.id = rt.vendor_trunk_id AND v.deleted_at IS NULL AND v.status = 'active'
@@ -434,8 +434,8 @@ async function loadCandidates(c: Db, s: MarketMoveSettings): Promise<Map<number,
     out.set(m, cand);
   }
   const { rows: ch } = await c.query(
-    `SELECT l.mccmnc_id AS m, rt.vendor_trunk_id AS vt, l.valid_from, l.rate / cl.rate_per_usd AS new_usd,
-            p.rate / cp.rate_per_usd AS old_usd
+    `SELECT l.mccmnc_id AS m, rt.vendor_trunk_id AS vt, l.valid_from, l.rate / cl.rate_per_eur AS new_usd,
+            p.rate / cp.rate_per_eur AS old_usd
        FROM rate_lines l
        JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
        JOIN rate_lines p ON p.rate_table_id = l.rate_table_id AND p.mccmnc_id = l.mccmnc_id AND p.sender_id IS NULL
@@ -560,14 +560,14 @@ async function scan() {
   const { rows: saved } = rows.length
     ? await c.query(
         `INSERT INTO market_moves (mccmnc_id, direction, first_effective, last_effective, avg_change_pct, moved_count,
-            top_count, old_cost_usd, new_cost_usd, urgent, affected_tables, affected_clients, affected_am_ids, volume_7d)
+            top_count, old_cost_eur, new_cost_eur, urgent, affected_tables, affected_clients, affected_am_ids, volume_7d)
          SELECT m, dir, f, l, avg, mv, tp, oc, nc, ur, tb, cl, am::bigint[], vo
            FROM unnest($1::bigint[], $2::text[], $3::timestamptz[], $4::timestamptz[], $5::numeric[], $6::int[], $7::int[],
                        $8::numeric[], $9::numeric[], $10::boolean[], $11::int[], $12::int[], $13::text[], $14::int[])
                 AS x(m, dir, f, l, avg, mv, tp, oc, nc, ur, tb, cl, am, vo)
          ON CONFLICT (mccmnc_id, direction, first_effective) DO UPDATE SET last_effective = EXCLUDED.last_effective,
             avg_change_pct = EXCLUDED.avg_change_pct, moved_count = EXCLUDED.moved_count, top_count = EXCLUDED.top_count,
-            old_cost_usd = EXCLUDED.old_cost_usd, new_cost_usd = EXCLUDED.new_cost_usd, urgent = EXCLUDED.urgent,
+            old_cost_eur = EXCLUDED.old_cost_eur, new_cost_eur = EXCLUDED.new_cost_eur, urgent = EXCLUDED.urgent,
             affected_tables = EXCLUDED.affected_tables, affected_clients = EXCLUDED.affected_clients,
             affected_am_ids = EXCLUDED.affected_am_ids, volume_7d = EXCLUDED.volume_7d, updated_at = now()
          RETURNING id, mccmnc_id, direction, first_effective, (xmax = 0) AS inserted`,
@@ -628,7 +628,7 @@ async function scan() {
   if (saved.length) {
     await c.query("DELETE FROM market_move_vendors WHERE move_id = ANY($1)", [saved.map((r) => Number(r.id))]);
     await c.query(
-      `INSERT INTO market_move_vendors (move_id, vendor_trunk_id, moved, old_rate_usd, new_rate_usd, effective_from)
+      `INSERT INTO market_move_vendors (move_id, vendor_trunk_id, moved, old_rate_eur, new_rate_eur, effective_from)
        SELECT * FROM unnest($1::bigint[], $2::bigint[], $3::boolean[], $4::numeric[], $5::numeric[], $6::timestamptz[])`,
       [v.move, v.vt, v.moved, v.o, v.n, v.at],
     );
@@ -666,9 +666,9 @@ async function autoApply(moveId: number): Promise<number> {
   if (!rules.length) return 0;
   const move = await loadMove(c, moveId);
   if (!move) return 0;
-  const fx = await perUsd(c);
-  const { rows: mm } = await c.query("SELECT new_cost_usd, mccmnc_id FROM market_moves WHERE id = $1", [moveId]);
-  const newUsd = Number(mm[0].new_cost_usd);
+  const fx = await perEur(c);
+  const { rows: mm } = await c.query("SELECT new_cost_eur, mccmnc_id FROM market_moves WHERE id = $1", [moveId]);
+  const newUsd = Number(mm[0].new_cost_eur);
   const tables = await affectedTables(c, Number(mm[0].mccmnc_id));
   let applied = 0;
   for (const t of tables) {

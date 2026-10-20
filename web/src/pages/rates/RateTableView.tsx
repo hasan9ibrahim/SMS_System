@@ -7,7 +7,7 @@ import { useLocation } from "react-router";
 import type { NoticeBreach, RateLineRow, RateTableDetail } from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { useListFields } from "../../api/hooks";
-import { useChangeRateLines, useRateTable } from "../../api/records";
+import { useChangeRateLines, usePlatformCurrency, useRateTable } from "../../api/records";
 import { downloadCsv } from "../../api/masterData";
 import { DataGrid, type ColumnOverride } from "../../grid/DataGrid";
 import { emptyState, toListQuery, type GridState } from "../../grid/filterModel";
@@ -135,8 +135,21 @@ function BarAction({
   );
 }
 
-function SetRateForm({ onApply }: { onApply: (v: number) => void }) {
+/** One rate for the selection, typed in the table currency or in the platform currency (team trial round 2). */
+function SetRateForm({
+  onApply,
+  currency,
+  platformCurrency,
+  factor,
+}: {
+  onApply: (v: number) => void;
+  currency: string;
+  platformCurrency: string;
+  factor: number;
+}) {
   const [v, setV] = useState("");
+  const [eur, setEur] = useState("");
+  const same = currency === platformCurrency;
   return (
     <form
       onSubmit={(e) => {
@@ -145,9 +158,34 @@ function SetRateForm({ onApply }: { onApply: (v: number) => void }) {
       }}
     >
       <label className="field">
-        <span>New sell rate</span>
-        <input autoFocus type="number" min={0} step="0.0001" value={v} onChange={(e) => setV(e.target.value)} />
+        <span>New rate ({currency})</span>
+        <input
+          autoFocus
+          type="number"
+          min={0}
+          step="0.0001"
+          value={v}
+          onChange={(e) => {
+            setV(e.target.value);
+            setEur(e.target.value === "" ? "" : String(round6(Number(e.target.value) * factor)));
+          }}
+        />
       </label>
+      {!same && (
+        <label className="field">
+          <span>or in {platformCurrency}</span>
+          <input
+            type="number"
+            min={0}
+            step="0.0001"
+            value={eur}
+            onChange={(e) => {
+              setEur(e.target.value);
+              setV(e.target.value === "" ? "" : String(round6(Number(e.target.value) / factor)));
+            }}
+          />
+        </label>
+      )}
       <Button small type="submit">
         Apply to selection
       </Button>
@@ -155,7 +193,15 @@ function SetRateForm({ onApply }: { onApply: (v: number) => void }) {
   );
 }
 
-function ChangeByForm({ onApply, customer }: { onApply: (m: ChangeMode, v: number) => void; customer: boolean }) {
+function ChangeByForm({
+  onApply,
+  customer,
+  currency,
+}: {
+  onApply: (m: ChangeMode, v: number) => void;
+  customer: boolean;
+  currency: string;
+}) {
   const [mode, setMode] = useState<ChangeMode>("percent");
   const [v, setV] = useState("");
   return (
@@ -174,7 +220,11 @@ function ChangeByForm({ onApply, customer }: { onApply: (m: ChangeMode, v: numbe
       </div>
       <label className="field">
         <span>
-          {mode === "percent" ? "Change %" : mode === "amount" ? "Add (negative to lower)" : "Margin over best buy"}
+          {mode === "percent"
+            ? "Change %"
+            : mode === "amount"
+              ? `Add (${currency}, negative to lower)`
+              : `Margin over best buy (${currency})`}
         </span>
         <input autoFocus type="number" step="any" value={v} onChange={(e) => setV(e.target.value)} />
       </label>
@@ -312,6 +362,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
   const [grid, setGrid] = useState<GridState>(emptyState);
   const [pending, setPending] = useState<Pending>(new Map());
   const tz = usePlatformTz();
+  const platformCurrency = usePlatformCurrency();
   // Chosen batch date (null = now); until one is chosen the batch starts at the next 00:00 (team trial round 2).
   const [chosenFrom, setChosenFrom] = useState<string | null>(null);
   const [fromChosen, setFromChosen] = useState(false);
@@ -325,6 +376,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
   const [sendRn, setSendRn] = useState(true);
   const [active, setActive] = useState<RateLineRow | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
+  const [editingEur, setEditingEur] = useState(false);
   const [dialog, setDialog] = useState<"add" | "rename" | null>(null);
   const rowsById = useRef(new Map<number, RateLineRow>());
   const onRows = useCallback((rows: RateLineRow[]) => {
@@ -355,13 +407,14 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       visible:
         grid.visible ??
         (t?.kind === "vendor"
-          ? ["country", "network", "mccmnc", "senderId", "rate", "changeType", "validFrom"]
+          ? ["country", "network", "mccmnc", "senderId", "rate", "sysRate", "changeType", "validFrom"]
           : [
               "country",
               "network",
               "mccmnc",
               "senderId",
               "rate",
+              "sysRate",
               "bestBuy",
               "bestVendor",
               "margin",
@@ -373,11 +426,15 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     [grid, id, view, t?.kind],
   );
 
-  const commitEdit = (row: RateLineRow, text: string) => {
+  // The rate in the table currency and in the platform currency (EUR) are both editable; either one sets the
+  // other at the latest exchange rate (team trial round 2).
+  const factor = t?.platformPerUnit && t.platformPerUnit > 0 ? t.platformPerUnit : 1;
+  const commitEdit = (row: RateLineRow, text: string, inPlatform = false) => {
     setEditing(null);
-    const v = Number(text);
+    setEditingEur(false);
+    const v = Number(text.replace(",", "."));
     if (text.trim() === "" || !Number.isFinite(v) || v < 0) return;
-    setPending((p) => merge(p, [row.id], { rate: round6(v) }));
+    setPending((p) => merge(p, [row.id], { rate: round6(inPlatform ? v / factor : v) }));
   };
 
   const columns = useMemo<Partial<Record<string, ColumnOverride<RateLineRow>>>>(
@@ -387,11 +444,11 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       mccmnc: { width: 90, render: (r) => <span className="muted num">{r.mccmnc}</span> },
       senderId: { width: 100 },
       rate: {
-        width: 110,
-        ...(t?.kind === "vendor" ? { label: "Buy Rate" } : {}),
+        width: 130,
+        label: `${t?.kind === "vendor" ? "Buy" : "Sell"} Rate (${t?.currency ?? ""})`,
         render: (r) => {
           const p = pending.get(r.id);
-          if (editing === r.id)
+          if (editing === r.id && !editingEur)
             return (
               <input
                 className="cell-input num"
@@ -416,11 +473,64 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               title={editable ? "Click to edit" : undefined}
               onClick={(e) => {
                 e.stopPropagation();
-                if (editable) setEditing(r.id);
+                if (editable) {
+                  setEditingEur(false);
+                  setEditing(r.id);
+                }
               }}
             >
               {formatRate(changed ? p!.rate : r.rate)}
               {r.isBlocked || p?.blocked ? <Icon name="lock" size={12} /> : null}
+            </button>
+          );
+        },
+      },
+      sysRate: {
+        width: 120,
+        label: `Rate (${platformCurrency})`,
+        render: (r) => {
+          const p = pending.get(r.id);
+          const changed = p?.rate !== undefined && p.rate !== r.rate;
+          const value = changed ? round6(p!.rate! * factor) : r.sysRate;
+          if (editing === r.id && editingEur)
+            return (
+              <input
+                className="cell-input num"
+                autoFocus
+                defaultValue={value === null ? "" : String(value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") commitEdit(r, (e.target as HTMLInputElement).value, true);
+                  if (e.key === "Escape") {
+                    setEditing(null);
+                    setEditingEur(false);
+                  }
+                }}
+                onBlur={(e) => commitEdit(r, e.target.value, true)}
+                aria-label={`Rate in ${platformCurrency} for ${r.country} ${r.network}`}
+              />
+            );
+          if (t?.currency === platformCurrency) return <span className="num muted">{formatRate(value)}</span>;
+          return (
+            <button
+              type="button"
+              className={`cell-edit num${changed ? " changed" : ""}`}
+              disabled={!editable}
+              title={
+                editable
+                  ? `Click to edit in ${platformCurrency}; the ${t?.currency} rate follows (1 ${t?.currency} = ${factor.toFixed(6)} ${platformCurrency})`
+                  : undefined
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                if (editable) {
+                  setEditingEur(true);
+                  setEditing(r.id);
+                }
+              }}
+            >
+              {formatRate(value)}
             </button>
           );
         },
@@ -469,7 +579,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pending, editing, editable, view],
+    [pending, editing, editingEur, editable, view, factor, platformCurrency, t?.currency, t?.kind],
   );
 
   const applyToSelection = (fn: (r: RateLineRow) => number | null) => {
@@ -780,6 +890,9 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             <BarAction label="Set rate" disabled={!selected.size || !editable}>
               {(close) => (
                 <SetRateForm
+                  currency={t.currency}
+                  platformCurrency={platformCurrency}
+                  factor={factor}
                   onApply={(v) => {
                     applyToSelection(() => v);
                     close();
@@ -791,6 +904,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               {(close) => (
                 <ChangeByForm
                   customer={t.kind === "customer"}
+                  currency={t.currency}
                   onApply={(mode, v) => {
                     applyToSelection((r) =>
                       changeRate({ rate: pending.get(r.id)?.rate ?? r.rate, bestBuy: r.bestBuy }, mode, v),

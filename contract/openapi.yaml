@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.70.0
+  version: 0.71.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -5740,7 +5740,8 @@ paths:
       operationId: queryCurrencyRates
       summary: "List current exchange rates (server-side filter, sort and paging)"
       description: |
-        Currency Exchange (§7): the rate in force per currency (units per 1 USD), with who set it and when.
+        Currency Exchange (§7): the rate in force per currency (units per 1 EUR, the base currency), with who set it
+        and when.
       requestBody:
         required: true
         content:
@@ -5767,8 +5768,8 @@ paths:
       operationId: setCurrencyRate
       summary: "Edit a currency's rate (Currency Exchange › Edit)"
       description: |
-        Adds a new rate valid from now; earlier rates stay in the history so past amounts never move.
-        One undoable change.
+        Adds a new rate (units per 1 EUR) valid from now; earlier rates stay in the history so past amounts never
+        move. One undoable change. EUR is the base and cannot be edited.
       parameters:
         - name: iso
           in: path
@@ -5804,7 +5805,8 @@ paths:
       operationId: syncCurrencyRates
       summary: "Sync Rates (pull market rates)"
       description: |
-        Pulls today's market rates for every currency (the mock simulates the feed) as one undoable change.
+        Pulls the latest rates from the exchange-rate provider (XE Currency Data API when an account is set up;
+        the mock simulates it) as one undoable change, then checks the currency alerts.
       responses:
         "200":
           description: What changed
@@ -5817,6 +5819,144 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /exchange-rates/provider:
+    get:
+      tags: [finance]
+      operationId: getFxProvider
+      summary: Exchange-rate provider settings (team trial round 2)
+      description: |
+        Where the exchange rates come from: XE Currency Data API (xe.com, a paid account with an account ID and API
+        key) or manual entry, and how often they refresh. The API key is never returned. Administrators only.
+      responses:
+        "200":
+          description: The settings and the last run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxProvider"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [finance]
+      operationId: updateFxProvider
+      summary: Change the exchange-rate provider settings
+      description: Administrators only. Logged in the audit log without the key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FxProviderUpdate"
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxProvider"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /exchange-rates/alerts:
+    get:
+      tags: [finance]
+      operationId: listFxAlertRules
+      summary: Currency alerts (team trial round 2)
+      description: Alerts when a currency moves against EUR by more than an amount or a percentage.
+      responses:
+        "200":
+          description: Every alert rule
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FxAlertRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [finance]
+      operationId: createFxAlertRule
+      summary: Add a currency alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FxAlertRuleInput"
+      responses:
+        "201":
+          description: The new rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxAlertRule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /exchange-rates/alerts/{id}:
+    put:
+      tags: [finance]
+      operationId: updateFxAlertRule
+      summary: Change a currency alert
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FxAlertRuleInput"
+      responses:
+        "200":
+          description: The saved rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxAlertRule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [finance]
+      operationId: deleteFxAlertRule
+      summary: Delete a currency alert
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /exchange-rates/alerts/events:
+    get:
+      tags: [finance]
+      operationId: listFxAlertEvents
+      summary: Recent currency alerts that fired
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FxAlertEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /currency-rate-history/query:
     post:
       tags: [finance]
@@ -16260,7 +16400,7 @@ components:
     RateTableDetail:
       allOf:
         - type: object
-          required: [id, name, kind, categoryId, category, currency, description, vendorTrunkId, vendorTrunkName, trunks, lastImport, archived, summary]
+          required: [id, name, kind, categoryId, category, currency, platformPerUnit, description, vendorTrunkId, vendorTrunkName, trunks, lastImport, archived, summary]
           properties:
             id:
               $ref: "#/components/schemas/Id"
@@ -16283,6 +16423,11 @@ components:
                 - type: "null"
             vendorTrunkName:
               type: [string, "null"]
+            platformPerUnit:
+              type: number
+              description: >-
+                Units of the platform currency (EUR by default) per 1 unit of the table currency at the latest
+                rate, for the table-currency / EUR rate columns (team trial round 2).
             trunks:
               type: array
               description: Customer trunks using the table, or the vendor trunk that owns it.
@@ -20486,7 +20631,7 @@ components:
 
     CurrencyRow:
       type: object
-      required: [id, name, iso, symbol, ratePerUsd, rateUpdatedAt, enterprises, updatedBy, updatedAt]
+      required: [id, name, iso, symbol, ratePerEur, rateUpdatedAt, enterprises, updatedBy, updatedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -20496,7 +20641,7 @@ components:
           type: string
         symbol:
           type: string
-        ratePerUsd:
+        ratePerEur:
           type: number
         rateUpdatedAt:
           type: [string, "null"]
@@ -20537,7 +20682,7 @@ components:
     CurrencyInput:
       type: object
       additionalProperties: false
-      required: [name, symbol, iso, ratePerUsd]
+      required: [name, symbol, iso, ratePerEur]
       properties:
         name:
           type: string
@@ -20550,10 +20695,10 @@ components:
         iso:
           type: string
           pattern: "^[A-Z]{3}$"
-        ratePerUsd:
+        ratePerEur:
           type: number
           exclusiveMinimum: 0
-          description: First exchange rate, units per 1 USD.
+          description: First exchange rate, units per 1 EUR (EUR is the base currency, team trial round 2).
 
     CurrencySaved:
       type: object
@@ -20568,7 +20713,7 @@ components:
 
     CurrencyRateRow:
       type: object
-      required: [id, iso, currency, ratePerUsd, validFrom, updatedBy, previousRate]
+      required: [id, iso, currency, ratePerEur, validFrom, updatedBy, previousRate]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -20577,9 +20722,9 @@ components:
           type: string
         currency:
           type: string
-        ratePerUsd:
+        ratePerEur:
           type: number
-          description: Units of the currency per 1 USD (USD = 1).
+          description: Units of the currency per 1 EUR (EUR, the base currency, is 1; team trial round 2).
         validFrom:
           type: [string, "null"]
           format: date-time
@@ -20603,9 +20748,9 @@ components:
     CurrencyRateInput:
       type: object
       additionalProperties: false
-      required: [ratePerUsd]
+      required: [ratePerEur]
       properties:
-        ratePerUsd:
+        ratePerEur:
           type: number
           exclusiveMinimum: 0
           maximum: 1000000
@@ -20632,9 +20777,140 @@ components:
             - $ref: "#/components/schemas/Change"
             - type: "null"
 
+    FxProvider:
+      type: object
+      required: [provider, accountId, apiKeySet, refreshMinutes, enabled, simulated, lastRunAt, lastStatus, lastMessage, nextRunAt, updatedBy, updatedAt]
+      properties:
+        provider:
+          type: string
+          enum: [xe, manual]
+          description: "`xe` = XE Currency Data API (xecdapi.xe.com, rates per EUR); `manual` = rates are typed in."
+        accountId:
+          type: [string, "null"]
+          description: The XE API account ID.
+        apiKeySet:
+          type: boolean
+          description: True when an API key is stored. The key itself is never returned (§13.22).
+        refreshMinutes:
+          type: integer
+          enum: [1, 15, 60, 360, 1440]
+          description: >-
+            How often rates are pulled: every minute, 15 minutes, hour (default), 6 hours or day. XE's plan decides
+            how fresh its rates are (daily, hourly or per minute); refreshing faster than the plan gains nothing.
+        enabled:
+          type: boolean
+        simulated:
+          type: boolean
+          description: "True while no account is set up (or in this phase): refreshes use simulated market moves."
+        lastRunAt:
+          type: [string, "null"]
+          format: date-time
+        lastStatus:
+          type: [string, "null"]
+          enum: [ok, simulated, error, null]
+        lastMessage:
+          type: [string, "null"]
+        nextRunAt:
+          type: [string, "null"]
+          format: date-time
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          type: [string, "null"]
+          format: date-time
+    FxProviderUpdate:
+      type: object
+      additionalProperties: false
+      required: [provider, accountId, refreshMinutes, enabled]
+      properties:
+        provider:
+          type: string
+          enum: [xe, manual]
+        accountId:
+          type: [string, "null"]
+          maxLength: 200
+        apiKey:
+          type: [string, "null"]
+          maxLength: 500
+          description: New API key; omitted or null keeps the stored one, "" removes it.
+        refreshMinutes:
+          type: integer
+          enum: [1, 15, 60, 360, 1440]
+        enabled:
+          type: boolean
+    FxAlertRuleInput:
+      type: object
+      additionalProperties: false
+      required: [iso, thresholdPct, thresholdAbs, window, recipients, enabled]
+      properties:
+        iso:
+          type: [string, "null"]
+          pattern: "^[A-Z]{3}$"
+          description: The currency; null = every currency.
+        thresholdPct:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          maximum: 100
+          description: Fire when the rate against EUR moves by at least this % (up or down).
+        thresholdAbs:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: Fire when the rate (units per 1 EUR) moves by at least this amount. At least one threshold is required.
+        window:
+          type: string
+          enum: [update, day]
+          description: "`update` = since the previous rate; `day` = against the rate 24 hours before."
+        recipients:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            format: email
+        enabled:
+          type: boolean
+    FxAlertRule:
+      allOf:
+        - $ref: "#/components/schemas/FxAlertRuleInput"
+        - type: object
+          required: [id, lastTriggeredAt, updatedBy, updatedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            lastTriggeredAt:
+              type: [string, "null"]
+              format: date-time
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+    FxAlertEvent:
+      type: object
+      required: [id, ruleId, iso, fromRate, toRate, changePct, window, at, emailed]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        iso:
+          type: string
+        fromRate:
+          type: number
+          description: Units per 1 EUR before.
+        toRate:
+          type: number
+        changePct:
+          type: number
+        window:
+          type: string
+          enum: [update, day]
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        emailed:
+          type: integer
+          description: How many recipients got the alert e-mail (Email logs, type currency_alert).
     CurrencyRateHistoryRow:
       type: object
-      required: [id, iso, currency, ratePerUsd, validFrom, updatedBy]
+      required: [id, iso, currency, ratePerEur, validFrom, updatedBy]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -20642,7 +20918,7 @@ components:
           type: string
         currency:
           type: string
-        ratePerUsd:
+        ratePerEur:
           type: number
         validFrom:
           $ref: "#/components/schemas/Timestamp"
@@ -22310,8 +22586,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test]
-      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) and template_test (a test of an e-mail template, §11).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test, currency_alert]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) and currency_alert (an exchange rate moved past an alert, team trial round 2).
 
     EmailLogRow:
       type: object

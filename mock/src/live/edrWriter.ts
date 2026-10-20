@@ -9,7 +9,7 @@
 // money and vendor figures are the written ones.
 import { db } from "../db.js";
 import { chQuery, chRows } from "../edr.js";
-import { PLATFORM_PER_USD, sysToPlatformFactor } from "../currency.js";
+import { PLATFORM_PER_EUR, sysToPlatformFactor } from "../currency.js";
 import { liveRoute } from "./routing.js";
 import type { Simulator, SimTrunk } from "./simulator.js";
 
@@ -89,7 +89,7 @@ async function prepare(): Promise<WriterState | null> {
         60_000,
       )) ?? [];
     const { rows: bcs } = await db().query(
-      `SELECT bc.id, bc.base_currency, ${PLATFORM_PER_USD} / cl.rate_per_usd AS f
+      `SELECT bc.id, bc.base_currency, ${PLATFORM_PER_EUR} / cl.rate_per_eur AS f
          FROM business_companies bc JOIN currency_latest cl ON cl.iso = bc.base_currency`,
     );
     const s: WriterState = {

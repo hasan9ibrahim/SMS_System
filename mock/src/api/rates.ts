@@ -14,7 +14,7 @@ import type {
   RateTableRow,
   RateTableUpdate,
 } from "@sms/contract";
-import { PLATFORM_CURRENCY } from "../currency.js";
+import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import { platformDateTime } from "../platform.js";
 import { withDb } from "../db.js";
 import { marginPct, trafficTodayByRateTable } from "../edr.js";
@@ -44,10 +44,10 @@ async function trafficFigures(db: Db, rows: { id: number; kind: string; currency
   const traffic = await trafficTodayByRateTable();
   if (!traffic || rows.length === 0)
     return new Map<number, { money: number | null; margin: number | null; n: number | null }>();
-  const { rows: fx } = await db.query("SELECT iso, rate_per_usd FROM currency_latest");
-  const perUsd = new Map(fx.map((r) => [String(r.iso), Number(r.rate_per_usd)]));
+  const { rows: fx } = await db.query("SELECT iso, rate_per_eur FROM currency_latest");
+  const perEur = new Map(fx.map((r) => [String(r.iso), Number(r.rate_per_eur)]));
   // Traffic money is in the platform currency; show it in the table's currency.
-  const platformPerUsd = perUsd.get(PLATFORM_CURRENCY) ?? 1;
+  const platformPerEur = perEur.get(PLATFORM_CURRENCY) ?? 1;
   return new Map(
     rows.map((r) => {
       const t = (r.kind === "customer" ? traffic.customer : traffic.vendor).get(r.id);
@@ -55,7 +55,7 @@ async function trafficFigures(db: Db, rows: { id: number; kind: string; currency
       return [
         r.id,
         {
-          money: Math.round((sys / platformPerUsd) * (perUsd.get(r.currency) ?? 1) * 100) / 100,
+          money: Math.round((sys / platformPerEur) * (perEur.get(r.currency) ?? 1) * 100) / 100,
           margin: marginPct(t),
           n: t?.messages ?? 0,
         },
@@ -156,7 +156,7 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
       ["Sender ID", "senderId"],
       ["Rate", "rate"],
       ["Currency", "currency"],
-      ["Sys Rate (USD)", "sysRate"],
+      [`Sys Rate (${PLATFORM_CURRENCY})`, "sysRate"],
       ["Best Buy", "bestBuy"],
       ["Best Vendor", "bestVendor"],
       ["Margin", "margin"],
@@ -185,12 +185,13 @@ async function loadTable(db: Db, id: number): Promise<RateTableDetail | null> {
   const { rows } = await db.query(
     `SELECT rt.*, pc.name AS category, vt.name AS vendor_trunk_name, du.username AS deleted_by,
             cb.username AS created_by, ub.username AS updated_by, ${negativeMarginSql} AS negative_lines,
-            vt.deleted_at AS trunk_deleted_at
+            vt.deleted_at AS trunk_deleted_at, ${toPlatformSql("1")} AS platform_per_unit
        FROM rate_tables rt JOIN product_categories pc ON pc.id = rt.product_category_id
        LEFT JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id
        LEFT JOIN users du ON du.id = rt.deleted_by_id
        LEFT JOIN users cb ON cb.id = rt.created_by_id
        LEFT JOIN users ub ON ub.id = rt.updated_by_id
+       LEFT JOIN currency_latest cl ON cl.iso = rt.currency
       WHERE rt.id = $1`,
     [id],
   );
@@ -235,6 +236,7 @@ async function loadTable(db: Db, id: number): Promise<RateTableDetail | null> {
     categoryId: r.product_category_id,
     category: r.category,
     currency: String(r.currency),
+    platformPerUnit: Number(r.platform_per_unit ?? 1),
     description: r.description ?? null,
     vendorTrunkId: r.vendor_trunk_id ?? null,
     vendorTrunkName: r.vendor_trunk_name ?? null,
@@ -328,7 +330,7 @@ export function createRateTable(request: FastifyRequest, reply: FastifyReply) {
           `INSERT INTO rate_lines (rate_table_id, mccmnc_id, mccmnc, dial_code, sender_id, rate, currency, valid_from,
                                   change_type, rate_note, created_by_id, updated_by_id)
            SELECT $1, l.mccmnc_id, l.mccmnc, l.dial_code, l.sender_id,
-                  round(l.rate / src.rate_per_usd * dst.rate_per_usd * (1 + $3::numeric / 100), 6), $4, now(),
+                  round(l.rate / src.rate_per_eur * dst.rate_per_eur * (1 + $3::numeric / 100), 6), $4, now(),
                   'new', 'Copied from vendor trunk ' || $5, $6, $6
              FROM rate_lines l
              JOIN currency_latest src ON src.iso = l.currency

@@ -811,7 +811,7 @@ const COMMON: [string, string, string][] = [
   ["bank_beneficiary", "Bank beneficiary name", "Bricor Gateway Group"],
   ["bank_name", "Bank name", "Demo Bank SAL"],
   ["bank_address", "Bank address", "1 Bank Square, Demo City"],
-  ["bank_currency", "Bank account currency", "USD"],
+  ["bank_currency", "Bank account currency", "EUR"],
   ["bank_account", "Bank account number", "000123456789"],
   ["bank_iban", "IBAN", "LB00 0000 0000 0000 0000 0000 0000"],
   ["bank_swift", "SWIFT / BIC", "DEMOLBBE"],
@@ -827,13 +827,13 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["invoice_no", "Invoice number", "INV-1042"],
     ["amount", "Total", "1,250.40"],
     ["due_amount", "Amount due (after balance)", "1,250.40"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
     ["due_date", "Due date", "2026-10-30"],
   ],
   low_balance: [
     ["balance", "Current balance", "120.00"],
     ["threshold", "Alert level", "500.00"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
   ],
   bind_down: [
     ["trunk", "Trunk", "FENPHY-MAIN"],
@@ -860,7 +860,7 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["to", "Period end", "2026-09-30"],
     ["timezone", "Time zone", "UTC"],
     ["closing_balance", "Closing balance", "-3,410.25"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
     ["balance_words", "Balance in words", "you owe us"],
   ],
   rate_upload_notification: [
@@ -889,7 +889,7 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["from", "Period start", "2026-09-01"],
     ["to", "Period end", "2026-09-30"],
     ["closing_balance", "Closing balance", "-3,410.25"],
-    ["currency", "Currency", "USD"],
+    ["currency", "Currency", "EUR"],
     ["balance_words", "Balance in words", "you owe us"],
   ],
   monitoring_alert: [

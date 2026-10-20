@@ -1,6 +1,6 @@
 // Currencies and exchange rates (§7): three views in the tab URL (?view=). Currency (Add,
 // Edit, Export), Currency Exchange (Edit, Sync Rates; the rate in force per currency, units per
-// 1 USD) and the Currency Exchange History (every rate, who and when). A new rate starts now
+// 1 EUR, the base currency) and the Currency Exchange History (every rate, who and when). A new rate starts now
 // and earlier ones stay, so amounts already converted never move (§13.29).
 import { useState } from "react";
 import { useLocation } from "react-router";
@@ -17,15 +17,17 @@ import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { fmtWhen, RecordDialog } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
+import { PageHeader } from "../../page/PageHeader";
+import { FxSettings } from "./FxSettings";
 
 const page = pageForPath("/finance/currencies")!;
-type View = "currencies" | "exchange" | "history";
+type View = "currencies" | "exchange" | "history" | "source";
 
 function useView(): [View, (v: View) => void] {
   const location = useLocation();
   const navigate = useTabNavigate();
   const raw = new URLSearchParams(location.search).get("view");
-  const view: View = raw === "exchange" || raw === "history" ? raw : "currencies";
+  const view: View = raw === "exchange" || raw === "history" || raw === "source" ? raw : "currencies";
   return [view, (v) => navigate(`/finance/currencies?view=${v}`, { replace: true })];
 }
 
@@ -39,6 +41,7 @@ function ViewSwitch({ note }: { note: string }) {
             ["currencies", "Currency"],
             ["exchange", "Currency Exchange"],
             ["history", "Exchange history"],
+            ["source", "Rate source & alerts"],
           ] as const
         ).map(([k, l]) => (
           <button
@@ -67,7 +70,7 @@ function CurrencyDialog({ row, done }: { row: CurrencyRow | null; done: () => vo
     iso: row?.iso ?? "",
     name: row?.name ?? "",
     symbol: row?.symbol ?? "",
-    ratePerUsd: row?.ratePerUsd ?? 1,
+    ratePerEur: row?.ratePerEur ?? 1,
   });
   const save = useSaveCurrency();
   const notifySaved = useNotifySaved();
@@ -106,7 +109,7 @@ function CurrencyDialog({ row, done }: { row: CurrencyRow | null; done: () => vo
             placeholder="CHF"
             hint="Three letters; it cannot change later"
           />
-          <NumberField form={form} path="ratePerUsd" label="Rate" required min={0} step={0.000001} suffix="per 1 USD" />
+          <NumberField form={form} path="ratePerEur" label="Rate" required min={0} step={0.000001} suffix="per 1 EUR" />
         </>
       )}
     </RecordDialog>
@@ -114,17 +117,17 @@ function CurrencyDialog({ row, done }: { row: CurrencyRow | null; done: () => vo
 }
 
 function RateDialog({ row, done }: { row: CurrencyRateRow; done: () => void }) {
-  const form = useForm<{ ratePerUsd: number }>({ ratePerUsd: row.ratePerUsd });
+  const form = useForm<{ ratePerEur: number }>({ ratePerEur: row.ratePerEur });
   const set = useSetRate();
   const notifySaved = useNotifySaved();
   const [error, setError] = useState<string | null>(null);
-  const move = row.ratePerUsd ? ((form.values.ratePerUsd - row.ratePerUsd) / row.ratePerUsd) * 100 : 0;
+  const move = row.ratePerEur ? ((form.values.ratePerEur - row.ratePerEur) / row.ratePerEur) * 100 : 0;
   const submit = () =>
     set.mutate(
-      { iso: row.iso, ratePerUsd: form.values.ratePerUsd },
+      { iso: row.iso, ratePerEur: form.values.ratePerEur },
       {
         onSuccess: (r) => {
-          if (r.change) notifySaved(r.change, `${row.iso} = ${rateText(r.record.ratePerUsd)} per USD`);
+          if (r.change) notifySaved(r.change, `${row.iso} = ${rateText(r.record.ratePerEur)} per EUR`);
           done();
         },
         onError: (e) => setError(form.fail(e)),
@@ -141,14 +144,14 @@ function RateDialog({ row, done }: { row: CurrencyRateRow; done: () => void }) {
     >
       <NumberField
         form={form}
-        path="ratePerUsd"
+        path="ratePerEur"
         label="Rate"
         required
         wide
         min={0}
         step={0.000001}
-        suffix={`${row.iso} per 1 USD`}
-        hint={`Now ${rateText(row.ratePerUsd)}${move ? ` · change ${move > 0 ? "+" : ""}${move.toFixed(2)} %` : ""}. Applies from now; amounts already converted keep their rate.`}
+        suffix={`${row.iso} per 1 EUR`}
+        hint={`Now ${rateText(row.ratePerEur)}${move ? ` · change ${move > 0 ? "+" : ""}${move.toFixed(2)} %` : ""}. Applies from now; amounts already converted keep their rate.`}
       />
     </RecordDialog>
   );
@@ -176,7 +179,7 @@ function CurrenciesView() {
         icon: "plus",
         onClick: () => void ask<void>((d) => <CurrencyDialog row={null} done={() => d()} />),
       }}
-      above={<ViewSwitch note="Rates are kept per USD; the platform currency is used for totals." />}
+      above={<ViewSwitch note="Rates are kept per EUR; the platform currency is used for totals." />}
       onExport={(s) =>
         void downloadCsv("/currencies/export", toListQuery(s)).catch((e) =>
           toast({ tone: "error", message: problemText(e) }),
@@ -187,10 +190,10 @@ function CurrenciesView() {
         name: { width: 200, render: (r) => <strong>{r.name}</strong> },
         iso: { width: 80 },
         symbol: { width: 80 },
-        ratePerUsd: {
+        ratePerEur: {
           width: 140,
           align: "right",
-          render: (r) => <span className="num">{rateText(r.ratePerUsd)}</span>,
+          render: (r) => <span className="num">{rateText(r.ratePerEur)}</span>,
         },
         enterprises: { width: 110, align: "right" },
         updatedBy: { width: 140, render: (r) => r.updatedBy ?? <span className="muted">seed data</span> },
@@ -203,7 +206,7 @@ function CurrenciesView() {
               {r.iso} · {r.name}
             </strong>
             <span className="muted">
-              {r.symbol} · {rateText(r.ratePerUsd)} per USD
+              {r.symbol} · {rateText(r.ratePerEur)} per EUR
             </span>
           </>
         ),
@@ -224,7 +227,7 @@ function CurrenciesView() {
               <dl className="kv">
                 <dt>Rate</dt>
                 <dd>
-                  {rateText(r.ratePerUsd)} per USD since {fmtWhen(r.rateUpdatedAt)}
+                  {rateText(r.ratePerEur)} per EUR since {fmtWhen(r.rateUpdatedAt)}
                 </dd>
                 <dt>Used by</dt>
                 <dd>{r.enterprises} enterprise billing settings</dd>
@@ -263,8 +266,8 @@ function ExchangeView() {
     });
   };
   const edit = (r: CurrencyRateRow) =>
-    r.iso === "USD"
-      ? toast({ tone: "info", message: "Rates are per USD; USD is always 1." })
+    r.iso === "EUR"
+      ? toast({ tone: "info", message: "Rates are per EUR, the base currency; EUR is always 1." })
       : void ask<void>((d) => <RateDialog row={r} done={() => d()} />);
   return (
     <ListScreen<CurrencyRateRow>
@@ -277,8 +280,8 @@ function ExchangeView() {
           label: "Edit rate…",
           icon: "file",
           main: true,
-          disabled: r.iso === "USD",
-          ...(r.iso === "USD" ? { hint: "Rates are per USD; USD is always 1." } : {}),
+          disabled: r.iso === "EUR",
+          ...(r.iso === "EUR" ? { hint: "Rates are per EUR, the base currency; EUR is always 1." } : {}),
           onSelect: () => edit(r),
         },
       ]}
@@ -293,19 +296,19 @@ function ExchangeView() {
           Exchange history
         </Button>
       }
-      above={<ViewSwitch note="The rate in force per currency, in units per 1 USD." />}
+      above={<ViewSwitch note="The rate in force per currency, in units per 1 EUR." />}
       columns={{
         id: { width: 90 },
         iso: { width: 80, render: (r) => <strong>{r.iso}</strong> },
         currency: { width: 200 },
-        ratePerUsd: {
+        ratePerEur: {
           width: 180,
           align: "right",
           render: (r) => {
-            const move = r.previousRate ? ((r.ratePerUsd - r.previousRate) / r.previousRate) * 100 : null;
+            const move = r.previousRate ? ((r.ratePerEur - r.previousRate) / r.previousRate) * 100 : null;
             return (
               <span className="num">
-                {rateText(r.ratePerUsd)}
+                {rateText(r.ratePerEur)}
                 {move !== null && Math.abs(move) >= 0.005 && (
                   <span className="muted small">
                     {" "}
@@ -329,7 +332,7 @@ function ExchangeView() {
           <>
             <strong>{r.iso}</strong>
             <span className="muted">
-              {r.currency} · {rateText(r.ratePerUsd)} per USD
+              {r.currency} · {rateText(r.ratePerEur)} per EUR
             </span>
           </>
         ),
@@ -338,7 +341,7 @@ function ExchangeView() {
             key: "rate",
             label: "Rate",
             actions:
-              r.iso === "USD" ? undefined : (
+              r.iso === "EUR" ? undefined : (
                 <Button small icon="file" onClick={() => edit(r)}>
                   Edit
                 </Button>
@@ -347,7 +350,7 @@ function ExchangeView() {
               <dl className="kv">
                 <dt>In force</dt>
                 <dd>
-                  {rateText(r.ratePerUsd)} since {fmtWhen(r.validFrom)} · {r.updatedBy ?? "market feed"}
+                  {rateText(r.ratePerEur)} since {fmtWhen(r.validFrom)} · {r.updatedBy ?? "market feed"}
                 </dd>
                 <dt>Before</dt>
                 <dd>{r.previousRate === null ? "—" : rateText(r.previousRate)}</dd>
@@ -373,10 +376,10 @@ function HistoryView() {
       columns={{
         iso: { width: 80, render: (r) => <strong>{r.iso}</strong> },
         currency: { width: 200 },
-        ratePerUsd: {
+        ratePerEur: {
           width: 150,
           align: "right",
-          render: (r) => <span className="num">{rateText(r.ratePerUsd)}</span>,
+          render: (r) => <span className="num">{rateText(r.ratePerEur)}</span>,
         },
         validFrom: { width: 170, render: (r) => fmtWhen(r.validFrom) },
         updatedBy: { width: 150, render: (r) => r.updatedBy ?? <span className="muted">market feed</span> },
@@ -386,8 +389,21 @@ function HistoryView() {
   );
 }
 
+function SourceView() {
+  return (
+    <div className="page">
+      <PageHeader page={page} title="Rate source & alerts" />
+      <div className="page-body">
+        <ViewSwitch note="Where the rates per 1 EUR come from, how often, and who is told when a currency moves." />
+        <FxSettings />
+      </div>
+    </div>
+  );
+}
+
 export function CurrenciesPage() {
   const [view] = useView();
+  if (view === "source") return <SourceView />;
   if (view === "exchange") return <ExchangeView />;
   if (view === "history") return <HistoryView />;
   return <CurrenciesView />;

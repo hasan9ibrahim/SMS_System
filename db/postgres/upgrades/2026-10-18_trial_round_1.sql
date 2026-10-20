@@ -83,3 +83,150 @@ ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS rate_notice_days_new integer NO
 ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS all_networks_code text NOT NULL DEFAULT 'mcc'
   CHECK (all_networks_code IN ('mcc', 'mcc0', 'mcc00', 'mcc000', 'mccStar'));
 ALTER TABLE rate_notifications ADD COLUMN IF NOT EXISTS header_row integer;
+
+-- Team trial round 2 (migration 053): EUR base currency, currency alerts, exchange-rate provider.
+-- EUR is the base currency (team trial round 2): exchange rates are stored as units per 1 EUR (EUR = 1,
+-- no rows) instead of per USD. Conversions are ratios, so amounts keep their value; figures stored "in USD"
+-- (market moves, LCR snapshots) become figures in EUR at the latest rate. Safe to run more than once.
+DO $$
+DECLARE
+  eur_now numeric;
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = current_schema() AND table_name = 'currency_rates' AND column_name = 'rate_per_usd') THEN
+    eur_now := (SELECT r.rate_per_usd FROM currency_rates r WHERE r.iso = 'EUR' ORDER BY r.valid_from DESC LIMIT 1);
+    IF eur_now IS NOT NULL THEN
+      -- Each rate divided by EUR's rate at the same moment (or EUR's first rate before its history starts).
+      UPDATE currency_rates r SET rate_per_usd = round(r.rate_per_usd / COALESCE(
+          (SELECT e.rate_per_usd FROM currency_rates e WHERE e.iso = 'EUR' AND e.valid_from <= r.valid_from
+            ORDER BY e.valid_from DESC LIMIT 1),
+          (SELECT e.rate_per_usd FROM currency_rates e WHERE e.iso = 'EUR' ORDER BY e.valid_from LIMIT 1)), 8)
+       WHERE r.iso <> 'EUR';
+      -- USD (1 before, no rows) gets EUR's history inverted.
+      INSERT INTO currency_rates (iso, rate_per_usd, valid_from, updated_by_id)
+      SELECT 'USD', round(1 / e.rate_per_usd, 8), e.valid_from, NULL FROM currency_rates e
+       WHERE e.iso = 'EUR' AND EXISTS (SELECT 1 FROM currencies c WHERE c.iso = 'USD');
+      DELETE FROM currency_rates WHERE iso = 'EUR';
+      UPDATE market_moves SET old_cost_usd = old_cost_usd * eur_now, new_cost_usd = new_cost_usd * eur_now;
+      UPDATE market_move_vendors SET old_rate_usd = old_rate_usd * eur_now, new_rate_usd = new_rate_usd * eur_now;
+      UPDATE lcr_snapshot SET cost_usd = cost_usd * eur_now;
+      UPDATE lcr_changes SET old_cost_usd = old_cost_usd * eur_now, new_cost_usd = new_cost_usd * eur_now;
+    END IF;
+    DROP MATERIALIZED VIEW IF EXISTS best_buy_rates;
+    DROP VIEW IF EXISTS currency_latest;
+    DROP FUNCTION IF EXISTS rate_per_usd_at(char(3), timestamptz);
+    ALTER TABLE currency_rates RENAME COLUMN rate_per_usd TO rate_per_eur;
+    ALTER TABLE market_moves RENAME COLUMN old_cost_usd TO old_cost_eur;
+    ALTER TABLE market_moves RENAME COLUMN new_cost_usd TO new_cost_eur;
+    ALTER TABLE market_move_vendors RENAME COLUMN old_rate_usd TO old_rate_eur;
+    ALTER TABLE market_move_vendors RENAME COLUMN new_rate_usd TO new_rate_eur;
+    ALTER TABLE lcr_snapshot RENAME COLUMN cost_usd TO cost_eur;
+    ALTER TABLE lcr_changes RENAME COLUMN old_cost_usd TO old_cost_eur;
+    ALTER TABLE lcr_changes RENAME COLUMN new_cost_usd TO new_cost_eur;
+  END IF;
+END $$;
+
+-- Latest exchange rate per currency: units per 1 EUR (EUR itself is 1).
+CREATE OR REPLACE VIEW currency_latest AS
+SELECT c.iso,
+       COALESCE((SELECT r.rate_per_eur FROM currency_rates r
+                  WHERE r.iso = c.iso AND r.valid_from <= now()
+                  ORDER BY r.valid_from DESC LIMIT 1), 1)::numeric(18, 8) AS rate_per_eur
+  FROM currencies c;
+
+-- Rate as of a moment: units per EUR, the latest row valid then (EUR = 1).
+CREATE OR REPLACE FUNCTION rate_per_eur_at(p_iso char(3), p_at timestamptz) RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT CASE WHEN p_iso = 'EUR' THEN 1 ELSE COALESCE(
+    (SELECT r.rate_per_eur FROM currency_rates r WHERE r.iso = p_iso AND r.valid_from <= p_at
+      ORDER BY r.valid_from DESC LIMIT 1),
+    (SELECT r.rate_per_eur FROM currency_rates r WHERE r.iso = p_iso ORDER BY r.valid_from LIMIT 1), 1) END
+$$;
+
+-- Best buy (§13.12): the cheapest vendor rate valid now per destination and product category, in EUR.
+CREATE MATERIALIZED VIEW IF NOT EXISTS best_buy_rates AS
+SELECT DISTINCT ON (l.mccmnc_id, rt.product_category_id)
+       l.mccmnc_id,
+       rt.product_category_id,
+       (l.rate / cl.rate_per_eur)::numeric(14, 8) AS rate_eur,
+       rt.vendor_trunk_id,
+       l.id AS rate_line_id
+  FROM rate_lines l
+  JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
+  JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id AND vt.deleted_at IS NULL AND vt.status = 'active'
+  JOIN currency_latest cl ON cl.iso = l.currency
+ WHERE l.sender_id IS NULL AND NOT l.is_blocked
+   AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
+ ORDER BY l.mccmnc_id, rt.product_category_id, l.rate / cl.rate_per_eur, l.id;
+CREATE UNIQUE INDEX IF NOT EXISTS best_buy_rates_key ON best_buy_rates (mccmnc_id, product_category_id);
+
+CREATE OR REPLACE FUNCTION refresh_rate_table_stats(ids bigint[] DEFAULT NULL) RETURNS void
+LANGUAGE sql AS $$
+  INSERT INTO rate_table_stats (rate_table_id, active_lines, negative_lines, refreshed_at)
+  SELECT rt.id,
+         (SELECT count(*) FROM rate_lines l
+           WHERE l.rate_table_id = rt.id AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())),
+         CASE WHEN rt.kind = 'customer' THEN (
+           SELECT count(*) FROM rate_lines l
+             JOIN best_buy_rates bb ON bb.mccmnc_id = l.mccmnc_id AND bb.product_category_id = rt.product_category_id
+            WHERE l.rate_table_id = rt.id AND l.sender_id IS NULL AND NOT l.is_blocked
+              AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
+              AND l.rate < bb.rate_eur * (SELECT cl.rate_per_eur FROM currency_latest cl WHERE cl.iso = rt.currency))
+         END,
+         now()
+    FROM rate_tables rt
+   WHERE ids IS NULL OR rt.id = ANY(ids)
+  ON CONFLICT (rate_table_id) DO UPDATE
+    SET active_lines = EXCLUDED.active_lines, negative_lines = EXCLUDED.negative_lines, refreshed_at = now();
+$$;
+
+-- Currency alerts (team trial round 2): a currency moving against EUR by an amount or a percentage.
+CREATE TABLE IF NOT EXISTS fx_alert_rules (
+  id                bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  iso               char(3) REFERENCES currencies(iso),
+  threshold_pct     numeric(8, 4) CHECK (threshold_pct > 0),
+  threshold_abs     numeric(18, 8) CHECK (threshold_abs > 0),
+  "window"          text NOT NULL DEFAULT 'update' CHECK ("window" IN ('update', 'day')),
+  recipients        text[] NOT NULL DEFAULT '{}',
+  enabled           boolean NOT NULL DEFAULT true,
+  last_triggered_at timestamptz,
+  updated_by_id     bigint REFERENCES users(id),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  CHECK (threshold_pct IS NOT NULL OR threshold_abs IS NOT NULL)
+);
+CREATE TABLE IF NOT EXISTS fx_alert_events (
+  id         bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  rule_id    bigint NOT NULL REFERENCES fx_alert_rules(id) ON DELETE CASCADE,
+  iso        char(3) NOT NULL,
+  from_rate  numeric(18, 8) NOT NULL,
+  to_rate    numeric(18, 8) NOT NULL,
+  change_pct numeric(10, 4) NOT NULL,
+  "window"   text NOT NULL,
+  emailed    integer NOT NULL DEFAULT 0,
+  at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS fx_alert_events_at_idx ON fx_alert_events (at DESC);
+
+-- Exchange-rate provider (team trial round 2): XE Currency Data API or manual; the key is stored encrypted
+-- by the API server (never returned).
+CREATE TABLE IF NOT EXISTS fx_provider (
+  id               int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  provider         text NOT NULL DEFAULT 'xe' CHECK (provider IN ('xe', 'manual')),
+  account_id       text,
+  api_key_enc      text,
+  refresh_minutes  int NOT NULL DEFAULT 60 CHECK (refresh_minutes IN (1, 15, 60, 360, 1440)),
+  enabled          boolean NOT NULL DEFAULT true,
+  last_run_at      timestamptz,
+  last_status      text CHECK (last_status IN ('ok', 'simulated', 'error')),
+  last_message     text,
+  updated_by_id    bigint REFERENCES users(id),
+  updated_at       timestamptz
+);
+INSERT INTO fx_provider (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_email_type_check;
+ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_type IN ('send_rate','send_tech_info','invoice',
+  'check_smtp','bind_down_alert','otp','forgot_password','auto_upload_rate','credit_alert','balance_alert','schedule_report_alert',
+  'traffic_alert','auto_upload_rejected','daily_report','broadcast','trouble_ticket','send_soa','payment_confirmation',
+  'invoice_acceptance','invoice_rejection','monitoring_alert','cleanup_summary','credential_transfer','password_reminder',
+  'template_test','currency_alert'));
