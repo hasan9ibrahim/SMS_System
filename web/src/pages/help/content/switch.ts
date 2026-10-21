@@ -505,8 +505,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Message Text",
-                what: "What the match (or group) becomes. Greyed out until a Regex Pattern is entered; required once there is one.",
-                values: "Up to 1,000 characters. Empty text removes the match.",
+                what: "What the match (or group) becomes. `$1`…`$9` insert what the pattern's brackets caught and `$0` the whole match, so you can pull a part out into new text. Greyed out until a Regex Pattern is entered; required once there is one.",
+                values: "Up to 1,000 characters. Empty text removes the match. Example: Regex Pattern `^.*?([0-9]{4,8}).*$` with Message Text `PIN $1 for you` turns `Your code is 482913. FREE gift at bit.ly/x` into `PIN 482913 for you`.",
               },
               {
                 name: "MSG Template",

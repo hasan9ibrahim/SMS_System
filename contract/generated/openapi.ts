@@ -12223,7 +12223,7 @@ export type components = {
       /** @description Content rewrite - the part of the text to replace. */
       contentRegex?: string | null;
       contentRegexIndex?: number | null;
-      /** @description Message Text that replaces the matched group (Regex Index) or the whole match. */
+      /** @description Message Text that replaces the matched group (Regex Index) or the whole match; $1..$9 insert the pattern's groups and $0 the whole match (team trial round 2). */
       contentReplacement?: string | null;
       /** @description MSG Template - replaces the whole text; {text} inserts the original. */
       msgTemplate?: string | null;

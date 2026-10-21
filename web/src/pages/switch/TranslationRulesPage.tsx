@@ -852,6 +852,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                 label="Message Text"
                 maxLength={1000}
                 disabled={!v.contentRegex}
+                hint="$1..$9 insert the pattern's groups, $0 the whole match"
               />
               <TextField
                 form={form}

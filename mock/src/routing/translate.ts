@@ -231,12 +231,21 @@ export function rewriteText(rule: EngineRule, text: string): string {
     if (re) {
       const idx = rule.contentRegexIndex;
       out = out.replace(re, (match: string, ...rest: unknown[]) => {
-        if (!idx) return rule.contentReplacement!;
-        const groups = rest.slice(0, -2) as (string | undefined)[];
+        // The groups come before the match offset (a number), then the whole input.
+        const groups = rest.slice(
+          0,
+          rest.findIndex((x) => typeof x === "number"),
+        ) as (string | undefined)[];
+        // Message Text can reuse what the pattern caught (team trial round 2): $1..$9 are its groups, $0 the
+        // whole match; e.g. pattern ^.*?([0-9]{4,8}).*$ with Message Text "PIN $1 for you" keeps only the code.
+        const text = rule.contentReplacement!.replace(/\$([0-9])/g, (_, d: string) =>
+          d === "0" ? match : (groups[Number(d) - 1] ?? ""),
+        );
+        if (!idx) return text;
         const g = groups[idx - 1];
         if (g === undefined) return match;
         const at = match.indexOf(g);
-        return match.slice(0, at) + rule.contentReplacement! + match.slice(at + g.length);
+        return match.slice(0, at) + text + match.slice(at + g.length);
       });
     }
   }

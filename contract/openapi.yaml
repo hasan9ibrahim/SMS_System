@@ -19530,7 +19530,7 @@ components:
         contentReplacement:
           type: [string, "null"]
           maxLength: 1000
-          description: Message Text that replaces the matched group (Regex Index) or the whole match.
+          description: Message Text that replaces the matched group (Regex Index) or the whole match; $1..$9 insert the pattern's groups and $0 the whole match (team trial round 2).
         msgTemplate:
           type: [string, "null"]
           maxLength: 1000
