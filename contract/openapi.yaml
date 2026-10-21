@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.78.0
+  version: 0.79.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -19411,7 +19411,7 @@ components:
           $ref: "#/components/schemas/RecordStatus"
         continueAfter:
           type: boolean
-          description: Is Continue - apply further rules after this one (a trunk can override).
+          description: Is Continue - apply further rules after this one (a trunk can override). Off by default for a new rule (team trial round 2).
         senderPattern:
           type: [string, "null"]
           maxLength: 200
@@ -19439,6 +19439,13 @@ components:
             pattern: "^[0-9]{3,6}$"
         mccmncNegate:
           type: boolean
+        mccmncPattern:
+          type: [string, "null"]
+          maxLength: 200
+          description: >-
+            Regular expression on the MCCMNC code (team trial round 2), as on route rules: `^415` is every Lebanese
+            network. The destination matches when it is in `mccmncs` or matches this pattern; `mccmncNegate` turns
+            the whole MCCMNC condition around. Missing in an input means none.
         contentPattern:
           type: [string, "null"]
           maxLength: 500
@@ -19523,7 +19530,7 @@ components:
         contentReplacement:
           type: [string, "null"]
           maxLength: 1000
-          description: Message Text that replaces the matched group (Regex Index) or the whole match.
+          description: Message Text that replaces the matched group (Regex Index) or the whole match; $1..$9 insert the pattern's groups and $0 the whole match (team trial round 2).
         msgTemplate:
           type: [string, "null"]
           maxLength: 1000
@@ -19600,7 +19607,7 @@ components:
             archivedAt:
               type: [string, "null"]
               format: date-time
-      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
+      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, mccmncPattern, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
 
     TranslationRuleSaved:
       type: object

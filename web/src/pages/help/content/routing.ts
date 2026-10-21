@@ -58,7 +58,7 @@ export const topics: HelpTopic[] = [
               "Each condition is one chip on the rule (Trunk, Category, Destination, Sender, Receiver, Content, TPS, Revenue/msg, HLR ported). Conditions the rule does not set are ignored.",
               "**all must match** (the default): every condition must pass. **any one matches**: one passing condition is enough. Click the words next to the rule title to switch.",
               "A rule with no conditions at all matches every message. That is why a new rule starts off.",
-              "Sender conditions match the exact capitals unless the rule's **Match case** box is cleared (then any case matches). Receiver, content and the MCCMNC pattern ignore upper and lower case.",
+              "Sender conditions match the exact capitals unless the rule's **Case sensitive** box is cleared (then any case matches). Receiver, content and the MCCMNC pattern ignore upper and lower case.",
               "A destination list matches exact codes only. A 3-digit code is the country's All networks entry, not the whole country. To cover a whole country, tick all its networks, or use **All**.",
             ],
           },
@@ -554,7 +554,7 @@ export const topics: HelpTopic[] = [
                 what: "Match messages whose value fits, or messages whose value does not fit.",
               },
               {
-                name: "Match case",
+                name: "Case sensitive",
                 what: 'Sender only. Ticked: the Sender ID values, the regex and the Sender ID list must match the exact capitals (`BANK` does not match "Bank"). Cleared: any mix of capitals matches, and the chip shows **any case**.',
                 values: "Ticked by default.",
               },
@@ -586,7 +586,7 @@ export const topics: HelpTopic[] = [
                 name: "Type a … and press + or Enter",
                 what: "Adds a value. Sender IDs and numbers can be pasted as a list separated by commas, semicolons or new lines; content phrases are split by new lines only, so they keep their commas. Click a value's × to remove it.",
                 values:
-                  "Sender: capitals count while Match case is ticked. Receiver and content: upper and lower case match alike.",
+                  "Sender: capitals count while Case sensitive is ticked. Receiver and content: upper and lower case match alike.",
               },
               {
                 name: "Sender ID list / Receiver ID list",

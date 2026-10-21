@@ -12160,7 +12160,7 @@ export type components = {
       /** @enum {string} */
       action?: "allow" | "block";
       status?: components["schemas"]["RecordStatus"];
-      /** @description Is Continue - apply further rules after this one (a trunk can override). */
+      /** @description Is Continue - apply further rules after this one (a trunk can override). Off by default for a new rule (team trial round 2). */
       continueAfter?: boolean;
       /** @description Regular expression on the sender ID. Keywords instead of a regular expression (team trial round 2): \Numeric = numeric Sender IDs (digits, optional leading +), \Alpha = Sender IDs with a letter. */
       senderPattern?: string | null;
@@ -12171,6 +12171,8 @@ export type components = {
       receiverPatternNegate?: boolean;
       mccmncs?: string[];
       mccmncNegate?: boolean;
+      /** @description Regular expression on the MCCMNC code (team trial round 2), as on route rules: `^415` is every Lebanese network. The destination matches when it is in `mccmncs` or matches this pattern; `mccmncNegate` turns the whole MCCMNC condition around. Missing in an input means none. */
+      mccmncPattern?: string | null;
       /** @description Regular expression on the message body. */
       contentPattern?: string | null;
       contentPatternNegate?: boolean;
@@ -12221,7 +12223,7 @@ export type components = {
       /** @description Content rewrite - the part of the text to replace. */
       contentRegex?: string | null;
       contentRegexIndex?: number | null;
-      /** @description Message Text that replaces the matched group (Regex Index) or the whole match. */
+      /** @description Message Text that replaces the matched group (Regex Index) or the whole match; $1..$9 insert the pattern's groups and $0 the whole match (team trial round 2). */
       contentReplacement?: string | null;
       /** @description MSG Template - replaces the whole text; {text} inserts the original. */
       msgTemplate?: string | null;
@@ -12302,6 +12304,7 @@ export type components = {
       | "receiverPatternNegate"
       | "mccmncs"
       | "mccmncNegate"
+      | "mccmncPattern"
       | "contentPattern"
       | "contentPatternNegate"
       | "senderListId"

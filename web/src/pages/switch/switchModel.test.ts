@@ -80,6 +80,7 @@ describe("switch model (§6.4, §13.2)", () => {
     assert.equal(
       ruleSummary({
         ...blankRule(),
+        continueAfter: true,
         receiverConversion: "regex_replace",
         receiverConversionValue: "^0(\\d+)",
         receiverConversionReplacement: "44$1",

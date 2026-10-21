@@ -96,7 +96,8 @@ export function blankRule(): TranslationRuleInput {
     direction: null,
     action: "allow",
     status: "active",
-    continueAfter: true,
+    // Is Continue off for a new rule (team trial round 2): the first matching rule decides.
+    continueAfter: false,
     senderPattern: null,
     senderPatternNegate: false,
     senderMatchCase: true,
@@ -104,6 +105,7 @@ export function blankRule(): TranslationRuleInput {
     receiverPatternNegate: false,
     mccmncs: [],
     mccmncNegate: false,
+    mccmncPattern: null,
     contentPattern: null,
     contentPatternNegate: false,
     senderListId: null,
@@ -184,7 +186,7 @@ export function impliedDirection(v: Pick<TranslationRuleInput, "direction" | "ta
 /** One line: what the rule matches and does, for the detail panel and confirmations. */
 export function ruleSummary(v: TranslationRuleInput): string {
   const not = (n: boolean) => (n ? "not " : "");
-  // Sender ID conditions match the exact capitals unless Match case is off (team trial round 1).
+  // Sender ID conditions match the exact capitals unless Case sensitive is off (team trial round 1).
   const anyCase = v.senderMatchCase === false ? " (any case)" : "";
   const when = [
     v.senderPattern && `sender ${not(v.senderPatternNegate)}~ ${v.senderPattern}${anyCase}`,
@@ -214,7 +216,7 @@ export function ruleSummary(v: TranslationRuleInput): string {
           v.msgTemplate && "text template",
         ].filter(Boolean);
   return `${when.length ? `When ${when.join(" and ")}` : "Every message"}: ${does.length ? does.join(", ") : "no change"}${
-    v.continueAfter ? "" : ", then stop"
+    v.continueAfter || v.action === "block" ? "" : ", then stop"
   }`;
 }
 

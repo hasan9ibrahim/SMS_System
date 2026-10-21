@@ -47,7 +47,6 @@ import { fmtWhen, RecordActions } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
 import { DestinationPick, MultiPick } from "../routing/pickers";
 import { NumberListDialog } from "./NumberListsPage";
-import { RuleCodesDialog } from "../rates/DestinationTree";
 import {
   BILLING_TYPES,
   blankRule,
@@ -154,29 +153,24 @@ function PatternField({
   negate: keyof TranslationRuleInput;
   label: string;
   placeholder: string;
-  /** Sender ID only: the Match case box (team trial round 1). */
+  /** Sender ID only: the Case sensitive box (team trial round 1). */
   matchCase?: boolean;
 }) {
   return (
     <div className={matchCase ? "cond-field with-case" : "cond-field"}>
-      <TextField
-        form={form}
-        path={path}
-        label={label}
-        placeholder={placeholder}
-        maxLength={500}
-        hint={
-          path === "senderPattern" ? "Keywords: \\Numeric = numeric Sender IDs, \\Alpha = with a letter" : undefined
-        }
-      />
+      <TextField form={form} path={path} label={label} placeholder={placeholder} maxLength={500} />
       <Negate form={form} path={negate} />
       {matchCase && <MatchCase form={form} />}
+      {/* On its own line under the row, so it never runs under the buttons (team trial round 2). */}
+      {path === "senderPattern" && (
+        <small className="cond-hint">{"Keywords: \\Numeric = numeric Sender IDs, \\Alpha = with a letter"}</small>
+      )}
     </div>
   );
 }
 
 /**
- * Match case for the Sender ID conditions (team trial round 1): on (the default), the Sender ID pattern and
+ * Case sensitive for the Sender ID conditions (team trial round 1): on (the default), the Sender ID pattern and
  * list must match the exact capitals; off, any case matches.
  */
 function MatchCase({ form }: { form: FormApi<TranslationRuleInput> }) {
@@ -190,7 +184,7 @@ function MatchCase({ form }: { form: FormApi<TranslationRuleInput> }) {
         checked={form.get("senderMatchCase") !== false}
         onChange={(e) => form.set("senderMatchCase", e.target.checked)}
       />
-      Match case
+      Case sensitive
     </label>
   );
 }
@@ -403,8 +397,8 @@ function ContentWordsEditor({
               <th>Find word or phrase</th>
               <th />
               <th>Replace with (empty = remove)</th>
-              <th>Whole word</th>
-              <th>Match case</th>
+              <th>Not part of a word</th>
+              <th>Case sensitive</th>
               <th />
             </tr>
           </thead>
@@ -433,7 +427,7 @@ function ContentWordsEditor({
                 <td>
                   <input
                     type="checkbox"
-                    aria-label="Whole word"
+                    aria-label="Not part of a word"
                     checked={w.wholeWord !== false}
                     onChange={(e) => patch(i, { wholeWord: e.target.checked })}
                   />
@@ -441,7 +435,7 @@ function ContentWordsEditor({
                 <td>
                   <input
                     type="checkbox"
-                    aria-label="Match case"
+                    aria-label="Case sensitive"
                     checked={w.matchCase !== false}
                     onChange={(e) => patch(i, { matchCase: e.target.checked })}
                   />
@@ -613,6 +607,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
         </Section>
 
         <Section title="Match conditions" columns={2} note="All set conditions must hold">
+          {/* Each pattern beside its list (team trial round 2). */}
           <PatternField
             form={form}
             path="senderPattern"
@@ -621,6 +616,15 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             placeholder="^[A-Z]+$"
             matchCase
           />
+          <div className="cond-field">
+            <ListPick form={form} path="senderListId" label="Sender ID List" />
+            <Negate form={form} path="senderListNegate" />
+            <small className="cond-hint">
+              {v.senderMatchCase === false
+                ? "Any capitals (Case sensitive is off)"
+                : "Exact capitals (Case sensitive is on)"}
+            </small>
+          </div>
           <PatternField
             form={form}
             path="receiverPattern"
@@ -628,47 +632,40 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             label="Receiver ID (regex)"
             placeholder="^00"
           />
-          <PatternField
-            form={form}
-            path="contentPattern"
-            negate="contentPatternNegate"
-            label="Message Body Text (regex)"
-            placeholder="bit\.ly"
-          />
-          <div className="cond-field">
-            <ListPick
-              form={form}
-              path="senderListId"
-              label="Sender ID List"
-              hint={v.senderMatchCase === false ? "Any case (Match case is off)" : "Exact capitals (Match case is on)"}
-            />
-            <Negate form={form} path="senderListNegate" />
-          </div>
           <div className="cond-field">
             <ListPick form={form} path="receiverListId" label="Receiver ID List" />
             <Negate form={form} path="receiverListNegate" />
           </div>
-          <div className="cond-field wide">
-            <FormField
-              label="MCCMNC"
-              error={form.error("mccmncs")}
-              hint="A 3-digit MCC is only the country’s All networks entry; tick the country to cover every network"
-            >
-              <div className="pick-with-list">
-                <DestinationPick value={v.mccmncs} onChange={(c) => form.set("mccmncs", c)} />
-                <Button
-                  small
-                  icon="globe"
-                  onClick={async () => {
-                    const codes = await ask<string[]>((d) => <RuleCodesDialog initial={v.mccmncs} done={d} />);
-                    if (codes) form.set("mccmncs", codes);
-                  }}
-                >
-                  Pick from list…
-                </Button>
-              </div>
+          <div className="wide">
+            <PatternField
+              form={form}
+              path="contentPattern"
+              negate="contentPatternNegate"
+              label="Message Body Text (regex)"
+              placeholder="bit\.ly"
+            />
+          </div>
+          <div className="cond-field wide align-top">
+            <FormField label="MCCMNC" error={form.error("mccmncs")}>
+              <DestinationPick value={v.mccmncs} onChange={(c) => form.set("mccmncs", c)} />
             </FormField>
             <Negate form={form} path="mccmncNegate" />
+            <small className="cond-hint">
+              A 3-digit MCC is only the country’s All networks entry; tick the country to cover every network
+            </small>
+          </div>
+          <div className="cond-field wide">
+            {/* A regex instead of (or as well as) picking networks, as on route rules (team trial round 2). */}
+            <TextField
+              form={form}
+              path="mccmncPattern"
+              label="MCCMNC (regex)"
+              placeholder="^415 (every Lebanese network) or ^(415|420)"
+              maxLength={200}
+            />
+            <small className="cond-hint">
+              Matched against the MCCMNC code; a network matches when it is picked above or matches this pattern
+            </small>
           </div>
           <div className="fgrid cols-4 wide">
             <NumberField
@@ -855,6 +852,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                 label="Message Text"
                 maxLength={1000}
                 disabled={!v.contentRegex}
+                hint="$1..$9 insert the pattern's groups, $0 the whole match"
               />
               <TextField
                 form={form}

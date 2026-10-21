@@ -135,6 +135,15 @@ describe("translation engine (§6.4)", () => {
     const r = rule(1, { contentRegex: "code is ([0-9]+)", contentRegexIndex: 1, contentReplacement: "****" });
     assert.equal(rewriteText(r, msg.text), "Your code is ****");
     assert.equal(rewriteText({ ...r, contentRegexIndex: null }, msg.text), "Your ****");
+    // Message Text reuses the pattern's groups (team trial round 2): extract the code into a new text.
+    const pin = rule(2, {
+      contentRegex: "^.*?([0-9]{4,8}).*$",
+      contentRegexIndex: null,
+      contentReplacement: "PIN $1 for you",
+    });
+    assert.equal(rewriteText(pin, "Your code is 482913. FREE gift at bit.ly/x"), "PIN 482913 for you");
+    const tpl = { ...pin, contentReplacement: "$1", msgTemplate: "PIN {text} for you" };
+    assert.equal(rewriteText(tpl, "Your code is 482913. FREE gift at bit.ly/x"), "PIN 482913 for you");
     assert.equal(rewriteText(rule(2, { msgTemplate: "[ACME] {text}" }), "hi"), "[ACME] hi");
   });
 

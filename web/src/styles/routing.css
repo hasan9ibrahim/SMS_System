@@ -499,6 +499,14 @@
 .cond-field.with-case {
   grid-template-columns: 1fr auto auto;
 }
+/* A row's hint on its own line under the field and its buttons (team trial round 2). */
+.cond-field .cond-hint {
+  grid-column: 1 / -1;
+  margin-top: -2px;
+  margin-bottom: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
 .cond-field .match-case {
   margin-bottom: 10px;
   white-space: nowrap;
@@ -1367,4 +1375,22 @@ textarea.mono {
 .capture-mode {
   align-self: flex-start;
   margin: 0 20px 6px;
+}
+
+/* New rule, step 2 (team trial round 2): conditions above vendors. */
+.new-rule-setup {
+  display: grid;
+  gap: 16px;
+}
+.new-rule-setup .nrs-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+/* A tall field (the MCCMNC tree): its Match / Not Match beside the label, not at the bottom. */
+.cond-field.align-top {
+  align-items: start;
+}
+.cond-field.align-top .negate {
+  margin-top: 22px;
 }
