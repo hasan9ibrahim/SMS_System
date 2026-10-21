@@ -1,9 +1,15 @@
 name: CI
 
+# Once per change (team trial round 2): pull requests and main. A pushed branch is checked by its pull request,
+# not a second time on the push; a newer push cancels the older run on the same branch or pull request.
 on:
   push:
-    branches: [main, "claude/**", "Claude/**"]
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
