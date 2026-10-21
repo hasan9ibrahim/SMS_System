@@ -989,6 +989,76 @@ export function topsEvent(sim: Simulator, now = Date.now()): DashboardTopsEvent 
   };
 }
 
+/**
+ * Today's figures again from the EDR store (team trial round 2), so the dashboard shows what Live analytics and
+ * the reports show: the same messages and the same conversion to the platform currency at the current rate.
+ * Run every minute; also catches up when the EDR store was not ready at start. Messages sent in the last
+ * second and not yet written come in on the next run. Skipped (figures kept) when the store does not answer.
+ */
+export async function resyncToday(sim: Simulator): Promise<boolean> {
+  if (process.env.NODE_TEST_CONTEXT) return false;
+  const day = platformDay(Date.now());
+  const f = await sysToPlatformFactor();
+  type Row = { id: string; n: string; rev: number; cost: number; ok: string; dl: string; sent: string };
+  const q = (col: string) =>
+    chRows<Row>(
+      `SELECT toString(${col}) AS id, count() AS n, toFloat64(sum(revenue_sys * ${f})) AS rev,
+              toFloat64(sum(cost_sys * ${f})) AS cost, countIf(is_submit_success = 1) AS ok,
+              countIf(msg_status = 'DELIVRD') AS dl, countIf(v_trunk_id > 0) AS sent
+         FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
+      15_000,
+    );
+  const [cDay, vDay, dDay] = await Promise.all([q("c_enterprise_id"), q("v_enterprise_id"), q("c_mccmnc")]);
+  if (!cDay || !vDay || !dDay || day !== sim.today.day) return false;
+  const names = new Map<number, string>();
+  for (const x of [...sim.trunks, ...sim.vendors]) names.set(x.enterpriseId, x.enterpriseName);
+  const party = (rows: Row[], old: Map<number, PartyTotals>, vendor: boolean) =>
+    new Map(
+      rows.map((r) => {
+        const id = Number(r.id);
+        return [
+          id,
+          {
+            name: old.get(id)?.name ?? names.get(id) ?? `#${id}`,
+            attempts: Number(r.n),
+            money: vendor ? r.cost : r.rev,
+            margin: r.rev - r.cost,
+            successful: Number(r.ok),
+            delivered: Number(r.dl),
+          },
+        ];
+      }),
+    );
+  const mix = new Map(sim.destMix.map((m) => [m.code, m]));
+  const t = sim.today;
+  t.clients = party(cDay, t.clients, false);
+  t.vendors = party(vDay, t.vendors, true);
+  t.destinations = new Map(
+    dDay.map((r) => {
+      const old = t.destinations.get(r.id) ?? mix.get(r.id);
+      return [
+        r.id,
+        {
+          country: old?.country ?? r.id,
+          network: old?.network ?? "",
+          attempts: Number(r.n),
+          revenue: r.rev,
+          margin: r.rev - r.cost,
+          successful: Number(r.ok),
+          delivered: Number(r.dl),
+        },
+      ];
+    }),
+  );
+  t.attempts = cDay.reduce((a, r) => a + Number(r.n), 0);
+  t.submitted = cDay.reduce((a, r) => a + Number(r.ok), 0);
+  t.sent = cDay.reduce((a, r) => a + Number(r.sent), 0);
+  t.delivered = cDay.reduce((a, r) => a + Number(r.dl), 0);
+  t.revenue = cDay.reduce((a, r) => a + r.rev, 0);
+  t.cost = cDay.reduce((a, r) => a + r.cost, 0);
+  return true;
+}
+
 const avg = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 
 /**

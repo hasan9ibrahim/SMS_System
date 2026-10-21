@@ -19,6 +19,7 @@ import {
   computeMovers,
   createSimulator,
   historyEvent,
+  resyncToday,
   step,
   summaryEvent,
   tickEvent,
@@ -42,6 +43,10 @@ let timer: NodeJS.Timeout | null = null;
 let ticks = 0;
 let lastEvaluation = 0;
 let lastEdrWrite = 0;
+let lastResync = Date.now();
+let resyncing = false;
+/** How often the dashboard's today figures are read again from the EDR store (resyncToday). */
+const RESYNC_EVERY_MS = 60_000;
 let evaluating = false;
 
 /** The simulator if it is running, without starting it (LCR TPS figures, §13.23). */
@@ -96,6 +101,13 @@ function tick() {
   if (now - lastEdrWrite >= WRITE_EVERY_MS) {
     lastEdrWrite = now;
     void writeLiveEdrs(sim);
+  }
+  if (!resyncing && now - lastResync >= RESYNC_EVERY_MS) {
+    lastResync = now;
+    resyncing = true;
+    resyncToday(sim)
+      .catch((err: Error) => console.warn(`live today figures: ${err.message}`))
+      .finally(() => (resyncing = false));
   }
   if (!evaluating && now - lastEvaluation >= EVALUATE_EVERY_MS) {
     lastEvaluation = now;
