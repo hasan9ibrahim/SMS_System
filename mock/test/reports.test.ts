@@ -421,7 +421,8 @@ describe("§10 scheduled reports and daily traffic alerts", { skip }, () => {
       201,
     );
     const mail = await ok("sendDailyTrafficAlert", call("POST", `/daily-traffic-alerts/${c.record.id}/send`));
-    assert.match(mail.subject, /^Daily traffic summary 2026-10-1\d/);
+    // The report day is the latest day with traffic, which moves as live EDRs are written.
+    assert.match(mail.subject, /^Daily traffic summary \d{4}-\d{2}-\d{2} – /);
     assert.match(mail.body, /Messages|No traffic/);
   });
 });

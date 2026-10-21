@@ -345,16 +345,28 @@ async function vendorWeek() {
     `SELECT e.id, e.name FROM enterprises e JOIN enterprise_billing vb ON vb.enterprise_id = e.id AND vb.side = 'vendor'
       WHERE e.deleted_at IS NULL AND e.id % 10 >= 3 ORDER BY e.id`,
   );
-  return { id: Number(rows[0].id), name: rows[0].name as string, from: "2026-09-21", to: "2026-09-27" };
+  // The first whole week the store holds (the seed covers the 30 days before it ran), not fixed dates.
+  const day = (d: Date, n: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  const start = day(new Date(cov!.from!), 2);
+  return {
+    id: Number(rows[0].id),
+    name: rows[0].name as string,
+    from: ymd(start),
+    to: ymd(day(start, 6)),
+    invoiceDate: ymd(day(start, 8)),
+    end: day(start, 7).toISOString(),
+    startIso: start.toISOString(),
+  };
 }
 
-const vInput = (v: { id: number; from: string; to: string }, over: object = {}) => ({
+const vInput = (v: { id: number; from: string; to: string; invoiceDate?: string }, over: object = {}) => ({
   enterpriseId: v.id,
   invoiceNumber: `T-${run}`,
   chargeVolume: null,
   chargeAmount: 1,
   currency: null,
-  invoiceDate: "2026-09-29",
+  invoiceDate: v.invoiceDate ?? "2026-09-29",
   dueDate: null,
   periodFrom: v.from,
   periodTo: v.to,
@@ -372,8 +384,8 @@ describe("vendor invoices and reconciliation (§13.31)", { skip }, () => {
     assert.notEqual(r.ourAmount, null);
     assert.ok(r.rule, "the rule used is kept");
     // Input From/To (§7): the UTC window our figures were counted for, midnight to midnight in the invoice zone.
-    assert.equal(r.inputFrom, "2026-09-21T00:00:00.000Z");
-    assert.equal(r.inputTo, "2026-09-28T00:00:00.000Z");
+    assert.equal(r.inputFrom, v.startIso);
+    assert.equal(r.inputTo, v.end);
     assert.deepEqual(
       r.events
         .map((e: { kind: string }) => e.kind)
@@ -473,9 +485,9 @@ describe("vendor invoices and reconciliation (§13.31)", { skip }, () => {
 
     const csv = [
       "enterprise,invoice_number,charge_volume,charge_amount,currency,invoice_date,due_date,period_from,period_to,timezone,remarks",
-      `"${v.name}",TI-${run},1000,12.5,,2026-09-29,,2026-09-21,2026-09-27,UTC,${tag}`,
-      `Nobody Ltd,TI2-${run},1,1,,2026-09-29,,2026-09-21,2026-09-27,UTC,${tag}`,
-      `"${v.name}",TI3-${run},x,1,,2026-09-29,,2026-09-21,2026-09-27,UTC,${tag}`,
+      `"${v.name}",TI-${run},1000,12.5,,${v.invoiceDate},,${v.from},${v.to},UTC,${tag}`,
+      `Nobody Ltd,TI2-${run},1,1,,${v.invoiceDate},,${v.from},${v.to},UTC,${tag}`,
+      `"${v.name}",TI3-${run},x,1,,${v.invoiceDate},,${v.from},${v.to},UTC,${tag}`,
     ].join("\n");
     const dry = await ok("importVendorInvoices", call("POST", "/vendor-invoices/import", { csv, dryRun: true }));
     assert.equal(dry.applied, false);

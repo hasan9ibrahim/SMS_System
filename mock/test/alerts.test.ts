@@ -197,6 +197,7 @@ async function fakeSim(dlr: number): Promise<Simulator> {
   return {
     trunks: [trunk(rows[0], dlr), trunk(rows[1], 85)],
     vendors: [],
+    destMix: [],
     today: {
       day: "2026-10-17",
       attempts: 0,

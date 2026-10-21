@@ -16,6 +16,14 @@ import type { Simulator, SimTrunk } from "./simulator.js";
 /** How often the sent messages are written. */
 export const WRITE_EVERY_MS = 1_000;
 /**
+ * Messages written per round, and per INSERT: one INSERT carries its rows in the query text, which ClickHouse
+ * caps at 256 KB (max_query_size); about 110 bytes per message. The rest wait for the next round.
+ */
+const MAX_PER_ROUND = 12_000;
+const CHUNK = 1_500;
+/** Most messages one trunk and outcome may have waiting. */
+const MAX_BACKLOG = 3_000;
+/**
  * Templates kept per customer trunk and outcome (its latest first attempts of the last 7 days). Enough that
  * each vendor and destination keeps its own delivery mix (with 10, a vendor could look 0 % or 100 %).
  */
@@ -173,17 +181,19 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
   if (writing) return 0;
   const s = state;
   const copies: Copy[] = [];
-  const taken: [NonNullable<SimTrunk["pending"]>, number, number][] = [];
+  let budget = MAX_PER_ROUND;
   for (const t of sim.trunks) {
     const pending = t.pending;
     if (!pending) continue;
     for (let o = 0; o < 4; o++) {
-      const n = pending[o]!;
+      // A backlog left by failed rounds is capped (those messages are dropped), so a round always fits.
+      if (pending[o]! > MAX_BACKLOG) pending[o] = MAX_BACKLOG;
+      const n = Math.min(pending[o]!, budget);
       if (n <= 0) continue;
       const tpls = pool(s, t, o);
       if (!tpls.length) continue;
-      pending[o] = 0;
-      taken.push([pending, o, n]);
+      pending[o]! -= n;
+      budget -= n;
       for (let k = 0; k < n; k++) {
         const tpl = tpls[Math.floor(Math.random() * tpls.length)]!;
         const f = s.factor.get(tpl.bc) ?? 1;
@@ -204,23 +214,24 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
   }
   if (!copies.length) return 0;
   writing = true;
-  const fx = await sysToPlatformFactor();
-  const cur = [...s.currency];
-  const currencyOf = `transform(business_company_id, [${cur.map(([id]) => id).join(",")}], [${cur.map(([, c]) => `'${c}'`).join(",")}], v_currency)`;
-  // (template, trunk, enterprise, copy number, vendor trunk, vendor enterprise, platform cost per message,
-  //  vendor bills it, vendor billing type, rule, route type, decided by); vendor trunk 0 = keep the stored one.
-  const tuples = copies.map((c) => {
-    const r = c.route;
-    return `('${c.tpl.id}',${c.trunk.id},${c.trunk.enterpriseId},${seq++},${r?.vendorTrunkId ?? 0},${r?.vendorEnterpriseId ?? 0},${(r?.cost ?? 0).toFixed(6)},${c.bills ? 1 : 0},'${r?.vendorBillingType ?? ""}',${r?.ruleId ?? 0},'${r?.routeType ?? ""}','${r?.decidedBy ?? ""}')`;
-  });
-  // One jitter per copy, so the four times move together and keep the stored delays.
-  const shift = `dateDiff('millisecond', submit_time, now64(3)) - toInt64(cityHash64(m_seq, toUnixTimestamp64Milli(now64(3))) % ${WRITE_EVERY_MS})`;
-  const id = () => `lower(hex(randomString(8)))`;
-  const routed = (expr: string, keep: string) => `if(m_vt > 0, ${expr}, ${keep})`;
-  const sysRate = `m_cost / (${fx})`;
   try {
-    await chQuery(
-      `INSERT INTO edr SELECT * EXCEPT (m_id, m_trunk, m_ent, m_seq, m_vt, m_ve, m_cost, m_bills, m_vbt, m_rule, m_rtype, m_by) REPLACE (
+    const fx = await sysToPlatformFactor();
+    const cur = [...s.currency];
+    const currencyOf = `transform(business_company_id, [${cur.map(([id]) => id).join(",")}], [${cur.map(([, c]) => `'${c}'`).join(",")}], v_currency)`;
+    // (template, trunk, enterprise, copy number, vendor trunk, vendor enterprise, platform cost per message,
+    //  vendor bills it, vendor billing type, rule, route type, decided by); vendor trunk 0 = keep the stored one.
+    const insert = (chunk: Copy[]) => {
+      const tuples = chunk.map((c) => {
+        const r = c.route;
+        return `('${c.tpl.id}',${c.trunk.id},${c.trunk.enterpriseId},${seq++},${r?.vendorTrunkId ?? 0},${r?.vendorEnterpriseId ?? 0},${(r?.cost ?? 0).toFixed(6)},${c.bills ? 1 : 0},'${r?.vendorBillingType ?? ""}',${r?.ruleId ?? 0},'${r?.routeType ?? ""}','${r?.decidedBy ?? ""}')`;
+      });
+      // One jitter per copy, so the four times move together and keep the stored delays.
+      const shift = `dateDiff('millisecond', submit_time, now64(3)) - toInt64(cityHash64(m_seq, toUnixTimestamp64Milli(now64(3))) % ${WRITE_EVERY_MS})`;
+      const id = () => `lower(hex(randomString(8)))`;
+      const routed = (expr: string, keep: string) => `if(m_vt > 0, ${expr}, ${keep})`;
+      const sysRate = `m_cost / (${fx})`;
+      return chQuery(
+        `INSERT INTO edr SELECT * EXCEPT (m_id, m_trunk, m_ent, m_seq, m_vt, m_ve, m_cost, m_bills, m_vbt, m_rule, m_rtype, m_by) REPLACE (
           generateUUIDv4(m_seq) AS edr_id,
           toUInt32(m_trunk) AS c_trunk_id,
           toUInt32(m_ent) AS c_enterprise_id,
@@ -250,28 +261,37 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
                  toFloat64(x.7) AS m_cost, x.8 AS m_bills, x.9 AS m_vbt, x.10 AS m_rule, x.11 AS m_rtype, x.12 AS m_by
             FROM (SELECT arrayJoin([${tuples.join(",")}]) AS x)
         ) AS m ON t.edr_id = m.m_id`,
-      30_000,
-    );
-    handBack(sim, copies);
-    if (process.env.SIM_EDR_DEBUG)
-      console.log(`live EDRs written ${copies.length}, routed ${copies.filter((c) => c.route).length}`);
-    return copies.length;
-  } catch (err) {
-    const msg = (err as Error).message;
-    console.warn(`live EDRs: ${msg}`);
-    // Not written: they wait for the next round.
-    for (const [p, o, n] of taken) p[o] = (p[o] ?? 0) + n;
-    // The EDR store got new columns after the templates were copied (an upgrade applied after start, e.g.
-    // migration 002): rebuild the templates from the current table on the next round.
-    if (
-      /NUMBER_OF_COLUMNS_DOESNT_MATCH|UNKNOWN_IDENTIFIER|NO_SUCH_COLUMN/.test(msg) &&
-      Date.now() - preparedAt >= REBUILD_MS
-    ) {
-      console.warn("live EDRs: the EDR store changed; rebuilding the live templates");
-      state = null;
-      preparing = null;
+        30_000,
+      );
+    };
+    let written = 0;
+    for (let i = 0; i < copies.length; i += CHUNK) {
+      const chunk = copies.slice(i, i + CHUNK);
+      try {
+        await insert(chunk);
+        handBack(sim, chunk);
+        written += chunk.length;
+      } catch (err) {
+        const msg = (err as Error).message;
+        console.warn(`live EDRs: ${msg}`);
+        // Not written: this chunk and the rest wait for the next round.
+        for (const c of copies.slice(i)) c.trunk.pending![c.outcome] = (c.trunk.pending![c.outcome] ?? 0) + 1;
+        // The EDR store got new columns after the templates were copied (an upgrade applied after start, e.g.
+        // migration 002): rebuild the templates from the current table on the next round.
+        if (
+          /NUMBER_OF_COLUMNS_DOESNT_MATCH|UNKNOWN_IDENTIFIER|NO_SUCH_COLUMN/.test(msg) &&
+          Date.now() - preparedAt >= REBUILD_MS
+        ) {
+          console.warn("live EDRs: the EDR store changed; rebuilding the live templates");
+          state = null;
+          preparing = null;
+        }
+        break;
+      }
     }
-    return 0;
+    if (process.env.SIM_EDR_DEBUG)
+      console.log(`live EDRs written ${written}, routed ${copies.filter((c) => c.route).length}`);
+    return written;
   } finally {
     writing = false;
   }

@@ -1030,6 +1030,13 @@ textarea.mono {
 .capture-form label:first-child input {
   width: 260px;
 }
+/* A date-time field keeps its own widths, also as the first field (PCAP From, team trial round 2). */
+.capture-form .dt-input input[type="date"] {
+  width: 150px;
+}
+.capture-form .dt-input input.dt-time {
+  width: 64px;
+}
 .rs-page,
 .diag-page {
   overflow: auto;
@@ -1126,6 +1133,20 @@ textarea.mono {
 }
 .diag-dest input {
   width: 280px;
+}
+/* One line: labels on top, controls and Go on the same baseline (team trial round 2). */
+.diag-form .field {
+  margin-bottom: 0;
+}
+.diag-form .segmented {
+  height: 30px;
+  align-self: flex-start;
+}
+.diag-form .segmented button {
+  padding: 0 10px;
+}
+.diag-form > .btn {
+  height: 30px;
 }
 .diag-runs {
   display: grid;

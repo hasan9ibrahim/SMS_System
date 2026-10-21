@@ -4,11 +4,10 @@
 // - Client view: a client's or account manager's sell rates against the LCR positions.
 // - Profiles: named rule sets reused by Least cost route rules.
 // - Changes: top vendor changes and cheapest cost moves, with the alert settings.
-import { IdChips } from "../../monitoring/alerts/parts";
 import { HoverList } from "../../../ui/HoverList";
 import { useMemo, useState } from "react";
 import { useLocation } from "react-router";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type {
   LcrChangeRow,
   LcrClientQuery,
@@ -53,6 +52,8 @@ import {
   type LcrView,
 } from "./lcrModel";
 import { DateTimeInput } from "../../../ui/DateTimeInput";
+import { CheckList, type CheckItem } from "../../../ui/CheckList";
+import { fetchListPage } from "../../../api/hooks";
 
 const page = pageForPath("/routing/lcr")!;
 const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
@@ -742,13 +743,8 @@ function ProfileDialog({ id, done }: { id: number | null; done: (v: boolean | nu
         {p.vendorTrunkMode !== "all" && (
           <div className="field rn-span">
             <span>{p.vendorTrunkMode === "inclusive" ? "Only" : "Never"} these vendor trunks</span>
-            {/* Vendor trunks by name, not ID (team trial round 1). */}
-            <IdChips
-              list="vendor_trunks"
-              ids={p.vendorTrunkIds}
-              onChange={(ids) => setP({ vendorTrunkIds: ids })}
-              placeholder="Add a vendor trunk…"
-            />
+            {/* Vendor trunks as checkboxes, Check all / Uncheck all on the searched ones (team trial round 2). */}
+            <VendorTrunkChecks ids={p.vendorTrunkIds} onChange={(ids) => setP({ vendorTrunkIds: ids })} />
             {problems.vendorTrunkIds && <small className="tone-error">{problems.vendorTrunkIds}</small>}
           </div>
         )}
@@ -1054,4 +1050,40 @@ export function LcrPage() {
   if (view === "profiles") return <ProfilesView />;
   if (view === "changes") return <ChangesView />;
   return <TableView />;
+}
+
+/** Every vendor trunk as a checkbox, searchable by trunk or enterprise name (§13.23, team trial round 2). */
+function VendorTrunkChecks({ ids, onChange }: { ids: number[]; onChange: (ids: number[]) => void }) {
+  const trunks = useQuery({
+    queryKey: ["list", "vendor_trunks", "checklist"],
+    queryFn: () =>
+      fetchListPage<{ id: number; name: string; enterpriseName?: string; status?: string }>("vendor_trunks", {
+        limit: 4000,
+        withTotal: false,
+        sort: [{ field: "name", dir: "asc" }],
+      }),
+    staleTime: 60_000,
+  });
+  const items = useMemo<CheckItem<number>[]>(
+    () =>
+      (trunks.data?.rows ?? []).map((t) => ({
+        value: t.id,
+        label: t.name,
+        detail: t.enterpriseName,
+        muted: t.status !== undefined && t.status !== "active",
+      })),
+    [trunks.data],
+  );
+  if (trunks.isPending) return <div className="muted">Loading vendor trunks…</div>;
+  return (
+    <CheckList
+      items={items}
+      selected={ids}
+      onChange={onChange}
+      label="Vendor trunks"
+      placeholder="Search trunk or vendor…"
+      height={220}
+      autoFocus={false}
+    />
+  );
 }

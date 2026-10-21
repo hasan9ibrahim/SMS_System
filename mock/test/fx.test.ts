@@ -4,7 +4,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { bigEnough, checkProvider, fires, runFxRefresh } from "../src/api/fx.js";
+import { bigEnough, checkProvider, fires, referenceRate, runFxRefresh, sourceQuote } from "../src/api/fx.js";
 import { dailyMoments, platformDateTime } from "../src/platform.js";
 
 const app = await buildServer({ socket: false });
@@ -135,11 +135,26 @@ test("scheduler: hourly check changes only big moves, the daily update takes eve
     await pool.query("UPDATE fx_provider SET last_daily_at = $1 WHERE id = 1", [
       new Date(lastDaily.getTime() - 86_400_000),
     ]);
+    // One rate set away from the source's quote: the daily update takes the quote again.
+    const iso = Object.keys(a)[0]!;
+    await pool.query("INSERT INTO currency_rates (iso, rate_per_eur, valid_from) VALUES ($1, $2, now())", [
+      iso,
+      a[iso]! * 1.03,
+    ]);
+    const before = Date.now();
     assert.equal(await runFxRefresh(pool, now + 120_000), "daily");
     const b = await latest();
+    const { rows: first } = await pool.query(
+      "SELECT rate_per_eur FROM currency_rates WHERE iso = $1 ORDER BY valid_from LIMIT 1",
+      [iso],
+    );
+    // The quote is the same all hour; either side of an hour turning over during the update counts.
+    const quotes = [before, Date.now()].map((t) =>
+      sourceQuote("fixer", iso, referenceRate(iso, Number(first[0].rate_per_eur)), t),
+    );
     assert.ok(
-      Object.keys(b).some((k) => b[k] !== a[k]),
-      "the daily update changed rates",
+      quotes.some((q) => Math.abs(b[iso]! - q) < 1e-6),
+      `the daily update took the source's quote: ${b[iso]} vs ${quotes.join(" / ")}`,
     );
     const { rows } = await pool.query("SELECT last_message FROM fx_provider WHERE id = 1");
     assert.match(String(rows[0].last_message), /Daily update/);
@@ -194,4 +209,16 @@ test("a sync checks the alerts: a tiny threshold fires and e-mails", { skip }, a
   assert.match(String(rows[0].subject), /GBP/);
   assert.equal((await call("DELETE", `/exchange-rates/alerts/${id}`)).statusCode, 204);
   if (sync.json().change) await call("POST", `/changes/${sync.json().change.id}/undo`, {});
+});
+
+test("a source quotes the same rate all hour, near the anchor; sources differ slightly (team trial round 2)", () => {
+  const h = Date.UTC(2026, 9, 21, 9, 0, 0);
+  const q = sourceQuote("xe", "USD", 1.09, h + 60_000);
+  assert.equal(sourceQuote("xe", "USD", 1.09, h + 59 * 60_000), q, "same quote within the hour");
+  for (let i = 0; i < 24 * 60; i++) {
+    const v = sourceQuote("xe", "USD", 1.09, h + i * 3_600_000);
+    assert.ok(Math.abs(v / 1.09 - 1) <= 0.0071, `stays near the anchor: ${v}`);
+  }
+  const ecb = sourceQuote("ecb", "USD", 1.09, h);
+  assert.ok(Math.abs(ecb / sourceQuote("xe", "USD", 1.09, h) - 1) <= 0.002, "sources within 0.2 % of each other");
 });

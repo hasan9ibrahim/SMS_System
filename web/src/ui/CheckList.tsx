@@ -54,6 +54,7 @@ export function CheckList<V extends string | number>({
   label,
   height = 260,
   placeholder = "Search…",
+  autoFocus = true,
 }: {
   items: CheckItem<V>[];
   selected: readonly V[];
@@ -61,6 +62,8 @@ export function CheckList<V extends string | number>({
   label: string;
   height?: number;
   placeholder?: string;
+  /** Focus the search on open (popovers); off inside a form. */
+  autoFocus?: boolean;
 }) {
   const [q, setQ] = useState("");
   const shown = useMemo(() => {
@@ -86,7 +89,7 @@ export function CheckList<V extends string | number>({
           onChange={(e) => setQ(e.target.value)}
           placeholder={placeholder}
           aria-label={`Search ${label}`}
-          autoFocus
+          autoFocus={autoFocus}
         />
       </div>
       <div className="checklist-bar">

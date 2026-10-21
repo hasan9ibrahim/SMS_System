@@ -13211,6 +13211,7 @@ export type components = {
         enterprise: string;
         /** @enum {string} */
         side: "customer" | "vendor";
+        /** @description The enterprise's billing currency (its invoices' currency); traffic rated in another currency is converted at the latest rate. */
         currency: string;
         timezone: string;
         messages: number;
