@@ -69,11 +69,17 @@ async function prepare(): Promise<WriterState | null> {
   try {
     await chQuery(`DROP TABLE IF EXISTS ${TEMPLATES}`);
     await chQuery(`CREATE TABLE ${TEMPLATES} AS edr ENGINE = MergeTree ORDER BY edr_id`);
+    // Two light steps (team trial round 2): pick the templates on a few narrow columns, then copy those rows
+    // whole. Sorting a week of whole rows (about 100 columns) passed the trial server's ClickHouse memory limit.
+    const since = `(SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY`;
     await chQuery(
       `INSERT INTO ${TEMPLATES} SELECT * FROM edr
-        WHERE submit_time > (SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY AND is_final_attempt = 1 AND attempt_no = 1
-        ORDER BY submit_time DESC LIMIT ${PER_OUTCOME} BY c_trunk_id, ${OUTCOME}`,
-      120_000,
+        WHERE submit_time > ${since} AND edr_id IN (
+          SELECT edr_id FROM edr
+           WHERE submit_time > ${since} AND is_final_attempt = 1 AND attempt_no = 1
+           ORDER BY submit_time DESC LIMIT ${PER_OUTCOME} BY c_trunk_id, ${OUTCOME})
+        SETTINGS max_bytes_before_external_sort = 500000000, max_bytes_before_external_group_by = 500000000`,
+      180_000,
     );
     const rows =
       (await chRows<{
