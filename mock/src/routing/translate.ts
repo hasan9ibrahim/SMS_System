@@ -55,7 +55,7 @@ export function initialState(m: TestMessage, ctx: EngineContext): MessageState {
   };
 }
 
-/** `matchCase` false = any case (the Sender ID conditions with Match case off, team trial round 1). */
+/** `matchCase` false = any case (the Sender ID conditions with Case sensitive off, team trial round 1). */
 function patternCheck(
   name: string,
   pattern: string | null,
@@ -78,7 +78,7 @@ function patternCheck(
 
 /**
  * A list entry matches the value exactly; in a Sender ID Template entry each {n} stands for one digit.
- * `matchCase` false compares any case (Sender ID list with Match case off, team trial round 1).
+ * `matchCase` false compares any case (Sender ID list with Case sensitive off, team trial round 1).
  */
 export function entryMatches(entry: string, value: string, matchCase = true): boolean {
   if (!entry.includes("{n}")) return matchCase ? entry === value : entry.toLowerCase() === value.toLowerCase();
@@ -116,7 +116,7 @@ function lengthCheck(name: string, value: string, min: number, max: number): Che
 
 /** The conditions of one rule on the current state. */
 export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext): Check[] {
-  // Match case for the Sender ID conditions: on unless switched off (team trial round 1).
+  // Case sensitive for the Sender ID conditions: on unless switched off (team trial round 1).
   const senderCase = rule.senderMatchCase !== false;
   const checks: (Check | null)[] = [
     rule.startsAt && new Date(rule.startsAt) > ctx.now
@@ -127,17 +127,28 @@ export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext
       : null,
     patternCheck("Sender ID", rule.senderPattern, rule.senderPatternNegate, s.sender, senderCase),
     patternCheck("Receiver ID", rule.receiverPattern, rule.receiverPatternNegate, s.receiver),
-    rule.mccmncs.length
+    rule.mccmncs.length || rule.mccmncPattern
       ? (() => {
           const code = s.mccmnc;
-          // Exact codes: a 3-digit code is the "All networks" entry only (team trial round 1).
-          const hit = code !== null && rule.mccmncs.includes(code);
+          // Exact codes: a 3-digit code is the "All networks" entry only (team trial round 1); or the MCCMNC
+          // regex, as on route rules (team trial round 2). Either one is a hit.
+          const inList = code !== null && rule.mccmncs.includes(code);
+          const re = rule.mccmncPattern ? compile(rule.mccmncPattern, "") : null;
+          if (rule.mccmncPattern && !re)
+            return { condition: "MCCMNC", ok: false, detail: `invalid pattern ${rule.mccmncPattern}` };
+          const hit = inList || (code !== null && !!re?.test(code));
+          const what = [
+            rule.mccmncs.length
+              ? `in ${rule.mccmncs.slice(0, 5).join(", ")}${rule.mccmncs.length > 5 ? ` +${rule.mccmncs.length - 5}` : ""}`
+              : "",
+            rule.mccmncPattern ? `matching ${rule.mccmncPattern}` : "",
+          ]
+            .filter(Boolean)
+            .join(" or ");
           return {
             condition: "MCCMNC",
             ok: hit !== rule.mccmncNegate,
-            detail: `${code ?? "unknown network"} ${hit ? "is" : "is not"} in ${rule.mccmncs.slice(0, 5).join(", ")}${
-              rule.mccmncs.length > 5 ? ` +${rule.mccmncs.length - 5}` : ""
-            }${rule.mccmncNegate ? " (Not Match)" : ""}`,
+            detail: `${code ?? "unknown network"} ${hit ? "is" : "is not"} ${what}${rule.mccmncNegate ? " (Not Match)" : ""}`,
           };
         })()
       : null,
@@ -192,7 +203,7 @@ export const fillContentTemplate = (template: string, original: string) =>
 
 /** Content rewrite: replace the Regex Index group (or the whole match), then the MSG Template. */
 /**
- * Words or phrases replaced as typed (no regex; team trial round 1). Whole words and exact case by default
+ * Words or phrases replaced as typed (no regex; team trial round 1). Whole words (not part of a word) and exact case by default
  * (match case off ignores case; team trial round 1); removing a word also tidies the space it leaves.
  */
 export function replaceWords(text: string, words: readonly ContentWordRule[] | null | undefined): string {

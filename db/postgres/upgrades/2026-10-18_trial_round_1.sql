@@ -310,3 +310,7 @@ ALTER TABLE vendor_trunks ALTER COLUMN allowed_src_npi DROP NOT NULL, ALTER COLU
 ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_ton DROP NOT NULL;
 ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_npi DROP NOT NULL;
 ALTER TABLE vendor_trunks ALTER COLUMN max_msg_len DROP NOT NULL, ALTER COLUMN max_msg_len SET DEFAULT NULL;
+
+-- Translation rules: MCCMNC regex, Is Continue off by default (migration 060, §6.4).
+ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS mccmnc_pattern text;
+ALTER TABLE translation_rules ALTER COLUMN continue_after SET DEFAULT false;

@@ -47,6 +47,7 @@ const COLUMNS: [keyof Fields, string][] = [
   ["receiverPatternNegate", "receiver_pattern_negate"],
   ["mccmncs", "mccmncs"],
   ["mccmncNegate", "mccmnc_negate"],
+  ["mccmncPattern", "mccmnc_pattern"],
   ["contentPattern", "content_pattern"],
   ["contentPatternNegate", "content_pattern_negate"],
   ["senderListId", "sender_list_id"],
@@ -171,7 +172,7 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
   const errors: FieldError[] = [];
   const err = (path: string, message: string) => errors.push({ path, message });
   if (!input.name.trim()) err("/name", "required");
-  for (const f of ["senderPattern", "receiverPattern", "contentPattern", "contentRegex"] as const) {
+  for (const f of ["senderPattern", "receiverPattern", "mccmncPattern", "contentPattern", "contentRegex"] as const) {
     const v = input[f];
     if (v && !compile(v)) err(`/${f}`, "not a valid regular expression");
   }
@@ -354,6 +355,8 @@ const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
   contentWords: (input.contentWords ?? []).filter((w) => w.find.trim() !== ""),
   // Missing (older clients) means Match case on for the Sender ID conditions (team trial round 1).
   senderMatchCase: input.senderMatchCase ?? true,
+  // Missing (older clients) means no MCCMNC regex (team trial round 2).
+  mccmncPattern: input.mccmncPattern?.trim() || null,
 });
 
 export function createTranslationRule(request: FastifyRequest, reply: FastifyReply) {

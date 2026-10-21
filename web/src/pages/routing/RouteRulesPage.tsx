@@ -75,6 +75,87 @@ function VendorsDialog({ id, done }: { id: number; done: () => void }) {
   );
 }
 
+/** A rule has what it needs to run: customer trunks, and vendors unless it blocks (team trial round 2). */
+export function readyToRun(r: RouteRuleDetail): boolean {
+  const customers = r.customerTrunkMode === "inclusive" && r.customerTrunkIds.length > 0;
+  const vendors = r.routeType === "block" || r.vendors.length > 0 || (r.vendorTrunkIds ?? []).length > 0;
+  return customers && vendors;
+}
+
+/**
+ * Step 2 of New rule (team trial round 2): the conditions and vendors of the rule just added, edited as in the
+ * detail panel (each save is one change, §13.10). "Rule on" ticks itself once the rule has customer trunks and
+ * vendors, unless switched by hand; Done saves it.
+ */
+function NewRuleSetup({ id, done }: { id: number; done: () => void }) {
+  const rule = useRouteRule(id);
+  const { save, saving } = useSaver(rule.data);
+  const [manual, setManual] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const r = rule.data;
+  const ready = r ? readyToRun(r) : false;
+  const on = manual ?? ready;
+  const finish = async () => {
+    if (r && (r.status === "active") !== on) {
+      const err = await save({ status: on ? "active" : "inactive" }, on ? "Rule on" : "Rule off");
+      if (err) return setError(err);
+    }
+    done();
+  };
+  return (
+    <Modal
+      title={`New rule #${id} ${r?.name ?? ""} · conditions and vendors`}
+      width={1180}
+      onClose={() => void finish()}
+      footer={
+        <>
+          <label className="toggle-inline" title="On by default once the rule has customer trunks and vendors">
+            <input type="checkbox" checked={on} onChange={(e) => setManual(e.target.checked)} />
+            Rule on
+          </label>
+          <span className="fb-spacer" />
+          <Button variant="primary" onClick={() => void finish()} disabled={saving}>
+            Done
+          </Button>
+        </>
+      }
+    >
+      {!r ? (
+        <p className="muted">Loading…</p>
+      ) : (
+        <div className="new-rule-setup">
+          <section>
+            <div className="nrs-head">
+              <strong>Conditions</strong>
+              <span className="fb-spacer" />
+              <AddCondition id={id} />
+            </div>
+            <ConditionsSection id={id} />
+            {!ready && (
+              <p className="muted small">
+                Add a Trunk condition with the customer trunks{r.routeType === "block" ? "" : " and the vendors below"};
+                the rule then turns on by default.
+              </p>
+            )}
+          </section>
+          <section>
+            <div className="nrs-head">
+              <strong>Vendors</strong>
+            </div>
+            <VendorsSection
+              key={r.updatedAt}
+              rule={r}
+              saving={saving}
+              onSave={(patch) => save(patch, "Vendors saved")}
+            />
+          </section>
+          {error && <p className="error-text">{error}</p>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /** Vendors are viewed in the panel and edited in the popup (team trial round 1). */
 function VendorsSectionFor({ id }: { id: number }) {
   const rule = useRouteRule(id);
@@ -229,6 +310,8 @@ export function RouteRulesPage() {
     if (id) {
       showRule(id);
       setSection("conditions");
+      // Conditions and vendors right away, in the same flow (team trial round 2).
+      await ask<void>((d) => <NewRuleSetup id={id} done={() => d()} />);
     }
   };
 

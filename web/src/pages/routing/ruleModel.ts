@@ -199,7 +199,7 @@ export function conditionChips(
         .join(" · "),
     });
   };
-  // Sender conditions match the exact capitals unless Match case is off (team trial round 1).
+  // Sender conditions match the exact capitals unless Case sensitive is off (team trial round 1).
   pattern("sender", rule.senderPattern, rule.senderPatternNegate, rule.senderListId, rule.senderMatchCase === false);
   pattern("receiver", rule.receiverPattern, rule.receiverPatternNegate, rule.receiverListId);
   pattern("content", rule.contentPattern, rule.contentPatternNegate);
@@ -366,7 +366,7 @@ export function vendorSwitches(
  * Sender, receiver and content conditions without regex (team trial round 1): a list of values that
  * becomes the pattern the rule stores (the contract and the switch keep one regex). "Is one of" =
  * ^(?:A|B)$, "starts with" = ^(?:A|B), "contains" = (?:A|B). Receiver and content ignore case in the switch;
- * sender conditions match the exact capitals unless the rule's Match case is off (team trial round 1).
+ * sender conditions match the exact capitals unless the rule's Case sensitive is off (team trial round 1).
  */
 export type PatternKind = "is" | "starts" | "contains" | "regex";
 export const PATTERN_KINDS: Record<PatternKind, string> = {

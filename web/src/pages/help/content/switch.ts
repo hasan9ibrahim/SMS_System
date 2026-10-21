@@ -153,7 +153,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Is Continue",
                 what: "When ticked, the trunk carries on with its next rule after this one matches. When cleared, this rule is the last one to run for a matching message. A trunk can override this for itself on its Rules tab.",
-                values: "Ticked by default.",
+                values: "Cleared by default for a new rule.",
               },
               {
                 name: "Start",
@@ -233,7 +233,7 @@ export const topics: HelpTopic[] = [
                 values: "Regex, up to 500 characters. Example: `^[A-Z]+$` (letters only), `^TEST`.",
               },
               {
-                name: "Match case (next to Sender ID)",
+                name: "Case sensitive (next to Sender ID)",
                 what: 'Ticked: the Sender ID pattern and the Sender ID List must match the exact capitals (`BANK` does not match "Bank"). Cleared: any mix of capitals matches, and the rule summary shows **(any case)**. Receiver and text conditions are not affected.',
                 values: "Ticked by default.",
               },
@@ -249,7 +249,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Sender ID List",
-                what: "The Sender ID must be (or, with Not Match, must not be) one of the entries in a number list. Any list type can be used. **New list** creates a list without leaving the form. Capitals count unless Match case is cleared.",
+                what: "The Sender ID must be (or, with Not Match, must not be) one of the entries in a number list. Any list type can be used. **New list** creates a list without leaving the form. Capitals count unless Case sensitive is cleared.",
                 values:
                   "Pick a list from [[number-lists]]. In a Sender ID Template entry each `{n}` stands for one digit.",
               },
@@ -260,9 +260,14 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "MCCMNC",
-                what: "Limits the rule to the receiver's network. Type codes in the picker, or click **Pick from list…** to tick countries and networks in a tree with search, **Select all** / **Clear all** (or **Select shown** / **Clear shown** while searching).",
+                what: "Limits the rule to the receiver's network. Tick countries and networks in the tree; search by country, network or code (`%` and `_` wildcards), with **Select all** / **Clear all** (or **Select shown** / **Clear shown** while searching).",
                 values:
                   "Network codes like `23410`. A 3-digit MCC (for example `234`) is the country's “All networks” entry only; to cover every network in a country, tick the whole country in the tree.",
+              },
+              {
+                name: "MCCMNC (regex)",
+                what: "A regular expression on the receiver's MCCMNC code, instead of (or as well as) ticking networks. A network matches when it is ticked or matches the pattern; **Not Match** next to MCCMNC turns both around.",
+                values: "For example `^415` (every Lebanese network) or `^(415|420)`. Empty = not used.",
               },
               {
                 name: "Sender ID Min Length / Sender ID Max Length",
@@ -469,12 +474,12 @@ export const topics: HelpTopic[] = [
                 values: "Up to 500 characters. Example: `no charge`, or empty.",
               },
               {
-                name: "Whole word",
+                name: "Not part of a word",
                 what: "Only matches the word on its own, not inside a longer word (`free` does not match `freedom`). Works for Arabic and accented letters too.",
                 values: "Ticked by default.",
               },
               {
-                name: "Match case",
+                name: "Case sensitive",
                 what: 'Only matches the exact capitals you typed: with `code`, "Code", "cOde" and "CODE" are left alone. Clear it to match any mix of capitals.',
                 values: "Ticked by default.",
               },

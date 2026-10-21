@@ -231,17 +231,18 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
           onChange={(e) => set({ comment: e.target.value || null })}
         />
       </label>
-      <label className="toggle-inline">
-        <input
-          type="checkbox"
-          checked={g.status === "active"}
-          onChange={(e) => set({ status: e.target.checked ? "active" : "inactive" })}
-        />
-        Rule on
-      </label>
-      {!rule && (
+      {rule ? (
+        <label className="toggle-inline">
+          <input
+            type="checkbox"
+            checked={g.status === "active"}
+            onChange={(e) => set({ status: e.target.checked ? "active" : "inactive" })}
+          />
+          Rule on
+        </label>
+      ) : (
         <p className="muted small">
-          The rule starts off. Add its conditions and vendors in the detail panel, test it, then turn it on.
+          Next: the rule's conditions and vendors. It turns on by default once it has customer trunks and vendors.
         </p>
       )}
       {error && <p className="error-text">{error}</p>}

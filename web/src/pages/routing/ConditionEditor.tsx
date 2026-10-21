@@ -96,7 +96,7 @@ function PatternBuilder({
   setValues: (v: string[]) => void;
   pattern: string;
   setPattern: (p: string) => void;
-  /** Sender only: Match case (team trial round 1); receiver and content always ignore case. */
+  /** Sender only: Case sensitive (team trial round 1); receiver and content always ignore case. */
   matchCase?: boolean;
 }) {
   const [draft, setDraft] = useState("");
@@ -325,7 +325,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   );
   const [patternValues, setPatternValues] = useState<string[]>(kinds.includes(initial.kind) ? initial.values : []);
   const [negate, setNegate] = useState(rule[`${pat}PatternNegate`]);
-  // Match case for the Sender conditions, on unless switched off (team trial round 1).
+  // Case sensitive for the Sender conditions, on unless switched off (team trial round 1).
   const [matchCase, setMatchCase] = useState(rule.senderMatchCase !== false);
   const [listId, setListId] = useState<number | null>(
     key === "sender" ? rule.senderListId : key === "receiver" ? rule.receiverListId : null,
@@ -440,7 +440,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                   title="On: the Sender ID values, pattern and list must match the exact capitals. Off: any case."
                 >
                   <input type="checkbox" checked={matchCase} onChange={(e) => setMatchCase(e.target.checked)} />
-                  Match case
+                  Case sensitive
                 </label>
               )}
             </div>
