@@ -14,6 +14,7 @@ import type {
   FxProviderUpdate,
 } from "@sms/contract";
 import { dailyMoments, PLATFORM_TIMEZONE } from "../platform.js";
+import { CURRENCIES } from "../generator/reference.js";
 import { decryptSecret, encryptSecret } from "../admin/passwords.js";
 import { db, withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
@@ -139,9 +140,19 @@ function unit(text: string): number {
 }
 
 /**
+ * The rate per EUR a source's quotes stay around: the fake data's reference value (the seed's latest day, from
+ * the generator's currency list), or for a currency added later its first stored rate.
+ */
+export function referenceRate(iso: string, fallback: number): number {
+  const eur = CURRENCIES.find((c) => c.iso === "EUR")!.perUsd;
+  const c = CURRENCIES.find((x) => x.iso === iso);
+  return c ? Number((c.perUsd / eur).toFixed(8)) : fallback;
+}
+
+/**
  * What a rate source quotes for one EUR in `iso` at `now` (this phase never calls a rate API). The same
- * source gives the same quote all hour; the quote moves slowly within ±0.6 % of the currency's first rate
- * (the anchor), and each source differs from the others by at most 0.1 %, as real sources do.
+ * source gives the same quote all hour; the quote moves slowly within ±0.6 % of the currency's reference rate
+ * (the reference rate), and each source differs from the others by at most 0.1 %, as real sources do.
  */
 export function sourceQuote(provider: string, iso: string, anchor: number, now = Date.now()): number {
   if (!(anchor > 0)) return anchor;
@@ -171,7 +182,9 @@ export async function refreshRates(
     const code = String(r.iso).trim();
     // Manual entry: nothing to fetch, the rates stay as typed.
     const after =
-      r.provider === "manual" ? before : sourceQuote(String(r.provider), code, Number(r.anchor ?? before), now);
+      r.provider === "manual"
+        ? before
+        : sourceQuote(String(r.provider), code, referenceRate(code, Number(r.anchor ?? before)), now);
     return { id: Number(r.id), iso: code, before, after };
   });
   const moves = checked.filter(

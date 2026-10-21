@@ -2006,7 +2006,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "**Sync Rates** on Currency Exchange takes every rate at once, like the daily update. In the trial nothing is sent to the rate API, even with an account set up: each source's quote is simulated (the same all hour, staying close to the currency's starting rate, a little different per source) and the system takes that quote.",
+            text: "**Sync Rates** on Currency Exchange takes every rate at once, like the daily update. In the trial nothing is sent to the rate API, even with an account set up: each source's quote is simulated (the same all hour, staying close to the currency's reference rate, a little different per source) and the system takes that quote.",
           },
           {
             kind: "fields",

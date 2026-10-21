@@ -4,7 +4,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { bigEnough, checkProvider, fires, runFxRefresh, sourceQuote } from "../src/api/fx.js";
+import { bigEnough, checkProvider, fires, referenceRate, runFxRefresh, sourceQuote } from "../src/api/fx.js";
 import { dailyMoments, platformDateTime } from "../src/platform.js";
 
 const app = await buildServer({ socket: false });
@@ -141,9 +141,21 @@ test("scheduler: hourly check changes only big moves, the daily update takes eve
       iso,
       a[iso]! * 1.03,
     ]);
+    const before = Date.now();
     assert.equal(await runFxRefresh(pool, now + 120_000), "daily");
     const b = await latest();
-    assert.ok(Math.abs(b[iso]! / a[iso]! - 1) < 0.01, "the daily update set the rate back to the source's quote");
+    const { rows: first } = await pool.query(
+      "SELECT rate_per_eur FROM currency_rates WHERE iso = $1 ORDER BY valid_from LIMIT 1",
+      [iso],
+    );
+    // The quote is the same all hour; either side of an hour turning over during the update counts.
+    const quotes = [before, Date.now()].map((t) =>
+      sourceQuote("fixer", iso, referenceRate(iso, Number(first[0].rate_per_eur)), t),
+    );
+    assert.ok(
+      quotes.some((q) => Math.abs(b[iso]! - q) < 1e-6),
+      `the daily update took the source's quote: ${b[iso]} vs ${quotes.join(" / ")}`,
+    );
     const { rows } = await pool.query("SELECT last_message FROM fx_provider WHERE id = 1");
     assert.match(String(rows[0].last_message), /Daily update/);
   } finally {
