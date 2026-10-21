@@ -1,8 +1,8 @@
 // Exchange rates against EUR, the base currency (team trial round 2): the source (any rate API: XE, Open
 // Exchange Rates, Fixer, ExchangeRate-API, the ECB, a custom JSON URL, or manual entry; round 3), the hourly
 // check that only changes rates which moved at least the minimum change, the daily update that takes every
-// rate whatever the difference, and currency alerts. This phase never calls a rate API: checks simulate small
-// market moves. The API key is admin-only, stored encrypted and never returned (§13.22).
+// rate whatever the difference, and currency alerts. This phase never calls a rate API: each source's quote
+// is simulated (sourceQuote) and the system takes that quote. The API key is admin-only, stored encrypted and never returned (§13.22).
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -131,19 +131,48 @@ export interface RefreshResult {
  * at least the minimum change, or all of them when `force` (daily update, Sync Rates), as one undoable change,
  * then checks the currency alerts. Shared by Sync Rates, the hourly check and the daily update.
  */
+/** A stable 0..1 number for a text (FNV-1a). */
+function unit(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h >>> 0) / 2 ** 32;
+}
+
+/**
+ * What a rate source quotes for one EUR in `iso` at `now` (this phase never calls a rate API). The same
+ * source gives the same quote all hour; the quote moves slowly within ±0.6 % of the currency's first rate
+ * (the anchor), and each source differs from the others by at most 0.1 %, as real sources do.
+ */
+export function sourceQuote(provider: string, iso: string, anchor: number, now = Date.now()): number {
+  if (!(anchor > 0)) return anchor;
+  const hour = Math.floor(now / 3_600_000);
+  const wave = Math.sin((2 * Math.PI * hour) / (90 + Math.floor(unit(iso) * 60)) + unit(iso) * 6.283);
+  const bias = (unit(`${provider}:${iso}`) - 0.5) * 0.002;
+  return Number((anchor * (1 + 0.006 * wave + bias)).toFixed(8));
+}
+
 export async function refreshRates(
   pool: pg.Pool,
   by: { userId: number | null; ip: string | null; note: string },
   opts: { force: boolean; mode?: "percent" | "amount"; min?: number } = { force: true },
 ): Promise<RefreshResult> {
+  // The rate each currency gets is what the selected source quotes now (simulated, see sourceQuote), not a
+  // random step from the current rate, so rates follow the source and do not drift (team trial round 2).
   const { rows } = await pool.query(
-    `SELECT c.id, c.iso, cl.rate_per_eur FROM currencies c JOIN currency_latest cl ON cl.iso = c.iso
+    `SELECT c.id, c.iso, cl.rate_per_eur,
+            (SELECT r.rate_per_eur FROM currency_rates r WHERE r.iso = c.iso ORDER BY r.valid_from LIMIT 1) AS anchor,
+            COALESCE((SELECT p.provider FROM fx_provider p WHERE p.id = 1), 'xe') AS provider
+       FROM currencies c JOIN currency_latest cl ON cl.iso = c.iso
       WHERE c.deleted_at IS NULL AND c.iso <> 'EUR' ORDER BY c.iso`,
   );
+  const now = Date.now();
   const checked: RateMove[] = rows.map((r) => {
     const before = Number(r.rate_per_eur);
-    const after = Number((before * (1 + (Math.random() - 0.5) * 0.012)).toFixed(8));
-    return { id: Number(r.id), iso: String(r.iso).trim(), before, after };
+    const code = String(r.iso).trim();
+    // Manual entry: nothing to fetch, the rates stay as typed.
+    const after =
+      r.provider === "manual" ? before : sourceQuote(String(r.provider), code, Number(r.anchor ?? before), now);
+    return { id: Number(r.id), iso: code, before, after };
   });
   const moves = checked.filter(
     (m) => m.after !== m.before && (opts.force || bigEnough(opts.mode ?? "percent", opts.min ?? 0, m.before, m.after)),

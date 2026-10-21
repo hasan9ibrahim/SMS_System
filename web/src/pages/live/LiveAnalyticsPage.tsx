@@ -44,6 +44,7 @@ import {
   TONED,
   nextSort,
   type ColumnSort,
+  type Fmt,
   type Settings,
 } from "./analyticsTree";
 
@@ -205,6 +206,9 @@ function DetailPanel({
     </section>
   );
 }
+
+/** Columns in money: shown in the platform currency (EUR, §13.4, team trial round 2). */
+const moneyCols = new Set<Fmt>(["money", "rate"]);
 
 /**
  * Pushes on live:analytics pace the refresh; at most one per chosen interval, and none while the previous
@@ -626,6 +630,7 @@ export function LiveAnalyticsPage() {
     queryFn: () => runMasterReport({ ...levelQuery(settings, top ?? "customer", []), limit: 1 }),
     placeholderData: keepPreviousData,
   });
+  const currency = total.data?.currency ?? "EUR";
   usePageStatus({
     rows: total.data && top ? `${total.data.total.toLocaleString("en-US")} × ${levelLabel(top).toLowerCase()}` : "",
     shortcuts: "+ breaks a row down by any level · EDRs opens the messages of a row · times in UTC",
@@ -780,11 +785,13 @@ export function LiveAnalyticsPage() {
                 <th
                   key={c.metric}
                   className="num"
-                  title={c.title}
+                  title={moneyCols.has(c.fmt) ? `${c.title} · in ${currency}` : c.title}
                   aria-sort={sort?.key === c.metric ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                 >
                   <button type="button" className="la-sort" onClick={() => setSort(nextSort(sort, c.metric))}>
                     {c.label}
+                    {/* Money and rates are in the platform currency (EUR), whatever each partner bills in. */}
+                    {moneyCols.has(c.fmt) && <span className="muted small"> {currency}</span>}
                     {arrow(c.metric)}
                   </button>
                 </th>

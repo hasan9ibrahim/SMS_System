@@ -46,7 +46,7 @@ export const topics: HelpTopic[] = [
               "[[balances|Enterprise balance]]: what every partner owes or has in credit right now.",
               "[[vendor-invoices|Vendor invoices]]: the vendors' invoices to us, checked automatically against our own figures.",
               "[[soa|SOA]] and [[soa-report|SOA report]]: the statement of account sent to a partner, and the copies sent or exported.",
-              "[[charges|Charges calculator]]: usage charges for any period, without making an invoice.",
+              "[[charges|Charges calculator]]: usage charges for any period, without making an invoice. Each partner's charges are in its billing currency (the currency of its invoices), with the platform-currency amount beside them.",
               "[[currencies|Currencies]]: the currency list and exchange rates.",
             ],
           },
@@ -2006,7 +2006,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "**Sync Rates** on Currency Exchange takes every rate at once, like the daily update. In the trial, checks are simulated (small market moves) and nothing is sent to the rate API, even with an account set up.",
+            text: "**Sync Rates** on Currency Exchange takes every rate at once, like the daily update. In the trial nothing is sent to the rate API, even with an account set up: each source's quote is simulated (the same all hour, staying close to the currency's starting rate, a little different per source) and the system takes that quote.",
           },
           {
             kind: "fields",

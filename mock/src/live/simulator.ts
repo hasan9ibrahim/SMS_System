@@ -171,6 +171,18 @@ interface DestTotals {
   delivered: number;
 }
 
+/** One destination in the traffic mix (last 7 days): its share and what one message brings (§13.3). */
+interface DestMix {
+  code: string;
+  country: string;
+  network: string;
+  weight: number;
+  revenue: number;
+  margin: number;
+  okP: number;
+  dlP: number;
+}
+
 export interface Simulator {
   /**
    * Set once live EDRs are being written (live/edrWriter.ts): revenue, cost and the vendor of each message
@@ -180,6 +192,8 @@ export interface Simulator {
   trunks: SimTrunk[];
   vendors: SimVendor[];
   today: DayTotals;
+  /** Where messages go; kept across midnight, when today's destination figures start again from zero. */
+  destMix: DestMix[];
   /** Index of the slot being filled in each trunk's ring. */
   slotIndex: number;
   lastTick: number;
@@ -242,7 +256,12 @@ export function levelAt(segs: Segment[], t: number): number {
 
 // ---------------------------------------------------------------- loading
 
-async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendor[]; today: DayTotals }> {
+async function loadFromStores(): Promise<{
+  trunks: SimTrunk[];
+  vendors: SimVendor[];
+  today: DayTotals;
+  destMix: DestMix[];
+}> {
   const now = Date.now();
   const today: DayTotals = {
     day: platformDay(now),
@@ -280,7 +299,7 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
     chRows<Stat>(
       `SELECT ${col} AS id, count() AS n, toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
               countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl, countIf(v_trunk_id > 0) AS sent
-         FROM edr WHERE submit_time > (SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY AND ${col} > 0 GROUP BY id`,
+         FROM edr WHERE submit_time > (SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
       15_000,
     );
   const day = (col: string) =>
@@ -290,9 +309,10 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
          FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
       15_000,
     );
-  const [cStats, vStats, cDay, vDay, dDay] = await Promise.all([
+  const [cStats, vStats, dStats, cDay, vDay, dDay] = await Promise.all([
     stats("c_trunk_id"),
     stats("v_trunk_id"),
+    stats("c_mccmnc"),
     day("c_enterprise_id"),
     day("v_enterprise_id"),
     day("c_mccmnc"),
@@ -419,7 +439,25 @@ async function loadFromStores(): Promise<{ trunks: SimTrunk[]; vendors: SimVendo
       delivered: Number(s.dl),
     });
   }
-  return { trunks, vendors, today };
+  const destMix: DestMix[] = [];
+  for (const d of dStats?.length ? dStats : (dDay ?? [])) {
+    const code = String(d.id);
+    const n = Number(d.n);
+    if (!n || code === "0" || code === "") continue;
+    const [country, network] = codeName.get(code) ?? ([code, ""] as const);
+    const ok = Number(d.ok);
+    destMix.push({
+      code,
+      country,
+      network,
+      weight: n,
+      revenue: d.rev / n,
+      margin: (d.rev - d.cost) / n,
+      okP: ok / n,
+      dlP: ok > 0 ? Number(d.dl) / ok : 0,
+    });
+  }
+  return { trunks, vendors, today, destMix };
 }
 
 /** Fills two hours of per-minute history and an hour of 5-second chart slots from the timelines. */
@@ -553,9 +591,11 @@ function rollMinute(
 
 export async function createSimulator(): Promise<Simulator> {
   let loaded: Awaited<ReturnType<typeof loadFromStores>>;
+  let demo = false;
   try {
     loaded = await loadFromStores();
   } catch (err) {
+    demo = !process.env.NODE_TEST_CONTEXT;
     console.warn(`live simulator: stores unavailable (${(err as Error).message}), using demo trunks`);
     // No database: a handful of fake trunks so the shell still shows live values (CLAUDE.md rule 1).
     const now = Date.now();
@@ -596,6 +636,7 @@ export async function createSimulator(): Promise<Simulator> {
     loaded = {
       trunks,
       vendors: [],
+      destMix: [],
       today: {
         day: platformDay(now),
         attempts: 0,
@@ -619,7 +660,26 @@ export async function createSimulator(): Promise<Simulator> {
     moneyFromWriter: process.env.SIM_WRITE_EDRS !== "0" && !process.env.NODE_TEST_CONTEXT,
   };
   seedHistory(sim, Date.now());
+  if (demo) retryLoad(sim);
   return sim;
+}
+
+/**
+ * After a failed start (stores down or busy, e.g. a statement timeout while the server starts) the demo
+ * trunks stand in; the real ones are loaded again every minute and replace them (team trial round 2).
+ */
+function retryLoad(sim: Simulator) {
+  const timer = setInterval(() => {
+    loadFromStores()
+      .then((loaded) => {
+        clearInterval(timer);
+        Object.assign(sim, loaded);
+        seedHistory(sim, Date.now());
+        console.log("live simulator: stores loaded, demo trunks replaced");
+      })
+      .catch((err: Error) => console.warn(`live simulator: stores still unavailable (${err.message})`));
+  }, 60_000);
+  timer.unref();
 }
 
 // ---------------------------------------------------------------- one second
@@ -802,22 +862,25 @@ export function step(sim: Simulator, now = Date.now()) {
     p.delivered += dl;
     sim.today.vendors.set(v.enterpriseId, p);
   }
-  // Each message goes to one destination, picked by today's mix.
-  const dests = [...sim.today.destinations.values()];
-  const dSum = dests.reduce((a, d) => a + d.attempts, 0);
+  // Each message goes to one destination, picked by the 7-day mix; today's figures grow from it, also
+  // after midnight when they start again from zero (team trial round 2).
+  const mix = sim.destMix;
+  const dSum = mix.reduce((a, d) => a + d.weight, 0);
   if (dSum > 0)
     for (let k = 0; k < total; k++) {
       let r = Math.random() * dSum;
-      const d = dests.find((x) => (r -= x.attempts) <= 0) ?? dests[0]!;
-      const per = d.attempts > 0 ? 1 / d.attempts : 0;
-      const okP = d.successful * per;
-      const dlP = d.successful > 0 ? d.delivered / d.successful : 0;
-      d.revenue += d.revenue * per;
-      d.margin += d.margin * per;
+      const m = mix.find((x) => (r -= x.weight) <= 0) ?? mix[0]!;
+      let d = sim.today.destinations.get(m.code);
+      if (!d) {
+        d = { country: m.country, network: m.network, attempts: 0, revenue: 0, margin: 0, successful: 0, delivered: 0 };
+        sim.today.destinations.set(m.code, d);
+      }
+      d.revenue += m.revenue;
+      d.margin += m.margin;
       d.attempts += 1;
-      if (Math.random() < okP) {
+      if (Math.random() < m.okP) {
         d.successful += 1;
-        if (Math.random() < dlP) d.delivered += 1;
+        if (Math.random() < m.dlP) d.delivered += 1;
       }
     }
   return total;

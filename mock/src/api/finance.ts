@@ -21,7 +21,7 @@ import type {
 import { refreshRates } from "./fx.js";
 import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
-import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
+import { PLATFORM_CURRENCY, PLATFORM_PER_EUR, sysToPlatformFactor } from "../currency.js";
 import {
   BALANCE_FROM,
   billingCycleList,
@@ -863,8 +863,15 @@ export function calculateCharges(request: FastifyRequest, reply: FastifyReply) {
   if ((Date.parse(body.to) - Date.parse(body.from)) / 86400_000 > 366)
     return badInput(reply, [{ path: "/to", message: "at most 366 days" }]);
   return withDb(reply, async (pool): Promise<ChargesResult | FastifyReply> => {
+    // Each enterprise's charges are in its billing currency, the currency of its invoices (team trial round 2):
+    // traffic rated in another currency is converted at the latest rate, through the platform currency.
     const { rows: ents } = await pool.query(
-      `SELECT e.id, e.name, COALESCE(e.billing_timezone, 'UTC') AS tz FROM enterprises e
+      `SELECT e.id, e.name, COALESCE(e.billing_timezone, 'UTC') AS tz,
+              COALESCE(b.currency, '${PLATFORM_CURRENCY}') AS cur,
+              COALESCE(cl.rate_per_eur / ${PLATFORM_PER_EUR}, 1) AS per_platform
+         FROM enterprises e
+         LEFT JOIN enterprise_billing b ON b.enterprise_id = e.id
+         LEFT JOIN currency_latest cl ON cl.iso = COALESCE(b.currency, '${PLATFORM_CURRENCY}')
         WHERE ($1::bigint IS NULL OR e.id = $1)`,
       [body.enterpriseId],
     );
@@ -873,6 +880,7 @@ export function calculateCharges(request: FastifyRequest, reply: FastifyReply) {
     for (const e of ents) groups.set(e.tz, [...(groups.get(e.tz) ?? []), Number(e.id)]);
     const name = new Map(ents.map((e) => [Number(e.id), e.name as string]));
     const tzOf = new Map(ents.map((e) => [Number(e.id), e.tz as string]));
+    const billing = new Map(ents.map((e) => [Number(e.id), { cur: e.cur as string, per: Number(e.per_platform) }]));
     const factor = await sysToPlatformFactor();
     const to = new Date(Date.parse(body.to) + 86400_000).toISOString().slice(0, 10);
     const side = (s: "c" | "v", ids: number[], tz: string) => `
@@ -893,15 +901,27 @@ export function calculateCharges(request: FastifyRequest, reply: FastifyReply) {
         )
       : [];
     if (rows === null) return sendProblem(reply, 503, "The EDR store is not reachable");
-    const out = rows
-      .filter((r) => Number(r.msgs) > 0 || r.amount !== 0)
+    // One row per enterprise and side, in its billing currency: an amount rated in that currency counts as is.
+    const merged = new Map<string, { e: number; side: string; msgs: number; amount: number; platform: number }>();
+    for (const r of rows) {
+      const e = Number(r.e);
+      const b = billing.get(e) ?? { cur: PLATFORM_CURRENCY, per: 1 };
+      const key = `${e}:${r.side}`;
+      const m = merged.get(key) ?? { e, side: r.side, msgs: 0, amount: 0, platform: 0 };
+      m.msgs += Number(r.msgs);
+      m.amount += r.cur === b.cur ? r.amount : r.platform * b.per;
+      m.platform += r.platform;
+      merged.set(key, m);
+    }
+    const out = [...merged.values()]
+      .filter((r) => r.msgs > 0 || r.amount !== 0)
       .map((r) => ({
-        enterpriseId: Number(r.e),
-        enterprise: name.get(Number(r.e)) ?? `#${r.e}`,
+        enterpriseId: r.e,
+        enterprise: name.get(r.e) ?? `#${r.e}`,
         side: (r.side === "c" ? "customer" : "vendor") as "customer" | "vendor",
-        currency: r.cur,
-        timezone: tzOf.get(Number(r.e)) ?? "UTC",
-        messages: Number(r.msgs),
+        currency: billing.get(r.e)?.cur ?? PLATFORM_CURRENCY,
+        timezone: tzOf.get(r.e) ?? "UTC",
+        messages: r.msgs,
         amount: money(r.amount),
         amountPlatform: money(r.platform),
       }))
