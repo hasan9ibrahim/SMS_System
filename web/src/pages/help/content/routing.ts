@@ -415,7 +415,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**New rule** and the **E** key (on a selected row) open the rule's general settings. Conditions and vendors are edited in the detail panel.",
+            text: "**Double-click** a rule (or press Enter) to open the detail panel on **Edit**: its general settings, saved in place with **Save**. The panel then has **Configuration** (Category, Customer trunks and Destination, each a block with **Edit**, and the Vendors), **Conditions** (sender, receiver, content, TPS, revenue, time, HLR, multipart), Traffic, History and Test. **New rule** opens one window: fill the general settings and click **Continue**; Category, Customer trunks (side by side, each a list with search and Check all), Destination, Vendors and the other conditions then appear in the same window, each saved as you go; tick **Rule on** and click **Done**.",
           },
           {
             kind: "fields",
@@ -472,9 +472,9 @@ export const topics: HelpTopic[] = [
             title: "How to add a rule",
             items: [
               "Click **New rule**.",
-              "Enter the **Name** and **Priority**, pick the **Route type** and click **Add rule**. The rule is added switched off and the grid shows it with the Conditions section open.",
-              "Click **+ Add condition** and add the conditions (for example Trunk and Destination).",
-              "Open **Vendors**, click **Edit vendors…**, add the vendors and click **Save vendors**.",
+              "Enter the **Name** and **Priority**, pick the **Route type** and click **Continue**. The rule is added switched off and the same window shows Category, Customer trunks, Destination, Vendors and Other conditions.",
+              "Tick the categories and customer trunks (**Inclusive** or **Exclusive**) and pick the destinations; click each block's Save.",
+              "Add the vendors in the Vendors block and click **Save vendors**; add other conditions with **+ Add condition** if needed. Tick **Rule on** and click **Done**.",
               "Open **Test** and run a sample number through the rule.",
               "Turn the rule on: click the hollow dot in the **On** column, or press E and tick **Rule on**.",
             ],
@@ -504,12 +504,12 @@ export const topics: HelpTopic[] = [
             title: "Trunk condition",
             fields: [
               {
-                name: "In the list / Not in the list",
+                name: "Inclusive / Exclusive",
                 what: "Match messages from the chosen customer trunks, or from every trunk except them.",
               },
               {
                 name: "Search customer trunks…",
-                what: "Search and tick the trunks. Each shows its enterprise and category. When the rule has a Category condition, only trunks of those categories are listed (or outside them, for Not in the list).",
+                what: "Search and tick the trunks. Each shows its enterprise and category. When the rule has a Category condition, only trunks of those categories are listed (or outside them, for Exclusive).",
                 values: "At least one trunk.",
               },
             ],
@@ -519,7 +519,7 @@ export const topics: HelpTopic[] = [
             title: "Category condition",
             fields: [
               {
-                name: "In the list / Not in the list",
+                name: "Inclusive / Exclusive",
                 what: "Match messages from customer trunks of the ticked product categories (for example OTP, Promo), or of every other category.",
                 values: "Tick at least one category.",
               },
@@ -530,8 +530,8 @@ export const topics: HelpTopic[] = [
             title: "Destination condition",
             fields: [
               {
-                name: "All / In the list / Not in the list",
-                what: "**All** is every destination, including ones added to the MCCMNC master later. In the list and Not in the list use the destination tree.",
+                name: "All / Inclusive / Exclusive",
+                what: "**All** is every destination, including ones added to the MCCMNC master later. Inclusive and Exclusive use the destination tree.",
               },
               {
                 name: "Destination tree",
@@ -803,6 +803,10 @@ export const topics: HelpTopic[] = [
                 what: "Vendors that leave less margin than this are skipped.",
                 values:
                   "`0.002` = amount in the platform currency, `5%` = % of the sell rate, `-0.001` or `-2%` = allow a small loss. Default 0.",
+              },
+              {
+                name: "+ Add limit",
+                what: "Minimum margin is always shown; the other limits (Skip vendor at % of its TPS, Volume cap) appear when set or when added here.",
               },
               {
                 name: "Skip vendor at % of its TPS",
@@ -1097,7 +1101,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "warning",
-            text: "Saves are refused when: the name is empty; stop is not after start; a pattern is not a valid regular expression; In the list is chosen with nothing picked; NEXT has no next group; an active static rule has no vendor; a vendor's level is above Max route level; percentage shares of a level do not add up to 100; quality weights do not add up to 100; a whitelist has no numbers or list; or an LCR profile is set on a rule that is not Least cost.",
+            text: "Saves are refused when: the name is empty; stop is not after start; a pattern is not a valid regular expression; Inclusive is chosen with nothing picked; NEXT has no next group; an active static rule has no vendor; a vendor's level is above Max route level; percentage shares of a level do not add up to 100; quality weights do not add up to 100; a whitelist has no numbers or list; or an LCR profile is set on a rule that is not Least cost.",
           },
           {
             kind: "tip",

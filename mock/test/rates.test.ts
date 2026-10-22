@@ -138,11 +138,33 @@ describe("rate table list and record (§13.12)", { skip }, () => {
     const scheduled = await lines(rows[0].id, [{ field: "view", op: "eq", value: "scheduled" }]);
     assert.ok(scheduled.total > 0);
     assert.ok(scheduled.rows.every((r: { validFrom: string }) => Date.parse(r.validFrom) > Date.now()));
-    const { rows: neg } = await db().query(
-      "SELECT rate_table_id AS id FROM rate_table_stats WHERE negative_lines > 0 ORDER BY negative_lines DESC LIMIT 1",
+    // Vendor and cost as the route rules choose them for the table's first customer trunk (team trial round 2).
+    const { rows: tbl } = await db().query(
+      `SELECT x.rate_table_id AS id, min(x.customer_trunk_id) AS trunk FROM customer_trunk_rate_tables x
+         JOIN rate_tables rt ON rt.id = x.rate_table_id AND rt.kind = 'customer' AND rt.deleted_at IS NULL
+         JOIN customer_trunks ct ON ct.id = x.customer_trunk_id AND ct.deleted_at IS NULL
+        GROUP BY 1 ORDER BY (SELECT count(*) FROM rate_lines l WHERE l.rate_table_id = x.rate_table_id) DESC LIMIT 1`,
     );
-    const negative = await lines(neg[0].id, [{ field: "negativeMargin", op: "eq", value: true }]);
-    assert.ok(negative.total > 0);
+    const page = await lines(tbl[0].id);
+    const routed = page.rows.filter((r: { routedCost: number | null }) => r.routedCost !== null);
+    assert.ok(routed.length > 0, "lines carry the routed cost");
+    for (const r of routed as { rate: number; routedCost: number; margin: number; routedVendor: string }[]) {
+      assert.ok(Math.abs(r.margin - (r.rate - r.routedCost)) < 1e-5, "margin is rate minus the routed cost");
+      assert.ok(r.routedVendor, "with the routed vendor");
+    }
+    const map = await ok(
+      "queryRouteMap",
+      call("POST", "/route-map/query", {
+        limit: 2000,
+        filter: { logic: "and", conditions: [{ field: "customerTrunkId", op: "eq", value: Number(tbl[0].trunk) }] },
+      }),
+    );
+    const vendorOf = new Map(map.rows.map((m: { mccmnc: string; vendor: string | null }) => [m.mccmnc, m.vendor]));
+    const sample = (routed as { mccmnc: string; senderId: string | null; routedVendor: string }[]).find(
+      (r) => !r.senderId && vendorOf.has(r.mccmnc),
+    );
+    if (sample) assert.equal(sample.routedVendor, vendorOf.get(sample.mccmnc), "the Route map's vendor");
+    const negative = await lines(tbl[0].id, [{ field: "negativeMargin", op: "eq", value: true }]);
     assert.ok(negative.rows.every((r: { margin: number }) => r.margin < 0));
   });
 

@@ -1942,3 +1942,99 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 select.chip-select {
   max-width: 260px;
 }
+
+/* ---------- compact layout (team trial round 2): more room for the grid and its panel ---------- */
+.topbar-main {
+  height: 52px;
+}
+.menu-bar {
+  height: 42px;
+}
+.logo-mark {
+  width: 30px;
+  height: 30px;
+}
+.jump,
+.bell,
+.avatar {
+  height: 36px;
+}
+.bell,
+.avatar {
+  width: 36px;
+}
+.tabstrip {
+  height: 36px;
+}
+.tab {
+  margin-top: 4px;
+}
+/* The tab strip still scrolls sideways (wheel or drag) but shows no scrollbar. */
+.tabs {
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.page {
+  padding: 12px 24px 10px;
+  gap: 10px;
+}
+.page-header:has(> .page-header-top) {
+  gap: 8px;
+}
+.page-header h1 {
+  font-size: 21px;
+}
+.page-heading {
+  gap: 1px;
+}
+.page-subtitle {
+  font-size: 13px;
+}
+.page-header-top .page-back {
+  margin-top: 0;
+}
+.siblings {
+  gap: 6px;
+}
+.siblings a {
+  padding: 3px 12px;
+  font-size: 13px;
+}
+.page .btn {
+  height: 34px;
+}
+.filter-card {
+  padding: 8px 10px;
+}
+.filter-card .filter-row {
+  gap: 8px;
+  min-height: 0;
+}
+.filter-card .quick-search {
+  height: 34px;
+}
+.range-chip {
+  height: 34px;
+  padding: 0 12px;
+}
+.seg {
+  padding: 3px;
+}
+.seg > button {
+  height: 28px;
+  padding: 0 12px;
+}
+.records-head {
+  min-height: 46px;
+  padding: 6px 12px 6px 16px;
+}
+.records-head h2 {
+  font-size: 15px;
+}
+.records-foot {
+  min-height: 34px;
+  padding: 0 16px;
+  font-size: 12.5px;
+}

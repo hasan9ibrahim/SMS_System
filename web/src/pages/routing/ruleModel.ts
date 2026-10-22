@@ -104,7 +104,8 @@ const names = (list: Named[], ids: number[], max = 4) =>
     .slice(0, max)
     .map((id) => nameOf(list, id))
     .join(", ") + (ids.length > max ? ` +${ids.length - max}` : "");
-const modeOp = (mode: string) => (mode === "exclusive" ? "not in" : "in");
+// Inclusive / Exclusive, as in the condition editor (team trial round 2).
+const modeOp = (mode: string) => (mode === "exclusive" ? "exclusive" : "inclusive");
 const opText = (op: string) => ({ ">=": "≥", "<=": "≤" })[op] ?? op;
 const num = (v: number) => String(+v.toFixed(4));
 const range = (op: string, v: number, v2: number | null | undefined, fmt = num) =>
@@ -174,7 +175,7 @@ export function conditionChips(
     chips.push({
       key: "destination",
       field: "Destination",
-      op: rule.mccmncMode === "exclusive" ? "not in" : rule.mccmncMode === "all" ? "matches" : "in",
+      op: rule.mccmncMode === "all" ? "matches" : modeOp(rule.mccmncMode),
       value: parts.join(" · "),
     });
   }
@@ -282,10 +283,15 @@ export function clearCondition(key: ConditionKey, rule: RouteRuleDetail): Partia
   }
 }
 
-/** Conditions not yet on the rule, for "+ Add condition". Time is always shown. */
+/** Category, customer trunks and destination: shown under Configuration with the vendors (team trial round 2). */
+export const CONFIG_KEYS: readonly ConditionKey[] = ["category", "trunk", "destination"];
+
+/** Conditions not yet on the rule, for "+ Add condition" (Configuration's keys excluded). Time is always shown. */
 export function missingConditions(rule: RouteRuleDetail): ConditionKey[] {
   const present = new Set(conditionChips(rule).map((c) => c.key));
-  return (Object.keys(CONDITION_LABELS) as ConditionKey[]).filter((k) => k !== "time" && !present.has(k));
+  return (Object.keys(CONDITION_LABELS) as ConditionKey[]).filter(
+    (k) => k !== "time" && !present.has(k) && !CONFIG_KEYS.includes(k),
+  );
 }
 
 /** Shares of each level must add up to 100 under the percentage hunt policy (§6.3). */

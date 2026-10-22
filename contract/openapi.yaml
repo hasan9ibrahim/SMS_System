@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.81.0
+  version: 0.82.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1592,7 +1592,7 @@ paths:
       operationId: exportRateLines
       summary: "Export rate lines as CSV (§6.2 Export Rate)"
       description: |
-        The lines of one view (current, scheduled or closed) with destination names, best buy and margin.
+        The lines of one view (current, scheduled or closed) with destination names, the routed vendor and cost (route rules) and margin.
       parameters:
         - $ref: "#/components/parameters/RecordId"
         - $ref: "#/components/parameters/RateView"
@@ -2406,7 +2406,7 @@ paths:
       summary: "List rate lines of one table (server-side filter, sort and paging)"
       description: |
         The filter must hold a top-level `rateTableId eq` condition. `view` picks current (valid now,
-        the default), scheduled (starting later) or closed lines. Rows carry best buy, margin and the
+        the default), scheduled (starting later) or closed lines. Rows carry the routed vendor and cost, margin and the
         next scheduled rate (§13.12).
       requestBody:
         required: true
@@ -8526,8 +8526,8 @@ paths:
         EDR Search (§9.1): one row per message attempt with both legs, from the EDR store (ClickHouse). Every column
         filters with the §13.25 grammar; the page's From / To Date and Final are filters on `startTime` and
         `isFinalAttempt`. Enterprise and trunk name filters match names (wildcards) and are applied as IDs. Message ID
-        filters take comma-separated lists (`in`). `numberOrMsgId` (filter only, `eq` / `in`) matches each value against
-        the receiver number (DNID, `+`, spaces and dashes ignored), the sender ID, the Customer Msg ID and any part's Vendor Msg ID
+        filters take comma-separated lists (`in`). `numberOrMsgId` (filter only, `eq` / `in`) matches each value as the
+        start of the receiver number (DNID, `+`, spaces and dashes ignored), the sender ID, the Customer Msg ID or any part's Vendor Msg ID
         (team trial round 2). Totals over very large windows may be estimates.
       requestBody:
         required: true
@@ -16386,7 +16386,7 @@ components:
             - type: "null"
         negativeMarginLines:
           type: [integer, "null"]
-          description: Current sell rates below the best buy rate; null for vendor tables.
+          description: Current sell rates below the routed cost (route rules, team trial round 2); null for vendor tables.
         avgMarginPct:
           type: [number, "null"]
           description: Margin of today's traffic, weighted by volume; null without traffic or EDR store.
@@ -16494,7 +16494,7 @@ components:
           type: integer
         negativeMarginLines:
           type: [integer, "null"]
-          description: Current sell rates below the best buy rate; null for vendor tables.
+          description: Current sell rates below the routed cost (route rules, team trial round 2); null for vendor tables.
         avgMarginPct:
           type: [number, "null"]
           description: Margin of today's traffic priced by this table, weighted by volume.
@@ -16575,7 +16575,7 @@ components:
 
     RateLineRow:
       type: object
-      required: [id, rateTableId, mccmncId, mccmnc, country, countryIso, network, dialCode, senderId, rate, sysRate, currency, bestBuy, bestVendorTrunkId, bestVendor, margin, marginPct, changeType, changePct, validFrom, validTo, statedValidFrom, nextRate, nextFrom, isBlocked, rateNote, updatedBy, updatedAt]
+      required: [id, rateTableId, mccmncId, mccmnc, country, countryIso, network, dialCode, senderId, rate, sysRate, currency, routedCost, routedVendorTrunkId, routedVendor, margin, marginPct, changeType, changePct, validFrom, validTo, statedValidFrom, nextRate, nextFrom, isBlocked, rateNote, updatedBy, updatedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -16603,18 +16603,22 @@ components:
           description: The rate in the platform currency (`ReferenceData.platformCurrency`, EUR by default).
         currency:
           type: string
-        bestBuy:
+        routedCost:
           type: [number, "null"]
-          description: Cheapest current vendor rate for the destination and product category, in the table currency.
-        bestVendorTrunkId:
+          description: |
+            The buy rate of the vendor the route rules choose for the destination (customer tables, for the table's
+            first customer trunk; the same engine as the Route map), in the table currency. Replaces the best buy
+            (team trial round 2).
+        routedVendorTrunkId:
           oneOf:
             - $ref: "#/components/schemas/Id"
             - type: "null"
-        bestVendor:
+        routedVendor:
           type: [string, "null"]
+          description: The vendor trunk the route rules choose.
         margin:
           type: [number, "null"]
-          description: rate - bestBuy (customer tables).
+          description: rate - routedCost (customer tables).
         marginPct:
           type: [number, "null"]
           description: margin / rate x 100.

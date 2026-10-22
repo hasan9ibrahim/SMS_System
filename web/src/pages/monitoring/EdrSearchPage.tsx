@@ -2,7 +2,7 @@
 // message IDs, the period, destinations and status sit in the filter card; every column filters with the §13.25 grammar; an EDR
 // Template sets the columns. Selected EDRs go to a Trouble Ticket or an EDR Repush; Export queues an
 // EDR Request (background download, §12.4) with the current filters.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { EdrRow, EmailPreview, EmailTemplateRow, FieldDescriptor, ListQuery, TrunkListRow } from "@sms/contract";
 import { fetchListPage, useListFields, type ListPage } from "../../api/hooks";
@@ -75,6 +75,42 @@ function DestinationsDialog({ initial, done }: { initial: string[]; done: (codes
     >
       <DestinationTree selected={picked} onChange={setPicked} height={380} />
     </Modal>
+  );
+}
+
+/**
+ * The number / sender / message ID box (team trial round 2): applies while typing (after a short pause), so there
+ * is no need to press Enter or leave the box.
+ */
+function SearchBox({ value, onSearch }: { value: string; onSearch: (text: string) => void }) {
+  const [text, setText] = useState(value);
+  const last = useRef(value);
+  useEffect(() => {
+    if (value !== last.current) setText(value);
+    last.current = value;
+  }, [value]);
+  useEffect(() => {
+    if (text === last.current) return;
+    const t = window.setTimeout(() => {
+      last.current = text;
+      onSearch(text);
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input
+      value={text}
+      placeholder="Number, sender, message ID…"
+      aria-label="Numbers, senders or Msg IDs"
+      title="The start of receiver numbers, sender IDs, Customer Msg IDs or Vendor Msg IDs (any part of a long message); several separated by commas"
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          last.current = text;
+          onSearch(text);
+        }
+      }}
+    />
   );
 }
 
@@ -170,15 +206,7 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
       {/* Numbers, senders and message IDs, mixed and comma separated (team trial round 2, §9.1). */}
       <div className="quick-search edr-search">
         <Icon name="search" size={15} />
-        <input
-          key={`n${ids("numberOrMsgId")}`}
-          defaultValue={ids("numberOrMsgId")}
-          placeholder="Number, sender, message ID…"
-          aria-label="Numbers, senders or Msg IDs"
-          title="Receiver numbers, sender IDs, Customer Msg IDs and Vendor Msg IDs (any part of a long message), exact; several separated by commas"
-          onBlur={(e) => e.target.value !== ids("numberOrMsgId") && setIds("numberOrMsgId", e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && setIds("numberOrMsgId", e.currentTarget.value)}
-        />
+        <SearchBox value={ids("numberOrMsgId")} onSearch={(text) => setIds("numberOrMsgId", text)} />
       </div>
       <RangeChip
         withTime

@@ -182,12 +182,14 @@ describe("§9 EDR search", { skip }, () => {
         `finds ${r.id}`,
       );
     assert.ok(
-      found.rows.every(
-        (x) =>
-          x.dnid === a!.dnid ||
-          [a!.dnid, b!.customerMsgId, lastPart].includes(x.senderId ?? "") ||
-          x.customerMsgId === b!.customerMsgId ||
-          x.vendorMsgId?.split(",").includes(lastPart),
+      found.rows.every((x) =>
+        [a!.dnid, b!.customerMsgId, lastPart].some(
+          (v) =>
+            (x.dnid ?? "").startsWith(v!) ||
+            (x.senderId ?? "").startsWith(v!) ||
+            (x.customerMsgId ?? "").startsWith(v!) ||
+            (x.vendorMsgId ?? "").split(",").some((part) => part.startsWith(v!)),
+        ),
       ),
     );
     const fields = await ok<{ fields: { field: string; filterOnly?: boolean }[] }>(
@@ -195,6 +197,25 @@ describe("§9 EDR search", { skip }, () => {
       call("GET", "/meta/lists/edrs/fields"),
     );
     assert.equal(fields.fields.find((f) => f.field === "numberOrMsgId")?.filterOnly, true, "never a column");
+    // The start of a number finds every number starting with it (team trial round 2).
+    const head = a!.dnid!.slice(0, 4);
+    const byHead = await ok<EdrPage>(
+      "queryEdrs",
+      call("POST", "/edrs/query", {
+        limit: 100,
+        filter: { logic: "and", conditions: [DAY, { field: "numberOrMsgId", op: "eq", value: head }] },
+      }),
+    );
+    assert.ok(byHead.rows.length > 0);
+    assert.ok(
+      byHead.rows.every(
+        (x) =>
+          (x.dnid ?? "").startsWith(head) ||
+          (x.senderId ?? "").startsWith(head) ||
+          (x.customerMsgId ?? "").startsWith(head) ||
+          (x.vendorMsgId ?? "").split(",").some((part) => part.startsWith(head)),
+      ),
+    );
   });
 
   test("filters, name filters as IDs, sort by name, quick search", async () => {

@@ -157,11 +157,11 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "best-buy",
-        title: "Best buy and margin",
+        title: "Vendor, cost and margin",
         blocks: [
           {
             kind: "text",
-            text: "**Best buy** is the cheapest current vendor rate for a destination in the same product category, converted to the customer table's currency. **Margin** is sell rate minus best buy; **Margin %** is that margin divided by the sell rate. A negative margin means we sell below the cheapest vendor cost and is shown in red.",
+            text: "**Vendor** and **Cost** are the vendor trunk the route rules choose for a destination and its current buy rate, for the table's first customer trunk (the same answer as the [[route-map|Route map]]), converted to the customer table's currency. **Margin** is sell rate minus that cost; **Margin %** is that margin divided by the sell rate. A negative margin means we sell below what the routing pays and is shown in red. Costs are worked out when you open the table and kept a minute; after a rule or rate change they follow on the next view.",
           },
         ],
       },
@@ -351,7 +351,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Export",
-                what: "Downloads the rates of the view you are on (Current, Scheduled or Closed; from Change log it exports Current) that match the grid's filters, search and sort, as a CSV file. Columns: Country, Network, MCCMNC, Dial Code, Sender ID, Rate, Currency, Sys Rate, Best Buy, Best Vendor, Margin, Margin %, Change, From Date (UTC), To Date (UTC), Blocked, Rate Note. Values you are not allowed to see stay hidden in the file.",
+                what: "Downloads the rates of the view you are on (Current, Scheduled or Closed; from Change log it exports Current) that match the grid's filters, search and sort, as a CSV file. Columns: Country, Network, MCCMNC, Dial Code, Sender ID, Rate, Currency, Sys Rate, Vendor, Cost, Margin, Margin %, Change, From Date (UTC), To Date (UTC), Blocked, Rate Note. Values you are not allowed to see stay hidden in the file.",
               },
               {
                 name: "Send to client",
@@ -380,15 +380,11 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Negative margin",
-                what: "Customer tables: current rates that sell below today's best buy. Red when above 0.",
+                what: "Customer tables: current rates that sell below the routed cost today. Red when above 0.",
               },
               {
                 name: "Closed rates",
                 what: "Vendor tables: how many ended rates are kept in the history.",
-              },
-              {
-                name: "Avg margin",
-                what: "Margin weighted by today's traffic. Green when positive, red when negative.",
               },
               {
                 name: "Revenue today / Cost today",
@@ -424,12 +420,12 @@ export const topics: HelpTopic[] = [
                 what: "The same price in EUR, the platform currency, at the latest exchange rate. Click it to type the price in EUR instead: the table-currency rate follows (and the other way round). Hover to see the exchange rate used. Plain text on tables already in EUR.",
               },
               {
-                name: "Best Buy / Best Vendor",
-                what: "Customer tables: the cheapest current vendor rate for the destination in the same category, and which vendor trunk offers it.",
+                name: "Vendor / Cost",
+                what: "Customer tables: the vendor trunk the route rules choose for the destination and its current buy rate in the table currency. Sender ID follows Margin %.",
               },
               {
                 name: "Margin / Margin %",
-                what: "Sell rate minus best buy, and that as a % of the sell rate. Green when positive, red when negative. Recalculated live while you edit.",
+                what: "Sell rate minus the routed cost, and that as a % of the sell rate. Green when positive, red when negative. Recalculated live while you edit.",
               },
               {
                 name: "Change",
@@ -447,7 +443,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Rows that sell below best buy are tinted red. Vendor tables show a shorter set of columns (no best buy or margin). The status bar shows the table name, active rates and how many edits are unsaved.",
+            text: "Rows that sell below the routed cost are tinted red. Vendor tables show a shorter set of columns (no vendor, cost or margin). The status bar shows the table name, active rates and how many edits are unsaved.",
           },
         ],
       },
@@ -483,7 +479,7 @@ export const topics: HelpTopic[] = [
                 name: "Change by % / margin",
                 what: "Changes the selected rates relative to what they are now.",
                 values:
-                  "**By %** (**Change %**, e.g. `5` raises by 5 %, `-3` lowers by 3 %); **By amount** (**Add (negative to lower)**, e.g. `0.001`); **Best buy + margin** (customer tables; **Margin over best buy** is an amount added to the best buy rate, e.g. `0.002`). Rates with no best buy, or that would go below zero, are skipped with a warning.",
+                  "**By %** (**Change %**, e.g. `5` raises by 5 %, `-3` lowers by 3 %); **By amount** (**Add (negative to lower)**, e.g. `0.001`); **Cost + margin** (customer tables; **Margin over the routed cost** is an amount added to the routed cost, e.g. `0.002`). Rates with no routed cost, or that would go below zero, are skipped with a warning.",
               },
               {
                 name: "Effective date…",
@@ -505,10 +501,9 @@ export const topics: HelpTopic[] = [
               },
               { name: "Discard", what: "Throws away all unsaved edits." },
               {
-                name: "Send RN to clients",
-                what: "Customer tables: e-mail each client using the table the changed rates. Ticked by default.",
+                name: "Save n changes",
+                what: "Saves every unsaved edit as one change you can undo. On customer tables the save summary has **Send RN to clients** (ticked by default).",
               },
-              { name: "Save n changes", what: "Saves every unsaved edit as one change you can undo." },
             ],
           },
           {
@@ -695,7 +690,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "tip",
-            text: "Use **Negative margin only** on a customer table to find every destination you sell below cost, then **Change by % / margin → Best buy + margin** to fix them in one batch.",
+            text: "Use **Negative margin only** on a customer table to find every destination you sell below cost, then **Change by % / margin → Cost + margin** to fix them in one batch.",
           },
           {
             kind: "tip",

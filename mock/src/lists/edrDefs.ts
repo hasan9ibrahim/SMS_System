@@ -35,15 +35,25 @@ const msgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
           ? `v_message_id ILIKE ${lit(`%${String(c.value)}%`)}`
           : any;
 };
-/** Number, sender or Msg ID (team trial round 2, §9.1): a receiver number, a sender ID, a Customer Msg ID or any part's Vendor Msg ID. */
+/**
+ * Number, sender or Msg ID (team trial round 2, §9.1): each value is the start of a receiver number, a sender ID,
+ * a Customer Msg ID or any part's Vendor Msg ID ("2348" finds every number starting 2348; a whole value finds it).
+ */
 const numberOrMsgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
   const raw = (c.values ?? [c.value]).map((v) => String(v).trim()).filter(Boolean);
   if (!raw.length) return "0";
-  const ids = raw.map((v) => lit(v)).join(",");
-  const numbers = raw.map((v) => v.replace(/[\s+()-]/g, "")).filter((v) => /^\d+$/.test(v));
-  const parts = [`src_addr IN (${ids})`, `c_message_id IN (${ids})`, `hasAny(splitByChar(',', v_message_id), [${ids}])`];
-  if (numbers.length) parts.unshift(`dst_addr IN (${numbers.map((v) => lit(v)).join(",")})`);
-  return `(${parts.join(" OR ")})`;
+  const parts = raw.map((v) => {
+    const p = lit(v);
+    const digits = v.replace(/[\s+()-]/g, "");
+    const or = [
+      `startsWith(src_addr, ${p})`,
+      `startsWith(c_message_id, ${p})`,
+      `arrayExists(x -> startsWith(x, ${p}), splitByChar(',', v_message_id))`,
+    ];
+    if (/^\d+$/.test(digits)) or.unshift(`startsWith(dst_addr, ${lit(digits)})`);
+    return or.join(" OR ");
+  });
+  return `(${parts.map((p) => `(${p})`).join(" OR ")})`;
 };
 const CAUSE_TEXT = `transform(command_status, [${CAUSE_CODES.map((c) => c.code).join(",")}], [${CAUSE_CODES.map((c) => lit(c.name)).join(",")}], '')`;
 

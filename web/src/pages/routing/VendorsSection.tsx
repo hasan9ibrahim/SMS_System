@@ -1,12 +1,12 @@
 // Vendors section of a route rule (§6.3 Route Information, §13.8 vendor capacity, §13.27
 // warm-up threshold and number whitelists). Edits stay local until Save, which writes the
 // rule once (one undoable change, §13.10).
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import type { RouteRuleDetail, RouteRuleInput, RouteVendor, RouteWhitelist, TrunkListRow } from "@sms/contract";
 import { useReference } from "../../api/records";
 import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
-import { Button } from "../../ui/primitives";
+import { Button, Menu, Popover } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
 import { MarginInput } from "./MarginInput";
 import { backupProblems, categoryFilter, formatMargin, ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
@@ -181,6 +181,13 @@ export function VendorsSection({
   const dirty = JSON.stringify(d) !== JSON.stringify(initial);
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
   const [marginOk, setMarginOk] = useState(true);
+  // Limits (team trial round 2): Minimum margin always; the others when set or added with "+ Add limit".
+  const [limits, setLimits] = useState<Set<"skip" | "cap">>(
+    () =>
+      new Set([...(rule.skipVendorAtTpsPct ? (["skip"] as const) : []), ...(rule.threshold ? (["cap"] as const) : [])]),
+  );
+  const addLimitRef = useRef<HTMLButtonElement>(null);
+  const [addLimitOpen, setAddLimitOpen] = useState(false);
   const setVendor = (i: number, patch: Partial<RouteVendor>) =>
     set({ vendors: d.vendors!.map((v, j) => (j === i ? { ...v, ...patch } : v)) });
   const setWhitelist = (i: number, patch: Partial<RouteWhitelist>) =>
@@ -678,7 +685,7 @@ export function VendorsSection({
 
           <fieldset className="vf-group">
             <legend>Limits</legend>
-            <div className="fgrid cols-4">
+            <div className="fgrid cols-4 limits-grid">
               <MarginInput
                 label="Minimum margin"
                 value={d.margin}
@@ -686,44 +693,87 @@ export function VendorsSection({
                 onValid={setMarginOk}
                 onChange={(m) => set({ margin: m.value ?? 0, marginType: m.type })}
               />
-              <label className="field">
-                <span>Skip vendor at % of its TPS</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  placeholder="off"
-                  value={d.skipVendorAtTpsPct ?? ""}
-                  onChange={(e) => set({ skipVendorAtTpsPct: numOrNull(e.target.value) })}
-                />
-                <small className="muted">§13.8 vendor capacity</small>
-              </label>
-              <label className="field">
-                <span>Volume cap (messages)</span>
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="off"
-                  value={d.threshold ?? ""}
-                  onChange={(e) => {
-                    const n = numOrNull(e.target.value);
-                    set({ threshold: n, thresholdInterval: n ? (d.thresholdInterval ?? "day") : null });
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>per</span>
-                <select
-                  disabled={!d.threshold}
-                  value={d.thresholdInterval ?? ""}
-                  onChange={(e) => set({ thresholdInterval: (e.target.value || null) as Draft["thresholdInterval"] })}
-                >
-                  <option value="minute">Minute</option>
-                  <option value="hour">Hour</option>
-                  <option value="day">Day</option>
-                </select>
-              </label>
+              {limits.has("skip") && (
+                <label className="field">
+                  <span>Skip vendor at % of its TPS</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    placeholder="off"
+                    value={d.skipVendorAtTpsPct ?? ""}
+                    onChange={(e) => set({ skipVendorAtTpsPct: numOrNull(e.target.value) })}
+                  />
+                  <small className="muted">§13.8 vendor capacity</small>
+                </label>
+              )}
+              {limits.has("cap") && (
+                <>
+                  <label className="field">
+                    <span>Volume cap (messages)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="off"
+                      value={d.threshold ?? ""}
+                      onChange={(e) => {
+                        const n = numOrNull(e.target.value);
+                        set({ threshold: n, thresholdInterval: n ? (d.thresholdInterval ?? "day") : null });
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>per</span>
+                    <select
+                      disabled={!d.threshold}
+                      value={d.thresholdInterval ?? ""}
+                      onChange={(e) =>
+                        set({ thresholdInterval: (e.target.value || null) as Draft["thresholdInterval"] })
+                      }
+                    >
+                      <option value="minute">Minute</option>
+                      <option value="hour">Hour</option>
+                      <option value="day">Day</option>
+                    </select>
+                  </label>
+                </>
+              )}
             </div>
+            {limits.size < 2 && (
+              <>
+                <button
+                  ref={addLimitRef}
+                  type="button"
+                  className="btn btn-sm btn-add-filter"
+                  onClick={() => setAddLimitOpen((v) => !v)}
+                >
+                  <Icon name="plus" size={13} /> Add limit
+                </button>
+                <Popover anchor={addLimitRef} open={addLimitOpen} onClose={() => setAddLimitOpen(false)}>
+                  <Menu
+                    onClose={() => setAddLimitOpen(false)}
+                    items={[
+                      ...(limits.has("skip")
+                        ? []
+                        : [
+                            {
+                              label: "Skip vendor at % of its TPS",
+                              onSelect: () => setLimits(new Set([...limits, "skip" as const])),
+                            },
+                          ]),
+                      ...(limits.has("cap")
+                        ? []
+                        : [
+                            {
+                              label: "Volume cap (messages per minute, hour or day)",
+                              onSelect: () => setLimits(new Set([...limits, "cap" as const])),
+                            },
+                          ]),
+                    ]}
+                  />
+                </Popover>
+              </>
+            )}
             <p className="muted small">
               Revenue and cost limits per customer and vendor trunk are set on the trunk page (§13.26).
             </p>

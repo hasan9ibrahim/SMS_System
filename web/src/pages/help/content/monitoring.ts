@@ -649,7 +649,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Number, sender, message ID…",
-                what: "One search box for receiver numbers (DNID), sender IDs, Customer Msg IDs and Vendor Msg IDs, mixed in any order. Each value finds the EDRs whose number, sender, customer message ID or vendor message ID (any part of a long message) is exactly that value. Press Enter or leave the box to apply.",
+                what: "One search box for receiver numbers (DNID), sender IDs, Customer Msg IDs and Vendor Msg IDs, mixed in any order. Each value finds the EDRs whose number, sender, customer message ID or vendor message ID (any part of a long message) starts with it: `2348` finds every number starting 2348, a whole number finds that number. The grid updates as you type.",
                 values:
                   "One or more values separated by commas, semicolons or new lines. A number may have `+`, spaces or dashes. Example: `2348030000001, ACMEBANK, 586f7e92c4d1471d`.",
               },

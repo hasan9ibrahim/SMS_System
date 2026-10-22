@@ -1,6 +1,6 @@
 // Route Rules (§6.3, §13.8–13.11, §13.24, §13.27). The one page that copies the reference
 // screenshot's layout and form exactly (§15.4): header links and actions, grid columns with
-// a filter under each, the detail panel (Conditions / Vendors / Traffic / History / Test)
+// a filter under each, the detail panel (Edit / Configuration / Conditions / Traffic / History / Test)
 // with condition chips and the 24h trend on the right, and the status bar shortcuts.
 import { HoverList } from "../../ui/HoverList";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -20,8 +20,10 @@ import { Button, Modal, Popover, StatusDot } from "../../ui/primitives";
 import { qualityClass, qualityTone } from "../../ui/quality";
 import { formatPct } from "../rates/format";
 import { AddCondition, ConditionsSection, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
-import { BulkDialog, RuleDialog, VendorSplitEditor, problemText } from "./dialogs";
-import { compact, routeTypeOf } from "./ruleModel";
+import { BulkDialog, RuleDialog, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
+import { InlineCondition } from "./ConditionEditor";
+import { codesText, useDestinationTree } from "../rates/DestinationTree";
+import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, type ConditionKey } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
 import { TrafficAside, TrafficHover, TrafficSection, money, usePlatformCurrency } from "./Traffic";
 import { VendorsSection, VendorsView } from "./VendorsSection";
@@ -83,16 +85,83 @@ export function readyToRun(r: RouteRuleDetail): boolean {
 }
 
 /**
- * Step 2 of New rule (team trial round 2): the conditions and vendors of the rule just added, edited as in the
- * detail panel (each save is one change, §13.10). "Rule on" ticks itself once the rule has customer trunks and
- * vendors, unless switched by hand; Done saves it.
+ * Configuration (team trial round 2): Category, Customer trunks and Destination, each a block like the vendors,
+ * then the vendors. In the detail panel a block opens its editor in place; in New rule (`expanded`) every block is
+ * open and the vendors are edited in place too. Each save is one change (§13.10).
  */
-function NewRuleSetup({ id, done }: { id: number; done: () => void }) {
+function ConfigurationSection({ id, expanded = false }: { id: number; expanded?: boolean }) {
+  const rule = useRouteRule(id);
+  const { save, saving } = useSaver(rule.data);
+  const [open, setOpen] = useState<ConditionKey | null>(null);
+  const { tree } = useDestinationTree();
+  const r = rule.data;
+  if (rule.isError) return <p className="error-text">{(rule.error as Error).message}</p>;
+  if (!r) return <p className="muted">Loading…</p>;
+  const locked = !!r.archived;
+  const chips = conditionChips(r, Date.now(), (codes) => codesText(tree, codes, 4));
+  const summary = (k: ConditionKey) => {
+    const c = chips.find((x) => x.key === k);
+    return c ? `${c.op} ${c.value}` : "All";
+  };
+  const LABEL: Record<string, string> = { category: "Category", trunk: "Customer trunks", destination: "Destination" };
+  return (
+    <div className={`cfg${expanded ? " cfg-expanded" : ""}`}>
+      {CONFIG_KEYS.map((k) => (
+        <section key={k} className={`cfg-block cfg-${k}`}>
+          <div className="cfg-head">
+            <strong>{LABEL[k]}</strong>
+            <span className="muted cfg-summary" title={summary(k)}>
+              {summary(k)}
+            </span>
+            <span className="fb-spacer" />
+            {!expanded && !locked && (
+              <button type="button" className="link" onClick={() => setOpen(open === k ? null : k)}>
+                {open === k ? "Close" : "Edit"}
+              </button>
+            )}
+          </div>
+          {(expanded || open === k) && !locked && (
+            <InlineCondition
+              key={`${k}${r.updatedAt}`}
+              conditionKey={k}
+              rule={r}
+              saving={saving}
+              onSave={async (patch) => {
+                const err = await save(patch, `${LABEL[k]} saved`);
+                if (!err && !expanded) setOpen(null);
+                return err;
+              }}
+              {...(expanded ? {} : { onCancel: () => setOpen(null) })}
+            />
+          )}
+        </section>
+      ))}
+      <section className="cfg-block cfg-vendors">
+        <div className="cfg-head">
+          <strong>Vendors</strong>
+        </div>
+        {expanded ? (
+          <VendorsSection key={r.updatedAt} rule={r} saving={saving} onSave={(patch) => save(patch, "Vendors saved")} />
+        ) : (
+          <VendorsSectionFor id={id} />
+        )}
+      </section>
+    </div>
+  );
+}
+
+/**
+ * New rule in one dialog (team trial round 2): the general fields, then, once added, Configuration (category,
+ * customer trunks, destination, vendors) and the other conditions in the same window. "Rule on" ticks itself once
+ * the rule has customer trunks and vendors, unless switched by hand; Done saves it.
+ */
+function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
+  const [id, setId] = useState<number | null>(null);
   const rule = useRouteRule(id);
   const { save, saving } = useSaver(rule.data);
   const [manual, setManual] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const r = rule.data;
+  const r = id !== null ? rule.data : undefined;
   const ready = r ? readyToRun(r) : false;
   const on = manual ?? ready;
   const finish = async () => {
@@ -100,60 +169,76 @@ function NewRuleSetup({ id, done }: { id: number; done: () => void }) {
       const err = await save({ status: on ? "active" : "inactive" }, on ? "Rule on" : "Rule off");
       if (err) return setError(err);
     }
-    done();
+    done(id);
   };
   return (
     <Modal
-      title={`New rule #${id} ${r?.name ?? ""} · conditions and vendors`}
-      width={1180}
+      title={r ? `New rule #${r.id} ${r.name}` : "New route rule"}
+      width={id === null ? 640 : 1180}
       onClose={() => void finish()}
-      footer={
-        <>
-          <label className="toggle-inline" title="On by default once the rule has customer trunks and vendors">
-            <input type="checkbox" checked={on} onChange={(e) => setManual(e.target.checked)} />
-            Rule on
-          </label>
-          <span className="fb-spacer" />
-          <Button variant="primary" onClick={() => void finish()} disabled={saving}>
-            Done
-          </Button>
-        </>
-      }
+      {...(id !== null
+        ? {
+            footer: (
+              <>
+                <label className="toggle-inline" title="On by default once the rule has customer trunks and vendors">
+                  <input type="checkbox" checked={on} onChange={(e) => setManual(e.target.checked)} />
+                  Rule on
+                </label>
+                {!ready && (
+                  <span className="muted small">
+                    Choose the customer trunks{r?.routeType === "block" ? "" : " and the vendors"}; the rule then turns
+                    on by default.
+                  </span>
+                )}
+                <span className="fb-spacer" />
+                <Button variant="primary" onClick={() => void finish()} disabled={saving}>
+                  Done
+                </Button>
+              </>
+            ),
+          }
+        : {})}
     >
-      {!r ? (
-        <p className="muted">Loading…</p>
-      ) : (
-        <div className="new-rule-setup">
-          <section>
-            <div className="nrs-head">
-              <strong>Conditions</strong>
-              <span className="fb-spacer" />
-              <AddCondition id={id} />
-            </div>
-            <ConditionsSection id={id} />
-            {!ready && (
-              <p className="muted small">
-                Add a Trunk condition with the customer trunks{r.routeType === "block" ? "" : " and the vendors below"};
-                the rule then turns on by default.
-              </p>
-            )}
-          </section>
-          <section>
-            <div className="nrs-head">
-              <strong>Vendors</strong>
-            </div>
-            <VendorsSection
-              key={r.updatedAt}
-              rule={r}
-              saving={saving}
-              onSave={(patch) => save(patch, "Vendors saved")}
-            />
-          </section>
-          {error && <p className="error-text">{error}</p>}
-        </div>
-      )}
+      <div className="new-rule">
+        <section className="cfg-block">
+          <div className="cfg-head">
+            <strong>General</strong>
+          </div>
+          <RuleGeneralForm
+            key={r?.updatedAt ?? "new"}
+            rule={r ?? null}
+            onSaved={(saved) => setId(saved)}
+            {...(id === null ? { onCancel: () => done(null) } : {})}
+            submitLabel={id === null ? "Continue" : "Save"}
+            hideStatus
+            hint="Next, in this window: category, customer trunks, destination, vendors and other conditions."
+          />
+        </section>
+        {id !== null && (
+          <>
+            <ConfigurationSection id={id} expanded />
+            <section className="cfg-block">
+              <div className="cfg-head">
+                <strong>Other conditions</strong>
+                <span className="fb-spacer" />
+                <AddCondition id={id} />
+              </div>
+              <ConditionsSection id={id} />
+            </section>
+          </>
+        )}
+        {error && <p className="error-text">{error}</p>}
+      </div>
     </Modal>
   );
+}
+
+/** The rule's general fields in the panel, saved in place (team trial round 2). */
+function EditSection({ id }: { id: number }) {
+  const rule = useRouteRule(id);
+  if (!rule.data) return <p className="muted">Loading…</p>;
+  if (rule.data.archived) return <p className="muted">Restore the rule to edit it.</p>;
+  return <RuleGeneralForm key={rule.data.updatedAt} rule={rule.data} onSaved={() => undefined} />;
 }
 
 /** Vendors are viewed in the panel and edited in the popup (team trial round 1). */
@@ -306,25 +391,27 @@ export function RouteRulesPage() {
   };
 
   const newRule = async () => {
-    const id = await ask<number>((done) => <RuleDialog rule={null} done={done} />);
+    // One dialog: general fields, then configuration and conditions (team trial round 2).
+    const id = await ask<number | null>((done) => <NewRuleDialog done={done} />);
     if (id) {
       showRule(id);
-      setSection("conditions");
-      // Conditions and vendors right away, in the same flow (team trial round 2).
-      await ask<void>((d) => <NewRuleSetup id={id} done={() => d()} />);
+      setSection("configuration");
     }
   };
 
   const detail = (row: RouteRuleRow): DetailContent => ({
     title: <RuleTitle id={row.id} fallback={row.name} />,
+    // Edit first, then Configuration (category, customer trunks, destination, vendors) and the other conditions
+    // (team trial round 2).
     sections: [
+      { key: "edit", label: "Edit", content: <EditSection id={row.id} /> },
+      { key: "configuration", label: "Configuration", content: <ConfigurationSection id={row.id} /> },
       {
         key: "conditions",
         label: "Conditions",
         content: <ConditionsSection id={row.id} />,
         actions: <AddCondition id={row.id} />,
       },
-      { key: "vendors", label: "Vendors", content: <VendorsSectionFor id={row.id} /> },
       { key: "traffic", label: "Traffic", content: <TrafficSection ruleId={row.id} /> },
       {
         key: "history",
@@ -368,7 +455,7 @@ export function RouteRulesPage() {
               row={r}
               onMore={() => {
                 setSelectId(null);
-                setSection("vendors");
+                setSection("configuration");
               }}
             />
           ),
@@ -432,8 +519,8 @@ export function RouteRulesPage() {
 
   return (
     <ListScreen<RouteRuleRow>
-      // Double-click or Enter edits the rule (team trial round 1).
-      onOpen={(row) => void edit(row)}
+      // Double-click or Enter opens the panel on Edit (team trial round 2).
+      onOpen={() => setSection("edit")}
       list="route_rules"
       page={page}
       historyScope={{ entityTypes: ["route_rule"] }}

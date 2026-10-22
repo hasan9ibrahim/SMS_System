@@ -1397,3 +1397,67 @@ textarea.mono {
 .cond-field.align-top .negate {
   margin-top: 22px;
 }
+
+/* Route rules (team trial round 2): Edit, Configuration blocks and New rule in one dialog. */
+.cfg {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cfg-block {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  background: var(--color-panel);
+}
+.cfg-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+}
+.cfg-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.cfg-block > .inline-cond,
+.cfg-block > .vendors-form,
+.cfg-block > .rule-general {
+  margin-top: 10px;
+}
+.inline-cond-foot,
+.rule-general .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.new-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.limits-grid {
+  margin-bottom: 8px;
+}
+.rule-general textarea.comment-box {
+  min-height: 34px;
+  resize: vertical;
+}
+.rule-general .field {
+  margin-bottom: 10px;
+}
+.inline-cond .checklist {
+  max-width: 560px;
+}
+/* New rule: Category and Customer trunks side by side, Destination and Vendors full width. */
+.cfg.cfg-expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.cfg.cfg-expanded .cfg-destination,
+.cfg.cfg-expanded .cfg-vendors {
+  grid-column: 1 / -1;
+}

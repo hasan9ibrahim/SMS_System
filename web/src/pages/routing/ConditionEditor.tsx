@@ -15,6 +15,7 @@ import type {
 import { useReference } from "../../api/records";
 import { ListLookup } from "../../records/parts";
 import { Button, Modal } from "../../ui/primitives";
+import { CheckList } from "../../ui/CheckList";
 import {
   buildPattern,
   categoryFilter,
@@ -199,8 +200,8 @@ function Mode({
   const modes: { value: MatchMode; label: string }[] = [
     // "All" is every destination, including ones added to the master later (team trial round 1).
     ...(allowAll ? [{ value: "all" as const, label: "All" }] : []),
-    { value: "inclusive", label: "In the list" },
-    { value: "exclusive", label: "Not in the list" },
+    { value: "inclusive", label: "Inclusive" },
+    { value: "exclusive", label: "Exclusive" },
   ];
   return (
     <div className="segmented" role="radiogroup">
@@ -376,20 +377,15 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
         form: (
           <>
             <Mode value={mode === "all" ? "inclusive" : mode} onChange={setMode} />
-            <div className="check-grid">
-              {ref.data?.productCategories.map((c) => (
-                <label key={c.id} className="toggle-inline">
-                  <input
-                    type="checkbox"
-                    checked={categories.includes(c.id)}
-                    onChange={(e) =>
-                      setCategories(e.target.checked ? [...categories, c.id] : categories.filter((x) => x !== c.id))
-                    }
-                  />
-                  {c.name}
-                </label>
-              ))}
-            </div>
+            {/* A compact list with search, "Selected N of M", Check all / Uncheck all (team trial round 2). */}
+            <CheckList
+              label="Product categories"
+              items={(ref.data?.productCategories ?? []).map((c) => ({ value: c.id, label: c.name }))}
+              selected={categories}
+              onChange={setCategories}
+              height={140}
+              autoFocus={false}
+            />
           </>
         ),
         patch: () =>
@@ -758,5 +754,43 @@ export function ConditionEditor({
       <div className="cond-form">{form}</div>
       {error && <p className="error-text">{error}</p>}
     </Modal>
+  );
+}
+
+/**
+ * One condition edited in place (team trial round 2): Category, Customer trunks and Destination under
+ * Configuration, in the detail panel and in New rule. Save writes it as one change.
+ */
+export function InlineCondition({
+  conditionKey,
+  rule,
+  saving,
+  onSave,
+  onCancel,
+}: {
+  conditionKey: ConditionKey;
+  rule: RouteRuleDetail;
+  saving: boolean;
+  onSave: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
+  onCancel?: () => void;
+}) {
+  const { form, patch } = useConditionForm(conditionKey, rule);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async () => {
+    const p = patch();
+    if (typeof p === "string") return setError(p);
+    setError(await onSave(p));
+  };
+  return (
+    <div className="cond-form inline-cond">
+      {form}
+      {error && <p className="error-text">{error}</p>}
+      <div className="inline-cond-foot">
+        {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+        <Button variant="primary" small onClick={() => void submit()} disabled={saving}>
+          Save {CONDITION_LABELS[conditionKey].toLowerCase()}
+        </Button>
+      </div>
+    </div>
   );
 }

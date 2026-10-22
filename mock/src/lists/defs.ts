@@ -281,14 +281,17 @@ export const vendorTrunkList = trunkList("vendor");
 
 const scheduledSql = `(SELECT count(*)::int FROM rate_lines l WHERE l.rate_table_id = rt.id AND l.valid_from > now())`;
 const nextChangeSql = `(SELECT min(l.valid_from) FROM rate_lines l WHERE l.rate_table_id = rt.id AND l.valid_from > now())`;
-/** Current sell lines below the best buy of their destination and category (customer tables). */
+/** The first live customer trunk of a sell table: whose routing gives the table's routed costs (team trial round 2). */
+const primaryTrunkSql = (table: string) => `(SELECT min(x.customer_trunk_id) FROM customer_trunk_rate_tables x
+    JOIN customer_trunks xt ON xt.id = x.customer_trunk_id AND xt.deleted_at IS NULL WHERE x.rate_table_id = ${table})`;
+/** Current sell lines below the routed cost of their destination (customer tables, route rules, team trial round 2). */
 // Lines are in the table currency, so the rate is converted once per table.
 export const negativeMarginSql = `(CASE WHEN rt.kind = 'customer' THEN (SELECT count(*)::int
    FROM rate_lines l
-   JOIN best_buy_rates bb ON bb.mccmnc_id = l.mccmnc_id AND bb.product_category_id = rt.product_category_id
+   JOIN route_cost_cache rc ON rc.customer_trunk_id = ${primaryTrunkSql("rt.id")} AND rc.mccmnc_id = l.mccmnc_id
   WHERE l.rate_table_id = rt.id AND l.sender_id IS NULL AND NOT l.is_blocked
     AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
-    AND l.rate < bb.rate_eur * (SELECT cl.rate_per_eur FROM currency_latest cl WHERE cl.iso = rt.currency)) END)`;
+    AND l.rate < rc.cost_eur * (SELECT cl.rate_per_eur FROM currency_latest cl WHERE cl.iso = rt.currency)) END)`;
 // Trunks using a table: customer trunks for a sell table, the owning trunk for a buy table.
 const usersSql = (col: string, sep: string | null) => {
   // Names for the cell and its hover list: up to 100, sorted (team trial round 1).
@@ -417,7 +420,8 @@ export const rateTableList: ListDef<RateTableRow> = {
 // ---------------------------------------------------------------- rate lines (§13.12 rate grid)
 
 const VALID_NOW = "l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())";
-const bestBuySql = "(bb.rate_eur * cl.rate_per_eur)";
+// The routed cost (route rules for the table's first customer trunk), in the line's currency (team trial round 2).
+const bestBuySql = "(rc.cost_eur * cl.rate_per_eur)";
 const marginSql = `(l.rate - ${bestBuySql})`;
 const marginPctSql = `(CASE WHEN l.rate > 0 THEN (l.rate - ${bestBuySql}) / l.rate * 100 END)`;
 const changeTypeSql = `(CASE WHEN prev.rate IS NULL THEN 'new' WHEN l.rate > prev.rate THEN 'increase'
@@ -431,8 +435,9 @@ export const rateLineFrom = `rate_lines l
     JOIN mccmnc m ON m.id = l.mccmnc_id
     JOIN countries co ON co.id = m.country_id
     JOIN currency_latest cl ON cl.iso = l.currency
-    LEFT JOIN best_buy_rates bb ON rt.kind = 'customer' AND bb.mccmnc_id = l.mccmnc_id AND bb.product_category_id = rt.product_category_id
-    LEFT JOIN vendor_trunks bv ON bv.id = bb.vendor_trunk_id
+    LEFT JOIN route_cost_cache rc ON rt.kind = 'customer' AND rc.customer_trunk_id = ${primaryTrunkSql("rt.id")}
+      AND rc.mccmnc_id = l.mccmnc_id
+    LEFT JOIN vendor_trunks bv ON bv.id = rc.vendor_trunk_id
     LEFT JOIN users ub ON ub.id = COALESCE(l.updated_by_id, l.created_by_id)
     LEFT JOIN LATERAL (SELECT p.rate FROM rate_lines p WHERE ${sameKey("p")} AND p.valid_from < l.valid_from
                         ORDER BY p.valid_from DESC LIMIT 1) prev ON true
@@ -459,8 +464,8 @@ export const rateLineList: ListDef<RateLineRow> = {
     mccmnc: { sql: "l.mccmnc" },
     senderId: { sql: "l.sender_id" },
     rate: visCol(rateHide("l.rate")),
-    bestBuy: visCol(hide("cost", bestBuySql, byEnterprise("bv.enterprise_id"))),
-    bestVendor: visCol(trunkMask("bv", "Vendor trunk")),
+    routedCost: visCol(hide("cost", bestBuySql, byEnterprise("bv.enterprise_id"))),
+    routedVendor: visCol(trunkMask("bv", "Vendor trunk")),
     margin: visCol(hide("margin", marginSql, ownedTable, { pct: marginPctSql })),
     marginPct: visCol(hide("margin", marginPctSql, ownedTable)),
     changeType: { sql: changeTypeSql },
@@ -477,11 +482,11 @@ export const rateLineList: ListDef<RateLineRow> = {
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "l.updated_at" },
   },
-  search: ["country", "network", "mccmnc", "senderId", "bestVendor"],
+  search: ["country", "network", "mccmnc", "senderId", "routedVendor"],
   idSql: "l.id",
   select: `l.id, l.rate_table_id, l.mccmnc_id, l.mccmnc, co.name AS country, co.iso AS country_iso, m.network,
     l.dial_code, l.sender_id, l.rate, ${toPlatformSql("l.rate")} AS sys_rate, l.currency,
-    ${bestBuySql} AS best_buy, bb.vendor_trunk_id AS best_vendor_trunk_id, bv.name AS best_vendor,
+    ${bestBuySql} AS best_buy, rc.vendor_trunk_id AS best_vendor_trunk_id, bv.name AS best_vendor,
     ${marginSql} AS margin, ${marginPctSql} AS margin_pct, ${changeTypeSql} AS change_type, ${changePctSql} AS change_pct,
     l.valid_from, l.valid_to, l.stated_valid_from, nxt.rate AS next_rate, nxt.valid_from AS next_from,
     l.is_blocked, l.rate_note, ub.username AS updated_by, l.updated_at`,
@@ -500,9 +505,9 @@ export const rateLineList: ListDef<RateLineRow> = {
       rate: r.rate as number,
       sysRate: round(r.sys_rate, 6)!,
       currency: String(r.currency),
-      bestBuy: round(r.best_buy, 6),
-      bestVendorTrunkId: (r.best_vendor_trunk_id as number | null) ?? null,
-      bestVendor: (r.best_vendor as string | null) ?? null,
+      routedCost: round(r.best_buy, 6),
+      routedVendorTrunkId: (r.best_vendor_trunk_id as number | null) ?? null,
+      routedVendor: (r.best_vendor as string | null) ?? null,
       margin: round(r.margin, 6),
       marginPct: round(r.margin_pct, 1),
       changeType: r.change_type as RateLineRow["changeType"],
