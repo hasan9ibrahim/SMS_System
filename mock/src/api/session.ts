@@ -9,14 +9,26 @@ import { db, withDb } from "../db.js";
 /** Alert sounds (§13.6): one per severity, Critical repeats until acknowledged. */
 export const DEFAULT_ALERT_SOUNDS: AlertSoundPrefs = { mute: false, info: "ping", warning: "chime", critical: "siren" };
 
-/** Live dashboard defaults (§13.3): 15-minute window, ±30 %, 15-minute chart, live refresh, every panel. */
+/**
+ * Live dashboard defaults (§13.3): 15-minute window, movers from 100 messages per card (team trial round 2),
+ * 15-minute chart, live refresh, every panel in the default layout.
+ */
 export const DEFAULT_DASHBOARD: DashboardSettings = {
   windowMinutes: 15,
-  thresholdPct: 30,
+  customerMinMessages: 100,
+  vendorMinMessages: 100,
   chartMinutes: 15,
   refreshSeconds: 1,
   hiddenPanels: [],
+  layout: [],
 };
+
+/** Saved settings on today's defaults: keys from older versions (the ± threshold) are dropped. */
+export function dashboardSettings(saved: Record<string, unknown> | null): DashboardSettings {
+  const out: Record<string, unknown> = { ...DEFAULT_DASHBOARD };
+  for (const k of Object.keys(DEFAULT_DASHBOARD)) if (saved && saved[k] !== undefined) out[k] = saved[k];
+  return out as unknown as DashboardSettings;
+}
 
 /** The fake user the mock signs in as (user 1 is a seeded administrator). */
 export const CURRENT_USER_ID = Number(process.env.MOCK_USER_ID ?? 1);
@@ -70,7 +82,7 @@ export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser |
       theme: r.theme,
       openInNewTab: r.open_in_new_tab,
       animations: r.animations,
-      dashboard: { ...DEFAULT_DASHBOARD, ...(r.dashboard_settings ?? {}) },
+      dashboard: dashboardSettings(r.dashboard_settings),
       alertSounds: { ...DEFAULT_ALERT_SOUNDS, ...(r.alert_sounds ?? {}) },
     },
     // GUI Access Group keys "page:action"; "*" = everything (§1). The user's own overrides apply on top;

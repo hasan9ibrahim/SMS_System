@@ -186,31 +186,51 @@ export interface AnalyticsSnapshotEvent {
   };
 }
 /**
- * Client to server: the phx_join payload for topic live:dashboard. Window and threshold of the traffic movers panel (§13.3); the user's saved dashboard preferences. To change them, leave and join again. refreshSeconds sets how often summary, movers and tops are pushed (team trial round 1).
+ * Client to server: the phx_join payload for topic live:dashboard. Window and Customer / Vendor volumes of the traffic movers panel (§13.3); the user's saved dashboard preferences. To change them, leave and join again. refreshSeconds sets how often summary, movers and tops are pushed (team trial round 1).
  */
 export interface DashboardJoinParams {
   windowMinutes?: 5 | 15 | 30 | 60;
-  thresholdPct?: number;
+  /**
+   * Customer movers: least messages in the window (team trial round 2).
+   */
+  customerMinMessages?: number;
+  /**
+   * Vendor movers: least messages in the window (team trial round 2).
+   */
+  vendorMinMessages?: number;
   /**
    * Push period in seconds: summary every refreshSeconds, movers and tops every max(5, refreshSeconds).
    */
   refreshSeconds?: 1 | 5 | 10 | 30 | 60;
 }
 /**
- * Topic live:dashboard, event "movers". Traffic movers panel (§13.3 item 2), pushed every 5 s: clients that started sending, increased or decreased by more than the threshold, or stopped, comparing the last window with the window before. Window and threshold come from the join parameters (dashboard.join.json).
+ * Topic live:dashboard, event "movers". Traffic movers panel (§13.3 item 2), pushed every 5 s, comparing the last window with the window before: customer trunks that started or stopped sending, and the customer trunks and vendor trunks whose traffic changed (team trial round 2: Customer and Vendor in place of Increasing and Decreasing, biggest change first), each with the destination it sends most to. A trunk shows in Customer or Vendor only when it sent at least the card's volume (messages in the window, now or before). Window and volumes come from the join parameters (dashboard.join.json).
  */
 export interface DashboardMoversEvent {
   at: EventTimestamp;
   windowMinutes: number;
-  thresholdPct: number;
+  /**
+   * Customer card: least messages in the window (now or before).
+   */
+  customerMinMessages: number;
+  /**
+   * Vendor card: least messages in the window (now or before).
+   */
+  vendorMinMessages: number;
   started: MoverRow[];
-  increasing: MoverRow[];
-  decreasing: MoverRow[];
+  /**
+   * Customer trunks whose traffic changed, biggest change first.
+   */
+  customers: MoverRow[];
+  /**
+   * Vendor trunks whose traffic changed, biggest change first.
+   */
+  vendors: MoverRow[];
   stopped: MoverRow[];
 }
 export interface MoverRow {
   trunk: PartyRef;
-  enterprise: PartyRef;
+  enterprise: PartyRef1;
   /**
    * Average TPS over the last window.
    */
@@ -231,6 +251,32 @@ export interface MoverRow {
   sparkline: number[];
   asr: number | null;
   dlr: number | null;
+  /**
+   * Messages in the last window.
+   */
+  messagesNow: number;
+  /**
+   * Messages in the window before.
+   */
+  messagesBefore: number;
+  /**
+   * The destination the trunk sent most to in the last hour; null when unknown.
+   */
+  topDestination: {
+    mccmnc: string;
+    /**
+     * Country and network.
+     */
+    name: string;
+  } | null;
+}
+/**
+ * An enterprise or trunk as shown in live panels.
+ */
+export interface PartyRef1 {
+  kind: "customer_enterprise" | "vendor_enterprise" | "customer_trunk" | "vendor_trunk";
+  id: number;
+  name: string;
 }
 /**
  * Topic live:dashboard, event "summary". Today's summary bar of the live dashboard (§13.3 item 1), pushed once a second. Today is the day in the platform time zone (`ReferenceData.platformTimezone`, UTC by default). Money is in the platform currency (`currency`, EUR by default).

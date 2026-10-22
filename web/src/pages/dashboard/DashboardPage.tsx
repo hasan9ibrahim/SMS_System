@@ -38,15 +38,20 @@ import {
   type ChartBuffer,
 } from "./dashboardModel";
 import { useOnlineUsers } from "../../api/team";
+import { useQuery } from "@tanstack/react-query";
+import type { FilterCondition, ReportDimension } from "@sms/contract";
+import { runMasterReport } from "../../api/masterReports";
 
 const page = pageForPath("/dashboard")!;
 
 const DEFAULTS: DashboardSettings = {
   windowMinutes: 15,
-  thresholdPct: 30,
+  customerMinMessages: 100,
+  vendorMinMessages: 100,
   chartMinutes: 15,
   refreshSeconds: 1,
   hiddenPanels: [],
+  layout: [],
 };
 type Panel = DashboardSettings["hiddenPanels"][number];
 const PANELS: { key: Panel; label: string }[] = [
@@ -90,7 +95,12 @@ interface Feed {
  * change. The refresh period (team trial round 1) sets the server's push period; the TPS table follows
  * it too (the chart stays live). Paused keeps the figures shown when it was paused.
  */
-function useDashboardFeed(windowMinutes: number, thresholdPct: number, refreshSeconds: number): Feed {
+function useDashboardFeed(
+  windowMinutes: number,
+  customerMinMessages: number,
+  vendorMinMessages: number,
+  refreshSeconds: number,
+): Feed {
   const paused = refreshSeconds === 0;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
@@ -132,11 +142,11 @@ function useDashboardFeed(windowMinutes: number, thresholdPct: number, refreshSe
         if (event === "movers") setFeed((f) => ({ ...f, movers: payload as unknown as DashboardMoversEvent }));
         if (event === "tops") setFeed((f) => ({ ...f, tops: payload as unknown as DashboardTopsEvent }));
       },
-      { windowMinutes, thresholdPct, refreshSeconds },
+      { windowMinutes, customerMinMessages, vendorMinMessages, refreshSeconds },
     );
     s.connect();
     return () => s.close();
-  }, [windowMinutes, thresholdPct, refreshSeconds, paused]);
+  }, [windowMinutes, customerMinMessages, vendorMinMessages, refreshSeconds, paused]);
   return feed;
 }
 
@@ -175,11 +185,49 @@ export function DashboardPage() {
   const animate = me?.preferences.animations !== false;
   const navigate = useTabNavigate();
   const refreshSeconds = saved.refreshSeconds ?? 1;
-  const feed = useDashboardFeed(saved.windowMinutes, saved.thresholdPct, refreshSeconds);
+  const feed = useDashboardFeed(
+    saved.windowMinutes,
+    saved.customerMinMessages ?? 100,
+    saved.vendorMinMessages ?? 100,
+    refreshSeconds,
+  );
   const hidden = new Set(saved.hiddenPanels);
   const save = (patch: Partial<DashboardSettings>) => prefs.mutate({ dashboard: { ...saved, ...patch } });
   const open = (target: PartyRef | { mccmnc: string }, title: string) =>
     navigate(analyticsPath(target), { forceNew: true, title: `Analytics · ${title}` });
+
+  const layout = layoutOf(saved.layout ?? []);
+  const saveLayout = (next: LayoutItem[]) => save({ layout: next });
+  const panel = (key: Panel): ReactNode => {
+    switch (key) {
+      case "summary":
+        return <SummaryBar summary={feed.summary} animate={animate} onOpen={open} />;
+      case "movers":
+        return (
+          <MoversPanel
+            movers={feed.movers}
+            onOpen={open}
+            volumes={{ customer: saved.customerMinMessages ?? 100, vendor: saved.vendorMinMessages ?? 100 }}
+            onVolume={(kind, n) => save(kind === "customer" ? { customerMinMessages: n } : { vendorMinMessages: n })}
+          />
+        );
+      case "chart":
+        return (
+          <TpsChart
+            chart={feed.chart}
+            minutes={saved.chartMinutes}
+            onMinutes={(chartMinutes) => save({ chartMinutes })}
+            onOpen={open}
+          />
+        );
+      case "tps":
+        return <TpsTables tick={feed.tick} onOpen={open} />;
+      case "tops":
+        return <TopParties tops={feed.tops} onOpen={open} />;
+      case "destinations":
+        return <TopDestinations tops={feed.tops} onOpen={open} />;
+    }
+  };
 
   const at = feed.summary?.at ?? feed.tick?.at;
   usePageStatus({
@@ -195,6 +243,8 @@ export function DashboardPage() {
         page={page}
         actions={
           <>
+            {/* Online now sits in the page header, left of the controls (team trial round 2). */}
+            <OnlineNowCard />
             <label className="dash-control">
               Movers window
               <select
@@ -223,9 +273,9 @@ export function DashboardPage() {
                 ))}
               </select>
             </label>
-            <ThresholdInput value={saved.thresholdPct} onChange={(thresholdPct) => save({ thresholdPct })} />
             <PanelsMenu
               hidden={hidden}
+              onReset={() => save({ layout: [] })}
               onToggle={(p) =>
                 save({
                   hiddenPanels: hidden.has(p) ? saved.hiddenPanels.filter((x) => x !== p) : [...saved.hiddenPanels, p],
@@ -239,19 +289,24 @@ export function DashboardPage() {
         }
       />
       <div className="dash-body">
-        {!hidden.has("summary") && <SummaryBar summary={feed.summary} animate={animate} onOpen={open} />}
-        {!hidden.has("movers") && <MoversPanel movers={feed.movers} onOpen={open} />}
-        {!hidden.has("chart") && (
-          <TpsChart
-            chart={feed.chart}
-            minutes={saved.chartMinutes}
-            onMinutes={(chartMinutes) => save({ chartMinutes })}
-            onOpen={open}
-          />
-        )}
-        {!hidden.has("tps") && <TpsTables tick={feed.tick} onOpen={open} />}
-        {!hidden.has("tops") && <TopParties tops={feed.tops} onOpen={open} />}
-        {!hidden.has("destinations") && <TopDestinations tops={feed.tops} onOpen={open} />}
+        {/* Panels in the user's order and sizes (team trial round 2): drag the grip to move, the corner to resize. */}
+        <div className="dash-grid">
+          {layout
+            .filter((l) => !hidden.has(l.panel))
+            .map((l) => (
+              <PanelFrame
+                key={l.panel}
+                item={l}
+                label={PANELS.find((p) => p.key === l.panel)!.label}
+                onMove={(from) => saveLayout(movePanel(layout, from, l.panel))}
+                onResize={(cols, height) =>
+                  saveLayout(layout.map((x) => (x.panel === l.panel ? { ...x, cols, height } : x)))
+                }
+              >
+                {panel(l.panel)}
+              </PanelFrame>
+            ))}
+        </div>
         {hidden.size === PANELS.length && (
           <div className="grid-message muted">All panels are hidden. Use Panels to show them again.</div>
         )}
@@ -262,33 +317,129 @@ export function DashboardPage() {
 
 type Open = (target: PartyRef | { mccmnc: string }, title: string) => void;
 
-function ThresholdInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-  const commit = () => {
-    const n = Number(draft);
-    if (Number.isFinite(n) && n >= 5 && n <= 500 && n !== value) onChange(n);
-    else setDraft(String(value));
+// ---------------------------------------------------------------- layout (team trial round 2)
+
+type LayoutItem = DashboardSettings["layout"][number];
+
+/** The saved order and sizes, then any panel not in it, full width in the default order. */
+export function layoutOf(saved: LayoutItem[]): LayoutItem[] {
+  const known = new Set(PANELS.map((p) => p.key));
+  const out = saved.filter((l, i) => known.has(l.panel) && saved.findIndex((x) => x.panel === l.panel) === i);
+  for (const p of PANELS) if (!out.some((l) => l.panel === p.key)) out.push({ panel: p.key, cols: 12, height: null });
+  return out;
+}
+
+/** Moves `from` to where `to` is (the panels between shift by one). */
+export function movePanel(layout: LayoutItem[], from: Panel, to: Panel): LayoutItem[] {
+  if (from === to) return layout;
+  const item = layout.find((l) => l.panel === from)!;
+  const rest = layout.filter((l) => l.panel !== from);
+  const at = rest.findIndex((l) => l.panel === to);
+  const after = layout.findIndex((l) => l.panel === from) < layout.findIndex((l) => l.panel === to);
+  rest.splice(after ? at + 1 : at, 0, item);
+  return rest;
+}
+
+/** One panel in the grid: a grip to drag it onto another panel, a corner to resize it. */
+function PanelFrame({
+  item,
+  label,
+  onMove,
+  onResize,
+  children,
+}: {
+  item: LayoutItem;
+  label: string;
+  onMove: (from: Panel) => void;
+  onResize: (cols: number, height: number | null) => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState(false);
+  const [over, setOver] = useState(false);
+  const [live, setLive] = useState<{ cols: number; height: number | null } | null>(null);
+  const cols = live?.cols ?? item.cols;
+  const height = live ? live.height : item.height;
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const el = ref.current!;
+    const grid = el.parentElement!;
+    const colW = (grid.clientWidth + 12) / 12;
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const w0 = el.offsetWidth;
+    const h0 = el.offsetHeight;
+    let last = { cols: item.cols, height: item.height };
+    const move = (ev: PointerEvent) => {
+      last = {
+        cols: Math.max(3, Math.min(12, Math.round((w0 + ev.clientX - x0 + 12) / colW))),
+        height: Math.max(120, Math.min(2000, Math.round(h0 + ev.clientY - y0))),
+      };
+      setLive(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setLive(null);
+      if (last.cols !== item.cols || last.height !== item.height) onResize(last.cols, last.height);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   };
   return (
-    <label className="dash-control" title="Clients changing by more than this count as increasing or decreasing">
-      Threshold ±
-      <input
-        className="dash-threshold"
-        type="number"
-        min={5}
-        max={500}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => e.key === "Enter" && commit()}
+    <div
+      ref={ref}
+      className={`dash-frame${over ? " drop" : ""}${height ? " sized" : ""}`}
+      style={{ gridColumn: `span ${cols}`, height: height ?? undefined }}
+      draggable={drag}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/x-dash-panel", item.panel);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragEnd={() => setDrag(false)}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("text/x-dash-panel")) {
+          e.preventDefault();
+          setOver(true);
+        }
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        setOver(false);
+        const from = e.dataTransfer.getData("text/x-dash-panel") as Panel;
+        if (from) onMove(from);
+      }}
+    >
+      <button
+        type="button"
+        className="dash-grip"
+        title={`Drag to move ${label}`}
+        aria-label={`Move ${label}`}
+        onMouseDown={() => setDrag(true)}
+        onMouseUp={() => setDrag(false)}
+      >
+        ⠿
+      </button>
+      {children}
+      <span
+        className="dash-resize"
+        title={`Drag to resize ${label}; double-click for its own height`}
+        onPointerDown={startResize}
+        onDoubleClick={() => onResize(item.cols, null)}
       />
-      %
-    </label>
+    </div>
   );
 }
 
-function PanelsMenu({ hidden, onToggle }: { hidden: Set<Panel>; onToggle: (p: Panel) => void }) {
+function PanelsMenu({
+  hidden,
+  onToggle,
+  onReset,
+}: {
+  hidden: Set<Panel>;
+  onToggle: (p: Panel) => void;
+  onReset: () => void;
+}) {
   const ref = useRef<HTMLButtonElement>(null);
   const [shown, setShown] = useState(false);
   return (
@@ -309,6 +460,9 @@ function PanelsMenu({ hidden, onToggle }: { hidden: Set<Panel>; onToggle: (p: Pa
               <input type="checkbox" checked={!hidden.has(p.key)} onChange={() => onToggle(p.key)} /> {p.label}
             </label>
           ))}
+          <button type="button" className="link small" onClick={onReset}>
+            Reset layout (order and sizes)
+          </button>
         </div>
       </Popover>
     </>
@@ -411,22 +565,66 @@ function OnlineNowCard() {
   );
 }
 
-/** Compact card of open market moves (§13.14); opens Rates › Market moves. */
-function MarketMovesChip() {
+/** Market moves as a top card (§13.14, team trial round 2); opens Rates › Market moves. */
+function MarketMovesCard() {
   const q = useMarketSummary();
   const navigate = useTabNavigate();
   const s = q.data;
-  if (!s) return null;
   return (
     <button
       type="button"
-      className="btn btn-sm btn-ghost dash-mm"
-      title={`${s.up} up · ${s.down} down${s.mine ? ` · ${s.mine} for your clients` : ""}`}
+      className="dash-kpi dash-kpi-btn"
+      title={s ? `${s.up} up · ${s.down} down${s.mine ? ` · ${s.mine} for your clients` : ""}` : undefined}
       onClick={() => navigate("/rates/market-moves")}
     >
-      Market moves <strong className="num">{s.open.toLocaleString("en-US")}</strong>
-      {s.urgent > 0 && <span className="chip-mini tone-error">{s.urgent} urgent</span>}
+      <span className="label">Market moves</span>
+      <span className="value">{s ? s.open.toLocaleString("en-US") : "—"}</span>
+      <span className="sub">{s && s.urgent > 0 ? <span className="tone-error">{s.urgent} urgent</span> : "open"}</span>
     </button>
+  );
+}
+
+/** Two figures in one card, one per line (team trial round 2). */
+function PairCard({
+  rows,
+  animate,
+}: {
+  rows: {
+    label: string;
+    value: number | undefined;
+    format: (v: number) => string;
+    valueClass?: string;
+  }[];
+  animate: boolean;
+}) {
+  return (
+    <div className="dash-kpi dash-kpi-pair">
+      {rows.map((r) => (
+        <PairRow key={r.label} {...r} animate={animate} />
+      ))}
+    </div>
+  );
+}
+
+function PairRow({
+  label,
+  value,
+  format,
+  valueClass,
+  animate,
+}: {
+  label: string;
+  value: number | undefined;
+  format: (v: number) => string;
+  valueClass?: string;
+  animate: boolean;
+}) {
+  const shown = useRolling(value ?? 0, animate);
+  return (
+    <div className="pair-row">
+      <span className="label">{label}</span>
+      <span className={`value ${valueClass ?? ""}`}>{value === undefined ? "—" : format(shown)}</span>
+    </div>
   );
 }
 
@@ -440,58 +638,47 @@ function SummaryBar({
   onOpen: Open;
 }) {
   const cur = s?.currency ?? "EUR";
-  // Today is the day in the platform time zone (decision 2026-10-16).
-  const tz = useReference().data?.platformTimezone ?? "UTC";
   return (
-    <Section
-      title="Today"
-      className="dash-summary"
-      extra={
-        <>
-          <OnlineNowCard />
-          <MarketMovesChip />
-          <span className="muted small">
-            {tz} day · {cur}
-          </span>
-        </>
-      }
-    >
+    <Section title="Today" className="dash-summary">
+      {/* Pairs in one card (team trial round 2): Submitted and Delivered, Revenue and Margin, ASR and DLR, Customers and Vendors online. */}
       <div className="dash-kpis">
         <Counter label="Attempts" value={s?.attempts} format={int} animate={animate} />
-        <Counter label="Submitted" value={s?.submitted} format={int} animate={animate} />
-        <Counter label="Delivered" value={s?.delivered} format={int} animate={animate} />
-        <Counter label="Revenue" value={s?.revenue} format={(v) => money(v, cur)} animate={animate} />
+        <PairCard
+          animate={animate}
+          rows={[
+            { label: "Submitted", value: s?.submitted, format: int },
+            { label: "Delivered", value: s?.delivered, format: int },
+          ]}
+        />
+        <PairCard
+          animate={animate}
+          rows={[
+            { label: "Revenue", value: s?.revenue, format: (v) => money(v, cur) },
+            {
+              label: "Margin",
+              value: s?.margin,
+              format: (v) => money(v, cur),
+              valueClass: s && s.margin < 0 ? "neg" : undefined,
+            },
+          ]}
+        />
         <Counter label="Cost" value={s?.cost} format={(v) => money(v, cur)} animate={animate} />
-        <Counter
-          label="Margin"
-          value={s?.margin}
-          format={(v) => money(v, cur)}
-          tone={s && s.margin < 0 ? "bad" : undefined}
+        <PairCard
           animate={animate}
-          sub={s ? `${s.marginPct.toFixed(1)}%` : undefined}
-        />
-        <Counter
-          label="ASR"
-          value={s?.asr}
-          format={(v) => `${v.toFixed(1)}%`}
-          valueClass={qualityClass(s?.asr)}
-          animate={animate}
-        />
-        <Counter
-          label="DLR"
-          value={s?.dlr}
-          format={(v) => `${v.toFixed(1)}%`}
-          valueClass={qualityClass(s?.dlr)}
-          animate={animate}
+          rows={[
+            { label: "ASR", value: s?.asr, format: (v) => `${v.toFixed(1)}%`, valueClass: qualityClass(s?.asr) },
+            { label: "DLR", value: s?.dlr, format: (v) => `${v.toFixed(1)}%`, valueClass: qualityClass(s?.dlr) },
+          ]}
         />
         <Counter label="TPS now" value={s?.tps} format={(v) => dec(v)} animate={animate} />
-        <Counter
-          label="Online"
-          value={s?.onlineCustomers}
-          format={int}
+        <PairCard
           animate={animate}
-          sub={s ? `customers · ${s.onlineVendors} vendors` : undefined}
+          rows={[
+            { label: "Customers", value: s?.onlineCustomers, format: int },
+            { label: "Vendors", value: s?.onlineVendors, format: int },
+          ]}
         />
+        <MarketMovesCard />
       </div>
       {s && s.topDestinations.length > 0 && (
         <div className="dash-topdest">
@@ -530,15 +717,54 @@ const Sparkline = memo(function Sparkline({ values }: { values: number[] }) {
   );
 });
 
-type MoverKind = "started" | "increasing" | "decreasing" | "stopped";
+type MoverKind = "started" | "customers" | "vendors" | "stopped";
+/** Customer and Vendor in place of Increasing and Decreasing (team trial round 2). */
 const MOVER_GROUPS: { key: MoverKind; label: string; tone: string }[] = [
-  { key: "started", label: "Started sending", tone: "good" },
-  { key: "increasing", label: "Increasing", tone: "good" },
-  { key: "decreasing", label: "Decreasing", tone: "bad" },
+  { key: "started", label: "Started", tone: "good" },
+  { key: "customers", label: "Customer", tone: "neutral" },
+  { key: "vendors", label: "Vendor", tone: "neutral" },
   { key: "stopped", label: "Stopped", tone: "bad" },
 ];
 
-function MoversPanel({ movers, onOpen }: { movers: DashboardMoversEvent | null; onOpen: Open }) {
+/** The card's volume (team trial round 2): only trunks that sent at least this many messages in the window. */
+function VolumeInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const n = Math.round(Number(draft));
+    if (Number.isFinite(n) && n >= 0 && n <= 10_000_000 && n !== value) onChange(n);
+    else setDraft(String(value));
+  };
+  return (
+    <label
+      className="dash-volume"
+      title="Only trunks that sent at least this many messages in the window, now or before"
+    >
+      Volume ≥
+      <input
+        type="number"
+        min={0}
+        step={50}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === "Enter" && commit()}
+      />
+    </label>
+  );
+}
+
+function MoversPanel({
+  movers,
+  onOpen,
+  volumes,
+  onVolume,
+}: {
+  movers: DashboardMoversEvent | null;
+  onOpen: Open;
+  volumes: { customer: number; vendor: number };
+  onVolume: (kind: "customer" | "vendor", n: number) => void;
+}) {
   // Started rows not in the previous push get the "new" badge and a pulse.
   const prev = useRef<Set<string>>(new Set());
   const fresh = useMemo(() => {
@@ -555,7 +781,7 @@ function MoversPanel({ movers, onOpen }: { movers: DashboardMoversEvent | null; 
       extra={
         movers && (
           <span className="muted small">
-            Last {movers.windowMinutes} min vs the {movers.windowMinutes} min before · ±{movers.thresholdPct}%
+            Last {movers.windowMinutes} min vs the {movers.windowMinutes} min before
           </span>
         )
       }
@@ -567,6 +793,12 @@ function MoversPanel({ movers, onOpen }: { movers: DashboardMoversEvent | null; 
             <div key={g.key} className={`dash-mover-group ${g.tone}`}>
               <h3>
                 {g.label} <span className="count num">{movers ? rows.length : "…"}</span>
+                {(g.key === "customers" || g.key === "vendors") && (
+                  <VolumeInput
+                    value={g.key === "customers" ? volumes.customer : volumes.vendor}
+                    onChange={(n) => onVolume(g.key === "customers" ? "customer" : "vendor", n)}
+                  />
+                )}
               </h3>
               {movers && rows.length === 0 && <div className="muted small dash-empty">None</div>}
               <ul>
@@ -601,14 +833,25 @@ function MoverItem({ row, kind, isNew, onOpen }: { row: MoverRow; kind: MoverKin
         type="button"
         className={`dash-mover${isNew ? " is-new" : ""}`}
         onClick={() => onOpen(row.enterprise, row.enterprise.name)}
-        title={`${row.enterprise.name} · ${row.trunk.name}: ${row.tpsBefore} → ${row.tpsNow} TPS. ASR ${pct(row.asr)}, DLR ${pct(row.dlr)}`}
+        title={`${row.enterprise.name} · ${row.trunk.name}: ${row.tpsBefore} → ${row.tpsNow} TPS (${int(row.messagesBefore)} → ${int(row.messagesNow)} messages). ASR ${pct(row.asr)}, DLR ${pct(row.dlr)}${row.topDestination ? `. Mostly ${row.topDestination.name}` : ""}`}
       >
         <span className="who">
           <span className="name">
             {row.enterprise.name}
             {isNew && <span className="badge-new">new</span>}
           </span>
-          <span className="trunk muted">{row.trunk.name}</span>
+          <span className="trunk muted">
+            {row.trunk.name}
+            {row.topDestination && (
+              <span
+                className="dash-mover-dest"
+                title={`Sends most to ${row.topDestination.name} (${row.topDestination.mccmnc})`}
+              >
+                {" "}
+                · {row.topDestination.name}
+              </span>
+            )}
+          </span>
         </span>
         <Sparkline values={row.sparkline} />
         <span className="tps num">
@@ -875,22 +1118,24 @@ function TopParties({ tops, onOpen }: { tops: DashboardTopsEvent | null; onOpen:
                 height={ROW_H * 10}
                 rowKey={(r) => String(r.party.id)}
                 render={(r, i) => (
-                  <button
-                    type="button"
-                    className="dash-cols dash-top-row"
-                    onClick={() => onOpen(r.party, r.party.name)}
-                  >
-                    <span className="muted num">{i + 1}</span>
-                    <span className="ellipsis dash-named" title={r.party.name}>
-                      <span className="dash-volbar" style={{ width: `${(r.attempts / max) * 100}%` }} />
-                      <span className="t">{r.party.name}</span>
-                    </span>
-                    <span className="r num">{int(r.attempts)}</span>
-                    <span className="r num">{money(r.money, cur)}</span>
-                    <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
-                    <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
-                    <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
-                  </button>
+                  <BreakdownHover target={{ kind: side === "clients" ? "customer" : "vendor", name: r.party.name }}>
+                    <button
+                      type="button"
+                      className="dash-cols dash-top-row"
+                      onClick={() => onOpen(r.party, r.party.name)}
+                    >
+                      <span className="muted num">{i + 1}</span>
+                      <span className="ellipsis dash-named" title={r.party.name}>
+                        <span className="dash-volbar" style={{ width: `${(r.attempts / max) * 100}%` }} />
+                        <span className="t">{r.party.name}</span>
+                      </span>
+                      <span className="r num">{int(r.attempts)}</span>
+                      <span className="r num">{money(r.money, cur)}</span>
+                      <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
+                      <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
+                      <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
+                    </button>
+                  </BreakdownHover>
                 )}
               />
             )}
@@ -926,28 +1171,130 @@ function TopDestinations({ tops, onOpen }: { tops: DashboardTopsEvent | null; on
           height={ROW_H * Math.min(15, Math.max(5, rows.length))}
           rowKey={(r) => r.mccmnc}
           render={(r, i) => (
-            <button
-              type="button"
-              className="dash-cols dash-dest-row"
-              onClick={() => onOpen({ mccmnc: r.mccmnc }, `${r.country} ${r.network}`)}
-            >
-              <span className="muted num">{i + 1}</span>
-              <span className="ellipsis dash-named" title={`${r.country} – ${r.network}`}>
-                <span className="dash-volbar" style={{ width: `${(r.attempts / max) * 100}%` }} />
-                <span className="t">
-                  {r.country} <span className="muted">{r.network}</span>
+            <BreakdownHover target={{ kind: "destination", mccmnc: r.mccmnc, name: `${r.country} ${r.network}` }}>
+              <button
+                type="button"
+                className="dash-cols dash-dest-row"
+                onClick={() => onOpen({ mccmnc: r.mccmnc }, `${r.country} ${r.network}`)}
+              >
+                <span className="muted num">{i + 1}</span>
+                <span className="ellipsis dash-named" title={`${r.country} – ${r.network}`}>
+                  <span className="dash-volbar" style={{ width: `${(r.attempts / max) * 100}%` }} />
+                  <span className="t">
+                    {r.country} <span className="muted">{r.network}</span>
+                  </span>
                 </span>
-              </span>
-              <span className="num muted">{r.mccmnc}</span>
-              <span className="r num">{int(r.attempts)}</span>
-              <span className="r num">{money(r.revenue, cur)}</span>
-              <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
-              <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
-              <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
-            </button>
+                <span className="num muted">{r.mccmnc}</span>
+                <span className="r num">{int(r.attempts)}</span>
+                <span className="r num">{money(r.revenue, cur)}</span>
+                <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
+                <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
+                <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
+              </button>
+            </BreakdownHover>
           )}
         />
       )}
     </Section>
+  );
+}
+
+// ---------------------------------------------------------------- hover breakdowns
+
+type Breakdown =
+  | { kind: "customer"; name: string }
+  | { kind: "vendor"; name: string }
+  | { kind: "destination"; mccmnc: string; name: string };
+
+/** What a hovered row is made of today (team trial round 2), from the same report engine as Live analytics. */
+const BREAKDOWN: Record<Breakdown["kind"], { by: [ReportDimension, ReportDimension]; heads: [string, string] }> = {
+  customer: { by: ["destination", "vendor"], heads: ["Destination", "Vendor"] },
+  vendor: { by: ["customer", "destination"], heads: ["Client", "Destination"] },
+  destination: { by: ["customer", "vendor"], heads: ["Client", "Vendor"] },
+};
+
+function BreakdownTable({ target, timezone }: { target: Breakdown; timezone: string }) {
+  const def = BREAKDOWN[target.kind];
+  const condition: FilterCondition =
+    target.kind === "destination"
+      ? { field: "destination", op: "eq", value: target.mccmnc }
+      : { field: target.kind, op: "eq", value: target.name };
+  const q = useQuery({
+    queryKey: ["dash-breakdown", target, timezone],
+    queryFn: () =>
+      runMasterReport({
+        groupBy: def.by,
+        metrics: ["attempts"],
+        enterpriseLabel: "alias",
+        timezone,
+        period: "today",
+        compare: "none",
+        filter: { logic: "and", conditions: [condition] },
+        sort: [{ field: "attempts", dir: "desc" }],
+        limit: 10,
+      }),
+    staleTime: 30_000,
+  });
+  return (
+    <div className="dash-breakdown">
+      <strong>{target.name}</strong> <span className="muted small">today, by volume</span>
+      {q.isPending ? (
+        <p className="muted small">Loading…</p>
+      ) : q.isError ? (
+        <p className="error-text small">{(q.error as Error).message}</p>
+      ) : !q.data.rows.length ? (
+        <p className="muted small">No traffic today.</p>
+      ) : (
+        <table className="mini-table">
+          <thead>
+            <tr>
+              <th>{def.heads[0]}</th>
+              <th>{def.heads[1]}</th>
+              <th className="num">Volume</th>
+            </tr>
+          </thead>
+          <tbody>
+            {q.data.rows.map((r) => (
+              <tr key={r.key}>
+                <td>{r.dims[def.by[0]]?.label ?? "—"}</td>
+                <td>{r.dims[def.by[1]]?.label ?? "—"}</td>
+                <td className="num">{int(r.metrics.attempts ?? 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/** Shows the breakdown after a short hover on the row (team trial round 2). */
+function BreakdownHover({ target, children }: { target: Breakdown; children: ReactNode }) {
+  const anchor = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  const tz = useReference().data?.platformTimezone ?? "UTC";
+  const clear = () => {
+    if (timer.current !== undefined) window.clearTimeout(timer.current);
+    timer.current = undefined;
+  };
+  return (
+    <div
+      ref={anchor}
+      className="dash-hover"
+      onMouseEnter={() => {
+        clear();
+        timer.current = window.setTimeout(() => setOpen(true), 400);
+      }}
+      onMouseLeave={() => {
+        clear();
+        setOpen(false);
+      }}
+    >
+      {children}
+      <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} align="start">
+        <BreakdownTable target={target} timezone={tz} />
+      </Popover>
+    </div>
   );
 }

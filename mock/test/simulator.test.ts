@@ -14,44 +14,68 @@ const trunk = (id: number, minutes: number[]) => ({
 });
 const hist = (before: number, now: number, w = 15) => [...Array(w).fill(before), ...Array(w).fill(now)];
 
-test("movers: started, stopped, increasing and decreasing by the threshold", () => {
+const MIN = { customer: 0, vendor: 0 };
+
+test("movers: started and stopped customers; customers and vendors that changed, biggest first (team trial round 2)", () => {
   const m = computeMovers(
-    [
-      trunk(1, hist(0, 5)), // started
-      trunk(2, hist(8, 0)), // stopped
-      trunk(3, hist(10, 14)), // +40 %
-      trunk(4, hist(10, 6)), // -40 %
-      trunk(5, hist(10, 12)), // +20 %: below the threshold
-      trunk(6, hist(0, 0.1)), // a trickle is not a start
-    ],
+    {
+      customers: [
+        trunk(1, hist(0, 5)), // started
+        trunk(2, hist(8, 0)), // stopped
+        trunk(3, hist(10, 14)), // +40 %
+        trunk(4, hist(10, 6)), // -40 %
+        trunk(5, hist(10, 12)), // +20 %: any change counts
+        trunk(6, hist(0, 0.1)), // a trickle is not a start
+      ],
+      vendors: [trunk(11, hist(10, 5)), trunk(12, hist(10, 11))],
+    },
     15,
-    30,
+    MIN,
     Date.parse("2026-10-16T12:00:00Z"),
+    15,
+    (kind, id) => (kind === "vendor" && id === 11 ? { mccmnc: "40474", name: "India BSNL" } : null),
   );
   assert.deepEqual(
-    [m.started, m.stopped, m.increasing, m.decreasing].map((xs) => xs.map((r) => r.trunk.id)),
-    [[1], [2], [3], [4]],
+    [m.started, m.stopped, m.customers, m.vendors].map((xs) => xs.map((r) => r.trunk.id)),
+    [[1], [2], [3, 4, 5], [11, 12]],
   );
-  assert.equal(m.increasing[0]!.changePct, 40);
-  assert.equal(m.decreasing[0]!.changePct, -40);
+  assert.equal(m.customers[0]!.changePct, 40);
+  assert.equal(m.vendors[0]!.trunk.kind, "vendor_trunk");
+  assert.equal(m.vendors[0]!.enterprise.kind, "vendor_enterprise");
+  assert.deepEqual(m.vendors[0]!.topDestination, { mccmnc: "40474", name: "India BSNL" });
+  assert.equal(m.customers[0]!.messagesNow, 14 * 60 * 15, "messages in the window");
   assert.equal(m.started[0]!.changePct, null, "no change % from zero");
   assert.equal(m.started[0]!.sparkline.length, 30);
 });
 
+test("movers: the card volume leaves out small trunks", () => {
+  const m = computeMovers(
+    { customers: [trunk(1, hist(1, 2)), trunk(2, hist(10, 20))], vendors: [trunk(3, hist(1, 2))] },
+    15,
+    { customer: 2000, vendor: 5000 },
+  );
+  // 2 TPS × 900 s = 1,800 messages: below 2,000; 20 TPS = 18,000: above.
+  assert.deepEqual(
+    m.customers.map((r) => r.trunk.id),
+    [2],
+  );
+  assert.equal(m.vendors.length, 0);
+});
+
 test("movers: the window only looks at its own minutes", () => {
-  // Busier earlier, steady for the last 20 minutes: no mover at 5 minutes, -33 % at 30.
+  // Busier earlier, steady for the last 20 minutes: no change at 5 minutes, -33 % at 30.
   const minutes = [...Array(40).fill(20), ...Array(20).fill(10)];
-  const five = computeMovers([trunk(1, minutes)], 5, 30);
-  assert.equal(five.increasing.length + five.decreasing.length, 0);
-  const thirty = computeMovers([trunk(1, minutes)], 30, 30);
-  assert.equal(thirty.decreasing[0]?.trunk.id, 1);
+  const five = computeMovers({ customers: [trunk(1, minutes)], vendors: [] }, 5, MIN);
+  assert.equal(five.customers.length, 0);
+  const thirty = computeMovers({ customers: [trunk(1, minutes)], vendors: [] }, 30, MIN);
+  assert.equal(thirty.customers[0]?.trunk.id, 1);
 });
 
 test("movers: lists are sorted and capped", () => {
   const trunks = Array.from({ length: 30 }, (_, i) => trunk(i + 1, hist(10, 14 + i)));
-  const m = computeMovers(trunks, 15, 30, Date.now(), 15);
-  assert.equal(m.increasing.length, 15);
-  assert.equal(m.increasing[0]!.trunk.id, 30, "biggest change first");
+  const m = computeMovers({ customers: trunks, vendors: [] }, 15, MIN, Date.now(), 15);
+  assert.equal(m.customers.length, 15);
+  assert.equal(m.customers[0]!.trunk.id, 30, "biggest change first");
 });
 
 test("timelines are continuous and cover the requested span", () => {

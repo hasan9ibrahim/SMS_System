@@ -87,7 +87,18 @@ test("live:dashboard: join params, then summary, movers and tops; history on liv
   await new Promise((r) => ws.once("open", r));
   ws.send(JSON.stringify(["9", "9", "live:dashboard", "phx_join", { windowMinutes: 7 }]));
   assert.equal((await waitFor((f) => f[1] === "9"))[4].status, "error", "window outside the enum");
-  ws.send(JSON.stringify(["1", "1", "live:dashboard", "phx_join", { windowMinutes: 5, thresholdPct: 20 }]));
+  // The ± threshold is gone; Customer and Vendor each have a volume (team trial round 2, §13.3).
+  ws.send(JSON.stringify(["8", "8", "live:dashboard", "phx_join", { windowMinutes: 5, thresholdPct: 20 }]));
+  assert.equal((await waitFor((f) => f[1] === "8"))[4].status, "error", "thresholdPct is no longer a join param");
+  ws.send(
+    JSON.stringify([
+      "1",
+      "1",
+      "live:dashboard",
+      "phx_join",
+      { windowMinutes: 5, customerMinMessages: 20, vendorMinMessages: 30 },
+    ]),
+  );
   ws.send(JSON.stringify(["2", "2", "live:tps", "phx_join", {}]));
   assert.equal((await waitFor((f) => f[1] === "1"))[4].status, "ok");
 
@@ -101,7 +112,8 @@ test("live:dashboard: join params, then summary, movers and tops; history on liv
   const movers = await waitFor((f) => f[3] === "movers");
   valid("dashboard.movers.json", movers[4]);
   assert.equal(movers[4].windowMinutes, 5, "the join params drive the movers");
-  assert.equal(movers[4].thresholdPct, 20);
+  assert.equal(movers[4].customerMinMessages, 20);
+  assert.equal(movers[4].vendorMinMessages, 30);
   valid("dashboard.tops.json", (await waitFor((f) => f[3] === "tops"))[4]);
   valid("dashboard.summary.json", (await waitFor((f) => f[3] === "summary"))[4]);
 

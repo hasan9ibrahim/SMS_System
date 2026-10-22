@@ -20,6 +20,7 @@ import {
   createSimulator,
   historyEvent,
   resyncToday,
+  topDestinationOf,
   step,
   summaryEvent,
   tickEvent,
@@ -32,7 +33,7 @@ type Frame = [string | null, string | null, string, string, Record<string, unkno
 interface Client {
   socket: WebSocket;
   topics: Map<string, string | null>; // topic -> join_ref
-  movers: { windowMinutes: number; thresholdPct: number; refreshSeconds: number };
+  movers: { windowMinutes: number; customerMinMessages: number; vendorMinMessages: number; refreshSeconds: number };
   analytics: AnalyticsParams | null;
 }
 
@@ -74,7 +75,19 @@ function push(topic: string, event: string, payload: object) {
 }
 
 function moversFor(s: Simulator, c: Client, now: number) {
-  send(c, "live:dashboard", "movers", computeMovers(s.trunks, c.movers.windowMinutes, c.movers.thresholdPct, now));
+  send(
+    c,
+    "live:dashboard",
+    "movers",
+    computeMovers(
+      { customers: s.trunks, vendors: s.vendors },
+      c.movers.windowMinutes,
+      { customer: c.movers.customerMinMessages, vendor: c.movers.vendorMinMessages },
+      now,
+      15,
+      topDestinationOf(s),
+    ),
+  );
 }
 
 function tick() {
@@ -128,16 +141,23 @@ export function startLive() {
   void getSimulator();
 }
 
-/** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes, 30 % and every second. */
+/** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes, 100 messages per card, every second. */
 function moverParams(p: Record<string, unknown>): Client["movers"] | null {
   const w = p.windowMinutes ?? 15;
-  const th = p.thresholdPct ?? 30;
+  const cm = p.customerMinMessages ?? 100;
+  const vm = p.vendorMinMessages ?? 100;
   const r = p.refreshSeconds ?? 1;
-  const extra = Object.keys(p).filter((k) => !["windowMinutes", "thresholdPct", "refreshSeconds"].includes(k));
-  if (extra.length || ![5, 15, 30, 60].includes(w as number)) return null;
+  const known = ["windowMinutes", "customerMinMessages", "vendorMinMessages", "refreshSeconds"];
+  if (Object.keys(p).some((k) => !known.includes(k)) || ![5, 15, 30, 60].includes(w as number)) return null;
   if (![1, 5, 10, 30, 60].includes(r as number)) return null;
-  if (typeof th !== "number" || th < 5 || th > 500) return null;
-  return { windowMinutes: w as number, thresholdPct: th, refreshSeconds: r as number };
+  const count = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 10_000_000;
+  if (!count(cm) || !count(vm)) return null;
+  return {
+    windowMinutes: w as number,
+    customerMinMessages: cm as number,
+    vendorMinMessages: vm as number,
+    refreshSeconds: r as number,
+  };
 }
 
 const KNOWN_TOPICS = (topic: string) =>
@@ -149,7 +169,7 @@ export async function registerSocket(app: FastifyInstance) {
     const client: Client = {
       socket,
       topics: new Map(),
-      movers: { windowMinutes: 15, thresholdPct: 30, refreshSeconds: 1 },
+      movers: { windowMinutes: 15, customerMinMessages: 100, vendorMinMessages: 100, refreshSeconds: 1 },
       analytics: null,
     };
     clients.add(client);
