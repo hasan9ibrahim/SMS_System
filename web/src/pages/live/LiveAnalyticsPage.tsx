@@ -22,6 +22,7 @@ import { PageHeader } from "../../page/PageHeader";
 import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
+import { HoursChip, PeriodTabs, RangeChip } from "../../ui/DateRange";
 import { Button, Modal, Popover } from "../../ui/primitives";
 import { fetchEdrs } from "../monitoring/EdrSearchPage";
 import { RequestDialog } from "../monitoring/parts";
@@ -49,7 +50,16 @@ import {
 } from "./analyticsTree";
 
 const page = pageForPath("/live/analytics")!;
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const PRESETS = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "last7", label: "Last 7 days" },
+  { key: "thisMonth", label: "This month" },
+  { key: "lastMonth", label: "Last month" },
+] as const satisfies { key: Parameters<typeof presetRange>[0]; label: string }[];
+const samePeriod = (a: { fromDate: string; toDate: string }, b: { fromDate: string; toDate: string }) =>
+  a.fromDate === b.fromDate && a.toDate === b.toDate;
+
 const REFRESH = [
   { value: 0, label: "Off" },
   // Down to 1 s, which the team calls live (team trial round 1).
@@ -678,66 +688,26 @@ export function LiveAnalyticsPage() {
           </>
         }
       />
+      {/* Period in the shared style (design refresh): quick periods, the day range and the hours of each day. */}
       <div className="la-bar">
-        <div className="la-range">
-          <label className="field">
-            <span>From day</span>
-            <input
-              type="date"
-              value={draft.fromDate}
-              onChange={(e) => setDraft({ ...draft, fromDate: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            <span>To day</span>
-            <input type="date" value={draft.toDate} onChange={(e) => setDraft({ ...draft, toDate: e.target.value })} />
-          </label>
-          <div className="la-presets">
-            <button type="button" className="la-chip" onClick={() => setRange("today")}>
-              Today
-            </button>
-            <button type="button" className="la-chip" onClick={() => setRange("yesterday")}>
-              Yesterday
-            </button>
-            <button type="button" className="la-chip" onClick={() => setRange("last7")}>
-              Last 7 days
-            </button>
-            <button type="button" className="la-chip" onClick={() => setRange("thisMonth")}>
-              This month
-            </button>
-            <button type="button" className="la-chip" onClick={() => setRange("lastMonth")}>
-              Last month
-            </button>
-          </div>
-          <div className="field">
-            <span>Each day</span>
-            <span className="la-hours">
-              <select
-                aria-label="Each day from"
-                value={draft.hourFrom}
-                onChange={(e) => setDraft({ ...draft, hourFrom: Number(e.target.value) })}
-              >
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>
-                    {String(h).padStart(2, "0")}:00
-                  </option>
-                ))}
-              </select>
-              –
-              <select
-                aria-label="Each day to"
-                value={draft.hourTo}
-                onChange={(e) => setDraft({ ...draft, hourTo: Number(e.target.value) })}
-              >
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>
-                    {String(h).padStart(2, "0")}:59
-                  </option>
-                ))}
-              </select>
-            </span>
-          </div>
-        </div>
+        <PeriodTabs
+          options={PRESETS}
+          value={PRESETS.find((p) => samePeriod(presetRange(p.key, reportToday), draft))?.key ?? null}
+          onPick={setRange}
+        />
+        <RangeChip
+          from={draft.fromDate}
+          to={draft.toDate}
+          empty="Pick days"
+          onChange={(fromDate, toDate) =>
+            fromDate && toDate && setDraft({ ...draft, fromDate, toDate: toDate < fromDate ? fromDate : toDate })
+          }
+        />
+        <HoursChip
+          from={draft.hourFrom}
+          to={draft.hourTo}
+          onChange={(hourFrom, hourTo) => setDraft({ ...draft, hourFrom, hourTo })}
+        />
       </div>
       {settings.at && (
         <div className="la-at" role="status">
@@ -797,8 +767,8 @@ export function LiveAnalyticsPage() {
                 >
                   <button type="button" className="la-sort" onClick={() => setSort(nextSort(sort, c.metric))}>
                     {c.label}
-                    {/* Money and rates are in the platform currency (EUR), whatever each partner bills in. */}
-                    {moneyCols.has(c.fmt) && <span className="muted small"> {currency}</span>}
+                    {/* Money and rates are in the platform currency (EUR); the header's tooltip says so (team trial
+                        round 2: no currency in the header text). */}
                     {arrow(c.metric)}
                   </button>
                 </th>

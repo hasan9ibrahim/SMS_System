@@ -184,7 +184,10 @@ describe("§9 EDR search", { skip }, () => {
     assert.ok(
       found.rows.every(
         (x) =>
-          x.dnid === a!.dnid || x.customerMsgId === b!.customerMsgId || x.vendorMsgId?.split(",").includes(lastPart),
+          x.dnid === a!.dnid ||
+          [a!.dnid, b!.customerMsgId, lastPart].includes(x.senderId ?? "") ||
+          x.customerMsgId === b!.customerMsgId ||
+          x.vendorMsgId?.split(",").includes(lastPart),
       ),
     );
     const fields = await ok<{ fields: { field: string; filterOnly?: boolean }[] }>(

@@ -179,9 +179,9 @@
       ],
       "destinations": [
         {
-          "mccmnc": "99901",
+          "iso": "FK",
           "country": "Fakeland",
-          "network": "Example Mobile",
+          "networks": 3,
           "attempts": 82000,
           "revenue": 2400.1,
           "margin": 300.4,

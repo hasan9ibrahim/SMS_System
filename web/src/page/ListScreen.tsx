@@ -60,10 +60,21 @@ export interface ListScreenProps<Row extends { id: number }> {
   /** Page-specific controls in the filter row (e.g. an account manager picker). */
   toolbar?: (state: GridState, setState: (s: GridState) => void) => ReactNode;
   shortcuts?: string;
-  /** Extra header actions, placed before the primary button (e.g. Simulate). */
-  actions?: ReactNode;
+  /**
+   * Extra header actions, placed before the primary button (e.g. Simulate). A function receives the rows the
+   * actions apply to: the selected rows, else the active row.
+   */
+  actions?: ReactNode | ((targets: Row[]) => ReactNode);
   /** Enables the header Export button; receives the current filters (§13.22). */
   onExport?: (state: GridState) => void;
+  /** Export as the page's filled button, last in the header (EDR search, team trial round 2). */
+  exportPrimary?: boolean;
+  /** Leave out the quick search box (a page whose own toolbar has the search, e.g. EDR search). */
+  noQuickSearch?: boolean;
+  /** Leave out the bar of actions on the selected row (the page puts them in `actions`). */
+  noRecordBar?: boolean;
+  /** Filters the page's toolbar shows itself, so they get no chip (e.g. EDR search's period). */
+  toolbarFields?: string[];
   /** Selection summary and the Bulk edit menu (§13.11). */
   selection?: {
     summary?: (rows: Row[], ids: ReadonlySet<number>) => ReactNode;
@@ -413,6 +424,10 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     toolbar,
     actions,
     onExport,
+    exportPrimary = false,
+    noQuickSearch = false,
+    noRecordBar = false,
+    toolbarFields = [],
     selection,
     onKey,
     rowClass,
@@ -534,19 +549,34 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 </Button>
               </>
             )}
-            <Button
-              icon="download"
-              disabled={!onExport}
-              onClick={() => onExport?.(state)}
-              title={
-                onExport
-                  ? "Export the rows matching the current filters (CSV)"
-                  : "Export follows the current filters; it arrives with import/export (§13.22)"
-              }
-            >
-              Export
-            </Button>
-            {actions}
+            {!exportPrimary && (
+              <Button
+                icon="download"
+                disabled={!onExport}
+                onClick={() => onExport?.(state)}
+                title={
+                  onExport
+                    ? "Export the rows matching the current filters (CSV)"
+                    : "Export follows the current filters; it arrives with import/export (§13.22)"
+                }
+              >
+                Export
+              </Button>
+            )}
+            {typeof actions === "function"
+              ? actions(selected.size ? rows.filter((r) => selected.has(r.id)) : activeRow ? [activeRow] : [])
+              : actions}
+            {exportPrimary && (
+              <Button
+                variant="primary"
+                icon="download"
+                disabled={!onExport}
+                onClick={() => onExport?.(state)}
+                title="Export the rows matching the current filters"
+              >
+                Export
+              </Button>
+            )}
             {primary && (
               <Button
                 variant="primary"
@@ -558,18 +588,20 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 {primary.label}
               </Button>
             )}
-            <RecordActionBar<Row>
-              target={
-                selected.size === 1
-                  ? (rows.find((r) => selected.has(r.id)) ?? null)
-                  : selected.size === 0
-                    ? activeRow
-                    : null
-              }
-              multi={selected.size > 1}
-              template={rows[0] ?? null}
-              {...(rowActions ? { rowActions } : {})}
-            />
+            {!noRecordBar && (
+              <RecordActionBar<Row>
+                target={
+                  selected.size === 1
+                    ? (rows.find((r) => selected.has(r.id)) ?? null)
+                    : selected.size === 0
+                      ? activeRow
+                      : null
+                }
+                multi={selected.size > 1}
+                template={rows[0] ?? null}
+                {...(rowActions ? { rowActions } : {})}
+              />
+            )}
           </>
         }
       />
@@ -577,26 +609,28 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
       {/* Filters in one card (design refresh): search first, the page's own filters, chips, Add filter. */}
       <div className="filter-card">
         <div className="filter-row">
-          <div className="quick-search">
-            <Icon name="search" size={13} />
-            <input
-              key={state.search === "" ? "empty" : "set"}
-              defaultValue={state.search}
-              placeholder="Quick search…"
-              aria-label="Quick search"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") setState({ ...state, search: (e.target as HTMLInputElement).value });
-                if (e.key === "Escape") {
-                  (e.target as HTMLInputElement).value = "";
-                  setState({ ...state, search: "" });
-                }
-              }}
-              onBlur={(e) => e.target.value !== state.search && setState({ ...state, search: e.target.value })}
-            />
-          </div>
+          {!noQuickSearch && (
+            <div className="quick-search">
+              <Icon name="search" size={13} />
+              <input
+                key={state.search === "" ? "empty" : "set"}
+                defaultValue={state.search}
+                placeholder="Quick search…"
+                aria-label="Quick search"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") setState({ ...state, search: (e.target as HTMLInputElement).value });
+                  if (e.key === "Escape") {
+                    (e.target as HTMLInputElement).value = "";
+                    setState({ ...state, search: "" });
+                  }
+                }}
+                onBlur={(e) => e.target.value !== state.search && setState({ ...state, search: e.target.value })}
+              />
+            </div>
+          )}
           {toolbar?.(state, setState)}
           {Object.values(state.columns)
-            .filter((c) => c.field !== "archived")
+            .filter((c) => c.field !== "archived" && !toolbarFields.includes(c.field))
             .map((c) => (
               <span key={c.field} className="chip accent">
                 {conditionLabel(byName.get(c.field), c)}

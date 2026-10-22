@@ -1961,7 +1961,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**Total** — the first row, with all traffic of the period. It opens broken down **by customer** (or by what the link that opened the page asked for).",
-              "**+** at the start of a row opens a menu of levels to break it down by; **−** closes the breakdown. Each row can be broken down by any level not already used above it. An expanded row and its sub rows sit in a bold blue frame, so you can see where a breakdown starts and ends.",
+              "**+** at the start of a row opens a menu of levels to break it down by; **−** closes the breakdown. Each row can be broken down by any level not already used above it. An expanded row and its sub rows sit in a bold grey frame, so you can see where a breakdown starts and ends.",
               "**Search** — the top breakdown has a search box in the first column header; each nested breakdown has its own search row. Type part of a name or code.",
               "**A–Z** next to the top search sorts by name. Click any column header to sort every breakdown by it: the first click shows the highest first, the next click flips it.",
               "Breakdowns show the 100 busiest rows; **Show … more of …** loads the next 100.",

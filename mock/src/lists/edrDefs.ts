@@ -35,13 +35,13 @@ const msgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
           ? `v_message_id ILIKE ${lit(`%${String(c.value)}%`)}`
           : any;
 };
-/** Number or Msg ID (team trial round 2, §9.1): a receiver number, a Customer Msg ID or any part's Vendor Msg ID. */
+/** Number, sender or Msg ID (team trial round 2, §9.1): a receiver number, a sender ID, a Customer Msg ID or any part's Vendor Msg ID. */
 const numberOrMsgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
   const raw = (c.values ?? [c.value]).map((v) => String(v).trim()).filter(Boolean);
   if (!raw.length) return "0";
   const ids = raw.map((v) => lit(v)).join(",");
   const numbers = raw.map((v) => v.replace(/[\s+()-]/g, "")).filter((v) => /^\d+$/.test(v));
-  const parts = [`c_message_id IN (${ids})`, `hasAny(splitByChar(',', v_message_id), [${ids}])`];
+  const parts = [`src_addr IN (${ids})`, `c_message_id IN (${ids})`, `hasAny(splitByChar(',', v_message_id), [${ids}])`];
   if (numbers.length) parts.unshift(`dst_addr IN (${numbers.map((v) => lit(v)).join(",")})`);
   return `(${parts.join(" OR ")})`;
 };

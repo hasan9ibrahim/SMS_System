@@ -19,6 +19,7 @@ import { Button, Modal } from "../../../ui/primitives";
 import { VirtualTable, type VColumn } from "../../lookup/VirtualTable";
 import { fmtWhen } from "../../reference/shared";
 import { problemText } from "../../routing/dialogs";
+import { PeriodTabs, RangeChip } from "../../../ui/DateRange";
 import { fmtHours, isSection, METRICS, PERIODS, ranking, recordLink, SECTIONS, type Section } from "./teamModel";
 
 const page = pageForPath("/reports/team")!;
@@ -771,28 +772,28 @@ export function TeamReportPage() {
         }
       />
       <div className="lcr-controls">
-        <label className="field">
+        <div className="field">
           <span>Period</span>
-          <select value={period} onChange={(e) => setPeriod(e.target.value as TeamReportQuery["period"])}>
-            {PERIODS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {period === "custom" && (
-          <>
-            <label className="field">
-              <span>From (UTC)</span>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>To (UTC, not included)</span>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </label>
-          </>
-        )}
+          {/* Shared period style (design refresh, team trial round 2); the range chip sets a custom period. */}
+          <span className="period-line">
+            <PeriodTabs
+              options={PERIODS.filter((p) => p.value !== "custom").map((p) => ({ key: p.value, label: p.label }))}
+              value={period === "custom" ? null : period}
+              onPick={setPeriod}
+            />
+            <RangeChip
+              from={period === "custom" ? from : ""}
+              to={period === "custom" ? to : ""}
+              empty="Custom period"
+              suffix={period === "custom" ? "UTC, To not included" : undefined}
+              onChange={(f, t) => {
+                setFrom(f);
+                setTo(t);
+                setPeriod("custom");
+              }}
+            />
+          </span>
+        </div>
         <div className="field">
           <span>Department</span>
           <ListLookup<{ id: number; name: string }>

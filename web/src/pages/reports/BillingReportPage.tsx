@@ -11,6 +11,7 @@ import { ListScreen } from "../../page/ListScreen";
 import { useTabNavigate } from "../../shell/tabContext";
 import { Button } from "../../ui/primitives";
 import { PERIODS } from "./masterModel";
+import { PeriodTabs, RangeChip } from "../../ui/DateRange";
 
 const page = pageForPath("/reports/billing")!;
 const money = (v: number | null) =>
@@ -63,43 +64,26 @@ export function BillingReportPage() {
       fetchPage={(body) => fetchBillingReport(params, body)}
       above={
         <div className="rp-settings rp-master-settings">
-          <label className="small">
-            Period
-            <select
-              value={params.period}
-              onChange={(e) => setParams({ ...params, period: e.target.value as ReportPeriod })}
-            >
-              {PERIODS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {params.period === "custom" && (
-            <>
-              <label className="small">
-                From *
-                <input
-                  type="date"
-                  value={params.from?.slice(0, 10) ?? ""}
-                  onChange={(e) =>
-                    setParams({ ...params, from: e.target.value ? `${e.target.value}T00:00:00.000Z` : null })
-                  }
-                />
-              </label>
-              <label className="small">
-                To (exclusive) *
-                <input
-                  type="date"
-                  value={params.to?.slice(0, 10) ?? ""}
-                  onChange={(e) =>
-                    setParams({ ...params, to: e.target.value ? `${e.target.value}T00:00:00.000Z` : null })
-                  }
-                />
-              </label>
-            </>
-          )}
+          {/* Period in the shared style (design refresh, team trial round 2); the range chip sets a custom period. */}
+          <PeriodTabs
+            options={PERIODS.filter((p) => p.value !== "custom").map((p) => ({ key: p.value, label: p.label }))}
+            value={params.period === "custom" ? null : params.period}
+            onPick={(period) => setParams({ ...params, period, from: null, to: null })}
+          />
+          <RangeChip
+            from={params.period === "custom" ? (params.from?.slice(0, 10) ?? "") : ""}
+            to={params.period === "custom" ? (params.to?.slice(0, 10) ?? "") : ""}
+            empty="Custom period"
+            suffix={params.period === "custom" ? "(To not included)" : undefined}
+            onChange={(from, to) =>
+              setParams({
+                ...params,
+                period: "custom",
+                from: from ? `${from}T00:00:00.000Z` : null,
+                to: to ? `${to}T00:00:00.000Z` : null,
+              })
+            }
+          />
           <span className="muted small">
             Amounts in each enterprise's billing currency; negative margin in {ccy}. Balance and credit use are as of
             today.

@@ -213,9 +213,10 @@
 }
 .la-bar {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
   margin-bottom: 8px;
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
@@ -661,8 +662,11 @@
   overflow: visible;
 }
 
-/* An expanded row and its sub rows sit in a bold frame (team trial round 2). The side edges are always reserved,
-   so framing a group never shifts its columns. */
+/* An expanded row and its sub rows sit in a frame: the grid's grey row line, bolded (team trial round 2). The side
+   edges are always reserved, so framing a group never shifts its columns. */
+.la-grid {
+  --la-frame: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-border));
+}
 .la-grid td:first-child {
   border-left: 2px solid transparent;
 }
@@ -670,19 +674,19 @@
   border-right: 2px solid transparent;
 }
 .la-grid tr.la-open > td {
-  border-top: 2px solid var(--color-accent);
+  border-top: 2px solid var(--la-frame);
 }
 .la-grid tr.la-open > td:first-child,
 .la-grid tr.la-framed > td:first-child {
-  border-left-color: var(--color-accent);
+  border-left-color: var(--la-frame);
 }
 .la-grid tr.la-open > td:last-child,
 .la-grid tr.la-framed > td:last-child {
-  border-right-color: var(--color-accent);
+  border-right-color: var(--la-frame);
 }
 .la-grid tr.la-group-end > td {
   height: 0;
   padding: 0;
-  border-top: 2px solid var(--color-accent);
+  border-top: 2px solid var(--la-frame);
   border-bottom: 0;
 }

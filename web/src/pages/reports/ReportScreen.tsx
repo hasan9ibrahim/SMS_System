@@ -45,7 +45,7 @@ import {
   type FlatRow,
   type Settings,
 } from "./masterModel";
-import { DateTimeInput } from "../../ui/DateTimeInput";
+import { HoursChip, PeriodTabs, RangeChip } from "../../ui/DateRange";
 
 const toLocal = (iso: string | null | undefined) => (iso ? iso.slice(0, 16) : "");
 const fromLocal = (v: string) => (v ? `${v}:00.000Z` : null);
@@ -201,84 +201,36 @@ function GroupBy({
   );
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
 function SettingsBar({ settings, set }: { settings: Settings; set: (s: Settings) => void }) {
   const win = periodWindow(settings);
   return (
     <div className="rp-settings rp-master-settings">
-      {/* Like the Enterprise report (team trial round 1): From / To always shown, quick periods as chips,
-          and an hour range applied to every day of the period. */}
-      <label className="small">
-        From
-        <DateTimeInput
-          value={toLocal(win.from)}
-          onChange={(e) =>
-            e.target.value && set({ ...settings, period: "custom", from: fromLocal(e.target.value), to: win.to })
-          }
-        />
-      </label>
-      <label className="small">
-        to
-        <DateTimeInput
-          value={toLocal(win.to)}
-          onChange={(e) =>
-            e.target.value && set({ ...settings, period: "custom", from: win.from, to: fromLocal(e.target.value) })
-          }
-        />
-      </label>
-      <span className="muted small">UTC</span>
-      <div className="rp-quick" role="group" aria-label="Quick periods">
-        {PERIODS.filter((p) => p.value !== "custom").map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            className={`btn btn-ghost btn-sm${settings.period === p.value ? " on" : ""}`}
-            aria-pressed={settings.period === p.value}
-            onClick={() => set({ ...settings, period: p.value, from: null, to: null })}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <label className="small" title="Only these hours, every day of the period (wraps past midnight)">
-        Each day
-        <select
-          value={settings.hourFrom ?? 0}
-          onChange={(e) => {
-            const hourFrom = Number(e.target.value);
-            const hourTo = settings.hourTo ?? 23;
-            set({
-              ...settings,
-              ...(hourFrom === 0 && hourTo === 23 ? { hourFrom: null, hourTo: null } : { hourFrom, hourTo }),
-            });
-          }}
-        >
-          {HOURS.map((h) => (
-            <option key={h} value={h}>
-              {String(h).padStart(2, "0")}:00
-            </option>
-          ))}
-        </select>
-        –
-        <select
-          value={settings.hourTo ?? 23}
-          onChange={(e) => {
-            const hourTo = Number(e.target.value);
-            const hourFrom = settings.hourFrom ?? 0;
-            set({
-              ...settings,
-              ...(hourFrom === 0 && hourTo === 23 ? { hourFrom: null, hourTo: null } : { hourFrom, hourTo }),
-            });
-          }}
-        >
-          {HOURS.map((h) => (
-            <option key={h} value={h}>
-              {String(h).padStart(2, "0")}:59
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* Period in the shared style (design refresh, team trial round 2): quick periods, the range as a chip that
+          opens From / To, and an hour range applied to every day of the period. */}
+      <PeriodTabs
+        options={PERIODS.filter((p) => p.value !== "custom").map((p) => ({ key: p.value, label: p.label }))}
+        value={settings.period === "custom" ? null : settings.period}
+        onPick={(period) => set({ ...settings, period, from: null, to: null })}
+      />
+      <RangeChip
+        withTime
+        from={toLocal(win.from)}
+        to={toLocal(win.to)}
+        suffix="UTC"
+        onChange={(from, to) =>
+          from && to && set({ ...settings, period: "custom", from: fromLocal(from), to: fromLocal(to) })
+        }
+      />
+      <HoursChip
+        from={settings.hourFrom ?? 0}
+        to={settings.hourTo ?? 23}
+        onChange={(hourFrom, hourTo) =>
+          set({
+            ...settings,
+            ...(hourFrom === 0 && hourTo === 23 ? { hourFrom: null, hourTo: null } : { hourFrom, hourTo }),
+          })
+        }
+      />
       <label className="small">
         Timezone
         <select value={settings.timezone} onChange={(e) => set({ ...settings, timezone: e.target.value })}>

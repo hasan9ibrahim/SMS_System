@@ -8527,7 +8527,7 @@ paths:
         filters with the §13.25 grammar; the page's From / To Date and Final are filters on `startTime` and
         `isFinalAttempt`. Enterprise and trunk name filters match names (wildcards) and are applied as IDs. Message ID
         filters take comma-separated lists (`in`). `numberOrMsgId` (filter only, `eq` / `in`) matches each value against
-        the receiver number (DNID, `+`, spaces and dashes ignored), the Customer Msg ID and any part's Vendor Msg ID
+        the receiver number (DNID, `+`, spaces and dashes ignored), the sender ID, the Customer Msg ID and any part's Vendor Msg ID
         (team trial round 2). Totals over very large windows may be estimates.
       requestBody:
         required: true

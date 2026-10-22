@@ -27,7 +27,7 @@ import {
 } from "./reportModel";
 import { metricQualityClass } from "../../ui/quality";
 import { tzLabel } from "../../ui/timezones";
-import { DateTimeInput } from "../../ui/DateTimeInput";
+import { PeriodTabs, RangeChip } from "../../ui/DateRange";
 
 const page = pageForPath("/reports/enterprise")!;
 
@@ -133,21 +133,18 @@ function Settings({
             </button>
           ))}
         </div>
-        <label className="toggle-inline">
-          From
-          <DateTimeInput value={draft.from} onChange={(e) => e.target.value && set({ from: e.target.value })} />
-        </label>
-        <label className="toggle-inline">
-          to
-          <DateTimeInput value={draft.to} onChange={(e) => e.target.value && set({ to: e.target.value })} />
-        </label>
-        <div className="rp-quick">
-          {QUICK.map((q) => (
-            <button key={q.key} type="button" className="btn btn-ghost btn-sm" onClick={() => set(quickPeriod(q.key))}>
-              {q.label}
-            </button>
-          ))}
-        </div>
+        {/* Period in the shared style (design refresh, team trial round 2). */}
+        <PeriodTabs
+          options={QUICK}
+          value={
+            QUICK.find((q) => {
+              const p = quickPeriod(q.key);
+              return p.from === draft.from && p.to === draft.to;
+            })?.key ?? null
+          }
+          onPick={(k) => set(quickPeriod(k))}
+        />
+        <RangeChip withTime from={draft.from} to={draft.to} onChange={(from, to) => from && to && set({ from, to })} />
       </div>
       <div className="rp-row">
         <label className="toggle-inline" title="Day and month totals are cut at midnight in this zone (§13.31)">
