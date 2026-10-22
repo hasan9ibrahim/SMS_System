@@ -11,6 +11,8 @@ import { startEdrDownloads } from "./api/edrDownloads.js";
 import { startNetworkStatus } from "./api/network.js";
 import { startReportJobs } from "./api/reports.js";
 import { startLive } from "./live/socket.js";
+import { startRouteCostWarmer } from "./api/routeMap.js";
+import { db } from "./db.js";
 import { checkPendingRns } from "./api/rn.js";
 import { startMarketMoves } from "./api/marketMoves.js";
 import { startLcrChecks } from "./api/lcr.js";
@@ -39,6 +41,8 @@ startEdrDownloads();
 startNetworkStatus();
 startReportJobs();
 startLive();
+// Routed vendor and cost per sell table, for Rate Manager (team trial round 2).
+startRouteCostWarmer(db());
 void checkPendingRns();
 startMarketMoves();
 startLcrChecks();

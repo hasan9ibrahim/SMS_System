@@ -2,12 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildItems, changeCount, changeRate, merge, setRate, summarize } from "./pending";
 
-test("change by percent, amount or margin over best buy", () => {
-  assert.equal(changeRate({ rate: 0.05, bestBuy: 0.04 }, "percent", 10), 0.055);
-  assert.equal(changeRate({ rate: 0.05, bestBuy: 0.04 }, "amount", -0.002), 0.048);
-  assert.equal(changeRate({ rate: 0.05, bestBuy: 0.04 }, "margin", 0.005), 0.045);
-  assert.equal(changeRate({ rate: 0.05, bestBuy: null }, "margin", 0.005), null, "no best buy, no margin rule");
-  assert.equal(changeRate({ rate: 0.001, bestBuy: null }, "amount", -0.01), null, "never below zero");
+test("change by percent, amount or margin over the routed cost", () => {
+  assert.equal(changeRate({ rate: 0.05, routedCost: 0.04 }, "percent", 10), 0.055);
+  assert.equal(changeRate({ rate: 0.05, routedCost: 0.04 }, "amount", -0.002), 0.048);
+  assert.equal(changeRate({ rate: 0.05, routedCost: 0.04 }, "margin", 0.005), 0.045);
+  assert.equal(changeRate({ rate: 0.05, routedCost: null }, "margin", 0.005), null, "no routed cost, no margin rule");
+  assert.equal(changeRate({ rate: 0.001, routedCost: null }, "amount", -0.01), null, "never below zero");
 });
 
 test("items: blocks first, unchanged values dropped, scheduled lines keep their date", () => {

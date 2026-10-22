@@ -20,7 +20,7 @@ import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button, Menu, Modal, Popover } from "../../ui/primitives";
 import { scopeUrl } from "./bulkModel";
-import { AddRatesDialog, SendRnCheck, RenameTableDialog } from "./dialogs";
+import { AddRatesDialog, RenameTableDialog } from "./dialogs";
 import { formatMoney, formatPct, formatRate, formatSigned, shortDate, shortDateTime } from "./format";
 import {
   buildItems,
@@ -95,17 +95,12 @@ function Summary({ t }: { t: RateTableDetail }) {
           label="Negative margin"
           value={s.negativeMarginLines ?? "—"}
           tone={s.negativeMarginLines ? "error" : undefined}
-          sub="sell below best buy today"
+          sub="sell below the routed cost today"
         />
       ) : (
         <Card label="Closed rates" value={s.closedLines.toLocaleString("en-US")} sub="kept in the rate history" />
       )}
-      <Card
-        label="Avg margin"
-        value={formatPct(s.avgMarginPct)}
-        tone={s.avgMarginPct === null ? undefined : s.avgMarginPct < 0 ? "error" : "good"}
-        sub="weighted by today's volume"
-      />
+      {/* Avg margin left out of the header (team trial round 2). */}
       <Card
         label={customer ? "Revenue today" : "Cost today"}
         value={formatMoney(s.moneyToday, t.currency)}
@@ -224,7 +219,7 @@ function ChangeByForm({
       <div className="segmented small-seg">
         {(["percent", "amount", ...(customer ? ["margin"] : [])] as ChangeMode[]).map((m) => (
           <button key={m} type="button" className={mode === m ? "on" : ""} onClick={() => setMode(m)}>
-            {m === "percent" ? "By %" : m === "amount" ? "By amount" : "Best buy + margin"}
+            {m === "percent" ? "By %" : m === "amount" ? "By amount" : "Cost + margin"}
           </button>
         ))}
       </div>
@@ -234,7 +229,7 @@ function ChangeByForm({
             ? "Change %"
             : mode === "amount"
               ? `Add (${currency}, negative to lower)`
-              : `Margin over best buy (${currency})`}
+              : `Margin over the routed cost (${currency})`}
         </span>
         <input autoFocus type="number" step="any" value={v} onChange={(e) => setV(e.target.value)} />
       </label>
@@ -419,18 +414,19 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       visible:
         grid.visible ??
         (t?.kind === "vendor"
-          ? ["country", "network", "mccmnc", "senderId", "rate", "sysRate", "changeType", "validFrom"]
-          : [
+          ? ["country", "network", "mccmnc", "rate", "sysRate", "senderId", "changeType", "validFrom"]
+          : // Vendor and cost as the route rules choose them; Sender ID between Margin % and Change (team trial round 2).
+            [
               "country",
               "network",
               "mccmnc",
-              "senderId",
               "rate",
               "sysRate",
-              "bestBuy",
-              "bestVendor",
+              "routedVendor",
+              "routedCost",
               "margin",
               "marginPct",
+              "senderId",
               "changeType",
               "validFrom",
             ]),
@@ -548,19 +544,19 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           );
         },
       },
-      bestBuy: { render: (r) => formatRate(r.bestBuy) },
-      bestVendor: { width: 140 },
+      routedVendor: { width: 150 },
+      routedCost: { render: (r) => formatRate(r.routedCost) },
       margin: {
         render: (r) => {
           const p = pending.get(r.id)?.rate;
-          const m = p !== undefined && r.bestBuy !== null ? round6(p - r.bestBuy) : r.margin;
+          const m = p !== undefined && r.routedCost !== null ? round6(p - r.routedCost) : r.margin;
           return <span className={m === null ? "muted" : m < 0 ? "tone-error" : "tone-good"}>{formatSigned(m)}</span>;
         },
       },
       marginPct: {
         render: (r) => {
           const p = pending.get(r.id)?.rate;
-          const pct = p !== undefined && r.bestBuy !== null && p > 0 ? ((p - r.bestBuy) / p) * 100 : r.marginPct;
+          const pct = p !== undefined && r.routedCost !== null && p > 0 ? ((p - r.routedCost) / p) * 100 : r.marginPct;
           return <span className={pct !== null && pct < 0 ? "tone-error" : ""}>{formatPct(pct)}</span>;
         },
       },
@@ -616,7 +612,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     if (skipped)
       toast({
         tone: "warning",
-        message: `${skipped} rate${skipped === 1 ? "" : "s"} skipped (no best buy or below zero)`,
+        message: `${skipped} rate${skipped === 1 ? "" : "s"} skipped (no routed cost or below zero)`,
       });
   };
 
@@ -633,7 +629,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
         rows={rows}
         effectiveFrom={effectiveFrom}
         scheduledKept={!fromChosen}
-        sendRn={sendRn}
+        sendRn
         done={done}
       />
     ));
@@ -900,7 +896,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             rowClass={(r) => {
               const p = pending.get(r.id)?.rate;
               const negative =
-                p !== undefined && r.bestBuy !== null ? p < r.bestBuy : r.margin !== null && r.margin < 0;
+                p !== undefined && r.routedCost !== null ? p < r.routedCost : r.margin !== null && r.margin < 0;
               return negative ? "negative" : undefined;
             }}
           />
@@ -928,7 +924,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                   currency={t.currency}
                   onApply={(mode, v) => {
                     applyToSelection((r) =>
-                      changeRate({ rate: pending.get(r.id)?.rate ?? r.rate, bestBuy: r.bestBuy }, mode, v),
+                      changeRate({ rate: pending.get(r.id)?.rate ?? r.rate, routedCost: r.routedCost }, mode, v),
                     );
                     close();
                   }}
@@ -1006,7 +1002,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 <button type="button" className="btn btn-sm btn-ghost bar-btn" onClick={() => setPending(new Map())}>
                   Discard
                 </button>
-                {t.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
+                {/* Send RN is chosen in the save summary (ticked by default), not here (team trial round 2). */}
                 <Button small variant="primary" disabled={change.isPending} onClick={() => void confirmSave()}>
                   Save {changes} change{changes === 1 ? "" : "s"}
                 </Button>

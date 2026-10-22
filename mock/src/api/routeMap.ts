@@ -12,6 +12,7 @@ import { listFields } from "../lists/fields.js";
 import { routeMapList, routeMapRows, routeMapTrunk } from "../lists/defs.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
+import { PLATFORM_CURRENCY } from "../currency.js";
 import { clientLines, routedVendors, type ClientLine, type Dest, type RouteOutcome } from "./rateLookup.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -114,10 +115,97 @@ export async function routeMapFor(db: Db, trunkId: number): Promise<RouteMapRow[
   return rows as RouteMapRow[];
 }
 
-/** Forgets computed route maps (after a rate change or an undo). */
+/** Forgets computed route maps (after a rate change or an undo); routed costs refresh on their next view. */
 export function clearRouteMaps() {
   routeMapRows.clear();
   computedAt.clear();
+  for (const t of costsAt.keys()) costsAt.set(t, 0);
+}
+
+// ---------------------------------------------------------------- routed costs (Rate Manager, team trial round 2)
+
+/** When each trunk's routed costs were written to route_cost_cache (0 = due for a refresh). */
+const costsAt = new Map<number, number>();
+const refreshing = new Map<number, Promise<void>>();
+
+/** Writes the vendor and cost the route rules choose for each destination the trunk sells (Route map engine). */
+export function refreshRouteCosts(db: Db, trunkId: number): Promise<void> {
+  const running = refreshing.get(trunkId);
+  if (running) return running;
+  const job = (async () => {
+    const rows = await routeMapFor(db, trunkId);
+    const { rows: fx } = await db.query("SELECT rate_per_eur FROM currency_latest WHERE iso = $1", [PLATFORM_CURRENCY]);
+    const perEur = Number(fx[0]?.rate_per_eur ?? 1) || 1;
+    const seen = new Set<number>();
+    const keep = rows.filter((r) => !seen.has(r.id) && seen.add(r.id));
+    await db.query("DELETE FROM route_cost_cache WHERE customer_trunk_id = $1", [trunkId]);
+    if (keep.length)
+      await db.query(
+        `INSERT INTO route_cost_cache (customer_trunk_id, mccmnc_id, vendor_trunk_id, vendor_name, cost_eur)
+         SELECT $1, * FROM unnest($2::int[], $3::int[], $4::text[], $5::numeric[])`,
+        [
+          trunkId,
+          keep.map((r) => r.id),
+          keep.map((r) => r.vendorTrunkId),
+          keep.map((r) => r.vendor),
+          keep.map((r) => (r.vendorCost === null ? null : r.vendorCost / perEur)),
+        ],
+      );
+    costsAt.set(trunkId, Date.now());
+  })().finally(() => refreshing.delete(trunkId));
+  refreshing.set(trunkId, job);
+  return job;
+}
+
+/**
+ * Routed costs for a sell table's first customer trunk: computed now when there are none yet, else served from
+ * the cache and refreshed in the background once older than a minute.
+ */
+export async function ensureRouteCosts(db: Db, rateTableId: number): Promise<void> {
+  const { rows } = await db.query(
+    `SELECT min(x.customer_trunk_id) AS t FROM customer_trunk_rate_tables x
+       JOIN customer_trunks xt ON xt.id = x.customer_trunk_id AND xt.deleted_at IS NULL
+       JOIN rate_tables rt ON rt.id = x.rate_table_id AND rt.kind = 'customer'
+      WHERE x.rate_table_id = $1`,
+    [rateTableId],
+  );
+  const trunk = rows[0]?.t == null ? null : Number(rows[0].t);
+  if (trunk === null) return;
+  if (!costsAt.has(trunk)) {
+    const { rows: cached } = await db.query("SELECT 1 FROM route_cost_cache WHERE customer_trunk_id = $1 LIMIT 1", [
+      trunk,
+    ]);
+    if (!cached.length) return refreshRouteCosts(db, trunk);
+    costsAt.set(trunk, 0);
+  }
+  if (Date.now() - costsAt.get(trunk)! > TTL_MS) void refreshRouteCosts(db, trunk).catch(() => undefined);
+}
+
+/** Fills the routed costs of every sell table slowly in the background, oldest first (one trunk at a time). */
+export function startRouteCostWarmer(db: Db, everyMs = 5_000): () => void {
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const { rows } = await db.query(
+        `SELECT t.id FROM (SELECT min(x.customer_trunk_id) AS id FROM customer_trunk_rate_tables x
+             JOIN customer_trunks xt ON xt.id = x.customer_trunk_id AND xt.deleted_at IS NULL
+             JOIN rate_tables rt ON rt.id = x.rate_table_id AND rt.kind = 'customer' GROUP BY x.rate_table_id) t
+           LEFT JOIN (SELECT customer_trunk_id, max(computed_at) AS at FROM route_cost_cache GROUP BY 1) c
+             ON c.customer_trunk_id = t.id
+          ORDER BY c.at NULLS FIRST LIMIT 1`,
+      );
+      const id = rows[0]?.id;
+      if (id != null) await refreshRouteCosts(db, Number(id));
+    } catch {
+      // The next tick tries again.
+    } finally {
+      busy = false;
+    }
+  }, everyMs);
+  timer.unref?.();
+  return () => clearInterval(timer);
 }
 
 function checkQuery(reply: FastifyReply, query: ListQuery): number | FastifyReply {

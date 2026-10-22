@@ -16,9 +16,13 @@ export type ChangeMode = "percent" | "amount" | "margin";
 
 /**
  * New sell rate for a bulk "change by" action: by % of the current rate, by an amount, or
- * best buy plus a margin amount. Null when it can't apply (no best buy) or goes below zero.
+ * the routed cost (route rules) plus a margin amount. Null when it can't apply (no routed cost) or goes below zero.
  */
-export function changeRate(row: Pick<RateLineRow, "rate" | "bestBuy">, mode: ChangeMode, value: number): number | null {
+export function changeRate(
+  row: Pick<RateLineRow, "rate" | "routedCost">,
+  mode: ChangeMode,
+  value: number,
+): number | null {
   // A rate withheld by the visibility policy (§13.17) cannot be changed by a percentage or amount.
   if (row.rate === null && mode !== "margin") return null;
   const rate = row.rate ?? 0;
@@ -27,9 +31,9 @@ export function changeRate(row: Pick<RateLineRow, "rate" | "bestBuy">, mode: Cha
       ? rate * (1 + value / 100)
       : mode === "amount"
         ? rate + value
-        : row.bestBuy === null
+        : row.routedCost === null
           ? null
-          : row.bestBuy + value;
+          : row.routedCost + value;
   return next === null || next < 0 ? null : round6(next);
 }
 

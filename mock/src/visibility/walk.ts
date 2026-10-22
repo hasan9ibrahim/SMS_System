@@ -60,7 +60,7 @@ const PAIRS: {
     kind: "vendorTrunk",
     vendorName: ["vendor", "vendorName"],
   },
-  { id: "bestVendorTrunkId", names: ["bestVendor"], kind: "vendorTrunk" },
+  { id: "routedVendorTrunkId", names: ["routedVendor"], kind: "vendorTrunk" },
 ];
 
 export async function maskPayload(payload: unknown, v: Viewer): Promise<unknown> {

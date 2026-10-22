@@ -974,7 +974,7 @@ export type paths = {
     };
     /**
      * Export rate lines as CSV (§6.2 Export Rate)
-     * @description The lines of one view (current, scheduled or closed) with destination names, best buy and margin.
+     * @description The lines of one view (current, scheduled or closed) with destination names, the routed vendor and cost (route rules) and margin.
      */
     get: operations["exportRateLines"];
     put?: never;
@@ -1532,7 +1532,7 @@ export type paths = {
     /**
      * List rate lines of one table (server-side filter, sort and paging)
      * @description The filter must hold a top-level `rateTableId eq` condition. `view` picks current (valid now,
-     *     the default), scheduled (starting later) or closed lines. Rows carry best buy, margin and the
+     *     the default), scheduled (starting later) or closed lines. Rows carry the routed vendor and cost, margin and the
      *     next scheduled rate (§13.12).
      */
     post: operations["queryRateLines"];
@@ -5751,8 +5751,8 @@ export type paths = {
      * @description EDR Search (§9.1): one row per message attempt with both legs, from the EDR store (ClickHouse). Every column
      *     filters with the §13.25 grammar; the page's From / To Date and Final are filters on `startTime` and
      *     `isFinalAttempt`. Enterprise and trunk name filters match names (wildcards) and are applied as IDs. Message ID
-     *     filters take comma-separated lists (`in`). `numberOrMsgId` (filter only, `eq` / `in`) matches each value against
-     *     the receiver number (DNID, `+`, spaces and dashes ignored), the sender ID, the Customer Msg ID and any part's Vendor Msg ID
+     *     filters take comma-separated lists (`in`). `numberOrMsgId` (filter only, `eq` / `in`) matches each value as the
+     *     start of the receiver number (DNID, `+`, spaces and dashes ignored), the sender ID, the Customer Msg ID or any part's Vendor Msg ID
      *     (team trial round 2). Totals over very large windows may be estimates.
      */
     post: operations["queryEdrs"];
@@ -10821,7 +10821,7 @@ export type components = {
       /** @description Lines starting later. */
       scheduledChanges: number;
       nextChangeAt: components["schemas"]["Timestamp"] | null;
-      /** @description Current sell rates below the best buy rate; null for vendor tables. */
+      /** @description Current sell rates below the routed cost (route rules, team trial round 2); null for vendor tables. */
       negativeMarginLines: number | null;
       /** @description Margin of today's traffic, weighted by volume; null without traffic or EDR store. */
       avgMarginPct: number | null;
@@ -10866,7 +10866,7 @@ export type components = {
       nextChangeAt: components["schemas"]["Timestamp"] | null;
       scheduledIncreases: number;
       closedLines: number;
-      /** @description Current sell rates below the best buy rate; null for vendor tables. */
+      /** @description Current sell rates below the routed cost (route rules, team trial round 2); null for vendor tables. */
       negativeMarginLines: number | null;
       /** @description Margin of today's traffic priced by this table, weighted by volume. */
       avgMarginPct: number | null;
@@ -10918,11 +10918,16 @@ export type components = {
       /** @description The rate in the platform currency (`ReferenceData.platformCurrency`, EUR by default). */
       sysRate: number | null;
       currency: string;
-      /** @description Cheapest current vendor rate for the destination and product category, in the table currency. */
-      bestBuy: number | null;
-      bestVendorTrunkId: components["schemas"]["Id"] | null;
-      bestVendor: string | null;
-      /** @description rate - bestBuy (customer tables). */
+      /**
+       * @description The buy rate of the vendor the route rules choose for the destination (customer tables, for the table's
+       *     first customer trunk; the same engine as the Route map), in the table currency. Replaces the best buy
+       *     (team trial round 2).
+       */
+      routedCost: number | null;
+      routedVendorTrunkId: components["schemas"]["Id"] | null;
+      /** @description The vendor trunk the route rules choose. */
+      routedVendor: string | null;
+      /** @description rate - routedCost (customer tables). */
       margin: number | null;
       /** @description margin / rate x 100. */
       marginPct: number | null;

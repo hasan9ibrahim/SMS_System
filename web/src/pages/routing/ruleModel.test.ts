@@ -90,8 +90,8 @@ const rule = (over: Partial<RouteRuleDetail> = {}): RouteRuleDetail => ({
 test("condition chips read as in the screenshot (§15.4)", () => {
   const chips = conditionChips(rule(), NOW).map((c) => [c.field, c.op, c.value].filter(Boolean).join(" "));
   assert.deepEqual(chips, [
-    "Trunk in Lumen_OTP, Lumen_OTP2",
-    "Destination in 50501, 50502",
+    "Trunk inclusive Lumen_OTP, Lumen_OTP2",
+    "Destination inclusive 50501, 50502",
     "Sender not ^(TEST|DEMO)",
     "TPS 5s > 50 · release 45",
     "Revenue/msg ≥ 0.040",
@@ -120,8 +120,8 @@ test("destinations by name, exclusive lists, accumulated revenue and HLR action"
     (codes) => codes.map((c) => (c === "505" ? "Australia · All networks (505)" : c)).join(", "),
   );
   const text = chips.map((c) => `${c.field}|${c.op}|${c.value}`);
-  assert.ok(text.includes("Trunk|not in|Lumen_OTP, Lumen_OTP2"));
-  assert.ok(text.includes("Destination|in|Australia · All networks (505)"), "names first (team trial round 1)");
+  assert.ok(text.includes("Trunk|exclusive|Lumen_OTP, Lumen_OTP2"));
+  assert.ok(text.includes("Destination|inclusive|Australia · All networks (505)"), "names first (team trial round 1)");
   assert.ok(text.includes("Revenue today|between|10.000 – 20.000 per rule"));
   assert.ok(text.includes("HLR action||Default · all trunks"), "the policy is shown by name");
 });
@@ -136,7 +136,8 @@ test("clearing a condition and the conditions still to add", () => {
   assert.deepEqual(clearCondition("trunk", rule()), { customerTrunkMode: "all", customerTrunkIds: [] });
   assert.deepEqual(clearCondition("tps", rule()), { tps: null });
   const missing = missingConditions(rule());
-  assert.ok(missing.includes("category") && missing.includes("hlrAction"));
+  // Category, trunk and destination are under Configuration, not "+ Add condition" (team trial round 2).
+  assert.ok(missing.includes("hlrAction") && !missing.includes("category") && !missing.includes("destination"));
   assert.ok(!missing.includes("trunk") && !missing.includes("time"));
 });
 

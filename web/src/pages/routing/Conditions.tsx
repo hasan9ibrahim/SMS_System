@@ -12,6 +12,7 @@ import { ConditionEditor } from "./ConditionEditor";
 import { problemText } from "./dialogs";
 import {
   CONDITION_LABELS,
+  CONFIG_KEYS,
   clearCondition,
   conditionChips,
   missingConditions,
@@ -117,7 +118,10 @@ export function ConditionsSection({ id }: { id: number }) {
   const r = rule.data;
   if (rule.isError) return <p className="error-text">{(rule.error as Error).message}</p>;
   if (!r) return <p className="muted">Loading…</p>;
-  const chips = conditionChips(r, Date.now(), (codes) => codesText(tree, codes, 4));
+  // Category, customer trunks and destination are under Configuration (team trial round 2).
+  const chips = conditionChips(r, Date.now(), (codes) => codesText(tree, codes, 4)).filter(
+    (c) => !CONFIG_KEYS.includes(c.key),
+  );
   const locked = !!r.archived;
   return (
     <>

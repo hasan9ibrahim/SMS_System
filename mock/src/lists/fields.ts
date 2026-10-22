@@ -403,8 +403,9 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "mccmnc", label: "MCCMNC", type: "mccmnc", defaultOperator: "like" }),
       field({ field: "senderId", label: "Sender ID", type: "text", defaultOperator: "like" }),
       field({ field: "rate", label: "Sell Rate", type: "decimal", defaultOperator: "gte" }),
-      field({ field: "bestBuy", label: "Best Buy", type: "decimal", defaultOperator: "gte" }),
-      field({ field: "bestVendor", label: "Best Vendor", type: "text", defaultOperator: "like" }),
+      // The vendor and cost the route rules choose (team trial round 2; replaces Best Buy / Best Vendor).
+      field({ field: "routedVendor", label: "Vendor", type: "text", defaultOperator: "like" }),
+      field({ field: "routedCost", label: "Cost", type: "decimal", defaultOperator: "gte" }),
       field({ field: "margin", label: "Margin", type: "decimal", defaultOperator: "lt" }),
       field({ field: "marginPct", label: "Margin %", type: "percent", defaultOperator: "lt" }),
       field({

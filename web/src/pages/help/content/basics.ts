@@ -553,7 +553,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Every active filter shows as a chip in the row above the grid, for example `Name acme`, `Type Customer, Vendor` or `Margin < 0`. Click ✕ on a chip to remove that filter. Conditions from the filter builder show as one chip such as **All of 3 conditions**; click it to edit them. **Clear all** removes every filter and the quick search but keeps your sort and columns.",
+            text: "Every active filter shows as a chip in the row above the grid, for example `Name acme`, `Type Customer, Vendor` or `Margin < 0`. Click ✕ on a chip to remove that filter. Conditions from the filter builder show as one chip such as **All of 3 conditions**; click it to edit them. **Clear all** removes every filter and the quick search but keeps your sort and columns; a page with a default filter (e.g. EDR search's today) goes back to it.",
           },
         ],
       },

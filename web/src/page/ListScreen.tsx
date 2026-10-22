@@ -658,6 +658,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               </button>
             </span>
           )}
+          {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
           <button type="button" className="btn btn-sm btn-add-filter" onClick={() => setBuilderOpen(true)}>
             <Icon name={builderCount ? "filter" : "plus"} size={13} /> {builderCount ? "Edit filter" : "Add filter"}
           </button>
@@ -665,14 +666,20 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setState({ ...emptyState(), visible: state.visible, sort: state.sort })}
+              // Back to the page's own defaults (e.g. EDR search's today), not to nothing (team trial round 2).
+              onClick={() =>
+                setState({
+                  ...emptyState(),
+                  ...initialState,
+                  columns: { ...(initialState?.columns ?? {}) },
+                  visible: state.visible,
+                  sort: state.sort,
+                })
+              }
             >
               Clear all
             </button>
           )}
-          {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
-          {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
-          <ViewsMenu list={list} state={state} onApply={setState} />
         </div>
       </div>
       <div className={`list-body${detail && activeRow ? " with-detail" : ""}`} ref={bodyRef}>
@@ -687,6 +694,9 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               </span>
             )}
             <span className="fb-spacer" />
+            {/* Saved views sit with Columns (compact layout, team trial round 2). */}
+            {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
+            <ViewsMenu list={list} state={state} onApply={setState} />
             {selected.size > 0 && (
               <>
                 <span className="muted">

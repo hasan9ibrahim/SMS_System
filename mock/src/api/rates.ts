@@ -20,6 +20,7 @@ import { withDb } from "../db.js";
 import { marginPct, trafficTodayByRateTable } from "../edr.js";
 import { listFields } from "../lists/fields.js";
 import { negativeMarginSql, rateLineList, rateTableList } from "../lists/defs.js";
+import { ensureRouteCosts } from "./routeMap.js";
 import { compileQuery, exportRows, runList } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
@@ -99,6 +100,16 @@ function scopedLineQuery(query: ListQuery): ListQuery | string {
   };
 }
 
+/** The table a rate lines query is scoped to (its top-level rateTableId eq condition). */
+function scopedTableId(query: ListQuery): number | null {
+  for (const c of query.filter?.conditions ?? []) {
+    if (!("field" in c) || c.field !== "rateTableId" || c.op !== "eq") continue;
+    const n = Number(c.value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 export function queryRateLines(request: FastifyRequest, reply: FastifyReply) {
   const body = request.body as ListQuery;
   const errors = checkListQuery(body, listFields.rate_lines);
@@ -108,6 +119,9 @@ export function queryRateLines(request: FastifyRequest, reply: FastifyReply) {
     return sendProblem(reply, 400, "Invalid list query", { errors: [{ path: "/filter", message: query }] });
   return withDb(reply, async (pool) => {
     try {
+      // Vendor and cost as the route rules choose them (team trial round 2).
+      const tableId = scopedTableId(query);
+      if (tableId !== null) await ensureRouteCosts(pool, tableId);
       return await runList(pool, rateLineList, query);
     } catch (err) {
       if ((err as { code?: string }).code === "2201B")
@@ -139,6 +153,7 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const { rows: t } = await pool.query("SELECT name FROM rate_tables WHERE id = $1", [id]);
     if (!t[0]) return notFound(reply, id);
+    await ensureRouteCosts(pool, Number(id));
     // As the viewer sees it (§13.17).
     const rows = await exportRows(pool, rateLineList, {
       filter: {
@@ -162,8 +177,8 @@ export function exportRateLines(request: FastifyRequest, reply: FastifyReply) {
       ["Rate", "rate"],
       ["Currency", "currency"],
       [`Sys Rate (${PLATFORM_CURRENCY})`, "sysRate"],
-      ["Best Buy", "bestBuy"],
-      ["Best Vendor", "bestVendor"],
+      ["Vendor", "routedVendor"],
+      ["Cost", "routedCost"],
       ["Margin", "margin"],
       ["Margin %", "marginPct"],
       ["Change", "changeType"],

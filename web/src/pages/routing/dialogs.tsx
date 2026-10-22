@@ -43,7 +43,27 @@ type General = Pick<
 >;
 
 /** New rule (rule = null) or the rule's settings (E edit). */
-export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done: (id: number | null) => void }) {
+/**
+ * The rule's general fields (name, priority, route type for a new rule, continue routing, groups, DLR target,
+ * comment, on / off), shared by the Edit section of the detail panel, New rule and Duplicate (team trial round 2).
+ * `onSaved` gets the rule id after a save; `onCancel` shows a Cancel button.
+ */
+export function RuleGeneralForm({
+  rule,
+  onSaved,
+  onCancel,
+  submitLabel,
+  hint,
+  hideStatus = false,
+}: {
+  rule: RouteRuleDetail | null;
+  onSaved: (id: number) => void;
+  onCancel?: () => void;
+  submitLabel?: string;
+  hint?: string;
+  /** New rule has Rule on in its footer. */
+  hideStatus?: boolean;
+}) {
   const ref = useReference();
   const save = useSaveRouteRule();
   const notifySaved = useNotifySaved();
@@ -88,26 +108,15 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
       {
         onSuccess: (r) => {
           if (r.change) notifySaved(r.change, rule ? "Saved" : `Added #${r.record.id} ${r.record.name}`);
-          done(r.record.id);
+          setError(null);
+          onSaved(r.record.id);
         },
         onError: (e) => setError(problemText(e)),
       },
     );
   };
   return (
-    <Modal
-      title={rule ? `Edit #${rule.id} ${rule.name}` : "New route rule"}
-      width={560}
-      onClose={() => done(null)}
-      footer={
-        <>
-          <Button onClick={() => done(null)}>Cancel</Button>
-          <Button variant="primary" onClick={submit} disabled={save.isPending}>
-            {rule ? "Save" : "Add rule"}
-          </Button>
-        </>
-      }
-    >
+    <div className="rule-general">
       <div className="fgrid cols-3">
         <label className="field span-2">
           <span>
@@ -225,13 +234,14 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
       <label className="field">
         <span>Comment</span>
         <textarea
-          rows={2}
+          rows={1}
+          className="comment-box"
           maxLength={1000}
           value={g.comment ?? ""}
           onChange={(e) => set({ comment: e.target.value || null })}
         />
       </label>
-      {rule ? (
+      {rule && hideStatus ? null : rule ? (
         <label className="toggle-inline">
           <input
             type="checkbox"
@@ -241,11 +251,24 @@ export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done:
           Rule on
         </label>
       ) : (
-        <p className="muted small">
-          Next: the rule's conditions and vendors. It turns on by default once it has customer trunks and vendors.
-        </p>
+        hint && <p className="muted small">{hint}</p>
       )}
       {error && <p className="error-text">{error}</p>}
+      <div className="form-actions">
+        {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+        <Button variant="primary" onClick={submit} disabled={save.isPending}>
+          {submitLabel ?? (rule ? "Save" : "Add rule")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The general fields in a dialog (Duplicate opens the copy here to rename it). */
+export function RuleDialog({ rule, done }: { rule: RouteRuleDetail | null; done: (id: number | null) => void }) {
+  return (
+    <Modal title={rule ? `Edit #${rule.id} ${rule.name}` : "New route rule"} width={560} onClose={() => done(null)}>
+      <RuleGeneralForm rule={rule} onSaved={(id) => done(id)} onCancel={() => done(null)} />
     </Modal>
   );
 }

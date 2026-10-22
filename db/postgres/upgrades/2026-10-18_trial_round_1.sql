@@ -314,3 +314,14 @@ ALTER TABLE vendor_trunks ALTER COLUMN max_msg_len DROP NOT NULL, ALTER COLUMN m
 -- Translation rules: MCCMNC regex, Is Continue off by default (migration 060, §6.4).
 ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS mccmnc_pattern text;
 ALTER TABLE translation_rules ALTER COLUMN continue_after SET DEFAULT false;
+
+-- Rate Manager: routed vendor and cost per customer trunk and destination (migration 061, §13.12).
+CREATE TABLE IF NOT EXISTS route_cost_cache (
+  customer_trunk_id integer NOT NULL,
+  mccmnc_id integer NOT NULL,
+  vendor_trunk_id integer,
+  vendor_name text,
+  cost_eur numeric(16, 6),
+  computed_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (customer_trunk_id, mccmnc_id)
+);
