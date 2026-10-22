@@ -21,7 +21,7 @@ import {
   fieldText,
   fmtSeconds,
   msgStatusTone,
-  parseIdList,
+  parseMixedList,
   timeBounds,
   timeCondition,
   toGridRow,
@@ -87,7 +87,7 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
     return c?.op === "in" ? (c.values ?? []).join(", ") : c?.op === "eq" ? String(c.value) : "";
   };
   const setIds = (field: string, text: string) => {
-    const list = parseIdList(text);
+    const list = parseMixedList(text);
     set(
       field,
       list.length > 1 ? { field, op: "in", values: list } : list.length ? { field, op: "eq", value: list[0]! } : null,
@@ -118,15 +118,16 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
         />
         Final
       </label>
+      {/* One box for receiver numbers and message IDs, mixed and comma separated (team trial round 2, §9.1). */}
       <input
-        key={`n${ids("dnid")}`}
-        className="edr-ids"
-        defaultValue={ids("dnid")}
-        placeholder="Numbers, comma separated"
-        aria-label="Receiver numbers"
-        title="Receiver numbers, exact (the quick search also takes several numbers or a customer name)"
-        onBlur={(e) => e.target.value !== ids("dnid") && setIds("dnid", e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && setIds("dnid", e.currentTarget.value)}
+        key={`n${ids("numberOrMsgId")}`}
+        className="edr-ids edr-ids-wide"
+        defaultValue={ids("numberOrMsgId")}
+        placeholder="Numbers or Msg IDs, comma separated"
+        aria-label="Numbers or Msg IDs"
+        title="Receiver numbers, Customer Msg IDs and Vendor Msg IDs (any part of a long message), exact; several separated by commas"
+        onBlur={(e) => e.target.value !== ids("numberOrMsgId") && setIds("numberOrMsgId", e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && setIds("numberOrMsgId", e.currentTarget.value)}
       />
       <Button
         small
@@ -146,25 +147,6 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
           return n ? `Destinations (${n})` : "Destinations";
         })()}
       </Button>
-      <input
-        key={`c${ids("customerMsgId")}`}
-        className="edr-ids"
-        defaultValue={ids("customerMsgId")}
-        placeholder="Customer Msg IDs, comma separated"
-        aria-label="Customer Msg IDs"
-        onBlur={(e) => e.target.value !== ids("customerMsgId") && setIds("customerMsgId", e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && setIds("customerMsgId", e.currentTarget.value)}
-      />
-      <input
-        key={`v${ids("vendorMsgId")}`}
-        className="edr-ids"
-        defaultValue={ids("vendorMsgId")}
-        placeholder="Vendor Msg IDs, comma separated"
-        title="A long message has one vendor ID per part; any of them finds it (team trial round 2)"
-        aria-label="Vendor Msg IDs"
-        onBlur={(e) => e.target.value !== ids("vendorMsgId") && setIds("vendorMsgId", e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && setIds("vendorMsgId", e.currentTarget.value)}
-      />
       <select
         aria-label="EDR Template"
         value={templates.data?.find((t) => state.visible && t.columns.join() === state.visible.join())?.id ?? ""}
@@ -341,7 +323,13 @@ function TroubleTicketDialog({ rows, done }: { rows: EdrGridRow[]; done: () => v
         </label>
         <div className="field tt-wide">
           <span>Email Columns * ({columns.length})</span>
-          {fields.data && <ColumnChecks fields={fields.data.fields} value={columns} onChange={setColumns} />}
+          {fields.data && (
+            <ColumnChecks
+              fields={fields.data.fields.filter((f) => !f.filterOnly)}
+              value={columns}
+              onChange={setColumns}
+            />
+          )}
         </div>
       </div>
       {preview && (

@@ -939,6 +939,9 @@ textarea.mono {
 .edr-ids {
   width: 190px;
 }
+.edr-ids.edr-ids-wide {
+  width: 320px;
+}
 .column-checks {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));

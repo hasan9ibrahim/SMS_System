@@ -4,10 +4,11 @@
   --accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);
   --accent-softer: color-mix(in srgb, var(--color-accent) 8%, transparent);
   --hover: color-mix(in srgb, var(--color-text) 6%, transparent);
-  --menu-text: #dfe4ec;
+  /* Text on the dark surfaces (toasts, bulk bar). */
+  --menu-text: #e6e9ef;
   --menu-text-dim: #a3acbb;
   --menu-hover: color-mix(in srgb, #ffffff 10%, transparent);
-  --shadow: 0 6px 24px color-mix(in srgb, #000 18%, transparent);
+  --shadow: 0 10px 30px color-mix(in srgb, #101828 14%, transparent);
 }
 
 button {
@@ -22,16 +23,22 @@ textarea {
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 5px 8px;
+  /* 5 px top and bottom so fixed-height boxes (26 px filters) keep room for the text. */
+  padding: 5px 10px;
   min-width: 0;
+}
+input:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus) {
+  border-color: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-border));
 }
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 button:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -1px;
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: 0;
 }
 kbd {
   font: inherit;
@@ -84,12 +91,14 @@ code {
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--color-border);
   background: var(--color-panel);
+  box-shadow: var(--card-shadow);
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -109,8 +118,8 @@ a.btn {
   border-color: var(--color-accent);
   color: #fff;
 }
-:root[data-theme="dark"] .btn-primary {
-  color: #151920;
+.btn-primary svg {
+  color: inherit;
 }
 .btn-primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-accent) 88%, #000);
@@ -118,6 +127,7 @@ a.btn {
 .btn-ghost {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 .btn-danger {
   background: var(--color-error);
@@ -125,10 +135,10 @@ a.btn {
   color: #fff;
 }
 .btn-sm {
-  height: 26px;
-  padding: 0 8px;
-  font-size: 12.5px;
-  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  font-size: 13px;
+  gap: 6px;
 }
 .icon-btn {
   display: inline-grid;
@@ -183,9 +193,9 @@ a.btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 26px;
-  padding: 0 4px 0 10px;
-  border-radius: var(--radius-sm);
+  height: 28px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
   background: var(--hover);
   white-space: nowrap;
 }
@@ -216,8 +226,8 @@ a.btn {
 }
 .tag {
   display: inline-block;
-  padding: 1px 7px;
-  border-radius: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
   background: var(--hover);
   font-size: 12px;
   color: var(--color-text-secondary);
@@ -285,123 +295,128 @@ a.btn {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 14px 20px 12px;
-  gap: 10px;
+  padding: 20px 28px 14px;
+  gap: 14px;
 }
 
-/* ---------- top menu bar (§15.1: dark, 46 px) ---------- */
+/* ---------- header (design refresh: two rows on white, logo / search / status, then the main menu) ---------- */
 .topbar {
-  height: var(--menu-bar-height);
   flex: none;
   display: flex;
+  flex-direction: column;
+  background: var(--color-header);
+  color: var(--color-text);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.topbar-main {
+  height: 56px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  background: var(--color-menu-bar);
-  color: var(--menu-text);
+  gap: 24px;
+  padding: 0 24px;
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 .logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   white-space: nowrap;
   flex: none;
   font-weight: 700;
+  font-size: 15.5px;
   background: none;
   border: 0;
   cursor: pointer;
-  padding: 0 10px 0 0;
-  color: var(--menu-text);
+  padding: 0;
+  color: var(--color-text);
 }
 .logo-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: var(--color-accent);
+  color: #fff;
 }
 .menu-bar {
+  height: 40px;
   display: flex;
-  align-items: center;
-  gap: 2px;
+  align-items: stretch;
+  gap: 4px;
   min-width: 0;
+  padding: 0 14px;
   overflow: hidden;
 }
 .menu-top {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--menu-text);
+  color: var(--color-text-secondary);
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
 }
 .menu-top:hover,
 .menu-top.open {
-  background: var(--menu-hover);
+  color: var(--color-text);
 }
 .menu-top.current {
-  background: color-mix(in srgb, #ffffff 14%, transparent);
+  color: var(--color-text);
   font-weight: 600;
+}
+.menu-top.current::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-accent);
 }
 .topbar-right {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .jump {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 32px;
-  min-width: 230px;
-  padding: 0 10px;
+  gap: 10px;
+  height: 38px;
+  flex: 0 1 460px;
+  min-width: 0;
+  padding: 0 8px 0 12px;
   border-radius: var(--radius-md);
-  border: var(--border-width) solid color-mix(in srgb, #ffffff 14%, transparent);
-  background: color-mix(in srgb, #ffffff 6%, transparent);
-  color: var(--menu-text-dim);
+  border: var(--border-width) solid transparent;
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-header));
+  color: var(--color-text-secondary);
   cursor: pointer;
+}
+.jump:hover {
+  border-color: var(--color-border);
 }
 .jump kbd {
   margin-left: auto;
-  color: var(--menu-text-dim);
-  border-color: color-mix(in srgb, #ffffff 18%, transparent);
+  color: var(--color-text-secondary);
+  background: var(--color-header);
 }
 /* Narrower screens: the search shrinks to its icon and shortcut so the whole menu fits. */
-@media (max-width: 1700px) {
-  .jump {
-    min-width: 0;
-  }
+@media (max-width: 1100px) {
   .jump > span {
     display: none;
   }
-  .jump kbd {
-    white-space: nowrap;
+  .jump {
+    flex: none;
   }
   .menu-top {
-    padding: 0 7px;
-  }
-  .top-clock-tz,
-  .top-clock-weekday {
-    display: none;
-  }
-}
-/* Under 1400 px the logo mark alone leaves room for the full menu and the date. */
-@media (max-width: 1400px) {
-  .logo > span:not(.logo-mark) {
-    display: none;
-  }
-}
-@media (max-width: 1300px) {
-  .menu-top {
-    padding: 0 5px;
-  }
-  .logo {
-    padding-right: 4px;
+    padding: 0 8px;
   }
 }
 /* System clock (team trial round 1): server time in the platform time zone. */
@@ -410,7 +425,7 @@ a.btn {
   align-items: baseline;
   gap: 6px;
   padding: 0 4px;
-  color: #ffffff;
+  color: var(--color-text);
   font-weight: 600;
   white-space: nowrap;
   cursor: default;
@@ -419,16 +434,16 @@ a.btn {
   font-variant-numeric: tabular-nums;
 }
 .top-clock-date {
-  color: var(--menu-text);
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
 .top-clock-tz {
-  color: var(--menu-text-dim);
+  color: var(--color-text-secondary);
   font-weight: 500;
   font-size: 12px;
 }
 .top-clock.offline .num {
-  color: var(--menu-text-dim);
+  color: var(--color-text-secondary);
 }
 @media (max-width: 1100px) {
   .top-clock-tz {
@@ -440,26 +455,26 @@ a.btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 14px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
   border: 0;
   cursor: pointer;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  background: color-mix(in srgb, var(--color-good) 22%, var(--color-menu-bar));
-  color: color-mix(in srgb, var(--color-good) 55%, #ffffff);
+  background: color-mix(in srgb, var(--color-good) 12%, var(--color-header));
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
 }
 .tps-pill .dot {
   background: var(--color-good);
   animation: pulse 2s infinite;
 }
 .tps-pill.offline {
-  background: color-mix(in srgb, #ffffff 8%, transparent);
-  color: var(--menu-text-dim);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--color-header));
+  color: var(--color-text-secondary);
 }
 .tps-pill.offline .dot {
-  background: var(--menu-text-dim);
+  background: var(--color-text-secondary);
   animation: none;
 }
 @keyframes pulse {
@@ -471,21 +486,21 @@ a.btn {
   position: relative;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  background: transparent;
-  color: var(--menu-text);
-  border-radius: var(--radius-sm);
+  width: 38px;
+  height: 38px;
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-header);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 .bell:hover {
-  background: var(--menu-hover);
+  background: var(--hover);
 }
 .bell-count {
   position: absolute;
-  top: 1px;
-  right: 0;
+  top: -5px;
+  right: -5px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -494,19 +509,19 @@ a.btn {
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  background: color-mix(in srgb, var(--color-error) 70%, var(--color-menu-bar));
+  background: color-mix(in srgb, var(--color-error) 70%, var(--color-header));
   color: #fff;
 }
 .bell-count.unseen {
   background: var(--color-error);
 }
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 0;
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--accent-soft);
+  color: var(--color-accent);
   font-weight: 700;
   font-size: 12px;
   cursor: pointer;
@@ -534,7 +549,7 @@ a.btn {
 .menu {
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  padding: 6px;
 }
 .menu-item {
   display: flex;
@@ -602,7 +617,7 @@ a.btn {
   display: flex;
   align-items: stretch;
   gap: 8px;
-  padding: 0 10px;
+  padding: 0 16px;
   background: var(--color-page-bg);
   border-bottom: var(--border-width) solid var(--color-border);
 }
@@ -619,8 +634,11 @@ a.btn {
   align-items: center;
   gap: 7px;
   max-width: 240px;
+  margin: 6px 2px 0;
   padding: 0 10px 0 12px;
-  border-right: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   color: var(--color-text-secondary);
   cursor: pointer;
   user-select: none;
@@ -631,9 +649,10 @@ a.btn {
 }
 .tab.active {
   background: var(--color-panel);
+  border-color: var(--color-border);
   color: var(--color-text);
   font-weight: 600;
-  box-shadow: inset 0 2px 0 var(--color-accent);
+  margin-bottom: -1px;
 }
 .tab.pinned:not(.active) .tab-title {
   max-width: 90px;
@@ -727,7 +746,7 @@ a.btn {
 .page-header {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px 18px;
   flex-wrap: wrap;
 }
 .page-header .page-back {
@@ -740,33 +759,38 @@ a.btn {
 .page-header h1 {
   margin: 0;
   font-size: var(--font-size-title);
-  font-weight: 650;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
+/* Sibling pages as pills; the current one filled (design refresh). */
 .siblings {
   display: flex;
-  gap: 2px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .siblings a {
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
+  padding: 6px 14px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-weight: 500;
   text-decoration: none;
 }
 .siblings a:hover {
-  background: var(--hover);
-  color: var(--color-text);
+  border-color: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-border));
 }
 .siblings a.current {
-  background: var(--accent-soft);
-  color: var(--color-accent);
+  background: var(--color-strong);
+  border-color: var(--color-strong);
+  color: var(--color-on-strong);
   font-weight: 600;
 }
 /* Actions on the selected row, next to New (team trial round 1): one joined, quiet group. */
 .record-actions {
   display: inline-flex;
   align-items: stretch;
-  height: 30px;
+  height: 34px;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-panel);
@@ -832,19 +856,19 @@ a.btn {
 .quick-search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 8px;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
   border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-panel);
   color: var(--color-text-secondary);
 }
 .quick-search input {
   border: 0;
   padding: 0;
-  height: 22px;
-  width: 160px;
+  height: 26px;
+  width: 220px;
   background: transparent;
 }
 .quick-search input:focus-visible {
@@ -869,6 +893,7 @@ a.btn {
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
   overflow: hidden;
 }
 .detail-nav {
@@ -952,7 +977,7 @@ a.btn {
   font-size: 12px;
   color: var(--color-text-secondary);
   border-top: var(--border-width) solid var(--color-border);
-  background: var(--color-page-bg);
+  background: var(--color-header);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1660,4 +1685,13 @@ body.resizing-split {
 }
 body.resizing-split iframe {
   pointer-events: none;
+}
+
+/* Check boxes and radios in the accent colour (design refresh). */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+  width: 15px;
+  height: 15px;
+  padding: 0;
 }

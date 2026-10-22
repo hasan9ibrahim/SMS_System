@@ -128,22 +128,24 @@ function ColumnsMenu({
         <Icon name="columns" size={13} /> Columns
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="end" className="choice-pop">
-        {fields.fields.map((f) => (
-          <label key={f.field} className="choice-row">
-            <input
-              type="checkbox"
-              checked={visible.includes(f.field)}
-              onChange={(e) => {
-                const next = e.target.checked
-                  ? fields.fields.map((x) => x.field).filter((n) => n === f.field || visible.includes(n))
-                  : visible.filter((n) => n !== f.field);
-                if (next.length) onChange({ ...state, visible: next });
-              }}
-            />
-            {f.label}
-            {f.hidden && <span className="muted small">hidden by default</span>}
-          </label>
-        ))}
+        {fields.fields
+          .filter((f) => !f.filterOnly)
+          .map((f) => (
+            <label key={f.field} className="choice-row">
+              <input
+                type="checkbox"
+                checked={visible.includes(f.field)}
+                onChange={(e) => {
+                  const next = e.target.checked
+                    ? fields.fields.map((x) => x.field).filter((n) => n === f.field || visible.includes(n))
+                    : visible.filter((n) => n !== f.field);
+                  if (next.length) onChange({ ...state, visible: next });
+                }}
+              />
+              {f.label}
+              {f.hidden && <span className="muted small">hidden by default</span>}
+            </label>
+          ))}
         <div className="menu-sep" />
         <button type="button" className="menu-item" onClick={() => onChange({ ...state, visible: null })}>
           <Icon name="refresh" size={13} /> <span>Default columns</span>

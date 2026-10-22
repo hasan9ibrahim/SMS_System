@@ -9,6 +9,23 @@ export type EdrGridRow = Omit<EdrRow, "id"> & { id: number; uuid: string };
 export const toGridRow = (r: EdrRow): EdrGridRow => ({ ...r, id: uuidKey(r.id), uuid: r.id });
 
 /** Comma, space or line separated message IDs, without blanks and repeats. */
+/**
+ * Numbers and message IDs in one box (team trial round 2, §9.1): split on commas, semicolons and new lines; a
+ * piece with spaces stays whole when it is a number written with spaces (`+44 7700 900123`), else splits on them.
+ */
+export const parseMixedList = (text: string) => [
+  ...new Set(
+    text
+      .split(/[,;\n]+/)
+      .flatMap((piece) => {
+        const p = piece.trim();
+        return /^\+?[\d\s()-]+$/.test(p) ? [p] : p.split(/\s+/);
+      })
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ),
+];
+
 export const parseIdList = (text: string) => [
   ...new Set(
     text

@@ -35,6 +35,16 @@ const msgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
           ? `v_message_id ILIKE ${lit(`%${String(c.value)}%`)}`
           : any;
 };
+/** Number or Msg ID (team trial round 2, §9.1): a receiver number, a Customer Msg ID or any part's Vendor Msg ID. */
+const numberOrMsgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
+  const raw = (c.values ?? [c.value]).map((v) => String(v).trim()).filter(Boolean);
+  if (!raw.length) return "0";
+  const ids = raw.map((v) => lit(v)).join(",");
+  const numbers = raw.map((v) => v.replace(/[\s+()-]/g, "")).filter((v) => /^\d+$/.test(v));
+  const parts = [`c_message_id IN (${ids})`, `hasAny(splitByChar(',', v_message_id), [${ids}])`];
+  if (numbers.length) parts.unshift(`dst_addr IN (${numbers.map((v) => lit(v)).join(",")})`);
+  return `(${parts.join(" OR ")})`;
+};
 const CAUSE_TEXT = `transform(command_status, [${CAUSE_CODES.map((c) => c.code).join(",")}], [${CAUSE_CODES.map((c) => lit(c.name)).join(",")}], '')`;
 
 export const EDR_COLUMNS: Record<string, ChColumn> = {
@@ -93,6 +103,7 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   vendorPort: { sql: "v_port" },
   // One ID per part of a multipart message, comma separated: a filter matches any of them (team trial round 2).
   vendorMsgId: { sql: "v_message_id", where: msgIdWhere },
+  numberOrMsgId: { sql: "dst_addr", where: numberOrMsgIdWhere },
   vendorMccmnc: { sql: "v_mccmnc" },
   vendorBillingType: { sql: "v_billing_type" },
   vendorRateTableId: { sql: "v_rate_table_id" },

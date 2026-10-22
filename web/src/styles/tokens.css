@@ -1,46 +1,57 @@
-/* Colour tokens, exactly as in spec §15.2. Light is the default; dark applies with
-   [data-theme="dark"] on <html>. Use these variables everywhere, never raw colours. */
+/* Colour tokens. Light is the default; dark applies with [data-theme="dark"] on <html>. Use these variables
+   everywhere, never raw colours. Design refresh (team trial round 2, decision 2026-10-22): a white header and
+   white cards on a soft grey page, a brighter accent and roomier rows, replacing the §15.2 palette. Colour still
+   carries meaning only: green good, amber warning, red problem. */
 :root {
-  --color-page-bg: #eef1f5;
-  --color-panel: #f9fafb;
-  --color-text: #273142;
-  --color-text-secondary: #5b6577;
-  --color-border: #dde2ea;
-  --color-accent: #4a6fa5;
-  --color-good: #3f8f6b;
-  --color-warning: #b7832f;
-  --color-error: #c0565b;
-  --color-menu-bar: #2b3445;
+  --color-page-bg: #f4f6f9;
+  --color-panel: #ffffff;
+  --color-text: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-border: #e4e7ec;
+  --color-accent: #2563eb;
+  --color-good: #16a34a;
+  --color-warning: #b45309;
+  --color-error: #dc2626;
+  /* Dark surfaces on a light page: toasts, the bulk bar, terminals. */
+  --color-menu-bar: #1f2937;
+  /* The two-row header (logo, search and status; the main menu). */
+  --color-header: #ffffff;
+  /* Selected pill (sibling page links): dark in light mode, light in dark mode. */
+  --color-strong: #111827;
+  --color-on-strong: #ffffff;
 
-  /* §15.3 common styling */
   --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-size-body: 13px;
-  --font-size-title: 17px;
-  --radius-sm: 7px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
+  --font-size-body: 13.5px;
+  --font-size-title: 22px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --border-width: 1px;
+  --card-shadow: 0 1px 2px color-mix(in srgb, #101828 5%, transparent);
 
-  /* §15.1 layout sizes */
-  --menu-bar-height: 46px;
+  --menu-bar-height: 96px;
   --tab-strip-height: 40px;
-  --grid-row-height: 38px;
-  --status-bar-height: 26px;
+  --grid-row-height: 42px;
+  --status-bar-height: 28px;
 
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --color-page-bg: #1b2029;
-  --color-panel: #222833;
-  --color-text: #dfe4ec;
-  --color-text-secondary: #a3acbb;
-  --color-border: #323a47;
-  --color-accent: #7ea2d8;
-  --color-good: #74c29a;
-  --color-warning: #dbb26b;
-  --color-error: #e08a8f;
-  --color-menu-bar: #151920;
+  --color-page-bg: #0f141a;
+  --color-panel: #171c24;
+  --color-text: #e6e9ef;
+  --color-text-secondary: #9aa3b2;
+  --color-border: #29303b;
+  --color-accent: #5b8def;
+  --color-good: #4cc38a;
+  --color-warning: #e9b25f;
+  --color-error: #f07178;
+  --color-menu-bar: #0b0f14;
+  --color-header: #141921;
+  --color-strong: #e6e9ef;
+  --color-on-strong: #111827;
+  --card-shadow: none;
 
   color-scheme: dark;
 }

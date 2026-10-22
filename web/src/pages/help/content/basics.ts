@@ -42,7 +42,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The dark bar at the top holds the main menu. A menu with several pages opens a drop-down; a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
+            text: "The header has two rows: the logo, search and live status on top, and the main menu underneath (the current section is underlined). A menu with several pages opens a drop-down; a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
           },
           {
             kind: "list",
@@ -62,7 +62,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "On the right of the top bar: **Search or jump to…** ([[search-jump]]), the live **TPS** pill (click it to open the Dashboard), the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
+            text: "In the top row: **Search or jump to…** ([[search-jump]]) next to the logo; on the right the live **TPS** pill (click it to open the Dashboard), the server clock, the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
           },
         ],
       },
@@ -217,7 +217,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**SMS Platform** logo — opens the Home tab.",
-              "**Main menu** — Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin and Help. The menu of the page you are on is highlighted. See [[getting-started#menus]].",
+              "**Main menu** — Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin and Help. The menu of the page you are on is underlined. See [[getting-started#menus]].",
               "**Search or jump to…** — finds pages and records. Shortcut **Ctrl K**. See [[search-jump]].",
               "**TPS pill** — the total messages per second right now across the platform. Its dot is grey and it reads **— TPS** when the live feed is not connected. Click it to open the Dashboard.",
               "**Bell** — the number of open incidents and a list of the latest ones. See [[alerts-and-popups]].",

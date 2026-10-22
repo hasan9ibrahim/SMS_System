@@ -7,6 +7,7 @@ import {
   messageEncoding,
   needsUcs2,
   parseIdList,
+  parseMixedList,
   parseReceivers,
   timeBounds,
   timeCondition,
@@ -26,6 +27,13 @@ test("UUID keys are stable numbers", () => {
 
 test("message ID lists and UTC time boxes", () => {
   assert.deepEqual(parseIdList(" a1, b2\nb2 ;c3 "), ["a1", "b2", "c3"]);
+  // Numbers and message IDs in one box: a number written with spaces stays whole.
+  assert.deepEqual(parseMixedList("+44 7700 900123, 586f7e92c4d1471d b772a0279f661a7e;2348030000001"), [
+    "+44 7700 900123",
+    "586f7e92c4d1471d",
+    "b772a0279f661a7e",
+    "2348030000001",
+  ]);
   const c = timeCondition("startTime", "2026-10-16T00:00", "2026-10-16T06:30")!;
   assert.deepEqual(c, {
     field: "startTime",
