@@ -34,7 +34,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Every message the platform carries is rated twice: once at the customer's sell rate (what we charge them) and once at the vendor's buy rate (what the vendor charges us). These rated records are the EDRs (event detail records). Finance turns them into invoices, balances and statements, per enterprise and per **side**: the customer side (we bill them) and the vendor side (they bill us). A reciprocal partner has both sides.",
+            text: "Every message the platform carries is rated twice: once at the customer's sell rate (what we charge them) and once at the vendor's buy rate (what the vendor charges us). These rated records are the EDRs (event detail records). Finance turns them into invoices, balances and statements, per enterprise and per **side**: the customer side (we bill them) and the vendor side (they bill us). A bilateral partner has both sides.",
           },
           {
             kind: "list",
@@ -178,6 +178,7 @@ export const topics: HelpTopic[] = [
               "A new rate starts from the moment it is saved. Earlier rates are kept, so amounts already converted never move.",
               "A payment's **Final Amount** is its amount converted to the base currency of the enterprise's business company, at the rate in force on the payment date.",
               "Totals across partners and companies (for example the [[charges|Charges calculator]] totals and the vendor invoice monthly summary) are in the **platform currency**. In the trial the platform currency is the euro (`EUR`).",
+              "Money is always calculated to 6 decimals. Each page keeps its usual display (Live analytics shows all 6).",
             ],
           },
         ],
@@ -355,8 +356,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Enterprise Name",
-                what: "The partner. Only enterprises of the chosen type, or reciprocal ones, are offered.",
-                values: "Type part of the name or alias, e.g. `Acme`. Required.",
+                what: "The partner. Only enterprises of the chosen type, or bilateral ones, are offered.",
+                values: "Type part of the name or brand name, e.g. `Acme`. Required.",
               },
               {
                 name: "Invoice Number",
@@ -617,7 +618,7 @@ export const topics: HelpTopic[] = [
             fields: [
               { name: "Invoice No", what: "The invoice number, e.g. `INV-3-1042`." },
               { name: "Enterprise Name", what: "The customer." },
-              { name: "Enterprise Type", what: "**Customer** or **Reciprocal**." },
+              { name: "Enterprise Type", what: "**Customer** or **Bilateral**." },
               {
                 name: "Invoice Type",
                 what: "**Auto** (made by the billing cycle) or **Manual** (made by Generate Request).",
@@ -712,7 +713,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Enterprise Name",
-                what: "One or more customers (customer or reciprocal enterprises). Each gets its own request and invoice.",
+                what: "One or more customers (customer or bilateral enterprises). Each gets its own request and invoice.",
                 values: "Required. Each must have customer billing settings.",
               },
               {
@@ -998,7 +999,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Enterprise",
-                what: "The vendor (vendor or reciprocal enterprises). It must have vendor billing settings.",
+                what: "The vendor (vendor or bilateral enterprises). It must have vendor billing settings.",
                 values: "Required.",
               },
               {
@@ -1079,7 +1080,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Click **Import** and choose the file.",
-              "Columns: `enterprise` (name or alias), `invoice_number`, `charge_volume`, `charge_amount`, `currency`, `invoice_date`, `due_date`, `period_from`, `period_to`, `timezone`, `remarks`.",
+              "Columns: `enterprise` (name or brand name), `invoice_number`, `charge_volume`, `charge_amount`, `currency`, `invoice_date`, `due_date`, `period_from`, `period_to`, `timezone`, `remarks`.",
               "Dates are `YYYY-MM-DD`. An empty currency or time zone takes the partner's billing settings.",
               "Each invoice is checked as it is added. Invoices already on file are left as they are (import only adds).",
             ],
@@ -1273,7 +1274,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Enterprise",
                 what: "One or more partners.",
-                values: "Required. Type a name or alias and pick from the list.",
+                values: "Required. Type a name or brand name and pick from the list.",
               },
               {
                 name: "Invoice Type",
@@ -1374,7 +1375,7 @@ export const topics: HelpTopic[] = [
               "**Disputed and pending vendor invoices**: printed as a separate block (not in the balance) or left off, as the partner's reconciliation rule says. **Add to SOA** puts one in the main lines.",
               "**Payments left off the SOA**: they still count in balances. **Include** puts one back on.",
               "**Removed by hand**: lines someone removed. **Put back** restores one.",
-              "For reciprocal partners: **Net balance (customer − vendor)** at the bottom.",
+              "For bilateral partners: **Net balance (customer − vendor)** at the bottom.",
             ],
           },
         ],
@@ -1580,7 +1581,7 @@ export const topics: HelpTopic[] = [
             title: "Download",
             items: [
               "Find the report (filter **Enterprise** or the dates).",
-              "Click the download icon, or **Download** in the detail panel. Excel files download as `.xls`, PDFs as `.pdf`, named after the partner's alias and the period.",
+              "Click the download icon, or **Download** in the detail panel. Excel files download as `.xls`, PDFs as `.pdf`, named after the partner's brand name and the period.",
             ],
           },
           {

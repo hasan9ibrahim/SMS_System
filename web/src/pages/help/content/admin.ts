@@ -184,7 +184,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The header has the filled **Add user** button. The grid lists every user; click a row to see the detail panel, double-click (or Enter) to edit. Tick rows to act on several users at once.",
+            text: "The header has the filled **Add user** button. The grid lists every user; click a row to see the detail panel on the right, double-click (or Enter) to edit. Tick rows to act on several users at once. Plain text in the quick search box matches the start of a value (`ann` finds names starting with Ann); type `%ann` to find it anywhere.",
           },
           {
             kind: "fields",
@@ -2100,7 +2100,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Customers can sign in to a self-service portal. Each login belongs to one customer (or reciprocal) enterprise. Account managers and admins add logins, reset passwords and switch them off here. Portal users follow the same monthly password change as staff.",
+            text: "Customers can sign in to a self-service portal. Each login belongs to one customer (or bilateral) enterprise. Account managers and admins add logins, reset passwords and switch them off here. Portal users follow the same monthly password change as staff.",
           },
         ],
       },
@@ -2141,7 +2141,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Enterprise",
-                what: "Required. Type to search; only customer and reciprocal enterprises are offered.",
+                what: "Required. Type to search; only customer and bilateral enterprises are offered.",
               },
               { name: "First Name", what: "Required, up to 80 characters." },
               { name: "Last Name", what: "Required, up to 80 characters." },

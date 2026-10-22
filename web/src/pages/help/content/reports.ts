@@ -250,7 +250,7 @@ export const topics: HelpTopic[] = [
             title: "Start from a ready-made report",
             items: [
               "Open **Start from…**.",
-              "Pick one: **Sales report**, **Billing report**, **NOC report**, **Customize** (date, customer, vendor), **Enterprise** (customer and trunk), **Master Grouping** (date, customer and trunk, vendor and trunk), **Usage Enterprise** (billable usage per customer and destination, last month), **Negative Margin** (traffic sold below cost, margin < 0) or **Bilateral** (customer and vendor, to look at one reciprocal partner both ways).",
+              "Pick one: **Sales report**, **Billing report**, **NOC report**, **Customize** (date, customer, vendor), **Enterprise** (customer and trunk), **Master Grouping** (date, customer and trunk, vendor and trunk), **Usage Enterprise** (billable usage per customer and destination, last month), **Negative Margin** (traffic sold below cost, margin < 0) or **Bilateral** (customer and vendor, to look at one bilateral partner both ways).",
               "Change anything you like; the ready-made report itself is not changed.",
             ],
           },
@@ -454,7 +454,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Customers / Vendors",
-                what: "Only these enterprises. The list offers customers (or vendors) and reciprocal partners.",
+                what: "Only these enterprises. The list offers customers (or vendors) and bilateral partners.",
                 values: "Search by name; pick several.",
               },
               { name: "Trunks", what: "Only these trunks of the chosen side.", values: "Pick several." },
@@ -745,7 +745,7 @@ export const topics: HelpTopic[] = [
             title: "Grid columns",
             fields: [
               { name: "Enterprise", what: "The enterprise name." },
-              { name: "Type", what: "Customer, Vendor or Reciprocal." },
+              { name: "Type", what: "Customer, Vendor or Bilateral." },
               { name: "Account Manager", what: "The enterprise's account manager." },
               { name: "Billing Cycle", what: "The billing cycle of the enterprise." },
               {

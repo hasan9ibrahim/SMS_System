@@ -42,7 +42,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The header has two rows: the logo, search and live status on top, and the main menu underneath (the current section is underlined). A menu with several pages opens a drop-down; a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
+            text: "The header is one top bar: the logo, then the main menu (the current section is underlined), then search and live status on the right. A menu with several pages opens a drop-down; a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
           },
           {
             kind: "list",
@@ -62,7 +62,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "In the top row: **Search or jump to…** ([[search-jump]]) next to the logo; on the right the live **TPS** pill (click it to open the Dashboard), the server clock, the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
+            text: "After the menu: **Search or jump to…** ([[search-jump]], **Ctrl K**); on the right the live **TPS** pill (click it to open the Dashboard), the server clock, the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
           },
         ],
       },
@@ -74,7 +74,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Start on the **Home** tab. It lists the daily screens and a few tips. Read [[layout]] once so you know the parts of every page.",
-              "Open **Enterprises**. Type part of a name in the filter box under **Name** and watch the list narrow. Click a row to see its details below the grid, double-click it to open the full record. See [[grids-and-filters]].",
+              "Open **Enterprises**. Type the start of a name in the filter box under **Full Legal Name** and watch the list narrow. Click a row to see its details on the right of the grid, double-click it to open the full record. See [[grids-and-filters]].",
               "Open **Rates › Rate manager** and pick a rate table. This is where customer and vendor prices live.",
               "Open **Routing › Route rules**. Click a rule and look at its **Conditions**, **Vendors**, **Traffic** and **History** in the detail panel.",
               "Open **Routing › Rate lookup** and type a country or network to see vendor costs and client rates side by side.",
@@ -183,7 +183,7 @@ export const topics: HelpTopic[] = [
     title: "The window layout",
     group: "Getting started",
     summary:
-      "Every page uses the same layout: top menu bar, tab strip, page header, filter chips, grid, detail panel and status bar.",
+      "Every page uses the same layout: top bar, tab strip, page header, filter card with quick search, grid, detail panel and status bar.",
     keywords: [
       "screen",
       "layout",
@@ -211,15 +211,16 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "top-bar",
-        title: "Top menu bar",
+        title: "Top bar",
         blocks: [
           {
             kind: "list",
+            title: "One bar, from left to right",
             items: [
               "**SMS Platform** logo — opens the Home tab.",
               "**Main menu** — Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin and Help. The menu of the page you are on is underlined. See [[getting-started#menus]].",
-              "**Search or jump to…** — finds pages and records. Shortcut **Ctrl K**. See [[search-jump]].",
-              "**TPS pill** — the total messages per second right now across the platform. Its dot is grey and it reads **— TPS** when the live feed is not connected. Click it to open the Dashboard.",
+              "**Search or jump to…** — after the menu; finds pages and records. Shortcut **Ctrl K**. See [[search-jump]].",
+              "**TPS pill** (on the right, with the clock) — the total messages per second right now across the platform. Its dot is grey and it reads **— TPS** when the live feed is not connected. Click it to open the Dashboard.",
               "**Bell** — the number of open incidents and a list of the latest ones. See [[alerts-and-popups]].",
               "**Avatar** — your initials; opens your personal settings. See [[getting-started#personal-settings]].",
             ],
@@ -244,9 +245,9 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**Back arrow** — goes back to the page you had open before in this tab, or, if there is none, to the tab this one was opened from. Shortcut **Alt+←**. It is greyed out when there is nowhere to go back to.",
-              "**Page title** — on record pages it can be a picker to switch to another record.",
+              "**Page title** — on record pages it can be a picker to switch to another record. There is no description line under the title.",
               "**Sibling links** — the other pages of the same menu as small links; the current one is highlighted. Ctrl-click or middle-click opens one in a new tab.",
-              "**Actions** on the right — usually **Undo**, **History**, **Export** and the page's main action. The main action (for example **Add rule**) is the only filled, coloured button on the page.",
+              "**Actions** on the right (small buttons) — usually **Undo**, **History**, **Export** and the page's main action. The main action (for example **Add rule**) is the only filled, coloured button on the page.",
             ],
           },
         ],
@@ -272,11 +273,11 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "filter-row",
-        title: "Active-filter row",
+        title: "Filter card",
         blocks: [
           {
             kind: "text",
-            text: "Under the header, list pages show a filter card: **Quick search…**, page-specific controls, a chip for every active filter (each with ✕ to remove it), **Add filter** (or **Edit filter**) for the filter builder, **Clear all**, **Save as view**, **Show deleted** where the list has archived records, and the **Views** menu. The grid sits in a **Records** card: its title shows the number of rows, and on the right the selection summary, **Clear selection**, **Bulk edit** and **Columns**; the footer says how many rows are loaded (more load as you scroll). See [[grids-and-filters]].",
+            text: "Under the header, list pages show a filter card: the quick search box (with a pill for every column filter), the page's own controls, **Show deleted** where the list has archived records and **Clear all**; on the right **Save as view**, **Views**, the selection summary, **Bulk edit** and **Columns**. The grid follows straight after; its footer gives the row count, for example **Showing 400 of 12,480 records · scroll for more**. See [[grids-and-filters]].",
           },
         ],
       },
@@ -286,7 +287,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The list itself: column headers, then a row of filter boxes (one under every column), then the rows. The first column is a checkbox for selection. Numbers are right-aligned. Status is a small coloured dot. Deleted (archived) rows are greyed out. The row you clicked is tinted. See [[grids-and-filters]].",
+            text: "The list itself: column headers, then a row of filter boxes (one under every column), then the rows. The headers have a light blue tint in the light theme. The first column is a checkbox for selection. Numbers are right-aligned. Status is a small coloured dot. Deleted (archived) rows are greyed out. The row you clicked is tinted. See [[grids-and-filters]].",
           },
         ],
       },
@@ -296,11 +297,11 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Click a row and its details open under the grid: the list of sections on the left (for example Conditions, Vendors, Traffic, History), the content in the middle, and sometimes key figures or a small trend chart on the right. The section you chose stays open while you move from row to row. Close it with ✕.",
+            text: "Click a row and its details open on the right of the grid. The grid narrows; the panel does not cover it. The panel shows its title with ✕, its sections as tabs across the top (for example Conditions, Vendors, Traffic, History), then the chosen section, then the facts (ID, created…) at the bottom. The section you chose stays open while you move from row to row. Close it with ✕.",
           },
           {
             kind: "tip",
-            text: "Drag the thin bar above the detail panel to make it taller or shorter. Double-click the bar to switch between tall and the default height. The height is remembered per list in this browser.",
+            text: "Drag the bar on the left edge of the detail panel to make it wider or narrower. Double-click the bar to switch between wide and the default width. The width is remembered per list.",
           },
         ],
       },
@@ -469,7 +470,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "The status bar shows the total, for example `12,480 rows · 400 loaded`. A new filter or sort scrolls back to the top.",
+            text: "The footer under the grid shows the count, for example **Showing 400 of 12,480 records · scroll for more**. A new filter or sort scrolls back to the top.",
           },
         ],
       },
@@ -549,11 +550,11 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "chips",
-        title: "Filter chips and Clear all",
+        title: "Field pills and Clear all",
         blocks: [
           {
             kind: "text",
-            text: "Every active filter shows as a chip in the row above the grid, for example `Name acme`, `Type Customer, Vendor` or `Margin < 0`. Click ✕ on a chip to remove that filter. Conditions from the filter builder show as one chip such as **All of 3 conditions**; click it to edit them. **Clear all** removes every filter and the quick search but keeps your sort and columns; a page with a default filter (e.g. EDR search's today) goes back to it.",
+            text: "Every column filter shows as a pill in the quick search box, for example `Type = Customer, Vendor` or `Margin = <0`, and also under its column header. All pills apply together (AND). Click × on a pill to remove that filter, or press **Backspace** in the empty box to remove the last pill. Conditions from the filter builder show as one chip such as **All of 3 conditions**; click it to edit them. **Clear all** removes every filter and the quick search but keeps your sort and columns; a page with a default filter (e.g. EDR search's today) goes back to it.",
           },
         ],
       },
@@ -563,7 +564,21 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**Quick search…** looks for text in the main columns of the list (for example name, alias and ID). Type and press **Enter**, or click elsewhere. **Esc** clears it. `%` and `_` work here too. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
+            text: "Click the quick search box and a card opens listing the page's fields by category: **Text**, **Customer**, **Vendor**, **Choices**, **Numbers and money**, **Dates and times**. Only visible columns and filter-only fields are listed; show a hidden column with **Columns** to filter by it.",
+          },
+          {
+            kind: "steps",
+            title: "Filter by a field",
+            items: [
+              "Click the quick search box.",
+              "Pick a field in the card. A pill such as **Status = …** appears in the box.",
+              "Type the value with the same shorthand as the column filters: `%` any text, `_` one character, `=exact`, `!not`, `/regex/`, numbers `>5`, `5..10`, `1,2,3`, dates `2026-10-01..2026-10-16`. Choice fields open a checklist instead.",
+              "Add more pills the same way. They all apply together (AND).",
+            ],
+          },
+          {
+            kind: "text",
+            text: "Plain text typed in the box (outside a pill) is a normal quick search over the main text columns: press **Enter**, or click **Search all text columns for …** in the card. **Esc** clears it. On **Enterprises**, **Customer trunks**, **Vendor trunks** and **Users** plain text matches the start of a value (`Colo` finds names starting with Colo); type `%colo` to find it anywhere. Other lists match anywhere. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
           },
         ],
       },
@@ -573,7 +588,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**Add filter** opens the filter builder, where you combine as many conditions as you like with AND and OR, on any field of the list, including columns that are hidden. See [[filter-builder]].",
+            text: "**Any of (OR)…** in the quick search card opens the filter builder, where you combine as many conditions as you like with AND and OR, on any field of the list, including columns that are hidden. See [[filter-builder]].",
           },
         ],
       },
@@ -598,7 +613,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "**Columns** at the right of the filter row lists every field. Tick or untick to show or hide a column. Fields marked **hidden by default** are extra columns you can add. At least one column stays visible.",
+              "**Columns** at the right of the filter card lists every field. Tick or untick to show or hide a column. Fields marked **hidden by default** are extra columns you can add. At least one column stays visible.",
               "**Default columns** in the same menu goes back to the standard set.",
               "Drag the right edge of a column header to make it wider or narrower.",
             ],
@@ -612,10 +627,10 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "Click a row to make it the active row and show its details below. Double-click (or middle-click) a row to open the full record; **Ctrl-click** opens it in a new tab where the page supports it.",
+              "Click a row to make it the active row and show its details on the right. Double-click (or middle-click) a row to open the full record; **Ctrl-click** opens it in a new tab where the page supports it.",
               "Tick the checkbox at the start of a row to select it. **Shift**-tick selects every row between the last one you ticked and this one.",
               "The checkbox in the header selects all loaded rows. When more rows match, a line offers **Select all … matching**, which loads and selects every matching row, up to 5,000.",
-              "The selection summary and **Clear selection** appear on the right of the filter row. **Bulk edit** acts on the selected rows (for example change status or delete several at once).",
+              "The selection summary appears on the right of the filter card, next to **Bulk edit**. **Bulk edit** acts on the selected rows (for example change status or delete several at once).",
               "Changing a filter or the quick search clears the selection, so a bulk action never touches rows you can no longer see.",
             ],
           },
@@ -648,7 +663,7 @@ export const topics: HelpTopic[] = [
             title: "Save a view",
             items: [
               "Set the filters, sort and columns you want.",
-              "Click **Save as view** in the filter row (or **Views › Save as new view…**).",
+              "Click **Save as view** in the filter card (or **Views › Save as new view…**).",
               "Type a **Name** (up to 100 characters).",
               "Optional: in **Share read-only with**, find colleagues by name or username and tick them. With nobody ticked the view is private.",
               "Click **Save view**.",
@@ -713,7 +728,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Click **Add filter** in the filter row above any list. When the builder already has conditions the button reads **Edit filter**, and a chip such as **All of 3 conditions** shows them; click the chip to edit too. The builder's conditions are combined (AND) with the filters under the column headers.",
+            text: "Click the quick search box above any list and choose **Any of (OR)…** in the card. When the builder already has conditions, a chip such as **All of 3 conditions** shows them; click the chip to edit them. The builder's conditions are combined (AND) with the filters under the column headers.",
           },
         ],
       },
@@ -783,7 +798,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "Open **Enterprises › Customer trunks** and click **Add filter**.",
+              "Open **Enterprises › Customer trunks** click the quick search box and choose **Any of (OR)…**.",
               "Leave **Match all (AND)**.",
               "First row: **Status** · **is one of** · tick **Active**.",
               "**+ Condition**: **Enterprise** · **matches** · `acme%`.",
@@ -804,7 +819,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "Open **Routing › Route rules** and click **Add filter**.",
+              "Open **Routing › Route rules** click the quick search box and choose **Any of (OR)…**.",
               "Click **any (OR)**.",
               "First row: **Vendors** · **matches** · `%kite direct%`.",
               "**+ Condition**: **Rule** · **matches** · `%otp%`.",
@@ -824,7 +839,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "Open **Routing › Route rules**, click **Add filter** and leave **Match all (AND)**.",
+              "Open **Routing › Route rules**, click the quick search box, choose **Any of (OR)…** and leave **Match all (AND)**.",
               "First row: **Destination** · **matches** · `%france%`.",
               "Click **+ Group**. A new box appears that matches **any (OR)**.",
               "In the new group's first row: **ASR** · **<** · `60`.",
@@ -982,7 +997,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Override the blockers",
-                what: "Administrators only, shown when something blocks the delete. Lets you delete anyway.",
+                what: "Administrators only, shown when something blocks the delete. Lets you delete anyway. Not offered for live trunks of an enterprise or for live trunks / enterprises using a translation or HLR rule.",
                 values: "Needs a written **Reason**, which is logged.",
               },
               {
@@ -1001,6 +1016,15 @@ export const topics: HelpTopic[] = [
           {
             kind: "text",
             text: "A trunk or enterprise with a non-zero balance, an unpaid or draft invoice, an open dispute or live binds cannot be deleted. The window says **Settle the red items first**. Settle them (for example record the payment or close the dispute) and try again, or ask an administrator to override.",
+          },
+          {
+            kind: "list",
+            title: "Blockers that cannot be overridden",
+            items: [
+              "An enterprise that still has any customer or vendor trunk that is not deleted cannot be deleted or archived, not even with an administrator override. Delete its trunks first.",
+              "A translation rule or HLR rule assigned to a live trunk or enterprise cannot be deleted, not even with an override. Remove it from those trunks / enterprises first. Rules that run on all trunks or on a category do not block; they just stop running there.",
+              "The delete window shows these items in red and offers no override for them.",
+            ],
           },
         ],
       },
@@ -1021,7 +1045,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "Tick **Show deleted** in the list's filter row. Deleted records appear greyed out.",
+              "Tick **Show deleted** in the list's filter card. Deleted records appear greyed out.",
               "Open the record. A banner says **This … is deleted** with when and by whom; editing is off.",
               "Administrators click **Restore** in the banner. Others see **An administrator can restore it.**",
               "Right after a delete you can also click **Undo** in the message, or undo the change from History ([[undo-and-history]]).",
@@ -1029,7 +1053,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "Deleting a parent (for example an enterprise) archives its trunks with it. Nothing below it is ever hard-deleted.",
+            text: "An enterprise can only be deleted once all its customer and vendor trunks are deleted. Nothing is ever hard-deleted.",
           },
         ],
       },
@@ -1372,8 +1396,8 @@ export const topics: HelpTopic[] = [
               { name: "Ctrl-click a row", what: "Open the record (in a new tab where the page supports it)." },
               { name: "Shift-tick a row checkbox", what: "Select every row between the last ticked one and this one." },
               {
-                name: "Double-click the bar above the detail panel",
-                what: "Switch the panel between tall and default height.",
+                name: "Double-click the bar on the left edge of the detail panel",
+                what: "Switch the panel between wide and default width.",
               },
             ],
           },
@@ -1405,7 +1429,10 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             fields: [
               { name: "Esc in a column filter", what: "Clear that filter." },
-              { name: "Enter in Quick search", what: "Search. **Esc** clears it." },
+              {
+                name: "Enter in the quick search box",
+                what: "Search all text columns for what you typed. **Esc** clears it. **Backspace** in the empty box removes the last field pill.",
+              },
               {
                 name: "↑ / ↓ / Enter / Esc in Search or jump to",
                 what: "Move, open, close. **Ctrl+Enter** opens in a new tab.",
@@ -1441,10 +1468,6 @@ export const topics: HelpTopic[] = [
               {
                 name: "Enter in a dialog field",
                 what: "Submit, on dialogs that support it (for example Route simulator and Network diagnosis: **Enter runs**).",
-              },
-              {
-                name: "↑ / ↓ on the bar above the detail panel",
-                what: "Make the panel taller / shorter (after clicking the bar).",
               },
             ],
           },
@@ -1501,7 +1524,7 @@ export const topics: HelpTopic[] = [
               "**DLR (delivery report / receipt)** — the message that says whether an SMS was delivered (stat DELIVRD, UNDELIV, EXPIRED …). DLR % = delivered ÷ successful. **DLR (c)** is what we report to the customer, **DLR (v)** what the vendor reported.",
               "**DNID / receiver** — the destination phone number. **Sender ID** is the source address.",
               "**EDR (event data record)** — one row per message attempt with both legs (customer and vendor), the rate and cost at send time. Feeds reports, billing and re-rating.",
-              "**Enterprise** — a partner company: customer, vendor or both (reciprocal).",
+              "**Enterprise** — a partner company: customer, vendor or both (bilateral).",
               "**ESME / SMSC** — in SMPP, the client (ESME) and the server (SMSC). We are the SMSC toward customers and an ESME toward vendors.",
               "**HLR (home location register) lookup** — a query to find which network a number belongs to now, and whether it is ported or reachable.",
             ],
@@ -1539,7 +1562,7 @@ export const topics: HelpTopic[] = [
               "**Product category** — a traffic class label such as DIRECT, HQ, SIM, OTP or PROMO, used on trunks, rate tables and route rules.",
               "**QBR (quality-based routing)** — routing that takes vendor quality (ASR, DLR, delay) into account, not only price.",
               "**Rate table** — a price list per MCCMNC (and optionally sender ID) with validity dates. Customer rate tables set what we charge; vendor rates what we pay.",
-              "**Reciprocal** — an enterprise that is both customer and vendor.",
+              "**Bilateral** — an enterprise that is both customer and vendor.",
               "**Re-rating** — recalculating the charges of past traffic after a rate correction.",
               "**RN (rate notification)** — a vendor's notice of new rates. A vendor RN never re-rates traffic already sent; it applies from its effective date.",
               "**Route rule** — conditions (customer, destination, sender …) that pick which vendors a message goes to, in which order or share.",
@@ -1675,7 +1698,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Panels",
-                what: "Tick or untick the panels to show: Today's summary, Traffic movers, Live TPS chart, TPS per trunk, Top clients and vendors, Top destinations. **Reset layout** puts every panel back in its place at full width.",
+                what: "Tick or untick the panels to show. The default order is Today's summary, Top clients and vendors, TPS per trunk, Traffic movers, Top destinations, Live TPS chart. **Reset layout** puts every panel back in that order at full width.",
                 values: "All shown by default.",
               },
               {
@@ -1717,8 +1740,8 @@ export const topics: HelpTopic[] = [
               { name: "DLR", what: "Delivered ÷ submitted.", values: "Amber below 70 %, red below 50 %." },
               { name: "TPS now", what: "Total messages per second right now." },
               {
-                name: "Customers / Vendors online",
-                what: "Customers sending now and vendors receiving now, in one card.",
+                name: "Online",
+                what: "Customers sending now and vendors receiving now, in one card. A green light shows next to **Online**.",
               },
             ],
           },
@@ -1906,15 +1929,19 @@ export const topics: HelpTopic[] = [
                 what: "**Live** (green): figures are refreshing. **Paused**: the period includes today but refresh is paused or off. **Not live**: the period is over, so nothing changes.",
               },
               {
+                name: "Pause / Resume",
+                what: "Right after the Live / Paused / Not live indicator. Freezes the figures while you investigate, keeping the chosen interval. **Resume** catches up.",
+                values: "Greyed out when the period does not include today or Refresh is Off.",
+              },
+              {
                 name: "Refresh",
-                what: "How often the figures refresh while the period includes today.",
+                what: "After **Pause**. How often the figures refresh while the period includes today.",
                 values:
                   "**Off**, **1 s (live)**, **2 s**, **5 s**, **15 s**, **30 s** (default), **1 min**, **5 min**.",
               },
               {
-                name: "Pause / Resume",
-                what: "Freezes the figures while you investigate, keeping the chosen interval. **Resume** catches up.",
-                values: "Greyed out when the period does not include today or Refresh is Off.",
+                name: "Columns",
+                what: "Right of the period bar. Adds or removes columns, grouped **Traffic**, **Quality**, **Money** and **HLR/MNP**. Saved per user. **Reset to default columns** goes back to the standard set. See [[live-analytics#columns]].",
               },
             ],
           },
@@ -1961,12 +1988,13 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**Total** — the first row, with all traffic of the period. It opens broken down **by customer** (or by what the link that opened the page asked for).",
-              "**+** at the start of a row opens a menu of levels to break it down by; **−** closes the breakdown. Each row can be broken down by any level not already used above it. An expanded row and its sub rows sit in a bold grey frame, so you can see where a breakdown starts and ends.",
-              "**Search** — the top breakdown has a search box in the first column header; each nested breakdown has its own search row. Type part of a name or code.",
+              "**+** at the start of a row opens a menu of levels to break it down by; **−** closes the breakdown. Each row can be broken down by any level not already used above it. An expanded row group is marked by bold lines above and below it, so you can see where a breakdown starts and ends. The **Total** row is bold throughout on a grey fill.",
+              "**Search** — the top breakdown has a search box in the first column header; each nested breakdown has its own search row. Each box is labelled with the level name (for example **Customer trunk**) and matches the start of the name.",
               "**A–Z** next to the top search sorts by name. Click any column header to sort every breakdown by it: the first click shows the highest first, the next click flips it.",
               "Breakdowns show the 100 busiest rows; **Show … more of …** loads the next 100.",
-              "Enterprises are shown by their alias.",
+              "Enterprises are shown by their brand name.",
               "**EDRs** at the end of a row opens the messages behind it; the ⬇ icon exports them. See below.",
+              "On narrow screens the table scrolls sideways instead of cutting figures.",
             ],
           },
           {
@@ -2018,10 +2046,37 @@ export const topics: HelpTopic[] = [
               { name: "Delivered", what: "Delivery receipts DELIVRD from vendors." },
               { name: "Rate (C) / Rate (V)", what: "Average customer / vendor rate per message." },
               { name: "Delay sec", what: "Average delivery delay in seconds." },
-              { name: "HLR", what: "Number of HLR lookups." },
+              { name: "HLR/MNP", what: "Number of HLR / MNP lookups." },
+              { name: "Ported", what: "Numbers the HLR / MNP lookup found ported to another network." },
               { name: "TPS", what: "Live TPS: messages per second over the last minute." },
-              { name: "HLR cost", what: "Cost of HLR lookups, in the platform currency." },
+              { name: "HLR/MNP cost", what: "Cost of HLR / MNP lookups, in the platform currency." },
             ],
+          },
+          {
+            kind: "fields",
+            title: "Hidden by default (add them with Columns)",
+            fields: [
+              {
+                name: "Cached HLR/MNP",
+                what: "Of all lookups, numbers already looked up in the last 24 hours, answered from the cache.",
+              },
+              { name: "Live HLR/MNP", what: "Lookups sent to a provider (not from the cache)." },
+              { name: "HLR/MNP answered", what: "Lookups that returned a result." },
+              { name: "Margin %", what: "Margin ÷ revenue." },
+              { name: "Avg cost", what: "Average cost per billable message, in the platform currency." },
+              { name: "Success", what: "Accepted by the platform." },
+              { name: "Failed submits", what: "Messages no vendor accepted." },
+              { name: "Reroutes", what: "Messages sent again to another vendor." },
+              { name: "Reported (C)", what: "Delivery receipts sent to the customer." },
+              { name: "Reported (V)", what: "Delivery receipts received from vendors." },
+              { name: "Avg TPS", what: "Average messages per second over the period." },
+              { name: "Peak TPS", what: "Busiest second of the period." },
+              { name: "MO", what: "Mobile originated messages." },
+            ],
+          },
+          {
+            kind: "text",
+            text: "The columns shown above are the default set. **Columns** (right of the period bar) adds or removes columns and saves your choice per user. Money and rate columns show 6 decimals on every row; they are never rounded to whole units.",
           },
           {
             kind: "list",
@@ -2040,7 +2095,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "Double-click any row (or the Total row). A panel opens under the table with that row's traffic over time, newest first.",
+              "Double-click any row (or the Total row). A panel opens on the right of the table with that row's traffic over time, newest first.",
               "Choose the **Period** of each line: **Second**, **Minute** (default), **15 minutes**, **Hour** or **Day**. **Show older** loads more lines.",
               "Click a time line. The table above then shows only that moment, with a strip **Showing only …**.",
               "Click **Show the whole period** in the strip to go back. Close the panel with ✕.",
@@ -2090,7 +2145,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "Settings on this page (period, levels, refresh) are not saved: they reset when you reopen the page. Copy the result with **Export…** if you need to keep it.",
+            text: "Settings on this page (period, levels, refresh) are not saved: they reset when you reopen the page. Only your **Columns** choice is saved. Copy the result with **Export…** if you need to keep it.",
           },
         ],
       },
