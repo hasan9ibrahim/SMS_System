@@ -243,6 +243,8 @@ export function DashboardPage() {
         page={page}
         actions={
           <>
+            {/* Online now sits in the page header, left of the controls (team trial round 2). */}
+            <OnlineNowCard />
             <label className="dash-control">
               Movers window
               <select
@@ -591,7 +593,6 @@ function PairCard({
     label: string;
     value: number | undefined;
     format: (v: number) => string;
-    sub?: string;
     valueClass?: string;
   }[];
   animate: boolean;
@@ -609,14 +610,12 @@ function PairRow({
   label,
   value,
   format,
-  sub,
   valueClass,
   animate,
 }: {
   label: string;
   value: number | undefined;
   format: (v: number) => string;
-  sub?: string;
   valueClass?: string;
   animate: boolean;
 }) {
@@ -624,10 +623,7 @@ function PairRow({
   return (
     <div className="pair-row">
       <span className="label">{label}</span>
-      <span className={`value ${valueClass ?? ""}`}>
-        {value === undefined ? "—" : format(shown)}
-        {sub && <span className="sub"> {sub}</span>}
-      </span>
+      <span className={`value ${valueClass ?? ""}`}>{value === undefined ? "—" : format(shown)}</span>
     </div>
   );
 }
@@ -642,22 +638,9 @@ function SummaryBar({
   onOpen: Open;
 }) {
   const cur = s?.currency ?? "EUR";
-  // Today is the day in the platform time zone (decision 2026-10-16).
-  const tz = useReference().data?.platformTimezone ?? "UTC";
   return (
-    <Section
-      title="Today"
-      className="dash-summary"
-      extra={
-        <>
-          <OnlineNowCard />
-          <span className="muted small">
-            {tz} day · {cur}
-          </span>
-        </>
-      }
-    >
-      {/* Pairs in one card (team trial round 2): Submitted and Delivered, Revenue and Margin, ASR and DLR. */}
+    <Section title="Today" className="dash-summary">
+      {/* Pairs in one card (team trial round 2): Submitted and Delivered, Revenue and Margin, ASR and DLR, Customers and Vendors online. */}
       <div className="dash-kpis">
         <Counter label="Attempts" value={s?.attempts} format={int} animate={animate} />
         <PairCard
@@ -675,7 +658,6 @@ function SummaryBar({
               label: "Margin",
               value: s?.margin,
               format: (v) => money(v, cur),
-              sub: s ? `${s.marginPct.toFixed(1)}%` : undefined,
               valueClass: s && s.margin < 0 ? "neg" : undefined,
             },
           ]}
@@ -689,12 +671,12 @@ function SummaryBar({
           ]}
         />
         <Counter label="TPS now" value={s?.tps} format={(v) => dec(v)} animate={animate} />
-        <Counter
-          label="Online"
-          value={s?.onlineCustomers}
-          format={int}
+        <PairCard
           animate={animate}
-          sub={s ? `customers · ${s.onlineVendors} vendors` : undefined}
+          rows={[
+            { label: "Customers", value: s?.onlineCustomers, format: int },
+            { label: "Vendors", value: s?.onlineVendors, format: int },
+          ]}
         />
         <MarketMovesCard />
       </div>

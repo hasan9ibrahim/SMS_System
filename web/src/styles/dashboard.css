@@ -381,7 +381,13 @@ button.dash-cols:hover {
 }
 
 /* Online now (§13.18) */
+.dash .page-actions {
+  flex: 1;
+}
+/* In the page header: left of the controls, after the title (team trial round 2). */
 .dash-online {
+  margin-left: 24px;
+  margin-right: auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;

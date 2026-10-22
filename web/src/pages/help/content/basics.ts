@@ -1697,7 +1697,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Counters for today that roll to their new value. The top right shows which day is meant (the platform time zone) and the currency. Admins and department managers also see **Online now** (signed-in colleagues; green initials are active in the last 5 minutes; click to open Logged-in users), and everyone sees **Market moves** with the number of open moves and how many are urgent (click to open Market moves).",
+            text: "Counters for today (the day in the platform time zone) that roll to their new value. Admins and department managers also see **Online now** in the page header, next to the title (signed-in colleagues; green initials are active in the last 5 minutes; click to open Logged-in users). Everyone sees the **Market moves** card with the number of open moves and how many are urgent (click to open Market moves).",
           },
           {
             kind: "fields",
@@ -1708,11 +1708,18 @@ export const topics: HelpTopic[] = [
               { name: "Delivered", what: "Messages with a delivered receipt." },
               { name: "Revenue", what: "What customers are charged today." },
               { name: "Cost", what: "What vendors charge us today." },
-              { name: "Margin", what: "Revenue minus cost, with margin % underneath.", values: "Red when negative." },
+              {
+                name: "Margin",
+                what: "Revenue minus cost, under Revenue in the same card.",
+                values: "Red when negative.",
+              },
               { name: "ASR", what: "Accepted ÷ attempts.", values: "Amber below 80 %, red below 60 %." },
               { name: "DLR", what: "Delivered ÷ submitted.", values: "Amber below 70 %, red below 50 %." },
               { name: "TPS now", what: "Total messages per second right now." },
-              { name: "Online", what: "Customers sending now, with the number of vendors underneath." },
+              {
+                name: "Customers / Vendors online",
+                what: "Customers sending now and vendors receiving now, in one card.",
+              },
             ],
           },
           {
