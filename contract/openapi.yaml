@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.79.0
+  version: 0.80.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14782,18 +14782,25 @@ components:
     DashboardSettings:
       type: object
       additionalProperties: false
-      description: The live dashboard's time window, thresholds and panels, saved per user (§13.3).
-      required: [windowMinutes, thresholdPct, chartMinutes, hiddenPanels]
+      description: The live dashboard's time window, mover volumes, panels and layout, saved per user (§13.3).
+      required: [windowMinutes, customerMinMessages, vendorMinMessages, chartMinutes, hiddenPanels, layout]
       properties:
         windowMinutes:
           type: integer
           enum: [5, 15, 30, 60]
           description: Traffic movers compare this window with the one before.
-        thresholdPct:
-          type: number
-          minimum: 5
-          maximum: 500
-          description: A client counts as increasing or decreasing beyond this change.
+        customerMinMessages:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          description: >-
+            Customer movers card (team trial round 2): a customer trunk shows only when it sent at least this many
+            messages in the window, now or before. Replaces the ± threshold.
+        vendorMinMessages:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          description: Vendor movers card, as customerMinMessages for vendor trunks.
         chartMinutes:
           type: integer
           enum: [5, 15, 60]
@@ -14811,6 +14818,30 @@ components:
           items:
             type: string
             enum: [summary, movers, chart, tps, tops, destinations]
+        layout:
+          type: array
+          maxItems: 6
+          description: >-
+            The panels in the user's order with their sizes (team trial round 2: drag to rearrange, resize). Panels
+            missing from the list follow in the default order; an empty list is the default layout.
+          items:
+            type: object
+            additionalProperties: false
+            required: [panel, cols, height]
+            properties:
+              panel:
+                type: string
+                enum: [summary, movers, chart, tps, tops, destinations]
+              cols:
+                type: integer
+                minimum: 3
+                maximum: 12
+                description: Width in twelfths of the page.
+              height:
+                type: [integer, "null"]
+                minimum: 120
+                maximum: 2000
+                description: Height in pixels; null = the panel's own height.
 
     WorkspaceTab:
       type: object

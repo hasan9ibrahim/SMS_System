@@ -10038,15 +10038,17 @@ export type components = {
       dashboard?: components["schemas"]["DashboardSettings"];
       alertSounds?: components["schemas"]["AlertSoundPrefs"];
     };
-    /** @description The live dashboard's time window, thresholds and panels, saved per user (§13.3). */
+    /** @description The live dashboard's time window, mover volumes, panels and layout, saved per user (§13.3). */
     DashboardSettings: {
       /**
        * @description Traffic movers compare this window with the one before.
        * @enum {integer}
        */
       windowMinutes: 5 | 15 | 30 | 60;
-      /** @description A client counts as increasing or decreasing beyond this change. */
-      thresholdPct: number;
+      /** @description Customer movers card (team trial round 2): a customer trunk shows only when it sent at least this many messages in the window, now or before. Replaces the ± threshold. */
+      customerMinMessages: number;
+      /** @description Vendor movers card, as customerMinMessages for vendor trunks. */
+      vendorMinMessages: number;
       /**
        * @description Length of the live TPS chart.
        * @enum {integer}
@@ -10059,6 +10061,15 @@ export type components = {
        */
       refreshSeconds: 0 | 1 | 5 | 10 | 30 | 60;
       hiddenPanels: ("summary" | "movers" | "chart" | "tps" | "tops" | "destinations")[];
+      /** @description The panels in the user's order with their sizes (team trial round 2: drag to rearrange, resize). Panels missing from the list follow in the default order; an empty list is the default layout. */
+      layout: {
+        /** @enum {string} */
+        panel: "summary" | "movers" | "chart" | "tps" | "tops" | "destinations";
+        /** @description Width in twelfths of the page. */
+        cols: number;
+        /** @description Height in pixels; null = the panel's own height. */
+        height: number | null;
+      }[];
     };
     /** @description One open page tab (§13.5). Per-tab page state (filters, scroll) stays in the browser. */
     WorkspaceTab: {

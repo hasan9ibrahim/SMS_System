@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "dashboard.join.json",
   "title": "DashboardJoinParams",
-  "description": "Client to server: the phx_join payload for topic live:dashboard. Window and threshold of the traffic movers panel (\u00a713.3); the user's saved dashboard preferences. To change them, leave and join again. refreshSeconds sets how often summary, movers and tops are pushed (team trial round 1).",
+  "description": "Client to server: the phx_join payload for topic live:dashboard. Window and Customer / Vendor volumes of the traffic movers panel (§13.3); the user's saved dashboard preferences. To change them, leave and join again. refreshSeconds sets how often summary, movers and tops are pushed (team trial round 1).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -16,11 +16,19 @@
       ],
       "default": 15
     },
-    "thresholdPct": {
-      "type": "number",
-      "minimum": 5,
-      "maximum": 500,
-      "default": 30
+    "customerMinMessages": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000000,
+      "default": 100,
+      "description": "Customer movers: least messages in the window (team trial round 2)."
+    },
+    "vendorMinMessages": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000000,
+      "default": 100,
+      "description": "Vendor movers: least messages in the window (team trial round 2)."
     },
     "refreshSeconds": {
       "type": "integer",
@@ -38,7 +46,8 @@
   "examples": [
     {
       "windowMinutes": 15,
-      "thresholdPct": 30,
+      "customerMinMessages": 100,
+      "vendorMinMessages": 100,
       "refreshSeconds": 1
     }
   ]

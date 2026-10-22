@@ -2,15 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "dashboard.movers.json",
   "title": "DashboardMoversEvent",
-  "description": "Topic live:dashboard, event \"movers\". Traffic movers panel (§13.3 item 2), pushed every 5 s: clients that started sending, increased or decreased by more than the threshold, or stopped, comparing the last window with the window before. Window and threshold come from the join parameters (dashboard.join.json).",
+  "description": "Topic live:dashboard, event \"movers\". Traffic movers panel (§13.3 item 2), pushed every 5 s, comparing the last window with the window before: customer trunks that started or stopped sending, and the customer trunks and vendor trunks whose traffic changed (team trial round 2: Customer and Vendor in place of Increasing and Decreasing, biggest change first), each with the destination it sends most to. A trunk shows in Customer or Vendor only when it sent at least the card's volume (messages in the window, now or before). Window and volumes come from the join parameters (dashboard.join.json).",
   "type": "object",
   "required": [
     "at",
     "windowMinutes",
-    "thresholdPct",
+    "customerMinMessages",
+    "vendorMinMessages",
     "started",
-    "increasing",
-    "decreasing",
+    "customers",
+    "vendors",
     "stopped"
   ],
   "additionalProperties": false,
@@ -22,9 +23,15 @@
       "type": "integer",
       "minimum": 1
     },
-    "thresholdPct": {
-      "type": "number",
-      "minimum": 0
+    "customerMinMessages": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Customer card: least messages in the window (now or before)."
+    },
+    "vendorMinMessages": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Vendor card: least messages in the window (now or before)."
     },
     "started": {
       "type": "array",
@@ -32,17 +39,19 @@
         "$ref": "#/$defs/MoverRow"
       }
     },
-    "increasing": {
+    "customers": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/MoverRow"
-      }
+      },
+      "description": "Customer trunks whose traffic changed, biggest change first."
     },
-    "decreasing": {
+    "vendors": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/MoverRow"
-      }
+      },
+      "description": "Vendor trunks whose traffic changed, biggest change first."
     },
     "stopped": {
       "type": "array",
@@ -63,7 +72,10 @@
         "changePct",
         "sparkline",
         "asr",
-        "dlr"
+        "dlr",
+        "messagesNow",
+        "messagesBefore",
+        "topDestination"
       ],
       "additionalProperties": false,
       "properties": {
@@ -71,7 +83,8 @@
           "$ref": "common.json#/$defs/PartyRef"
         },
         "enterprise": {
-          "$ref": "common.json#/$defs/PartyRef"
+          "$ref": "common.json#/$defs/PartyRef",
+          "description": "Its enterprise (customer_enterprise for a customer trunk, vendor_enterprise for a vendor trunk)."
         },
         "tpsNow": {
           "type": "number",
@@ -114,6 +127,37 @@
           ],
           "minimum": 0,
           "maximum": 100
+        },
+        "messagesNow": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Messages in the last window."
+        },
+        "messagesBefore": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Messages in the window before."
+        },
+        "topDestination": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "mccmnc",
+            "name"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "mccmnc": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "description": "Country and network."
+            }
+          },
+          "description": "The destination the trunk sent most to in the last hour; null when unknown."
         }
       }
     }
@@ -122,7 +166,6 @@
     {
       "at": "2026-10-16T08:00:05Z",
       "windowMinutes": 15,
-      "thresholdPct": 30,
       "started": [
         {
           "trunk": {
@@ -146,12 +189,20 @@
             12.5
           ],
           "asr": 96.1,
-          "dlr": 88.4
+          "dlr": 88.4,
+          "messagesNow": 11250,
+          "messagesBefore": 0,
+          "topDestination": {
+            "mccmnc": "40474",
+            "name": "India BSNL"
+          }
         }
       ],
-      "increasing": [],
-      "decreasing": [],
-      "stopped": []
+      "stopped": [],
+      "customerMinMessages": 100,
+      "vendorMinMessages": 100,
+      "customers": [],
+      "vendors": []
     }
   ]
 }

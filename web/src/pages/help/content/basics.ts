@@ -1674,14 +1674,14 @@ export const topics: HelpTopic[] = [
                   "**Live (1 s)** (default), **Every 5 s**, **Every 10 s**, **Every 30 s**, **Every minute**, **Paused** (keeps the figures shown when you paused).",
               },
               {
-                name: "Threshold ± %",
-                what: "How much a client's TPS must change to count as increasing or decreasing. Type a number and press Enter or click away.",
-                values: "5 to 500, default 30. Other values are refused and the box goes back.",
+                name: "Panels",
+                what: "Tick or untick the panels to show: Today's summary, Traffic movers, Live TPS chart, TPS per trunk, Top clients and vendors, Top destinations. **Reset layout** puts every panel back in its place at full width.",
+                values: "All shown by default.",
               },
               {
-                name: "Panels",
-                what: "Tick or untick the panels to show: Today's summary, Traffic movers, Live TPS chart, TPS per trunk, Top clients and vendors, Top destinations.",
-                values: "All shown by default.",
+                name: "Moving and resizing panels",
+                what: "Hover a panel: drag the **⠿** grip (top right) onto another panel to move it there, and drag the corner (bottom right) to make it narrower, wider, shorter or taller. Two half-width panels sit side by side. Double-click the corner to give the panel its own height again.",
+                values: "Widths go in twelfths of the page (a quarter at the least). Saved to your profile.",
               },
               {
                 name: "Live / Paused / Offline",
@@ -1727,20 +1727,20 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The heading says what is compared, for example `Last 15 min vs the 15 min before · ±30%`. Four columns:",
+            text: "The heading says what is compared, for example `Last 15 min vs the 15 min before`. Four columns:",
           },
           {
             kind: "list",
             items: [
-              "**Started sending** (green) — clients with no traffic in the previous window that are sending now. Newly appeared rows get a **new** badge and a short pulse.",
-              "**Increasing** (green) — clients whose TPS rose by more than the threshold.",
-              "**Decreasing** (red) — clients whose TPS fell by more than the threshold.",
+              "**Started** (green) — clients with no traffic in the previous window that are sending now. Newly appeared rows get a **new** badge and a short pulse.",
+              "**Customer** — customer trunks whose traffic went up (▲) or down (▼), biggest change first. **Volume ≥** leaves out trunks that sent fewer messages than this in the window (now and before); default 100.",
+              "**Vendor** — the same for vendor trunks, with its own **Volume ≥**.",
               "**Stopped** (red) — clients that were sending and dropped to zero.",
             ],
           },
           {
             kind: "text",
-            text: "Each row: client and trunk, a sparkline of the last hour, the TPS now and **from** the earlier TPS (for Stopped: what it **was**), the change in % with ▲ or ▼, then ASR and DLR. Hover for the full figures; click to open the client's analytics. **None** means no client is in that group.",
+            text: "Each row: client (or vendor) and trunk with the destination it sends most to, a sparkline of the last hour, the TPS now and **from** the earlier TPS (for Stopped: what it **was**), the change in % with ▲ or ▼, then ASR and DLR. Hover for the full figures and message counts; click to open its analytics. **None** means no trunk is in that group.",
           },
         ],
       },
@@ -1841,7 +1841,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "tip",
-            text: "Your movers window, threshold, chart length, refresh and hidden panels are saved to your profile and come back next time.",
+            text: "Your movers window, Customer and Vendor volumes, chart length, refresh, hidden panels and layout are saved to your profile and come back next time. Hover a row in Top clients, Top vendors or Top destinations to see what it is made of today (destination and vendor, client and destination, or client and vendor, with the volume).",
           },
           {
             kind: "tip",

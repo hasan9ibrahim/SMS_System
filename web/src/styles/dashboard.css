@@ -412,3 +412,137 @@ button.dash-cols:hover {
 .dash-avatar.more {
   border-style: dashed;
 }
+
+/* ---------- layout (team trial round 2): 12 columns, panels moved and resized by the user ---------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.dash-frame {
+  position: relative;
+  min-width: 0;
+}
+.dash-frame.sized {
+  overflow: auto;
+}
+.dash-frame.sized > .dash-panel,
+.dash-frame.sized > .dash-pair {
+  min-height: 100%;
+}
+.dash-frame.drop {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+}
+.dash-grip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: grab;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  opacity: 0;
+}
+.dash-frame:hover .dash-grip,
+.dash-grip:focus-visible {
+  opacity: 1;
+}
+.dash-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  z-index: 2;
+  border-right: 2px solid var(--color-border-strong, var(--color-border));
+  border-bottom: 2px solid var(--color-border-strong, var(--color-border));
+  border-bottom-right-radius: 3px;
+  opacity: 0;
+}
+.dash-frame:hover .dash-resize {
+  opacity: 1;
+}
+.dash-frame .dash-panel > header {
+  padding-right: 22px;
+}
+
+/* ---------- paired top cards (team trial round 2) ---------- */
+.dash-kpi-pair {
+  justify-content: center;
+  gap: 0;
+  padding: 4px 10px;
+}
+.dash-kpi-pair .pair-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+.dash-kpi-pair .pair-row + .pair-row {
+  border-top: var(--border-width) solid var(--color-border);
+}
+.dash-kpi-pair .pair-row .label {
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.dash-kpi-pair .pair-row .value {
+  font-size: 16px;
+}
+.dash-kpi-pair .value.neg {
+  color: var(--color-error);
+}
+.dash-kpi-btn {
+  text-align: left;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.dash-kpi-btn:hover {
+  border-color: var(--color-accent);
+}
+
+/* ---------- movers: Customer / Vendor volume, top destination ---------- */
+.dash-volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-weight: normal;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.dash-volume input {
+  width: 72px;
+  height: 22px;
+  padding: 0 6px;
+}
+.dash-mover-dest {
+  color: var(--color-text-secondary);
+}
+
+/* ---------- hover breakdowns ---------- */
+.dash-hover {
+  display: block;
+  min-width: 0;
+}
+.dash-breakdown {
+  padding: 10px 12px;
+  min-width: 320px;
+  max-width: 460px;
+}
+.dash-breakdown .mini-table {
+  margin-top: 6px;
+  width: 100%;
+}

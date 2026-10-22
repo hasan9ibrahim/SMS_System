@@ -194,6 +194,8 @@ export interface Simulator {
   today: DayTotals;
   /** Where messages go; kept across midnight, when today's destination figures start again from zero. */
   destMix: DestMix[];
+  /** The destination each customer and vendor trunk sent most to in the last hour (movers, team trial round 2). */
+  topDest?: { customer: Map<number, string>; vendor: Map<number, string> };
   /** Index of the slot being filled in each trunk's ring. */
   slotIndex: number;
   lastTick: number;
@@ -317,6 +319,9 @@ async function loadFromStores(): Promise<{
     day("v_enterprise_id"),
     day("c_mccmnc"),
   ]);
+  // No EDR store yet (it starts after the server, or is busy): load again later rather than run a day with no
+  // vendors and no destinations (team trial round 2; createSimulator retries every minute).
+  if (cStats === null || vStats === null || dStats === null) throw new Error("the EDR store did not answer");
   const cBy = new Map((cStats ?? []).map((s) => [Number(s.id), s]));
   const vBy = new Map((vStats ?? []).map((s) => [Number(s.id), s]));
   const cTotal = [...cBy.values()].reduce((s, x) => s + Number(x.n), 0) || 1;
@@ -1008,7 +1013,24 @@ export async function resyncToday(sim: Simulator): Promise<boolean> {
          FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
       15_000,
     );
-  const [cDay, vDay, dDay] = await Promise.all([q("c_enterprise_id"), q("v_enterprise_id"), q("c_mccmnc")]);
+  const top = (col: string) =>
+    chRows<{ id: string; code: string }>(
+      `SELECT toString(${col}) AS id, toString(topK(1)(c_mccmnc)[1]) AS code FROM edr
+        WHERE submit_time > now() - INTERVAL 1 HOUR AND ${col} > 0 GROUP BY ${col}`,
+      15_000,
+    );
+  const [cDay, vDay, dDay, cTop, vTop] = await Promise.all([
+    q("c_enterprise_id"),
+    q("v_enterprise_id"),
+    q("c_mccmnc"),
+    top("c_trunk_id"),
+    top("v_trunk_id"),
+  ]);
+  if (cTop && vTop)
+    sim.topDest = {
+      customer: new Map(cTop.map((r) => [Number(r.id), r.code])),
+      vendor: new Map(vTop.map((r) => [Number(r.id), r.code])),
+    };
   if (!cDay || !vDay || !dDay || day !== sim.today.day) return false;
   const names = new Map<number, string>();
   for (const x of [...sim.trunks, ...sim.vendors]) names.set(x.enterpriseId, x.enterpriseName);
@@ -1061,54 +1083,82 @@ export async function resyncToday(sim: Simulator): Promise<boolean> {
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 
+type MoverInput = Pick<SimTrunk, "id" | "name" | "enterpriseId" | "enterpriseName" | "minutes" | "asr" | "dlr">;
+type TopDestination = MoverRow["topDestination"];
+
 /**
- * Traffic movers (§13.3 item 2): the last `window` minutes against the window before. Started:
- * no traffic before, sending now; stopped: the reverse; increasing / decreasing: changed by more
- * than the threshold. Pure, so it can be tested with made-up histories.
+ * Traffic movers (§13.3 item 2): the last `window` minutes against the window before. Started: no traffic before,
+ * sending now; stopped: the reverse (customer trunks). Customer and Vendor (team trial round 2, in place of
+ * Increasing and Decreasing): the customer and vendor trunks whose traffic changed, biggest change first, that
+ * sent at least the card's volume (messages in the window, now or before). Pure, so it can be tested with
+ * made-up histories.
  */
 export function computeMovers(
-  trunks: Pick<SimTrunk, "id" | "name" | "enterpriseId" | "enterpriseName" | "minutes" | "asr" | "dlr">[],
+  trunks: { customers: MoverInput[]; vendors: MoverInput[] },
   windowMinutes: number,
-  thresholdPct: number,
+  minMessages: { customer: number; vendor: number },
   now = Date.now(),
   limit = 15,
+  topDestination: (kind: "customer" | "vendor", id: number) => TopDestination = () => null,
 ): DashboardMoversEvent {
   const ON = 0.2; // TPS that counts as sending
   const OFF = 0.05;
   const out: DashboardMoversEvent = {
     at: new Date(now).toISOString(),
     windowMinutes,
-    thresholdPct,
+    customerMinMessages: minMessages.customer,
+    vendorMinMessages: minMessages.vendor,
     started: [],
-    increasing: [],
-    decreasing: [],
+    customers: [],
+    vendors: [],
     stopped: [],
   };
-  for (const t of trunks) {
+  const rowOf = (t: MoverInput, kind: "customer" | "vendor") => {
     const m = t.minutes;
     const cur = avg(m.slice(-windowMinutes));
     const before = avg(m.slice(-2 * windowMinutes, -windowMinutes));
     const row: MoverRow = {
-      trunk: { kind: "customer_trunk", id: t.id, name: t.name },
-      enterprise: { kind: "customer_enterprise", id: t.enterpriseId, name: t.enterpriseName },
+      trunk: { kind: kind === "customer" ? "customer_trunk" : "vendor_trunk", id: t.id, name: t.name },
+      enterprise: {
+        kind: kind === "customer" ? "customer_enterprise" : "vendor_enterprise",
+        id: t.enterpriseId,
+        name: t.enterpriseName,
+      },
       tpsNow: r1(cur),
       tpsBefore: r1(before),
       changePct: before > OFF ? r1(((cur - before) / before) * 100) : null,
+      messagesNow: Math.round(cur * 60 * windowMinutes),
+      messagesBefore: Math.round(before * 60 * windowMinutes),
       sparkline: m.slice(-60).map(r1),
       asr: t.asr,
       dlr: t.dlr,
+      topDestination: topDestination(kind, t.id),
     };
+    return { row, cur, before };
+  };
+  const changed = (kind: "customer" | "vendor", list: MoverInput[], min: number) =>
+    list
+      .map((t) => rowOf(t, kind))
+      .filter(
+        ({ row, cur, before }) =>
+          before >= OFF &&
+          cur >= OFF &&
+          row.changePct !== null &&
+          row.changePct !== 0 &&
+          Math.max(row.messagesNow, row.messagesBefore) >= min,
+      )
+      .map((x) => x.row)
+      .sort((a, b) => Math.abs(b.changePct!) - Math.abs(a.changePct!))
+      .slice(0, limit);
+  for (const t of trunks.customers) {
+    const { row, cur, before } = rowOf(t, "customer");
     if (before < OFF && cur >= ON) out.started.push(row);
     else if (before >= ON && cur < OFF) out.stopped.push(row);
-    else if (before >= OFF && cur >= OFF && row.changePct !== null) {
-      if (row.changePct >= thresholdPct) out.increasing.push(row);
-      else if (row.changePct <= -thresholdPct) out.decreasing.push(row);
-    }
   }
   out.started = out.started.sort((a, b) => b.tpsNow - a.tpsNow).slice(0, limit);
   out.stopped = out.stopped.sort((a, b) => b.tpsBefore - a.tpsBefore).slice(0, limit);
-  out.increasing = out.increasing.sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0)).slice(0, limit);
-  out.decreasing = out.decreasing.sort((a, b) => (a.changePct ?? 0) - (b.changePct ?? 0)).slice(0, limit);
+  out.customers = changed("customer", trunks.customers, minMessages.customer);
+  out.vendors = changed("vendor", trunks.vendors, minMessages.vendor);
   return out;
 }
 
@@ -1125,5 +1175,14 @@ export function historyEvent(sim: Simulator, now = Date.now()): TpsHistoryEvent 
       trunk: { kind: "customer_trunk" as const, id: t.id, name: t.name },
       values: Array.from({ length: SLOTS }, (_, i) => r1(t.slots[order(i)]!)),
     })),
+  };
+}
+
+/** Movers' top destination with its country and network name (team trial round 2). */
+export function topDestinationOf(sim: Simulator): (kind: "customer" | "vendor", id: number) => TopDestination {
+  const names = new Map(sim.destMix.map((m) => [m.code, `${m.country}${m.network ? ` ${m.network}` : ""}`]));
+  return (kind, id) => {
+    const code = sim.topDest?.[kind].get(id);
+    return code ? { mccmnc: code, name: names.get(code) ?? code } : null;
   };
 }

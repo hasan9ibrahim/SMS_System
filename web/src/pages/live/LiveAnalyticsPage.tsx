@@ -22,7 +22,7 @@ import { PageHeader } from "../../page/PageHeader";
 import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
-import { Button, Menu, Modal, Popover } from "../../ui/primitives";
+import { Button, Modal, Popover } from "../../ui/primitives";
 import { fetchEdrs } from "../monitoring/EdrSearchPage";
 import { RequestDialog } from "../monitoring/parts";
 import { edrGridState } from "../reports/masterModel";
@@ -185,13 +185,7 @@ function DetailPanel({
               );
             })}
             {q.data?.nextCursor && (
-              <tr>
-                <td colSpan={COLUMNS.length + 2}>
-                  <button type="button" className="link small" onClick={() => setLimit((l) => l + 500)}>
-                    Show older
-                  </button>
-                </td>
-              </tr>
+              <MoreOnScroll busy={q.isFetching} text="Loading older…" onMore={() => setLimit((l) => l + 500)} />
             )}
             {!q.data && !q.isError && (
               <tr>
@@ -363,9 +357,12 @@ function ExpandButton({
       </button>
       <Popover anchor={ref} open={menu} onClose={() => setMenu(false)}>
         <div className="la-menu">
-          <Menu
-            onClose={() => setMenu(false)}
-            items={options.map((o) => ({ label: o.label, onSelect: () => onPick(o.value) }))}
+          <LevelMenu
+            options={options}
+            onPick={(d) => {
+              setMenu(false);
+              onPick(d);
+            }}
           />
         </div>
       </Popover>
@@ -546,14 +543,12 @@ function Level({
         );
       })}
       {q.data.nextCursor && (
-        <tr>
-          <td colSpan={COLUMNS.length + 2} style={indent}>
-            <button type="button" className="link small" onClick={() => setLimit((l) => l + 100)}>
-              Show {Math.min(100, q.data.total - q.data.rows.length).toLocaleString("en-US")} more of{" "}
-              {q.data.total.toLocaleString("en-US")}
-            </button>
-          </td>
-        </tr>
+        <MoreOnScroll
+          busy={q.isFetching}
+          style={indent}
+          text={`Loading more · ${q.data.rows.length.toLocaleString("en-US")} of ${q.data.total.toLocaleString("en-US")}`}
+          onMore={() => setLimit((l) => l + 100)}
+        />
       )}
       {q.data.rows.length === 0 && (
         <tr>
@@ -867,6 +862,101 @@ export function LiveAnalyticsPage() {
           }}
           onClose={() => setDetail(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The next rows load when this row scrolls into view (team trial round 2: no Show more button). Waits for the
+ * previous page, so one scroll loads one page.
+ */
+function MoreOnScroll({
+  busy,
+  text,
+  onMore,
+  style,
+}: {
+  busy: boolean;
+  text: string;
+  onMore: () => void;
+  style?: React.CSSProperties;
+}) {
+  const ref = useRef<HTMLTableRowElement>(null);
+  const more = useRef(onMore);
+  more.current = onMore;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || busy) return;
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && more.current(), {
+      rootMargin: "200px",
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [busy]);
+  return (
+    <tr ref={ref}>
+      <td colSpan={COLUMNS.length + 2} className="muted small" style={style}>
+        {text}
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * The "+" menu (team trial round 2): the levels, with the time periods under one Time entry that opens them to
+ * its right on hover (or on click / arrow right).
+ */
+function LevelMenu({
+  options,
+  onPick,
+}: {
+  options: { value: ReportDimension; label: string; time?: boolean }[];
+  onPick: (d: ReportDimension) => void;
+}) {
+  const [timeOpen, setTimeOpen] = useState(false);
+  const plain = options.filter((o) => !o.time);
+  const times = options.filter((o) => o.time);
+  return (
+    <div className="menu" role="menu">
+      {plain.map((o) => (
+        <button key={o.value} type="button" role="menuitem" className="menu-item" onClick={() => onPick(o.value)}>
+          <span className="menu-icon-space" />
+          <span>{o.label}</span>
+        </button>
+      ))}
+      {times.length > 0 && (
+        <div className="la-submenu" onMouseEnter={() => setTimeOpen(true)} onMouseLeave={() => setTimeOpen(false)}>
+          <button
+            type="button"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded={timeOpen}
+            className="menu-item"
+            onClick={() => setTimeOpen((v) => !v)}
+            onKeyDown={(e) => e.key === "ArrowRight" && setTimeOpen(true)}
+          >
+            <span className="menu-icon-space" />
+            <span>Time</span>
+            <Icon name="chevronRight" size={12} />
+          </button>
+          {timeOpen && (
+            <div className="menu la-submenu-list" role="menu">
+              {times.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => onPick(o.value)}
+                >
+                  <span className="menu-icon-space" />
+                  <span>{o.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

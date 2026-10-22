@@ -636,3 +636,27 @@
   flex: none;
   font-size: 11px;
 }
+/* Live analytics "+" menu: Time opens its periods to the right (team trial round 2). */
+.la-submenu {
+  position: relative;
+}
+.la-submenu > .menu-item svg {
+  margin-left: auto;
+}
+.la-submenu-list {
+  position: absolute;
+  top: -4px;
+  left: 100%;
+  min-width: 140px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover, 0 6px 18px rgba(0, 0, 0, 0.15));
+  z-index: 1;
+}
+.la-menu:has(.la-submenu-list) {
+  overflow: visible;
+}
+.popover:has(.la-submenu-list) {
+  overflow: visible;
+}
