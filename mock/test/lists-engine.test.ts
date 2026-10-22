@@ -98,9 +98,13 @@ test("quick search: plain text means contains, wildcards are used as typed", () 
   assert.equal(searchPattern("orbit"), "%orbit%");
   assert.equal(searchPattern("orb%"), "orb%");
   assert.equal(searchPattern("o_bit"), "o_bit");
+  // Lists of named records match the start (team trial round 3); a neutral ID anywhere.
+  assert.equal(searchPattern("orbit", true), "orbit%");
+  assert.equal(searchPattern("%orbit", true), "%orbit");
+  assert.equal(searchPattern("#12", true), "%#12%");
   const { sql, values } = q({ search: "orbit" });
   assert.match(sql, /\(e\.name\)::text ILIKE \$1 OR \(e\.alias\)::text ILIKE \$1/);
-  assert.equal(values[0], "%orbit%");
+  assert.equal(values[0], "orbit%", "enterprises match the start of a name");
 });
 
 test("sort uses the default, puts nulls last and ends with the ID tie-breaker", () => {

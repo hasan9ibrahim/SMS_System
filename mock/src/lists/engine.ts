@@ -68,9 +68,12 @@ export interface ListPage<Row> {
 const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
 const TIME = new Set(["date", "datetime"]);
 
-/** `%` / `_` wildcards are used as typed; plain text means "contains" (§13.25), or "starts with" on prefix lists. */
+/**
+ * `%` / `_` wildcards are used as typed; plain text means "contains" (§13.25), or "starts with" on prefix lists. A
+ * neutral ID ("#123", the masked names of §13.17) is always found anywhere.
+ */
 export function searchPattern(text: string, prefix = false): string {
-  return /[%_]/.test(text) ? text : prefix ? `${text}%` : `%${text}%`;
+  return /[%_]/.test(text) ? text : prefix && !text.startsWith("#") ? `${text}%` : `%${text}%`;
 }
 
 /** Cursor = position in the sorted result. Valid for the same filter and sort only. */
