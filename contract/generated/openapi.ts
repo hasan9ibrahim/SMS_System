@@ -5751,7 +5751,9 @@ export type paths = {
      * @description EDR Search (§9.1): one row per message attempt with both legs, from the EDR store (ClickHouse). Every column
      *     filters with the §13.25 grammar; the page's From / To Date and Final are filters on `startTime` and
      *     `isFinalAttempt`. Enterprise and trunk name filters match names (wildcards) and are applied as IDs. Message ID
-     *     filters take comma-separated lists (`in`). Totals over very large windows may be estimates.
+     *     filters take comma-separated lists (`in`). `numberOrMsgId` (filter only, `eq` / `in`) matches each value against
+     *     the receiver number (DNID, `+`, spaces and dashes ignored), the sender ID, the Customer Msg ID and any part's Vendor Msg ID
+     *     (team trial round 2). Totals over very large windows may be estimates.
      */
     post: operations["queryEdrs"];
     delete?: never;
@@ -17721,6 +17723,11 @@ export type components = {
       sortable: boolean;
       /** @description Not shown as a column by default, but still filterable (§13.25). */
       hidden: boolean;
+      /**
+       * @description A filter with no column of its own (never offered as a column or in column templates), e.g. EDR Search's
+       *     `numberOrMsgId` (team trial round 2).
+       */
+      filterOnly?: boolean;
       /** @description Choices for `enum` fields (dropdown filter with Select All, §1). */
       enumValues?: {
         value: string;

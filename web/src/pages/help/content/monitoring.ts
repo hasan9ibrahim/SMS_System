@@ -638,35 +638,25 @@ export const topics: HelpTopic[] = [
             title: "Filters above the grid",
             fields: [
               {
-                name: "From / To",
-                what: "The time range on **Start Time**, in UTC. Fill one or both.",
+                name: "Period chip",
+                what: "The time range on **Start Time**, in UTC, e.g. `Today · 22 Oct 2026 07:00 → 22 Oct 2026 08:00 UTC`. Click it to set From and To (fill one or both), then **Apply**.",
                 values: "Date and time, e.g. `2026-10-16 08:00` to `2026-10-16 09:00`.",
               },
               {
-                name: "Final",
-                what: "Only the final attempt of each message (hides attempts that were re-routed). Tick it to count each message once.",
-                values: "Ticked or not.",
+                name: "Status",
+                what: "Message statuses to show (none ticked = all), and **Final attempt only** (hides attempts that were re-routed; tick it to count each message once).",
+                values: "Any number of statuses; Final on or off.",
               },
               {
-                name: "Numbers, comma separated",
-                what: "Receiver numbers (DNID), exact match. Press Enter or leave the box to apply.",
+                name: "Number, sender, message ID…",
+                what: "One search box for receiver numbers (DNID), sender IDs, Customer Msg IDs and Vendor Msg IDs, mixed in any order. Each value finds the EDRs whose number, sender, customer message ID or vendor message ID (any part of a long message) is exactly that value. Press Enter or leave the box to apply.",
                 values:
-                  "One or more numbers, separated by commas, spaces or new lines. Example: `2348030000001, 2348030000002`.",
+                  "One or more values separated by commas, semicolons or new lines. A number may have `+`, spaces or dashes. Example: `2348030000001, ACMEBANK, 586f7e92c4d1471d`.",
               },
               {
                 name: "Destinations",
-                what: "Opens a country / network tree; tick countries or networks (select all works too) and click **Apply**. The button shows how many networks are chosen.",
+                what: "**Destinations: All** opens a country / network tree; tick countries or networks (select all works too) and click **Apply**. The chip shows how many networks are chosen.",
                 values: "Empty = all destinations.",
-              },
-              {
-                name: "Customer Msg IDs, comma separated",
-                what: "The message IDs we returned to the customer. Exact match.",
-                values: "One or more IDs.",
-              },
-              {
-                name: "Vendor Msg IDs, comma separated",
-                what: "The message IDs the vendor returned to us. Exact match. A long message has one vendor ID per part, stored comma separated; any part's ID finds it.",
-                values: "One or more IDs.",
               },
               {
                 name: "Template",

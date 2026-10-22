@@ -1,7 +1,7 @@
 // Traffic movers (§13.3 item 2) and the simulator timelines, on made-up histories.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeMovers, extendSegments, levelAt } from "../src/live/simulator.js";
+import { COUNTRY_ISO, computeMovers, extendSegments, levelAt, topCountries } from "../src/live/simulator.js";
 
 const trunk = (id: number, minutes: number[]) => ({
   id,
@@ -88,4 +88,36 @@ test("timelines are continuous and cover the requested span", () => {
     assert.equal(segs[i]!.a, segs[i - 1]!.b);
   }
   for (let t = now - 3_600_000; t < now + 3_600_000; t += 60_000) assert.ok(levelAt(segs, t) >= 0);
+});
+
+test("top destinations add up each country's networks (team trial round 2)", () => {
+  COUNTRY_ISO.set("Nigeria", "NG").set("Ghana", "GH");
+  const d = (country: string, network: string, attempts: number, successful: number, delivered: number) => ({
+    country,
+    network,
+    attempts,
+    revenue: attempts / 100,
+    margin: attempts / 1000,
+    successful,
+    delivered,
+  });
+  const rows = topCountries(
+    new Map([
+      ["62130", d("Nigeria", "MTN", 600, 500, 400)],
+      ["62120", d("Nigeria", "Airtel", 400, 300, 200)],
+      ["62001", d("Ghana", "MTN", 700, 700, 700)],
+      ["99999", d("Nowhere", "", 5000, 0, 0)],
+    ]),
+  );
+  assert.deepEqual(
+    rows.map((r) => [r.iso, r.networks, r.attempts]),
+    [
+      ["NG", 2, 1000],
+      ["GH", 1, 700],
+    ],
+    "biggest first; a country missing from the master list is left out",
+  );
+  assert.equal(rows[0]!.asr, 80);
+  assert.equal(rows[0]!.dlr, 75);
+  assert.equal(rows[0]!.revenue, 10);
 });

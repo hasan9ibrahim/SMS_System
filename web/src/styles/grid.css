@@ -1,4 +1,4 @@
-/* Standard grid (§15.1): header, filter row with one filter per column, rows 38 px, checkbox
+/* Standard grid (§15.1): header, filter row with one filter per column, rows 42 px (design refresh), checkbox
    first, numbers right-aligned with tabular figures, selected row tinted, filters in use in
    the accent colour. */
 .grid {
@@ -9,6 +9,7 @@
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
   outline: none;
 }
 .grid:focus-visible {
@@ -27,13 +28,13 @@
 }
 .gh {
   top: 0;
-  height: 36px;
+  height: 42px;
   border-bottom: var(--border-width) solid var(--color-border);
-  background: color-mix(in srgb, var(--color-page-bg) 55%, var(--color-panel));
+  background: var(--color-panel);
 }
 .gf {
-  top: 36px;
-  height: 40px;
+  top: 42px;
+  height: 42px;
   border-bottom: var(--border-width) solid var(--color-border);
 }
 .gh-cell {
@@ -42,8 +43,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 10px;
-  font-weight: 500;
+  padding: 0 12px;
+  font-weight: 600;
+  font-size: 13px;
   color: var(--color-text-secondary);
   white-space: nowrap;
   user-select: none;
@@ -100,13 +102,13 @@
   flex: none;
   display: flex;
   align-items: center;
-  padding: 0 6px;
+  padding: 0 7px;
 }
 .gf-input {
   width: 100%;
-  height: 26px;
-  padding: 3px 8px;
-  font-size: 12.5px;
+  height: 30px;
+  padding: 4px 10px;
+  font-size: 13px;
 }
 .gf-input::placeholder {
   color: color-mix(in srgb, var(--color-text-secondary) 75%, transparent);
@@ -126,14 +128,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  height: 26px;
+  height: 30px;
   min-width: 56px;
   max-width: 100%;
-  padding: 0 8px;
+  padding: 0 10px;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-panel);
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 .gf-select span {
@@ -152,7 +154,7 @@
   height: var(--grid-row-height);
   display: flex;
   align-items: center;
-  border-bottom: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid color-mix(in srgb, var(--color-border) 65%, var(--color-panel));
   background: var(--color-panel);
   cursor: default;
 }
@@ -170,7 +172,7 @@
 }
 .gc {
   flex: none;
-  padding: 0 10px;
+  padding: 0 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -217,7 +219,7 @@
 /* Select all matching (team trial round 1): under the filter row, stays in view. */
 .grid-selall {
   position: sticky;
-  top: 76px;
+  top: 84px;
   left: 0;
   z-index: 3;
   display: flex;

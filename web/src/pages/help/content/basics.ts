@@ -42,7 +42,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The dark bar at the top holds the main menu. A menu with several pages opens a drop-down; a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
+            text: "The header has two rows: the logo, search and live status on top, and the main menu underneath (the current section is underlined). A menu with several pages opens a drop-down; a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
           },
           {
             kind: "list",
@@ -62,7 +62,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "On the right of the top bar: **Search or jump to…** ([[search-jump]]), the live **TPS** pill (click it to open the Dashboard), the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
+            text: "In the top row: **Search or jump to…** ([[search-jump]]) next to the logo; on the right the live **TPS** pill (click it to open the Dashboard), the server clock, the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
           },
         ],
       },
@@ -217,7 +217,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**SMS Platform** logo — opens the Home tab.",
-              "**Main menu** — Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin and Help. The menu of the page you are on is highlighted. See [[getting-started#menus]].",
+              "**Main menu** — Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin and Help. The menu of the page you are on is underlined. See [[getting-started#menus]].",
               "**Search or jump to…** — finds pages and records. Shortcut **Ctrl K**. See [[search-jump]].",
               "**TPS pill** — the total messages per second right now across the platform. Its dot is grey and it reads **— TPS** when the live feed is not connected. Click it to open the Dashboard.",
               "**Bell** — the number of open incidents and a list of the latest ones. See [[alerts-and-popups]].",
@@ -276,7 +276,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Under the header, list pages show **Filters:** followed by a chip for every active filter, each with ✕ to remove it. Then **Add filter** (or **Edit filter**) for the filter builder, **Quick search…**, **Clear all**, **Save as view**, **Show deleted** where the list has archived records, page-specific controls, the **Views** menu, and on the right the selection summary, **Clear selection**, **Bulk edit** and **Columns**. See [[grids-and-filters]].",
+            text: "Under the header, list pages show a filter card: **Quick search…**, page-specific controls, a chip for every active filter (each with ✕ to remove it), **Add filter** (or **Edit filter**) for the filter builder, **Clear all**, **Save as view**, **Show deleted** where the list has archived records, and the **Views** menu. The grid sits in a **Records** card: its title shows the number of rows, and on the right the selection summary, **Clear selection**, **Bulk edit** and **Columns**; the footer says how many rows are loaded (more load as you scroll). See [[grids-and-filters]].",
           },
         ],
       },
@@ -1792,7 +1792,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Ranked tables for today, with a bar showing each row's share of the volume. Rows move when their rank changes. Click a row to open its analytics.",
+            text: "Ranked tables for today, with a bar showing each row's share of the volume. Rows move when their rank changes. **Click a row** to open what it is made of today under it, framed: for a client its destinations (whole countries) and vendors, for a vendor its clients and destinations, for a destination its clients and vendors, each with the volume. Click the row again to close it. **Click a line of the breakdown** to open the row in Live analytics in a new tab.",
           },
           {
             kind: "fields",
@@ -1810,9 +1810,9 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Top destinations today",
             fields: [
-              { name: "Country / network", what: "Destination name." },
-              { name: "MCCMNC", what: "Its mobile country and network code." },
-              { name: "Volume, Revenue, Margin, ASR, DLR", what: "As above, for traffic to that destination." },
+              { name: "Country", what: "The destination country, all its networks together." },
+              { name: "Networks", what: "How many of its networks had traffic today." },
+              { name: "Volume, Revenue, Margin, ASR, DLR", what: "As above, for traffic to that country." },
             ],
           },
         ],
@@ -1825,7 +1825,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "Investigate a client that dropped",
             items: [
-              "Look in **Decreasing** or **Stopped** for the client.",
+              "Look in **Customer** (a ▼ row) or **Stopped** for the client.",
               "Hover the row to see TPS before and now, ASR and DLR.",
               "Click it. Live analytics opens in a new tab, broken down for that client.",
               "Break the client down by destination or vendor there to find where traffic fell.",
@@ -1848,7 +1848,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "tip",
-            text: "Your movers window, Customer and Vendor volumes, chart length, refresh, hidden panels and layout are saved to your profile and come back next time. Hover a row in Top clients, Top vendors or Top destinations to see what it is made of today (destination and vendor, client and destination, or client and vendor, with the volume).",
+            text: "Your movers window, Customer and Vendor volumes, chart length, refresh, hidden panels and layout are saved to your profile and come back next time.",
           },
           {
             kind: "tip",
@@ -1961,7 +1961,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**Total** — the first row, with all traffic of the period. It opens broken down **by customer** (or by what the link that opened the page asked for).",
-              "**+** at the start of a row opens a menu of levels to break it down by; **−** closes the breakdown. Each row can be broken down by any level not already used above it.",
+              "**+** at the start of a row opens a menu of levels to break it down by; **−** closes the breakdown. Each row can be broken down by any level not already used above it. An expanded row and its sub rows sit in a bold grey frame, so you can see where a breakdown starts and ends.",
               "**Search** — the top breakdown has a search box in the first column header; each nested breakdown has its own search row. Type part of a name or code.",
               "**A–Z** next to the top search sorts by name. Click any column header to sort every breakdown by it: the first click shows the highest first, the next click flips it.",
               "Breakdowns show the 100 busiest rows; **Show … more of …** loads the next 100.",

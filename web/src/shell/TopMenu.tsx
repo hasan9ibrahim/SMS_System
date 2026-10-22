@@ -217,35 +217,40 @@ export function TopMenu() {
   const openPalette = usePalette((s) => s.show);
   const open = useOpener();
   return (
+    // Two rows (design refresh, team trial round 2): logo, search and status on top, the main menu below.
     <header className="topbar">
-      <button type="button" className="logo" onClick={(e) => open("/", e)} aria-label="Home">
-        <span className="logo-mark" />
-        <span>SMS Platform</span>
-      </button>
+      <div className="topbar-main">
+        <button type="button" className="logo" onClick={(e) => open("/", e)} aria-label="Home">
+          <span className="logo-mark">
+            <Icon name="mail" size={15} />
+          </span>
+          <span>SMS Platform</span>
+        </button>
+        <button type="button" className="jump" onClick={() => openPalette()}>
+          <Icon name="search" size={15} />
+          <span>Search or jump to…</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+        <div className="topbar-right">
+          <button
+            type="button"
+            className={`tps-pill${connected ? "" : " offline"}`}
+            title={connected ? "Total TPS right now (live)" : "Live feed not connected"}
+            onClick={(e) => open("/dashboard", e)}
+          >
+            <span className="dot" />
+            {totalTps === null ? "— TPS" : `${fmtTps(totalTps)} TPS`}
+          </button>
+          <SystemClock />
+          <AlertBell />
+          <Avatar />
+        </div>
+      </div>
       <nav className="menu-bar" aria-label="Main menu">
         {SECTIONS.map((s) => (
           <SectionMenu key={s.key} section={s.key} current={s.key === currentSection && activePath !== "/"} />
         ))}
       </nav>
-      <div className="topbar-right">
-        <button type="button" className="jump" onClick={() => openPalette()}>
-          <Icon name="search" size={14} />
-          <span>Search or jump to…</span>
-          <kbd>Ctrl K</kbd>
-        </button>
-        <SystemClock />
-        <button
-          type="button"
-          className={`tps-pill${connected ? "" : " offline"}`}
-          title={connected ? "Total TPS right now (live)" : "Live feed not connected"}
-          onClick={(e) => open("/dashboard", e)}
-        >
-          <span className="dot" />
-          {totalTps === null ? "— TPS" : `${fmtTps(totalTps)} TPS`}
-        </button>
-        <AlertBell />
-        <Avatar />
-      </div>
     </header>
   );
 }

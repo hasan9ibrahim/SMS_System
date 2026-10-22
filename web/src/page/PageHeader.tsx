@@ -1,5 +1,5 @@
-// Page header (§15.1): title, the sibling pages of the same section as small links (current
-// highlighted), actions on the right with the main action as the one filled button (§15.3).
+// Page header (§15.1): title and purpose, actions on the right with the main action as the one filled button
+// (§15.3), then the sibling pages of the same section as pills (current filled).
 import { useContext, useEffect, type ReactNode } from "react";
 import { pagesOf, type PageDef } from "../nav/registry";
 import { TabContext, useTabNavigate } from "../shell/tabContext";
@@ -70,11 +70,22 @@ export function PageHeader({
 }) {
   const navigate = useTabNavigate();
   const siblings = page.key === "home" ? [] : pagesOf(page.section);
+  // Design refresh (team trial round 2): title with the page's one-line purpose under it and the actions on the
+  // right, then the sibling pages as pills.
+  const subtitle = !heading && !title ? page.summary : null;
   return (
     <div className="page-header">
-      <BackButton />
-      {heading ?? <h1>{title ?? page.label}</h1>}
-      {page.key !== "help" && <HelpButton topic={helpTopic ?? page.key} />}
+      <div className="page-header-top">
+        <BackButton />
+        <div className="page-heading">
+          <div className="page-title-row">
+            {heading ?? <h1>{title ?? page.label}</h1>}
+            {page.key !== "help" && <HelpButton topic={helpTopic ?? page.key} />}
+          </div>
+          {subtitle && <p className="page-subtitle">{subtitle}</p>}
+        </div>
+        <div className="page-actions">{actions}</div>
+      </div>
       {siblings.length > 1 && (
         <nav className="siblings" aria-label={`${page.label} and related pages`}>
           {siblings.map((s) => (
@@ -99,7 +110,6 @@ export function PageHeader({
           ))}
         </nav>
       )}
-      <div className="page-actions">{actions}</div>
     </div>
   );
 }

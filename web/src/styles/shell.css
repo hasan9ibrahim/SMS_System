@@ -4,17 +4,18 @@
   --accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);
   --accent-softer: color-mix(in srgb, var(--color-accent) 8%, transparent);
   --hover: color-mix(in srgb, var(--color-text) 6%, transparent);
-  --menu-text: #dfe4ec;
+  /* Text on the dark surfaces (toasts, bulk bar). */
+  --menu-text: #e6e9ef;
   --menu-text-dim: #a3acbb;
   --menu-hover: color-mix(in srgb, #ffffff 10%, transparent);
-  --shadow: 0 6px 24px color-mix(in srgb, #000 18%, transparent);
+  --shadow: 0 10px 30px color-mix(in srgb, #101828 14%, transparent);
 }
 
 button {
   font: inherit;
   color: inherit;
 }
-input,
+input:where(:not([type="checkbox"]):not([type="radio"])),
 select,
 textarea {
   font: inherit;
@@ -22,16 +23,22 @@ textarea {
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 5px 8px;
+  /* 5 px top and bottom so fixed-height boxes (26 px filters) keep room for the text. */
+  padding: 5px 10px;
   min-width: 0;
+}
+input:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus) {
+  border-color: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-border));
 }
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 button:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -1px;
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: 0;
 }
 kbd {
   font: inherit;
@@ -84,12 +91,14 @@ code {
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--color-border);
   background: var(--color-panel);
+  box-shadow: var(--card-shadow);
+  font-weight: 550;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -109,8 +118,8 @@ a.btn {
   border-color: var(--color-accent);
   color: #fff;
 }
-:root[data-theme="dark"] .btn-primary {
-  color: #151920;
+.btn-primary svg {
+  color: inherit;
 }
 .btn-primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-accent) 88%, #000);
@@ -118,6 +127,7 @@ a.btn {
 .btn-ghost {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 .btn-danger {
   background: var(--color-error);
@@ -125,10 +135,10 @@ a.btn {
   color: #fff;
 }
 .btn-sm {
-  height: 26px;
-  padding: 0 8px;
-  font-size: 12.5px;
-  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  font-size: 13px;
+  gap: 6px;
 }
 .icon-btn {
   display: inline-grid;
@@ -183,9 +193,9 @@ a.btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 26px;
-  padding: 0 4px 0 10px;
-  border-radius: var(--radius-sm);
+  height: 28px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
   background: var(--hover);
   white-space: nowrap;
 }
@@ -216,8 +226,8 @@ a.btn {
 }
 .tag {
   display: inline-block;
-  padding: 1px 7px;
-  border-radius: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
   background: var(--hover);
   font-size: 12px;
   color: var(--color-text-secondary);
@@ -285,123 +295,133 @@ a.btn {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 14px 20px 12px;
-  gap: 10px;
+  padding: 24px 32px 16px;
+  gap: 16px;
 }
 
-/* ---------- top menu bar (§15.1: dark, 46 px) ---------- */
+/* ---------- header (design refresh: two rows on white, logo / search / status, then the main menu) ---------- */
 .topbar {
-  height: var(--menu-bar-height);
   flex: none;
   display: flex;
+  flex-direction: column;
+  background: var(--color-header);
+  color: var(--color-text);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.topbar-main {
+  height: 64px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  background: var(--color-menu-bar);
-  color: var(--menu-text);
+  gap: 24px;
+  padding: 0 24px;
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 .logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   white-space: nowrap;
   flex: none;
   font-weight: 700;
+  font-size: 17px;
   background: none;
   border: 0;
   cursor: pointer;
-  padding: 0 10px 0 0;
-  color: var(--menu-text);
+  padding: 0;
+  color: var(--color-text);
 }
 .logo-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   background: var(--color-accent);
+  color: #fff;
 }
 .menu-bar {
+  height: 48px;
   display: flex;
-  align-items: center;
-  gap: 2px;
+  align-items: stretch;
+  gap: 4px;
   min-width: 0;
+  padding: 0 14px;
   overflow: hidden;
 }
 .menu-top {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
-  padding: 0 10px;
+  padding: 0 14px;
   border: 0;
-  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--menu-text);
+  color: color-mix(in srgb, var(--color-text) 78%, var(--color-header));
+  font-size: 15px;
+  font-weight: 450;
   cursor: pointer;
   white-space: nowrap;
 }
+/* Drop-down menus open on click as before; the mockup shows no chevrons. */
+.menu-top > svg {
+  display: none;
+}
 .menu-top:hover,
 .menu-top.open {
-  background: var(--menu-hover);
+  color: var(--color-text);
 }
 .menu-top.current {
-  background: color-mix(in srgb, #ffffff 14%, transparent);
+  color: var(--color-text);
   font-weight: 600;
+}
+.menu-top.current::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-accent);
 }
 .topbar-right {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .jump {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 32px;
-  min-width: 230px;
-  padding: 0 10px;
+  gap: 10px;
+  height: 42px;
+  flex: 0 1 520px;
+  min-width: 0;
+  padding: 0 8px 0 12px;
   border-radius: var(--radius-md);
-  border: var(--border-width) solid color-mix(in srgb, #ffffff 14%, transparent);
-  background: color-mix(in srgb, #ffffff 6%, transparent);
-  color: var(--menu-text-dim);
+  border: var(--border-width) solid transparent;
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-header));
+  color: var(--color-text-secondary);
   cursor: pointer;
+}
+.jump:hover {
+  border-color: var(--color-border);
 }
 .jump kbd {
   margin-left: auto;
-  color: var(--menu-text-dim);
-  border-color: color-mix(in srgb, #ffffff 18%, transparent);
+  color: var(--color-text-secondary);
+  background: var(--color-header);
 }
 /* Narrower screens: the search shrinks to its icon and shortcut so the whole menu fits. */
-@media (max-width: 1700px) {
-  .jump {
-    min-width: 0;
-  }
+@media (max-width: 1100px) {
   .jump > span {
     display: none;
   }
-  .jump kbd {
-    white-space: nowrap;
+  .jump {
+    flex: none;
   }
   .menu-top {
-    padding: 0 7px;
-  }
-  .top-clock-tz,
-  .top-clock-weekday {
-    display: none;
-  }
-}
-/* Under 1400 px the logo mark alone leaves room for the full menu and the date. */
-@media (max-width: 1400px) {
-  .logo > span:not(.logo-mark) {
-    display: none;
-  }
-}
-@media (max-width: 1300px) {
-  .menu-top {
-    padding: 0 5px;
-  }
-  .logo {
-    padding-right: 4px;
+    padding: 0 8px;
   }
 }
 /* System clock (team trial round 1): server time in the platform time zone. */
@@ -410,8 +430,8 @@ a.btn {
   align-items: baseline;
   gap: 6px;
   padding: 0 4px;
-  color: #ffffff;
-  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-weight: 450;
   white-space: nowrap;
   cursor: default;
 }
@@ -419,16 +439,16 @@ a.btn {
   font-variant-numeric: tabular-nums;
 }
 .top-clock-date {
-  color: var(--menu-text);
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
 .top-clock-tz {
-  color: var(--menu-text-dim);
+  color: var(--color-text-secondary);
   font-weight: 500;
   font-size: 12px;
 }
 .top-clock.offline .num {
-  color: var(--menu-text-dim);
+  color: var(--color-text-secondary);
 }
 @media (max-width: 1100px) {
   .top-clock-tz {
@@ -440,26 +460,26 @@ a.btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 14px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
   border: 0;
   cursor: pointer;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  background: color-mix(in srgb, var(--color-good) 22%, var(--color-menu-bar));
-  color: color-mix(in srgb, var(--color-good) 55%, #ffffff);
+  background: color-mix(in srgb, var(--color-good) 12%, var(--color-header));
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
 }
 .tps-pill .dot {
   background: var(--color-good);
   animation: pulse 2s infinite;
 }
 .tps-pill.offline {
-  background: color-mix(in srgb, #ffffff 8%, transparent);
-  color: var(--menu-text-dim);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--color-header));
+  color: var(--color-text-secondary);
 }
 .tps-pill.offline .dot {
-  background: var(--menu-text-dim);
+  background: var(--color-text-secondary);
   animation: none;
 }
 @keyframes pulse {
@@ -471,21 +491,21 @@ a.btn {
   position: relative;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  background: transparent;
-  color: var(--menu-text);
-  border-radius: var(--radius-sm);
+  width: 42px;
+  height: 42px;
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-header);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 .bell:hover {
-  background: var(--menu-hover);
+  background: var(--hover);
 }
 .bell-count {
   position: absolute;
-  top: 1px;
-  right: 0;
+  top: -5px;
+  right: -5px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -494,19 +514,19 @@ a.btn {
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  background: color-mix(in srgb, var(--color-error) 70%, var(--color-menu-bar));
+  background: color-mix(in srgb, var(--color-error) 70%, var(--color-header));
   color: #fff;
 }
 .bell-count.unseen {
   background: var(--color-error);
 }
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   border: 0;
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--accent-soft);
+  color: var(--color-accent);
   font-weight: 700;
   font-size: 12px;
   cursor: pointer;
@@ -534,7 +554,7 @@ a.btn {
 .menu {
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  padding: 6px;
 }
 .menu-item {
   display: flex;
@@ -602,7 +622,7 @@ a.btn {
   display: flex;
   align-items: stretch;
   gap: 8px;
-  padding: 0 10px;
+  padding: 0 16px;
   background: var(--color-page-bg);
   border-bottom: var(--border-width) solid var(--color-border);
 }
@@ -619,8 +639,11 @@ a.btn {
   align-items: center;
   gap: 7px;
   max-width: 240px;
+  margin: 6px 2px 0;
   padding: 0 10px 0 12px;
-  border-right: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   color: var(--color-text-secondary);
   cursor: pointer;
   user-select: none;
@@ -631,9 +654,10 @@ a.btn {
 }
 .tab.active {
   background: var(--color-panel);
+  border-color: var(--color-border);
   color: var(--color-text);
   font-weight: 600;
-  box-shadow: inset 0 2px 0 var(--color-accent);
+  margin-bottom: -1px;
 }
 .tab.pinned:not(.active) .tab-title {
   max-width: 90px;
@@ -727,8 +751,44 @@ a.btn {
 .page-header {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px 18px;
   flex-wrap: wrap;
+}
+/* The standard header (PageHeader): title row with actions, then the sibling pills (design refresh). */
+.page-header:has(> .page-header-top) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+.page-header-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px 18px;
+  flex-wrap: wrap;
+}
+.page-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-subtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 14.5px;
+}
+.page-header-top .page-actions {
+  align-self: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.page-header-top .page-back {
+  margin: 4px -6px 0 -6px;
 }
 .page-header .page-back {
   margin-right: -10px;
@@ -740,33 +800,38 @@ a.btn {
 .page-header h1 {
   margin: 0;
   font-size: var(--font-size-title);
-  font-weight: 650;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
+/* Sibling pages as pills; the current one filled (design refresh). */
 .siblings {
   display: flex;
-  gap: 2px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .siblings a {
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
+  padding: 7px 16px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-weight: 500;
   text-decoration: none;
 }
 .siblings a:hover {
-  background: var(--hover);
-  color: var(--color-text);
+  border-color: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-border));
 }
 .siblings a.current {
-  background: var(--accent-soft);
-  color: var(--color-accent);
+  background: var(--color-strong);
+  border-color: var(--color-strong);
+  color: var(--color-on-strong);
   font-weight: 600;
 }
 /* Actions on the selected row, next to New (team trial round 1): one joined, quiet group. */
 .record-actions {
   display: inline-flex;
   align-items: stretch;
-  height: 30px;
+  height: 34px;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-panel);
@@ -832,19 +897,19 @@ a.btn {
 .quick-search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 8px;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
   border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-panel);
   color: var(--color-text-secondary);
 }
 .quick-search input {
   border: 0;
   padding: 0;
-  height: 22px;
-  width: 160px;
+  height: 26px;
+  width: 220px;
   background: transparent;
 }
 .quick-search input:focus-visible {
@@ -859,8 +924,90 @@ a.btn {
   flex-direction: column;
   gap: 10px;
 }
-.list-body.with-detail .grid {
+.list-body.with-detail .grid,
+.list-body.with-detail .records-card {
   flex: 1 1 60%;
+}
+
+/* Filters in one white card (design refresh). */
+.filter-card {
+  padding: 14px 16px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+}
+.filter-card .filter-row {
+  gap: 10px;
+}
+.filter-card .quick-search {
+  flex: 1 1 320px;
+  max-width: 560px;
+  height: 40px;
+  padding: 0 14px;
+}
+.filter-card .quick-search input {
+  width: 100%;
+  height: 30px;
+  font-size: 14px;
+}
+.btn-add-filter {
+  height: 34px;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* The grid in a Records card: title and count, selection, Bulk edit and Columns, then the rows and a footer. */
+.records-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+.records-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 10px 16px 10px 20px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.records-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.count-badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 7%, var(--color-panel));
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.records-head .btn-ghost {
+  border-color: var(--color-border);
+}
+.records-card > .grid {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.records-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 20px;
+  border-top: var(--border-width) solid var(--color-border);
+  font-size: 13.5px;
 }
 .detail {
   flex: 0 0 34%;
@@ -869,6 +1016,7 @@ a.btn {
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
   overflow: hidden;
 }
 .detail-nav {
@@ -952,7 +1100,7 @@ a.btn {
   font-size: 12px;
   color: var(--color-text-secondary);
   border-top: var(--border-width) solid var(--color-border);
-  background: var(--color-page-bg);
+  background: var(--color-header);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -976,7 +1124,8 @@ a.btn {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: color-mix(in srgb, #000 30%, transparent);
+  background: color-mix(in srgb, #101828 38%, transparent);
+  backdrop-filter: blur(2px);
 }
 .modal-backdrop {
   display: grid;
@@ -997,35 +1146,41 @@ a.btn {
 .modal-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 16px 22px;
 }
 .modal-head {
   border-bottom: var(--border-width) solid var(--color-border);
 }
+/* Dialog titles like page cards (design refresh). */
 .modal-head h2,
 .drawer-head h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   flex: 1;
 }
 .modal-body {
-  padding: 14px 16px;
+  padding: 18px 22px;
   overflow: auto;
 }
 .modal-foot {
   justify-content: flex-end;
   border-top: var(--border-width) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-panel));
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 14px;
 }
 .field > span {
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 85%, var(--color-panel));
 }
 .drawer {
   position: absolute;
@@ -1043,7 +1198,7 @@ a.btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 16px 20px;
   border-bottom: var(--border-width) solid var(--color-border);
 }
 .change-list {
@@ -1660,4 +1815,130 @@ body.resizing-split {
 }
 body.resizing-split iframe {
   pointer-events: none;
+}
+
+/* Check boxes and radios in the accent colour (design refresh). */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+  width: 15px;
+  height: 15px;
+  padding: 0;
+}
+
+/* ---------- period controls (ui/DateRange.tsx, design refresh) ---------- */
+/* Quick periods: one grey track, the period in use as a white pill. */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--color-panel));
+}
+.seg > button {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: color-mix(in srgb, var(--color-text) 80%, var(--color-panel));
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.seg > button:hover {
+  color: var(--color-text);
+}
+.seg > button.on {
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-weight: 700;
+  box-shadow: 0 1px 3px color-mix(in srgb, #101828 12%, transparent);
+}
+/* The range (accent, tinted) and plain chips (Each day, Destinations, Status). */
+.range-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border: var(--border-width) solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 9%, var(--color-panel));
+  color: var(--color-accent);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.range-chip:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-border));
+}
+.range-chip.plain {
+  border-color: var(--color-border);
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-weight: 500;
+}
+.range-chip.plain:hover {
+  border-color: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-border));
+}
+.range-chip.plain.set {
+  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+  color: var(--color-accent);
+}
+.range-chip svg {
+  flex: none;
+}
+.range-pop {
+  min-width: 300px;
+}
+.range-pop-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 14px 16px 2px;
+}
+.range-pop-body .field {
+  margin-bottom: 12px;
+}
+.range-pop-foot {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: var(--border-width) solid var(--color-border);
+}
+.range-pop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+}
+/* EDR search: the wide search box first in the filter card. */
+.filter-card .quick-search.edr-search {
+  flex: 1 1 380px;
+  max-width: none;
+}
+select.chip-select {
+  appearance: auto;
+  padding-right: 10px;
+}
+/* Date fields in forms and dialogs: the same height and corners as the other fields, a quiet calendar icon. */
+input[type="date"],
+input[type="datetime-local"] {
+  min-height: 38px;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.9;
+}
+select.chip-select {
+  max-width: 260px;
 }

@@ -56,4 +56,5 @@ test("new keys and analytics links", () => {
   assert.deepEqual([...newKeys(new Set(["a"]), ["a", "b"])], ["b"]);
   assert.equal(analyticsPath({ kind: "vendor_enterprise", id: 4, name: "V" }), "/live/analytics?by=vendor&q=V");
   assert.equal(analyticsPath({ mccmnc: "40474" }), "/live/analytics?by=destination&q=40474");
+  assert.equal(analyticsPath({ country: "Côte d'Ivoire" }), "/live/analytics?by=country&q=C%C3%B4te%20d'Ivoire");
 });

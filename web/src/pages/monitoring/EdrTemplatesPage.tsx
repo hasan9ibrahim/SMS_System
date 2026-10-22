@@ -92,18 +92,20 @@ function TemplateDialog({ row, done }: { row: EdrTemplateRow | null; done: () =>
             ))}
           </ol>
           <div className="column-checks">
-            {(fields.data?.fields ?? []).map((f) => (
-              <label key={f.field} className="toggle-inline small">
-                <input
-                  type="checkbox"
-                  checked={columns.includes(f.field)}
-                  onChange={(e) =>
-                    setColumns(e.target.checked ? [...columns, f.field] : columns.filter((x) => x !== f.field))
-                  }
-                />
-                {f.label}
-              </label>
-            ))}
+            {(fields.data?.fields ?? [])
+              .filter((f) => !f.filterOnly)
+              .map((f) => (
+                <label key={f.field} className="toggle-inline small">
+                  <input
+                    type="checkbox"
+                    checked={columns.includes(f.field)}
+                    onChange={(e) =>
+                      setColumns(e.target.checked ? [...columns, f.field] : columns.filter((x) => x !== f.field))
+                    }
+                  />
+                  {f.label}
+                </label>
+              ))}
           </div>
         </div>
       </div>

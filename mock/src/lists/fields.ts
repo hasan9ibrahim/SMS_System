@@ -1797,6 +1797,17 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "vendorIp", label: "Vendor IP", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "vendorPort", label: "Vendor Port", type: "integer", defaultOperator: "eq", hidden: true }),
       field({ field: "vendorMsgId", label: "Vendor Msg ID", type: "text", defaultOperator: "eq" }),
+      // One box for numbers, senders and message IDs on EDR Search (team trial round 2, §9.1).
+      field({
+        field: "numberOrMsgId",
+        label: "Number, sender or Msg ID",
+        type: "text",
+        operators: ["in", "eq"],
+        defaultOperator: "in",
+        sortable: false,
+        hidden: true,
+        filterOnly: true,
+      }),
       field({ field: "vendorMccmnc", label: "Vendor MCCMNC", type: "mccmnc", defaultOperator: "like", hidden: true }),
       field({
         field: "vendorBillingType",

@@ -383,6 +383,7 @@ button.dash-cols:hover {
 /* Online now (§13.18) */
 .dash .page-actions {
   flex: 1;
+  flex-wrap: nowrap;
 }
 /* In the page header: left of the controls, after the title (team trial round 2). */
 .dash-online {
@@ -505,6 +506,16 @@ button.dash-cols:hover {
 .dash-kpi-pair .pair-row .value {
   font-size: 16px;
 }
+/* A titled pair (Online: Customers, Vendors). */
+.dash-kpi-pair.titled {
+  padding-top: 6px;
+}
+.dash-kpi-pair .pair-title {
+  margin-bottom: 1px;
+}
+.dash-kpi-pair.titled .pair-row {
+  padding: 1px 0;
+}
 .dash-kpi-pair .value.neg {
   color: var(--color-error);
 }
@@ -539,14 +550,30 @@ button.dash-cols:hover {
 }
 
 /* ---------- hover breakdowns ---------- */
-.dash-hover {
-  display: block;
-  min-width: 0;
-}
 .dash-breakdown {
-  padding: 10px 12px;
-  min-width: 320px;
-  max-width: 460px;
+  padding: 8px 12px;
+}
+/* An opened top row and its breakdown under it (team trial round 2); breakdown rows open Live analytics. */
+.dash-rank-row.open .dash-top-row,
+.dash-rank-row.open .dash-dest-row {
+  background: var(--accent-softer);
+  font-weight: 600;
+}
+.dash-rank-open {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: auto;
+  border: 2px solid var(--color-accent);
+  border-top-width: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--color-panel);
+}
+.dash-open-row {
+  cursor: pointer;
+}
+.dash-open-row:hover td {
+  background: var(--accent-softer);
 }
 .dash-breakdown .mini-table {
   margin-top: 6px;

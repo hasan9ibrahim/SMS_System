@@ -60,10 +60,21 @@ export interface ListScreenProps<Row extends { id: number }> {
   /** Page-specific controls in the filter row (e.g. an account manager picker). */
   toolbar?: (state: GridState, setState: (s: GridState) => void) => ReactNode;
   shortcuts?: string;
-  /** Extra header actions, placed before the primary button (e.g. Simulate). */
-  actions?: ReactNode;
+  /**
+   * Extra header actions, placed before the primary button (e.g. Simulate). A function receives the rows the
+   * actions apply to: the selected rows, else the active row.
+   */
+  actions?: ReactNode | ((targets: Row[]) => ReactNode);
   /** Enables the header Export button; receives the current filters (§13.22). */
   onExport?: (state: GridState) => void;
+  /** Export as the page's filled button, last in the header (EDR search, team trial round 2). */
+  exportPrimary?: boolean;
+  /** Leave out the quick search box (a page whose own toolbar has the search, e.g. EDR search). */
+  noQuickSearch?: boolean;
+  /** Leave out the bar of actions on the selected row (the page puts them in `actions`). */
+  noRecordBar?: boolean;
+  /** Filters the page's toolbar shows itself, so they get no chip (e.g. EDR search's period). */
+  toolbarFields?: string[];
   /** Selection summary and the Bulk edit menu (§13.11). */
   selection?: {
     summary?: (rows: Row[], ids: ReadonlySet<number>) => ReactNode;
@@ -128,22 +139,24 @@ function ColumnsMenu({
         <Icon name="columns" size={13} /> Columns
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="end" className="choice-pop">
-        {fields.fields.map((f) => (
-          <label key={f.field} className="choice-row">
-            <input
-              type="checkbox"
-              checked={visible.includes(f.field)}
-              onChange={(e) => {
-                const next = e.target.checked
-                  ? fields.fields.map((x) => x.field).filter((n) => n === f.field || visible.includes(n))
-                  : visible.filter((n) => n !== f.field);
-                if (next.length) onChange({ ...state, visible: next });
-              }}
-            />
-            {f.label}
-            {f.hidden && <span className="muted small">hidden by default</span>}
-          </label>
-        ))}
+        {fields.fields
+          .filter((f) => !f.filterOnly)
+          .map((f) => (
+            <label key={f.field} className="choice-row">
+              <input
+                type="checkbox"
+                checked={visible.includes(f.field)}
+                onChange={(e) => {
+                  const next = e.target.checked
+                    ? fields.fields.map((x) => x.field).filter((n) => n === f.field || visible.includes(n))
+                    : visible.filter((n) => n !== f.field);
+                  if (next.length) onChange({ ...state, visible: next });
+                }}
+              />
+              {f.label}
+              {f.hidden && <span className="muted small">hidden by default</span>}
+            </label>
+          ))}
         <div className="menu-sep" />
         <button type="button" className="menu-item" onClick={() => onChange({ ...state, visible: null })}>
           <Icon name="refresh" size={13} /> <span>Default columns</span>
@@ -411,6 +424,10 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     toolbar,
     actions,
     onExport,
+    exportPrimary = false,
+    noQuickSearch = false,
+    noRecordBar = false,
+    toolbarFields = [],
     selection,
     onKey,
     rowClass,
@@ -532,19 +549,34 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 </Button>
               </>
             )}
-            <Button
-              icon="download"
-              disabled={!onExport}
-              onClick={() => onExport?.(state)}
-              title={
-                onExport
-                  ? "Export the rows matching the current filters (CSV)"
-                  : "Export follows the current filters; it arrives with import/export (§13.22)"
-              }
-            >
-              Export
-            </Button>
-            {actions}
+            {!exportPrimary && (
+              <Button
+                icon="download"
+                disabled={!onExport}
+                onClick={() => onExport?.(state)}
+                title={
+                  onExport
+                    ? "Export the rows matching the current filters (CSV)"
+                    : "Export follows the current filters; it arrives with import/export (§13.22)"
+                }
+              >
+                Export
+              </Button>
+            )}
+            {typeof actions === "function"
+              ? actions(selected.size ? rows.filter((r) => selected.has(r.id)) : activeRow ? [activeRow] : [])
+              : actions}
+            {exportPrimary && (
+              <Button
+                variant="primary"
+                icon="download"
+                disabled={!onExport}
+                onClick={() => onExport?.(state)}
+                title="Export the rows matching the current filters"
+              >
+                Export
+              </Button>
+            )}
             {primary && (
               <Button
                 variant="primary"
@@ -556,158 +588,184 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 {primary.label}
               </Button>
             )}
-            <RecordActionBar<Row>
-              target={
-                selected.size === 1
-                  ? (rows.find((r) => selected.has(r.id)) ?? null)
-                  : selected.size === 0
-                    ? activeRow
-                    : null
-              }
-              multi={selected.size > 1}
-              template={rows[0] ?? null}
-              {...(rowActions ? { rowActions } : {})}
-            />
+            {!noRecordBar && (
+              <RecordActionBar<Row>
+                target={
+                  selected.size === 1
+                    ? (rows.find((r) => selected.has(r.id)) ?? null)
+                    : selected.size === 0
+                      ? activeRow
+                      : null
+                }
+                multi={selected.size > 1}
+                template={rows[0] ?? null}
+                {...(rowActions ? { rowActions } : {})}
+              />
+            )}
           </>
         }
       />
       {above}
-      <div className="filter-row">
-        <span className="muted">Filters:</span>
-        {Object.values(state.columns)
-          .filter((c) => c.field !== "archived")
-          .map((c) => (
-            <span key={c.field} className="chip accent">
-              {conditionLabel(byName.get(c.field), c)}
+      {/* Filters in one card (design refresh): search first, the page's own filters, chips, Add filter. */}
+      <div className="filter-card">
+        <div className="filter-row">
+          {!noQuickSearch && (
+            <div className="quick-search">
+              <Icon name="search" size={13} />
+              <input
+                key={state.search === "" ? "empty" : "set"}
+                defaultValue={state.search}
+                placeholder="Quick search…"
+                aria-label="Quick search"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") setState({ ...state, search: (e.target as HTMLInputElement).value });
+                  if (e.key === "Escape") {
+                    (e.target as HTMLInputElement).value = "";
+                    setState({ ...state, search: "" });
+                  }
+                }}
+                onBlur={(e) => e.target.value !== state.search && setState({ ...state, search: e.target.value })}
+              />
+            </div>
+          )}
+          {toolbar?.(state, setState)}
+          {Object.values(state.columns)
+            .filter((c) => c.field !== "archived" && !toolbarFields.includes(c.field))
+            .map((c) => (
+              <span key={c.field} className="chip accent">
+                {conditionLabel(byName.get(c.field), c)}
+                <button
+                  type="button"
+                  aria-label={`Remove filter ${byName.get(c.field)?.label ?? c.field}`}
+                  onClick={() => removeColumn(c.field)}
+                >
+                  <Icon name="x" size={11} />
+                </button>
+              </span>
+            ))}
+          {builderCount > 0 && (
+            <span className="chip accent">
+              <button type="button" className="chip-text" onClick={() => setBuilderOpen(true)}>
+                {state.builder!.logic === "or" ? "Any of" : "All of"} {builderCount} condition
+                {builderCount === 1 ? "" : "s"}
+              </button>
               <button
                 type="button"
-                aria-label={`Remove filter ${byName.get(c.field)?.label ?? c.field}`}
-                onClick={() => removeColumn(c.field)}
+                aria-label="Remove builder filter"
+                onClick={() => setState({ ...state, builder: null })}
               >
                 <Icon name="x" size={11} />
               </button>
             </span>
-          ))}
-        {builderCount > 0 && (
-          <span className="chip accent">
-            <button type="button" className="chip-text" onClick={() => setBuilderOpen(true)}>
-              {state.builder!.logic === "or" ? "Any of" : "All of"} {builderCount} condition
-              {builderCount === 1 ? "" : "s"}
-            </button>
-            <button
-              type="button"
-              aria-label="Remove builder filter"
-              onClick={() => setState({ ...state, builder: null })}
-            >
-              <Icon name="x" size={11} />
-            </button>
-          </span>
-        )}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setBuilderOpen(true)}>
-          <Icon name="filter" size={13} /> {builderCount ? "Edit filter" : "Add filter"}
-        </button>
-        <div className="quick-search">
-          <Icon name="search" size={13} />
-          <input
-            key={state.search === "" ? "empty" : "set"}
-            defaultValue={state.search}
-            placeholder="Quick search…"
-            aria-label="Quick search"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") setState({ ...state, search: (e.target as HTMLInputElement).value });
-              if (e.key === "Escape") {
-                (e.target as HTMLInputElement).value = "";
-                setState({ ...state, search: "" });
-              }
-            }}
-            onBlur={(e) => e.target.value !== state.search && setState({ ...state, search: e.target.value })}
-          />
-        </div>
-        {isFiltered(state) && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => setState({ ...emptyState(), visible: state.visible, sort: state.sort })}
-          >
-            Clear all
+          )}
+          <button type="button" className="btn btn-sm btn-add-filter" onClick={() => setBuilderOpen(true)}>
+            <Icon name={builderCount ? "filter" : "plus"} size={13} /> {builderCount ? "Edit filter" : "Add filter"}
           </button>
-        )}
-        {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
-        {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
-        {toolbar?.(state, setState)}
-        <ViewsMenu list={list} state={state} onApply={setState} />
-        <span className="fb-spacer" />
-        {selected.size > 0 && (
-          <>
-            <span className="muted">
-              {selection?.summary ? selection.summary(rows, selected) : `${selected.size} selected`}
-            </span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
-              Clear selection
-            </button>
-          </>
-        )}
-        {noSelection ? null : selection?.bulk ? (
-          <>
+          {isFiltered(state) && (
             <button
-              ref={bulkRef}
               type="button"
-              className="btn btn-default btn-sm"
-              disabled={selected.size === 0}
-              aria-haspopup="menu"
-              onClick={() => setBulkOpen((v) => !v)}
+              className="btn btn-ghost btn-sm"
+              onClick={() => setState({ ...emptyState(), visible: state.visible, sort: state.sort })}
             >
-              Bulk edit <Icon name="chevronDown" size={12} />
+              Clear all
             </button>
-            <Popover anchor={bulkRef} open={bulkOpen} onClose={() => setBulkOpen(false)} align="end">
-              <Menu
-                items={selection.bulk(
-                  [...selected],
-                  () => setSelected(new Set()),
-                  rows.filter((r) => selected.has(r.id)),
-                )}
-                onClose={() => setBulkOpen(false)}
-              />
-            </Popover>
-          </>
-        ) : (
-          <Button
-            small
-            icon="layers"
-            disabled={selected.size === 0}
-            title="Bulk edit opens the bulk workspace (§13.11, build step 5)"
-          >
-            Bulk edit
-          </Button>
-        )}
-        <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
+          )}
+          {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
+          {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
+          <ViewsMenu list={list} state={state} onApply={setState} />
+        </div>
       </div>
       <div className={`list-body${detail && activeRow ? " with-detail" : ""}`} ref={bodyRef}>
-        {fields.data ? (
-          <DataGrid<Row>
-            list={list}
-            fields={fields.data}
-            state={state}
-            onStateChange={setState}
-            {...(columns ? { columns } : {})}
-            {...(trailing ? { trailing } : {})}
-            activeId={activeRow?.id ?? null}
-            onActiveChange={onActive}
-            selected={selected}
-            onSelectedChange={setSelected}
-            {...(onOpen ? { onOpen } : {})}
-            {...(onKey ? { onKeyAction: onKey } : {})}
-            {...(rowClass ? { rowClass } : {})}
-            {...(fetchPage ? { fetchPage } : {})}
-            {...(queryScope !== undefined ? { queryScope } : {})}
-            {...(enabled !== undefined ? { enabled } : {})}
-            {...(idleMessage !== undefined ? { idleMessage } : {})}
-            onRows={setRows}
-            onMeta={onMeta}
-          />
-        ) : (
-          <div className="grid-message muted">Loading…</div>
-        )}
+        {/* The grid in a Records card (design refresh): count, selection, Bulk edit and Columns on top. */}
+        <section className="records-card">
+          <div className="records-head">
+            <h2>Records</h2>
+            {total !== null && (
+              <span className="count-badge">
+                {total.toLocaleString("en-US")}
+                {meta.isEstimate ? "+" : ""}
+              </span>
+            )}
+            <span className="fb-spacer" />
+            {selected.size > 0 && (
+              <>
+                <span className="muted">
+                  {selection?.summary ? selection.summary(rows, selected) : `${selected.size} selected`}
+                </span>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
+                  Clear selection
+                </button>
+              </>
+            )}
+            {noSelection ? null : selection?.bulk ? (
+              <>
+                <button
+                  ref={bulkRef}
+                  type="button"
+                  className="btn btn-default btn-sm"
+                  disabled={selected.size === 0}
+                  aria-haspopup="menu"
+                  onClick={() => setBulkOpen((v) => !v)}
+                >
+                  Bulk edit <Icon name="chevronDown" size={12} />
+                </button>
+                <Popover anchor={bulkRef} open={bulkOpen} onClose={() => setBulkOpen(false)} align="end">
+                  <Menu
+                    items={selection.bulk(
+                      [...selected],
+                      () => setSelected(new Set()),
+                      rows.filter((r) => selected.has(r.id)),
+                    )}
+                    onClose={() => setBulkOpen(false)}
+                  />
+                </Popover>
+              </>
+            ) : (
+              <Button
+                small
+                icon="layers"
+                disabled={selected.size === 0}
+                title="Bulk edit opens the bulk workspace (§13.11, build step 5)"
+              >
+                Bulk edit
+              </Button>
+            )}
+            <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
+          </div>
+          {fields.data ? (
+            <DataGrid<Row>
+              list={list}
+              fields={fields.data}
+              state={state}
+              onStateChange={setState}
+              {...(columns ? { columns } : {})}
+              {...(trailing ? { trailing } : {})}
+              activeId={activeRow?.id ?? null}
+              onActiveChange={onActive}
+              selected={selected}
+              onSelectedChange={setSelected}
+              {...(onOpen ? { onOpen } : {})}
+              {...(onKey ? { onKeyAction: onKey } : {})}
+              {...(rowClass ? { rowClass } : {})}
+              {...(fetchPage ? { fetchPage } : {})}
+              {...(queryScope !== undefined ? { queryScope } : {})}
+              {...(enabled !== undefined ? { enabled } : {})}
+              {...(idleMessage !== undefined ? { idleMessage } : {})}
+              onRows={setRows}
+              onMeta={onMeta}
+            />
+          ) : (
+            <div className="grid-message muted">Loading…</div>
+          )}
+          <div className="records-foot muted">
+            {total === null
+              ? meta.fetching
+                ? "Loading…"
+                : ""
+              : `Showing ${Math.min(meta.loaded, total).toLocaleString("en-US")} of ${total.toLocaleString("en-US")}${meta.isEstimate ? "+" : ""} records`}
+            {total !== null && meta.loaded < total && <span>&nbsp;· scroll for more</span>}
+          </div>
+        </section>
         {detail && activeRow && <DetailSplitter height={detailHeight} onChange={setDetailHeight} container={bodyRef} />}
         {detail && activeRow && (
           <DetailPanel

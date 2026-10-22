@@ -1,8 +1,8 @@
-// EDR Search (§9.1): every message attempt with both legs, from the EDR store. From / To Date, Final
-// and message ID lists sit in the filter row; every column filters with the §13.25 grammar; an EDR
+// EDR Search (§9.1): every message attempt with both legs, from the EDR store. One box for numbers, senders and
+// message IDs, the period, destinations and status sit in the filter card; every column filters with the §13.25 grammar; an EDR
 // Template sets the columns. Selected EDRs go to a Trouble Ticket or an EDR Repush; Export queues an
 // EDR Request (background download, §12.4) with the current filters.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { EdrRow, EmailPreview, EmailTemplateRow, FieldDescriptor, ListQuery, TrunkListRow } from "@sms/contract";
 import { fetchListPage, useListFields, type ListPage } from "../../api/hooks";
@@ -13,7 +13,9 @@ import { ListScreen } from "../../page/ListScreen";
 import { ListLookup } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
-import { Button, Modal, StatusDot } from "../../ui/primitives";
+import { Button, Modal, Popover, StatusDot } from "../../ui/primitives";
+import { Icon } from "../../ui/Icon";
+import { RangeChip } from "../../ui/DateRange";
 import { problemText } from "../routing/dialogs";
 import { toBase64 } from "../switch/tools/toolsModel";
 import {
@@ -21,7 +23,7 @@ import {
   fieldText,
   fmtSeconds,
   msgStatusTone,
-  parseIdList,
+  parseMixedList,
   timeBounds,
   timeCondition,
   toGridRow,
@@ -29,7 +31,6 @@ import {
 } from "./monitorModel";
 import { RequestDialog } from "./parts";
 import { DestinationTree } from "../rates/DestinationTree";
-import { DateTimeInput } from "../../ui/DateTimeInput";
 
 const page = pageForPath("/monitoring/edr")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -43,6 +44,11 @@ export const fetchEdrs = (body: ListQuery): Promise<ListPage<EdrGridRow>> =>
     for (const r of rows) seen.set(r.id, r);
     return { ...p, rows };
   });
+/** Today 00:00 – 23:59 UTC on Start Time, the page's default period (team trial round 2). */
+const todayCondition = () => {
+  const d = new Date().toISOString().slice(0, 10);
+  return timeCondition("startTime", `${d}T00:00`, `${d}T23:59`)!;
+};
 const uuidsOf = (ids: number[]) => ids.map((id) => seen.get(id)).filter((r): r is EdrGridRow => !!r);
 
 // ---------------------------------------------------------------- filter row
@@ -72,6 +78,69 @@ function DestinationsDialog({ initial, done }: { initial: string[]; done: (codes
   );
 }
 
+/** Message statuses and Final in one chip (design refresh, team trial round 2). */
+function StatusChip({
+  state,
+  set,
+}: {
+  state: GridState;
+  set: (field: string, c: GridState["columns"][string] | null) => void;
+}) {
+  const fields = useListFields("edrs");
+  const ref = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const statuses = fields.data?.fields.find((f) => f.field === "msgStatus")?.enumValues ?? [];
+  const c = state.columns.msgStatus;
+  const picked = c?.values?.map(String) ?? (c?.value !== undefined ? [String(c.value)] : []);
+  const final = state.columns.isFinalAttempt?.value === true;
+  const label =
+    picked.length === 0 ? "All" : picked.length === 1 ? picked[0] || "(none yet)" : `${picked.length} statuses`;
+  const toggle = (v: string) => {
+    const next = picked.includes(v) ? picked.filter((x) => x !== v) : [...picked, v];
+    set("msgStatus", next.length ? { field: "msgStatus", op: "in", values: next } : null);
+  };
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        className={`range-chip plain${picked.length || final ? " set" : ""}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Status: {label}
+        {final ? " · final" : ""}
+      </button>
+      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} className="range-pop">
+        <div className="range-pop-list">
+          <label className="choice-row">
+            <input
+              type="checkbox"
+              checked={final}
+              onChange={(e) =>
+                set("isFinalAttempt", e.target.checked ? { field: "isFinalAttempt", op: "eq", value: true } : null)
+              }
+            />
+            Final attempt only
+          </label>
+          <div className="menu-sep" />
+          {statuses.map((o) => (
+            <label key={o.value} className="choice-row">
+              <input type="checkbox" checked={picked.includes(o.value)} onChange={() => toggle(o.value)} />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      </Popover>
+    </>
+  );
+}
+
+/**
+ * EDR search filters (design refresh, team trial round 2): one box for numbers, senders and message IDs, the
+ * period as a chip, Destinations and Status chips, and the column template.
+ */
 function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
   const templates = useEdrTemplates();
   const bounds = timeBounds(state.columns.startTime);
@@ -81,91 +150,59 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
     else delete columns[field];
     setState({ ...state, columns });
   };
-  const setTime = (from: string, to: string) => set("startTime", timeCondition("startTime", from, to));
   const ids = (field: string) => {
     const c = state.columns[field];
     return c?.op === "in" ? (c.values ?? []).join(", ") : c?.op === "eq" ? String(c.value) : "";
   };
   const setIds = (field: string, text: string) => {
-    const list = parseIdList(text);
+    const list = parseMixedList(text);
     set(
       field,
       list.length > 1 ? { field, op: "in", values: list } : list.length ? { field, op: "eq", value: list[0]! } : null,
     );
   };
+  const today = new Date().toISOString().slice(0, 10);
+  const isToday = bounds.from.startsWith(today) && (bounds.to === "" || bounds.to.startsWith(today));
+  const dest = state.columns.customerMccmnc;
+  const destCount = dest?.values?.length ?? (dest?.value !== undefined ? 1 : 0);
   return (
-    <div className="edr-toolbar">
-      <label className="small">
-        From
-        <DateTimeInput
-          value={bounds.from}
-          onChange={(e) => setTime(e.target.value, bounds.to)}
-          aria-label="From (UTC)"
-        />
-      </label>
-      <label className="small">
-        To
-        <DateTimeInput value={bounds.to} onChange={(e) => setTime(bounds.from, e.target.value)} aria-label="To (UTC)" />
-      </label>
-      <span className="muted small">UTC</span>
-      <label className="toggle-inline small">
+    <>
+      {/* Numbers, senders and message IDs, mixed and comma separated (team trial round 2, §9.1). */}
+      <div className="quick-search edr-search">
+        <Icon name="search" size={15} />
         <input
-          type="checkbox"
-          checked={state.columns.isFinalAttempt?.value === true}
-          onChange={(e) =>
-            set("isFinalAttempt", e.target.checked ? { field: "isFinalAttempt", op: "eq", value: true } : null)
-          }
+          key={`n${ids("numberOrMsgId")}`}
+          defaultValue={ids("numberOrMsgId")}
+          placeholder="Number, sender, message ID…"
+          aria-label="Numbers, senders or Msg IDs"
+          title="Receiver numbers, sender IDs, Customer Msg IDs and Vendor Msg IDs (any part of a long message), exact; several separated by commas"
+          onBlur={(e) => e.target.value !== ids("numberOrMsgId") && setIds("numberOrMsgId", e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && setIds("numberOrMsgId", e.currentTarget.value)}
         />
-        Final
-      </label>
-      <input
-        key={`n${ids("dnid")}`}
-        className="edr-ids"
-        defaultValue={ids("dnid")}
-        placeholder="Numbers, comma separated"
-        aria-label="Receiver numbers"
-        title="Receiver numbers, exact (the quick search also takes several numbers or a customer name)"
-        onBlur={(e) => e.target.value !== ids("dnid") && setIds("dnid", e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && setIds("dnid", e.currentTarget.value)}
+      </div>
+      <RangeChip
+        withTime
+        from={bounds.from}
+        to={bounds.to}
+        suffix="UTC"
+        {...(isToday ? { prefix: "Today ·" } : {})}
+        onChange={(from, to) => set("startTime", timeCondition("startTime", from, to))}
       />
-      <Button
-        small
-        icon="globe"
-        className={state.columns.customerMccmnc ? "active" : ""}
+      <button
+        type="button"
+        className={`range-chip plain${destCount ? " set" : ""}`}
         onClick={async () => {
-          const c = state.columns.customerMccmnc;
-          const current = c?.values?.map(String) ?? (c?.value !== undefined ? [String(c.value)] : []);
+          const current = dest?.values?.map(String) ?? (dest?.value !== undefined ? [String(dest.value)] : []);
           const codes = await ask<string[]>((d) => <DestinationsDialog initial={current} done={d} />);
           if (codes === null) return;
           set("customerMccmnc", codes.length ? { field: "customerMccmnc", op: "in", values: codes } : null);
         }}
       >
-        {(() => {
-          const c = state.columns.customerMccmnc;
-          const n = c?.values?.length ?? (c?.value !== undefined ? 1 : 0);
-          return n ? `Destinations (${n})` : "Destinations";
-        })()}
-      </Button>
-      <input
-        key={`c${ids("customerMsgId")}`}
-        className="edr-ids"
-        defaultValue={ids("customerMsgId")}
-        placeholder="Customer Msg IDs, comma separated"
-        aria-label="Customer Msg IDs"
-        onBlur={(e) => e.target.value !== ids("customerMsgId") && setIds("customerMsgId", e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && setIds("customerMsgId", e.currentTarget.value)}
-      />
-      <input
-        key={`v${ids("vendorMsgId")}`}
-        className="edr-ids"
-        defaultValue={ids("vendorMsgId")}
-        placeholder="Vendor Msg IDs, comma separated"
-        title="A long message has one vendor ID per part; any of them finds it (team trial round 2)"
-        aria-label="Vendor Msg IDs"
-        onBlur={(e) => e.target.value !== ids("vendorMsgId") && setIds("vendorMsgId", e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && setIds("vendorMsgId", e.currentTarget.value)}
-      />
+        Destinations: {destCount ? `${destCount} network${destCount === 1 ? "" : "s"}` : "All"}
+      </button>
+      <StatusChip state={state} set={set} />
       <select
+        className="range-chip plain chip-select"
         aria-label="EDR Template"
         value={templates.data?.find((t) => state.visible && t.columns.join() === state.visible.join())?.id ?? ""}
         onChange={(e) => {
@@ -176,11 +213,11 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
         <option value="">Template: default columns</option>
         {templates.data?.map((t) => (
           <option key={t.id} value={t.id}>
-            {t.name}
+            Template: {t.name}
           </option>
         ))}
       </select>
-    </div>
+    </>
   );
 }
 
@@ -341,7 +378,13 @@ function TroubleTicketDialog({ rows, done }: { rows: EdrGridRow[]; done: () => v
         </label>
         <div className="field tt-wide">
           <span>Email Columns * ({columns.length})</span>
-          {fields.data && <ColumnChecks fields={fields.data.fields} value={columns} onChange={setColumns} />}
+          {fields.data && (
+            <ColumnChecks
+              fields={fields.data.fields.filter((f) => !f.filterOnly)}
+              value={columns}
+              onChange={setColumns}
+            />
+          )}
         </div>
       </div>
       {preview && (
@@ -516,12 +559,28 @@ export function EdrSearchPage() {
       historyScope={null}
       fetchPage={fetchEdrs}
       toolbar={(state, setState) => <EdrToolbar state={state} setState={setState} />}
+      // Opens on today (UTC) when the tab has no filters of its own (team trial round 2).
+      initialState={{ columns: { startTime: todayCondition() } }}
+      noQuickSearch
+      toolbarFields={["startTime", "numberOrMsgId", "customerMccmnc", "msgStatus", "isFinalAttempt"]}
+      noRecordBar
+      exportPrimary
       onExport={(s) => void openDownload(s)}
-      actions={
-        <Button small icon="file" onClick={() => navigate("/monitoring/edr-templates")}>
-          Templates
-        </Button>
-      }
+      actions={(targets) => (
+        <>
+          <Button icon="file" onClick={() => navigate("/monitoring/edr-templates")}>
+            Templates
+          </Button>
+          <Button
+            icon="mail"
+            disabled={targets.length === 0}
+            title={targets.length ? "E-mail the selected EDRs to a partner" : "Select EDRs first"}
+            onClick={() => void openTicket(targets)}
+          >
+            Trouble ticket
+          </Button>
+        </>
+      )}
       columns={{
         startTime: { width: 170, render: (r) => <span className="num">{fmtSeconds(r.startTime)}</span> },
         submitTime: { width: 170, render: (r) => <span className="num">{fmtSeconds(r.submitTime)}</span> },

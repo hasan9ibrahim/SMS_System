@@ -23,7 +23,7 @@ import { StatusDot } from "../ui/primitives";
 import { ColumnFilter } from "./ColumnFilter";
 import { isChoice, isNumeric, isTime, nextSort, toListQuery, type GridState } from "./filterModel";
 
-export const ROW_HEIGHT = 38;
+export const ROW_HEIGHT = 42;
 /** Most rows "Select all matching" takes (one bulk action stays reviewable). */
 const SELECT_ALL_MAX = 5000;
 const PAGE_SIZE = 200;
@@ -95,8 +95,9 @@ export function defaultCell(f: FieldDescriptor, value: unknown): ReactNode {
   return String(value);
 }
 
+// Widths for the roomier design refresh (13.5 px text, 12 px cell padding).
 const defaultWidth = (f: FieldDescriptor) =>
-  f.field === "id" ? 80 : isNumeric(f) ? 110 : isChoice(f) ? 120 : isTime(f) ? 150 : f.field === "status" ? 70 : 180;
+  f.field === "id" ? 84 : isNumeric(f) ? 120 : isChoice(f) ? 130 : isTime(f) ? 178 : f.field === "status" ? 80 : 190;
 
 function HeaderCell({
   field,
@@ -325,7 +326,8 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
   const visibleFields = useMemo(() => {
     const byName = new Map(fields.fields.map((f) => [f.field, f]));
     const names = state.visible ?? fields.fields.filter((f) => !f.hidden).map((f) => f.field);
-    return names.map((n) => byName.get(n)).filter((f): f is FieldDescriptor => !!f);
+    // Filter-only fields (e.g. EDR Number or Msg ID) never become columns.
+    return names.map((n) => byName.get(n)).filter((f): f is FieldDescriptor => !!f && !f.filterOnly);
   }, [fields, state.visible]);
 
   // TanStack Table holds the column model and widths; data stays server-side (manual mode).

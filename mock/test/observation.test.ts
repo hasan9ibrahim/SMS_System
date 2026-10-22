@@ -153,6 +153,50 @@ describe("§9 EDR search", { skip }, () => {
     assert.ok(found.rows.some((r) => r.id === row.id));
   });
 
+  test("Number or Msg ID: one box takes numbers, customer and vendor Msg IDs, mixed (team trial round 2)", async () => {
+    const page = await ok<EdrPage>(
+      "queryEdrs",
+      call("POST", "/edrs/query", {
+        limit: 200,
+        filter: { logic: "and", conditions: [DAY, { field: "vendorMsgId", op: "not_empty" }] },
+      }),
+    );
+    const [a, b, c] = page.rows.filter((r) => r.dnid && r.customerMsgId && r.vendorMsgId);
+    const lastPart = c!.vendorMsgId!.split(",").at(-1)!;
+    const found = await ok<EdrPage>(
+      "queryEdrs",
+      call("POST", "/edrs/query", {
+        limit: 200,
+        filter: {
+          logic: "and",
+          conditions: [
+            DAY,
+            { field: "numberOrMsgId", op: "in", values: [`+${a!.dnid}`, b!.customerMsgId!, lastPart, "nope"] },
+          ],
+        },
+      }),
+    );
+    for (const r of [a!, b!, c!])
+      assert.ok(
+        found.rows.some((x) => x.id === r.id),
+        `finds ${r.id}`,
+      );
+    assert.ok(
+      found.rows.every(
+        (x) =>
+          x.dnid === a!.dnid ||
+          [a!.dnid, b!.customerMsgId, lastPart].includes(x.senderId ?? "") ||
+          x.customerMsgId === b!.customerMsgId ||
+          x.vendorMsgId?.split(",").includes(lastPart),
+      ),
+    );
+    const fields = await ok<{ fields: { field: string; filterOnly?: boolean }[] }>(
+      "getListFields",
+      call("GET", "/meta/lists/edrs/fields"),
+    );
+    assert.equal(fields.fields.find((f) => f.field === "numberOrMsgId")?.filterOnly, true, "never a column");
+  });
+
   test("filters, name filters as IDs, sort by name, quick search", async () => {
     const page = await ok<EdrPage>(
       "queryEdrs",
