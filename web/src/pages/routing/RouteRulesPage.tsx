@@ -3,13 +3,20 @@
 // a filter under each, the detail panel (Edit / Configuration / Conditions / Traffic / History / Test)
 // with condition chips and the 24h trend on the right, and the status bar shortcuts.
 import { HoverList } from "../../ui/HoverList";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { RouteRuleDetail, RouteRuleRow, TrafficWindow } from "@sms/contract";
+import type { RouteRuleDetail, RouteRuleInput, RouteRuleRow, TrafficWindow } from "@sms/contract";
 import { api, unwrap } from "../../api/client";
 import { useMe } from "../../api/hooks";
 import { useRestore } from "../../api/records";
-import { useBulkRouteRules, useCloneRouteRule, exportRouteRules, useRouteRule } from "../../api/routing";
+import {
+  useBulkRouteRules,
+  useCloneRouteRule,
+  useDiscardRouteRule,
+  exportRouteRules,
+  useRouteRule,
+  useSaveRouteRule,
+} from "../../api/routing";
 import { toListQuery } from "../../grid/filterModel";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
@@ -19,8 +26,8 @@ import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { Button, Modal, Popover, StatusDot } from "../../ui/primitives";
 import { qualityClass, qualityTone } from "../../ui/quality";
 import { formatPct } from "../rates/format";
-import { AddCondition, ConditionsSection, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
-import { BulkDialog, RuleDialog, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
+import { AddCondition, ConditionsSection, DraftRuleContext, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
+import { BulkDialog, DEFAULT_PRIORITY, RuleDialog, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
 import { InlineCondition } from "./ConditionEditor";
 import { codesText, useDestinationTree } from "../rates/DestinationTree";
 import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, type ConditionKey } from "./ruleModel";
@@ -151,84 +158,107 @@ function ConfigurationSection({ id, expanded = false }: { id: number; expanded?:
 }
 
 /**
- * New rule in one dialog (team trial round 2): the general fields, then, once added, Configuration (category,
- * customer trunks, destination, vendors) and the other conditions in the same window. "Rule on" ticks itself once
- * the rule has customer trunks and vendors, unless switched by hand; Done saves it.
+ * New rule (team trial round 3): one window with every section at once. Opening it adds a draft rule, turned off; ×
+ * discards the draft as if it never existed, and only Save keeps it (with the general fields and Rule on). A click
+ * outside or Escape does nothing. "Rule on" ticks itself once the rule has customer trunks and vendors, unless
+ * switched by hand.
  */
 function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
   const [id, setId] = useState<number | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const create = useSaveRouteRule();
+  const discard = useDiscardRouteRule();
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    create
+      .mutateAsync({
+        id: null,
+        input: { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
+      })
+      .then((r) => setId(r.record.id))
+      .catch((e) => setCreateError(problemText(e)));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const rule = useRouteRule(id);
-  const { save, saving } = useSaver(rule.data);
   const [manual, setManual] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const submitGeneral = useRef<((patch?: Partial<RouteRuleInput>) => Promise<string | null>) | null>(null);
   const r = id !== null ? rule.data : undefined;
   const ready = r ? readyToRun(r) : false;
   const on = manual ?? ready;
-  const finish = async () => {
-    if (r && (r.status === "active") !== on) {
-      const err = await save({ status: on ? "active" : "inactive" }, on ? "Rule on" : "Rule off");
-      if (err) return setError(err);
-    }
+  const [busy, setBusy] = useState(false);
+  const close = async () => {
+    setBusy(true);
+    if (id !== null) await discard.mutateAsync(id).catch((e) => toast({ tone: "error", message: problemText(e) }));
+    done(null);
+  };
+  const saveRule = async () => {
+    if (!submitGeneral.current) return;
+    setBusy(true);
+    const err = await submitGeneral.current({ status: on ? "active" : "inactive" });
+    setBusy(false);
+    if (err) return setError(err);
     done(id);
   };
   return (
     <Modal
-      title={r ? `New rule #${r.id} ${r.name}` : "New route rule"}
-      width={id === null ? 640 : 1180}
-      onClose={() => void finish()}
-      {...(id !== null
-        ? {
-            footer: (
-              <>
-                <label className="toggle-inline" title="On by default once the rule has customer trunks and vendors">
-                  <input type="checkbox" checked={on} onChange={(e) => setManual(e.target.checked)} />
-                  Rule on
-                </label>
-                {!ready && (
-                  <span className="muted small">
-                    Choose the customer trunks{r?.routeType === "block" ? "" : " and the vendors"}; the rule then turns
-                    on by default.
-                  </span>
-                )}
-                <span className="fb-spacer" />
-                <Button variant="primary" onClick={() => void finish()} disabled={saving}>
-                  Done
-                </Button>
-              </>
-            ),
-          }
-        : {})}
+      title="New route rule"
+      width={1180}
+      onClose={() => void close()}
+      onlyCloseButton
+      footer={
+        <>
+          <label className="toggle-inline" title="On by default once the rule has customer trunks and vendors">
+            <input type="checkbox" checked={on} disabled={!r} onChange={(e) => setManual(e.target.checked)} />
+            Rule on
+          </label>
+          {r && !ready && (
+            <span className="muted small">
+              Choose the customer trunks{r.routeType === "block" ? "" : " and the vendors"}; the rule then turns on by
+              default.
+            </span>
+          )}
+          <span className="fb-spacer" />
+          <span className="muted small">× discards the rule</span>
+          <Button variant="primary" icon="save" onClick={() => void saveRule()} disabled={!r || busy}>
+            Save
+          </Button>
+        </>
+      }
     >
-      <div className="new-rule">
-        <section className="cfg-block">
-          <div className="cfg-head">
-            <strong>General</strong>
-          </div>
-          <RuleGeneralForm
-            key={r?.updatedAt ?? "new"}
-            rule={r ?? null}
-            onSaved={(saved) => setId(saved)}
-            {...(id === null ? { onCancel: () => done(null) } : {})}
-            submitLabel={id === null ? "Continue" : "Save"}
-            hideStatus
-            hint="Next, in this window: category, customer trunks, destination, vendors and other conditions."
-          />
-        </section>
-        {id !== null && (
-          <>
-            <ConfigurationSection id={id} expanded />
-            <section className="cfg-block">
-              <div className="cfg-head">
-                <strong>Other conditions</strong>
-                <span className="fb-spacer" />
-                <AddCondition id={id} />
-              </div>
-              <ConditionsSection id={id} />
-            </section>
-          </>
-        )}
-        {error && <p className="error-text">{error}</p>}
-      </div>
+      <DraftRuleContext.Provider value={true}>
+        <div className="new-rule">
+          {createError && <p className="error-text">{createError}</p>}
+          {!r && !createError && <p className="muted">Preparing the rule…</p>}
+          {r && (
+            <>
+              <section className="cfg-block">
+                <div className="cfg-head">
+                  <strong>General</strong>
+                </div>
+                <RuleGeneralForm
+                  rule={r}
+                  draft
+                  hideStatus
+                  onSaved={() => undefined}
+                  bindSubmit={(fn) => (submitGeneral.current = fn)}
+                />
+              </section>
+              <ConfigurationSection id={r.id} expanded />
+              <section className="cfg-block">
+                <div className="cfg-head">
+                  <strong>Other conditions</strong>
+                  <span className="fb-spacer" />
+                  <AddCondition id={r.id} />
+                </div>
+                <ConditionsSection id={r.id} />
+              </section>
+            </>
+          )}
+          {error && <p className="error-text">{error}</p>}
+        </div>
+      </DraftRuleContext.Provider>
     </Modal>
   );
 }
@@ -391,11 +421,11 @@ export function RouteRulesPage() {
   };
 
   const newRule = async () => {
-    // One dialog: general fields, then configuration and conditions (team trial round 2).
+    // One window with every section (team trial round 3); Save opens the rule in the panel.
     const id = await ask<number | null>((done) => <NewRuleDialog done={done} />);
     if (id) {
       showRule(id);
-      setSection("configuration");
+      setSection("edit");
     }
   };
 

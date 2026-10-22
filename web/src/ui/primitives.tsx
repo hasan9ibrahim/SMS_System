@@ -159,20 +159,24 @@ export function Modal({
   children,
   footer,
   width = 520,
+  onlyCloseButton = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   width?: number;
+  /** Only × closes it: a click outside or Escape does nothing (New rule, team trial round 3). */
+  onlyCloseButton?: boolean;
 }) {
   useEffect(() => {
+    if (onlyCloseButton) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, onlyCloseButton]);
   return createPortal(
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(e) => !onlyCloseButton && e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ width }} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h2>{title}</h2>

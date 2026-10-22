@@ -149,6 +149,26 @@ describe("lists (§13.25)", { skip }, () => {
     }
   });
 
+  test("enterprise quick search matches the start of a name (team trial round 3)", async () => {
+    const first = (await call("POST", "/enterprises/query", { limit: 1 })).json().rows[0] as { name: string };
+    const head = first.name.slice(0, 4);
+    const res = await call("POST", "/enterprises/query", { search: head.toLowerCase(), limit: 200 });
+    assert.equal(res.statusCode, 200);
+    const rows = res.json().rows as { name: string; alias: string; accountManagerName: string | null }[];
+    assert.ok(rows.some((r) => r.name === first.name));
+    for (const r of rows)
+      assert.ok(
+        [r.name, r.alias, r.accountManagerName ?? ""].some((v) => v.toLowerCase().startsWith(head.toLowerCase())),
+        `${r.name} starts with ${head}`,
+      );
+    // The middle of a name no longer matches unless typed with %.
+    const middle = first.name.slice(2, 6);
+    const mid = (await call("POST", "/enterprises/query", { search: `%${middle}`, limit: 200 })).json().rows as {
+      name: string;
+    }[];
+    assert.ok(mid.some((r) => r.name === first.name));
+  });
+
   test("users and change history", async () => {
     const users = await call("POST", "/users/query", { search: "a", limit: 10 });
     assert.equal(users.statusCode, 200);

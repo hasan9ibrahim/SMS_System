@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.82.0
+  version: 0.83.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -34,7 +34,7 @@ tags:
   - name: meta
     description: Field catalogue for grids and the filter builder (§13.25)
   - name: enterprises
-    description: Partners - customers, vendors and reciprocals (§5)
+    description: Partners - customers, vendors and bilateral partners (§5)
   - name: trunks
     description: Customer and vendor trunks (§5.4, §5.5)
   - name: routing
@@ -4365,6 +4365,29 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /translation-rules/{id}/dependencies:
+    get:
+      tags: [switch]
+      operationId: getTranslationRuleDependencies
+      summary: "What uses a translation rule (safe delete, §13.29)"
+      description: |
+        Trunks and enterprises the rule is assigned to (team trial round 3): while any is live the rule cannot be deleted, not even with an override. Rules for all trunks or a category do not block.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
   /translation-rules/{id}/archive:
     post:
       tags: [switch]
@@ -4968,6 +4991,29 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /hlr-rules/{id}/dependencies:
+    get:
+      tags: [switch]
+      operationId: getHlrRuleDependencies
+      summary: "What uses an HLR rule (safe delete, §13.29)"
+      description: |
+        Trunks and enterprises the rule is assigned to (team trial round 3): while any is live the rule cannot be deleted, not even with an override. Rules for all trunks or a category do not block.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -14043,6 +14089,30 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /route-rules/{id}/discard:
+    post:
+      tags: [routing]
+      operationId: discardRouteRule
+      summary: "Discard a new rule that was never saved (team trial round 3, §6.3)"
+      description: |
+        New rule opens one window at once on a draft: the rule is created turned off, and closing the window with ×
+        discards it. Discard removes the rule and its change history as if it never existed. Only the user who added
+        it, within 24 hours, while it has never been turned on and has carried no traffic; otherwise 409 (use
+        Delete, which archives, §13.29).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "204":
+          description: Discarded
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
   /route-rules/{id}/clone:
     post:
       tags: [routing]
@@ -14752,6 +14822,8 @@ components:
               $ref: "#/components/schemas/DashboardSettings"
             alertSounds:
               $ref: "#/components/schemas/AlertSoundPrefs"
+            liveAnalytics:
+              $ref: "#/components/schemas/LiveAnalyticsSettings"
         permissions:
           type: array
           description: >-
@@ -14780,6 +14852,23 @@ components:
           $ref: "#/components/schemas/DashboardSettings"
         alertSounds:
           $ref: "#/components/schemas/AlertSoundPrefs"
+        liveAnalytics:
+          $ref: "#/components/schemas/LiveAnalyticsSettings"
+
+    LiveAnalyticsSettings:
+      type: object
+      additionalProperties: false
+      description: >-
+        Live analytics columns, saved per user (team trial round 3): the metrics shown, in order. An empty list is the
+        default set; the client adds or removes columns like dashboard panels.
+      required: [columns]
+      properties:
+        columns:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/ReportMetric"
 
     DashboardSettings:
       type: object
@@ -15261,6 +15350,11 @@ components:
         blocking:
           type: boolean
           description: Must be settled before archiving (§13.29).
+        noOverride:
+          type: boolean
+          description: >-
+            A blocking item even an administrator cannot override (team trial round 3): an enterprise's live trunks,
+            the trunks and enterprises a translation or HLR rule is assigned to.
         detail:
           type: [string, "null"]
 
@@ -15376,11 +15470,12 @@ components:
 
     AllNetworksCode:
       type: string
-      enum: [mcc, mcc0, mcc00, mcc000, mccStar]
+      pattern: "^(mcc|mcc0|mcc00|mcc000|mccStar|MCC[0-9A-Za-z*#._-]{1,6})$"
       default: mcc
       description: |
         How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
-        `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Incoming RNs from the partner read
+        `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Team trial round 3: any other form as
+        `MCC` plus up to 6 characters, e.g. `MCC99` = 26299, `MCCxx` = 262xx. Incoming RNs from the partner read
         that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
     EnterpriseInput:
       type: object
@@ -22966,6 +23061,13 @@ components:
           maxItems: 500
           items:
             $ref: "#/components/schemas/Id"
+        oneEmailPerEnterprise:
+          type: boolean
+          default: false
+          description: >-
+            Send Tech Info only (team trial round 3, Notifications on the enterprise): one e-mail per enterprise with
+            every picked trunk's connection details in the {trunks} block of the Customer Tech Info template (added
+            after the body when the template has no {trunks}). False = one e-mail per trunk.
 
     SendRateInput:
       type: object
@@ -31352,7 +31454,11 @@ components:
         search:
           type: string
           maxLength: 200
-          description: Quick search across the list's text columns (case-insensitive, wildcards allowed).
+          description: >-
+            Quick search across the list's text columns (case-insensitive, wildcards allowed). Plain text matches
+            anywhere in a value; on lists of named records (enterprises, customer and vendor trunks, users) it matches
+            the start of a value, e.g. "Colo" finds names starting with Colo (team trial round 3). `%` and `_` work
+            as typed on every list.
         sort:
           type: array
           maxItems: 5
@@ -31457,7 +31563,7 @@ components:
     EnterpriseType:
       type: string
       enum: [customer, vendor, reciprocal]
-      description: Reciprocal = both customer and vendor.
+      description: "reciprocal = Bilateral (both customer and vendor; shown as Bilateral since team trial round 3)."
 
     EnterpriseTier:
       type: string

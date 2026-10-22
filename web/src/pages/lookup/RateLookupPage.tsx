@@ -94,6 +94,19 @@ export function RateLookupPage() {
     else p.delete(key);
     write(p);
   };
+  /** Both sides at once (the shared search and Include inactive trunks, team trial round 3). */
+  const setBoth = (c: SideState, v: SideState) => {
+    const p = new URLSearchParams(location.search);
+    for (const [key, st] of [
+      ["c", c],
+      ["v", v],
+    ] as const) {
+      const e = encodeSide(st);
+      if (e) p.set(key, e);
+      else p.delete(key);
+    }
+    write(p);
+  };
   const setShow = (v: Show) => {
     const p = new URLSearchParams(location.search);
     if (v === "both") p.delete("show");
@@ -160,6 +173,7 @@ export function RateLookupPage() {
           vendor={vendorSide}
           setCustomer={(st) => setSide("c", st)}
           setVendor={(st) => setSide("v", st)}
+          setBoth={setBoth}
         />
       ) : mode === "easy" ? (
         <>

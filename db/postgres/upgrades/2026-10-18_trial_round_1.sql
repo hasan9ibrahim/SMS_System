@@ -325,3 +325,11 @@ CREATE TABLE IF NOT EXISTS route_cost_cache (
   computed_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (customer_trunk_id, mccmnc_id)
 );
+
+-- Live analytics columns per user (migration 062, §13.4).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_settings jsonb;
+
+-- "All networks" code: any MCC + suffix form (migration 062, §13.13, §13.14).
+ALTER TABLE enterprises DROP CONSTRAINT IF EXISTS enterprises_all_networks_code_check;
+ALTER TABLE enterprises ADD CONSTRAINT enterprises_all_networks_code_check
+  CHECK (all_networks_code ~ '^(mcc|mcc0|mcc00|mcc000|mccStar|MCC[0-9A-Za-z*#._-]{1,6})$');

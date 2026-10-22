@@ -4,6 +4,7 @@ import {
   bucketWindow,
   cellTone,
   COLUMNS,
+  columnsFor,
   detailQuery,
   fmt,
   levelOptions,
@@ -31,7 +32,9 @@ test("colours: ASR and DLR green from 80, orange from 60, red below; margin gree
   assert.equal(cellTone("margin", 3), "good");
   assert.equal(cellTone("margin", 0), "");
   assert.equal(cellTone("revenue", 3), "");
-  assert.equal(fmt(0.0123456, "rate"), "0.01235");
+  // Money and rates: 6 decimals, never rounded (team trial round 3).
+  assert.equal(fmt(0.0123456, "rate"), "0.012346");
+  assert.equal(fmt(12345.5, "money"), "12,345.500000");
 });
 
 test("period, hours and levels make the query", () => {
@@ -87,7 +90,15 @@ test("a row's + offers every level not used above it; headers are one line (team
   assert.ok(!underAlpha.some((l) => l.value === "senderId"));
   assert.equal(COLUMNS.find((c) => c.metric === "submitted")?.label, "Submitted");
   assert.equal(COLUMNS.find((c) => c.metric === "tpsNow")?.label, "TPS");
-  assert.ok(!COLUMNS.some((c) => c.metric === "hlrPorted"), "TPS replaced HLR ported");
+  // Team trial round 3: Ported shown, HLR renamed HLR/MNP; Cached HLR/MNP hidden until added.
+  assert.equal(COLUMNS.find((c) => c.metric === "hlrTotal")?.label, "HLR/MNP");
+  assert.ok(COLUMNS.some((c) => c.metric === "hlrPorted"));
+  assert.ok(!COLUMNS.some((c) => c.metric === "hlrCached"));
+  assert.deepEqual(
+    columnsFor(["hlrCached", "attempts", "nope"]).map((c) => c.metric),
+    ["attempts", "hlrCached"],
+  );
+  assert.equal(columnsFor([]).length, COLUMNS.length);
 });
 
 test("column sort: a header flips its direction, names sort by the level's field (team trial round 1)", () => {

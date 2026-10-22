@@ -748,6 +748,48 @@ export function archiveRouteRule(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
+/**
+ * Discards a draft from New rule (team trial round 3): the rule, its vendors, whitelists, traffic rows and change
+ * history go, as if it was never added. Only its author, within 24 hours, never turned on, no traffic.
+ */
+export function discardRouteRule(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: number };
+  return withDb(reply, async (pool) => {
+    const me = await getCurrentUser();
+    const { rows } = await pool.query(
+      "SELECT created_by_id, inserted_at > now() - interval '24 hours' AS recent FROM route_rules WHERE id = $1",
+      [id],
+    );
+    if (!rows[0]) return notFound(reply, id);
+    const { rows: on } = await pool.query(
+      `SELECT 1 FROM changes WHERE entity_type = 'route_rule' AND entity_ids && ARRAY[$1]::bigint[]
+          AND (change_type = 'enable' OR diff @> '[{"field": "status", "after": "active"}]'::jsonb) LIMIT 1`,
+      [id],
+    );
+    const { rows: now } = await pool.query("SELECT status FROM route_rules WHERE id = $1", [id]);
+    const traffic = await chRows<{ n: string }>(`SELECT count() AS n FROM edr WHERE route_rule_id = ${Number(id)}`);
+    if (
+      Number(rows[0].created_by_id) !== me.id ||
+      !rows[0].recent ||
+      on[0] ||
+      now[0].status === "active" ||
+      Number(traffic?.[0]?.n ?? 0) > 0
+    )
+      return sendProblem(
+        reply,
+        409,
+        "Only a new rule you added today that was never turned on can be discarded; use Delete",
+      );
+    await inTransaction(pool, async (c) => {
+      for (const t of ["route_rule_vendors", "route_rule_whitelists", "route_rule_traffic"])
+        await c.query(`DELETE FROM ${t} WHERE route_rule_id = $1`, [id]);
+      await c.query("DELETE FROM changes WHERE entity_type = 'route_rule' AND entity_ids = ARRAY[$1]::bigint[]", [id]);
+      await c.query("DELETE FROM route_rules WHERE id = $1", [id]);
+    });
+    return reply.code(204).send();
+  });
+}
+
 export function restoreRouteRule(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   return withDb(reply, async (pool) => {

@@ -44,6 +44,11 @@ export interface ListDef<Row> {
   columns: Record<string, ColumnSql>;
   /** Fields matched by the quick search box. */
   search: string[];
+  /**
+   * Plain quick-search text matches the start of a value instead of anywhere (team trial round 3): lists of named
+   * records, where "Colo" should find names starting with Colo.
+   */
+  searchPrefix?: boolean;
   /** Unique, stable tie-breaker so paging never repeats or skips rows. */
   idSql: string;
   /** SELECT list; rows are passed to mapRow. */
@@ -63,9 +68,9 @@ export interface ListPage<Row> {
 const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
 const TIME = new Set(["date", "datetime"]);
 
-/** `%` / `_` wildcards are used as typed; plain text means "contains" (§13.25). */
-export function searchPattern(text: string): string {
-  return /[%_]/.test(text) ? text : `%${text}%`;
+/** `%` / `_` wildcards are used as typed; plain text means "contains" (§13.25), or "starts with" on prefix lists. */
+export function searchPattern(text: string, prefix = false): string {
+  return /[%_]/.test(text) ? text : prefix ? `${text}%` : `%${text}%`;
 }
 
 /** Cursor = position in the sorted result. Valid for the same filter and sort only. */
@@ -214,7 +219,7 @@ export function compileQuery(def: ListDef<unknown>, query: ListQuery, extraSelec
   if (def.baseWhere && !showArchived) where.push(def.baseWhere);
   if (query.filter) where.push(groupSql(query.filter, def, byName, params.add));
   if (query.search?.trim()) {
-    const pattern = params.add(searchPattern(query.search.trim()));
+    const pattern = params.add(searchPattern(query.search.trim(), def.searchPrefix));
     where.push(`(${def.search.map((f) => `(${def.columns[f]!.sql})::text ILIKE ${pattern}`).join(" OR ")})`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";

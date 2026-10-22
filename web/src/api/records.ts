@@ -265,8 +265,9 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   // Nothing depends on a dial-code profile or an MO entry (§6.1).
   if (kind === "dial_code_profile" || kind === "mo_number") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "number_list") return unwrap(api.GET("/number-lists/{id}/dependencies", params));
-  // A translation rule just stops running on its trunks (§13.2); nothing blocks it.
-  if (kind === "translation_rule" || kind === "hlr_rule") return Promise.resolve({ blocked: false, items: [] });
+  // Assigned to a live trunk or enterprise: cannot be deleted (team trial round 3).
+  if (kind === "translation_rule") return unwrap(api.GET("/translation-rules/{id}/dependencies", params));
+  if (kind === "hlr_rule") return unwrap(api.GET("/hlr-rules/{id}/dependencies", params));
   if (kind === "hlr_provider") return unwrap(api.GET("/hlr-providers/{id}/dependencies", params));
   if (kind === "hlr_policy") return unwrap(api.GET("/hlr-policies/{id}/dependencies", params));
   if (kind === "transaction") return Promise.resolve({ blocked: false, items: [] });

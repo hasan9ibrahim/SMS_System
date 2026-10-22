@@ -106,7 +106,7 @@ export function sanitizeHtml(html: string): string {
 
 /** Placeholders whose value is HTML already (the company logo), and ones shown as fixed-width text. */
 const RAW_KEYS = new Set(["company_logo"]);
-const PRE_KEYS = new Set(["edrs", "summary"]);
+const PRE_KEYS = new Set(["edrs", "summary", "trunks"]);
 
 /**
  * Fills {placeholders}. In an HTML body values are escaped and line breaks kept (<br>), so a value can

@@ -60,34 +60,238 @@ export interface Column {
 }
 /**
  * The old platform's Analytics Report columns, plus Attempts and the two DLRs. Success (the same as
- * Submitted) and Reported were dropped at the team's request (trial round 1).
+ * Submitted) and Reported were dropped at the team's request (trial round 1). Team trial round 3: Ported added,
+ * HLR renamed HLR/MNP, and more columns the user can add (hidden by default), like dashboard panels.
  */
-export const COLUMNS: Column[] = [
-  { metric: "attempts", label: "Attempts", title: "Messages received from customers", fmt: "int" },
-  { metric: "submitted", label: "Submitted", title: "Sent to a vendor", fmt: "int" },
-  { metric: "billableCustomer", label: "Billable (C)", title: "Billable to the customer", fmt: "int" },
-  { metric: "billableVendor", label: "Billable (V)", title: "Billable by the vendor", fmt: "int" },
-  { metric: "asr", label: "ASR %", title: "Accepted / attempts", fmt: "pct" },
+export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
+  {
+    metric: "attempts",
+    label: "Attempts",
+    title: "Messages received from customers",
+    fmt: "int",
+    shown: true,
+    group: "Traffic",
+  },
+  { metric: "submitted", label: "Submitted", title: "Sent to a vendor", fmt: "int", shown: true, group: "Traffic" },
+  {
+    metric: "billableCustomer",
+    label: "Billable (C)",
+    title: "Billable to the customer",
+    fmt: "int",
+    shown: true,
+    group: "Traffic",
+  },
+  {
+    metric: "billableVendor",
+    label: "Billable (V)",
+    title: "Billable by the vendor",
+    fmt: "int",
+    shown: true,
+    group: "Traffic",
+  },
+  { metric: "asr", label: "ASR %", title: "Accepted / attempts", fmt: "pct", shown: true, group: "Quality" },
   {
     metric: "dlrCustomer",
     label: "DLR (c) %",
     title: "Delivered as reported to the customer (the receipts we send)",
     fmt: "pct",
+    shown: true,
+    group: "Quality",
   },
-  { metric: "dlrVendor", label: "DLR (v) %", title: "Delivered as reported by the vendor", fmt: "pct" },
-  { metric: "margin", label: "Margin", title: "Revenue − cost (platform currency)", fmt: "money" },
-  { metric: "revenue", label: "Revenue", title: "Customer charges (platform currency)", fmt: "money" },
-  { metric: "cost", label: "Cost", title: "Vendor charges (platform currency)", fmt: "money" },
-  { metric: "delivered", label: "Delivered", title: "Delivery receipts DELIVRD from vendors", fmt: "int" },
-  { metric: "avgRateCustomer", label: "Rate (C)", title: "Average customer rate per message", fmt: "rate" },
-  { metric: "avgRateVendor", label: "Rate (V)", title: "Average vendor rate per message", fmt: "rate" },
-  { metric: "deliveryDelayS", label: "Delay sec", title: "Average delivery delay in seconds", fmt: "sec" },
-  { metric: "hlrTotal", label: "HLR", title: "HLR lookups", fmt: "int" },
+  {
+    metric: "dlrVendor",
+    label: "DLR (v) %",
+    title: "Delivered as reported by the vendor",
+    fmt: "pct",
+    shown: true,
+    group: "Quality",
+  },
+  {
+    metric: "margin",
+    label: "Margin",
+    title: "Revenue − cost (platform currency)",
+    fmt: "money",
+    shown: true,
+    group: "Money",
+  },
+  {
+    metric: "revenue",
+    label: "Revenue",
+    title: "Customer charges (platform currency)",
+    fmt: "money",
+    shown: true,
+    group: "Money",
+  },
+  {
+    metric: "cost",
+    label: "Cost",
+    title: "Vendor charges (platform currency)",
+    fmt: "money",
+    shown: true,
+    group: "Money",
+  },
+  {
+    metric: "delivered",
+    label: "Delivered",
+    title: "Delivery receipts DELIVRD from vendors",
+    fmt: "int",
+    shown: true,
+    group: "Traffic",
+  },
+  {
+    metric: "avgRateCustomer",
+    label: "Rate (C)",
+    title: "Average customer rate per message",
+    fmt: "rate",
+    shown: true,
+    group: "Money",
+  },
+  {
+    metric: "avgRateVendor",
+    label: "Rate (V)",
+    title: "Average vendor rate per message",
+    fmt: "rate",
+    shown: true,
+    group: "Money",
+  },
+  {
+    metric: "deliveryDelayS",
+    label: "Delay sec",
+    title: "Average delivery delay in seconds",
+    fmt: "sec",
+    shown: true,
+    group: "Quality",
+  },
+  { metric: "hlrTotal", label: "HLR/MNP", title: "HLR / MNP lookups", fmt: "int", shown: true, group: "HLR/MNP" },
+  {
+    metric: "hlrPorted",
+    label: "Ported",
+    title: "Numbers the HLR / MNP lookup found ported to another network",
+    fmt: "int",
+    shown: true,
+    group: "HLR/MNP",
+  },
   // Live TPS replaced HLR ported (team trial round 1): messages per second over the last minute up to now.
-  { metric: "tpsNow", label: "TPS", title: "Live TPS: messages per second over the last minute", fmt: "tps" },
-  { metric: "hlrCost", label: "HLR cost", title: "HLR cost (platform currency)", fmt: "money" },
+  {
+    metric: "tpsNow",
+    label: "TPS",
+    title: "Live TPS: messages per second over the last minute",
+    fmt: "tps",
+    shown: true,
+    group: "Traffic",
+  },
+  {
+    metric: "hlrCost",
+    label: "HLR/MNP cost",
+    title: "HLR / MNP cost (platform currency)",
+    fmt: "money",
+    shown: true,
+    group: "HLR/MNP",
+  },
+  // Hidden by default (team trial round 3).
+  {
+    metric: "hlrCached",
+    label: "Cached HLR/MNP",
+    title:
+      "Of all HLR / MNP lookups, numbers already looked up in the last 24 hours: answered from the cache, not looked up again",
+    fmt: "int",
+    shown: false,
+    group: "HLR/MNP",
+  },
+  {
+    metric: "hlrLive",
+    label: "Live HLR/MNP",
+    title: "HLR / MNP lookups sent to a provider (not from the cache)",
+    fmt: "int",
+    shown: false,
+    group: "HLR/MNP",
+  },
+  {
+    metric: "hlrAccomplished",
+    label: "HLR/MNP answered",
+    title: "HLR / MNP lookups that returned a result",
+    fmt: "int",
+    shown: false,
+    group: "HLR/MNP",
+  },
+  { metric: "marginPct", label: "Margin %", title: "Margin / revenue", fmt: "pct", shown: false, group: "Money" },
+  {
+    metric: "costAvg",
+    label: "Avg cost",
+    title: "Average cost per billable message (platform currency)",
+    fmt: "rate",
+    shown: false,
+    group: "Money",
+  },
+  {
+    metric: "successful",
+    label: "Success",
+    title: "Accepted by the platform",
+    fmt: "int",
+    shown: false,
+    group: "Traffic",
+  },
+  {
+    metric: "failedSubmits",
+    label: "Failed submits",
+    title: "Messages no vendor accepted",
+    fmt: "int",
+    shown: false,
+    group: "Traffic",
+  },
+  {
+    metric: "reroutes",
+    label: "Reroutes",
+    title: "Messages sent again to another vendor",
+    fmt: "int",
+    shown: false,
+    group: "Traffic",
+  },
+  {
+    metric: "reportedCustomer",
+    label: "Reported (C)",
+    title: "Delivery receipts sent to the customer",
+    fmt: "int",
+    shown: false,
+    group: "Quality",
+  },
+  {
+    metric: "reportedVendor",
+    label: "Reported (V)",
+    title: "Delivery receipts received from vendors",
+    fmt: "int",
+    shown: false,
+    group: "Quality",
+  },
+  {
+    metric: "tpsAvg",
+    label: "Avg TPS",
+    title: "Average messages per second over the period",
+    fmt: "tps",
+    shown: false,
+    group: "Traffic",
+  },
+  {
+    metric: "tpsPeak",
+    label: "Peak TPS",
+    title: "Busiest second of the period",
+    fmt: "tps",
+    shown: false,
+    group: "Traffic",
+  },
+  { metric: "moCount", label: "MO", title: "Mobile originated messages", fmt: "int", shown: false, group: "Traffic" },
 ];
-export const METRICS = COLUMNS.map((c) => c.metric);
+/** The default columns, in order. */
+export const DEFAULT_COLUMNS: ReportMetric[] = ALL_COLUMNS.filter((c) => c.shown).map((c) => c.metric);
+/** The user's saved columns (unknown ones dropped), else the default set. Shown in the catalogue's order. */
+export function columnsFor(saved: readonly string[] | undefined): Column[] {
+  const pick = saved?.length ? new Set(saved) : new Set<string>(DEFAULT_COLUMNS);
+  const out = ALL_COLUMNS.filter((c) => pick.has(c.metric));
+  return out.length ? out : ALL_COLUMNS.filter((c) => c.shown);
+}
+/** The default columns (tests and the detail panel before preferences load). */
+export const COLUMNS: Column[] = columnsFor(undefined);
+export const METRICS = DEFAULT_COLUMNS;
 
 export function fmt(v: number | null | undefined, kind: Fmt): string {
   if (v === null || v === undefined) return "—";
@@ -96,13 +300,10 @@ export function fmt(v: number | null | undefined, kind: Fmt): string {
       return Math.round(v).toLocaleString("en-US");
     case "pct":
       return v.toFixed(2);
-    case "money": {
-      // Whole units from 1,000 up, so every column fits without scrolling (team trial round 1).
-      const d = Math.abs(v) >= 1000 ? 0 : 2;
-      return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
-    }
+    // Money and rates are never rounded: 6 decimals on every row, the total included (team trial round 3).
+    case "money":
     case "rate":
-      return v.toFixed(5);
+      return v.toLocaleString("en-US", { minimumFractionDigits: 6, maximumFractionDigits: 6 });
     case "sec":
     case "tps":
       return v.toFixed(2);
@@ -189,12 +390,13 @@ export function levelQuery(
   parents: FilterCondition[],
   limit = 100,
   columnSort: ColumnSort | null = null,
+  metrics: readonly ReportMetric[] = METRICS,
 ): MasterReportQuery {
   const to = s.at ? s.at.to : new Date(Date.parse(`${s.toDate}T00:00:00Z`) + 86_400_000).toISOString();
   const allHours = !!s.at || (s.hourFrom === 0 && s.hourTo === 23);
   return {
     groupBy: [dim],
-    metrics: METRICS,
+    metrics: [...metrics],
     // Live screens show enterprises by alias (team trial round 1).
     enterpriseLabel: "alias",
     timezone: "UTC",
@@ -238,8 +440,9 @@ export function detailQuery(
   by: ReportDimension,
   conditions: FilterCondition[],
   limit = 500,
+  metrics: readonly ReportMetric[] = METRICS,
 ): MasterReportQuery {
-  const q = levelQuery(s, by, conditions, limit);
+  const q = levelQuery(s, by, conditions, limit, null, metrics);
   return { ...q, sort: [{ field: by, dir: "desc" }] };
 }
 

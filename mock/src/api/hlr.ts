@@ -38,6 +38,7 @@ import { dependencies, iso, recordChange, same, type DiffEntry, type FieldError 
 import { getCurrentUser } from "./session.js";
 import { mccmncLookup } from "./translationRules.js";
 import { inTransaction } from "./views.js";
+import { ruleTargetDependencies } from "./ruleTargets.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -821,7 +822,12 @@ export function archiveHlrRule(request: FastifyRequest, reply: FastifyReply) {
     const before = await loadHlrRule(pool, id);
     if (!before) return notFound(reply, "HLR rule", id);
     if (before.archivedAt) return { record: before, change: null };
-    const gate = await archiveGate(reply, (request.body ?? {}) as ArchiveRequest, dependencies([]));
+    // Assigned to a live trunk or enterprise: cannot be deleted (team trial round 3).
+    const gate = await archiveGate(
+      reply,
+      (request.body ?? {}) as ArchiveRequest,
+      await ruleTargetDependencies(pool, "hlr", id, before.usedBy),
+    );
     if (!gate.ok) return gate.reply;
     const r = await setArchived(request, reply, pool, {
       table: "hlr_rules",
@@ -1200,4 +1206,13 @@ export async function applyHlrField(
   if (entityType === "hlr_provider") await applyProviderField(c, id, field, value, userId);
   else if (entityType === "hlr_rule") await applyRuleField(c, id, field, value, userId);
   else if (entityType === "hlr_policy") await applyPolicyField(c, id, field, value, userId);
+}
+
+export function getHlrRuleDependencies(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as Params;
+  return withDb(reply, async (pool) => {
+    const rule = await loadHlrRule(pool, id);
+    if (!rule) return notFound(reply, "HLR rule", id);
+    return ruleTargetDependencies(pool, "hlr", id, rule.usedBy);
+  });
 }

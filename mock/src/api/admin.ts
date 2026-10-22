@@ -861,6 +861,11 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["tps", "TPS", "100"],
     ["connections", "Connections", "4"],
     ["password", "SMPP password (plain text, team trial round 1)", "fake-pass-123"],
+    [
+      "trunks",
+      "Every trunk's connection details, one block each (Notifications on the enterprise)",
+      "FENPHY-MAIN\n  SMPP host:    smpp.bricor.example\n  SMPP port:    2775\n  System ID:    fenphy01",
+    ],
   ],
   trunk_change_info: [
     ["trunk", "Trunk", "FENPHY-MAIN"],

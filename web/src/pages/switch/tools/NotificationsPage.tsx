@@ -111,12 +111,17 @@ function SendRateDialog({ ids, done }: { ids: number[]; done: () => void }) {
   );
 }
 
-function TechInfoDialog({ ids, done }: { ids: number[]; done: () => void }) {
+/** `oneEmail`: all the trunks in one e-mail per enterprise (Notifications on the enterprise, team trial round 3). */
+function TechInfoDialog({ ids, done, oneEmail = false }: { ids: number[]; done: () => void; oneEmail?: boolean }) {
   const send = useSendTechInfo();
   const preview = useNotificationPreview(ids[0]!, "send_tech_info");
   return (
     <Modal
-      title={`Send Tech Info to ${ids.length} trunk${ids.length === 1 ? "" : "s"}`}
+      title={
+        oneEmail
+          ? `Send Tech Info: ${ids.length} trunk${ids.length === 1 ? "" : "s"} in one e-mail`
+          : `Send Tech Info to ${ids.length} trunk${ids.length === 1 ? "" : "s"}`
+      }
       width={620}
       onClose={done}
       footer={
@@ -127,13 +132,16 @@ function TechInfoDialog({ ids, done }: { ids: number[]; done: () => void }) {
             icon="mail"
             disabled={send.isPending}
             onClick={() =>
-              send.mutate(ids, {
-                onSuccess: (r) => {
-                  report(r, "Tech info");
-                  done();
+              send.mutate(
+                { trunkIds: ids, oneEmailPerEnterprise: oneEmail },
+                {
+                  onSuccess: (r) => {
+                    report(r, "Tech info");
+                    done();
+                  },
+                  onError: (e) => toast({ tone: "error", message: problemText(e) }),
                 },
-                onError: (e) => toast({ tone: "error", message: problemText(e) }),
-              })
+              )
             }
           >
             Send
@@ -147,6 +155,9 @@ function TechInfoDialog({ ids, done }: { ids: number[]; done: () => void }) {
             <div className="small">
               <strong>To:</strong>{" "}
               {preview.data.recipients.join(", ") || <span className="tone-error">no contact</span>}
+              {oneEmail && ids.length > 1 && (
+                <span className="muted"> (preview of the first trunk; the e-mail lists all {ids.length})</span>
+              )}
             </div>
             <div className="small">
               <strong>Subject:</strong> {preview.data.subject}
@@ -164,8 +175,9 @@ function TechInfoDialog({ ids, done }: { ids: number[]; done: () => void }) {
   );
 }
 
-const openSendRate = (ids: number[]) => ask<void>((d) => <SendRateDialog ids={ids} done={() => d()} />);
-const openTechInfo = (ids: number[]) => ask<void>((d) => <TechInfoDialog ids={ids} done={() => d()} />);
+export const openSendRate = (ids: number[]) => ask<void>((d) => <SendRateDialog ids={ids} done={() => d()} />);
+export const openTechInfo = (ids: number[], oneEmail = false) =>
+  ask<void>((d) => <TechInfoDialog ids={ids} oneEmail={oneEmail} done={() => d()} />);
 const viewRate = (id: number, t: "excel" | "csv") =>
   void downloadRateSheet(id, t).catch((e) => toast({ tone: "error", message: problemText(e) }));
 

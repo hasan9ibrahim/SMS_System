@@ -272,12 +272,31 @@ async function rateMail(c: Db, t: TrunkInfo) {
   };
 }
 
-async function techMail(c: Db, t: TrunkInfo) {
+/** One trunk's connection details as a text block (the {trunks} placeholder, team trial round 3). */
+const techBlock = (t: TrunkInfo) =>
+  [
+    t.name,
+    `  SMPP host:    ${t.host ?? "—"}`,
+    `  SMPP port:    ${t.port}`,
+    `  System ID:    ${t.username}`,
+    `  Password:     ${t.password || "—"}`,
+    `  Bind type:    ${t.bindType}`,
+    `  Allowed IPs:  ${t.ips.join(", ") || "—"}`,
+    `  TPS:          ${t.tps}`,
+    `  Connections:  ${t.connections}`,
+  ].join("\n");
+
+/**
+ * The Customer Tech Info e-mail for one trunk, or for several trunks of one enterprise in one e-mail (`trunks` =
+ * all of them; the first gives the single-trunk placeholders).
+ */
+async function techMail(c: Db, t: TrunkInfo, trunks: TrunkInfo[] = [t]) {
   const tpl = await templateFor(c, t.enterpriseId, "customer_tech_info");
+  const many = trunks.length > 1;
   const vars = {
     ...(await companyVarsOf(c, t.enterpriseId)),
     enterprise: t.enterprise,
-    trunk: t.name,
+    trunk: many ? trunks.map((x) => x.name).join(", ") : t.name,
     company: t.company,
     host: t.host ?? "—",
     port: String(t.port),
@@ -288,11 +307,20 @@ async function techMail(c: Db, t: TrunkInfo) {
     connections: String(t.connections),
     // The SMPP password goes in the e-mail in plain text (decided 2026-10-18, team trial round 1).
     password: t.password || "—",
+    trunks: trunks.map(techBlock).join("\n\n"),
   };
+  const template = tpl?.body ?? "";
+  const body = fillBody(template, vars);
   return {
     to: await contactEmails(c, t.enterpriseId, ["technical", "commercial"]).then((x) => x.slice(0, 3)),
-    subject: fillText(tpl?.subject ?? "Connection details for {trunk}", vars),
-    body: fillBody(tpl?.body ?? "", vars),
+    subject: fillText(
+      many
+        ? (tpl?.subject ?? "Connection details for {trunk}").replace("{trunk}", "your trunks")
+        : (tpl?.subject ?? "Connection details for {trunk}"),
+      vars,
+    ),
+    // A template without {trunks} still lists every trunk when several go in one e-mail.
+    body: many && !template.includes("{trunks}") ? appendText(body, vars.trunks) : body,
   };
 }
 
@@ -350,25 +378,33 @@ export function sendTechInfoNotifications(request: FastifyRequest, reply: Fastif
     const me = await getCurrentUser();
     let sent = 0;
     const failed: { trunkId: number; trunk: string; reason: string }[] = [];
+    const found: TrunkInfo[] = [];
     for (const id of [...new Set(b.trunkIds)]) {
       const t = await trunkInfo(pool, id);
-      if (!t) {
-        failed.push({ trunkId: id, trunk: `#${id}`, reason: "not found" });
-        continue;
-      }
-      const m = await techMail(pool, t);
+      if (t) found.push(t);
+      else failed.push({ trunkId: id, trunk: `#${id}`, reason: "not found" });
+    }
+    // One e-mail per trunk, or per enterprise with all its trunks (team trial round 3).
+    const byEnterprise = new Map<number, TrunkInfo[]>();
+    for (const t of found) byEnterprise.set(t.enterpriseId, [...(byEnterprise.get(t.enterpriseId) ?? []), t]);
+    const groups = b.oneEmailPerEnterprise ? [...byEnterprise.values()] : found.map((t) => [t]);
+    for (const group of groups) {
+      const t = group[0]!;
+      const m = await techMail(pool, t, group);
       const status = await logEmail(pool, {
         type: "send_tech_info",
         enterpriseId: t.enterpriseId,
-        customerTrunkId: t.id,
+        customerTrunkId: group.length === 1 ? t.id : null,
         to: m.to,
         sender: await companyMailbox(pool, t.enterpriseId, "techInfo"),
         subject: m.subject,
         body: m.body,
         userId: me.id,
       });
-      if (status === "sent") sent++;
-      else failed.push({ trunkId: id, trunk: t.name, reason: "no Technical or Commercial contact" });
+      if (status === "sent") sent += group.length;
+      else
+        for (const x of group)
+          failed.push({ trunkId: x.id, trunk: x.name, reason: "no Technical or Commercial contact" });
     }
     return { sent, failed };
   });

@@ -290,7 +290,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-panel);
@@ -440,7 +440,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 .la-detail .la-row {
   cursor: pointer;
@@ -582,7 +582,7 @@
   color: #1d1d1d;
 }
 .la-total td.num {
-  font-weight: 400;
+  font-weight: 700;
 }
 .la-total td.num.la-strong {
   font-weight: 700;
@@ -662,31 +662,77 @@
   overflow: visible;
 }
 
-/* An expanded row and its sub rows sit in a frame: the grid's grey row line, bolded (team trial round 2). The side
-   edges are always reserved, so framing a group never shifts its columns. */
+/* An expanded row and its sub rows: the grid's grey row line, bolded, above and below the group only (team trial
+   round 3: no side edges). */
 .la-grid {
   --la-frame: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-border));
 }
-.la-grid td:first-child {
-  border-left: 2px solid transparent;
-}
-.la-grid td:last-child {
-  border-right: 2px solid transparent;
-}
 .la-grid tr.la-open > td {
   border-top: 2px solid var(--la-frame);
-}
-.la-grid tr.la-open > td:first-child,
-.la-grid tr.la-framed > td:first-child {
-  border-left-color: var(--la-frame);
-}
-.la-grid tr.la-open > td:last-child,
-.la-grid tr.la-framed > td:last-child {
-  border-right-color: var(--la-frame);
 }
 .la-grid tr.la-group-end > td {
   height: 0;
   padding: 0;
   border-top: 2px solid var(--la-frame);
   border-bottom: 0;
+}
+
+/* The total row (team trial round 3): bold throughout, on a grey fill that differs from the hovered row's. */
+.la-grid .la-total td,
+.la-grid .la-total td.la-warn,
+.la-grid .la-total td.la-bad {
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
+  font-weight: 700;
+}
+/* Columns picker (team trial round 3): grouped checkboxes like the dashboard's panels menu. */
+.la-cols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, auto));
+  gap: 4px 18px;
+  padding: 12px 14px 6px;
+}
+.la-cols fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.la-cols legend {
+  padding: 0 0 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+.la-cols .check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.la-cols-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 10px 10px;
+  border-top: var(--border-width) solid var(--color-border);
+}
+/* The detail panel on the right of the table (team trial round 3). */
+.la-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 10px;
+}
+.la-body > .la-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.la-body > .la-detail {
+  flex: 0 0 min(40%, 620px);
+  min-width: 360px;
+  margin-top: 0;
 }

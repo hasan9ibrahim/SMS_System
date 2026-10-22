@@ -41,7 +41,6 @@ const DAY_MS = 86_400_000;
 const badInput = (reply: FastifyReply, errors: FieldError[]) =>
   sendProblem(reply, 400, "Check the highlighted fields", { errors });
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
-const r2 = (v: number) => Math.round(v * 100) / 100;
 const pct = (a: number, b: number) => (b > 0 ? Math.round(((a - b) / b) * 1000) / 10 : null);
 
 interface TableInfo extends EditTable {
@@ -316,11 +315,11 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
 
       const messages = tr?.messages ?? 0;
       const toPlatform = platformPerEur / (perEur.get(t.currency) ?? 1);
-      const revenueT = tr ? r2(tr.revenuePlatform / toPlatform) : 0;
-      const marginT = tr ? r2((tr.revenuePlatform - tr.costPlatform) / toPlatform) : 0;
+      const revenueT = tr ? r6(tr.revenuePlatform / toPlatform) : 0;
+      const marginT = tr ? r6((tr.revenuePlatform - tr.costPlatform) / toPlatform) : 0;
       let revenueChangeT = 0;
       if (edit === "close") revenueChangeT = -revenueT;
-      else if (edit === "set" && cur !== null) revenueChangeT = r2(messages * (newRate! - cur));
+      else if (edit === "set" && cur !== null) revenueChangeT = r6(messages * (newRate! - cur));
 
       summary.up += +(change === "increase");
       summary.down += +(change === "decrease");
@@ -380,7 +379,7 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       };
     });
     for (const k of ["revenue7d", "margin7d", "revenueChange7d", "marginChange7d"] as const)
-      summary[k] = r2(summary[k]);
+      summary[k] = r6(summary[k]);
     return { rows, summary } satisfies RateBulkPreview;
   });
 }

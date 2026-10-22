@@ -27,6 +27,7 @@ import { dependencies, iso, recordChange, same, type DiffEntry, type FieldError 
 import { getCurrentUser } from "./session.js";
 import { trunkRuleOrder } from "./trunks.js";
 import { inTransaction } from "./views.js";
+import { ruleTargetDependencies } from "./ruleTargets.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -524,7 +525,12 @@ export function archiveTranslationRule(request: FastifyRequest, reply: FastifyRe
     if (!before) return notFound(reply, "Translation rule", id);
     if (before.archivedAt) return { record: before, change: null };
     // Nothing blocks: the rule just stops running on the trunks it touched (shown in the answer).
-    const gate = await archiveGate(reply, (request.body ?? {}) as ArchiveRequest, dependencies([]));
+    // Assigned to a live trunk or enterprise: cannot be deleted (team trial round 3).
+    const gate = await archiveGate(
+      reply,
+      (request.body ?? {}) as ArchiveRequest,
+      await ruleTargetDependencies(pool, "translation", id, before.usedBy),
+    );
     if (!gate.ok) return gate.reply;
     const r = await setArchived(request, reply, pool, {
       table: "translation_rules",
@@ -699,4 +705,13 @@ export function testTrunkRules(kind: TrunkKind) {
       return result ?? sendProblem(reply, 404, `${kind === "customer" ? "Customer" : "Vendor"} trunk ${id} not found`);
     });
   };
+}
+
+export function getTranslationRuleDependencies(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as Params;
+  return withDb(reply, async (pool) => {
+    const rule = await loadTranslationRule(pool, id);
+    if (!rule) return notFound(reply, "Translation rule", id);
+    return ruleTargetDependencies(pool, "translation", id, rule.usedBy);
+  });
 }

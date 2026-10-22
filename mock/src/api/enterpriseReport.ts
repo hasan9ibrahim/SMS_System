@@ -104,11 +104,11 @@ const DERIVED: Record<keyof ReportMetrics, string> = {
   asr: ratio("successful", "attempts", 100, 1),
   dlrCustomer: ratio("delivered_c", "successful", 100, 1),
   dlrVendor: ratio("delivered_v", "successful", 100, 1),
-  revenue: "round(revenue_p, 4)",
-  revenuePlatform: "round(revenue_b, 4)",
-  cost: "round(cost_p, 4)",
-  costPlatform: "round(cost_b, 4)",
-  margin: "round(revenue_b - cost_b, 4)",
+  revenue: "round(revenue_p, 6)",
+  revenuePlatform: "round(revenue_b, 6)",
+  cost: "round(cost_p, 6)",
+  costPlatform: "round(cost_b, 6)",
+  margin: "round(revenue_b - cost_b, 6)",
   marginPct: ratio("revenue_b - cost_b", "revenue_b", 100, 1),
   avgRateCustomer: ratio("revenue_p", "billable_c", 1, 6),
   avgRateVendor: ratio("cost_p", "billable_v", 1, 6),
@@ -121,15 +121,16 @@ const DERIVED: Record<keyof ReportMetrics, string> = {
   hlrTotal: "hlr_cached + hlr_live",
   hlrAccomplished: "hlr_acc",
   hlrPorted: "hlr_ported",
-  hlrCost: "round(hlr_cost_p, 4)",
-  hlrCostPlatform: "round(hlr_cost_b, 4)",
+  hlrCost: "round(hlr_cost_p, 6)",
+  hlrCostPlatform: "round(hlr_cost_b, 6)",
 };
 
 /** The same metrics in JavaScript, for the totals row. */
 export function metricsFrom(b: Base): ReportMetrics {
   const r = (num: number, den: number, scale: number, digits: number) =>
     den === 0 ? null : Math.round((num / den) * scale * 10 ** digits) / 10 ** digits;
-  const m4 = (v: number) => Math.round(v * 1e4) / 1e4;
+  // Money keeps 6 decimals, never rounded further (team trial round 3).
+  const m6 = (v: number) => Math.round(v * 1e6) / 1e6;
   return {
     attempts: b.attempts,
     successful: b.successful,
@@ -139,11 +140,11 @@ export function metricsFrom(b: Base): ReportMetrics {
     asr: r(b.successful, b.attempts, 100, 1),
     dlrCustomer: r(b.delivered_c, b.successful, 100, 1),
     dlrVendor: r(b.delivered_v, b.successful, 100, 1),
-    revenue: m4(b.revenue_p),
-    revenuePlatform: m4(b.revenue_b),
-    cost: m4(b.cost_p),
-    costPlatform: m4(b.cost_b),
-    margin: m4(b.revenue_b - b.cost_b),
+    revenue: m6(b.revenue_p),
+    revenuePlatform: m6(b.revenue_b),
+    cost: m6(b.cost_p),
+    costPlatform: m6(b.cost_b),
+    margin: m6(b.revenue_b - b.cost_b),
     marginPct: r(b.revenue_b - b.cost_b, b.revenue_b, 100, 1),
     avgRateCustomer: r(b.revenue_p, b.billable_c, 1, 6),
     avgRateVendor: r(b.cost_p, b.billable_v, 1, 6),
@@ -156,8 +157,8 @@ export function metricsFrom(b: Base): ReportMetrics {
     hlrTotal: b.hlr_cached + b.hlr_live,
     hlrAccomplished: b.hlr_acc,
     hlrPorted: b.hlr_ported,
-    hlrCost: m4(b.hlr_cost_p),
-    hlrCostPlatform: m4(b.hlr_cost_b),
+    hlrCost: m6(b.hlr_cost_p),
+    hlrCostPlatform: m6(b.hlr_cost_b),
   };
 }
 

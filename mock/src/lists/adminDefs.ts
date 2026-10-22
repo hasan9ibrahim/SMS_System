@@ -120,6 +120,7 @@ export const userList: ListDef<UserRow> = {
     archived: { sql: "(u.deleted_at IS NOT NULL)" },
   },
   search: ["username", "displayName", "email"],
+  searchPrefix: true,
   idSql: "u.id",
   select: USER_SELECT,
   mapRow: mapUser,

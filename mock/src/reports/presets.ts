@@ -115,7 +115,7 @@ export const PRESETS: Preset[] = [
   {
     key: "bilateral",
     name: "Bilateral (§10 /bilateral)",
-    description: "Traffic each way with reciprocal partners: add a filter on the partner as customer or vendor.",
+    description: "Traffic each way with bilateral partners: add a filter on the partner as customer or vendor.",
     department: null,
     settings: {
       ...base,

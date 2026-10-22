@@ -275,6 +275,43 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     await ok("archiveRouteRule", call("POST", `/route-rules/${draft.id}/archive`, {}));
   });
 
+  test("New rule draft: × discards it with its history; a rule once turned on cannot be discarded", async () => {
+    const draft = (
+      await ok(
+        "createRouteRule",
+        call("POST", "/route-rules", { name: `Discard ${run}`, priority: 90, status: "inactive", routeType: "block" }),
+        201,
+      )
+    ).record;
+    const edited = await call("PUT", `/route-rules/${draft.id}`, {
+      name: `Discard ${run} b`,
+      priority: 90,
+      status: "inactive",
+      routeType: "block",
+    });
+    assert.equal(edited.statusCode, 200);
+    const gone = await call("POST", `/route-rules/${draft.id}/discard`, {});
+    assert.equal(gone.statusCode, 204);
+    assert.equal((await call("GET", `/route-rules/${draft.id}`)).statusCode, 404);
+    const { rows } = await db().query(
+      "SELECT count(*)::int AS n FROM changes WHERE entity_type = 'route_rule' AND $1 = ANY(entity_ids)",
+      [draft.id],
+    );
+    assert.equal(rows[0].n, 0, "no history left");
+    // Turned on once: Delete (archive) only.
+    const live = (
+      await ok(
+        "createRouteRule",
+        call("POST", "/route-rules", { name: `Kept ${run}`, priority: 90, status: "active", routeType: "block" }),
+        201,
+      )
+    ).record;
+    const refused = await call("POST", `/route-rules/${live.id}/discard`, {});
+    assert.equal(refused.statusCode, 409);
+    check("discardRouteRule", refused);
+    await ok("archiveRouteRule", call("POST", `/route-rules/${live.id}/archive`, {}));
+  });
+
   test("DLR target: the rule's own, else its destinations' lowest; block rules have none", async () => {
     const f = await fixtures();
     // Two networks of one country, the country with a target and one network with its own.

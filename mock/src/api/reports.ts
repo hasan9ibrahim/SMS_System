@@ -245,7 +245,7 @@ export function salesInsights(request: FastifyRequest, reply: FastifyReply) {
       ]);
       const ent = new Map(ents.rows.map((r) => [Number(r.id), String(r.name)]));
       const user = new Map(users.rows.map((r) => [Number(r.id), String(r.name)]));
-      const r2 = (v: number) => Math.round(v * 100) / 100;
+      const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
       const movers: SalesMover[] = rows.map((r) => {
         const revenue = Number(r.r);
         const prev = Number(r.pr);
@@ -255,9 +255,10 @@ export function salesInsights(request: FastifyRequest, reply: FastifyReply) {
           accountManager: user.get(Number(r.am)) ?? null,
           attempts: Number(r.a),
           previousAttempts: Number(r.pa),
-          revenue: r2(revenue),
-          previousRevenue: r2(prev),
-          margin: r2(Number(r.m)),
+          // Money to 6 decimals (team trial round 3).
+          revenue: r6(revenue),
+          previousRevenue: r6(prev),
+          margin: r6(Number(r.m)),
           changePct: prev > 0 ? Math.round(((revenue - prev) / prev) * 1000) / 10 : null,
         };
       });

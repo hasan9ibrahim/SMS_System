@@ -56,6 +56,8 @@ const PATHS = {
   chevronDown: "M6 9l6 6 6-6",
   chevronRight: "M9 6l6 6-6 6",
   arrowLeft: "M19 12H5M11 6l-6 6 6 6",
+  arrowUpRight: "M7 17L17 7M9 7h8v8",
+  arrowDownLeft: "M17 7L7 17M15 17H7V9",
   undo: "M9 14L4 9l5-5M4 9h11a5 5 0 010 10h-3",
   filter: "M3 5h18l-7 8v6l-4 2v-8z",
   star: "M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z",

@@ -604,3 +604,67 @@ button.chip.accent {
   flex: 0 0 auto;
   width: auto;
 }
+/* Side by side, team trial round 3: one search and Include inactive trunks for both sides; each side's filters in its
+   header; no filter row under the column headers. */
+.sl-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sl-common {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.sl-common .sl-search {
+  flex: 1 1 auto;
+  height: 36px;
+}
+.sl-side {
+  gap: 0;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.sl-head {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-panel));
+}
+.sl-head-vendor {
+  background: color-mix(in srgb, var(--color-warning) 7%, var(--color-panel));
+}
+.sl-head-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--color-accent);
+}
+.sl-head-vendor .sl-head-icon {
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  color: var(--color-warning);
+}
+.sl-head-title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.sl-head h2 {
+  font-size: 15px;
+}
+.sl-side .sl-table {
+  border: 0;
+}

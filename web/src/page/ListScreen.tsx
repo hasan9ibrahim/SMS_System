@@ -18,16 +18,9 @@ import type { ListId, ListQuery } from "@sms/contract";
 import { useListFields, type ListPage } from "../api/hooks";
 import { DataGrid, type ColumnOverride, type GridMeta } from "../grid/DataGrid";
 import { FilterBuilder } from "../grid/FilterBuilder";
+import { PillSearch } from "../grid/PillSearch";
 import { SaveViewButton, ViewsMenu } from "../grid/ViewsMenu";
-import {
-  conditionLabel,
-  countConditions,
-  decodeState,
-  emptyState,
-  encodeState,
-  isFiltered,
-  type GridState,
-} from "../grid/filterModel";
+import { countConditions, decodeState, emptyState, encodeState, isFiltered, type GridState } from "../grid/filterModel";
 import { HistoryDrawer, useUndoLast, useUndoShortcut, type HistoryScope } from "../history/undo";
 import type { PageDef } from "../nav/registry";
 import { usePageStatus, useTab, useTabNavigate } from "../shell/tabContext";
@@ -187,12 +180,12 @@ export function ShowDeleted({ state, onChange }: { state: GridState; onChange: (
 }
 
 /**
- * Height of the detail panel, dragged with the bar above it and remembered per list in this browser
- * (team trial round 1: "the bottom window can be stretched or pulled"). Null = the default share.
+ * Width of the detail panel on the right of the grid (team trial round 3: it sits beside the grid and narrows it),
+ * dragged with the bar on its left edge and remembered per list in this browser. Null = the default share.
  */
-function useDetailHeight(list: string): [number | null, (h: number | null) => void] {
-  const key = `sms.detailHeight.${list}`;
-  const [h, setH] = useState<number | null>(() => {
+function useDetailWidth(list: string): [number | null, (w: number | null) => void] {
+  const key = `sms.detailWidth.${list}`;
+  const [w, setW] = useState<number | null>(() => {
     try {
       const v = Number(localStorage.getItem(key));
       return v > 0 ? v : null;
@@ -201,60 +194,60 @@ function useDetailHeight(list: string): [number | null, (h: number | null) => vo
     }
   });
   const set = (v: number | null) => {
-    setH(v);
+    setW(v);
     try {
       if (v === null) localStorage.removeItem(key);
       else localStorage.setItem(key, String(Math.round(v)));
     } catch {
-      // Private mode: the height lasts for this page only.
+      // Private mode: the width lasts for this page only.
     }
   };
-  return [h, set];
+  return [w, set];
 }
 
-const DETAIL_MIN = 140;
+const DETAIL_MIN = 320;
 
-/** The drag bar between the grid and the detail panel; double-click switches between tall and default. */
+/** The drag bar between the grid and the detail panel; double-click switches between wide and default. */
 function DetailSplitter({
-  height,
+  width,
   onChange,
   container,
 }: {
-  height: number | null;
-  onChange: (h: number | null) => void;
+  width: number | null;
+  onChange: (w: number | null) => void;
   container: RefObject<HTMLDivElement | null>;
 }) {
-  const max = () => Math.max(DETAIL_MIN, (container.current?.clientHeight ?? 600) - 120);
+  const max = () => Math.max(DETAIL_MIN, (container.current?.clientWidth ?? 1200) - 360);
   const start = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const panel = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null;
-    const startY = e.clientY;
-    const startH = panel?.offsetHeight ?? height ?? 260;
+    const startX = e.clientX;
+    const startW = panel?.offsetWidth ?? width ?? 480;
     const move = (ev: globalThis.PointerEvent) =>
-      onChange(Math.min(max(), Math.max(DETAIL_MIN, startH + startY - ev.clientY)));
+      onChange(Math.min(max(), Math.max(DETAIL_MIN, startW + startX - ev.clientX)));
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      document.body.classList.remove("resizing-rows");
+      document.body.classList.remove("resizing-split");
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-    document.body.classList.add("resizing-rows");
+    document.body.classList.add("resizing-split");
   };
   return (
     <div
       className="detail-splitter"
       role="separator"
-      aria-orientation="horizontal"
-      aria-label="Resize the details (double-click: tall or default)"
-      title="Drag to resize · double-click: tall or default"
+      aria-orientation="vertical"
+      aria-label="Resize the details (double-click: wide or default)"
+      title="Drag to resize · double-click: wide or default"
       tabIndex={0}
       onPointerDown={start}
-      onDoubleClick={() => onChange(height !== null && height > max() * 0.6 ? null : max())}
+      onDoubleClick={() => onChange(width !== null && width > max() * 0.6 ? null : max())}
       onKeyDown={(e) => {
-        const cur = height ?? (e.currentTarget.nextElementSibling as HTMLElement | null)?.offsetHeight ?? 260;
-        if (e.key === "ArrowUp") onChange(Math.min(max(), cur + 40));
-        if (e.key === "ArrowDown") onChange(Math.max(DETAIL_MIN, cur - 40));
+        const cur = width ?? (e.currentTarget.nextElementSibling as HTMLElement | null)?.offsetWidth ?? 480;
+        if (e.key === "ArrowLeft") onChange(Math.min(max(), cur + 40));
+        if (e.key === "ArrowRight") onChange(Math.max(DETAIL_MIN, cur - 40));
       }}
     />
   );
@@ -265,41 +258,44 @@ function DetailPanel({
   onClose,
   section,
   setSection,
-  height,
+  width,
 }: {
   content: DetailContent;
   onClose: () => void;
   section: string | null;
   setSection: (key: string) => void;
-  height: number | null;
+  width: number | null;
 }) {
   const current = content.sections.find((s) => s.key === section) ?? content.sections[0];
+  // On the right (team trial round 3): title, the sections as tabs, the section, then the aside facts.
   return (
-    <section className="detail" aria-label="Details" style={height ? { flex: `0 0 ${height}px` } : undefined}>
-      <nav className="detail-nav">
-        {content.sections.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            className={s.key === current?.key ? "on" : ""}
-            onClick={() => setSection(s.key)}
-          >
-            {s.label}
-          </button>
-        ))}
-      </nav>
-      <div className="detail-main">
-        <div className="detail-title">
-          {content.title}
-          <span className="fb-spacer" />
-          {current?.actions}
-          <button type="button" className="icon-btn" aria-label="Close details" onClick={onClose}>
-            <Icon name="x" />
-          </button>
-        </div>
-        {current?.content}
+    <section className="detail" aria-label="Details" style={width ? { flex: `0 0 ${width}px` } : undefined}>
+      <div className="detail-title">
+        {content.title}
+        <span className="fb-spacer" />
+        <button type="button" className="icon-btn" aria-label="Close details" onClick={onClose}>
+          <Icon name="x" />
+        </button>
       </div>
-      {content.aside && <aside className="detail-aside">{content.aside}</aside>}
+      {content.sections.length > 1 && (
+        <nav className="detail-nav">
+          {content.sections.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              className={s.key === current?.key ? "on" : ""}
+              onClick={() => setSection(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+      )}
+      <div className="detail-main">
+        {current?.actions && <div className="detail-actions-row">{current.actions}</div>}
+        {current?.content}
+        {content.aside && <aside className="detail-aside">{content.aside}</aside>}
+      </div>
     </section>
   );
 }
@@ -440,7 +436,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     noSelection,
   } = props;
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [detailHeight, setDetailHeight] = useDetailHeight(list);
+  const [detailWidth, setDetailWidth] = useDetailWidth(list);
   const trailing = rowActions
     ? {
         header: trailingProp?.header ?? "",
@@ -509,12 +505,22 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   const filterKey = JSON.stringify([state.columns, state.builder, state.search]);
   useEffect(() => setSelected(new Set()), [filterKey]);
   const onActive = useCallback((row: Row | null) => setActiveRow(row), []);
-  const removeColumn = (field: string) => {
-    const next = { ...state.columns };
-    delete next[field];
-    setState({ ...state, columns: next });
-  };
   const builderCount = countConditions(state.builder);
+
+  // Quick search with field pills (team trial round 3): replaces Add filter and the filter chips.
+  const pills = (
+    <PillSearch
+      fields={fields.data?.fields}
+      visible={state.visible}
+      columns={state.columns}
+      onColumns={(columns) => setState({ ...state, columns })}
+      search={state.search}
+      onSearch={(search) => setState({ ...state, search })}
+      freeText={!noQuickSearch}
+      exclude={toolbarFields}
+      onAdvanced={() => setBuilderOpen(true)}
+    />
+  );
 
   if (fields.isError) {
     return (
@@ -609,40 +615,10 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
       {/* Filters in one card (design refresh): search first, the page's own filters, chips, Add filter. */}
       <div className="filter-card">
         <div className="filter-row">
-          {!noQuickSearch && (
-            <div className="quick-search">
-              <Icon name="search" size={13} />
-              <input
-                key={state.search === "" ? "empty" : "set"}
-                defaultValue={state.search}
-                placeholder="Quick search…"
-                aria-label="Quick search"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") setState({ ...state, search: (e.target as HTMLInputElement).value });
-                  if (e.key === "Escape") {
-                    (e.target as HTMLInputElement).value = "";
-                    setState({ ...state, search: "" });
-                  }
-                }}
-                onBlur={(e) => e.target.value !== state.search && setState({ ...state, search: e.target.value })}
-              />
-            </div>
-          )}
+          {/* Quick search with field pills first; a page with its own search box shows it before the pills. */}
+          {!noQuickSearch && pills}
           {toolbar?.(state, setState)}
-          {Object.values(state.columns)
-            .filter((c) => c.field !== "archived" && !toolbarFields.includes(c.field))
-            .map((c) => (
-              <span key={c.field} className="chip accent">
-                {conditionLabel(byName.get(c.field), c)}
-                <button
-                  type="button"
-                  aria-label={`Remove filter ${byName.get(c.field)?.label ?? c.field}`}
-                  onClick={() => removeColumn(c.field)}
-                >
-                  <Icon name="x" size={11} />
-                </button>
-              </span>
-            ))}
+          {noQuickSearch && pills}
           {builderCount > 0 && (
             <span className="chip accent">
               <button type="button" className="chip-text" onClick={() => setBuilderOpen(true)}>
@@ -659,9 +635,6 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             </span>
           )}
           {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
-          <button type="button" className="btn btn-sm btn-add-filter" onClick={() => setBuilderOpen(true)}>
-            <Icon name={builderCount ? "filter" : "plus"} size={13} /> {builderCount ? "Edit filter" : "Add filter"}
-          </button>
           {isFiltered(state) && (
             <button
               type="button"
@@ -680,68 +653,60 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               Clear all
             </button>
           )}
+          {/* Views, selection, Bulk edit and Columns at the end of the filter row (team trial round 3). */}
+          <span className="fb-spacer" />
+          {/* Saved views sit with Columns (compact layout, team trial round 2). */}
+          {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
+          <ViewsMenu list={list} state={state} onApply={setState} />
+          {selected.size > 0 && (
+            <>
+              <span className="muted">
+                {selection?.summary ? selection.summary(rows, selected) : `${selected.size} selected`}
+              </span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
+                Clear selection
+              </button>
+            </>
+          )}
+          {noSelection ? null : selection?.bulk ? (
+            <>
+              <button
+                ref={bulkRef}
+                type="button"
+                className="btn btn-default btn-sm"
+                disabled={selected.size === 0}
+                aria-haspopup="menu"
+                onClick={() => setBulkOpen((v) => !v)}
+              >
+                Bulk edit <Icon name="chevronDown" size={12} />
+              </button>
+              <Popover anchor={bulkRef} open={bulkOpen} onClose={() => setBulkOpen(false)} align="end">
+                <Menu
+                  items={selection.bulk(
+                    [...selected],
+                    () => setSelected(new Set()),
+                    rows.filter((r) => selected.has(r.id)),
+                  )}
+                  onClose={() => setBulkOpen(false)}
+                />
+              </Popover>
+            </>
+          ) : (
+            <Button
+              small
+              icon="layers"
+              disabled={selected.size === 0}
+              title="Bulk edit opens the bulk workspace (§13.11, build step 5)"
+            >
+              Bulk edit
+            </Button>
+          )}
+          <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
         </div>
       </div>
       <div className={`list-body${detail && activeRow ? " with-detail" : ""}`} ref={bodyRef}>
-        {/* The grid in a Records card (design refresh): count, selection, Bulk edit and Columns on top. */}
+        {/* The grid in a Records card (design refresh); the count in the footer. */}
         <section className="records-card">
-          <div className="records-head">
-            <h2>Records</h2>
-            {total !== null && (
-              <span className="count-badge">
-                {total.toLocaleString("en-US")}
-                {meta.isEstimate ? "+" : ""}
-              </span>
-            )}
-            <span className="fb-spacer" />
-            {/* Saved views sit with Columns (compact layout, team trial round 2). */}
-            {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
-            <ViewsMenu list={list} state={state} onApply={setState} />
-            {selected.size > 0 && (
-              <>
-                <span className="muted">
-                  {selection?.summary ? selection.summary(rows, selected) : `${selected.size} selected`}
-                </span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
-                  Clear selection
-                </button>
-              </>
-            )}
-            {noSelection ? null : selection?.bulk ? (
-              <>
-                <button
-                  ref={bulkRef}
-                  type="button"
-                  className="btn btn-default btn-sm"
-                  disabled={selected.size === 0}
-                  aria-haspopup="menu"
-                  onClick={() => setBulkOpen((v) => !v)}
-                >
-                  Bulk edit <Icon name="chevronDown" size={12} />
-                </button>
-                <Popover anchor={bulkRef} open={bulkOpen} onClose={() => setBulkOpen(false)} align="end">
-                  <Menu
-                    items={selection.bulk(
-                      [...selected],
-                      () => setSelected(new Set()),
-                      rows.filter((r) => selected.has(r.id)),
-                    )}
-                    onClose={() => setBulkOpen(false)}
-                  />
-                </Popover>
-              </>
-            ) : (
-              <Button
-                small
-                icon="layers"
-                disabled={selected.size === 0}
-                title="Bulk edit opens the bulk workspace (§13.11, build step 5)"
-              >
-                Bulk edit
-              </Button>
-            )}
-            <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
-          </div>
           {fields.data ? (
             <DataGrid<Row>
               list={list}
@@ -776,7 +741,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             {total !== null && meta.loaded < total && <span>&nbsp;· scroll for more</span>}
           </div>
         </section>
-        {detail && activeRow && <DetailSplitter height={detailHeight} onChange={setDetailHeight} container={bodyRef} />}
+        {detail && activeRow && <DetailSplitter width={detailWidth} onChange={setDetailWidth} container={bodyRef} />}
         {detail && activeRow && (
           <DetailPanel
             key={activeRow.id}
@@ -784,7 +749,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             section={section}
             setSection={setSection}
             onClose={() => setActiveRow(null)}
-            height={detailHeight}
+            width={detailWidth}
           />
         )}
       </div>

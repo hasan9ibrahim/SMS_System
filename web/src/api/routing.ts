@@ -37,6 +37,17 @@ export function useSaveRouteRule() {
   });
 }
 
+/** Removes a New rule draft that was never saved (team trial round 3). */
+export function useDiscardRouteRule() {
+  const refresh = useRefreshRecords();
+  return useMutation({
+    mutationFn: async (id: number): Promise<void> => {
+      await unwrap(api.POST("/route-rules/{id}/discard", { params: { path: { id } } }));
+    },
+    onSuccess: () => void refresh(),
+  });
+}
+
 export function useCloneRouteRule() {
   const refresh = useRefreshRecords();
   return useMutation({

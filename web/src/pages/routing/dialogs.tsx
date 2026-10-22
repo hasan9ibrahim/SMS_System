@@ -55,6 +55,8 @@ export function RuleGeneralForm({
   submitLabel,
   hint,
   hideStatus = false,
+  draft = false,
+  bindSubmit,
 }: {
   rule: RouteRuleDetail | null;
   onSaved: (id: number) => void;
@@ -63,6 +65,12 @@ export function RuleGeneralForm({
   hint?: string;
   /** New rule has Rule on in its footer. */
   hideStatus?: boolean;
+  /**
+   * New rule (team trial round 3): `rule` is the draft just created; the name starts empty, the route type can still
+   * be picked, and there is no button of its own: the window's Save calls the function given to `bindSubmit`.
+   */
+  draft?: boolean;
+  bindSubmit?: (submit: (patch?: Partial<RouteRuleInput>) => Promise<string | null>) => void;
 }) {
   const ref = useReference();
   const save = useSaveRouteRule();
@@ -71,7 +79,7 @@ export function RuleGeneralForm({
   const [g, setG] = useState<General>(
     rule
       ? {
-          name: rule.name,
+          name: draft ? "" : rule.name,
           priority: rule.priority,
           status: rule.status,
           routeType: rule.routeType,
@@ -97,24 +105,26 @@ export function RuleGeneralForm({
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<General>) => setG((x) => ({ ...x, ...patch }));
   const groups = ref.data?.routeRuleGroups ?? [];
-  const submit = () => {
-    if (!g.name.trim()) return setError("Enter the rule name.");
-    if (g.continueRouting === "next" && !g.nextGroupId) return setError("Choose the next group for NEXT.");
+  // Saves the fields (plus `patch`, e.g. Rule on from New rule's footer); resolves with an error text or null.
+  const submitAsync = async (patch: Partial<RouteRuleInput> = {}): Promise<string | null> => {
+    const fail = (m: string) => (setError(m), m);
+    if (!g.name.trim()) return fail("Enter the rule name.");
+    if (g.continueRouting === "next" && !g.nextGroupId) return fail("Choose the next group for NEXT.");
     const input: RouteRuleInput = rule
-      ? toInput(rule, { ...g, name: g.name.trim() })
-      : ({ ...g, name: g.name.trim() } as RouteRuleInput);
-    save.mutate(
-      { id: rule?.id ?? null, input },
-      {
-        onSuccess: (r) => {
-          if (r.change) notifySaved(r.change, rule ? "Saved" : `Added #${r.record.id} ${r.record.name}`);
-          setError(null);
-          onSaved(r.record.id);
-        },
-        onError: (e) => setError(problemText(e)),
-      },
-    );
+      ? toInput(rule, { ...g, name: g.name.trim(), ...patch })
+      : ({ ...g, name: g.name.trim(), ...patch } as RouteRuleInput);
+    try {
+      const r = await save.mutateAsync({ id: rule?.id ?? null, input });
+      if (r.change && !draft) notifySaved(r.change, rule ? "Saved" : `Added #${r.record.id} ${r.record.name}`);
+      setError(null);
+      onSaved(r.record.id);
+      return null;
+    } catch (e) {
+      return fail(problemText(e));
+    }
   };
+  const submit = () => void submitAsync();
+  bindSubmit?.(submitAsync);
   return (
     <div className="rule-general">
       <div className="fgrid cols-3">
@@ -153,7 +163,7 @@ export function RuleGeneralForm({
           </small>
         </label>
       </div>
-      {!rule && (
+      {(!rule || draft) && (
         <div className="field">
           <span>Route type</span>
           <div className="segmented" role="radiogroup">
@@ -164,7 +174,14 @@ export function RuleGeneralForm({
                 role="radio"
                 aria-checked={g.routeType === t.value}
                 className={g.routeType === t.value ? "on" : ""}
-                onClick={() => set({ routeType: t.value })}
+                onClick={() => {
+                  set({ routeType: t.value });
+                  // On a draft the type applies at once, so Configuration shows vendors or not (team trial round 3).
+                  if (draft && rule && rule.routeType !== t.value)
+                    void save
+                      .mutateAsync({ id: rule.id, input: toInput(rule, { routeType: t.value }) })
+                      .catch((e) => setError(problemText(e)));
+                }}
               >
                 <span className={`dot dot-${t.tone}`} /> {t.label}
               </button>
@@ -254,12 +271,14 @@ export function RuleGeneralForm({
         hint && <p className="muted small">{hint}</p>
       )}
       {error && <p className="error-text">{error}</p>}
-      <div className="form-actions">
-        {onCancel && <Button onClick={onCancel}>Cancel</Button>}
-        <Button variant="primary" onClick={submit} disabled={save.isPending}>
-          {submitLabel ?? (rule ? "Save" : "Add rule")}
-        </Button>
-      </div>
+      {!draft && (
+        <div className="form-actions">
+          {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+          <Button variant="primary" onClick={submit} disabled={save.isPending}>
+            {submitLabel ?? (rule ? "Save" : "Add rule")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

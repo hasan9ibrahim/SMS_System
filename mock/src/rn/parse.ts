@@ -129,20 +129,35 @@ function utc(y: number, mo: number, d: number, h: number, mi: number): string | 
   return dt.toISOString();
 }
 
-/** How a partner writes "all networks" of a country (team trial round 2); see AllNetworksCode in the contract. */
-export type AllNetworks = "mcc" | "mcc0" | "mcc00" | "mcc000" | "mccStar";
+/**
+ * How a partner writes "all networks" of a country (team trial round 2); see AllNetworksCode in the contract. Team
+ * trial round 3: also a custom form, "MCC" plus a suffix ("MCC99" = 26299).
+ */
+export type AllNetworks = "mcc" | "mcc0" | "mcc00" | "mcc000" | "mccStar" | `MCC${string}`;
+
+const customSuffix = (conv: AllNetworks | null | undefined) => (conv && conv.startsWith("MCC") ? conv.slice(3) : null);
 
 /** A sheet code in the partner's "all networks" form → the country code (MCC); other codes unchanged. */
 export function toCountryCode(code: string, conv: AllNetworks | null | undefined): string {
   if (conv === "mcc0" && /^\d{3}0$/.test(code)) return code.slice(0, 3);
   if (conv === "mcc00" && /^\d{3}00$/.test(code)) return code.slice(0, 3);
   if (conv === "mcc000" && /^\d{3}000$/.test(code)) return code.slice(0, 3);
+  const suffix = customSuffix(conv);
+  if (
+    suffix &&
+    code.length === 3 + suffix.length &&
+    /^\d{3}/.test(code) &&
+    code.slice(3).toLowerCase() === suffix.toLowerCase()
+  )
+    return code.slice(0, 3);
   return code;
 }
 
 /** The country code (MCC) written the partner's way; network codes unchanged. */
 export function fromCountryCode(code: string, conv: AllNetworks | null | undefined): string {
   if (code.length !== 3) return code;
+  const suffix = customSuffix(conv);
+  if (suffix) return `${code}${suffix}`;
   return conv === "mcc0"
     ? `${code}0`
     : conv === "mcc00"
