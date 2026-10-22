@@ -83,9 +83,13 @@ export function newKeys(prev: Set<string>, now: string[]): Set<string> {
 }
 
 /** Analytics view (§13.4) for a client, vendor, trunk or destination, opened in a new tab. */
-export function analyticsPath(target: PartyRef | { mccmnc: string }): string {
+/** What the Dashboard opens in Live analytics: a partner, a network or a whole country (team trial round 2). */
+export type AnalyticsTarget = PartyRef | { mccmnc: string } | { country: string };
+
+export function analyticsPath(target: AnalyticsTarget): string {
   // Live analytics (§13.4) takes Report By and a search (name, parent or code).
   if ("mccmnc" in target) return `/live/analytics?by=destination&q=${encodeURIComponent(target.mccmnc)}`;
+  if ("country" in target) return `/live/analytics?by=country&q=${encodeURIComponent(target.country)}`;
   const by = {
     customer_enterprise: "customer",
     vendor_enterprise: "vendor",

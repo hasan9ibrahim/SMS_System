@@ -382,8 +382,11 @@ function Level({
   onDetail,
   selected,
   sort,
+  framed = false,
 }: {
   settings: Settings;
+  /** Inside an expanded row: its rows carry the frame around the expanded group (team trial round 2). */
+  framed?: boolean;
   /** This breakdown's level; `used` holds it and the levels above, which the rows' "+" leave out. */
   dim: ReportDimension;
   used: ReportDimension[];
@@ -410,6 +413,7 @@ function Level({
     placeholderData: keepPreviousData,
   });
   const indent = { paddingLeft: 8 + (depth + 1) * 18 };
+  const fr = framed ? " la-framed" : "";
   const setRow = (key: string, d: ReportDimension | null) =>
     setOpen((m) => {
       const n = new Map(m);
@@ -420,7 +424,7 @@ function Level({
   // Every breakdown under a row searches its own rows, like the old platform (team trial round 1).
   const searchRow =
     search === undefined ? (
-      <tr className="la-search-row">
+      <tr className={`la-search-row${fr}`}>
         <td className="la-name" style={indent}>
           <span className="la-toggle-gap" />
           <input
@@ -438,7 +442,7 @@ function Level({
     return (
       <>
         {searchRow}
-        <tr>
+        <tr className={fr.trim() || undefined}>
           <td colSpan={COLUMNS.length + 2} className="tone-error" style={indent}>
             {problemText(q.error)}
           </td>
@@ -449,7 +453,7 @@ function Level({
     return (
       <>
         {searchRow}
-        <tr>
+        <tr className={fr.trim() || undefined}>
           <td colSpan={COLUMNS.length + 2} className="muted" style={indent}>
             Loading {levelLabel(dim).toLowerCase()}…
           </td>
@@ -466,7 +470,7 @@ function Level({
         return (
           <Fragment key={r.key}>
             <tr
-              className={`la-row depth-${depth}${selected === rowChain.map((c) => c.row.key).join("/") ? " la-selected" : ""}`}
+              className={`la-row depth-${depth}${fr}${next ? " la-open" : ""}${selected === rowChain.map((c) => c.row.key).join("/") ? " la-selected" : ""}`}
               title="Double-click: this row's traffic over time below"
               onDoubleClick={() =>
                 onDetail({
@@ -537,13 +541,21 @@ function Level({
                 onDetail={onDetail}
                 selected={selected}
                 sort={sort}
+                framed
               />
+            )}
+            {/* The bottom edge of the frame around an expanded row and its sub rows. */}
+            {next && (
+              <tr className={`la-group-end${fr}`} aria-hidden="true">
+                <td colSpan={COLUMNS.length + 2} />
+              </tr>
             )}
           </Fragment>
         );
       })}
       {q.data.nextCursor && (
         <MoreOnScroll
+          className={fr.trim() || undefined}
           busy={q.isFetching}
           style={indent}
           text={`Loading more · ${q.data.rows.length.toLocaleString("en-US")} of ${q.data.total.toLocaleString("en-US")}`}
@@ -551,7 +563,7 @@ function Level({
         />
       )}
       {q.data.rows.length === 0 && (
-        <tr>
+        <tr className={fr.trim() || undefined}>
           <td colSpan={COLUMNS.length + 2} className="muted" style={indent}>
             {typed ? "Nothing matches." : "No traffic."}
           </td>
@@ -876,11 +888,13 @@ function MoreOnScroll({
   text,
   onMore,
   style,
+  className,
 }: {
   busy: boolean;
   text: string;
   onMore: () => void;
   style?: React.CSSProperties;
+  className?: string | undefined;
 }) {
   const ref = useRef<HTMLTableRowElement>(null);
   const more = useRef(onMore);
@@ -895,7 +909,7 @@ function MoreOnScroll({
     return () => io.disconnect();
   }, [busy]);
   return (
-    <tr ref={ref}>
+    <tr ref={ref} className={className}>
       <td colSpan={COLUMNS.length + 2} className="muted small" style={style}>
         {text}
       </td>

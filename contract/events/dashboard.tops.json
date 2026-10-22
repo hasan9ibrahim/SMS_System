@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "dashboard.tops.json",
   "title": "DashboardTopsEvent",
-  "description": "Topic live:dashboard, event \"tops\". Daily top clients, top vendors (§13.3 item 5) and top destinations (item 6) for today (the day in the platform time zone, `ReferenceData.platformTimezone`), pushed every 5 s. Money is in the platform currency.",
+  "description": "Topic live:dashboard, event \"tops\". Daily top clients, top vendors (\u00a713.3 item 5) and top destinations by country, all networks together (item 6, team trial round 2) for today (the day in the platform time zone, `ReferenceData.platformTimezone`), pushed every 5 s. Money is in the platform currency.",
   "type": "object",
   "required": [
     "at",
@@ -90,10 +90,11 @@
     "TopDestinationRow": {
       "title": "TopDestinationRow",
       "type": "object",
+      "description": "A destination country today, all its networks together (team trial round 2).",
       "required": [
-        "mccmnc",
+        "iso",
         "country",
-        "network",
+        "networks",
         "attempts",
         "revenue",
         "margin",
@@ -102,15 +103,18 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "mccmnc": {
+        "iso": {
           "type": "string",
-          "pattern": "^[0-9]{3,6}$"
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2 code; filters reports on `country`."
         },
         "country": {
           "type": "string"
         },
-        "network": {
-          "type": "string"
+        "networks": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Networks of the country with traffic today."
         },
         "attempts": {
           "type": "integer",

@@ -62,7 +62,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "Filter bar",
             items: [
-              "**Filters:** shows each active filter as a chip; click the x on a chip to remove it.",
+              "**Filter card** — shows each active filter as a chip; click the x on a chip to remove it.",
               "**Add filter** / **Edit filter** opens the filter builder for conditions on several fields joined with AND or OR. See [[filter-builder]].",
               "**Quick search…** searches the main text fields. Press **Enter** to apply, **Esc** to clear.",
               "**Clear all** removes every filter and the search.",

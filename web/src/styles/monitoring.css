@@ -660,3 +660,29 @@
 .popover:has(.la-submenu-list) {
   overflow: visible;
 }
+
+/* An expanded row and its sub rows sit in a bold frame (team trial round 2). The side edges are always reserved,
+   so framing a group never shifts its columns. */
+.la-grid td:first-child {
+  border-left: 2px solid transparent;
+}
+.la-grid td:last-child {
+  border-right: 2px solid transparent;
+}
+.la-grid tr.la-open > td {
+  border-top: 2px solid var(--color-accent);
+}
+.la-grid tr.la-open > td:first-child,
+.la-grid tr.la-framed > td:first-child {
+  border-left-color: var(--color-accent);
+}
+.la-grid tr.la-open > td:last-child,
+.la-grid tr.la-framed > td:last-child {
+  border-right-color: var(--color-accent);
+}
+.la-grid tr.la-group-end > td {
+  height: 0;
+  padding: 0;
+  border-top: 2px solid var(--color-accent);
+  border-bottom: 0;
+}

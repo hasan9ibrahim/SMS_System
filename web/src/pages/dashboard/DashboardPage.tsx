@@ -35,6 +35,7 @@ import {
   chartWindow,
   limitLevel,
   newKeys,
+  type AnalyticsTarget,
   type ChartBuffer,
 } from "./dashboardModel";
 import { useOnlineUsers } from "../../api/team";
@@ -193,7 +194,7 @@ export function DashboardPage() {
   );
   const hidden = new Set(saved.hiddenPanels);
   const save = (patch: Partial<DashboardSettings>) => prefs.mutate({ dashboard: { ...saved, ...patch } });
-  const open = (target: PartyRef | { mccmnc: string }, title: string) =>
+  const open = (target: AnalyticsTarget, title: string) =>
     navigate(analyticsPath(target), { forceNew: true, title: `Analytics · ${title}` });
 
   const layout = layoutOf(saved.layout ?? []);
@@ -315,7 +316,7 @@ export function DashboardPage() {
   );
 }
 
-type Open = (target: PartyRef | { mccmnc: string }, title: string) => void;
+type Open = (target: AnalyticsTarget, title: string) => void;
 
 // ---------------------------------------------------------------- layout (team trial round 2)
 
@@ -584,11 +585,13 @@ function MarketMovesCard() {
   );
 }
 
-/** Two figures in one card, one per line (team trial round 2). */
+/** Two figures in one card, one per line (team trial round 2), with an optional title above them. */
 function PairCard({
+  title,
   rows,
   animate,
 }: {
+  title?: string;
   rows: {
     label: string;
     value: number | undefined;
@@ -598,7 +601,8 @@ function PairCard({
   animate: boolean;
 }) {
   return (
-    <div className="dash-kpi dash-kpi-pair">
+    <div className={`dash-kpi dash-kpi-pair${title ? " titled" : ""}`}>
+      {title && <span className="label pair-title">{title}</span>}
       {rows.map((r) => (
         <PairRow key={r.label} {...r} animate={animate} />
       ))}
@@ -672,6 +676,7 @@ function SummaryBar({
         />
         <Counter label="TPS now" value={s?.tps} format={(v) => dec(v)} animate={animate} />
         <PairCard
+          title="Online"
           animate={animate}
           rows={[
             { label: "Customers", value: s?.onlineCustomers, format: int },
@@ -982,33 +987,51 @@ function TpsChart({
 
 const ROW_H = 28;
 
-/** Rows positioned by rank, so a rank change slides the row (§13.3 "rows re-sort smoothly"). */
+/** Height of an expanded row's breakdown under it (team trial round 2). */
+const OPEN_H = 300;
+
+/**
+ * Rows positioned by rank, so a rank change slides the row (§13.3 "rows re-sort smoothly"). An open row shows
+ * `renderOpen` under it and the rows below move down (team trial round 2).
+ */
 function RankedList<T>({
   rows,
   rowKey,
   render,
   height,
   label,
+  openKey = null,
+  renderOpen,
 }: {
   rows: T[];
   rowKey: (r: T) => string;
   render: (r: T, i: number) => ReactNode;
   height: number;
   label: string;
+  openKey?: string | null;
+  renderOpen?: (r: T) => ReactNode;
 }) {
+  const openAt = openKey === null ? -1 : rows.findIndex((r) => rowKey(r) === openKey);
+  const opened = openAt >= 0 ? rows[openAt] : undefined;
+  const y = (i: number) => i * ROW_H + (openAt >= 0 && i > openAt ? OPEN_H : 0);
   return (
     <div className="dash-ranked" style={{ height }} role="list" aria-label={label}>
-      <div style={{ height: rows.length * ROW_H, position: "relative" }}>
+      <div style={{ height: rows.length * ROW_H + (opened ? OPEN_H : 0), position: "relative" }}>
         {rows.map((r, i) => (
           <div
             key={rowKey(r)}
             role="listitem"
-            className="dash-rank-row"
-            style={{ transform: `translateY(${i * ROW_H}px)` }}
+            className={`dash-rank-row${i === openAt ? " open" : ""}`}
+            style={{ transform: `translateY(${y(i)}px)` }}
           >
             {render(r, i)}
           </div>
         ))}
+        {opened !== undefined && renderOpen && (
+          <div className="dash-rank-open" style={{ top: (openAt + 1) * ROW_H, height: OPEN_H }}>
+            {renderOpen(opened)}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1089,6 +1112,8 @@ function TpsTable({
 
 function TopParties({ tops, onOpen }: { tops: DashboardTopsEvent | null; onOpen: Open }) {
   const cur = tops?.currency ?? "EUR";
+  // Click a row: its breakdown opens under it; click a breakdown row: Live analytics (team trial round 2).
+  const [open, setOpen] = useState<{ side: "clients" | "vendors"; key: string } | null>(null);
   return (
     <div className="dash-pair">
       {(["clients", "vendors"] as const).map((side) => {
@@ -1117,12 +1142,23 @@ function TopParties({ tops, onOpen }: { tops: DashboardTopsEvent | null; onOpen:
                 label={side}
                 height={ROW_H * 10}
                 rowKey={(r) => String(r.party.id)}
-                render={(r, i) => (
-                  <BreakdownHover target={{ kind: side === "clients" ? "customer" : "vendor", name: r.party.name }}>
+                openKey={open?.side === side ? open.key : null}
+                renderOpen={(r) => (
+                  <BreakdownTable
+                    target={{ kind: side === "clients" ? "customer" : "vendor", name: r.party.name }}
+                    onOpen={() => onOpen(r.party, r.party.name)}
+                  />
+                )}
+                render={(r, i) => {
+                  const key = String(r.party.id);
+                  const isOpen = open?.side === side && open.key === key;
+                  return (
                     <button
                       type="button"
                       className="dash-cols dash-top-row"
-                      onClick={() => onOpen(r.party, r.party.name)}
+                      aria-expanded={isOpen}
+                      title={isOpen ? "Close the breakdown" : "Show what it is made of today"}
+                      onClick={() => setOpen(isOpen ? null : { side, key })}
                     >
                       <span className="muted num">{i + 1}</span>
                       <span className="ellipsis dash-named" title={r.party.name}>
@@ -1135,8 +1171,8 @@ function TopParties({ tops, onOpen }: { tops: DashboardTopsEvent | null; onOpen:
                       <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
                       <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
                     </button>
-                  </BreakdownHover>
-                )}
+                  );
+                }}
               />
             )}
           </Section>
@@ -1150,12 +1186,13 @@ function TopDestinations({ tops, onOpen }: { tops: DashboardTopsEvent | null; on
   const cur = tops?.currency ?? "EUR";
   const rows = tops?.destinations ?? [];
   const max = Math.max(1, ...rows.map((r) => r.attempts));
+  const [open, setOpen] = useState<string | null>(null);
   return (
     <Section title="Top destinations today" className="dash-top">
       <div className="dash-cols dash-dest-row head" aria-hidden="true">
         <span>#</span>
-        <span>Country / network</span>
-        <span>MCCMNC</span>
+        <span>Country</span>
+        <span>Networks</span>
         <span className="r">Volume</span>
         <span className="r">Revenue</span>
         <span className="r">Margin</span>
@@ -1169,29 +1206,34 @@ function TopDestinations({ tops, onOpen }: { tops: DashboardTopsEvent | null; on
           rows={rows}
           label="Top destinations"
           height={ROW_H * Math.min(15, Math.max(5, rows.length))}
-          rowKey={(r) => r.mccmnc}
+          rowKey={(r) => r.iso}
+          openKey={open}
+          renderOpen={(r) => (
+            <BreakdownTable
+              target={{ kind: "destination", iso: r.iso, name: r.country }}
+              onOpen={() => onOpen({ country: r.country }, r.country)}
+            />
+          )}
           render={(r, i) => (
-            <BreakdownHover target={{ kind: "destination", mccmnc: r.mccmnc, name: `${r.country} ${r.network}` }}>
-              <button
-                type="button"
-                className="dash-cols dash-dest-row"
-                onClick={() => onOpen({ mccmnc: r.mccmnc }, `${r.country} ${r.network}`)}
-              >
-                <span className="muted num">{i + 1}</span>
-                <span className="ellipsis dash-named" title={`${r.country} – ${r.network}`}>
-                  <span className="dash-volbar" style={{ width: `${(r.attempts / max) * 100}%` }} />
-                  <span className="t">
-                    {r.country} <span className="muted">{r.network}</span>
-                  </span>
-                </span>
-                <span className="num muted">{r.mccmnc}</span>
-                <span className="r num">{int(r.attempts)}</span>
-                <span className="r num">{money(r.revenue, cur)}</span>
-                <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
-                <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
-                <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
-              </button>
-            </BreakdownHover>
+            <button
+              type="button"
+              className="dash-cols dash-dest-row"
+              aria-expanded={open === r.iso}
+              title={open === r.iso ? "Close the breakdown" : "Show who sends to it today"}
+              onClick={() => setOpen(open === r.iso ? null : r.iso)}
+            >
+              <span className="muted num">{i + 1}</span>
+              <span className="ellipsis dash-named" title={r.country}>
+                <span className="dash-volbar" style={{ width: `${(r.attempts / max) * 100}%` }} />
+                <span className="t">{r.country}</span>
+              </span>
+              <span className="num muted">{r.networks}</span>
+              <span className="r num">{int(r.attempts)}</span>
+              <span className="r num">{money(r.revenue, cur)}</span>
+              <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
+              <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
+              <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
+            </button>
           )}
         />
       )}
@@ -1199,25 +1241,29 @@ function TopDestinations({ tops, onOpen }: { tops: DashboardTopsEvent | null; on
   );
 }
 
-// ---------------------------------------------------------------- hover breakdowns
+// ---------------------------------------------------------------- row breakdowns
 
 type Breakdown =
   | { kind: "customer"; name: string }
   | { kind: "vendor"; name: string }
-  | { kind: "destination"; mccmnc: string; name: string };
+  | { kind: "destination"; iso: string; name: string };
 
-/** What a hovered row is made of today (team trial round 2), from the same report engine as Live analytics. */
+/**
+ * What an opened row is made of today (team trial round 2), from the same report engine as Live analytics.
+ * Destinations are whole countries, all networks together.
+ */
 const BREAKDOWN: Record<Breakdown["kind"], { by: [ReportDimension, ReportDimension]; heads: [string, string] }> = {
-  customer: { by: ["destination", "vendor"], heads: ["Destination", "Vendor"] },
-  vendor: { by: ["customer", "destination"], heads: ["Client", "Destination"] },
+  customer: { by: ["country", "vendor"], heads: ["Destination", "Vendor"] },
+  vendor: { by: ["customer", "country"], heads: ["Client", "Destination"] },
   destination: { by: ["customer", "vendor"], heads: ["Client", "Vendor"] },
 };
 
-function BreakdownTable({ target, timezone }: { target: Breakdown; timezone: string }) {
+function BreakdownTable({ target, onOpen }: { target: Breakdown; onOpen: () => void }) {
+  const timezone = useReference().data?.platformTimezone ?? "UTC";
   const def = BREAKDOWN[target.kind];
   const condition: FilterCondition =
     target.kind === "destination"
-      ? { field: "destination", op: "eq", value: target.mccmnc }
+      ? { field: "country", op: "eq", value: target.iso }
       : { field: target.kind, op: "eq", value: target.name };
   const q = useQuery({
     queryKey: ["dash-breakdown", target, timezone],
@@ -1255,7 +1301,7 @@ function BreakdownTable({ target, timezone }: { target: Breakdown; timezone: str
           </thead>
           <tbody>
             {q.data.rows.map((r) => (
-              <tr key={r.key}>
+              <tr key={r.key} className="dash-open-row" title="Open in Live analytics" onClick={onOpen}>
                 <td>{r.dims[def.by[0]]?.label ?? "—"}</td>
                 <td>{r.dims[def.by[1]]?.label ?? "—"}</td>
                 <td className="num">{int(r.metrics.attempts ?? 0)}</td>
@@ -1264,37 +1310,6 @@ function BreakdownTable({ target, timezone }: { target: Breakdown; timezone: str
           </tbody>
         </table>
       )}
-    </div>
-  );
-}
-
-/** Shows the breakdown after a short hover on the row (team trial round 2). */
-function BreakdownHover({ target, children }: { target: Breakdown; children: ReactNode }) {
-  const anchor = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const timer = useRef<number | undefined>(undefined);
-  const tz = useReference().data?.platformTimezone ?? "UTC";
-  const clear = () => {
-    if (timer.current !== undefined) window.clearTimeout(timer.current);
-    timer.current = undefined;
-  };
-  return (
-    <div
-      ref={anchor}
-      className="dash-hover"
-      onMouseEnter={() => {
-        clear();
-        timer.current = window.setTimeout(() => setOpen(true), 400);
-      }}
-      onMouseLeave={() => {
-        clear();
-        setOpen(false);
-      }}
-    >
-      {children}
-      <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} align="start">
-        <BreakdownTable target={target} timezone={tz} />
-      </Popover>
     </div>
   );
 }

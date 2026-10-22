@@ -290,11 +290,12 @@ async function loadFromStores(): Promise<{
     // Live screens show enterprises by alias (team trial round 1); the name when the alias is empty.
     db().query("SELECT id, COALESCE(NULLIF(alias, ''), name) AS name FROM enterprises"),
     db().query(
-      "SELECT m.mccmnc, m.network, co.name AS country FROM mccmnc m JOIN countries co ON co.id = m.country_id",
+      "SELECT m.mccmnc, m.network, co.name AS country, co.iso FROM mccmnc m JOIN countries co ON co.id = m.country_id",
     ),
   ]);
   const entName = new Map(ents.map((e) => [Number(e.id), e.name as string]));
   const codeName = new Map(codes.map((c) => [c.mccmnc as string, [c.country as string, c.network as string] as const]));
+  for (const c of codes) if (c.iso) COUNTRY_ISO.set(c.country as string, c.iso as string);
   const f = await sysToPlatformFactor();
   type Stat = { id: number; n: string; rev: number; cost: number; ok: string; dl: string; sent: string };
   const stats = (col: string) =>
@@ -960,6 +961,47 @@ export function summaryEvent(sim: Simulator, now = Date.now()): DashboardSummary
   };
 }
 
+/** Country name → ISO code, from the destination master list (top destinations by country, team trial round 2). */
+export const COUNTRY_ISO = new Map<string, string>();
+
+/** Today's destinations added up per country, all networks together (team trial round 2). */
+export function topCountries(destinations: Map<string, DestTotals>, limit = 15): DashboardTopsEvent["destinations"] {
+  const by = new Map<string, DestTotals & { networks: number }>();
+  for (const d of destinations.values()) {
+    const c = by.get(d.country) ?? {
+      ...d,
+      network: "",
+      attempts: 0,
+      revenue: 0,
+      margin: 0,
+      successful: 0,
+      delivered: 0,
+      networks: 0,
+    };
+    c.attempts += d.attempts;
+    c.revenue += d.revenue;
+    c.margin += d.margin;
+    c.successful += d.successful;
+    c.delivered += d.delivered;
+    c.networks += 1;
+    by.set(d.country, c);
+  }
+  return [...by.values()]
+    .filter((c) => COUNTRY_ISO.has(c.country))
+    .sort((a, b) => b.attempts - a.attempts)
+    .slice(0, limit)
+    .map((c) => ({
+      iso: COUNTRY_ISO.get(c.country)!,
+      country: c.country,
+      networks: c.networks,
+      attempts: Math.round(c.attempts),
+      revenue: r2(c.revenue),
+      margin: r2(c.margin),
+      asr: pct(c.successful, c.attempts),
+      dlr: pct(c.delivered, c.successful),
+    }));
+}
+
 export function topsEvent(sim: Simulator, now = Date.now()): DashboardTopsEvent {
   const party = (kind: "customer_enterprise" | "vendor_enterprise", m: Map<number, PartyTotals>) =>
     [...m.entries()]
@@ -978,19 +1020,7 @@ export function topsEvent(sim: Simulator, now = Date.now()): DashboardTopsEvent 
     currency: PLATFORM_CURRENCY,
     clients: party("customer_enterprise", sim.today.clients),
     vendors: party("vendor_enterprise", sim.today.vendors),
-    destinations: [...sim.today.destinations.entries()]
-      .sort((a, b) => b[1].attempts - a[1].attempts)
-      .slice(0, 15)
-      .map(([mccmnc, d]) => ({
-        mccmnc,
-        country: d.country,
-        network: d.network || "All networks",
-        attempts: Math.round(d.attempts),
-        revenue: r2(d.revenue),
-        margin: r2(d.margin),
-        asr: pct(d.successful, d.attempts),
-        dlr: pct(d.delivered, d.successful),
-      })),
+    destinations: topCountries(sim.today.destinations),
   };
 }
 

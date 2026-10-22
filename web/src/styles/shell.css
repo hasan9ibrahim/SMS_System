@@ -15,7 +15,7 @@ button {
   font: inherit;
   color: inherit;
 }
-input,
+input:where(:not([type="checkbox"]):not([type="radio"])),
 select,
 textarea {
   font: inherit;
@@ -92,13 +92,13 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 34px;
-  padding: 0 14px;
+  height: 38px;
+  padding: 0 16px;
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--color-border);
   background: var(--color-panel);
   box-shadow: var(--card-shadow);
-  font-weight: 500;
+  font-weight: 550;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -295,8 +295,8 @@ a.btn {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 20px 28px 14px;
-  gap: 14px;
+  padding: 24px 32px 16px;
+  gap: 16px;
 }
 
 /* ---------- header (design refresh: two rows on white, logo / search / status, then the main menu) ---------- */
@@ -309,7 +309,7 @@ a.btn {
   border-bottom: var(--border-width) solid var(--color-border);
 }
 .topbar-main {
-  height: 56px;
+  height: 64px;
   display: flex;
   align-items: center;
   gap: 24px;
@@ -323,7 +323,7 @@ a.btn {
   white-space: nowrap;
   flex: none;
   font-weight: 700;
-  font-size: 15.5px;
+  font-size: 17px;
   background: none;
   border: 0;
   cursor: pointer;
@@ -333,14 +333,14 @@ a.btn {
 .logo-mark {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   background: var(--color-accent);
   color: #fff;
 }
 .menu-bar {
-  height: 40px;
+  height: 48px;
   display: flex;
   align-items: stretch;
   gap: 4px;
@@ -353,13 +353,18 @@ a.btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 0;
   background: transparent;
-  color: var(--color-text-secondary);
-  font-weight: 500;
+  color: color-mix(in srgb, var(--color-text) 78%, var(--color-header));
+  font-size: 15px;
+  font-weight: 450;
   cursor: pointer;
   white-space: nowrap;
+}
+/* Drop-down menus open on click as before; the mockup shows no chevrons. */
+.menu-top > svg {
+  display: none;
 }
 .menu-top:hover,
 .menu-top.open {
@@ -372,10 +377,10 @@ a.btn {
 .menu-top.current::after {
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: 4px;
+  right: 4px;
   bottom: 0;
-  height: 2px;
+  height: 3px;
   border-radius: 2px 2px 0 0;
   background: var(--color-accent);
 }
@@ -389,8 +394,8 @@ a.btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 38px;
-  flex: 0 1 460px;
+  height: 42px;
+  flex: 0 1 520px;
   min-width: 0;
   padding: 0 8px 0 12px;
   border-radius: var(--radius-md);
@@ -425,8 +430,8 @@ a.btn {
   align-items: baseline;
   gap: 6px;
   padding: 0 4px;
-  color: var(--color-text);
-  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-weight: 450;
   white-space: nowrap;
   cursor: default;
 }
@@ -486,8 +491,8 @@ a.btn {
   position: relative;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border: var(--border-width) solid var(--color-border);
   background: var(--color-header);
   color: var(--color-text);
@@ -516,8 +521,8 @@ a.btn {
   background: var(--color-error);
 }
 .avatar {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   border: 0;
   background: var(--accent-soft);
@@ -749,6 +754,42 @@ a.btn {
   gap: 12px 18px;
   flex-wrap: wrap;
 }
+/* The standard header (PageHeader): title row with actions, then the sibling pills (design refresh). */
+.page-header:has(> .page-header-top) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+.page-header-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px 18px;
+  flex-wrap: wrap;
+}
+.page-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-subtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 14.5px;
+}
+.page-header-top .page-actions {
+  align-self: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.page-header-top .page-back {
+  margin: 4px -6px 0 -6px;
+}
 .page-header .page-back {
   margin-right: -10px;
 }
@@ -769,7 +810,7 @@ a.btn {
   flex-wrap: wrap;
 }
 .siblings a {
-  padding: 6px 14px;
+  padding: 7px 16px;
   border: var(--border-width) solid var(--color-border);
   border-radius: 999px;
   background: var(--color-panel);
@@ -883,8 +924,90 @@ a.btn {
   flex-direction: column;
   gap: 10px;
 }
-.list-body.with-detail .grid {
+.list-body.with-detail .grid,
+.list-body.with-detail .records-card {
   flex: 1 1 60%;
+}
+
+/* Filters in one white card (design refresh). */
+.filter-card {
+  padding: 14px 16px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+}
+.filter-card .filter-row {
+  gap: 10px;
+}
+.filter-card .quick-search {
+  flex: 1 1 320px;
+  max-width: 560px;
+  height: 40px;
+  padding: 0 14px;
+}
+.filter-card .quick-search input {
+  width: 100%;
+  height: 30px;
+  font-size: 14px;
+}
+.btn-add-filter {
+  height: 34px;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* The grid in a Records card: title and count, selection, Bulk edit and Columns, then the rows and a footer. */
+.records-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+.records-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 10px 16px 10px 20px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.records-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.count-badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 7%, var(--color-panel));
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.records-head .btn-ghost {
+  border-color: var(--color-border);
+}
+.records-card > .grid {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.records-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 20px;
+  border-top: var(--border-width) solid var(--color-border);
+  font-size: 13.5px;
 }
 .detail {
   flex: 0 0 34%;

@@ -323,7 +323,7 @@ export interface TopDestination {
   attempts: number;
 }
 /**
- * Topic live:dashboard, event "tops". Daily top clients, top vendors (§13.3 item 5) and top destinations (item 6) for today (the day in the platform time zone, `ReferenceData.platformTimezone`), pushed every 5 s. Money is in the platform currency.
+ * Topic live:dashboard, event "tops". Daily top clients, top vendors (§13.3 item 5) and top destinations by country, all networks together (item 6, team trial round 2) for today (the day in the platform time zone, `ReferenceData.platformTimezone`), pushed every 5 s. Money is in the platform currency.
  */
 export interface DashboardTopsEvent {
   at: EventTimestamp;
@@ -352,10 +352,19 @@ export interface TopParty {
   asr: number | null;
   dlr: number | null;
 }
+/**
+ * A destination country today, all its networks together (team trial round 2).
+ */
 export interface TopDestinationRow {
-  mccmnc: string;
+  /**
+   * ISO 3166-1 alpha-2 code; filters reports on `country`.
+   */
+  iso: string;
   country: string;
-  network: string;
+  /**
+   * Networks of the country with traffic today.
+   */
+  networks: number;
   attempts: number;
   revenue: number;
   margin: number;
