@@ -15056,7 +15056,7 @@ export type components = {
       customerTrunkId: components["schemas"]["Id"];
       senderId?: string;
       receiver?: string;
-      /** @description Overrides the destination found from the number. */
+      /** @description Overrides the destination found from the number. A 3-digit code is a country's All networks (default) entry (team trial round 5). */
       mccmnc?: string | null;
       sourceTon: number;
       sourceNpi: number;

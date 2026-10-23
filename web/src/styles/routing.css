@@ -1494,3 +1494,173 @@ textarea.mono {
     grid-column: 1 / -1;
   }
 }
+/* Route simulator in two columns (team trial round 5): numbered input cards on the left; the summary, the run
+   button and the route on the right. */
+.sim-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.sim-main,
+.sim-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.sim-side {
+  position: sticky;
+  top: 0;
+}
+.sim-card {
+  padding: 14px 18px 16px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  box-shadow: var(--card-shadow);
+  min-width: 0;
+}
+.sim-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.sim-num {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-panel));
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sim-seg {
+  margin-left: auto;
+}
+.sim-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  align-items: start;
+}
+.sim-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 12px;
+}
+.sim-span3 {
+  grid-column: span 3;
+}
+.sim-span4 {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.sim-grid .field > span:first-child {
+  font-weight: 500;
+}
+.req {
+  color: var(--color-error);
+}
+.sim-text {
+  width: 100%;
+  resize: vertical;
+}
+.sim-counter {
+  margin-top: 8px;
+}
+.sim-adv-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sim-adv-head .sim-step {
+  margin-bottom: 2px;
+}
+.sim-adv-head p {
+  margin: 0;
+}
+.sim-adv-head .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+svg.flip {
+  transform: rotate(180deg);
+}
+.sim-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  margin: 0 0 14px;
+}
+.sim-summary dt {
+  color: var(--color-text-secondary);
+}
+.sim-summary dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sim-test {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.sim-test > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.btn.sim-go {
+  width: 100%;
+  justify-content: center;
+  height: 40px;
+}
+.sim-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 8px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+.sim-empty strong {
+  color: var(--color-text);
+}
+.sim-results .rs-cards {
+  grid-template-columns: 1fr;
+}
+.sim-results .rs-one + .rs-one {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: var(--border-width) solid var(--color-border);
+}
+@media (max-width: 1100px) {
+  .sim-layout {
+    grid-template-columns: 1fr;
+  }
+  .sim-side {
+    position: static;
+  }
+}
+.sim-card .field > span.muted {
+  font-weight: 400;
+}

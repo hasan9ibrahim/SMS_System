@@ -1840,18 +1840,23 @@ export const topics: HelpTopic[] = [
         title: "Fields in the form",
         blocks: [
           {
+            kind: "text",
+            text: "The page has two columns. On the left, numbered cards: **1 Who is sending**, **2 Send to** and **3 Message**, then **Advanced settings** folded up (its line shows the TON / NPI, coding and vendor in use; **Change** opens them). On the right, the **Summary** (From, Sender ID, To, Message, Vendor), **Also send a real test SMS** and the **Simulate route** button; the result appears under it, step by step.",
+          },
+          {
             kind: "fields",
             fields: [
               {
-                name: "Customer Trunk ID",
+                name: "Customer trunk",
                 what: "Required. The trunk the message comes in on.",
                 values: "Search by ID, name or enterprise.",
               },
               { name: "Sender ID", what: "The sender.", values: "Default `INFO`, up to 20 characters." },
               {
                 name: "Send to",
-                what: "**Numbers**: type receiver numbers. **Destination**: tick countries or networks; a test number is made from each network's dial code.",
-                values: "Numbers comma-separated, up to 20 at once, e.g. `447700900123, 33612345678`.",
+                what: "**Numbers**: type receiver numbers. **Destination**: tick networks; a test number is made from each one's dial code. Ticking a whole country picks only its **All networks** (default) entry, so it gives one result for the default network, not one per network.",
+                values:
+                  "Numbers comma-separated, up to 20 at once, e.g. `447700900123, 33612345678`. Destination: up to 5 networks.",
               },
               {
                 name: "MCCMNC",
@@ -1882,10 +1887,13 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Message Text",
-                what: "The text. The counter under it shows the coding, characters, bits per character, how many SMS parts and bytes. A warning shows when the text needs UCS-2.",
+                what: "The text. Tags under it show how many SMS parts, the coding, characters out of the limit and bytes. A tag warns when the text needs UCS-2.",
                 values: "Up to 1600 characters.",
               },
-              { name: "Test SMS (also send it)", what: "Also send the message and show its delivery receipt." },
+              {
+                name: "Also send a real test SMS",
+                what: "Off (the default) = simulate only, nothing is sent. On = also send the message and show its delivery receipt.",
+              },
               {
                 name: "Back to automatic coding and TON / NPI",
                 what: "Shown once you change coding or TON / NPI by hand; returns them to automatic.",
@@ -1894,7 +1902,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Click **Go** (or press Enter). With several receivers it shows **Go (n)** and one result per receiver.",
+            text: "Click **Simulate route** (or press Enter). With several receivers it shows **Simulate route (n)** and one result per receiver.",
           },
         ],
       },
@@ -1906,7 +1914,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               '**Verdict** (green or red): "Routes to vendor (decided by, level) · cost · margin", "Sent straight to vendor (routing skipped)", or why it is blocked.',
-              "**Translation**: the sender and receiver before → after the trunk's translation rules, each rule (changed the message, matched, no match, blocked) and the HLR rule.",
+              "**Translation**: the sender and receiver before → after the trunk's translation rules, only the rules that matched (changed the message, matched or blocked) with a count of the others, and the HLR rule.",
               "**Destination and rate**: the destination, the customer rate with its rate table, and the encoding.",
               "**Route**: the deciding rule and its outcome, the vendors tried (Vendor trunk, Level, Cost, Margin, Note), and **Rules tried** with the reason each one matched or not.",
               "The **Test** section of a route rule and **Simulate** on Route rules list **Vendors skipped** the same way: a vendor whose own vendor translation rule blocks the test message is passed over (its Note says so) and the next vendor is chosen.",
