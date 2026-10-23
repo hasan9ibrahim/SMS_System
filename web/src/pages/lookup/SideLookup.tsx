@@ -24,7 +24,7 @@ import {
   type SideState,
 } from "./sideModel";
 
-const TITLE: Record<LookupSide, string> = { customer: "Customer rates (sell)", vendor: "Vendor rates (buy)" };
+const TITLE: Record<LookupSide, string> = { customer: "Customer rates · sell", vendor: "Vendor rates · buy" };
 const TRUNK: Record<LookupSide, string> = { customer: "Customer trunk", vendor: "Vendor trunk" };
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -131,11 +131,6 @@ export function SidePanel({
   setState: (s: SideState) => void;
 }) {
   const navigate = useTabNavigate();
-  const [search, setSearch] = useState(state.search);
-  const debounced = useDebounced(search, 300);
-  useEffect(() => {
-    if (debounced !== state.search) setState({ ...state, search: debounced });
-  }, [debounced]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const options = useQuery({
     queryKey: ["lookup-side-options", side],
@@ -315,12 +310,12 @@ export function SidePanel({
     },
   ];
 
+  // The filters under the column headers stay (team trial round 3: destination, MCCMNC, tables and price ranges).
   const chosen =
     state.categoryIds.length +
     state.trunkIds.length +
-    state.mccs.length +
     state.mccmncs.length +
-    (state.search ? 1 : 0) +
+    state.mccs.length +
     (state.destination ? 1 : 0) +
     (state.code ? 1 : 0) +
     (state.tables?.op ? 1 : 0) +
@@ -328,39 +323,29 @@ export function SidePanel({
     (state.sys?.op ? 1 : 0);
   return (
     <section className={`sl-side sl-${side}`} aria-label={TITLE[side]}>
-      <header className="sl-head">
-        <h2>{TITLE[side]}</h2>
-        <span className="muted">
-          {total === null ? "…" : `${total.toLocaleString("en-US")} destination${total === 1 ? "" : "s"}`}
+      {/* Title, count and this side's own filters in one compact header (team trial round 3). */}
+      <header className={`sl-head sl-head-${side}`}>
+        <span className="sl-head-icon" aria-hidden="true">
+          <Icon name={side === "customer" ? "arrowUpRight" : "arrowDownLeft"} size={14} />
         </span>
-        {chosen > 0 && (
-          <button
-            type="button"
-            className="link"
-            onClick={() => {
-              setSearch("");
-              setState({
-                ...state,
-                categoryIds: [],
-                trunkIds: [],
-                mccs: [],
-                mccmncs: [],
-                search: "",
-                destination: "",
-                code: "",
-                tables: noRange(),
-                price: noRange(),
-                sys: noRange(),
-              });
-            }}
-          >
-            Clear filters
-          </button>
+        <div className="sl-head-title">
+          <h2>{TITLE[side]}</h2>
+          <span className="muted small">
+            {total === null ? "…" : `${total.toLocaleString("en-US")} destination${total === 1 ? "" : "s"}`}
+            {state.search ? ` · filtered by "${state.search}"` : ""}
+          </span>
+        </div>
+        <span className="fb-spacer" />
+        {state.search && (
+          <span className="chip accent">
+            &quot;{state.search}&quot;
+            <button type="button" aria-label="Clear the search" onClick={() => set({ search: "" })}>
+              <Icon name="x" size={11} />
+            </button>
+          </span>
         )}
-      </header>
-      <div className="sl-filters">
         <CheckListButton
-          title="Product category"
+          title="Product"
           items={items.categories}
           selected={state.categoryIds}
           onChange={(categoryIds) => set({ categoryIds })}
@@ -387,24 +372,29 @@ export function SidePanel({
           selected={state.mccmncs}
           onChange={(mccmncs) => set({ mccmncs })}
         />
-        <div className="sl-search">
-          <Icon name="search" size={13} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Country, network or code (% _ wildcards)"
-            aria-label={`Search ${TITLE[side]}`}
-          />
-        </div>
-        <label className="toggle-inline">
-          <input
-            type="checkbox"
-            checked={state.includeInactive}
-            onChange={(e) => set({ includeInactive: e.target.checked })}
-          />
-          Inactive trunks
-        </label>
-      </div>
+        {chosen > 0 && (
+          <button
+            type="button"
+            className="link small"
+            onClick={() =>
+              setState({
+                ...state,
+                categoryIds: [],
+                trunkIds: [],
+                mccs: [],
+                mccmncs: [],
+                destination: "",
+                code: "",
+                tables: noRange(),
+                price: noRange(),
+                sys: noRange(),
+              })
+            }
+          >
+            Clear
+          </button>
+        )}
+      </header>
       <div className="sl-table">
         {pages.isError ? (
           <div className="vt-empty tone-error">Could not load the rates. Try again.</div>
@@ -439,21 +429,61 @@ export function SideLookup({
   vendor,
   setCustomer,
   setVendor,
+  setBoth,
 }: {
   show: "both" | "customer" | "vendor";
   customer: SideState;
   vendor: SideState;
   setCustomer: (s: SideState) => void;
   setVendor: (s: SideState) => void;
+  setBoth: (customer: SideState, vendor: SideState) => void;
 }) {
   usePageStatus({
     rows: "",
     shortcuts: "Click a destination to see its rate tables · click a table name to open it in Rate Manager",
   });
+  // One search and Include inactive trunks for both sides (team trial round 3).
+  const [search, setSearch] = useState(customer.search || vendor.search);
+  const debounced = useDebounced(search, 300);
+  useEffect(() => {
+    if (debounced !== customer.search || debounced !== vendor.search)
+      setBoth({ ...customer, search: debounced }, { ...vendor, search: debounced });
+  }, [debounced]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A chip's × on one side clears the shared box too.
+  useEffect(() => {
+    if (!customer.search && !vendor.search) setSearch("");
+  }, [customer.search, vendor.search]);
+  const inactive = customer.includeInactive && vendor.includeInactive;
   return (
-    <div className={`sl-wrap sl-show-${show}`}>
-      {show !== "vendor" && <SidePanel side="customer" state={customer} setState={setCustomer} />}
-      {show !== "customer" && <SidePanel side="vendor" state={vendor} setState={setVendor} />}
+    <div className="sl-page">
+      <div className="sl-common">
+        <div className="sl-search">
+          <Icon name="search" size={14} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Country, network or MCCMNC — searches both sides (% _ wildcards)"
+            aria-label="Search both sides"
+          />
+        </div>
+        <label className="toggle-inline">
+          <input
+            type="checkbox"
+            checked={inactive}
+            onChange={(e) =>
+              setBoth(
+                { ...customer, includeInactive: e.target.checked },
+                { ...vendor, includeInactive: e.target.checked },
+              )
+            }
+          />
+          Include inactive trunks
+        </label>
+      </div>
+      <div className={`sl-wrap sl-show-${show}`}>
+        {show !== "vendor" && <SidePanel side="customer" state={customer} setState={setCustomer} />}
+        {show !== "customer" && <SidePanel side="vendor" state={vendor} setState={setVendor} />}
+      </div>
     </div>
   );
 }

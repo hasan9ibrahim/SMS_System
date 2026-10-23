@@ -14,7 +14,7 @@ export const topics: HelpTopic[] = [
       "partner",
       "customer",
       "vendor",
-      "reciprocal",
+      "bilateral",
       "client",
       "carrier",
       "account",
@@ -32,7 +32,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "An **enterprise** is one partner company: a customer that sends us traffic, a vendor we send traffic to, or a **reciprocal** partner that is both. Everything about a partner hangs off its enterprise: contacts, documents, billing, its customer and vendor trunks, its account manager and its change history.",
+            text: "An **enterprise** is one partner company: a customer that sends us traffic, a vendor we send traffic to, or a **bilateral** partner that is both. Everything about a partner hangs off its enterprise: contacts, documents, billing, its customer and vendor trunks, its account manager and its change history.",
           },
           {
             kind: "text",
@@ -60,16 +60,13 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "list",
-            title: "Filter bar",
+            title: "Filter card",
             items: [
-              "**Filter card** — shows each active filter as a chip; click the x on a chip to remove it.",
-              "**Add filter** / **Edit filter** opens the filter builder for conditions on several fields joined with AND or OR. See [[filter-builder]].",
-              "**Quick search…** searches the main text fields. Press **Enter** to apply, **Esc** to clear.",
-              "**Clear all** removes every filter and the search.",
-              "**Save as view** keeps the current filters as a named view; the views menu reapplies a saved view.",
+              "**Quick search box** — click it to pick a field (for example **Type** or **Status**); each field filter shows as a pill in the box. × on a pill removes it. Plain text typed outside a pill searches the main text fields when you press **Enter**; it matches the start of a value (`Colo` finds names starting with Colo), so type `%colo` to find it anywhere. **Esc** clears it. See [[grids-and-filters#quick-search]].",
+              "**Any of (OR)…** in the search card opens the filter builder for conditions on several fields joined with AND or OR. See [[filter-builder]].",
               "**Show deleted** adds deleted (archived) enterprises to the list, greyed out.",
-              "**Bulk edit** acts on selected rows. Enterprises have no bulk actions yet.",
-              "The columns menu shows or hides columns.",
+              "**Clear all** removes every filter and the search.",
+              "On the right: **Save as view** keeps the current filters as a named view and **Views** reapplies a saved view; then the selection summary, **Bulk edit** (enterprises have no bulk actions yet) and **Columns** to show or hide columns.",
             ],
           },
           {
@@ -82,13 +79,13 @@ export const topics: HelpTopic[] = [
                 values: "Filter with an exact number, e.g. `1042`.",
               },
               {
-                name: "Name",
-                what: "The partner's full company name. Unique across all enterprises, deleted ones included.",
+                name: "Full Legal Name",
+                what: "The partner's full legal company name. Unique across all enterprises, deleted ones included.",
               },
-              { name: "Alias", what: "Short name used in trunk names and reports.", values: "e.g. `ACME`." },
+              { name: "Brand Name", what: "Short name used in trunk names and reports.", values: "e.g. `ACME`." },
               {
                 name: "Type",
-                what: "Customer, Vendor or Reciprocal (both). Decides which trunk and billing tabs the record has.",
+                what: "Customer, Vendor or Bilateral (both). Decides which trunk and billing tabs the record has.",
               },
               { name: "Category", what: "The partner's tier: Tier 1, Tier 2 or Tier 3." },
               { name: "Status", what: "Active or Inactive." },
@@ -113,12 +110,12 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "list",
-            title: "Detail panel (click a row)",
+            title: "Detail panel (click a row; it opens on the right of the grid)",
             items: [
-              "Title: **Name – Alias (ID)** and the type.",
-              "**General**: Type, Category, Status, Business company, Account manager, Country and who updated it last (UTC).",
+              "Title: **Full Legal Name – Brand Name (ID)** and the type, with × to close.",
+              "**General**: Type, Category, Status, Business company, Account manager, Country and who updated it last (UTC). Beside them, **Emails** lists the e-mail addresses of the four contacts (Commercial, Technical, Rates, Finance).",
               "**Record**: a link that opens the full record for docs, billing, trunks, account managers and history.",
-              "Right side: ID, Created date and, for a deleted enterprise, **Deleted** with the date (amber).",
+              "At the bottom: ID, Created date and, for a deleted enterprise, **Deleted** with the date (amber).",
             ],
           },
           {
@@ -138,15 +135,15 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "Type part of the name in the **Name** filter, e.g. `acme%` for names that start with Acme, or `%mobile%` for names containing mobile.",
-              "Or use **Quick search…** and press **Enter**.",
-              "Click the row to see its summary in the detail panel.",
+              "Type the start of the name in the **Full Legal Name** filter, e.g. `acme` for names that start with Acme, or `%mobile%` for names containing mobile.",
+              "Or type in the quick search box and press **Enter**. It matches the start of a name; type `%mobile` to find it anywhere.",
+              "Click the row to see its summary and contact e-mails in the detail panel on the right.",
               "Double-click the row or press **Enter** to open the full record in its own tab. Hold **Ctrl** (or **Cmd**) while double-clicking to force a second tab even if the record is already open.",
             ],
           },
           {
             kind: "tip",
-            text: "Inside an open record you can switch to another partner with the **Name – Alias (ID)** picker at the top. Type a name, alias or an ID number.",
+            text: "Inside an open record you can switch to another partner with the **Full Legal Name – Brand Name (ID)** picker at the top. Type a name, brand name or an ID number.",
           },
         ],
       },
@@ -158,8 +155,8 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Click **New enterprise**. An empty record opens in a new tab on the **General** tab.",
-              "Fill in at least **Name**, **Alias**, **Business company**, **Account manager**, **Address line 1** and one e-mail address for each of the four contacts (Commercial, Technical, Rates, Finance).",
-              "Pick the **Type**: Customer, Vendor or Reciprocal (both).",
+              "Fill in at least **Full Legal Name**, **Brand Name**, **Business company**, **Account manager** (picked once here; later changes go through **Hand over**), **Address line 1** and one e-mail address for each of the four contacts (Commercial, Technical, Rates, Finance).",
+              "Pick the **Type**: Customer, Vendor or Bilateral (both).",
               "Click **Add enterprise**. The record saves and the other tabs (Docs, Billing, trunks, Account managers, History) become available.",
               "Go to **Billing** and click **Set up customer billing** and/or **Set up vendor billing**, then **Save billing**.",
               "Add trunks from the **Customer trunks** or **Vendor trunks** tab.",
@@ -181,20 +178,21 @@ export const topics: HelpTopic[] = [
               "Open the row menu (⋯) and choose **Delete…**, or click **Delete** in the open record.",
               "The dialog checks what depends on the partner: live binds, customer and vendor trunks, route rules using its trunks, unpaid or draft invoices, customer and vendor balances, open disputes, and traffic in the last 30 days.",
               "Items in red block the delete. Settle them first (pay or credit the invoices, bring balances to zero, close disputes).",
+              "An enterprise that still has any customer or vendor trunk that is not deleted cannot be deleted or archived, not even with an administrator override. Delete its trunks first.",
               "Optionally write a **Reason**, then click **Delete**.",
             ],
           },
           {
             kind: "text",
-            text: "Delete never erases data. The enterprise is archived: it leaves lists, pickers and routing at once, and all its live trunks are archived with it. It stays in reports, invoices and history. See [[safe-delete]].",
+            text: "Delete never erases data. The enterprise is archived: it leaves lists, pickers and routing at once. It stays in reports, invoices and history. See [[safe-delete]].",
           },
           {
             kind: "text",
-            text: "To restore, tick **Show deleted**, open the deleted enterprise and click **Restore** in the banner at the top. Trunks that were archived together with it come back too.",
+            text: "To restore, tick **Show deleted**, open the deleted enterprise and click **Restore** in the banner at the top.",
           },
           {
             kind: "warning",
-            text: "Only an administrator can restore a deleted enterprise, and only an administrator can **Override the blockers**. An override needs a written reason, which is saved with the change.",
+            text: "Only an administrator can restore a deleted enterprise, and only an administrator can **Override the blockers**. An override needs a written reason, which is saved with the change. Live trunks can never be overridden: delete them first.",
           },
         ],
       },
@@ -270,9 +268,9 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "Header",
             items: [
-              "**Name – Alias (ID)** picker: click it and type a name, alias or ID to switch to another partner in the same tab. If you have unsaved edits you are asked whether to discard them.",
+              "**Full Legal Name – Brand Name (ID)** picker: click it and type a name, brand name or ID to switch to another partner in the same tab. If you have unsaved edits you are asked whether to discard them.",
               "**Delete**: starts the safe delete check (hidden when the enterprise is already deleted).",
-              "**⋯ More actions**: **Send rates…** and **Send tech info…**. Both are greyed out here in the trial; use the [[notifications|Notifications]] page to send tech info and rate sheets.",
+              "**Notifications**: **Send rates…** and **Send tech info…** for all the enterprise's customer trunks at once. Greyed out when the enterprise has no customer trunks. See [[enterprise-record#notifications]].",
               "The filled button on the right changes with the tab: **Add enterprise** / **Save**, **Upload document**, **Save billing**, **New customer trunk**, **New vendor trunk** or **Hand over**. A **Discard** button appears next to Save when you have unsaved edits.",
             ],
           },
@@ -287,8 +285,8 @@ export const topics: HelpTopic[] = [
               "**General**: identity, address, company details, alerts and contacts.",
               "**Docs**: contracts, KYC and other files.",
               "**Billing**: customer and/or vendor billing sides and bank details.",
-              "**Customer trunks**: only for Customer and Reciprocal partners. Shows a count.",
-              "**Vendor trunks**: only for Vendor and Reciprocal partners. Shows a count.",
+              "**Customer trunks**: only for Customer and Bilateral partners. Shows a count.",
+              "**Vendor trunks**: only for Vendor and Bilateral partners. Shows a count.",
               "**Account managers**: AM history and **Hand over**.",
               "**History**: every saved change to this enterprise, with undo.",
             ],
@@ -312,12 +310,12 @@ export const topics: HelpTopic[] = [
             title: "General information",
             fields: [
               {
-                name: "Name",
-                what: "The partner's full company name. Required. Must be unique, including deleted enterprises.",
+                name: "Full Legal Name",
+                what: "The partner's full legal company name. Required. Must be unique, including deleted enterprises.",
                 values: "Up to 200 characters, e.g. `Acme Mobile Ltd`.",
               },
               {
-                name: "Alias",
+                name: "Brand Name",
                 what: "Short name used in trunk names and reports. Required.",
                 values: "Up to 100 characters, e.g. `ACME`.",
               },
@@ -331,7 +329,7 @@ export const topics: HelpTopic[] = [
                 name: "Type",
                 what: "What the partner is to us. Decides which trunk tabs and billing sides exist.",
                 values:
-                  "**Customer** (sends us traffic), **Vendor** (we send to it) or **Reciprocal (both)**. Default Customer.",
+                  "**Customer** (sends us traffic), **Vendor** (we send to it) or **Bilateral (both)**. Default Customer.",
               },
               {
                 name: "Category",
@@ -345,7 +343,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Account manager",
-                what: "The AM who owns the partner. Required when adding. On an existing enterprise it is read-only and shows a **Hand over…** link, because a change of AM must go through Hand over so that past results stay with the AM who earned them.",
+                what: "The AM who owns the partner. Shown and required only when adding an enterprise. Afterwards the General tab no longer shows it: changes go through the **Account managers** tab (**Hand over**), so that past results stay with the AM who earned them.",
                 values: "Pick a user who is an active account manager.",
               },
             ],
@@ -396,20 +394,20 @@ export const topics: HelpTopic[] = [
                 values: "Pick a time zone. Default `UTC`.",
               },
               {
+                name: "'All networks' code",
+                what: "How this partner writes a country's all-networks rate in rate sheets: MCC (262), MCC0 (2620), MCC00 (26200), MCC000 (262000), MCC* (262*) or **Custom…**: MCC followed by up to 6 characters you type (e.g. MCC99 = 26299 for Germany).",
+                values:
+                  "Incoming RNs from the partner read that code as the country rate; rate notifications to the partner write country rates that way. Default MCC.",
+              },
+              {
                 name: "Notice: increase",
-                what: "How many days' notice the partner gets for rate increases. Used by rate notices and the rate tools to flag increases that start too early.",
+                what: "How many days' notice the partner gets for rate increases. Used by rate notices and the rate tools to flag increases that start too early. The three notices sit on one line, last.",
                 values: "0 to 90 days. Default 7.",
               },
               {
                 name: "Notice: decrease / Notice: new destination",
                 what: "The same for decreases and for destinations the partner had no rate for. Saves that start sooner ask for confirmation; incoming vendor RNs are flagged.",
                 values: "0 to 90 days. Default 0 (no notice).",
-              },
-              {
-                name: "'All networks' code",
-                what: "How this partner writes a country's all-networks rate in rate sheets: MCC (262), MCC0 (2620), MCC00 (26200), MCC000 (262000) or MCC* (262*).",
-                values:
-                  "Incoming RNs from the partner read that code as the country rate; rate notifications to the partner write country rates that way. Default MCC.",
               },
             ],
           },
@@ -454,7 +452,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Emails",
                 what: "Where e-mails for that area go: commercial matters, technical (for example tech-info mails), rate sheets and notices, finance (invoices, statements). Required: at least one per contact.",
-                values: "One or more addresses, e.g. `noc@acme.example`.",
+                values:
+                  "One or more addresses, e.g. `noc@acme.example`. Pasting adds the address(es) at once, even a list such as `Name <a@b.com>; c@d.com`, so **Save** right after a paste keeps them.",
               },
             ],
           },
@@ -486,7 +485,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "warning",
-            text: "You cannot change **Type** so that a side disappears while it still has trunks. For example, a Reciprocal partner with 3 vendor trunks cannot become Customer until those vendor trunks are deleted.",
+            text: "You cannot change **Type** so that a side disappears while it still has trunks. For example, a Bilateral partner with 3 vendor trunks cannot become Customer until those vendor trunks are deleted.",
           },
           {
             kind: "tip",
@@ -542,7 +541,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Billing has one side per role: **Customer billing** for a customer, **Vendor billing** for a vendor, and both for a reciprocal partner. Below them is **Beneficiary**, the partner's bank details. One **Save billing** saves the whole tab as one change.",
+            text: "Billing has one side per role: **Customer billing** for a customer, **Vendor billing** for a vendor, and both for a bilateral partner. Below them is **Beneficiary**, the partner's bank details. One **Save billing** saves the whole tab as one change.",
           },
           {
             kind: "text",
@@ -686,7 +685,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "How to hand a partner over",
             items: [
-              "Open the **Account managers** tab (or click **Hand over…** next to Account manager on the General tab).",
+              "Open the **Account managers** tab. The General tab no longer shows the account manager.",
               "Click **Hand over**.",
               "Pick the **New account manager**, choose **Now** or a time, add a note.",
               "Click **Hand over now** or **Schedule handover**.",
@@ -695,6 +694,30 @@ export const topics: HelpTopic[] = [
           {
             kind: "text",
             text: "Revenue, cost and margin from before the handover stay credited to the previous AM. Reports split results by the AM at the time each message was sent. A new scheduled handover replaces one that has not started yet. You can undo a handover from History until it takes effect.",
+          },
+        ],
+      },
+      {
+        id: "notifications",
+        title: "Notifications: send rates and tech info",
+        blocks: [
+          {
+            kind: "text",
+            text: "The **Notifications** button in the record header sends e-mails for all the enterprise's customer trunks at once. It is greyed out when the enterprise has no customer trunks.",
+          },
+          {
+            kind: "fields",
+            fields: [
+              {
+                name: "Send rates…",
+                what: "E-mails the rate sheet of every customer trunk of the enterprise, as on the [[notifications|Notifications]] page (**Customer Send Rate Information**).",
+                values: "Excel or CSV.",
+              },
+              {
+                name: "Send tech info…",
+                what: "Sends ONE e-mail with the connection details of every customer trunk, using the **Customer Tech Info** template. The placeholder {trunks} is replaced by every trunk's block; if the template has no {trunks}, the blocks are added after the body.",
+              },
+            ],
           },
         ],
       },
@@ -714,7 +737,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**Delete** archives the enterprise and its live trunks. It is blocked while there are live binds, unpaid or draft invoices, a customer or vendor balance that is not zero, or open disputes. The check also lists trunks and route rules that will be affected. See [[enterprises#how-to-delete|How to delete an enterprise]] and [[safe-delete]].",
+            text: "**Delete** archives the enterprise. It is blocked while there are live binds, unpaid or draft invoices, a customer or vendor balance that is not zero, or open disputes. It is also blocked while the enterprise has any customer or vendor trunk that is not deleted; these show in red and no administrator override is offered for them, so delete the trunks first. See [[enterprises#how-to-delete|How to delete an enterprise]] and [[safe-delete]].",
           },
           {
             kind: "warning",
@@ -818,10 +841,10 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "list",
-            title: "Detail panel (click a row)",
+            title: "Detail panel (click a row; it opens on the right of the grid)",
             items: [
               "**General**: the Enterprise (click to open it), Username, Protocol, Bind type, TPS, Category and Rules running.",
-              "Right side: ID, who updated it last (UTC), and **Deleted (archived)** in amber for a deleted trunk.",
+              "At the bottom: ID, who updated it last (UTC), and **Deleted (archived)** in amber for a deleted trunk.",
             ],
           },
           {
@@ -831,7 +854,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Filters, quick search, saved views and **Show deleted** work as on every list. See [[grids-and-filters]].",
+            text: "Filters, quick search, saved views and **Show deleted** work as on every list. Plain text in the quick search box matches the start of a value (`Colo` finds trunks starting with Colo); type `%colo` to find it anywhere. See [[grids-and-filters]].",
           },
         ],
       },
@@ -943,7 +966,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** (not active yet) and **New vendor trunk** in the header; per-column filters; detail panel; row menu with **Open**, **Clone…** and **Delete…**; and **Bulk edit** with **Clone…** (one trunk) and **Delete N trunks…**.",
+            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** (not active yet) and **New vendor trunk** in the header; per-column filters; quick search matching the start of a value (type `%text` to find it anywhere); detail panel on the right; row menu with **Open**, **Clone…** and **Delete…**; and **Bulk edit** with **Clone…** (one trunk) and **Delete N trunks…**.",
           },
           {
             kind: "fields",
@@ -1110,7 +1133,7 @@ export const topics: HelpTopic[] = [
                 name: "Enterprise",
                 what: "The partner that owns the trunk. Required. On a new trunk, pick it with the searchable picker (it is already filled when you start from an enterprise). After saving it is fixed and shown as a link: a trunk cannot move to another enterprise; clone it instead.",
                 values:
-                  "A customer trunk needs a Customer or Reciprocal enterprise; a vendor trunk needs a Vendor or Reciprocal one. A deleted enterprise cannot get new trunks.",
+                  "A customer trunk needs a Customer or Bilateral enterprise; a vendor trunk needs a Vendor or Bilateral one. A deleted enterprise cannot get new trunks.",
               },
               { name: "Trunk ID", what: "The trunk's number. Shown after saving." },
               {
@@ -1769,7 +1792,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "The **Send tech info…** item in the enterprise's **⋯** menu is not active yet in the trial.",
+            text: "To send one e-mail with the details of every customer trunk of a partner, use **Notifications › Send tech info…** on the enterprise record ([[enterprise-record#notifications]]).",
           },
         ],
       },

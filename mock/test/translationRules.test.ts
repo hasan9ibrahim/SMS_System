@@ -548,7 +548,30 @@ describe("translation rules API", { skip }, () => {
       }),
     );
     for (const r of page.rows) assert.ok(r.senderConversionValue, "the list name stands in for the value");
-    const id = page.rows[0]?.id ?? 1;
+    // A rule assigned to a live trunk or enterprise cannot be deleted (team trial round 3).
+    const { rows: assigned } = await db().query(
+      `SELECT tg.translation_rule_id AS id FROM translation_rule_targets tg JOIN translation_rules r ON r.id = tg.translation_rule_id
+        WHERE r.deleted_at IS NULL AND tg.target_type = 'trunk' AND tg.trunk_kind = 'customer'
+          AND EXISTS (SELECT 1 FROM customer_trunks t WHERE t.id = tg.target_id AND t.deleted_at IS NULL) LIMIT 1`,
+    );
+    if (assigned[0]) {
+      const deps = await ok(
+        "getTranslationRuleDependencies",
+        call("GET", `/translation-rules/${assigned[0].id}/dependencies`),
+      );
+      assert.ok(deps.blocked);
+      const refused = await call("POST", `/translation-rules/${assigned[0].id}/archive`, {
+        override: true,
+        reason: "x",
+      });
+      assert.equal(refused.statusCode, 409);
+    }
+    const { rows: free } = await db().query(
+      `SELECT r.id FROM translation_rules r WHERE r.deleted_at IS NULL AND NOT EXISTS (
+         SELECT 1 FROM translation_rule_targets tg WHERE tg.translation_rule_id = r.id AND tg.target_type IN ('trunk', 'enterprise'))
+        LIMIT 1`,
+    );
+    const id = free[0]?.id ?? page.rows[0]?.id ?? 1;
     const gone = await ok("archiveTranslationRule", call("POST", `/translation-rules/${id}/archive`, {}));
     assert.ok(gone.record.archivedAt);
     const back = await ok("restoreTranslationRule", call("POST", `/translation-rules/${id}/restore`));

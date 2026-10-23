@@ -534,3 +534,45 @@
   font-size: inherit;
   font-weight: 400;
 }
+/* 'All networks' code with a custom suffix (team trial round 3). */
+.allnet {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.allnet > select {
+  flex: 1;
+  min-width: 0;
+}
+.allnet-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.allnet-custom input {
+  width: 72px;
+}
+.email-chip {
+  display: inline-block;
+  margin: 0 6px 2px 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: 12.5px;
+}
+.ent-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px 28px;
+  align-items: start;
+}
+.ent-detail-h {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

@@ -8,11 +8,11 @@
 // includes today, a live:analytics push (WebSocket) refreshes the open levels at the chosen interval.
 // Each row opens its EDRs in a window, exports them, or opens EDR Search. Every breakdown has its own
 // search box; changes apply at once (no Search button) and Pause stops the live refresh (team trial round 1).
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FilterCondition, ListQuery, MasterReportRow, ReportDimension } from "@sms/contract";
-import { useListFields } from "../../api/hooks";
+import { useListFields, useMe, useUpdatePreferences } from "../../api/hooks";
 import { runMasterReport } from "../../api/masterReports";
 import { DataGrid } from "../../grid/DataGrid";
 import { encodeState, type GridState } from "../../grid/filterModel";
@@ -29,9 +29,12 @@ import { RequestDialog } from "../monitoring/parts";
 import { edrGridState } from "../reports/masterModel";
 import { problemText } from "../routing/dialogs";
 import {
+  ALL_COLUMNS,
   cellTone,
   childConditions,
+  columnsFor,
   COLUMNS,
+  DEFAULT_COLUMNS,
   fmt,
   bucketWindow,
   DETAIL,
@@ -44,6 +47,7 @@ import {
   rangeProblem,
   TONED,
   nextSort,
+  type Column,
   type ColumnSort,
   type Fmt,
   type Settings,
@@ -86,6 +90,80 @@ const BY: Record<string, ReportDimension> = {
   country: "country",
 };
 
+const metricsOf = (cols: Column[]) => cols.map((c) => c.metric);
+/** Money and rates (6 decimals) get wider columns than counts (team trial round 3). */
+const WEIGHT: Record<Fmt, number> = { money: 1.65, rate: 1.35, int: 1.2, pct: 0.95, sec: 0.85, tps: 0.85 };
+const weightOf = (cols: Column[]) => cols.reduce((n, c) => n + WEIGHT[c.fmt], 0);
+const colWidth = (cols: Column[], c: Column) => `${((WEIGHT[c.fmt] / weightOf(cols)) * 82).toFixed(2)}%`;
+/** Below this width the table scrolls sideways instead of cutting figures off. */
+const tableMinWidth = (cols: Column[]) => Math.round(weightOf(cols) * 62 + 260);
+
+/**
+ * Add or remove columns, like dashboard panels (team trial round 3): grouped checkboxes, saved in the user's
+ * preferences; Reset brings back the default set.
+ */
+function ColumnsPicker({ shown }: { shown: Column[] }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const prefs = useUpdatePreferences();
+  const on = new Set(shown.map((c) => c.metric));
+  const groups = [...new Set(ALL_COLUMNS.map((c) => c.group))];
+  const save = (next: Set<string>) => {
+    if (next.size === 0) return;
+    const list = ALL_COLUMNS.filter((c) => next.has(c.metric)).map((c) => c.metric);
+    const isDefault = list.length === DEFAULT_COLUMNS.length && list.every((m, i) => m === DEFAULT_COLUMNS[i]);
+    prefs.mutate({ liveAnalytics: { columns: isDefault ? [] : list } });
+  };
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        className="btn btn-default btn-sm"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Icon name="columns" size={13} /> Columns
+      </button>
+      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="end" className="la-cols-pop">
+        <div className="la-cols">
+          {groups.map((g) => (
+            <fieldset key={g}>
+              <legend>{g}</legend>
+              {ALL_COLUMNS.filter((c) => c.group === g).map((c) => (
+                <label key={c.metric} className="check" title={c.title}>
+                  <input
+                    type="checkbox"
+                    checked={on.has(c.metric)}
+                    disabled={on.has(c.metric) && on.size === 1}
+                    onChange={(e) => {
+                      const next = new Set(on);
+                      if (e.target.checked) next.add(c.metric);
+                      else next.delete(c.metric);
+                      save(next);
+                    }}
+                  />
+                  <span>{c.label}</span>
+                </label>
+              ))}
+            </fieldset>
+          ))}
+        </div>
+        <div className="la-cols-foot">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => save(new Set(DEFAULT_COLUMNS))}>
+            Reset to default columns
+          </button>
+        </div>
+      </Popover>
+    </>
+  );
+}
+
+/** The columns on screen (team trial round 3: the user adds or removes them, saved in their preferences). */
+const ColsCtx = createContext<Column[]>(COLUMNS);
+const useCols = () => useContext(ColsCtx);
+
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -105,6 +183,7 @@ interface Detail {
 
 /** Under the table: the double-clicked row's traffic per second, minute, 15 minutes, hour or day. */
 function DetailPanel({
+  width,
   settings,
   by,
   setBy,
@@ -113,6 +192,7 @@ function DetailPanel({
   onPick,
   onClose,
 }: {
+  width: number | null;
   settings: Settings;
   by: ReportDimension;
   setBy: (d: ReportDimension) => void;
@@ -121,15 +201,20 @@ function DetailPanel({
   onPick: (at: NonNullable<Settings["at"]>) => void;
   onClose: () => void;
 }) {
+  const cols = useCols();
   const [limit, setLimit] = useState(500);
   const whole = { ...settings, at: null };
   const q = useQuery({
-    queryKey: ["analytics-detail", whole, by, detail.conditions, limit, tick],
-    queryFn: () => runMasterReport(detailQuery(whole, by, detail.conditions, limit)),
+    queryKey: ["analytics-detail", whole, by, detail.conditions, limit, tick, metricsOf(cols)],
+    queryFn: () => runMasterReport(detailQuery(whole, by, detail.conditions, limit, metricsOf(cols))),
     placeholderData: keepPreviousData,
   });
   return (
-    <section className="la-detail" aria-label={`Traffic over time: ${detail.title}`}>
+    <section
+      className="la-detail"
+      aria-label={`Traffic over time: ${detail.title}`}
+      style={width ? { flex: `0 0 ${width}px` } : undefined}
+    >
       <div className="la-detail-head">
         <strong>{detail.title}</strong>
         <span className="muted small">over time · click a time to see all traffic at that moment above</span>
@@ -149,18 +234,18 @@ function DetailPanel({
         </button>
       </div>
       <div className="la-detail-body">
-        <table className="la-grid">
+        <table className="la-grid" style={{ minWidth: tableMinWidth(cols) }}>
           <colgroup>
             <col className="la-col-name" />
-            {COLUMNS.map((c) => (
-              <col key={c.metric} />
+            {cols.map((c) => (
+              <col key={c.metric} style={{ width: colWidth(cols, c) }} />
             ))}
             <col className="la-col-act" />
           </colgroup>
           <thead>
             <tr>
               <th>{DETAIL.find((d) => d.value === by)?.label ?? "Time"} (UTC)</th>
-              {COLUMNS.map((c) => (
+              {cols.map((c) => (
                 <th key={c.metric} className="num" title={c.title}>
                   {c.label}
                 </th>
@@ -171,7 +256,7 @@ function DetailPanel({
           <tbody>
             {q.isError && (
               <tr>
-                <td colSpan={COLUMNS.length + 2} className="tone-error">
+                <td colSpan={cols.length + 2} className="tone-error">
                   {problemText(q.error)}
                 </td>
               </tr>
@@ -199,7 +284,7 @@ function DetailPanel({
             )}
             {!q.data && !q.isError && (
               <tr>
-                <td colSpan={COLUMNS.length + 2} className="muted">
+                <td colSpan={cols.length + 2} className="muted">
                   Loading…
                 </td>
               </tr>
@@ -208,6 +293,38 @@ function DetailPanel({
         </table>
       </div>
     </section>
+  );
+}
+
+/** The bar between the table and the detail panel: drag sideways to resize, double-click for the default width. */
+function SideSplitter({ width, onChange }: { width: number | null; onChange: (w: number | null) => void }) {
+  const start = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const panel = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null;
+    const host = (e.currentTarget as HTMLElement).parentElement;
+    const startX = e.clientX;
+    const startW = panel?.offsetWidth ?? width ?? 520;
+    const max = Math.max(360, (host?.clientWidth ?? 1200) - 420);
+    const move = (ev: PointerEvent) => onChange(Math.min(max, Math.max(360, startW + startX - ev.clientX)));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing-split");
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    document.body.classList.add("resizing-split");
+  };
+  return (
+    <div
+      className="detail-splitter"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the detail panel"
+      title="Drag to resize · double-click: default width"
+      onPointerDown={start}
+      onDoubleClick={() => onChange(null)}
+    />
   );
 }
 
@@ -314,9 +431,10 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
 }
 
 function Cells({ metrics }: { metrics: Record<string, number | null> }) {
+  const cols = useCols();
   return (
     <>
-      {COLUMNS.map((c) => {
+      {cols.map((c) => {
         const v = metrics[c.metric];
         const t = cellTone(c.metric, v);
         return (
@@ -410,16 +528,18 @@ function Level({
   selected: string | null;
   sort: ColumnSort | null;
 }) {
+  const cols = useCols();
   // Row key → the level it is broken down by.
   const [open, setOpen] = useState<Map<string, ReportDimension>>(new Map());
   const [limit, setLimit] = useState(100);
   const [own, setOwn] = useState("");
   const typed = useDebounced((search ?? own).trim(), 300);
   const depth = chain.length;
-  const conds = typed ? [...parents, { field: dim, op: "like" as const, value: `%${typed}%` }] : parents;
+  // Searches match the start of the name: "Colo" finds rows starting with Colo (team trial round 3).
+  const conds = typed ? [...parents, { field: dim, op: "like" as const, value: `${typed}%` }] : parents;
   const q = useQuery({
-    queryKey: ["analytics-level", settings, dim, conds, limit, tick, sort],
-    queryFn: () => runMasterReport(levelQuery(settings, dim, conds, limit, sort)),
+    queryKey: ["analytics-level", settings, dim, conds, limit, tick, sort, metricsOf(cols)],
+    queryFn: () => runMasterReport(levelQuery(settings, dim, conds, limit, sort, metricsOf(cols))),
     placeholderData: keepPreviousData,
   });
   const indent = { paddingLeft: 8 + (depth + 1) * 18 };
@@ -439,13 +559,13 @@ function Level({
           <span className="la-toggle-gap" />
           <input
             className="la-row-search"
-            placeholder={`Search ${levelLabel(dim).toLowerCase()}…`}
+            placeholder={levelLabel(dim)}
             aria-label={`Search ${levelLabel(dim).toLowerCase()} of ${chain.map((c) => c.row.dims[c.dims[0]!]?.label).join(" › ")}`}
             value={own}
             onChange={(e) => setOwn(e.target.value)}
           />
         </td>
-        <td colSpan={COLUMNS.length + 1} />
+        <td colSpan={cols.length + 1} />
       </tr>
     ) : null;
   if (q.isError)
@@ -453,7 +573,7 @@ function Level({
       <>
         {searchRow}
         <tr className={fr.trim() || undefined}>
-          <td colSpan={COLUMNS.length + 2} className="tone-error" style={indent}>
+          <td colSpan={cols.length + 2} className="tone-error" style={indent}>
             {problemText(q.error)}
           </td>
         </tr>
@@ -464,7 +584,7 @@ function Level({
       <>
         {searchRow}
         <tr className={fr.trim() || undefined}>
-          <td colSpan={COLUMNS.length + 2} className="muted" style={indent}>
+          <td colSpan={cols.length + 2} className="muted" style={indent}>
             Loading {levelLabel(dim).toLowerCase()}…
           </td>
         </tr>
@@ -557,7 +677,7 @@ function Level({
             {/* The bottom edge of the frame around an expanded row and its sub rows. */}
             {next && (
               <tr className={`la-group-end${fr}`} aria-hidden="true">
-                <td colSpan={COLUMNS.length + 2} />
+                <td colSpan={cols.length + 2} />
               </tr>
             )}
           </Fragment>
@@ -574,7 +694,7 @@ function Level({
       )}
       {q.data.rows.length === 0 && (
         <tr className={fr.trim() || undefined}>
-          <td colSpan={COLUMNS.length + 2} className="muted" style={indent}>
+          <td colSpan={cols.length + 2} className="muted" style={indent}>
             {typed ? "Nothing matches." : "No traffic."}
           </td>
         </tr>
@@ -585,6 +705,8 @@ function Level({
 
 export function LiveAnalyticsPage() {
   const location = useLocation();
+  const me = useMe();
+  const cols = columnsFor(me.data?.preferences.liveAnalytics?.columns);
   const url = new URLSearchParams(location.search);
   const first = BY[url.get("by") ?? ""] ?? "customer";
   const [draft, setDraft] = useState<Settings>(() => ({ ...presetRange("today"), hourFrom: 0, hourTo: 23 }));
@@ -622,6 +744,7 @@ export function LiveAnalyticsPage() {
   const [refresh, setRefresh] = useState(30);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailBy, setDetailBy] = useState<ReportDimension>("minute");
+  const [detailWidth, setDetailWidth] = useState<number | null>(null);
   const live = includesToday(settings, reportToday);
   // Pause stops the live refresh without losing the chosen interval (team trial round 1).
   const [paused, setPaused] = useState(false);
@@ -643,8 +766,9 @@ export function LiveAnalyticsPage() {
     [settings],
   );
   const total = useQuery({
-    queryKey: ["analytics-total", settings, tick],
-    queryFn: () => runMasterReport({ ...levelQuery(settings, top ?? "customer", []), limit: 1 }),
+    queryKey: ["analytics-total", settings, tick, metricsOf(cols)],
+    queryFn: () =>
+      runMasterReport({ ...levelQuery(settings, top ?? "customer", [], 1, null, metricsOf(cols)), limit: 1 }),
     placeholderData: keepPreviousData,
   });
   const currency = total.data?.currency ?? "EUR";
@@ -654,198 +778,208 @@ export function LiveAnalyticsPage() {
   });
   const setRange = (k: Parameters<typeof presetRange>[0]) => setDraft({ ...draft, ...presetRange(k, reportToday) });
   return (
-    <div className="page la-page">
-      <PageHeader
-        page={page}
-        actions={
-          <>
-            <span
-              className={`la-live${running ? " on" : ""}`}
-              title={live ? "Refreshes while the period includes today" : "The period is over, so nothing changes"}
-            >
-              <span className="la-live-dot" /> {running ? "Live" : live ? "Paused" : "Not live"}
-            </span>
-            <label className="field inline">
-              <span>Refresh</span>
-              <select value={refresh} onChange={(e) => setRefresh(Number(e.target.value))}>
-                {REFRESH.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button
-              variant="primary"
-              icon={paused ? "play" : "pause"}
-              disabled={!live || !refresh}
-              title={!live ? "The period does not include today" : undefined}
-              onClick={() => setPaused((p) => !p)}
-            >
-              {paused ? "Resume" : "Pause"}
-            </Button>
-            {problem && <span className="tone-error small">{problem}</span>}
-          </>
-        }
-      />
-      {/* Period in the shared style (design refresh): quick periods, the day range and the hours of each day. */}
-      <div className="la-bar">
-        <PeriodTabs
-          options={PRESETS}
-          value={PRESETS.find((p) => samePeriod(presetRange(p.key, reportToday), draft))?.key ?? null}
-          onPick={setRange}
-        />
-        <RangeChip
-          from={draft.fromDate}
-          to={draft.toDate}
-          empty="Pick days"
-          onChange={(fromDate, toDate) =>
-            fromDate && toDate && setDraft({ ...draft, fromDate, toDate: toDate < fromDate ? fromDate : toDate })
+    <ColsCtx.Provider value={cols}>
+      <div className="page la-page">
+        <PageHeader
+          page={page}
+          actions={
+            <>
+              <span
+                className={`la-live${running ? " on" : ""}`}
+                title={live ? "Refreshes while the period includes today" : "The period is over, so nothing changes"}
+              >
+                <span className="la-live-dot" /> {running ? "Live" : live ? "Paused" : "Not live"}
+              </span>
+              {/* Pause right after Live, the refresh interval after them (team trial round 3). */}
+              <Button
+                variant="primary"
+                icon={paused ? "play" : "pause"}
+                disabled={!live || !refresh}
+                title={!live ? "The period does not include today" : undefined}
+                onClick={() => setPaused((p) => !p)}
+              >
+                {paused ? "Resume" : "Pause"}
+              </Button>
+              <label className="field inline">
+                <span>Refresh</span>
+                <select value={refresh} onChange={(e) => setRefresh(Number(e.target.value))}>
+                  {REFRESH.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {problem && <span className="tone-error small">{problem}</span>}
+            </>
           }
         />
-        <HoursChip
-          from={draft.hourFrom}
-          to={draft.hourTo}
-          onChange={(hourFrom, hourTo) => setDraft({ ...draft, hourFrom, hourTo })}
-        />
-      </div>
-      {settings.at && (
-        <div className="la-at" role="status">
-          <strong>Showing only {settings.at.label}</strong>
-          <span className="muted small">picked in the detail panel; levels and totals are for that moment</span>
-          <Button
-            onClick={() => {
-              setSettings({ ...settings, at: null });
-              setDraft({ ...draft, at: null });
-            }}
-          >
-            Show the whole period
-          </Button>
+        {/* Period in the shared style (design refresh): quick periods, the day range and the hours of each day. */}
+        <div className="la-bar">
+          <PeriodTabs
+            options={PRESETS}
+            value={PRESETS.find((p) => samePeriod(presetRange(p.key, reportToday), draft))?.key ?? null}
+            onPick={setRange}
+          />
+          <RangeChip
+            from={draft.fromDate}
+            to={draft.toDate}
+            empty="Pick days"
+            onChange={(fromDate, toDate) =>
+              fromDate && toDate && setDraft({ ...draft, fromDate, toDate: toDate < fromDate ? fromDate : toDate })
+            }
+          />
+          <HoursChip
+            from={draft.hourFrom}
+            to={draft.hourTo}
+            onChange={(hourFrom, hourTo) => setDraft({ ...draft, hourFrom, hourTo })}
+          />
+          <span className="fb-spacer" />
+          <ColumnsPicker shown={cols} />
         </div>
-      )}
-      <div className="la-wrap">
-        <table className="la-grid">
-          <colgroup>
-            <col className="la-col-name" />
-            {COLUMNS.map((c) => (
-              <col key={c.metric} />
-            ))}
-            <col className="la-col-act" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th className="la-th-name" title="Use + on a row to break it down by any level">
-                {top ? (
-                  <span className="la-th-search">
-                    <input
-                      className="la-row-search"
-                      placeholder={`Search ${levelLabel(top).toLowerCase()}…`}
-                      aria-label={`Search ${levelLabel(top).toLowerCase()}`}
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
+        {settings.at && (
+          <div className="la-at" role="status">
+            <strong>Showing only {settings.at.label}</strong>
+            <span className="muted small">picked in the detail panel; levels and totals are for that moment</span>
+            <Button
+              onClick={() => {
+                setSettings({ ...settings, at: null });
+                setDraft({ ...draft, at: null });
+              }}
+            >
+              Show the whole period
+            </Button>
+          </div>
+        )}
+        {/* The detail panel sits on the right of the table and narrows it (team trial round 3). */}
+        <div className="la-body">
+          <div className="la-wrap">
+            <table className="la-grid" style={{ minWidth: tableMinWidth(cols) }}>
+              <colgroup>
+                <col className="la-col-name" />
+                {cols.map((c) => (
+                  <col key={c.metric} style={{ width: colWidth(cols, c) }} />
+                ))}
+                <col className="la-col-act" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="la-th-name" title="Use + on a row to break it down by any level">
+                    {top ? (
+                      <span className="la-th-search">
+                        <input
+                          className="la-row-search"
+                          placeholder={levelLabel(top)}
+                          aria-label={`Search ${levelLabel(top).toLowerCase()}`}
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="la-sort"
+                          title="Sort by name"
+                          aria-label="Sort by name"
+                          onClick={() => setSort(nextSort(sort, "name"))}
+                        >
+                          A–Z{arrow("name")}
+                        </button>
+                      </span>
+                    ) : (
+                      "Total"
+                    )}
+                  </th>
+                  {cols.map((c) => (
+                    <th
+                      key={c.metric}
+                      className="num"
+                      title={moneyCols.has(c.fmt) ? `${c.title} · in ${currency}` : c.title}
+                      aria-sort={sort?.key === c.metric ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
+                    >
+                      <button type="button" className="la-sort" onClick={() => setSort(nextSort(sort, c.metric))}>
+                        {c.label}
+                        {/* Money and rates are in the platform currency (EUR); the header's tooltip says so (team trial
+                        round 2: no currency in the header text). */}
+                        {arrow(c.metric)}
+                      </button>
+                    </th>
+                  ))}
+                  <th>EDRs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  className={`la-total${detail?.key === "" ? " la-selected" : ""}`}
+                  title="Double-click: all traffic over time below"
+                  onDoubleClick={() => setDetail({ key: "", title: "All traffic", conditions: [], chain: [] })}
+                >
+                  <td className="la-name">
+                    <ExpandButton name="the total" open={top} used={[]} onPick={setTop} onClose={() => setTop(null)} />
+                    <span className="la-label">Total</span>
+                    {top && <span className="la-by">by {levelLabel(top).toLowerCase()}</span>}
+                  </td>
+                  {total.data ? (
+                    <Cells metrics={total.data.totals.metrics} />
+                  ) : (
+                    <td colSpan={cols.length} className="muted">
+                      {total.isError ? problemText(total.error) : "Loading…"}
+                    </td>
+                  )}
+                  <td className="la-actions">
                     <button
                       type="button"
-                      className="la-sort"
-                      title="Sort by name"
-                      aria-label="Sort by name"
-                      onClick={() => setSort(nextSort(sort, "name"))}
+                      className="la-act"
+                      onClick={() =>
+                        void ask<void>((d) => (
+                          <EdrWindow
+                            title="All traffic"
+                            state={edrGridState([], window.from, window.to)}
+                            done={() => d()}
+                          />
+                        ))
+                      }
                     >
-                      A–Z{arrow("name")}
+                      EDRs
                     </button>
-                  </span>
-                ) : (
-                  "Total"
+                  </td>
+                </tr>
+                {top && (
+                  <Level
+                    key={top}
+                    settings={settings}
+                    dim={top}
+                    used={[top]}
+                    parents={[]}
+                    chain={[]}
+                    tick={tick}
+                    search={search}
+                    window={window}
+                    onDetail={setDetail}
+                    selected={detail?.key ?? null}
+                    sort={sort}
+                  />
                 )}
-              </th>
-              {COLUMNS.map((c) => (
-                <th
-                  key={c.metric}
-                  className="num"
-                  title={moneyCols.has(c.fmt) ? `${c.title} · in ${currency}` : c.title}
-                  aria-sort={sort?.key === c.metric ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
-                >
-                  <button type="button" className="la-sort" onClick={() => setSort(nextSort(sort, c.metric))}>
-                    {c.label}
-                    {/* Money and rates are in the platform currency (EUR); the header's tooltip says so (team trial
-                        round 2: no currency in the header text). */}
-                    {arrow(c.metric)}
-                  </button>
-                </th>
-              ))}
-              <th>EDRs</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              className={`la-total${detail?.key === "" ? " la-selected" : ""}`}
-              title="Double-click: all traffic over time below"
-              onDoubleClick={() => setDetail({ key: "", title: "All traffic", conditions: [], chain: [] })}
-            >
-              <td className="la-name">
-                <ExpandButton name="the total" open={top} used={[]} onPick={setTop} onClose={() => setTop(null)} />
-                <span className="la-label">Total</span>
-                {top && <span className="la-by">by {levelLabel(top).toLowerCase()}</span>}
-              </td>
-              {total.data ? (
-                <Cells metrics={total.data.totals.metrics} />
-              ) : (
-                <td colSpan={COLUMNS.length} className="muted">
-                  {total.isError ? problemText(total.error) : "Loading…"}
-                </td>
-              )}
-              <td className="la-actions">
-                <button
-                  type="button"
-                  className="la-act"
-                  onClick={() =>
-                    void ask<void>((d) => (
-                      <EdrWindow
-                        title="All traffic"
-                        state={edrGridState([], window.from, window.to)}
-                        done={() => d()}
-                      />
-                    ))
-                  }
-                >
-                  EDRs
-                </button>
-              </td>
-            </tr>
-            {top && (
-              <Level
-                key={top}
-                settings={settings}
-                dim={top}
-                used={[top]}
-                parents={[]}
-                chain={[]}
-                tick={tick}
-                search={search}
-                window={window}
-                onDetail={setDetail}
-                selected={detail?.key ?? null}
-                sort={sort}
-              />
-            )}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+          {detail && <SideSplitter width={detailWidth} onChange={setDetailWidth} />}
+          {detail && (
+            <DetailPanel
+              width={detailWidth}
+              settings={settings}
+              by={detailBy}
+              setBy={setDetailBy}
+              detail={detail}
+              tick={tick}
+              onPick={(at) => {
+                setSettings({ ...settings, at });
+                setDraft({ ...draft, at });
+              }}
+              onClose={() => setDetail(null)}
+            />
+          )}
+        </div>
       </div>
-      {detail && (
-        <DetailPanel
-          settings={settings}
-          by={detailBy}
-          setBy={setDetailBy}
-          detail={detail}
-          tick={tick}
-          onPick={(at) => {
-            setSettings({ ...settings, at });
-            setDraft({ ...draft, at });
-          }}
-          onClose={() => setDetail(null)}
-        />
-      )}
-    </div>
+    </ColsCtx.Provider>
   );
 }
 
@@ -866,6 +1000,7 @@ function MoreOnScroll({
   style?: React.CSSProperties;
   className?: string | undefined;
 }) {
+  const cols = useCols();
   const ref = useRef<HTMLTableRowElement>(null);
   const more = useRef(onMore);
   more.current = onMore;
@@ -880,7 +1015,7 @@ function MoreOnScroll({
   }, [busy]);
   return (
     <tr ref={ref} className={className}>
-      <td colSpan={COLUMNS.length + 2} className="muted small" style={style}>
+      <td colSpan={cols.length + 2} className="muted small" style={style}>
         {text}
       </td>
     </tr>

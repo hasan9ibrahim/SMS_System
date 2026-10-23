@@ -61,7 +61,7 @@ async function trafficFigures(db: Db, rows: { id: number; kind: string; currency
       return [
         r.id,
         {
-          money: Math.round((sys / platformPerEur) * (perEur.get(r.currency) ?? 1) * 100) / 100,
+          money: Math.round((sys / platformPerEur) * (perEur.get(r.currency) ?? 1) * 1e6) / 1e6,
           margin: marginPct(t),
           n: t?.messages ?? 0,
         },

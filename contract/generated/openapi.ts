@@ -2882,6 +2882,26 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/translation-rules/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses a translation rule (safe delete, §13.29)
+     * @description Trunks and enterprises the rule is assigned to (team trial round 3): while any is live the rule cannot be deleted, not even with an override. Rules for all trunks or a category do not block.
+     */
+    get: operations["getTranslationRuleDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/translation-rules/{id}/archive": {
     parameters: {
       query?: never;
@@ -3272,6 +3292,26 @@ export type paths = {
      * @description Saves the whole record; the change lists the fields that differ. One undoable change.
      */
     put: operations["updateHlrRule"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/hlr-rules/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses an HLR rule (safe delete, §13.29)
+     * @description Trunks and enterprises the rule is assigned to (team trial round 3): while any is live the rule cannot be deleted, not even with an override. Rules for all trunks or a category do not block.
+     */
+    get: operations["getHlrRuleDependencies"];
+    put?: never;
     post?: never;
     delete?: never;
     options?: never;
@@ -9613,6 +9653,29 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/route-rules/{id}/discard": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Discard a new rule that was never saved (team trial round 3, §6.3)
+     * @description New rule opens one window at once on a draft: the rule is created turned off, and closing the window with ×
+     *     discards it. Discard removes the rule and its change history as if it never existed. Only the user who added
+     *     it, within 24 hours, while it has never been turned on and has carried no traffic; otherwise 409 (use
+     *     Delete, which archives, §13.29).
+     */
+    post: operations["discardRouteRule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/{id}/clone": {
     parameters: {
       query?: never;
@@ -10027,6 +10090,7 @@ export type components = {
         animations: boolean;
         dashboard: components["schemas"]["DashboardSettings"];
         alertSounds?: components["schemas"]["AlertSoundPrefs"];
+        liveAnalytics?: components["schemas"]["LiveAnalyticsSettings"];
       };
       /** @description GUI Access Group permission keys ("page:action"; "*" = everything) after the user's own overrides; pages without view are hidden from the menu and blocked, buttons not covered are hidden (§1). */
       permissions: string[];
@@ -10039,6 +10103,11 @@ export type components = {
       animations?: boolean;
       dashboard?: components["schemas"]["DashboardSettings"];
       alertSounds?: components["schemas"]["AlertSoundPrefs"];
+      liveAnalytics?: components["schemas"]["LiveAnalyticsSettings"];
+    };
+    /** @description Live analytics columns, saved per user (team trial round 3): the metrics shown, in order. An empty list is the default set; the client adds or removes columns like dashboard panels. */
+    LiveAnalyticsSettings: {
+      columns: components["schemas"]["ReportMetric"][];
     };
     /** @description The live dashboard's time window, mover volumes, panels and layout, saved per user (§13.3). */
     DashboardSettings: {
@@ -10266,6 +10335,8 @@ export type components = {
       count: number | null;
       /** @description Must be settled before archiving (§13.29). */
       blocking: boolean;
+      /** @description A blocking item even an administrator cannot override (team trial round 3): an enterprise's live trunks, the trunks and enterprises a translation or HLR rule is assigned to. */
+      noOverride?: boolean;
       detail?: string | null;
     };
     Dependencies: {
@@ -10307,12 +10378,12 @@ export type components = {
     };
     /**
      * @description How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
-     *     `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Incoming RNs from the partner read
+     *     `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Team trial round 3: any other form as
+     *     `MCC` plus up to 6 characters, e.g. `MCC99` = 26299, `MCCxx` = 262xx. Incoming RNs from the partner read
      *     that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
      * @default mcc
-     * @enum {string}
      */
-    AllNetworksCode: "mcc" | "mcc0" | "mcc00" | "mcc000" | "mccStar";
+    AllNetworksCode: string;
     /** @description Add/Edit form (§5.1). The account manager is set on create; later changes go through handover (§13.30). */
     EnterpriseInput: {
       name: string;
@@ -14055,6 +14126,11 @@ export type components = {
     };
     NotificationTrunksInput: {
       trunkIds: components["schemas"]["Id"][];
+      /**
+       * @description Send Tech Info only (team trial round 3, Notifications on the enterprise): one e-mail per enterprise with every picked trunk's connection details in the {trunks} block of the Customer Tech Info template (added after the body when the template has no {trunks}). False = one e-mail per trunk.
+       * @default false
+       */
+      oneEmailPerEnterprise: boolean;
     };
     SendRateInput: {
       trunkIds: components["schemas"]["Id"][];
@@ -17673,7 +17749,7 @@ export type components = {
      */
     ListQuery: {
       filter?: components["schemas"]["FilterGroup"];
-      /** @description Quick search across the list's text columns (case-insensitive, wildcards allowed). */
+      /** @description Quick search across the list's text columns (case-insensitive, wildcards allowed). Plain text matches anywhere in a value; on lists of named records (enterprises, customer and vendor trunks, users) it matches the start of a value, e.g. "Colo" finds names starting with Colo (team trial round 3). `%` and `_` work as typed on every list. */
       search?: string;
       sort?: components["schemas"]["SortKey"][];
       /**
@@ -17745,7 +17821,7 @@ export type components = {
       defaultSort: components["schemas"]["SortKey"][];
     };
     /**
-     * @description Reciprocal = both customer and vendor.
+     * @description reciprocal = Bilateral (both customer and vendor; shown as Bilateral since team trial round 3).
      * @enum {string}
      */
     EnterpriseType: "customer" | "vendor" | "reciprocal";
@@ -22690,6 +22766,31 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  getTranslationRuleDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
   archiveTranslationRule: {
     parameters: {
       query?: never;
@@ -23288,6 +23389,31 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getHlrRuleDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -32492,6 +32618,30 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  discardRouteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Discarded */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
     };
   };

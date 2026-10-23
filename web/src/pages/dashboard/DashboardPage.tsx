@@ -56,12 +56,13 @@ const DEFAULTS: DashboardSettings = {
 };
 type Panel = DashboardSettings["hiddenPanels"][number];
 const PANELS: { key: Panel; label: string }[] = [
+  // Default order (team trial round 3): cards, tops, TPS per trunk, movers, destinations, the TPS chart.
   { key: "summary", label: "Today's summary" },
-  { key: "movers", label: "Traffic movers" },
-  { key: "chart", label: "Live TPS chart" },
-  { key: "tps", label: "TPS per trunk" },
   { key: "tops", label: "Top clients and vendors" },
+  { key: "tps", label: "TPS per trunk" },
+  { key: "movers", label: "Traffic movers" },
   { key: "destinations", label: "Top destinations" },
+  { key: "chart", label: "Live TPS chart" },
 ];
 
 /** Refresh periods of the summary, movers, top lists and TPS table (team trial round 1). */
@@ -588,10 +589,13 @@ function MarketMovesCard() {
 /** Two figures in one card, one per line (team trial round 2), with an optional title above them. */
 function PairCard({
   title,
+  dot,
   rows,
   animate,
 }: {
   title?: string;
+  /** A green light before the title (Online, team trial round 3). */
+  dot?: boolean;
   rows: {
     label: string;
     value: number | undefined;
@@ -602,7 +606,12 @@ function PairCard({
 }) {
   return (
     <div className={`dash-kpi dash-kpi-pair${title ? " titled" : ""}`}>
-      {title && <span className="label pair-title">{title}</span>}
+      {title && (
+        <span className="label pair-title">
+          {dot && <span className="dot dot-good" aria-hidden="true" />}
+          {title}
+        </span>
+      )}
       {rows.map((r) => (
         <PairRow key={r.label} {...r} animate={animate} />
       ))}
@@ -677,6 +686,7 @@ function SummaryBar({
         <Counter label="TPS now" value={s?.tps} format={(v) => dec(v)} animate={animate} />
         <PairCard
           title="Online"
+          dot
           animate={animate}
           rows={[
             { label: "Customers", value: s?.onlineCustomers, format: int },

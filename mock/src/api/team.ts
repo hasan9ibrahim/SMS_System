@@ -43,7 +43,8 @@ import { CURRENT_USER_ID } from "./session.js";
 
 const DAY = 86_400_000;
 const ACTIVE_MS = 5 * 60_000;
-const r2 = (v: number) => Math.round(v * 100) / 100;
+/** Money to 6 decimals (team trial round 3). */
+const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const n = (v: unknown) => Number(v ?? 0);
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
@@ -446,15 +447,15 @@ export async function buildTeamReport(
         newClients: count(fresh, m.id),
         stoppedClients: count(stopped, m.id),
         messages: c.messages,
-        revenue: r2(c.revenue),
-        margin: r2(margin),
+        revenue: r6(c.revenue),
+        margin: r6(margin),
         marginPct: c.revenue > 0 ? r1((margin / c.revenue) * 100) : null,
         growthPct: p.revenue > 0 ? r1(((c.revenue - p.revenue) / p.revenue) * 100) : null,
         prevMessages: p.messages,
-        prevRevenue: r2(p.revenue),
-        prevMargin: r2(p.revenue - p.cost),
-        revenueTarget: t ? r2(t.revenue) : null,
-        marginTarget: t ? r2(t.margin) : null,
+        prevRevenue: r6(p.revenue),
+        prevMargin: r6(p.revenue - p.cost),
+        revenueTarget: t ? r6(t.revenue) : null,
+        marginTarget: t ? r6(t.margin) : null,
         achievedPct: t && t.revenue > 0 ? r1((c.revenue / t.revenue) * 100) : null,
       };
     }
@@ -494,8 +495,8 @@ export async function buildTeamReport(
       members: rows.length,
       activeMembers: rows.filter((r) => r.activity.daysActive > 0).length,
       messages: sum((r) => r.business?.messages),
-      revenue: revHidden ? null : r2(revenue),
-      margin: marHidden ? null : r2(margin),
+      revenue: revHidden ? null : r6(revenue),
+      margin: marHidden ? null : r6(margin),
       marginPct: revHidden || marHidden || revenue <= 0 ? null : r1((margin / revenue) * 100),
       saves: sum((r) => r.activity.saves),
       hoursOnline: r1(sum((r) => r.activity.hoursOnline)),
@@ -655,8 +656,8 @@ export function getTeamMember(request: FastifyRequest, reply: FastifyReply) {
       trend: (trend ?? []).map((t) => ({
         date: t.d,
         messages: n(t.m),
-        revenue: hideMoney && row.business?.revenue === null ? null : r2(n(t.r)),
-        margin: hideMoney && row.business?.margin === null ? null : r2(n(t.r) - n(t.c)),
+        revenue: hideMoney && row.business?.revenue === null ? null : r6(n(t.r)),
+        margin: hideMoney && row.business?.margin === null ? null : r6(n(t.r) - n(t.c)),
       })),
       hourly: hours,
       days: days.rows.map((d) => ({

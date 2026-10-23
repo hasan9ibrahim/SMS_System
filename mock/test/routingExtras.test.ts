@@ -191,7 +191,8 @@ describe("re-rating", { skip: skipEdr }, () => {
         row.transactionId,
       ]);
       assert.equal(tx[0].transaction_type, "reprocess");
-      assert.equal(Number(tx[0].amount), Math.abs(row.amount));
+      // The difference is calculated to 6 decimals; the posted transaction is in cents (team trial round 3).
+      assert.equal(Number(tx[0].amount), Math.round(Math.abs(row.amount) * 100) / 100);
     } else assert.equal(row.transactionStatus, "no_difference");
     const again = await call("POST", `/rerating-requests/${theirs}/decline`, { reason: "late" });
     assert.equal(again.statusCode, 409, "a decided request cannot be decided again");

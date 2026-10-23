@@ -65,7 +65,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The page uses the standard layout: header with the **Add rule** button, active-filter chips, the rules grid with a filter under each column, a detail panel for the selected rule and the status bar. See [[layout]] and [[grids-and-filters]].",
+            text: "The page uses the standard layout: header with the **Add rule** button, the filter card with the quick search box, the rules grid with a filter under each column, a detail panel on the right for the selected rule and the status bar. See [[layout]] and [[grids-and-filters]].",
           },
           {
             kind: "fields",
@@ -506,7 +506,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Message Text",
                 what: "What the match (or group) becomes. `$1`…`$9` insert what the pattern's brackets caught and `$0` the whole match, so you can pull a part out into new text. Greyed out until a Regex Pattern is entered; required once there is one.",
-                values: "Up to 1,000 characters. Empty text removes the match. Example: Regex Pattern `^.*?([0-9]{4,8}).*$` with Message Text `PIN $1 for you` turns `Your code is 482913. FREE gift at bit.ly/x` into `PIN 482913 for you`.",
+                values:
+                  "Up to 1,000 characters. Empty text removes the match. Example: Regex Pattern `^.*?([0-9]{4,8}).*$` with Message Text `PIN $1 for you` turns `Your code is 482913. FREE gift at bit.ly/x` into `PIN 482913 for you`.",
               },
               {
                 name: "MSG Template",
@@ -585,6 +586,10 @@ export const topics: HelpTopic[] = [
               "Review what depends on the rule and confirm.",
               "The rule is archived, not destroyed: it stops running everywhere. An administrator can **Restore** it.",
             ],
+          },
+          {
+            kind: "warning",
+            text: "A rule assigned to a live trunk or enterprise cannot be deleted, not even with an administrator override. The delete window lists those trunks and enterprises in red: remove the rule from them first. A rule for all trunks or for a category does not block the delete; it just stops running there.",
           },
           { kind: "text", text: "See [[safe-delete]]. Ctrl+Z undoes your last change; see [[undo-and-history]]." },
         ],
@@ -984,6 +989,10 @@ export const topics: HelpTopic[] = [
           {
             kind: "tip",
             text: "HLR rules apply to customer trunks only. If a rule runs on more than one trunk, saving asks you to confirm “Save on n trunks”.",
+          },
+          {
+            kind: "warning",
+            text: "An HLR rule assigned to a live trunk or enterprise cannot be deleted, not even with an administrator override; the delete window shows those items in red. Remove the rule from those trunks / enterprises first. A rule for all customer trunks or a category does not block; it just stops running there.",
           },
         ],
       },
@@ -2088,7 +2097,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Enterprise Type",
                 what: "Which partners get it.",
-                values: "Customer and Reciprocal (default), Vendor. At least one.",
+                values: "Customer and Bilateral (default), Vendor. At least one.",
               },
               {
                 name: "Message",

@@ -303,9 +303,9 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**Page header**: links to the other routing pages (Route map, LCR, Re-rating, Rate lookup, Simulator) and the actions **Undo**, **History**, **Export**, **Cleanup** (only when there are findings), **Simulate** and the blue **New rule** button.",
-              '**Filter row**: the active filter chips, **Add filter** (the filter builder), **Quick search**, **Clear all**, **Save as view**, **Views**, and on the right the selection summary (for example "2 selected · 28.2k msgs"), **Bulk edit** and the columns menu.',
-              "**Grid**: one row per rule, sorted by priority then ID, with a filter box under every column header. See [[grids-and-filters]].",
-              "**Detail panel**: opens when you click a rule. On the left the sections **Conditions**, **Vendors**, **Traffic**, **History** and **Test**; on the right the **Traffic 24h** trend line with Messages and Margin for the last 24 hours.",
+              '**Filter card**: the quick search box with a pill for every field filter (click the box to pick a field; **Any of (OR)…** opens the filter builder), its own controls, **Clear all**, and on the right **Save as view**, **Views**, the selection summary (for example "2 selected · 28.2k msgs"), **Bulk edit** and **Columns**.',
+              "**Grid**: one row per rule, sorted by priority then ID, with a filter box under every column header. The footer shows the row count. See [[grids-and-filters]].",
+              "**Detail panel**: opens on the right of the grid with a single click on a rule. Its sections are tabs across the top: **Edit**, **Configuration** (with the vendors), **Conditions**, **Traffic**, **History** and **Test**; at the bottom the **Traffic 24h** trend line with Messages and Margin for the last 24 hours. Drag its left edge to resize it.",
               "**Status bar**: row counts and the shortcuts ↑↓ move · Space select · E edit · D duplicate · Ctrl+Z undo.",
             ],
           },
@@ -335,7 +335,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "New rule",
-                what: "Opens the New route rule form.",
+                what: "Opens the New route rule window with all sections at once. See [[route-rules#rule-form]].",
               },
             ],
           },
@@ -400,7 +400,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "list",
-            title: "Hidden filters (add them with Add filter)",
+            title: "Filter-only fields (pick them in the quick search box)",
             items: [
               "**Traffic window**: 15m, 1h, 24h, 7d or 30d. Changes the 24h column to that window.",
               "**DLR target** and **DLR below target**: find rules whose delivery is under target.",
@@ -415,7 +415,11 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**Double-click** a rule (or press Enter) to open the detail panel on **Edit**: its general settings, saved in place with **Save**. The panel then has **Configuration** (Category, Customer trunks and Destination, each a block with **Edit**, and the Vendors), **Conditions** (sender, receiver, content, TPS, revenue, time, HLR, multipart), Traffic, History and Test. **New rule** opens one window: fill the general settings and click **Continue**; Category, Customer trunks (side by side, each a list with search and Check all), Destination, Vendors and the other conditions then appear in the same window, each saved as you go; tick **Rule on** and click **Done**.",
+            text: "A single click on a rule opens the detail panel. **Double-click** a rule (or press Enter) to open the panel on **Edit**: its general settings, saved in place with **Save**. The panel then has **Configuration** (Category, Customer trunks and Destination, each a block with **Edit**, and the Vendors), **Conditions** (sender, receiver, content, TPS, revenue, time, HLR, multipart), Traffic, History and Test.",
+          },
+          {
+            kind: "text",
+            text: "**New rule** opens straight into ONE window with all sections: **General** (name, priority, route type, continue routing, groups, DLR target, comment), **Configuration** (category, customer trunks side by side with search and Check all, destination, vendors) and **Other conditions**. The rule is created as a draft, switched off, when the window opens. **Save** keeps it, on or off as set by **Rule on** in the footer. **×** discards the draft completely, as if it never existed. Clicking outside the window or pressing **Esc** does nothing.",
           },
           {
             kind: "fields",
@@ -462,8 +466,9 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Rule on",
-                what: "Ticked = the rule routes traffic.",
-                values: "A new rule starts off: with no conditions yet it would match all traffic.",
+                what: "Ticked = the rule routes traffic. In New rule it sits in the window's footer.",
+                values:
+                  "A new rule starts off: with no conditions yet it would match all traffic. In New rule it ticks itself once the rule has customer trunks and vendors (customer trunks only for Block); you can still switch it by hand.",
               },
             ],
           },
@@ -471,12 +476,13 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "How to add a rule",
             items: [
-              "Click **New rule**.",
-              "Enter the **Name** and **Priority**, pick the **Route type** and click **Continue**. The rule is added switched off and the same window shows Category, Customer trunks, Destination, Vendors and Other conditions.",
-              "Tick the categories and customer trunks (**Inclusive** or **Exclusive**) and pick the destinations; click each block's Save.",
-              "Add the vendors in the Vendors block and click **Save vendors**; add other conditions with **+ Add condition** if needed. Tick **Rule on** and click **Done**.",
-              "Open **Test** and run a sample number through the rule.",
-              "Turn the rule on: click the hollow dot in the **On** column, or press E and tick **Rule on**.",
+              "Click **New rule**. One window opens with **General**, **Configuration** and **Other conditions**; the rule already exists as a draft, switched off.",
+              "Under **General** enter the **Name** and **Priority**, pick the **Route type**, and set continue routing, groups, DLR target and comment if needed.",
+              "Under **Configuration** tick the categories and customer trunks (**Inclusive** or **Exclusive**), pick the destinations and add the vendors.",
+              "Add other conditions with **+ Add condition** if needed.",
+              "Check **Rule on** in the footer (it ticks itself once the rule has customer trunks and vendors) and click **Save**. To drop the rule instead, click **×**: the draft is discarded completely.",
+              "Open **Test** in the panel and run a sample number through the rule.",
+              "To turn a rule on later: click the hollow dot in the **On** column, or press E and tick **Rule on**.",
             ],
           },
         ],
@@ -1638,26 +1644,36 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Customer rates (sell) on the left and vendor rates (buy) on the right, each with its own filters. **Show** in the header picks Both, Customer or Vendor.",
+            text: "Customer rates (sell) on the left and vendor rates (buy) on the right. **Show** in the header picks Both, Customer or Vendor.",
           },
           {
             kind: "fields",
-            title: "Filters on each side",
+            title: "Common bar (both sides)",
             fields: [
-              { name: "Product category", what: "Tick categories." },
-              { name: "Customer trunk / Vendor trunk", what: "Tick trunks." },
-              { name: "Country", what: "Tick countries. MCCMNCs outside them drop out." },
-              { name: "MCCMNC", what: "Tick single destinations." },
-              { name: "Search", what: "Country, network or code.", values: "`%` and `_` wildcards." },
-              { name: "Inactive trunks", what: "Include rates of inactive trunks." },
-              { name: "Clear filters", what: "Clears that side's filters, including the column filters." },
               {
-                name: "Column filters",
-                what: "Under each header, like the other grids: Destination (country or network, wildcards), MCCMNC (starts with, or wildcards), and Tables, Price and Sys price with **≥**, **≤** or **Range** (from – to).",
-                values:
-                  "Price compares each table's own rate in its currency; Sys price the converted rate. Number filters apply when you press Enter or leave the box.",
+                name: "Search",
+                what: "Country, network or MCCMNC. Searches both sides at once.",
+                values: "`%` and `_` wildcards.",
               },
+              { name: "Include inactive trunks", what: "Include rates of inactive trunks, on both sides." },
             ],
+          },
+          {
+            kind: "fields",
+            title: "Each side's header (Customer rates · sell, Vendor rates · buy)",
+            fields: [
+              { name: "Destination count", what: "How many destinations the side lists." },
+              { name: "Search chip", what: "The search from the common bar, shown as a chip; × clears it." },
+              { name: "Product", what: "Checklist: tick product categories." },
+              { name: "Customer trunk / Vendor trunk", what: "Checklist: tick trunks." },
+              { name: "Country", what: "Checklist: tick countries; MCCMNC codes outside them drop out." },
+              { name: "MCCMNC", what: "Checklist: tick single destinations." },
+              { name: "Clear", what: "Clears that side's filters, the ones under the column headers too." },
+            ],
+          },
+          {
+            kind: "text",
+            text: "Click a column header to sort. Under the headers: **Destination** (country or network, `%` `_` wildcards), **MCCMNC** (starts with), and **Tables**, **Price** and **Sys price** as a range: Any, ≥, ≤ or Range (from … to).",
           },
           {
             kind: "fields",

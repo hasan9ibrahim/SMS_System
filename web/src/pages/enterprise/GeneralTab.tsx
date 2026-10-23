@@ -5,10 +5,11 @@ import type { EnterpriseDetail, EnterpriseInput } from "@sms/contract";
 import { useReference, useSaveEnterprise } from "../../api/records";
 import {
   CheckField,
+  FormField,
+  type FormApi,
   FormBanner,
   ListField,
   NumberField,
-  ReadOnly,
   Section,
   SelectField,
   TextField,
@@ -100,6 +101,60 @@ export function toInput(e: EnterpriseDetail): Form {
   };
 }
 
+const ALL_NETWORKS = [
+  { value: "mcc", label: "MCC (e.g. 262)" },
+  { value: "mcc0", label: "MCC0 (e.g. 2620)" },
+  { value: "mcc00", label: "MCC00 (e.g. 26200)" },
+  { value: "mcc000", label: "MCC000 (e.g. 262000)" },
+  { value: "mccStar", label: "MCC* (e.g. 262*)" },
+];
+
+/**
+ * How the partner writes a country's all-networks rate: one of the usual forms, or Custom: MCC plus any suffix
+ * ("MCC99" = 26299; team trial round 3).
+ */
+function AllNetworksField({ form }: { form: FormApi<Form> }) {
+  const v = String(form.get("allNetworksCode") ?? "mcc");
+  const custom = v.startsWith("MCC");
+  const suffix = custom ? v.slice(3) : "";
+  const error = form.error("allNetworksCode");
+  return (
+    <FormField
+      label="'All networks' code"
+      required
+      error={error}
+      hint={custom ? `e.g. 262${suffix || "…"} for Germany` : "How this partner writes a country's all-networks rate"}
+    >
+      <div className="allnet">
+        <select
+          aria-label="'All networks' code"
+          value={custom ? "custom" : v}
+          onChange={(e) => form.set("allNetworksCode", e.target.value === "custom" ? "MCC99" : e.target.value)}
+        >
+          {ALL_NETWORKS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+          <option value="custom">Custom…</option>
+        </select>
+        {custom && (
+          <span className="allnet-custom">
+            <span className="muted">MCC</span>
+            <input
+              aria-label="Custom suffix after the MCC"
+              value={suffix}
+              maxLength={6}
+              placeholder="99"
+              onChange={(e) => form.set("allNetworksCode", `MCC${e.target.value.replace(/[^0-9A-Za-z*#._-]/g, "")}`)}
+            />
+          </span>
+        )}
+      </div>
+    </FormField>
+  );
+}
+
 /** Required fields checked before the round trip, with plain messages. */
 function check(v: Form, isNew: boolean): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -119,7 +174,6 @@ export function GeneralTab({
   record,
   slot,
   onDirty,
-  onOpenSection,
 }: SectionProps & { record: EnterpriseDetail | null; onOpenSection: (key: string) => void }) {
   const ref = useReference();
   const isNew = record === null;
@@ -208,11 +262,11 @@ export function GeneralTab({
       />
       <fieldset disabled={readOnly} className="plain-fieldset">
         <Section title="General information">
-          <TextField form={form} path="name" label="Name" required maxLength={200} nullable={false} />
+          <TextField form={form} path="name" label="Full legal name" required maxLength={200} nullable={false} />
           <TextField
             form={form}
             path="alias"
-            label="Alias"
+            label="Brand name"
             required
             maxLength={100}
             nullable={false}
@@ -233,7 +287,7 @@ export function GeneralTab({
             options={[
               { value: "customer", label: "Customer" },
               { value: "vendor", label: "Vendor" },
-              { value: "reciprocal", label: "Reciprocal (both)" },
+              { value: "reciprocal", label: "Bilateral (both)" },
             ]}
           />
           <SelectField
@@ -257,22 +311,17 @@ export function GeneralTab({
               { value: "inactive", label: "Inactive" },
             ]}
           />
-          {isNew ? (
+          {/* The account manager is picked once, when adding; afterwards it lives on the Account managers tab only
+              (team trial round 3), where Hand over keeps past results with the AM who earned them (§13.30). */}
+          {isNew && (
             <SelectField
               form={form}
               path="accountManagerId"
               label="Account manager"
               required
               options={opts(ref.data?.accountManagers, (u) => u.displayName)}
-              hint="Later changes go through Hand over, so past results stay with the AM who earned them (§13.30)"
+              hint="Later changes go through the Account managers tab (§13.30)"
             />
-          ) : (
-            <ReadOnly label="Account manager">
-              {record?.accountManagerName ?? "—"}
-              <button type="button" className="link" onClick={() => onOpenSection("account-managers")}>
-                Hand over…
-              </button>
-            </ReadOnly>
           )}
         </Section>
 
@@ -310,6 +359,8 @@ export function GeneralTab({
             options={tzOptions(ref.data?.timezones ?? ["UTC"])}
             hint="Day and month totals are cut at midnight in this zone (§13.31)"
           />
+          <AllNetworksField form={form} />
+          {/* The three notice periods on one line, last (team trial round 3). */}
           <NumberField
             form={form}
             path="rateNoticeDays"
@@ -339,20 +390,6 @@ export function GeneralTab({
             step={1}
             suffix="days"
             hint="Notice for new destinations; 0 = none"
-          />
-          <SelectField
-            form={form}
-            path="allNetworksCode"
-            label="'All networks' code"
-            required
-            options={[
-              { value: "mcc", label: "MCC (e.g. 262)" },
-              { value: "mcc0", label: "MCC0 (e.g. 2620)" },
-              { value: "mcc00", label: "MCC00 (e.g. 26200)" },
-              { value: "mcc000", label: "MCC000 (e.g. 262000)" },
-              { value: "mccStar", label: "MCC* (e.g. 262*)" },
-            ]}
-            hint="How this partner writes a country's all-networks rate in rate sheets"
           />
         </Section>
 

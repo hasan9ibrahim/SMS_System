@@ -217,21 +217,26 @@ export function TopMenu() {
   const openPalette = usePalette((s) => s.show);
   const open = useOpener();
   return (
-    // Two rows (design refresh, team trial round 2): logo, search and status on top, the main menu below.
+    // One bar (team trial round 3): logo, the main menu, then search / jump-to and the status on the right.
     <header className="topbar">
       <div className="topbar-main">
         <button type="button" className="logo" onClick={(e) => open("/", e)} aria-label="Home">
           <span className="logo-mark">
-            <Icon name="mail" size={15} />
+            <Icon name="mail" size={14} />
           </span>
           <span>SMS Platform</span>
         </button>
-        <button type="button" className="jump" onClick={() => openPalette()}>
-          <Icon name="search" size={15} />
-          <span>Search or jump to…</span>
-          <kbd>Ctrl K</kbd>
-        </button>
+        <nav className="menu-bar" aria-label="Main menu">
+          {SECTIONS.map((s) => (
+            <SectionMenu key={s.key} section={s.key} current={s.key === currentSection && activePath !== "/"} />
+          ))}
+        </nav>
         <div className="topbar-right">
+          <button type="button" className="jump" onClick={() => openPalette()}>
+            <Icon name="search" size={15} />
+            <span>Search or jump to…</span>
+            <kbd>Ctrl K</kbd>
+          </button>
           <button
             type="button"
             className={`tps-pill${connected ? "" : " offline"}`}
@@ -246,11 +251,6 @@ export function TopMenu() {
           <Avatar />
         </div>
       </div>
-      <nav className="menu-bar" aria-label="Main menu">
-        {SECTIONS.map((s) => (
-          <SectionMenu key={s.key} section={s.key} current={s.key === currentSection && activePath !== "/"} />
-        ))}
-      </nav>
     </header>
   );
 }

@@ -1,7 +1,7 @@
 // Conditions section of the detail panel (§15.4): the rule title with "all must match"
 // (switchable to any), + Add condition, and one chip per condition (field, operator,
 // value). A chip opens its editor; its × removes it. Each save is one change (§13.10).
-import { useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import type { RouteRuleDetail, RouteRuleInput } from "@sms/contract";
 import { useRouteRule, useSaveRouteRule } from "../../api/routing";
 import { useNotifySaved } from "../../history/undo";
@@ -22,10 +22,15 @@ import {
 import { DuplicateWarning } from "../admin/cleanup/DuplicateWarning";
 import { codesText, useDestinationTree } from "../rates/DestinationTree";
 
+/** Inside New rule (team trial round 3): edits of the draft show no "Saved · Undo" toasts. */
+export const DraftRuleContext = createContext(false);
+
 /** Saves a patch of the rule as one change; resolves with an error text or null. */
 export function useRuleSaver(rule: RouteRuleDetail | undefined) {
   const save = useSaveRouteRule();
-  const notifySaved = useNotifySaved();
+  const notify = useNotifySaved();
+  const draft = useContext(DraftRuleContext);
+  const notifySaved: typeof notify = (change, message) => (draft ? 0 : notify(change, message));
   const run = async (patch: Partial<RouteRuleInput>, message = "Saved"): Promise<string | null> => {
     if (!rule) return "The rule is still loading.";
     try {

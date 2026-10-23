@@ -48,8 +48,8 @@ export const useSendRate = () =>
   );
 
 export const useSendTechInfo = () =>
-  useWrite((trunkIds: number[]): Promise<NotificationResult> =>
-    unwrap(api.POST("/notifications/send-tech-info", { body: { trunkIds } })),
+  useWrite(({ trunkIds, oneEmailPerEnterprise = false }: { trunkIds: number[]; oneEmailPerEnterprise?: boolean }) =>
+    unwrap(api.POST("/notifications/send-tech-info", { body: { trunkIds, oneEmailPerEnterprise } })),
   );
 
 export function useNotificationPreview(trunkId: number | null, kind: "send_rate" | "send_tech_info") {

@@ -2038,3 +2038,341 @@ select.chip-select {
   padding: 0 16px;
   font-size: 12.5px;
 }
+
+/* ---------- one top bar (team trial round 3): logo, main menu, search and status in a single row ---------- */
+.topbar-main {
+  height: 50px;
+  gap: 18px;
+  padding: 0 18px;
+  border-bottom: 0;
+}
+.topbar .menu-bar {
+  flex: 1 1 auto;
+  height: 100%;
+  padding: 0;
+  gap: 0;
+}
+.menu-top {
+  padding: 0 11px;
+  font-size: 14px;
+}
+.topbar-right {
+  flex: none;
+  gap: 10px;
+}
+.jump {
+  flex: none;
+  width: 230px;
+  height: 34px;
+  gap: 8px;
+}
+.tps-pill {
+  height: 30px;
+  padding: 0 11px;
+}
+.bell,
+.avatar {
+  width: 34px;
+  height: 34px;
+}
+@media (max-width: 1500px) {
+  .jump {
+    width: auto;
+  }
+  .jump > span,
+  .top-clock-date {
+    display: none;
+  }
+}
+@media (max-width: 1250px) {
+  .menu-top {
+    padding: 0 7px;
+    font-size: 13.5px;
+  }
+  .logo > span:last-child,
+  .top-clock-tz {
+    display: none;
+  }
+}
+/* Page actions on the right: a step smaller everywhere. */
+.page-actions .btn,
+.page-actions .icon-btn {
+  height: 30px;
+  min-height: 30px;
+}
+.page-actions .btn {
+  padding: 0 10px;
+  font-size: 13px;
+  gap: 5px;
+}
+.page-actions .icon-btn {
+  width: 30px;
+}
+.page-actions .seg > button {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.page-actions .range-chip {
+  height: 30px;
+  font-size: 13px;
+}
+.page-header h1 {
+  font-size: 20px;
+}
+/* The records bar keeps its buttons only; the count is in the footer. */
+.records-head {
+  min-height: 40px;
+  padding: 4px 10px;
+}
+.records-head .btn {
+  height: 30px;
+}
+.records-foot {
+  min-height: 28px;
+}
+/* Header tint (light: a shade of the accent pill fill). */
+.gh,
+.gh .gh-cell,
+.la-table thead th,
+.la-table thead .la-name,
+.vt-head,
+.vt-head .vt-cell.sticky,
+.rtable th,
+.simple-table th,
+.mig-table th,
+.perm-matrix thead th,
+.vis-items th {
+  background: var(--color-head-tint);
+}
+
+/* ---------- detail panel on the right (team trial round 3): beside the grid, which narrows; resizable ---------- */
+.list-body {
+  flex-direction: row;
+  gap: 10px;
+}
+.list-body > .records-card,
+.list-body.with-detail .grid,
+.list-body.with-detail .records-card {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.detail {
+  flex: 0 0 min(42%, 640px);
+  min-width: 320px;
+  min-height: 0;
+  flex-direction: column;
+}
+.detail-title {
+  flex: none;
+  margin: 0;
+  padding: 8px 10px 8px 16px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  flex-wrap: wrap;
+}
+.detail-nav {
+  flex: none;
+  width: auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 8px;
+  border-right: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-head-tint);
+}
+.detail-nav button {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+.detail-main {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 16px 14px;
+}
+.detail-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.detail-aside {
+  width: auto;
+  margin-top: 14px;
+  padding: 10px 0 0;
+  border-left: 0;
+  border-top: var(--border-width) solid var(--color-border);
+}
+.detail-splitter {
+  width: 8px;
+  height: auto;
+  margin: 0 -9px;
+  cursor: col-resize;
+}
+.detail-splitter::after {
+  left: 2px;
+  top: 50%;
+  width: 4px;
+  height: 44px;
+  margin: -22px 0 0;
+}
+
+/* ---------- quick search with field pills (team trial round 3) ---------- */
+.pill-search {
+  flex: 1 1 360px;
+  min-width: 260px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 3px 8px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  color: var(--color-text-secondary);
+  cursor: text;
+}
+.pill-search.open,
+.pill-search:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.pill-search-input {
+  flex: 1 1 140px;
+  min-width: 120px;
+  height: 26px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+}
+.pill-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 4px 0 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--color-accent);
+  font-size: 12.5px;
+  cursor: default;
+}
+.pill-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pill-eq {
+  opacity: 0.7;
+}
+.pill-filter .gf-input,
+.pill-filter .gf-select {
+  height: 20px;
+  min-width: 70px;
+  width: 9em;
+  padding: 0 6px;
+  border: var(--border-width) solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  border-radius: 6px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+.pill-x {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.pill-x:hover {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+.pill-pop {
+  min-width: 520px;
+  max-width: 760px;
+}
+.pill-card {
+  display: flex;
+  flex-direction: column;
+}
+.pill-card-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+.pill-card-search:hover {
+  background: var(--hover);
+}
+.pill-card-search kbd {
+  margin-left: auto;
+}
+.pill-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 6px 14px;
+  max-height: 340px;
+  overflow: auto;
+  padding: 10px 12px;
+}
+.pill-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pill-group-title {
+  padding: 2px 6px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+.pill-field {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pill-field:hover {
+  background: var(--accent-soft);
+  color: var(--color-accent);
+}
+.pill-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: var(--border-width) solid var(--color-border);
+  background: var(--color-head-tint);
+}
+.pill-search {
+  flex: 1 1 560px;
+}
+.pill-search .pill-search-input,
+.pill-search .pill-search-input:focus,
+.pill-search .pill-search-input:focus-visible {
+  border: 0;
+  box-shadow: none;
+  outline: 0;
+  padding: 0 2px;
+  min-height: 0;
+  background: none;
+}

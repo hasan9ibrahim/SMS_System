@@ -1,4 +1,4 @@
-// Page header (§15.1): title and purpose, actions on the right with the main action as the one filled button
+// Page header (§15.1): title, actions on the right with the main action as the one filled button
 // (§15.3), then the sibling pages of the same section as pills (current filled).
 import { useContext, useEffect, type ReactNode } from "react";
 import { pagesOf, type PageDef } from "../nav/registry";
@@ -70,9 +70,8 @@ export function PageHeader({
 }) {
   const navigate = useTabNavigate();
   const siblings = page.key === "home" ? [] : pagesOf(page.section);
-  // Design refresh (team trial round 2): title with the page's one-line purpose under it and the actions on the
-  // right, then the sibling pages as pills.
-  const subtitle = !heading && !title ? page.summary : null;
+  // Design refresh (team trial round 2): title and the actions on the right, then the sibling pages as pills. The
+  // one-line purpose under the title was dropped to give the page more room (team trial round 3).
   return (
     <div className="page-header">
       <div className="page-header-top">
@@ -82,7 +81,6 @@ export function PageHeader({
             {heading ?? <h1>{title ?? page.label}</h1>}
             {page.key !== "help" && <HelpButton topic={helpTopic ?? page.key} />}
           </div>
-          {subtitle && <p className="page-subtitle">{subtitle}</p>}
         </div>
         <div className="page-actions">{actions}</div>
       </div>

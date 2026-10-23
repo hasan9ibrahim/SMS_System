@@ -71,4 +71,10 @@ test("all-networks codes both ways", () => {
   assert.equal(fromCountryCode("262", "mcc0"), "2620");
   assert.equal(fromCountryCode("262", "mcc"), "262");
   assert.equal(fromCountryCode("26201", "mcc00"), "26201");
+  // A custom form (team trial round 3): MCC plus a suffix.
+  assert.equal(toCountryCode("26299", "MCC99"), "262");
+  assert.equal(toCountryCode("26201", "MCC99"), "26201");
+  assert.equal(toCountryCode("262XX", "MCCxx"), "262");
+  assert.equal(fromCountryCode("262", "MCC99"), "26299");
+  assert.equal(fromCountryCode("26201", "MCC99"), "26201");
 });

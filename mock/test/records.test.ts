@@ -329,7 +329,7 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.equal((await ok("listEnterpriseDocs", call("GET", `/enterprises/${id}/docs`))).length, 1);
   });
 
-  test("safe delete: blockers answer 409, admin override archives trunks with it, undo brings them back (§13.29)", async () => {
+  test("safe delete: live trunks block even an override; a free enterprise archives and undo brings it back (§13.29)", async () => {
     const { rows } = await db().query(
       `SELECT e.id FROM enterprises e
         WHERE e.deleted_at IS NULL AND EXISTS (SELECT 1 FROM invoices i WHERE i.enterprise_id = e.id AND i.payment_status <> 'paid')
@@ -339,33 +339,31 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     const id = rows[0].id;
     const deps = await ok("getEnterpriseDependencies", call("GET", `/enterprises/${id}/dependencies`));
     assert.equal(deps.blocked, true);
+    const trunks = deps.items.find((i: { key: string }) => i.key === "customer_trunks");
+    assert.ok(trunks.blocking && trunks.noOverride && trunks.count > 0);
     const blocked = await call("POST", `/enterprises/${id}/archive`, {});
     assert.equal(blocked.statusCode, 409);
     check("archiveEnterprise", blocked);
-    const noReason = await call("POST", `/enterprises/${id}/archive`, { override: true });
-    assert.equal(noReason.statusCode, 409);
+    // Team trial round 3: live trunks cannot be overridden, not even by an administrator.
+    const override = await call("POST", `/enterprises/${id}/archive`, { override: true, reason: "Test of override" });
+    assert.equal(override.statusCode, 409);
+    assert.match(override.json().detail, /Customer trunks/);
 
-    const archived = await ok(
-      "archiveEnterprise",
-      call("POST", `/enterprises/${id}/archive`, { override: true, reason: "Test of override" }),
-    );
+    const fresh = (await newEnterprise("customer", "del")).record;
+    const archived = await ok("archiveEnterprise", call("POST", `/enterprises/${fresh.id}/archive`, {}));
     assert.ok(archived.record.archived);
-    assert.equal(archived.record.trunkCounts.customer, 0);
-    assert.match(archived.change.note, /Override: Test of override/);
     const list = await ok(
       "queryEnterprises",
       call("POST", "/enterprises/query", {
-        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: id }] },
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: fresh.id }] },
       }),
     );
     assert.equal(list.total, 0, "archived enterprises leave normal lists");
-    const edit = await call("PUT", `/enterprises/${id}`, {});
+    const edit = await call("PUT", `/enterprises/${fresh.id}`, {});
     assert.equal(edit.statusCode, 400);
-
     await ok("undoChange", call("POST", `/changes/${archived.change.id}/undo`, {}));
-    const back = await ok("getEnterprise", call("GET", `/enterprises/${id}`));
+    const back = await ok("getEnterprise", call("GET", `/enterprises/${fresh.id}`));
     assert.equal(back.archived, null);
-    assert.ok(back.trunkCounts.customer > 0, "its trunks came back with it");
   });
 
   test("unknown enterprise answers 404", async () => {

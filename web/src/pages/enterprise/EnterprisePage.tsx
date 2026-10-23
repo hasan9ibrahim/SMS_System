@@ -22,7 +22,10 @@ import {
   useSectionTab,
 } from "../../records/parts";
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
-import { confirmDialog } from "../../ui/feedback";
+import { confirmDialog, toast } from "../../ui/feedback";
+import { fetchListPage } from "../../api/hooks";
+import { openSendRate, openTechInfo } from "../switch/tools/NotificationsPage";
+import { problemText } from "../routing/dialogs";
 import { Icon } from "../../ui/Icon";
 import { Button, Menu, Popover } from "../../ui/primitives";
 import { AccountManagersTab } from "./AccountManagersTab";
@@ -41,28 +44,62 @@ const SECTIONS = [
   "history",
 ] as const;
 
-function MoreMenu() {
+/** The enterprise's live customer trunks (Notifications, team trial round 3). */
+async function customerTrunkIds(enterpriseId: number): Promise<number[]> {
+  const page = await fetchListPage<TrunkListRow>("customer_trunks", {
+    filter: { logic: "and", conditions: [{ field: "enterpriseId", op: "eq", value: enterpriseId }] },
+    limit: 500,
+    withTotal: false,
+  });
+  return page.rows.map((r) => r.id);
+}
+
+/**
+ * Notifications (team trial round 3, was "…"): Send rates e-mails the rate sheet of every customer trunk; Send tech
+ * info sends one e-mail with every customer trunk's connection details (Customer Tech Info template).
+ */
+function NotificationsMenu({ enterpriseId, trunks }: { enterpriseId: number; trunks: number }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
+  const run = async (what: (ids: number[]) => Promise<unknown>) => {
+    try {
+      const ids = await customerTrunkIds(enterpriseId);
+      if (!ids.length) return toast({ tone: "info", message: "This enterprise has no customer trunks." });
+      await what(ids);
+    } catch (err) {
+      toast({ tone: "error", message: problemText(err) });
+    }
+  };
+  const none = trunks === 0 ? "No customer trunks" : undefined;
   return (
     <>
       <button
         ref={ref}
         type="button"
-        className="btn btn-ghost"
+        className="btn btn-default"
         onClick={() => setOpen((v) => !v)}
-        aria-label="More actions"
         aria-haspopup="menu"
       >
-        <Icon name="more" size={15} />
+        <Icon name="bell" size={14} /> Notifications <Icon name="chevronDown" size={12} />
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="end">
         <Menu
           onClose={() => setOpen(false)}
           items={[
-            // §13.13: sending rate sheets and tech info by email arrives with the rate notices.
-            { label: "Send rates…", icon: "send", disabled: true, onSelect: () => {} },
-            { label: "Send tech info…", icon: "mail", disabled: true, onSelect: () => {} },
+            {
+              label: "Send rates…",
+              icon: "send",
+              disabled: trunks === 0,
+              hint: none ?? "Every customer trunk's rate sheet",
+              onSelect: () => void run((ids) => openSendRate(ids)),
+            },
+            {
+              label: "Send tech info…",
+              icon: "mail",
+              disabled: trunks === 0,
+              hint: none ?? "One e-mail with every customer trunk",
+              onSelect: () => void run((ids) => openTechInfo(ids, true)),
+            },
           ]}
         />
       </Popover>
@@ -186,7 +223,7 @@ export function EnterprisePage() {
                 Delete
               </Button>
             )}
-            {e && <MoreMenu />}
+            {e && !e.archived && <NotificationsMenu enterpriseId={e.id} trunks={e.trunkCounts.customer} />}
             <span ref={setSlot} className="action-slot" />
           </>
         }

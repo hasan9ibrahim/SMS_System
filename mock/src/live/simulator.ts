@@ -896,6 +896,8 @@ export function step(sim: Simulator, now = Date.now()) {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const r2 = (v: number) => Math.round(v * 100) / 100;
+/** Money is calculated to 6 decimals; screens choose how many to show (team trial round 3). */
+const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
 const pct = (a: number, b: number) => (b > 0 ? r1((a / b) * 100) : null);
 
 export function tickEvent(sim: Simulator, now = Date.now()): TpsTickEvent {
@@ -943,9 +945,9 @@ export function summaryEvent(sim: Simulator, now = Date.now()): DashboardSummary
     // "Submitted" as in the reports and Live analytics: sent to a vendor (team trial round 1).
     submitted: Math.round(t.sent),
     delivered: Math.round(t.delivered),
-    revenue: r2(t.revenue),
-    cost: r2(t.cost),
-    margin: r2(t.revenue - t.cost),
+    revenue: r6(t.revenue),
+    cost: r6(t.cost),
+    margin: r6(t.revenue - t.cost),
     marginPct: t.revenue > 0 ? r2(((t.revenue - t.cost) / t.revenue) * 100) : 0,
     asr: pct(t.submitted, t.attempts) ?? 0,
     dlr: pct(t.delivered, t.submitted) ?? 0,
@@ -995,8 +997,8 @@ export function topCountries(destinations: Map<string, DestTotals>, limit = 15):
       country: c.country,
       networks: c.networks,
       attempts: Math.round(c.attempts),
-      revenue: r2(c.revenue),
-      margin: r2(c.margin),
+      revenue: r6(c.revenue),
+      margin: r6(c.margin),
       asr: pct(c.successful, c.attempts),
       dlr: pct(c.delivered, c.successful),
     }));
@@ -1011,7 +1013,7 @@ export function topsEvent(sim: Simulator, now = Date.now()): DashboardTopsEvent 
         party: { kind, id, name: p.name },
         attempts: Math.round(p.attempts),
         money: r2(p.money),
-        margin: r2(p.margin),
+        margin: r6(p.margin),
         asr: pct(p.successful, p.attempts),
         dlr: pct(p.delivered, p.successful),
       }));

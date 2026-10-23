@@ -775,7 +775,7 @@ function InvoicesView({ onGenerate }: { onGenerate: () => void }) {
       columns={{
         invoiceNumber: { width: 130, render: (r) => <strong className="num">{r.invoiceNumber}</strong> },
         enterprise: { width: 220 },
-        enterpriseType: { width: 110, render: (r) => (r.enterpriseType === "reciprocal" ? "Reciprocal" : "Customer") },
+        enterpriseType: { width: 110, render: (r) => (r.enterpriseType === "reciprocal" ? "Bilateral" : "Customer") },
         invoiceType: { width: 100, render: (r) => (r.invoiceType === "auto" ? "Auto" : "Manual") },
         billingType: { width: 100, render: (r) => (r.billingType === "prepaid" ? "Prepaid" : "Postpaid") },
         currency: { width: 80 },

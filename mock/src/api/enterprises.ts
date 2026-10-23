@@ -888,19 +888,22 @@ async function enterpriseDependencies(db: Db, id: number) {
   const billing = await loadBilling(db, id);
   const items: DependencyItem[] = [
     { key: "live_binds", label: "Live binds", count: 0, blocking: true, detail: "Disconnect the trunks first" },
+    // Team trial round 3: an enterprise with live trunks cannot be deleted, not even with an override.
     {
       key: "customer_trunks",
       label: "Customer trunks",
       count: r.customer_trunks,
-      blocking: false,
-      detail: "Archived with the enterprise",
+      blocking: true,
+      noOverride: true,
+      detail: r.customer_trunks ? "Delete its customer trunks first" : null,
     },
     {
       key: "vendor_trunks",
       label: "Vendor trunks",
       count: r.vendor_trunks,
-      blocking: false,
-      detail: "Archived with the enterprise",
+      blocking: true,
+      noOverride: true,
+      detail: r.vendor_trunks ? "Delete its vendor trunks first" : null,
     },
     {
       key: "route_rules",
@@ -965,6 +968,22 @@ export async function archiveGate(
 ): Promise<{ ok: true; note: string | null } | { ok: false; reply: FastifyReply }> {
   const me = await getCurrentUser();
   const reason = body.reason?.trim() || null;
+  // Blockers nobody can override (team trial round 3), e.g. an enterprise's live trunks.
+  const hard = deps.items.filter((i) => i.blocking && i.noOverride && i.count);
+  if (hard.length)
+    return {
+      ok: false,
+      reply: reply
+        .code(409)
+        .type("application/problem+json")
+        .send({
+          type: "about:blank",
+          title: "This cannot be deleted yet",
+          status: 409,
+          detail: hard.map((i) => `${i.label}: ${i.count}${i.detail ? ` (${i.detail})` : ""}`).join(", "),
+          dependencies: deps,
+        }),
+    };
   if (body.override && !isAdmin(me))
     return { ok: false, reply: sendProblem(reply, 403, "Only administrators can override delete blockers") };
   if (deps.blocked && !body.override) {

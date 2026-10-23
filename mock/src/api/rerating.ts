@@ -24,7 +24,6 @@ import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
-const r2 = (v: number) => Math.round(v * 100) / 100;
 const digits = (s: string) => s.replace(/\D/g, "");
 
 interface Line {
@@ -142,7 +141,7 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
   }
   const rows: ReratingSummaryRow[] = ents.map((e) => {
     const x = per.get(Number(e.id)) ?? { n: 0, old: 0, next: 0 };
-    const amount = r2(x.next - x.old);
+    const amount = r6(x.next - x.old);
     return {
       enterpriseId: Number(e.id),
       enterpriseName: e.name,
@@ -184,7 +183,7 @@ async function loadDetail(db: Db, id: number): Promise<ReratingDetail | null> {
   return {
     ...base,
     summary: res.map((r) => {
-      const amount = r2(Number(r.new_amount) - Number(r.old_amount));
+      const amount = r6(Number(r.new_amount) - Number(r.old_amount));
       return {
         enterpriseId: Number(r.enterprise_id),
         enterpriseName: r.enterprise_name,

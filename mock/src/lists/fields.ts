@@ -224,8 +224,8 @@ export const listFields: Record<ListId, ListFields> = {
     defaultSort: [{ field: "name", dir: "asc" }],
     fields: [
       field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
-      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
-      field({ field: "alias", label: "Alias", type: "text", defaultOperator: "like" }),
+      field({ field: "name", label: "Full Legal Name", type: "text", defaultOperator: "like" }),
+      field({ field: "alias", label: "Brand Name", type: "text", defaultOperator: "like" }),
       field({
         field: "type",
         label: "Type",
@@ -234,7 +234,7 @@ export const listFields: Record<ListId, ListFields> = {
         enumValues: [
           { value: "customer", label: "Customer" },
           { value: "vendor", label: "Vendor" },
-          { value: "reciprocal", label: "Reciprocal" },
+          { value: "reciprocal", label: "Bilateral" },
         ],
       }),
       field({
@@ -1023,7 +1023,7 @@ export const listFields: Record<ListId, ListFields> = {
         defaultOperator: "in",
         enumValues: [
           { value: "customer", label: "Customer" },
-          { value: "reciprocal", label: "Reciprocal" },
+          { value: "reciprocal", label: "Bilateral" },
         ],
       }),
       field({
@@ -2308,7 +2308,7 @@ export const listFields: Record<ListId, ListFields> = {
         enumValues: [
           { value: "customer", label: "Customer" },
           { value: "vendor", label: "Vendor" },
-          { value: "reciprocal", label: "Reciprocal" },
+          { value: "reciprocal", label: "Bilateral" },
         ],
       }),
       field({ field: "accountManager", label: "Account Manager", type: "text", defaultOperator: "like" }),

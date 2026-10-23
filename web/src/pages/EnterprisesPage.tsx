@@ -5,7 +5,8 @@ import type { Enterprise } from "@sms/contract";
 import { pageForPath } from "../nav/registry";
 import { ListScreen } from "../page/ListScreen";
 import { useMe } from "../api/hooks";
-import { useRestore } from "../api/records";
+import { useEnterprise, useRestore } from "../api/records";
+import { Fragment } from "react";
 import { useNotifySaved } from "../history/undo";
 import { isAdminUser, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
@@ -13,7 +14,38 @@ import { toast } from "../ui/feedback";
 import { problemText } from "./routing/dialogs";
 
 const page = pageForPath("/enterprises")!;
-const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Reciprocal" } as const;
+const CONTACT_LABEL = { commercial: "Commercial", technical: "Technical", rates: "Rates", finance: "Finance" } as const;
+
+/** The four contacts' emails, from the enterprise record (team trial round 3: shown when a row is clicked). */
+function EnterpriseEmails({ id }: { id: number }) {
+  const q = useEnterprise(id);
+  if (!q.data) return <p className="muted small">{q.isError ? problemText(q.error) : "Loading…"}</p>;
+  return (
+    <dl className="kv">
+      {(Object.keys(CONTACT_LABEL) as (keyof typeof CONTACT_LABEL)[]).map((k) => {
+        const c = q.data!.contacts[k];
+        return (
+          <Fragment key={k}>
+            <dt>{CONTACT_LABEL[k]}</dt>
+            <dd>
+              {c?.emails.length ? (
+                c.emails.map((m) => (
+                  <a key={m} href={`mailto:${m}`} className="email-chip">
+                    {m}
+                  </a>
+                ))
+              ) : (
+                <span className="muted">—</span>
+              )}
+              {c?.name && <span className="muted small"> · {c.name}</span>}
+            </dd>
+          </Fragment>
+        );
+      })}
+    </dl>
+  );
+}
+const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" } as const;
 
 function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[] }) {
   if (!count) return <span className="muted">—</span>;
@@ -105,24 +137,31 @@ export function EnterprisesPage() {
             key: "general",
             label: "General",
             content: (
-              <dl className="kv">
-                <dt>Type</dt>
-                <dd>{TYPE_LABEL[r.type]}</dd>
-                <dt>Category</dt>
-                <dd>{r.tier.replace("tier", "Tier ")}</dd>
-                <dt>Status</dt>
-                <dd>{r.status === "active" ? "Active" : "Inactive"}</dd>
-                <dt>Business company</dt>
-                <dd>{r.businessCompanyName}</dd>
-                <dt>Account manager</dt>
-                <dd>{r.accountManagerName ?? "—"}</dd>
-                <dt>Country</dt>
-                <dd>{r.country ?? "—"}</dd>
-                <dt>Updated</dt>
-                <dd>
-                  {r.updatedBy} · {r.updatedAt.slice(0, 16).replace("T", " ")} UTC
-                </dd>
-              </dl>
+              // The contacts' emails beside the general facts (team trial round 3).
+              <div className="ent-detail">
+                <dl className="kv">
+                  <dt>Type</dt>
+                  <dd>{TYPE_LABEL[r.type]}</dd>
+                  <dt>Category</dt>
+                  <dd>{r.tier.replace("tier", "Tier ")}</dd>
+                  <dt>Status</dt>
+                  <dd>{r.status === "active" ? "Active" : "Inactive"}</dd>
+                  <dt>Business company</dt>
+                  <dd>{r.businessCompanyName}</dd>
+                  <dt>Account manager</dt>
+                  <dd>{r.accountManagerName ?? "—"}</dd>
+                  <dt>Country</dt>
+                  <dd>{r.country ?? "—"}</dd>
+                  <dt>Updated</dt>
+                  <dd>
+                    {r.updatedBy} · {r.updatedAt.slice(0, 16).replace("T", " ")} UTC
+                  </dd>
+                </dl>
+                <div>
+                  <h3 className="ent-detail-h">Emails</h3>
+                  <EnterpriseEmails id={r.id} />
+                </div>
+              </div>
             ),
           },
           {

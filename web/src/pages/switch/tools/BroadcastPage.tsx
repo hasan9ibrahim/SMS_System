@@ -30,7 +30,7 @@ const CONTACTS: { value: ContactType; label: string }[] = [
 const ENTERPRISES: { value: EnterpriseType; label: string }[] = [
   { value: "customer", label: "Customer" },
   { value: "vendor", label: "Vendor" },
-  { value: "reciprocal", label: "Reciprocal" },
+  { value: "reciprocal", label: "Bilateral" },
 ];
 const MAX_ATTACHMENT = 5 * 1024 * 1024;
 

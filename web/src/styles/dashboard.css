@@ -511,6 +511,9 @@ button.dash-cols:hover {
   padding-top: 6px;
 }
 .dash-kpi-pair .pair-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 1px;
 }
 .dash-kpi-pair.titled .pair-row {

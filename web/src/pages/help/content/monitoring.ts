@@ -631,7 +631,7 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "filters",
-        title: "The filter row",
+        title: "The filter card",
         blocks: [
           {
             kind: "fields",

@@ -370,11 +370,13 @@ export function ListField<T>({
             }}
             onBlur={() => draft && add(draft)}
             onPaste={(e) => {
+              // A paste is added at once (team trial round 3), so Save right after it keeps it. Emails are picked out
+              // of text such as "Ann Lee <ann@acme.example>; bob@acme.example".
               const text = e.clipboardData.getData("text");
-              if (/[,\s;]/.test(text)) {
-                e.preventDefault();
-                add(text);
-              }
+              if (!text.trim()) return;
+              e.preventDefault();
+              const emails = text.match(/[^\s<>,;:"'()[\]]+@[^\s<>,;:"'()[\]]+\.[^\s<>,;:"'()[\]]+/g);
+              add(emails ? emails.join(",") : `${draft}${text}`);
             }}
           />
         )}

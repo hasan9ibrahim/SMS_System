@@ -154,7 +154,9 @@ function DeleteDialog({
   const [error, setError] = useState<string | null>(null);
   const admin = isAdminUser(me?.permissions);
   const blocked = deps.data?.blocked ?? false;
-  const canSubmit = !!deps.data && (!blocked || (override && reason.trim().length > 0));
+  // Blockers nobody can override (team trial round 3): e.g. an enterprise's live trunks.
+  const hard = (deps.data?.items ?? []).filter((d) => d.blocking && d.noOverride && d.count);
+  const canSubmit = !!deps.data && !hard.length && (!blocked || (override && reason.trim().length > 0));
   const submit = () =>
     archive.mutate(
       { id, body: { ...(reason.trim() ? { reason: reason.trim() } : {}), ...(override ? { override: true } : {}) } },
@@ -204,16 +206,23 @@ function DeleteDialog({
               );
             })}
           </ul>
-          {blocked && (
-            <p className={admin ? "muted" : "error-text"}>
-              {admin
-                ? "Settle the red items first, or override with a written reason (logged with the change)."
-                : "Settle the red items first. Only an administrator can override."}
+          {hard.length > 0 ? (
+            <p className="error-text">
+              {name} cannot be deleted while it has {hard.map((d) => d.label.toLowerCase()).join(" or ")}. Delete or
+              unassign them first.
             </p>
+          ) : (
+            blocked && (
+              <p className={admin ? "muted" : "error-text"}>
+                {admin
+                  ? "Settle the red items first, or override with a written reason (logged with the change)."
+                  : "Settle the red items first. Only an administrator can override."}
+              </p>
+            )
           )}
         </>
       )}
-      {blocked && admin && (
+      {blocked && admin && !hard.length && (
         <label className="toggle-inline">
           <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
           Override the blockers

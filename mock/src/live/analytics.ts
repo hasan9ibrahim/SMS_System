@@ -68,6 +68,8 @@ export function nameMatcher(search: string): (name: string) => boolean {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const r2 = (v: number) => Math.round(v * 100) / 100;
+/** Money is calculated to 6 decimals; screens choose how many to show (team trial round 3). */
+const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
 const pct = (a: number, b: number) => (b > 0 ? r1((a / b) * 100) : null);
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
@@ -107,9 +109,9 @@ function figures(a: Acc, compare: number): Row {
     delivered: Math.round(d.delivered),
     asr: pct(d.submitted, d.attempts),
     dlr: pct(d.delivered, d.submitted),
-    revenue: a.hasRevenue ? r2(d.revenue) : null,
-    cost: r2(d.cost),
-    margin: margin === null ? null : r2(margin),
+    revenue: a.hasRevenue ? r6(d.revenue) : null,
+    cost: r6(d.cost),
+    margin: margin === null ? null : r6(margin),
     marginPct: margin === null || d.revenue <= 0 ? null : r1((margin / d.revenue) * 100),
     tps: tpsNow === null ? null : r1(tpsNow),
     tpsBefore,
@@ -225,9 +227,9 @@ export function analyticsSnapshot(sim: Simulator, p: AnalyticsParams, now = Date
       delivered: Math.round(sum("delivered")),
       asr: pct(sum("submitted"), sum("attempts")),
       dlr: pct(sum("delivered"), sum("submitted")),
-      revenue: revenueRows ? r2(revenue) : null,
-      cost: r2(cost),
-      margin: revenueRows ? r2(revenue - cost) : null,
+      revenue: revenueRows ? r6(revenue) : null,
+      cost: r6(cost),
+      margin: revenueRows ? r6(revenue - cost) : null,
       marginPct: revenueRows && revenue > 0 ? r1(((revenue - cost) / revenue) * 100) : null,
       tps: g === "destination" || g === "country" ? null : r1(sum("tps")),
     },

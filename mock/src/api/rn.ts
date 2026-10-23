@@ -453,7 +453,7 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
         after,
         after !== null && after < 0 && (now === null || now >= 0),
         b?.n ?? 0,
-        Math.round((b?.cost ?? 0) * 1e4) / 1e4,
+        Math.round((b?.cost ?? 0) * 1e6) / 1e6,
       ],
     );
   }

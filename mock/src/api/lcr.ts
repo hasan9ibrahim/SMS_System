@@ -441,8 +441,8 @@ async function whatIfImpact(
     clientLines: clients.length,
     routesChanged: changed,
     messages7d: msgs,
-    costChange7d: r2(costChange),
-    marginChange7d: r2(-costChange),
+    costChange7d: r6(costChange),
+    marginChange7d: r6(-costChange),
     changes: changes.sort((x, y) => y.messages7d - x.messages7d),
   };
 }

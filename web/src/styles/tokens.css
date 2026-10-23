@@ -19,6 +19,8 @@
   /* Selected pill (sibling page links): dark in light mode, light in dark mode. */
   --color-strong: #18202f;
   --color-on-strong: #ffffff;
+  /* Table and card headers (team trial round 3): a light shade of the accent pill fill breaks up the white. */
+  --color-head-tint: color-mix(in srgb, var(--color-accent) 7%, var(--color-panel));
 
   --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-size-body: 14px;
@@ -51,6 +53,7 @@
   --color-header: #141921;
   --color-strong: #e6e9ef;
   --color-on-strong: #111827;
+  --color-head-tint: color-mix(in srgb, var(--color-accent) 6%, var(--color-panel));
   --card-shadow: none;
 
   color-scheme: dark;

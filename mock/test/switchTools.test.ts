@@ -143,6 +143,28 @@ describe("Notification: Send Rate, Send Tech Info, View Rate (§8)", { skip }, (
     // The SMPP password goes in the e-mail in plain text (decided 2026-10-18, team trial round 1).
     assert.ok(/Password: \S+/.test(techLog.body), "the password is in the e-mail");
   });
+
+  test("Send Tech Info from the enterprise: one e-mail with every trunk (team trial round 3)", async () => {
+    const { rows } = await db().query(
+      `SELECT array_agg(t.id ORDER BY t.id) AS ids, array_agg(t.name ORDER BY t.id) AS names FROM customer_trunks t
+        JOIN enterprise_contacts c ON c.enterprise_id = t.enterprise_id AND c.contact_type IN ('technical', 'commercial')
+             AND cardinality(c.emails) > 0
+        WHERE t.deleted_at IS NULL GROUP BY t.enterprise_id HAVING count(DISTINCT t.id) >= 2 LIMIT 1`,
+    );
+    assert.ok(rows[0], "an enterprise with two trunks and a contact");
+    const ids = [...new Set(rows[0].ids as number[])].map(Number);
+    const names = [...new Set(rows[0].names as string[])];
+    const sent = await ok(
+      "sendTechInfoNotifications",
+      call("POST", "/notifications/send-tech-info", { trunkIds: ids, oneEmailPerEnterprise: true }),
+    );
+    assert.equal(sent.sent, ids.length);
+    const { rows: last } = await db().query(
+      "SELECT body FROM email_logs WHERE email_type = 'send_tech_info' ORDER BY id DESC LIMIT 1",
+    );
+    const log = last[0] as { body: string };
+    for (const n of names) assert.ok(log.body.includes(n), `${n} is in the e-mail`);
+  });
 });
 
 describe("Firewall (§8)", { skip }, () => {
