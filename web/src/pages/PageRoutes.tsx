@@ -11,6 +11,7 @@ import { AlertRulesPage } from "./monitoring/alerts/AlertRulesPage";
 import { IncidentsPage } from "./monitoring/alerts/IncidentsPage";
 import { LiveAnalyticsPage } from "./live/LiveAnalyticsPage";
 import { BulkRatingPage } from "./rates/BulkRatingPage";
+import { MarginCalculatorPage } from "./rates/MarginCalculatorPage";
 import { IncomingRnsPage } from "./rates/incoming/IncomingRnsPage";
 import { MarketMovesPage } from "./rates/market/MarketMovesPage";
 import { LcrPage } from "./routing/lcr/LcrPage";
@@ -100,6 +101,7 @@ const BUILT = new Set([
   "/admin/security",
   "/rates/mccmnc",
   "/rates/categories",
+  "/rates/margin-calculator",
   "/rates/countries",
   "/rates/master-table",
   "/rates/mo-book",
@@ -179,6 +181,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/rates/manager" element={<RateManagerPage />} />
       <Route path="/rates/mccmnc" element={<MccmncPage />} />
       <Route path="/rates/categories" element={<ProductCategoriesPage />} />
+      <Route path="/rates/margin-calculator" element={<MarginCalculatorPage />} />
       <Route path="/rates/countries" element={<CountriesPage />} />
       <Route path="/rates/master-table" element={<MasterTablePage />} />
       <Route path="/rates/mo-book" element={<MoBookPage />} />

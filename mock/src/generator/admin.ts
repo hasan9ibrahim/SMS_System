@@ -54,6 +54,7 @@ const ACCESS_GROUPS: { name: string; description: string; permissions: Record<st
       "rate-manager": ["view", "edit", "export", "send"],
       "market-moves": ["view", "export"],
       "rate-lookup": ["view", "export"],
+      "margin-calculator": ["view", "add", "edit", "delete", "export"],
       "master-report": ["view", "export"],
       "enterprise-report": ["view", "export"],
       "sales-report": ["view", "export"],

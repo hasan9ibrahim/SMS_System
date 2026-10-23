@@ -549,7 +549,8 @@ export function RouteRulesPage() {
 
   return (
     <ListScreen<RouteRuleRow>
-      // Double-click or Enter opens the panel on Edit (team trial round 2).
+      // A click highlights the rule; double-click or Enter opens the panel on Edit (team trial round 3).
+      detailOpensOn="double"
       onOpen={() => setSection("edit")}
       list="route_rules"
       page={page}

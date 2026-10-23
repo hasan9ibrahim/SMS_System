@@ -45,6 +45,11 @@ export interface ListScreenProps<Row extends { id: number }> {
   rowActions?: (row: Row) => (MenuItem | "separator")[];
   detail?: (row: Row) => DetailContent;
   onOpen?: (row: Row, e: MouseEvent | KeyboardEvent) => void;
+  /**
+   * "double": a click only highlights the row; double-click or Enter opens the detail panel, which then follows the
+   * highlighted row until closed (Route rules, team trial round 3). Default: a click opens it.
+   */
+  detailOpensOn?: "click" | "double";
   /** Records this page edits; enables the header Undo and History buttons (§13.10). */
   historyScope?: HistoryScope | null;
   primary?: { label: string; icon?: IconName; onClick?: () => void; disabled?: boolean; title?: string };
@@ -434,6 +439,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     enabled,
     idleMessage,
     noSelection,
+    detailOpensOn = "click",
   } = props;
   const bodyRef = useRef<HTMLDivElement>(null);
   const [detailWidth, setDetailWidth] = useDetailWidth(list);
@@ -453,6 +459,8 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   const fields = useListFields(list);
   const [state, setState] = useGridUrlState(initialState);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
+  const [detailOpen, setDetailOpen] = useState(detailOpensOn === "click");
+  const showDetail = !!detail && !!activeRow && detailOpen;
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // The open detail section stays the same while the user moves between rows.
   const ownSection = useState<string | null>(null);
@@ -493,6 +501,8 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
       const wanted = rows.find((r) => r.id === selectId);
       if (wanted) {
         applied.current = selectId;
+        // A row picked from outside (a new rule, the simulator) opens its panel.
+        setDetailOpen(true);
         return setActiveRow(wanted);
       }
     }
@@ -704,7 +714,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
           <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
         </div>
       </div>
-      <div className={`list-body${detail && activeRow ? " with-detail" : ""}`} ref={bodyRef}>
+      <div className={`list-body${showDetail ? " with-detail" : ""}`} ref={bodyRef}>
         {/* The grid in a Records card (design refresh); the count in the footer. */}
         <section className="records-card">
           {fields.data ? (
@@ -719,7 +729,15 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               onActiveChange={onActive}
               selected={selected}
               onSelectedChange={setSelected}
-              {...(onOpen ? { onOpen } : {})}
+              {...(onOpen || detailOpensOn === "double"
+                ? {
+                    onOpen: (row: Row, e: MouseEvent | KeyboardEvent) => {
+                      setActiveRow(row);
+                      setDetailOpen(true);
+                      onOpen?.(row, e);
+                    },
+                  }
+                : {})}
               {...(onKey ? { onKeyAction: onKey } : {})}
               {...(rowClass ? { rowClass } : {})}
               {...(fetchPage ? { fetchPage } : {})}
@@ -741,14 +759,14 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             {total !== null && meta.loaded < total && <span>&nbsp;· scroll for more</span>}
           </div>
         </section>
-        {detail && activeRow && <DetailSplitter width={detailWidth} onChange={setDetailWidth} container={bodyRef} />}
-        {detail && activeRow && (
+        {showDetail && <DetailSplitter width={detailWidth} onChange={setDetailWidth} container={bodyRef} />}
+        {showDetail && activeRow && (
           <DetailPanel
             key={activeRow.id}
             content={detail(activeRow)}
             section={section}
             setSection={setSection}
-            onClose={() => setActiveRow(null)}
+            onClose={() => (detailOpensOn === "double" ? setDetailOpen(false) : setActiveRow(null))}
             width={detailWidth}
           />
         )}

@@ -2376,3 +2376,56 @@ select.chip-select {
   min-height: 0;
   background: none;
 }
+/* Help must stay visible on laptop screens (team trial round 3): a narrower search, then icon only. */
+.jump {
+  width: 180px;
+}
+@media (max-width: 1750px) {
+  .jump {
+    width: auto;
+  }
+  .jump > span,
+  .top-clock-date {
+    display: none;
+  }
+}
+@media (max-width: 1400px) {
+  .menu-top {
+    padding: 0 8px;
+  }
+  .top-clock-tz,
+  .jump kbd {
+    display: none;
+  }
+}
+.topbar .menu-bar {
+  min-width: max-content;
+}
+/* Quick search card (team trial round 3): groups flow in even columns with no gaps; the card fits its content. */
+.pill-pop {
+  min-width: 0;
+  width: max-content;
+  max-width: min(720px, calc(100vw - 32px));
+}
+.pill-groups {
+  display: block;
+  columns: 3 180px;
+  column-gap: 20px;
+  padding: 10px 14px 6px;
+}
+.pill-group {
+  break-inside: avoid;
+  margin-bottom: 10px;
+}
+.pill-group-title {
+  padding: 0 6px 3px;
+}
+.pill-field {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  line-height: 1.35;
+}
+.pill-card-foot {
+  gap: 16px;
+}

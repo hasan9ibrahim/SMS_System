@@ -305,7 +305,7 @@ export const topics: HelpTopic[] = [
               "**Page header**: links to the other routing pages (Route map, LCR, Re-rating, Rate lookup, Simulator) and the actions **Undo**, **History**, **Export**, **Cleanup** (only when there are findings), **Simulate** and the blue **New rule** button.",
               '**Filter card**: the quick search box with a pill for every field filter (click the box to pick a field; **Any of (OR)…** opens the filter builder), its own controls, **Clear all**, and on the right **Save as view**, **Views**, the selection summary (for example "2 selected · 28.2k msgs"), **Bulk edit** and **Columns**.',
               "**Grid**: one row per rule, sorted by priority then ID, with a filter box under every column header. The footer shows the row count. See [[grids-and-filters]].",
-              "**Detail panel**: opens on the right of the grid with a single click on a rule. Its sections are tabs across the top: **Edit**, **Configuration** (with the vendors), **Conditions**, **Traffic**, **History** and **Test**; at the bottom the **Traffic 24h** trend line with Messages and Margin for the last 24 hours. Drag its left edge to resize it.",
+              "**Detail panel**: opens on the right of the grid when you **double-click** a rule (a single click only highlights it). Its sections are tabs across the top: **Edit**, **Configuration** (with the vendors), **Conditions**, **Traffic**, **History** and **Test**; at the bottom the **Traffic 24h** trend line with Messages and Margin for the last 24 hours. Drag its left edge to resize it.",
               "**Status bar**: row counts and the shortcuts ↑↓ move · Space select · E edit · D duplicate · Ctrl+Z undo.",
             ],
           },
@@ -415,7 +415,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A single click on a rule opens the detail panel. **Double-click** a rule (or press Enter) to open the panel on **Edit**: its general settings, saved in place with **Save**. The panel then has **Configuration** (Category, Customer trunks and Destination, each a block with **Edit**, and the Vendors), **Conditions** (sender, receiver, content, TPS, revenue, time, HLR, multipart), Traffic, History and Test.",
+            text: "A single click on a rule only highlights it. **Double-click** a rule (or press Enter) to open the detail panel on **Edit**; while the panel is open, clicking another rule shows that one, and closing it (×) goes back to highlighting only: its general settings, saved in place with **Save**. The panel then has **Configuration** (Category, Customer trunks and Destination, each a block with **Edit**, and the Vendors), **Conditions** (sender, receiver, content, TPS, revenue, time, HLR, multipart), Traffic, History and Test.",
           },
           {
             kind: "text",

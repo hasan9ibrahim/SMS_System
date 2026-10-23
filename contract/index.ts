@@ -303,6 +303,11 @@ export type LookupVendorCost = Schemas["LookupVendorCost"];
 export type LookupClientRate = Schemas["LookupClientRate"];
 export type RateLookupResult = Schemas["RateLookupResult"];
 export type LookupSide = Schemas["LookupSide"];
+export type MarginDealLine = Schemas["MarginDealLine"];
+export type MarginDealInput = Schemas["MarginDealInput"];
+export type MarginDealTotals = Schemas["MarginDealTotals"];
+export type MarginDeal = Schemas["MarginDeal"];
+export type MarginDealRow = Schemas["MarginDealRow"];
 export type LookupSideOptions = Schemas["LookupSideOptions"];
 /** A side's filters: the side lookup request without paging and sort. */
 export type LookupSideFilters = Omit<Schemas["LookupSideRequest"], "limit" | "cursor" | "sort" | "dir">;

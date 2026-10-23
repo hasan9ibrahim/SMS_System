@@ -266,6 +266,13 @@ import {
 } from "./api/fx.js";
 import { rateLookupSide, rateLookupSideLines, rateLookupSideOptions } from "./api/rateLookupSide.js";
 import {
+  createMarginDeal,
+  deleteMarginDeal,
+  getMarginDeal,
+  listMarginDeals,
+  updateMarginDeal,
+} from "./api/marginDeals.js";
+import {
   createSavedLookup,
   deleteSavedLookup,
   exportRateLookupMatrix,
@@ -774,6 +781,11 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   rateLookupMatrix,
   exportRateLookupMatrix,
   rateLookupSideOptions,
+  listMarginDeals,
+  createMarginDeal,
+  getMarginDeal,
+  updateMarginDeal,
+  deleteMarginDeal,
   rateLookupSide,
   rateLookupSideLines,
   listSavedLookups,
