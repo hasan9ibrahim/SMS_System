@@ -17,7 +17,7 @@ import { useMe } from "../../api/hooks";
 import { isAdminUser, ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
-import { ROUTE_TYPES, shareProblems, toInput } from "./ruleModel";
+import { shareProblems, toInput } from "./ruleModel";
 
 /** New rules start at 97; 98–100 are kept for administrators (team trial round 1). */
 export const DEFAULT_PRIORITY = 97;
@@ -127,8 +127,9 @@ export function RuleGeneralForm({
   bindSubmit?.(submitAsync);
   return (
     <div className="rule-general">
-      <div className="fgrid cols-3">
-        <label className="field span-2">
+      {/* Compact (team trial round 4): two rows; the route type is set in Configuration with the vendors. */}
+      <div className="rule-general-grid">
+        <label className="field rg-name">
           <span>
             Name<span className="req">*</span>
           </span>
@@ -140,7 +141,10 @@ export function RuleGeneralForm({
             onChange={(e) => set({ name: e.target.value })}
           />
         </label>
-        <label className="field">
+        <label
+          className="field"
+          title={`1–100, 100 tried first${maxPriority < 100 ? "; 98–100 only by an administrator" : ""}`}
+        >
           <span>
             Priority<span className="req">*</span>
           </span>
@@ -158,38 +162,7 @@ export function RuleGeneralForm({
               })
             }
           />
-          <small className="muted">
-            1–100, 100 tried first{maxPriority < 100 ? "; 98–100 only by an administrator" : ""}
-          </small>
         </label>
-      </div>
-      {(!rule || draft) && (
-        <div className="field">
-          <span>Route type</span>
-          <div className="segmented" role="radiogroup">
-            {ROUTE_TYPES.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                role="radio"
-                aria-checked={g.routeType === t.value}
-                className={g.routeType === t.value ? "on" : ""}
-                onClick={() => {
-                  set({ routeType: t.value });
-                  // On a draft the type applies at once, so Configuration shows vendors or not (team trial round 3).
-                  if (draft && rule && rule.routeType !== t.value)
-                    void save
-                      .mutateAsync({ id: rule.id, input: toInput(rule, { routeType: t.value }) })
-                      .catch((e) => setError(problemText(e)));
-                }}
-              >
-                <span className={`dot dot-${t.tone}`} /> {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="fgrid cols-3">
         <label className="field">
           <span>Continue routing</span>
           <select
@@ -230,34 +203,33 @@ export function RuleGeneralForm({
             ))}
           </select>
         </label>
+        <label
+          className="field"
+          title="Empty = the destinations' targets (MCCMNC codes page). The grid shows the rule's DLR in amber below it."
+        >
+          <span>DLR target %</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            placeholder="Destinations'"
+            value={g.dlrTargetPct ?? ""}
+            onChange={(e) =>
+              set({ dlrTargetPct: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })
+            }
+          />
+        </label>
+        <label className="field rg-comment">
+          <span>Comment</span>
+          <input
+            maxLength={1000}
+            value={g.comment ?? ""}
+            placeholder="Optional"
+            onChange={(e) => set({ comment: e.target.value || null })}
+          />
+        </label>
       </div>
-      <label className="field">
-        <span>DLR target %</span>
-        <input
-          type="number"
-          min={0}
-          max={100}
-          step={0.5}
-          placeholder="Empty = the destinations' targets"
-          value={g.dlrTargetPct ?? ""}
-          onChange={(e) =>
-            set({ dlrTargetPct: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })
-          }
-        />
-        <small className="muted">
-          The grid shows the rule's DLR in amber below it. Destination targets are set on the MCCMNC codes page.
-        </small>
-      </label>
-      <label className="field">
-        <span>Comment</span>
-        <textarea
-          rows={1}
-          className="comment-box"
-          maxLength={1000}
-          value={g.comment ?? ""}
-          onChange={(e) => set({ comment: e.target.value || null })}
-        />
-      </label>
       {rule && hideStatus ? null : rule ? (
         <label className="toggle-inline">
           <input

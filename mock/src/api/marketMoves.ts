@@ -1,7 +1,7 @@
 // Market rate movements (§13.14). A scan looks at vendor rate changes of the last weeks (imports,
 // incoming RNs §13.13, manual edits), keeps the top vendors of each destination (Tier 1 plus the
 // cheapest N), and records a move when enough of them change in the same direction within the window
-// (market/detect.ts). Each move lists the affected client tables with a suggested sell rate; account
+// (market/detect.ts). The market cost is the average rate of the vendors that moved, before and after. Each move lists the affected client tables with a suggested sell rate; account
 // managers update them through Bulk rating, reroute, snooze or dismiss, and every action is logged.
 // Optional auto-apply rules re-price a client's table to keep a margin, with the contractual notice.
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -30,6 +30,7 @@ import { sendProblem } from "../problem.js";
 import { logEmail } from "./emailLog.js";
 import { applyLineEdits, checkLineEdits, noticePeriods, type EditTable } from "./rates.js";
 import { iso, recordChange, type DiffEntry } from "./records.js";
+import { emailRateSheets } from "./switchTools.js";
 import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 
@@ -534,9 +535,11 @@ async function scan() {
     ams: [] as string[],
     vol: [] as number[],
   };
+  // Market cost (team trial round 4, §13.14): the average rate of the vendors that moved, before and after. The
+  // cheapest top vendor often does not move, so its rate would show no change and suggest no new sell rate.
+  const avg = (move: (typeof found)[number]["move"], k: "oldUsd" | "newUsd") =>
+    move.changes.reduce((sum, x) => sum + x[k], 0) / move.changes.length;
   for (const { cand, move, a } of rows) {
-    const after = (vt: number, usd: number, k: "oldUsd" | "newUsd") =>
-      move.changes.find((x) => x.vendorTrunkId === vt)?.[k] ?? usd;
     cols.m.push(cand.mccmncId);
     cols.dir.push(move.direction);
     cols.first.push(new Date(move.first));
@@ -544,8 +547,8 @@ async function scan() {
     cols.avg.push(move.avgChangePct);
     cols.moved.push(move.changes.length);
     cols.top.push(cand.topCount);
-    cols.oldc.push(Math.min(...[...cand.current].map(([vt, usd]) => after(vt, usd, "oldUsd"))));
-    cols.newc.push(Math.min(...[...cand.current].map(([vt, usd]) => after(vt, usd, "newUsd"))));
+    cols.oldc.push(avg(move, "oldUsd"));
+    cols.newc.push(avg(move, "newUsd"));
     cols.urgent.push(
       move.direction === "up" &&
         move.avgChangePct >= s.urgentChangePct &&
@@ -652,7 +655,24 @@ async function scan() {
       WHERE state IN ('open', 'snoozed') AND last_effective < now() - make_interval(days => $1)`,
     [s.lookbackDays],
   );
-  return { created, updated, expired: expired ?? 0, autoApplied, tookMs: Date.now() - t0 };
+  // An open move this scan no longer finds (regrouped under newer dates, or its vendors left the top or moved back)
+  // is closed with a note, so the list never shows stale costs (team trial round 5, §13.14).
+  const savedIds = saved.map((r) => Number(r.id));
+  const { rowCount: replaced } = await c.query(
+    `UPDATE market_moves mm SET state = 'expired', updated_at = now(),
+            note = coalesce(mm.note, CASE WHEN EXISTS (SELECT 1 FROM market_moves n WHERE n.id = ANY($1::bigint[])
+                     AND n.mccmnc_id = mm.mccmnc_id AND n.direction = mm.direction)
+                   THEN 'Replaced by a newer move' ELSE 'No longer detected' END)
+      WHERE mm.state IN ('open', 'snoozed') AND NOT (mm.id = ANY($1::bigint[]))`,
+    [savedIds],
+  );
+  return {
+    created,
+    updated,
+    expired: (expired ?? 0) + (replaced ?? 0),
+    autoApplied,
+    tookMs: Date.now() - t0,
+  };
 }
 
 /**
@@ -671,6 +691,7 @@ async function autoApply(moveId: number): Promise<number> {
   const newUsd = Number(mm[0].new_cost_eur);
   const tables = await affectedTables(c, Number(mm[0].mccmnc_id));
   let applied = 0;
+  const notify: { id: number; name: string; from: Date }[] = [];
   for (const t of tables) {
     const rule = ruleFor(rules, t);
     if (!rule || (move.direction === "down" && rule.direction !== "both")) continue;
@@ -725,7 +746,20 @@ async function autoApply(moveId: number): Promise<number> {
         `Auto-applied ${rate} ${t.currency} on ${t.name} from ${from.toISOString().slice(0, 10)}`,
       );
       applied++;
+      notify.push({ id: table.id, name: t.name, from });
     });
+  }
+  // The clients get the normal rate notification at once (team trial round 4, §13.14): the new rate starts after
+  // their increase (or decrease) notice, so the e-mail is the notice.
+  for (const n of notify) {
+    const r = await emailRateSheets(c, { rateTableIds: [n.id], fileType: "excel", sendEmail: true }, null);
+    const why = [...r.failed.map((f) => `${f.trunk}: ${f.reason}`), ...r.skippedTables.map((x) => x.reason)];
+    await log(
+      c,
+      moveId,
+      null,
+      `Rate notice for ${n.name} (new rate from ${n.from.toISOString().slice(0, 10)}) e-mailed to ${r.sent} customer trunk${r.sent === 1 ? "" : "s"}${why.length ? `; not sent: ${why.join("; ")}` : ""}`,
+    );
   }
   if (applied)
     await c.query("UPDATE market_moves SET auto_applied = auto_applied + $2 WHERE id = $1", [moveId, applied]);

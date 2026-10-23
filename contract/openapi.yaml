@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.85.0
+  version: 0.86.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -23369,12 +23369,20 @@ components:
     SendRateInput:
       type: object
       additionalProperties: false
-      required: [trunkIds, fileType, sendEmail]
+      required: [fileType, sendEmail]
+      description: Customer trunks, rate tables, or both; at least one (team trial round 4).
       properties:
         trunkIds:
           type: array
-          minItems: 1
           maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+        rateTableIds:
+          type: array
+          maxItems: 500
+          description: >-
+            Customer rate tables (Rate Manager, team trial round 4): every live customer trunk using one of them gets
+            its rate sheet; a table no live trunk uses is listed in `skippedTables`.
           items:
             $ref: "#/components/schemas/Id"
         fileType:
@@ -23390,6 +23398,21 @@ components:
       properties:
         sent:
           type: integer
+        sentTrunks:
+          type: array
+          description: Send Rate (team trial round 4) - each trunk e-mailed, with its enterprise and the address used.
+          items:
+            type: object
+            required: [trunkId, trunk, enterprise, to]
+            properties:
+              trunkId:
+                $ref: "#/components/schemas/Id"
+              trunk:
+                type: string
+              enterprise:
+                type: string
+              to:
+                type: string
         failed:
           type: array
           items:
@@ -23399,6 +23422,21 @@ components:
               trunkId:
                 $ref: "#/components/schemas/Id"
               trunk:
+                type: string
+              enterprise:
+                type: [string, "null"]
+              reason:
+                type: string
+        skippedTables:
+          type: array
+          description: Rate tables sent nothing because no live customer trunk uses them (or they are vendor tables).
+          items:
+            type: object
+            required: [rateTableId, rateTable, reason]
+            properties:
+              rateTableId:
+                $ref: "#/components/schemas/Id"
+              rateTable:
                 type: string
               reason:
                 type: string

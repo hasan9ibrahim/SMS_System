@@ -492,17 +492,18 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "au",
-                what: "Contains `au` anywhere.",
+                what: "Starts with `au` (the box says **starts with…**). Type `%au` to find au anywhere.",
                 values: "Case does not matter: `AU`, `Au` and `au` give the same result.",
               },
               {
                 name: "acme%",
                 what: "Starts with `acme`. `%` stands for any text (also none).",
-                values: "`%mobile` ends with mobile; `%tel%com%` contains tel and later com.",
+                values:
+                  "`%mobile` contains mobile anywhere; `%tel%com%` contains tel and later com; `/mobile$/` ends with mobile.",
               },
               { name: "a_c", what: "`_` stands for exactly one character.", values: "`a_c` matches abc, a1c, aXc." },
               { name: "=ACME", what: "Equals exactly (still not case-sensitive)." },
-              { name: "!test", what: "Does not contain `test`." },
+              { name: "!test", what: "Does not start with `test`. `!%test` does not contain it anywhere." },
               {
                 name: "/^ab[0-9]+$/",
                 what: "A regular expression between slashes, for advanced patterns. Not case-sensitive.",
@@ -578,7 +579,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Plain text typed in the box (outside a pill) is a normal quick search over the main text columns: press **Enter**, or click **Search all text columns for …** in the card. **Esc** clears it. On **Enterprises**, **Customer trunks**, **Vendor trunks** and **Users** plain text matches the start of a value (`Colo` finds names starting with Colo); type `%colo` to find it anywhere. Other lists match anywhere. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
+            text: "Plain text typed in the box (outside a pill) is a normal quick search over the main text columns: press **Enter**, or click **Search all text columns for …** in the card. **Esc** clears it. Inside a pill, and in every column filter, text matches the start of a value (`Colo` finds names starting with Colo); type `%colo` to find it anywhere. On **Enterprises**, **Customer trunks**, **Vendor trunks** and **Users** the plain quick search also matches the start; other lists match anywhere. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
           },
         ],
       },

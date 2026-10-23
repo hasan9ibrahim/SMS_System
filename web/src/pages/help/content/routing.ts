@@ -357,7 +357,10 @@ export const topics: HelpTopic[] = [
                 what: "Selects the row; the header actions then act on every selected rule. The header box selects all loaded rows.",
               },
               { name: "ID", what: "The rule number. Filter: equals." },
-              { name: "Rule", what: "The rule name. Filter: contains, with `%` and `_` wildcards." },
+              {
+                name: "Rule",
+                what: "The rule name. Filter: starts with; type `%` first to match anywhere (`_` = one character).",
+              },
               {
                 name: "Priority",
                 what: "Priority, 1–100. High numbers are tried first; the grid opens sorted that way. Filter: a range (from – to).",
@@ -372,7 +375,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Customer trunks",
-                what: 'The first trunks the rule matches (in bold), then "+N" for the rest. Point at the cell to see every trunk in a small window. Filter: contains.',
+                what: 'The first trunks the rule matches (in bold), then "+N" for the rest. Point at the cell to see every trunk in a small window. Filter: starts with (type `%` first to match anywhere).',
               },
               {
                 name: "Destination",
@@ -380,7 +383,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Vendors",
-                what: 'The vendor split in bold, for example "Kite_DIR 60 · Orbit_DIR 40", or the least cost or quality pool. Point at it to see every vendor with its share, level and backups; click it to edit the level 1 split in place. Shows — for Block rules. Filter: contains (vendor name).',
+                what: 'The vendor split in bold, for example "Kite_DIR 60 · Orbit_DIR 40", or the least cost or quality pool. Point at it to see every vendor with its share, level and backups; click it to edit the level 1 split in place. Shows — for Block rules. Filter: vendor name, starts with (type `%` first to match anywhere).',
               },
               {
                 name: "24h",
@@ -439,11 +442,6 @@ export const topics: HelpTopic[] = [
                 values: "1–100. Default 97. Only an administrator can set 98, 99 or 100.",
               },
               {
-                name: "Route type",
-                what: "Only on a new rule (change it later in the Vendors popup). Static, Least cost, Quality or Block.",
-                values: "Default Static.",
-              },
-              {
                 name: "Continue routing",
                 what: "What happens when this rule matches but no vendor qualifies.",
                 values: "STOP – end here (default), YES – keep evaluating, NEXT – jump to group.",
@@ -480,8 +478,8 @@ export const topics: HelpTopic[] = [
             title: "How to add a rule",
             items: [
               "Click **New rule**. One window opens with **General**, **Configuration** and **Other conditions**; the rule already exists as a draft, switched off.",
-              "Under **General** enter the **Name** and **Priority**, pick the **Route type**, and set continue routing, groups, DLR target and comment if needed.",
-              "Under **Configuration** tick the categories and customer trunks (**Inclusive** or **Exclusive**), pick the destinations and add the vendors.",
+              "Under **General** enter the **Name** and **Priority**, and set continue routing, groups, DLR target and comment if needed (all on two compact rows).",
+              "Under **Configuration** tick the categories and customer trunks (**Inclusive** or **Exclusive**), pick the destinations, choose the **Route type** and add the vendors.",
               "Add other conditions with **+ Add condition** if needed.",
               "Check **Rule on** in the footer (it ticks itself once the rule has customer trunks and vendors) and click **Save**. To drop the rule instead, click **×**: the draft is discarded completely.",
               "Open **Test** in the panel and run a sample number through the rule.",

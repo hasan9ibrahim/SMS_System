@@ -308,12 +308,13 @@ export const topics: HelpTopic[] = [
             items: [
               "**Open** / **Open in new tab**.",
               "**Bulk rating…**: opens [[bulk|Bulk rating]] for this table (customer tables only).",
+              "**Send rates…** (also in the header for the highlighted table): e-mails the table's current rate sheet (Excel or CSV) to every live customer trunk using it, one e-mail per trunk to the enterprise's Rates contact (Commercial when there is none). Customer tables in use only.",
               "**Delete…**: archives the table (see below).",
             ],
           },
           {
             kind: "text",
-            text: "Tick several tables (Space or the checkboxes) and choose **Bulk rating (n tables)…** to re-price them together. Filtering, sorting and search all run on the server; see [[grids-and-filters]].",
+            text: "Tick several tables (Space or the checkboxes) and choose **Bulk rating (n tables)…** to re-price them together, or **Send rates (n tables)…** to e-mail all their sheets at once. After sending, a window shows each customer trunk that was e-mailed, each one that failed and why, and any table with nothing to send (no live customer trunk). Every e-mail is also in Email logs. Filtering, sorting and search all run on the server; see [[grids-and-filters]].",
           },
         ],
       },
@@ -753,7 +754,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Rows of flagged RNs that are due soon are highlighted. Tick several RNs and choose the header's **Accept n pending RNs** to accept them all at once (each RN is still its own change you can undo; the confirmation warns when some have live traffic flags or notice breaches).",
+            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Tiles count the RNs pending review, the pending ones with live traffic flags or notice breaches, the unmatched and the accepted. The **Status** and **Flags** chips filter the list. Each RN is a card row: **RN** (reference and when it arrived), **Vendor · trunk**, **Effective** (date and how soon), **Rates** (count with increases, decreases, new and closed), **Checks** (flag tags, or All checks passed) and **Status** (with who decided). The left edge is red for flags or errors, amber while pending and green once decided. Rows of flagged RNs that are due soon are highlighted. Tick several RNs and choose the header's **Accept n pending RNs** to accept them all at once (each RN is still its own change you can undo; the confirmation warns when some have live traffic flags or notice breaches).",
           },
           {
             kind: "fields",
@@ -1111,7 +1112,8 @@ export const topics: HelpTopic[] = [
               "It looks at their rate changes over the look-back period (from imports, accepted RNs and manual edits).",
               "When at least the minimum number of top vendors move in the same direction by at least the minimum %, with start dates within the window of each other, that is one move.",
               "A move is **Urgent** when it is an increase of at least the urgent % starting within the urgent days.",
-              "Scans run every 15 minutes, soon after vendor rates change, and when you click **Scan now**. Snoozed moves reopen when the snooze ends; moves nobody acted on expire after the look-back period.",
+              "Scans run every 15 minutes, soon after vendor rates change, and when you click **Scan now**. Snoozed moves reopen when the snooze ends; moves nobody acted on expire after the look-back period. An open move a scan no longer finds (its vendors moved back or left the top, or the changes were regrouped under a newer move) is expired with a note.",
+              "**Example:** Germany · Vodafone has 28 top vendors (the 3 cheapest plus the Tier 1 vendors). Two of them raise their rate by 12 % and 14 % with start dates 5 days apart: with the defaults (at least 2 vendors, at least 3 %, within 7 days) that is one ↑ +13 % move. The market cost is the average of those two vendors' rates before and after.",
             ],
           },
         ],
@@ -1121,6 +1123,10 @@ export const topics: HelpTopic[] = [
         title: "Columns",
         blocks: [
           {
+            kind: "text",
+            text: "Tiles at the top count the open moves: urgent, increases, decreases and the ones for your clients. Under them, **State**, **Direction** and **Urgent** chips and the account manager box filter the list on the server. Each move is a card row with a red edge for increases and a green edge for decreases: **Destination** (country, Urgent tag, network · MCCMNC), **Change** (average change and how many top vendors moved), **Effective** (dates and how soon), **Market cost** (old → new and the % change), **Clients** (client count and 7-day messages) and **State**. More columns are in **Columns**.",
+          },
+          {
             kind: "fields",
             fields: [
               { name: "Country / Network / MCCMNC", what: "The destination." },
@@ -1128,7 +1134,10 @@ export const topics: HelpTopic[] = [
               { name: "Avg Change", what: "Average change of the vendors that moved. Increases red, decreases green." },
               { name: "Moved", what: 'How many of the top vendors moved, e.g. "3 of 5".' },
               { name: "From", what: "The first new start date." },
-              { name: "New Cost", what: "Market cost before → after." },
+              {
+                name: "New Cost",
+                what: "Market cost before → after: the average rate of the vendors that moved (EUR). Example: two top vendors go 0.0300 → 0.0336 and 0.0320 → 0.0352, so the market cost is 0.0310 → 0.0344 (+11 %).",
+              },
               { name: "Clients", what: "Client tables selling this destination." },
               { name: "Msgs 7d", what: "Messages to this destination in the last 7 days." },
               { name: "Urgent", what: "Red chip for urgent moves; open urgent rows are highlighted." },
@@ -1164,8 +1173,9 @@ export const topics: HelpTopic[] = [
               { name: "Notice", what: "The client's rate notice period in days." },
               {
                 name: "Suggested / From",
-                what: "Suggested new sell rate and the earliest date with notice. The suggestion keeps the client's current margin over the new cost, or the target margin when that is higher.",
+                what: "Suggested new sell rate and the earliest date with notice. The suggestion keeps the client's current margin over the new market cost, or the target margin when that is higher. Example: sell 0.0400 at market cost 0.0310 is a 22.5 % margin; at the new cost 0.0344 the same margin gives 0.0444.",
               },
+              { name: "Change", what: "The suggested rate against today's sell rate, in %." },
               { name: "Auto-apply", what: "The auto-apply rule covering this client, if any." },
             ],
           },
@@ -1224,10 +1234,13 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Auto-apply rules",
             fields: [
-              { name: "Client", what: "The client the rule covers." },
+              {
+                name: "Clients",
+                what: "Every client (customers and Bilateral partners). Search, tick one or many (**Select all shown**), and **Add rules** makes one rule per client. Clients that already have a rule are greyed out.",
+              },
               {
                 name: "keep margin ≥ %",
-                what: "When the margin at the new cost falls below this, the client's table is re-priced automatically, from the move's date or the client's notice, whichever is later. Each re-price is one undoable change.",
+                what: "When the margin at the new market cost falls below this, the client's table is re-priced automatically, from the move's date or the client's increase notice (decrease notice for decreases), whichever is later. Each re-price is one undoable change, and the client's customer trunks get the normal rate notification e-mail straight away showing the new rate and its start date (logged on the move and in Email logs).",
               },
               { name: "decreases too", what: "Also follow price decreases (otherwise increases only)." },
             ],
@@ -1284,15 +1297,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Clients' rate tables",
-                what: "The customer tables to change. Remove one with ×; add with **Add a client's rate table…**, or click **Pick customer trunks…**, tick the trunks (search, **Select all shown**) and **Add their rate tables**: every client table those trunks use joins the scope. At least one is required.",
-              },
-              {
-                name: "Destinations by MCCMNC",
-                what: "Single networks (or country-level codes). Add with **Add an MCCMNC…**.",
-              },
-              {
-                name: "Destinations by country (every network)",
-                what: "Whole countries by ISO code. Add with **Add a country…**.",
+                what: "The customer tables to change, picked like Customer trunks on a route rule. **Inclusive**: tick the tables to change. **Exclusive**: every customer table except the ones you tick. The search box finds a table by its name, a customer trunk or an enterprise; each row shows the trunks using the table (or the enterprises) and its currency. **Select all shown** ticks every row found. Ticked tables show as chips above the list; remove one with ×. At least one table is required.",
               },
               {
                 name: "Pick countries and networks…",
@@ -1300,13 +1305,13 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Paste a list",
-                what: "Paste MCCMNC codes (3–6 digits) or country ISO codes (2 letters), one per line or separated by commas, spaces or semicolons. Anything else is listed as ignored.",
+                what: "Paste MCCMNC codes (3–6 digits) or country ISO codes (2 letters), one per line or separated by commas, spaces or semicolons. Anything else is listed as ignored. The line under the buttons counts the networks and whole countries picked; **Clear** removes them all.",
               },
             ],
           },
           {
             kind: "text",
-            text: 'With no destinations, the job covers every destination the tables price. The line under the buttons shows the size, e.g. "3 tables × 2 MCCMNC + 1 countries = 140 rates". A job can hold up to 20,000 rates; narrow the scope if it is larger.',
+            text: 'With no destinations, the job covers every destination the tables price. The line under the buttons shows the size, e.g. "3 tables × 2 networks + 1 countries = 140 rates". A job can hold up to 20,000 rates; narrow the scope if it is larger.',
           },
         ],
       },
@@ -1347,8 +1352,8 @@ export const topics: HelpTopic[] = [
                 what: "Ticked by default. Increases start when each client's notice period ends instead of on the chosen date.",
               },
               {
-                name: "Also add destinations a table lacks",
-                what: "For Set a fixed rate and Cost + actions: add a new rate where a table has no rate yet. Off = only change existing rates.",
+                name: "Don't add if new",
+                what: "For Set a fixed rate and Cost + actions. Off (the default): a destination a table has no rate for yet gets a new rate. On: only rates the tables already have are changed; new destinations are skipped.",
               },
             ],
           },

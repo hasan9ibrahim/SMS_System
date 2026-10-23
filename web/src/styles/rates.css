@@ -688,3 +688,60 @@
 .mc-card strong {
   font-size: 18px;
 }
+/* Send rates result (team trial round 4). */
+.send-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+}
+.send-summary.good {
+  background: color-mix(in srgb, var(--color-good) 10%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+}
+.send-summary.partial {
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-panel));
+}
+.send-summary.bad {
+  background: color-mix(in srgb, var(--color-error) 9%, var(--color-panel));
+  color: var(--color-error);
+}
+/* Bulk rating scope checklist (team trial round 4). */
+.table-scope {
+  max-width: 640px;
+}
+.table-scope-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.table-scope .pick-list {
+  max-height: 240px;
+}
+.choice-row.select-all {
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+/* Market moves as cards (team trial round 5): a red edge for increases, green for decreases. */
+.gr.rule-row.sev-good {
+  --sev-edge: var(--color-good);
+}
+.two-line.right {
+  align-items: flex-end;
+  text-align: right;
+}
+.mm-change {
+  font-size: 14px;
+  font-weight: 700;
+}
+.kpi-label.green::before {
+  background: var(--color-good);
+}
+.two-line > .chip-tag {
+  align-self: flex-start;
+}
+.two-line.right > .chip-tag {
+  align-self: flex-end;
+}

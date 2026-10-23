@@ -14263,8 +14263,11 @@ export type components = {
        */
       oneEmailPerEnterprise: boolean;
     };
+    /** @description Customer trunks, rate tables, or both; at least one (team trial round 4). */
     SendRateInput: {
-      trunkIds: components["schemas"]["Id"][];
+      trunkIds?: components["schemas"]["Id"][];
+      /** @description Customer rate tables (Rate Manager, team trial round 4): every live customer trunk using one of them gets its rate sheet; a table no live trunk uses is listed in `skippedTables`. */
+      rateTableIds?: components["schemas"]["Id"][];
       /** @enum {string} */
       fileType: "excel" | "csv";
       /** @description False = nothing is e-mailed; the page downloads the sheets instead (View Rate). */
@@ -14272,9 +14275,23 @@ export type components = {
     };
     NotificationResult: {
       sent: number;
+      /** @description Send Rate (team trial round 4) - each trunk e-mailed, with its enterprise and the address used. */
+      sentTrunks?: {
+        trunkId: components["schemas"]["Id"];
+        trunk: string;
+        enterprise: string;
+        to: string;
+      }[];
       failed: {
         trunkId: components["schemas"]["Id"];
         trunk: string;
+        enterprise?: string | null;
+        reason: string;
+      }[];
+      /** @description Rate tables sent nothing because no live customer trunk uses them (or they are vendor tables). */
+      skippedTables?: {
+        rateTableId: components["schemas"]["Id"];
+        rateTable: string;
         reason: string;
       }[];
     };

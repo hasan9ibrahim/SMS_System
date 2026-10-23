@@ -5,8 +5,9 @@
 // Rules on the trunk), Accept and update customers (Bulk rating), and the replies and log.
 import { useMemo, useState } from "react";
 import { useLocation } from "react-router";
-import type { RnDetail, RnLineRow, RnRow, RnSettings, VendorRnSettings } from "@sms/contract";
-import { useListFields } from "../../../api/hooks";
+import { useQuery } from "@tanstack/react-query";
+import type { FilterCondition, RnDetail, RnLineRow, RnRow, RnSettings, VendorRnSettings } from "@sms/contract";
+import { fetchListPage, useListFields } from "../../../api/hooks";
 import {
   rnFileUrl,
   useAssignRn,
@@ -28,15 +29,86 @@ import { ListScreen } from "../../../page/ListScreen";
 import { ListLookup } from "../../../records/parts";
 import { usePageStatus, useTabNavigate, useTabTitle } from "../../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../../ui/feedback";
+import { ChecklistChip } from "../../../ui/ChecklistChip";
 import { Icon } from "../../../ui/Icon";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
 import { Kv } from "../../admin/parts";
-import { formatPct, formatRate, shortDate } from "../format";
+import { formatPct, formatRate, relDays, shortDate } from "../format";
 import { CHANGE, changeSummary, decidable, lineFlags, rerouteUrl, STATUS, updateCustomersUrl } from "./rnModel";
 
 const page = pageForPath("/rates/incoming")!;
+const STATUS_CHIP: Record<RnRow["status"], string> = {
+  pending: "amber",
+  accepted: "green",
+  partly_accepted: "amber",
+  rejected: "red",
+  failed: "red",
+  unmatched: "amber",
+};
+
+/** One summary tile: a count from the server (team trial round 5). */
+function RnTile({
+  t,
+}: {
+  t: { key: string; label: string; conditions: FilterCondition[]; tone?: string; note?: string };
+}) {
+  const q = useQuery({
+    queryKey: ["list", "rate_notifications", "kpi", t.key],
+    queryFn: () =>
+      fetchListPage<RnRow>("rate_notifications", {
+        limit: 1,
+        withTotal: true,
+        filter: { logic: "and", conditions: t.conditions },
+      }),
+    staleTime: 30_000,
+  });
+  return (
+    <div className="kpi-tile">
+      <span className={`kpi-label${t.tone ? ` tone-dot ${t.tone}` : ""}`}>{t.label}</span>
+      <span className="kpi-value">{q.data?.total === undefined ? "…" : q.data.total.toLocaleString("en-US")}</span>
+      {t.note && <span className="muted small">{t.note}</span>}
+    </div>
+  );
+}
+
+const PENDING: FilterCondition = { field: "status", op: "in", values: ["pending"] };
+const RN_TILES = [
+  { key: "pending", label: "Pending review", conditions: [PENDING], tone: "amber" },
+  {
+    key: "flagged",
+    label: "With live traffic flags",
+    conditions: [PENDING, { field: "flagged", op: "gte", value: 1 }],
+    tone: "red",
+    note: "Pending RNs touching sent traffic",
+  },
+  {
+    key: "notice",
+    label: "Notice breaches",
+    conditions: [PENDING, { field: "noticeBreaches", op: "gte", value: 1 }],
+    tone: "amber",
+  },
+  { key: "unmatched", label: "Unmatched", conditions: [{ field: "status", op: "in", values: ["unmatched"] }] },
+  {
+    key: "accepted",
+    label: "Accepted",
+    conditions: [{ field: "status", op: "in", values: ["accepted", "partly_accepted"] }],
+    tone: "green",
+  },
+] satisfies { key: string; label: string; conditions: FilterCondition[]; tone?: string; note?: string }[];
+
+/** Summary tiles over the queue (team trial round 5). */
+function RnKpis() {
+  return (
+    <div className="kpi-tiles">
+      {RN_TILES.map((t) => (
+        <RnTile key={t.key} t={t} />
+      ))}
+    </div>
+  );
+}
+
 const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
 const statusCell = (s: RnRow["status"]) => (
   <span>
@@ -674,55 +746,161 @@ function RnQueue() {
           Settings
         </Button>
       }
-      columns={{
-        reference: {
-          width: 150,
-          render: (r) => (
+      // Queue redesign (team trial round 5, like Incidents and Alert rules): summary tiles, a filter bar of chips,
+      // and each RN as a card row with an edge for its state (red flags, amber pending, green accepted).
+      above={<RnKpis />}
+      rowHeight={62}
+      initialState={{
+        visible: ["reference", "vendor", "effectiveFrom", "lines", "flagged", "status"],
+      }}
+      toolbarFields={["status"]}
+      toolbar={(state, setState) => {
+        const set = (field: string, c: FilterCondition | null) => {
+          const columns = { ...state.columns };
+          if (c) columns[field] = c;
+          else delete columns[field];
+          setState({ ...state, columns });
+        };
+        const flagged = state.columns.flagged;
+        return (
+          <div className="incident-filters">
+            <ChecklistChip
+              label="Status"
+              field="status"
+              condition={state.columns.status}
+              options={Object.entries(STATUS).map(([value, v]) => ({ value, label: v.label }))}
+              onChange={(c) => set("status", c)}
+            />
             <button
               type="button"
-              className="link strong"
-              onClick={(e) => {
-                e.stopPropagation();
-                open(r.id, e.ctrlKey || e.metaKey);
-              }}
+              className={`range-chip plain${flagged ? " set" : ""}`}
+              aria-pressed={!!flagged}
+              onClick={() => set("flagged", flagged ? null : { field: "flagged", op: "gte", value: 1 })}
             >
-              {r.reference}
+              {flagged ? "With live traffic flags" : "Flags: All"}
             </button>
+          </div>
+        );
+      }}
+      columns={{
+        reference: {
+          width: 230,
+          label: "RN",
+          render: (r) => (
+            <span className="two-line">
+              <button
+                type="button"
+                className="link strong"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  open(r.id, e.ctrlKey || e.metaKey);
+                }}
+              >
+                {r.reference}
+              </button>
+              <span className="muted small">received {fmtWhen(r.receivedAt)}</span>
+            </span>
           ),
         },
-        vendor: { width: 200, render: (r) => r.vendor ?? <span className="tone-warning">not matched</span> },
+        vendor: {
+          width: 280,
+          label: "Vendor · trunk",
+          render: (r) => (
+            <span className="two-line">
+              {r.vendor ? <strong>{r.vendor}</strong> : <span className="tone-warning strong">Not matched</span>}
+              <span className="muted small">{r.vendorTrunk ?? "no vendor trunk yet"}</span>
+            </span>
+          ),
+        },
         vendorTrunk: { width: 170, render: (r) => r.vendorTrunk ?? <span className="muted">—</span> },
         receivedAt: { width: 160, render: (r) => fmtWhen(r.receivedAt) },
         effectiveFrom: {
-          width: 120,
+          width: 170,
+          align: "left",
+          label: "Effective",
           render: (r) =>
             r.effectiveFrom ? (
-              <span
-                className={r.dueSoon ? "tone-warning strong" : undefined}
-                title={r.dueSoon ? "Flagged and due soon" : undefined}
-              >
-                {shortDate(r.effectiveFrom)}
+              <span className="two-line">
+                <strong className={`num${r.dueSoon ? " tone-warning" : ""}`}>{shortDate(r.effectiveFrom)}</strong>
+                <span className={`small${r.dueSoon ? " tone-warning" : " muted"}`}>
+                  {r.dueSoon ? "flagged and due soon" : relDays(r.effectiveFrom)}
+                </span>
               </span>
             ) : (
               <span className="muted">—</span>
             ),
         },
         lines: {
-          width: 80,
-          align: "right",
-          render: (r) => <span className="num">{r.lines.toLocaleString("en-US")}</span>,
+          width: 220,
+          align: "left",
+          label: "Rates",
+          render: (r) => (
+            <span className="two-line">
+              <strong className="num">
+                {r.lines.toLocaleString("en-US")} rate{r.lines === 1 ? "" : "s"}
+              </strong>
+              <span className="muted small">
+                {[
+                  r.increases ? `↑ ${r.increases}` : null,
+                  r.decreases ? `↓ ${r.decreases}` : null,
+                  r.newLines ? `${r.newLines} new` : null,
+                  r.closed ? `${r.closed} closed` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "no changes"}
+              </span>
+            </span>
+          ),
         },
-        flagged: { width: 96, align: "right", render: (r) => count(r.flagged, "error") },
+        flagged: {
+          width: 260,
+          align: "left",
+          label: "Checks",
+          render: (r) => {
+            const tags = [
+              r.flagged ? { t: `${r.flagged} live traffic flag${r.flagged === 1 ? "" : "s"}`, c: "red" } : null,
+              r.noticeBreaches ? { t: `${r.noticeBreaches} notice`, c: "amber" } : null,
+              r.backdated ? { t: `${r.backdated} back-dated`, c: "amber" } : null,
+              r.errors ? { t: `${r.errors} error${r.errors === 1 ? "" : "s"}`, c: "red" } : null,
+            ].filter((x): x is { t: string; c: string } => x !== null);
+            return tags.length ? (
+              <span className="tag-row">
+                {tags.map((x) => (
+                  <span key={x.t} className={`chip-tag ${x.c}`}>
+                    {x.t}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="tone-good small">All checks passed</span>
+            );
+          },
+        },
         noticeBreaches: { width: 80, align: "right", render: (r) => count(r.noticeBreaches, "warning") },
         backdated: { width: 96, align: "right", render: (r) => count(r.backdated, "warning") },
-        status: { width: 150, render: (r) => statusCell(r.status) },
+        status: {
+          width: 200,
+          render: (r) => (
+            <span className="two-line">
+              <span className={`chip-tag ${STATUS_CHIP[r.status]}`}>
+                <span className="dot-mini" />
+                {STATUS[r.status].label}
+              </span>
+              <span className="muted small">
+                {r.autoAccepted ? "auto-accepted" : r.decidedBy ? `by ${r.decidedBy}` : "\u00a0"}
+              </span>
+            </span>
+          ),
+        },
         decidedBy: {
           width: 140,
           render: (r) =>
             r.autoAccepted ? <span className="muted">auto</span> : (r.decidedBy ?? <span className="muted">—</span>),
         },
       }}
-      rowClass={(r) => (r.dueSoon ? "row-alert" : undefined)}
+      rowClass={(r) =>
+        `rule-row ${r.flagged || r.errors || r.status === "failed" || r.status === "rejected" ? "sev-critical" : decidable(r.status) || r.status === "unmatched" ? "sev-warning" : "sev-good"}${decidable(r.status) || r.status === "unmatched" ? "" : " row-muted"}${r.dueSoon ? " has-open" : ""}`
+      }
       onOpen={(r, e) => open(r.id, e.ctrlKey || e.metaKey)}
       detail={(r) => ({
         title: (
