@@ -109,7 +109,14 @@ describe("market moves (§13.14)", { skip }, () => {
     }
   });
 
-  test("a move from two cheapest vendors' increases, with auto-apply and Bulk rating suggestions", async () => {
+  test("a move from two cheapest vendors' increases, with auto-apply and Bulk rating suggestions", async (t) => {
+    // This test is about the Cheapest N rule; the default (team trial round 5) is Tier 1 vendors only.
+    const before = await ok("getMarketMoveSettings", call("GET", "/market-moves/settings"));
+    await ok(
+      "updateMarketMoveSettings",
+      call("PUT", "/market-moves/settings", { ...before, unlistedMode: "cheapest" }),
+    );
+    t.after(() => call("PUT", "/market-moves/settings", before));
     // A destination sold by a client, and its two cheapest live vendors.
     const { rows: d } = await db().query(
       `SELECT l.mccmnc_id, l.mccmnc, rt.id AS table_id, rt.currency, l.rate, t.enterprise_id
@@ -229,6 +236,66 @@ describe("market moves (§13.14)", { skip }, () => {
     const row = pre.rows.find((r: { senderId: string | null }) => r.senderId === null);
     assert.equal(row.newRate, client.suggestedRate);
     assert.ok(Date.parse(row.effectiveFrom) >= Date.parse(client.suggestedFrom) - 1000);
+  });
+
+  test("by default only Tier 1 vendors count; too few of them and the destination is not watched", async () => {
+    const s = await ok("getMarketMoveSettings", call("GET", "/market-moves/settings"));
+    assert.equal(s.unlistedMode, "tier1");
+    // A destination without a list and with at least two live Tier 1 vendor trunks.
+    const { rows: d } = await db().query(
+      `SELECT l.mccmnc_id, array_agg(DISTINCT vt.id) AS t1 FROM rate_lines l
+         JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
+         JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id AND vt.deleted_at IS NULL AND vt.status = 'active'
+         JOIN enterprises e ON e.id = vt.enterprise_id AND e.tier = 'tier1'
+        WHERE l.sender_id IS NULL AND NOT l.is_blocked AND l.valid_from <= now() AND l.valid_to IS NULL
+          AND length(l.mccmnc) = 5 AND l.mccmnc_id NOT IN (SELECT mccmnc_id FROM market_top_vendors)
+        GROUP BY 1 HAVING count(DISTINCT vt.id) >= 2 ORDER BY 1 DESC LIMIT 1`,
+    );
+    const mccmncId = Number(d[0].mccmnc_id);
+    const tier1 = (d[0].t1 as string[]).map(Number);
+    const at = new Date(Math.ceil(Date.now() / DAY) * DAY + 4 * DAY + Math.floor((Date.now() % DAY) / 1000) * 1000);
+    for (const [i, vt] of tier1.slice(0, 2).entries()) {
+      const { rows: l } = await db().query(
+        `SELECT l.id, l.rate, rt.id AS table_id FROM rate_lines l JOIN rate_tables rt ON rt.id = l.rate_table_id
+          WHERE rt.vendor_trunk_id = $1 AND rt.kind = 'vendor' AND rt.deleted_at IS NULL AND l.mccmnc_id = $2
+            AND l.sender_id IS NULL AND l.valid_from <= now() AND l.valid_to IS NULL LIMIT 1`,
+        [vt, mccmncId],
+      );
+      const saved = await ok(
+        "changeRateLines",
+        call("POST", `/rate-tables/${l[0].table_id}/lines/changes`, {
+          items: [
+            {
+              action: "set",
+              lineId: Number(l[0].id),
+              rate: Math.round(Number(l[0].rate) * 1.09 * 1e6) / 1e6,
+              effectiveFrom: new Date(at.getTime() + i * 3600_000).toISOString(),
+            },
+          ],
+        }),
+      );
+      cleanup.push(() => call("POST", `/changes/${saved.change.id}/undo`, {}));
+    }
+    await ok("scanMarketMoves", call("POST", "/market-moves/scan"));
+    const { rows: mv } = await db().query(
+      "SELECT id, top_count FROM market_moves WHERE mccmnc_id = $1 AND direction = 'up' AND first_effective = $2",
+      [mccmncId, at],
+    );
+    assert.equal(mv.length, 1, "the Tier 1 vendors' move is recorded");
+    assert.ok(Number(mv[0].top_count) >= 2);
+    const { rows: vs } = await db().query(
+      `SELECT e.tier FROM market_move_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
+         JOIN enterprises e ON e.id = vt.enterprise_id WHERE v.move_id = $1`,
+      [mv[0].id],
+    );
+    assert.ok(vs.length >= 2 && vs.every((x) => x.tier === "tier1"), "only Tier 1 trunks count");
+    // No open move anywhere counts fewer top vendors than the minimum.
+    const { rows: few } = await db().query(
+      `SELECT count(*)::int AS n FROM market_moves mm WHERE mm.state = 'open' AND mm.top_count < $1
+         AND mm.mccmnc_id NOT IN (SELECT mccmnc_id FROM market_top_vendors)`,
+      [s.minVendors],
+    );
+    assert.equal(few[0].n, 0, "destinations with too few Tier 1 vendors are not watched");
   });
 
   test("hand-picked top vendors per destination (team trial round 5)", async () => {

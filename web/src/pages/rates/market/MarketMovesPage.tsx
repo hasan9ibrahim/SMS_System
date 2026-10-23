@@ -501,19 +501,24 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
                 value={s.unlistedMode}
                 onChange={(e) => setD({ ...s, unlistedMode: e.target.value as MarketMoveSettings["unlistedMode"] })}
               >
+                <option value="tier1">Tier 1 vendors (not watched with fewer than N)</option>
                 <option value="cheapest">Cheapest N vendors (+ Tier 1 if ticked)</option>
                 <option value="skip">Not watched</option>
               </select>
             </label>
-            {num("cheapestN", "Cheapest N vendors count")}
-            <label className="toggle-inline">
-              <input
-                type="checkbox"
-                checked={s.includeTier1}
-                onChange={(e) => setD({ ...s, includeTier1: e.target.checked })}
-              />
-              Tier 1 vendors count too
-            </label>
+            {s.unlistedMode === "cheapest" && (
+              <>
+                {num("cheapestN", "Cheapest N vendors count")}
+                <label className="toggle-inline">
+                  <input
+                    type="checkbox"
+                    checked={s.includeTier1}
+                    onChange={(e) => setD({ ...s, includeTier1: e.target.checked })}
+                  />
+                  Tier 1 vendors count too
+                </label>
+              </>
+            )}
             {num("windowDays", "Dates within (days)")}
             {num("minVendors", "At least N vendors")}
             {num("minChangePct", "Moving by at least (%)", 0.5)}
@@ -528,7 +533,8 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
             <button type="button" className="link" onClick={() => void openTopVendors()}>
               Top vendors per destination
             </button>
-            . The two settings above only apply to destinations without one.
+            . Destinations without one use the choice above: by default their Tier 1 vendors, and a destination with
+            fewer Tier 1 vendors than &quot;At least N vendors&quot; is not watched.
           </p>
           <h3 className="part-title">Auto-apply rules</h3>
           <p className="muted small">

@@ -11845,10 +11845,10 @@ export type components = {
       /** @description Daily digest e-mail to account managers, UTC. */
       digestHour: number;
       /**
-       * @description Destinations without a hand-picked top vendor list: `cheapest` = the cheapest N (plus Tier 1 when `includeTier1`); `skip` = not watched (team trial round 5).
+       * @description Destinations without a hand-picked top vendor list (team trial round 5): `tier1` (default) = the Tier 1 vendors pricing the destination, so a destination with fewer than `minVendors` of them is not watched; `cheapest` = the cheapest N (plus Tier 1 when `includeTier1`); `skip` = not watched.
        * @enum {string}
        */
-      unlistedMode: "cheapest" | "skip";
+      unlistedMode: "tier1" | "cheapest" | "skip";
       readonly updatedBy?: string | null;
       readonly updatedAt?: components["schemas"]["Timestamp"] | null;
     };

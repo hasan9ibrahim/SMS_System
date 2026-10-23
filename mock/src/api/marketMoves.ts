@@ -1,6 +1,6 @@
 // Market rate movements (§13.14). A scan looks at vendor rate changes of the last weeks (imports,
 // incoming RNs §13.13, manual edits), keeps the top vendors of each destination (hand-picked per
-// destination, team trial round 5; otherwise Tier 1 plus the cheapest N), and records a move when enough of them change in the same direction within the window
+// destination, team trial round 5; otherwise the Tier 1 vendors by default, or Tier 1 plus the cheapest N), and records a move when enough of them change in the same direction within the window
 // (market/detect.ts). The market cost is the average rate of the vendors that moved, before and after. Each move lists the affected client tables with a suggested sell rate; account
 // managers update them through Bulk rating, reroute, snooze or dismiss, and every action is logged.
 // Optional auto-apply rules re-price a client's table to keep a margin, with the contractual notice.
@@ -62,7 +62,7 @@ const toSettings = (r: Record<string, unknown>): MarketMoveSettings => ({
   urgentDays: Number(r.urgent_days),
   targetMarginPct: r.target_margin_pct === null ? null : Number(r.target_margin_pct),
   digestHour: Number(r.digest_hour),
-  unlistedMode: (r.unlisted_mode as MarketMoveSettings["unlistedMode"]) ?? "cheapest",
+  unlistedMode: (r.unlisted_mode as MarketMoveSettings["unlistedMode"]) ?? "tier1",
   updatedBy: (r.updated_by as string | null) ?? null,
   updatedAt: iso(r.updated_at),
 });
@@ -91,7 +91,7 @@ export function updateMarketMoveSettings(request: FastifyRequest, reply: Fastify
         b.targetMarginPct,
         b.digestHour,
         me.id,
-        b.unlistedMode ?? "cheapest",
+        b.unlistedMode ?? "tier1",
       ],
     );
     return toSettings(await loadSettings(pool));
@@ -570,6 +570,8 @@ async function loadCandidates(c: Db, s: MarketMoveSettings): Promise<Map<number,
         -- A hand-picked list (team trial round 5): its vendor trunks, plus Tier 1 when the destination says so.
         WHEN tv.mccmnc_id IS NOT NULL THEN x.vt = ANY(tv.vendor_trunk_ids) OR (tv.include_tier1 AND x.tier = 'tier1')
         WHEN $3 = 'skip' THEN false
+        -- The default: Tier 1 vendors only; with fewer than the minimum, nothing can move (not watched).
+        WHEN $3 = 'tier1' THEN x.tier = 'tier1'
         ELSE x.rn <= $1 OR ($2 AND x.tier = 'tier1') END`,
     [s.cheapestN, s.includeTier1, s.unlistedMode],
   );

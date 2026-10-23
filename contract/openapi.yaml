@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.87.0
+  version: 0.88.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18660,11 +18660,13 @@ components:
         unlistedMode:
           type: string
           enum:
+          - tier1
           - cheapest
           - skip
           description: >-
-            Destinations without a hand-picked top vendor list: `cheapest` = the cheapest N (plus Tier 1 when
-            `includeTier1`); `skip` = not watched (team trial round 5).
+            Destinations without a hand-picked top vendor list (team trial round 5): `tier1` (default) = the Tier 1
+            vendors pricing the destination, so a destination with fewer than `minVendors` of them is not watched;
+            `cheapest` = the cheapest N (plus Tier 1 when `includeTier1`); `skip` = not watched.
         updatedBy:
           type:
           - string

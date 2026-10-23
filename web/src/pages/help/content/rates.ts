@@ -1108,7 +1108,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "For each destination the platform keeps the **top vendors**. A destination with a hand-picked list (**Top vendors** in the header, or **Top vendors…** on a move) uses exactly those vendor trunks, plus the Tier 1 vendors pricing it when its Tier 1 box is ticked. Other destinations use the settings: the cheapest N vendor trunks plus Tier 1 vendors if set, or are not watched.",
+              "For each destination the platform keeps the **top vendors**. A destination with a hand-picked list (**Top vendors** in the header, or **Top vendors…** on a move) uses exactly those vendor trunks, plus the Tier 1 vendors pricing it when its Tier 1 box is ticked. Other destinations use the settings: by default their **Tier 1 vendors** only, so a destination with fewer Tier 1 vendors than **At least N vendors** is not watched; or the cheapest N vendor trunks plus Tier 1 vendors if set; or not watched at all.",
               "**Top vendors per destination:** the header button lists every destination with its own list (search starts with; `%` anywhere), with **Edit**, **Remove** (back to the settings) and **Add destinations…**. In the editor, pick the destinations in the country/network tree, tick the vendor trunks that count (the list shows the trunks pricing the first destination, cheapest first, with their EUR rate and a Tier 1 tag; the search box above it finds a trunk or vendor by the start of its name, `%` anywhere), and choose whether Tier 1 vendors count too. The same choice is saved for every destination picked; the next scan uses it.",
               "It looks at their rate changes over the look-back period (from imports, accepted RNs and manual edits).",
               "When at least the minimum number of top vendors move in the same direction by at least the minimum %, with start dates within the window of each other, that is one move.",
@@ -1215,7 +1215,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Destinations without a top vendor list",
-                what: "**Cheapest N vendors** (the two settings below) or **Not watched**: then only destinations with a hand-picked list can have moves.",
+                what: "**Tier 1 vendors** (the default): the Tier 1 vendors pricing the destination are its top vendors, and with fewer of them than **At least N vendors** the destination is not watched. **Cheapest N vendors**: the two settings below (shown only with this choice). **Not watched**: only destinations with a hand-picked list can have moves.",
               },
               {
                 name: "Cheapest N vendors count",

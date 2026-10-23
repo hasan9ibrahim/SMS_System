@@ -370,3 +370,18 @@ CREATE TABLE IF NOT EXISTS market_top_vendors (
 );
 ALTER TABLE market_move_settings ADD COLUMN IF NOT EXISTS unlisted_mode text NOT NULL DEFAULT 'cheapest'
   CHECK (unlisted_mode IN ('cheapest', 'skip'));
+
+-- Team trial round 5 (§13.14): destinations without a hand-picked top vendor list use their Tier 1 vendors by
+-- default; with fewer Tier 1 vendors than the minimum, the destination is not watched.
+ALTER TABLE market_move_settings DROP CONSTRAINT IF EXISTS market_move_settings_unlisted_mode_check;
+ALTER TABLE market_move_settings ALTER COLUMN unlisted_mode SET DEFAULT 'tier1';
+ALTER TABLE market_move_settings ADD CONSTRAINT market_move_settings_unlisted_mode_check
+  CHECK (unlisted_mode IN ('tier1', 'cheapest', 'skip'));
+DO $$
+BEGIN
+  -- Once: later choices of "cheapest" are kept when this script runs again.
+  IF NOT EXISTS (SELECT 1 FROM upgrade_marks WHERE name = 'market_unlisted_tier1') THEN
+    UPDATE market_move_settings SET unlisted_mode = 'tier1' WHERE unlisted_mode = 'cheapest';
+    INSERT INTO upgrade_marks (name) VALUES ('market_unlisted_tier1');
+  END IF;
+END $$;
