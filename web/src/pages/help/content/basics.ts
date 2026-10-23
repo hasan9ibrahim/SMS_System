@@ -62,7 +62,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "After the menu: **Search or jump to…** ([[search-jump]], **Ctrl K**); on the right the live **TPS** pill (click it to open the Dashboard), the server clock, the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
+            text: "After the menu: **Search or jump to…** ([[search-jump]], **Ctrl K**; on a laptop-sized screen only its magnifier icon shows, so the menu up to **Help** always fits); on the right the live **TPS** pill (click it to open the Dashboard), the server clock, the alert bell ([[alerts-and-popups]]) and your avatar with your personal settings.",
           },
         ],
       },
@@ -2111,6 +2111,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Click **EDRs** on a row. A window lists the message records (EDRs) behind that row for the period, with the usual column filters.",
+              "The foot of the window shows when the list was loaded. Click **Refresh** to load the EDRs written since you opened it.",
               "Click **Open in EDR search** to continue in a new tab with the same filters ([[edr-search]]).",
               "Click **Export…** (or the ⬇ icon on the row) to request a CSV or Excel file of those EDRs.",
             ],

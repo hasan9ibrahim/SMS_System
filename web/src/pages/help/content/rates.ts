@@ -1545,12 +1545,82 @@ export const topics: HelpTopic[] = [
     ],
   },
 
+  // ------------------------------------------------------------------ Margin calculator
+  {
+    id: "margin-calculator",
+    pageKey: "margin-calculator",
+    title: "Margin calculator",
+    group: "Rates",
+    summary:
+      "Works out a swap deal with one carrier: our margin on the traffic we send them and on the traffic they send us, the total margin and who pays whom (netting).",
+    keywords: ["swap", "swap deal", "bilateral", "netting", "margin", "calculator", "deal", "reciprocal"],
+    sections: [
+      {
+        id: "overview",
+        title: "What this page is for",
+        blocks: [
+          {
+            kind: "text",
+            text: "The SMS version of the team's swap-deal sheet. A swap deal has two legs with the same carrier: **Us to carrier** (we send traffic to them; the carrier is our vendor, so their price is our cost) and **Carrier to us** (they send traffic to us; the carrier is our customer, so their price is our selling rate). Nothing here changes rates or routing; it is a calculator, and deals can be saved for later.",
+          },
+        ],
+      },
+      {
+        id: "use",
+        title: "Working out a deal",
+        blocks: [
+          {
+            kind: "steps",
+            items: [
+              "Enter a **Deal name** and the **Carrier**. **Enterprise** links the deal to an existing partner and fills in the carrier name; it is optional, so a carrier we do not work with yet can be checked too.",
+              "Set the **Currency** and the **Period (days)** the volumes cover (30 by default). Per-day figures are the period totals divided by the days.",
+              "In each leg, type a **Destination** (pick a suggested country and network, or type any name), the **Cost / SMS**, the **Selling rate** and the number of **SMS** over the period. **+ Add destination** adds a row; × removes one.",
+              "The figures update as you type. Click **Save deal** to keep it; **Saved deals** lists the saved ones (search by deal or carrier) and opens one.",
+            ],
+          },
+          {
+            kind: "fields",
+            title: "Worked out per row",
+            fields: [
+              { name: "Margin / SMS", what: "Selling rate − cost." },
+              { name: "Cost / day", what: "Us to carrier: SMS × cost ÷ days." },
+              { name: "Revenue / day", what: "Carrier to us: SMS × selling rate ÷ days." },
+              { name: "Margin / day", what: "SMS × margin per SMS ÷ days." },
+              { name: "SMS / day", what: "SMS ÷ days." },
+              {
+                name: "Total cost / Total revenue",
+                what: "SMS × cost (Us to carrier) or SMS × selling rate (Carrier to us).",
+              },
+              { name: "Total margin", what: "SMS × margin per SMS. Negative figures are red." },
+            ],
+          },
+          {
+            kind: "fields",
+            title: "Summary cards",
+            fields: [
+              { name: "Total margin", what: "Margin of both legs together, and per day." },
+              {
+                name: "Netting",
+                what: "What we owe the carrier (total cost of Us to carrier) less what they owe us (total revenue of Carrier to us). Above zero: **We pay** the carrier; below zero: the **carrier pays us**.",
+              },
+              { name: "Us to carrier / Carrier to us", what: "Each leg's margin, SMS and its total cost or revenue." },
+            ],
+          },
+          {
+            kind: "tip",
+            text: "**Export CSV** downloads the deal laid out like the sheet: both legs with their totals, then the total margin and the netting. **New** starts an empty deal; **Delete** removes the saved deal you have open.",
+          },
+        ],
+      },
+    ],
+  },
+
   // ------------------------------------------------------------------ Countries
   {
     id: "countries",
     pageKey: "countries",
     title: "Countries",
-    group: "Rates",
+    group: "Routing",
     summary:
       "The country list: name, ISO code, international dial code and region, with the MCCMNC codes of each country.",
     keywords: ["country", "ISO", "dial code", "country code", "region"],
@@ -1619,7 +1689,7 @@ export const topics: HelpTopic[] = [
     id: "mccmnc",
     pageKey: "mccmnc",
     title: "MCCMNC codes",
-    group: "Rates",
+    group: "Routing",
     summary:
       "The destination master list: every mobile network code (MCC + MNC) with its country and name. It is the key for rating, routing and reports.",
     keywords: [
@@ -1753,7 +1823,7 @@ export const topics: HelpTopic[] = [
     id: "master-table",
     pageKey: "master-table",
     title: "Master table",
-    group: "Rates",
+    group: "Routing",
     summary:
       "Dial-code profiles: sets of number prefixes mapped to MCCMNC codes, used to find the network of a phone number.",
     keywords: ["dial code", "prefix", "number plan", "profile", "master data", "numbering"],
@@ -1851,7 +1921,7 @@ export const topics: HelpTopic[] = [
     id: "mo-book",
     pageKey: "mo-book",
     title: "MO reference book",
-    group: "Rates",
+    group: "Routing",
     summary:
       "Two-way and MO (mobile-originated) billing numbers: the long numbers and short codes a client receives replies on, with what we charge and pay for them.",
     keywords: ["MO", "mobile originated", "two-way", "long number", "short code", "keyword", "inbound SMS"],

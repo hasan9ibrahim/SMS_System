@@ -552,3 +552,132 @@
   flex: 1;
   min-width: 0;
 }
+
+/* Margin calculator (team trial round 3, §13.12): deal fields, summary cards, two leg sheets. */
+.mc-page {
+  overflow: auto;
+}
+.mc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+.mc-deal,
+.mc-leg,
+.mc-card {
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow);
+}
+.mc-deal {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1.2fr) minmax(180px, 1.2fr) 90px 110px minmax(180px, 2fr);
+  gap: 8px 12px;
+  padding: 12px 14px;
+}
+.mc-deal .field {
+  margin: 0;
+}
+@media (max-width: 1300px) {
+  .mc-deal {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.mc-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1000px) {
+  .mc-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.mc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  min-width: 0;
+}
+.mc-card-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mc-card strong {
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.mc-page .good {
+  color: var(--color-good);
+}
+.mc-page .bad {
+  color: var(--color-error);
+}
+.mc-leg header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.mc-leg h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.mc-table-wrap {
+  overflow-x: auto;
+}
+.mc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.mc-table th {
+  background: var(--color-head-tint);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-align: left;
+  padding: 7px 8px;
+  white-space: nowrap;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.mc-table td {
+  padding: 4px 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  white-space: nowrap;
+}
+.mc-table .num {
+  text-align: right;
+}
+.mc-table .strong {
+  font-weight: 650;
+}
+.mc-table tfoot td {
+  font-weight: 650;
+  border-bottom: 0;
+  padding: 8px;
+}
+.mc-table th.mc-input-col {
+  color: var(--color-text);
+}
+.mc-dest {
+  width: 100%;
+  min-width: 220px;
+}
+.mc-num {
+  width: 100px;
+  text-align: right;
+}
+.mc-deals-pop {
+  min-width: 340px;
+}

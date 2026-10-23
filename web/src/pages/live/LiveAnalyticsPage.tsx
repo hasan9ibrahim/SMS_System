@@ -382,6 +382,9 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
   const navigate = useTabNavigate();
   const [grid, setGrid] = useState<GridState>(state);
   const [active, setActive] = useState<number | null>(null);
+  // Refresh reloads the list so EDRs written since the window opened show up (team trial round 3).
+  const [loaded, setLoaded] = useState(0);
+  const [loadedAt, setLoadedAt] = useState(() => new Date());
   return (
     <Modal
       title={`EDRs · ${title}`}
@@ -389,7 +392,18 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
       onClose={done}
       footer={
         <>
-          <span className="muted small la-cdr-note">The hours-of-day filter is not applied here.</span>
+          <span className="muted small la-cdr-note">
+            The hours-of-day filter is not applied here · loaded {loadedAt.toISOString().slice(11, 19)} UTC
+          </span>
+          <Button
+            icon="refresh"
+            onClick={() => {
+              setLoaded((n) => n + 1);
+              setLoadedAt(new Date());
+            }}
+          >
+            Refresh
+          </Button>
           <Button
             icon="external"
             onClick={() => {
@@ -412,6 +426,7 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
       <div className="la-cdr">
         {fields.data ? (
           <DataGrid
+            queryScope={["edr-window", loaded]}
             list="edrs"
             fields={fields.data}
             state={grid}

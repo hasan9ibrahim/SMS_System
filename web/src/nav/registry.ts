@@ -274,19 +274,16 @@ export const PAGES: PageDef[] = [
     "5.1",
     "Traffic classes (DIRECT, HQ, OTP, …)",
   ),
-  p("rates", "countries", "Countries", "/rates/countries", "globe", "§6.1", "5.1", "Countries and dial codes"),
-  p("rates", "mccmnc", "MCCMNC codes", "/rates/mccmnc", "grid", "§6.1, §13.21", "5.1", "The destination master list"),
   p(
     "rates",
-    "master-table",
-    "Master table",
-    "/rates/master-table",
-    "grid",
-    "§6.1",
-    "5.1",
-    "Dial-code prefixes to MCCMNC",
+    "margin-calculator",
+    "Margin calculator",
+    "/rates/margin-calculator",
+    "calculator",
+    "§13.12",
+    "5.22",
+    "Swap deals: margin both ways and who pays whom",
   ),
-  p("rates", "mo-book", "MO reference book", "/rates/mo-book", "book", "§6.1", "5.1", "Two-way and MO billing numbers"),
 
   p(
     "routing",
@@ -319,6 +316,20 @@ export const PAGES: PageDef[] = [
     "5.9",
     "Which rule and vendor a message would get",
   ),
+  // Reference data sits with routing (team trial round 3); the addresses stay the same.
+  p("routing", "countries", "Countries", "/rates/countries", "globe", "§6.1", "5.1", "Countries and dial codes"),
+  p("routing", "mccmnc", "MCCMNC codes", "/rates/mccmnc", "grid", "§6.1, §13.21", "5.1", "The destination master list"),
+  p(
+    "routing",
+    "master-table",
+    "Master table",
+    "/rates/master-table",
+    "grid",
+    "§6.1",
+    "5.1",
+    "Dial-code prefixes to MCCMNC",
+  ),
+  p("routing", "mo-book", "MO reference book", "/rates/mo-book", "book", "§6.1", "5.1", "Two-way and MO billing numbers"),
 
   p(
     "switch",

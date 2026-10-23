@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.83.0
+  version: 0.84.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14367,6 +14367,127 @@ paths:
                 type: string
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /margin-deals:
+    get:
+      tags: [rates]
+      operationId: listMarginDeals
+      summary: "Saved swap deals of the Margin calculator (team trial round 3)"
+      description: |
+        Newest first; `search` matches the start of the deal or carrier name (% and _ wildcards as typed).
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 120
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: The deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarginDealRow"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      tags: [rates]
+      operationId: createMarginDeal
+      summary: "Save a new swap deal"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarginDealInput"
+      responses:
+        "201":
+          description: Saved, with the totals worked out on the server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarginDeal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /margin-deals/{id}:
+    get:
+      tags: [rates]
+      operationId: getMarginDeal
+      summary: "One swap deal"
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarginDeal"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [rates]
+      operationId: updateMarginDeal
+      summary: "Save changes to a swap deal"
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarginDealInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarginDeal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      tags: [rates]
+      operationId: deleteMarginDeal
+      summary: "Delete a swap deal"
+      description: A deal is a worksheet, not a billing record; it is removed.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -31722,6 +31843,142 @@ components:
           type: string
           maxLength: 20
           description: Use the sender-ID line where a table has one (§6.2).
+
+    MarginDealLine:
+      type: object
+      additionalProperties: false
+      description: One destination of a leg; prices per SMS in the deal currency, messages over the deal period.
+      required: [destination, cost, rate, messages]
+      properties:
+        destination:
+          type: string
+          maxLength: 200
+        mccmnc:
+          type: [string, "null"]
+          maxLength: 6
+        cost:
+          type: number
+          minimum: 0
+        rate:
+          type: number
+          minimum: 0
+          description: Selling rate per SMS.
+        messages:
+          type: integer
+          minimum: 0
+
+    MarginDealInput:
+      allOf:
+        - $ref: "#/components/schemas/MarginDealFields"
+      unevaluatedProperties: false
+
+    MarginDealFields:
+      type: object
+      description: >-
+        Margin calculator (team trial round 3, SMS version of the team's swap-deal sheet). `outbound`: traffic we send
+        to the carrier (it is our vendor: cost = its rate, rate = what our customers pay). `inbound`: traffic the
+        carrier sends us (it is our customer: rate = what it pays, cost = our vendor cost).
+      required: [name, carrierName, currency, periodDays, outbound, inbound]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        carrierEnterpriseId:
+          type: [integer, "null"]
+        carrierName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        periodDays:
+          type: integer
+          minimum: 1
+          maximum: 366
+        notes:
+          type: [string, "null"]
+          maxLength: 2000
+        outbound:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/MarginDealLine"
+        inbound:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/MarginDealLine"
+
+    MarginLegTotals:
+      type: object
+      required: [messages, cost, revenue, margin]
+      properties:
+        messages:
+          type: integer
+        cost:
+          type: number
+        revenue:
+          type: number
+        margin:
+          type: number
+
+    MarginDealTotals:
+      type: object
+      description: >-
+        Worked out to 6 decimals. netting = outbound cost - inbound revenue: above 0 we pay the carrier, below 0 the
+        carrier pays us.
+      required: [outbound, inbound, totalMargin, netting]
+      properties:
+        outbound:
+          $ref: "#/components/schemas/MarginLegTotals"
+        inbound:
+          $ref: "#/components/schemas/MarginLegTotals"
+        totalMargin:
+          type: number
+        netting:
+          type: number
+
+    MarginDeal:
+      allOf:
+        - $ref: "#/components/schemas/MarginDealFields"
+        - type: object
+          required: [id, totals, createdBy, updatedAt, updatedBy]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            totals:
+              $ref: "#/components/schemas/MarginDealTotals"
+            createdBy:
+              type: string
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            updatedBy:
+              type: string
+
+    MarginDealRow:
+      type: object
+      required: [id, name, carrierName, currency, periodDays, totalMargin, netting, updatedAt, updatedBy]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        carrierName:
+          type: string
+        currency:
+          type: string
+        periodDays:
+          type: integer
+        totalMargin:
+          type: number
+        netting:
+          type: number
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          type: string
 
     LookupSide:
       type: string

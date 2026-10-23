@@ -9866,6 +9866,49 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/margin-deals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Saved swap deals of the Margin calculator (team trial round 3)
+     * @description Newest first; `search` matches the start of the deal or carrier name (% and _ wildcards as typed).
+     */
+    get: operations["listMarginDeals"];
+    put?: never;
+    /** Save a new swap deal */
+    post: operations["createMarginDeal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/margin-deals/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One swap deal */
+    get: operations["getMarginDeal"];
+    /** Save changes to a swap deal */
+    put: operations["updateMarginDeal"];
+    post?: never;
+    /**
+     * Delete a swap deal
+     * @description A deal is a worksheet, not a billing record; it is removed.
+     */
+    delete: operations["deleteMarginDeal"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-lookup/side/options": {
     parameters: {
       query?: never;
@@ -17905,6 +17948,58 @@ export type components = {
       asOf?: components["schemas"]["Timestamp"];
       /** @description Use the sender-ID line where a table has one (§6.2). */
       senderId?: string;
+    };
+    /** @description One destination of a leg; prices per SMS in the deal currency, messages over the deal period. */
+    MarginDealLine: {
+      destination: string;
+      mccmnc?: string | null;
+      cost: number;
+      /** @description Selling rate per SMS. */
+      rate: number;
+      messages: number;
+    };
+    MarginDealInput: components["schemas"]["MarginDealFields"];
+    /** @description Margin calculator (team trial round 3, SMS version of the team's swap-deal sheet). `outbound`: traffic we send to the carrier (it is our vendor: cost = its rate, rate = what our customers pay). `inbound`: traffic the carrier sends us (it is our customer: rate = what it pays, cost = our vendor cost). */
+    MarginDealFields: {
+      name: string;
+      carrierEnterpriseId?: number | null;
+      carrierName: string;
+      currency: string;
+      periodDays: number;
+      notes?: string | null;
+      outbound: components["schemas"]["MarginDealLine"][];
+      inbound: components["schemas"]["MarginDealLine"][];
+    };
+    MarginLegTotals: {
+      messages: number;
+      cost: number;
+      revenue: number;
+      margin: number;
+    };
+    /** @description Worked out to 6 decimals. netting = outbound cost - inbound revenue: above 0 we pay the carrier, below 0 the carrier pays us. */
+    MarginDealTotals: {
+      outbound: components["schemas"]["MarginLegTotals"];
+      inbound: components["schemas"]["MarginLegTotals"];
+      totalMargin: number;
+      netting: number;
+    };
+    MarginDeal: components["schemas"]["MarginDealFields"] & {
+      id: components["schemas"]["Id"];
+      totals: components["schemas"]["MarginDealTotals"];
+      createdBy: string;
+      updatedAt: components["schemas"]["Timestamp"];
+      updatedBy: string;
+    };
+    MarginDealRow: {
+      id: components["schemas"]["Id"];
+      name: string;
+      carrierName: string;
+      currency: string;
+      periodDays: number;
+      totalMargin: number;
+      netting: number;
+      updatedAt: components["schemas"]["Timestamp"];
+      updatedBy: string;
     };
     /**
      * @description Customer (sell) or vendor (buy) rate tables.
@@ -32886,6 +32981,136 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listMarginDeals: {
+    parameters: {
+      query?: {
+        search?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The deals */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarginDealRow"][];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createMarginDeal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarginDealInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the totals worked out on the server */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarginDeal"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getMarginDeal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The deal */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarginDeal"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateMarginDeal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarginDealInput"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarginDeal"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  deleteMarginDeal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };
