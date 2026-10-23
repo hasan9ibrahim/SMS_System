@@ -59,9 +59,19 @@ export function PageHeader({
   heading,
   actions,
   helpTopic,
+  crumbs,
+  avatar,
+  meta,
 }: {
   page: PageDef;
   title?: string;
+  /**
+   * Record screens (team trial round 4): a breadcrumb above the title (the list, then the record) instead of the
+   * sibling pills, a coloured initials tile before the title and a line of chips and facts under it.
+   */
+  crumbs?: { label: string; path?: string }[];
+  avatar?: ReactNode;
+  meta?: ReactNode;
   /** Help topic the ? button opens; defaults to the page's own (a record screen names its own). */
   helpTopic?: string;
   /** Replaces the plain title, e.g. a record picker (§5.1); must contain the page's h1. */
@@ -69,45 +79,85 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   const navigate = useTabNavigate();
-  const siblings = page.key === "home" ? [] : pagesOf(page.section);
-  // Design refresh (team trial round 2): title and the actions on the right, then the sibling pages as pills. The
-  // one-line purpose under the title was dropped to give the page more room (team trial round 3).
+  const siblings = page.key === "home" || crumbs ? [] : pagesOf(page.section);
+  // Design refresh (team trial round 2): title, the sibling pages as pills beside it (team trial round 4, to keep the
+  // header to one line), and the actions on the right. The one-line purpose under the title was dropped (round 3).
   return (
-    <div className="page-header">
+    <div className={`page-header${crumbs ? " record-header" : ""}`}>
+      {crumbs && (
+        <nav className="crumbs" aria-label="Breadcrumb">
+          {crumbs.map((c, i) => (
+            <span key={i} className="crumb">
+              {i > 0 && <Icon name="chevronRight" size={12} />}
+              {c.path ? (
+                <a
+                  href={c.path}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate(c.path!, e.ctrlKey || e.metaKey ? { forceNew: true } : {});
+                  }}
+                >
+                  {c.label}
+                </a>
+              ) : (
+                <span aria-current="page">{c.label}</span>
+              )}
+            </span>
+          ))}
+        </nav>
+      )}
       <div className="page-header-top">
         <BackButton />
+        {avatar}
         <div className="page-heading">
           <div className="page-title-row">
             {heading ?? <h1>{title ?? page.label}</h1>}
             {page.key !== "help" && <HelpButton topic={helpTopic ?? page.key} />}
           </div>
+          {meta && <div className="record-chips">{meta}</div>}
         </div>
+        {siblings.length > 1 && (
+          <nav className="siblings" aria-label={`${page.label} and related pages`}>
+            {siblings.map((s) => (
+              <a
+                key={s.key}
+                href={s.path}
+                className={s.key === page.key ? "current" : ""}
+                aria-current={s.key === page.key ? "page" : undefined}
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate(s.path, e.ctrlKey || e.metaKey ? { forceNew: true } : {});
+                }}
+                onAuxClick={(e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    navigate(s.path, { forceNew: true });
+                  }
+                }}
+              >
+                {s.label}
+              </a>
+            ))}
+          </nav>
+        )}
         <div className="page-actions">{actions}</div>
       </div>
-      {siblings.length > 1 && (
-        <nav className="siblings" aria-label={`${page.label} and related pages`}>
-          {siblings.map((s) => (
-            <a
-              key={s.key}
-              href={s.path}
-              className={s.key === page.key ? "current" : ""}
-              aria-current={s.key === page.key ? "page" : undefined}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(s.path, e.ctrlKey || e.metaKey ? { forceNew: true } : {});
-              }}
-              onAuxClick={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault();
-                  navigate(s.path, { forceNew: true });
-                }
-              }}
-            >
-              {s.label}
-            </a>
-          ))}
-        </nav>
-      )}
     </div>
+  );
+}
+
+/** Initials on a soft colour tile, the colour picked from the name (record headers and cards, team trial round 4). */
+export function Avatar({ name, size = "lg", icon }: { name: string; size?: "sm" | "md" | "lg"; icon?: ReactNode }) {
+  const words = name
+    .replace(/[^\p{L}\p{N} ]/gu, " ")
+    .trim()
+    .split(/\s+/);
+  const initials = ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? words[0]?.[1] ?? "")).toUpperCase();
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 6;
+  return (
+    <span className={`avatar-tile size-${size} hue-${h}`} aria-hidden="true">
+      {icon ?? initials}
+    </span>
   );
 }

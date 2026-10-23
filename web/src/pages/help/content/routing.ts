@@ -356,7 +356,7 @@ export const topics: HelpTopic[] = [
               { name: "ID", what: "The rule number. Filter: equals." },
               { name: "Rule", what: "The rule name. Filter: contains, with `%` and `_` wildcards." },
               {
-                name: "Pri",
+                name: "Priority",
                 what: "Priority, 1–100. High numbers are tried first; the grid opens sorted that way. Filter: a range (from – to).",
               },
               {
@@ -974,7 +974,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "The table shows **Pri**, **Rule** and **Result** for the rules that matched. Tick **Show the N rules tried before (did not match)** to see why earlier rules were skipped.",
+              "The table shows **Priority**, **Rule** and **Result** for the rules that matched. Tick **Show the N rules tried before (did not match)** to see why earlier rules were skipped.",
               "Click a rule name to close the simulator and show that rule in the grid.",
               "Below it is the full decision of the deciding rule, as in the Test section. If no rule matched, the message would be rejected.",
             ],
@@ -1191,7 +1191,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Hidden columns you can add or filter on: Currency, Rate table, Rule ID, Pri (rule priority) and Decided by. Clicking a row opens the **Route** detail with the same facts in one place.",
+            text: "Hidden columns you can add or filter on: Currency, Rate table, Rule ID, Priority (rule priority) and Decided by. Clicking a row opens the **Route** detail with the same facts in one place.",
           },
         ],
       },

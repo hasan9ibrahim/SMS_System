@@ -19,7 +19,7 @@ import type { FieldDescriptor, ListFields, ListId, ListQuery } from "@sms/contra
 import { fetchListPage, type ListPage } from "../api/hooks";
 import { ApiError } from "../api/client";
 import { Icon } from "../ui/Icon";
-import { StatusDot } from "../ui/primitives";
+import { StatusPill } from "../ui/primitives";
 import { ColumnFilter } from "./ColumnFilter";
 import { isChoice, isNumeric, isTime, nextSort, toListQuery, type GridState } from "./filterModel";
 
@@ -77,13 +77,8 @@ export interface DataGridProps<Row extends { id: number }> {
 export function defaultCell(f: FieldDescriptor, value: unknown): ReactNode {
   if (value === null || value === undefined || value === "") return <span className="muted">—</span>;
   if (f.field === "status" && (value === "active" || value === "inactive")) {
-    return (
-      <StatusDot
-        tone={value === "active" ? "good" : "neutral"}
-        hollow={value === "inactive"}
-        label={value === "active" ? "Active" : "Inactive"}
-      />
-    );
+    // The dot with its word in a pill (team trial round 4).
+    return <StatusPill active={value === "active"} />;
   }
   if (f.type === "enum") return f.enumValues?.find((e) => e.value === value)?.label ?? String(value);
   if (f.type === "boolean") return value ? "Yes" : "No";

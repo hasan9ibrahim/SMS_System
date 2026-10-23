@@ -12,6 +12,8 @@ import type {
   RouteSimulation,
   RouteTestRequest,
   RouteTraffic,
+  RouteVendorCost,
+  RouteVendorCostRequest,
   TrafficWindow,
 } from "@sms/contract";
 import { api, ApiError, apiFetch, unwrap } from "./client";
@@ -102,4 +104,22 @@ export async function exportRouteRules(query: Pick<ListQuery, "filter" | "search
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** What each vendor charges for a rule's destinations, in its currency and in EUR (team trial round 4). */
+export function useVendorCosts(vendorTrunkIds: number[], dest: Omit<RouteVendorCostRequest, "vendorTrunkIds">) {
+  const ids = [...new Set(vendorTrunkIds.filter((id) => id > 0))].sort((a, b) => a - b);
+  const body: RouteVendorCostRequest = {
+    vendorTrunkIds: ids,
+    mccmncMode: dest.mccmncMode,
+    mccmncs: dest.mccmncMode === "all" ? [] : dest.mccmncs,
+    mccmncPattern: dest.mccmncPattern || null,
+  };
+  const q = useQuery<RouteVendorCost[]>({
+    queryKey: ["route-vendor-costs", body],
+    queryFn: () => unwrap(api.POST("/route-rules/vendor-costs", { body })),
+    enabled: ids.length > 0,
+    staleTime: 60_000,
+  });
+  return new Map((q.data ?? []).map((c) => [c.vendorTrunkId, c]));
 }

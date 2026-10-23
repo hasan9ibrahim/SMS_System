@@ -6,12 +6,15 @@ import type { CustomerTrunkInput, RateTableRow, TrunkListRow, VendorTrunkInput }
 import { useReference, type TrunkDetail, type TrunkKind } from "../../api/records";
 import {
   CheckField,
+  ChoiceField,
   FormField,
   ListField,
   MultiCheck,
   NumberField,
   Section,
   SelectField,
+  StatusField,
+  SubHead,
   TextArea,
   TextField,
   type FormApi,
@@ -214,10 +217,10 @@ function PasswordField({
 
 function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: TrunkKind }) {
   const ref = useReference();
+  // Record redesign (team trial round 4): protocol and bind type as joined buttons, status as a checkbox card.
   return (
     <>
       <TextField form={form} path="name" label="Trunk name" required maxLength={100} nullable={false} />
-      <SelectField form={form} path="protocol" label="Protocol" required options={PROTOCOL} />
       <SelectField
         form={form}
         path="categoryId"
@@ -233,23 +236,36 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         options={BILLING}
         hint="The event that makes a message billable"
       />
-      <SelectField form={form} path="status" label="Status" required options={STATUS} />
-      <SelectField
-        form={form}
-        path="bindType"
-        label="Bind type"
-        required
-        options={["TX", "RX", "TR", ...(kind === "customer" ? ["AUTO"] : [])].map((v) => ({ value: v, label: v }))}
-      />
       <SelectField
         form={form}
         path="billingTimezone"
         label="Billing time zone"
         placeholder="The enterprise's"
         options={tzOptions(ref.data?.timezones ?? ["UTC"])}
-        hint="Day and month totals in the Enterprise report are cut at midnight here (§13.31)"
+        hint="Day and month totals are cut at midnight here (§13.31)"
       />
+      <ChoiceField form={form} path="protocol" label="Protocol" required options={PROTOCOL} />
+      <ChoiceField
+        form={form}
+        path="bindType"
+        label="Bind type"
+        required
+        options={["TR", "TX", "RX", ...(kind === "customer" ? ["AUTO"] : [])].map((v) => ({ value: v, label: v }))}
+      />
+      <StatusField form={form} path="status" required onText="Active" />
     </>
+  );
+}
+
+/** The bind at a glance (team trial round 4): our side, the far side and whether the bind is up. */
+function BindLine({ from, to, up }: { from: string; to: string; up: boolean | null }) {
+  return (
+    <div className="bind-line wide">
+      <code>{from}</code>
+      <span className="bind-arrow" aria-hidden="true" />
+      <code>{to}</code>
+      {up !== null && <span className={up ? "tone-good small" : "muted small"}>· bind {up ? "up" : "down"}</span>}
+    </div>
   );
 }
 
@@ -372,11 +388,12 @@ export function CustomerTrunkFields({
   const shown = useTabShown(); // sections an access group can hide (§11, trial round 2)
   return (
     <>
-      <Section title="Trunk">
+      <Section title="Trunk" columns={4}>
         <CommonTrunkFields form={form} kind="customer" />
       </Section>
       {shown("customer-trunks.connection") && (
-        <Section title="Connection" note="What the client binds with">
+        <Section title="Connection" subtitle="What the client binds with." columns={4}>
+          <SubHead>Access</SubHead>
           <ListField
             form={form}
             path="hostIps"
@@ -386,6 +403,9 @@ export function CustomerTrunkFields({
             placeholder="192.0.2.10, 2001:db8::1"
             hint="Binds from other addresses are refused"
           />
+          <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
+          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
+          <SubHead>Credentials</SubHead>
           <TextField
             form={form}
             path="username"
@@ -395,10 +415,8 @@ export function CustomerTrunkFields({
             nullable={false}
           />
           <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
-          <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
           <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
           <TextField form={form} path="systemType" label="System type" maxLength={13} />
-          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
         </Section>
       )}
       {shown("customer-trunks.receipts") && (
@@ -503,20 +521,29 @@ export function VendorTrunkFields({
   form,
   isNew,
   passwordSet,
+  connected,
 }: {
   form: FormApi<TrunkForm>;
   isNew: boolean;
   passwordSet: boolean;
+  /** Whether the bind is up now (null: unknown, e.g. a new trunk). */
+  connected?: boolean | null;
 }) {
   const v = form.values as VendorTrunkInput;
   const shown = useTabShown(); // sections an access group can hide (§11, trial round 2)
   return (
     <>
-      <Section title="Trunk">
+      <Section title="Trunk" columns={4}>
         <CommonTrunkFields form={form} kind="vendor" />
       </Section>
       {shown("vendor-trunks.connection") && (
-        <Section title="Connection" note="How we bind to the vendor">
+        <Section title="Connection" subtitle="How we bind to the vendor." columns={4}>
+          <BindLine
+            from={`Us · ${v.sourceHost || "any address"}`}
+            to={`Vendor · ${v.host || "host"}:${v.port ?? ""}`}
+            up={connected ?? null}
+          />
+          <SubHead>Endpoint</SubHead>
           <TextField form={form} path="host" label="Host" required maxLength={255} nullable={false} />
           <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
           <TextField
@@ -526,6 +553,8 @@ export function VendorTrunkFields({
             maxLength={64}
             hint="Our address the bind comes from"
           />
+          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
+          <SubHead>Credentials</SubHead>
           <TextField
             form={form}
             path="username"
@@ -538,7 +567,6 @@ export function VendorTrunkFields({
           <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
           <TextField form={form} path="systemType" label="System type" maxLength={13} />
           <TextField form={form} path="serviceType" label="Service type" maxLength={6} />
-          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
         </Section>
       )}
       {v.protocol === "http"

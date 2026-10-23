@@ -607,6 +607,15 @@ export function EdrSearchPage() {
           >
             Trouble ticket
           </Button>
+          {/* Repush sits with the other header actions now that Bulk edit is gone (team trial round 4). */}
+          <Button
+            icon="send"
+            disabled={targets.length === 0}
+            title={targets.length ? "Send the selected EDRs again" : "Select EDRs first"}
+            onClick={() => void openRepush(targets)}
+          >
+            Repush
+          </Button>
         </>
       )}
       columns={{

@@ -1775,6 +1775,7 @@ export const invoiceList: ListDef<InvoiceRow> = {
   columns: {
     id: { sql: "inv.id" },
     invoiceNumber: { sql: "inv.invoice_number" },
+    accountNumber: { sql: "e.account_number" },
     enterpriseId: { sql: "inv.enterprise_id" },
     enterprise: visCol(enterpriseMask("e")),
     enterpriseType: { sql: "e.type" },
@@ -1800,9 +1801,9 @@ export const invoiceList: ListDef<InvoiceRow> = {
     remarks: { sql: "inv.remarks" },
     archived: { sql: "(inv.deleted_at IS NOT NULL)" },
   },
-  search: ["invoiceNumber", "enterprise"],
+  search: ["invoiceNumber", "enterprise", "accountNumber"],
   idSql: "inv.id",
-  select: `inv.*, e.name AS enterprise, e.type AS enterprise_type, bco.name AS business_company`,
+  select: `inv.*, e.name AS enterprise, e.type AS enterprise_type, e.account_number, bco.name AS business_company`,
   mapRow: (r) => mapInvoiceRow(r),
 };
 
@@ -1811,6 +1812,7 @@ export function mapInvoiceRow(r: Record<string, unknown>): InvoiceRow {
   return {
     id: Number(r.id),
     invoiceNumber: r.invoice_number as string,
+    accountNumber: (r.account_number as string | null | undefined) ?? null,
     enterpriseId: Number(r.enterprise_id),
     enterprise: r.enterprise as string,
     enterpriseType: r.enterprise_type as string,

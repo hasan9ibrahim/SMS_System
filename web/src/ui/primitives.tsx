@@ -190,6 +190,16 @@ export function Modal({
   );
 }
 
+/** Active / Inactive as a tinted pill with its dot (team trial round 4). */
+export function StatusPill({ active, label }: { active: boolean; label?: string }) {
+  return (
+    <span className={`status-pill ${active ? "on" : "off"}`}>
+      <span className="status-pill-dot" aria-hidden="true" />
+      {label ?? (active ? "Active" : "Inactive")}
+    </span>
+  );
+}
+
 export function StatusDot({
   tone,
   hollow,

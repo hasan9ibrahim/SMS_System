@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { EnterpriseDetail, EnterpriseInput } from "@sms/contract";
 import { useReference, useSaveEnterprise } from "../../api/records";
 import {
-  CheckField,
+  ChoiceField,
   FormField,
   type FormApi,
   FormBanner,
@@ -12,7 +12,9 @@ import {
   NumberField,
   Section,
   SelectField,
+  StatusField,
   TextField,
+  ToggleCard,
   useForm,
 } from "../../form/form";
 import { useNotifySaved } from "../../history/undo";
@@ -49,6 +51,7 @@ function blank(): Form {
     fax: null,
     registrationNumber: null,
     vatNumber: null,
+    accountNumber: null,
     billingTimezone: "UTC",
     rateNoticeDays: 7,
     rateNoticeDaysDecrease: 0,
@@ -87,6 +90,7 @@ export function toInput(e: EnterpriseDetail): Form {
     fax: e.fax ?? null,
     registrationNumber: e.registrationNumber ?? null,
     vatNumber: e.vatNumber ?? null,
+    accountNumber: e.accountNumber ?? null,
     billingTimezone: e.billingTimezone,
     rateNoticeDays: e.rateNoticeDays,
     rateNoticeDaysDecrease: e.rateNoticeDaysDecrease,
@@ -155,6 +159,42 @@ function AllNetworksField({ form }: { form: FormApi<Form> }) {
   );
 }
 
+/** A notice period as a tinted tile: increase amber, decrease green, new destination blue (team trial round 4). */
+function NoticeTile({
+  form,
+  path,
+  label,
+  tone,
+}: {
+  form: FormApi<Form>;
+  path: string;
+  label: string;
+  tone: "up" | "down" | "new";
+}) {
+  const icon = tone === "up" ? "↑" : tone === "down" ? "↓" : "+";
+  return (
+    <div className={`notice-tile ${tone}`}>
+      <span className="notice-tile-label">
+        <span aria-hidden="true">{icon}</span> {label}
+      </span>
+      <span className="input-suffix">
+        <input
+          type="number"
+          className="num"
+          min={0}
+          max={90}
+          step={1}
+          aria-label={`${label}: days of notice`}
+          value={(form.get(path) as number | null) ?? ""}
+          onChange={(e) => form.set(path, e.target.value === "" ? 0 : Number(e.target.value))}
+        />
+        <span className="muted">days</span>
+      </span>
+      {form.error(path) && <span className="ff-error">{form.error(path)}</span>}
+    </div>
+  );
+}
+
 /** Required fields checked before the round trip, with plain messages. */
 function check(v: Form, isNew: boolean): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -162,6 +202,7 @@ function check(v: Form, isNew: boolean): Record<string, string> {
   if (!v.alias.trim()) errors.alias = "Required";
   if (!v.businessCompanyId) errors.businessCompanyId = "Required";
   if (!v.address.line1.trim()) errors["address.line1"] = "Required";
+  if (v.address.countryId == null) errors["address.countryId"] = "Required";
   if (isNew && v.accountManagerId == null) errors.accountManagerId = "Required";
   for (const [k] of CONTACTS) if (!v.contacts[k].emails.length) errors[`contacts.${k}.emails`] = "At least one email";
   const p = v.creditAlertPercent;
@@ -225,6 +266,7 @@ export function GeneralTab({
   const opts = <T extends { id: number }>(list: T[] | undefined, label: (x: T) => string) =>
     (list ?? []).map((x) => ({ value: x.id, label: label(x) }));
 
+  const levels = form.values.creditAlertPercent;
   return (
     <>
       <HeaderAction slot={slot}>
@@ -260,8 +302,10 @@ export function GeneralTab({
             : null
         }
       />
-      <fieldset disabled={readOnly} className="plain-fieldset">
-        <Section title="General information">
+      {/* Record redesign (team trial round 4): cards with a purpose line, choices as cards and joined buttons,
+          notice periods and alert levels as tiles. */}
+      <fieldset disabled={readOnly} className="plain-fieldset form-main">
+        <Section id="ent-general" title="General information" subtitle="Who this partner is and how it's classified.">
           <TextField form={form} path="name" label="Full legal name" required maxLength={200} nullable={false} />
           <TextField
             form={form}
@@ -279,18 +323,22 @@ export function GeneralTab({
             required
             options={opts(ref.data?.businessCompanies, (b) => `${b.name} (${b.baseCurrency})`)}
           />
-          <SelectField
+          <ChoiceField
             form={form}
             path="type"
             label="Type"
             required
-            options={[
-              { value: "customer", label: "Customer" },
-              { value: "vendor", label: "Vendor" },
-              { value: "reciprocal", label: "Bilateral (both)" },
-            ]}
+            variant="cards"
+            // A saved customer or vendor can only become Bilateral (team trial round 4).
+            options={(["customer", "vendor", "reciprocal"] as const).map((t) => ({
+              value: t,
+              label: { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" }[t],
+              ...(record && t !== record.type && t !== "reciprocal"
+                ? { disabled: true, hint: "A customer or a vendor can only be changed to Bilateral" }
+                : {}),
+            }))}
           />
-          <SelectField
+          <ChoiceField
             form={form}
             path="tier"
             label="Category"
@@ -301,18 +349,9 @@ export function GeneralTab({
               { value: "tier3", label: "Tier 3" },
             ]}
           />
-          <SelectField
-            form={form}
-            path="status"
-            label="Status"
-            required
-            options={[
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-            ]}
-          />
+          <StatusField form={form} path="status" required onText="Active · can send and receive traffic" />
           {/* The account manager is picked once, when adding; afterwards it lives on the Account managers tab only
-              (team trial round 3), where Hand over keeps past results with the AM who earned them (§13.30). */}
+                (team trial round 3), where Hand over keeps past results with the AM who earned them (§13.30). */}
           {isNew && (
             <SelectField
               form={form}
@@ -325,7 +364,7 @@ export function GeneralTab({
           )}
         </Section>
 
-        <Section title="Address">
+        <Section id="ent-address" title="Address" columns={4}>
           <TextField
             form={form}
             path="address.line1"
@@ -336,106 +375,105 @@ export function GeneralTab({
           />
           <TextField form={form} path="address.line2" label="Address line 2" maxLength={200} />
           <TextField form={form} path="address.city" label="City" maxLength={100} />
-          <TextField form={form} path="address.state" label="State / region" maxLength={100} />
+          <TextField form={form} path="address.state" label="State / region" maxLength={100} placeholder="Optional" />
           <SelectField
             form={form}
             path="address.countryId"
             label="Country"
+            required
             options={opts(ref.data?.countries, (c) => `${c.name} (${c.iso})`)}
           />
           <TextField form={form} path="address.zip" label="ZIP / postcode" maxLength={20} />
         </Section>
 
-        <Section title="Company details">
+        <Section id="ent-company" title="Company details" columns={4}>
           <TextField form={form} path="website" label="Website" maxLength={300} placeholder="https://" />
-          <TextField form={form} path="fax" label="Fax" maxLength={50} />
           <TextField form={form} path="registrationNumber" label="Registration number" maxLength={100} />
           <TextField form={form} path="vatNumber" label="VAT number" maxLength={100} />
+          <TextField form={form} path="fax" label="Fax" maxLength={50} placeholder="Optional" />
           <SelectField
             form={form}
             path="billingTimezone"
             label="Billing time zone"
             required
             options={tzOptions(ref.data?.timezones ?? ["UTC"])}
-            hint="Day and month totals are cut at midnight in this zone (§13.31)"
+            hint="Day and month totals are cut at midnight in this zone"
           />
           <AllNetworksField form={form} />
-          {/* The three notice periods on one line, last (team trial round 3). */}
-          <NumberField
-            form={form}
-            path="rateNoticeDays"
-            label="Notice: increase"
-            min={0}
-            max={90}
-            step={1}
-            suffix="days"
-            hint="Notice for rate increases (§13.14)"
-          />
-          <NumberField
-            form={form}
-            path="rateNoticeDaysDecrease"
-            label="Notice: decrease"
-            min={0}
-            max={90}
-            step={1}
-            suffix="days"
-            hint="Notice for rate decreases; 0 = none"
-          />
-          <NumberField
-            form={form}
-            path="rateNoticeDaysNew"
-            label="Notice: new destination"
-            min={0}
-            max={90}
-            step={1}
-            suffix="days"
-            hint="Notice for new destinations; 0 = none"
-          />
-        </Section>
-
-        <Section title="Alerts" columns={4} note="Credit alert levels are % of the credit limit">
-          <CheckField form={form} path="bindAlert" label="Bind alert" hint="Alert when a trunk's binds drop" />
-          <CheckField form={form} path="creditAlert" label="Credit alert" />
-          <NumberField
-            form={form}
-            path="creditAlertPercent.notice"
-            label="Notice at"
-            min={1}
-            max={100}
-            step={1}
-            suffix="%"
-            required
-          />
-          <NumberField
-            form={form}
-            path="creditAlertPercent.warning"
-            label="Warning at"
-            min={1}
-            max={100}
-            step={1}
-            suffix="%"
-            required
-          />
-          <NumberField
-            form={form}
-            path="creditAlertPercent.critical"
-            label="Critical at"
-            min={1}
-            max={100}
-            step={1}
-            suffix="%"
-            required
-          />
-          {form.error("creditAlertPercent") && !form.errors["creditAlertPercent.notice"] && (
-            <span className="ff-error wide">{form.errors.creditAlertPercent}</span>
+          {/* Clients only: our account number for them, printed on their invoices (team trial round 4). */}
+          {form.values.type !== "vendor" && (
+            <TextField
+              form={form}
+              path="accountNumber"
+              label="Account number"
+              maxLength={50}
+              placeholder="Optional"
+              hint="Shown in the invoice header"
+            />
           )}
         </Section>
 
-        <Section title="Contacts" columns={1}>
+        <Section
+          id="ent-notice"
+          title="Rate notice periods"
+          subtitle="Days of notice before a rate change takes effect. 0 = no notice needed."
+          columns={3}
+        >
+          <NoticeTile form={form} path="rateNoticeDays" label="Rate increase" tone="up" />
+          <NoticeTile form={form} path="rateNoticeDaysDecrease" label="Rate decrease" tone="down" />
+          <NoticeTile form={form} path="rateNoticeDaysNew" label="New destination" tone="new" />
+        </Section>
+
+        <Section id="ent-alerts" title="Alerts" subtitle="Get notified when something needs attention." columns={2}>
+          <ToggleCard form={form} path="bindAlert" label="Bind alert" hint="Alert when a trunk's binds drop" />
+          <ToggleCard
+            form={form}
+            path="creditAlert"
+            label="Credit alert"
+            hint="Alert as usage approaches the credit limit"
+          />
+          <div className="credit-levels wide">
+            <div className="credit-levels-head">
+              <span className="strong">Credit alert levels</span>
+              <span className="muted small">% of the credit limit</span>
+            </div>
+            <div className="credit-bar" aria-hidden="true">
+              <span className="cb-notice" style={{ left: `${Math.min(100, levels.notice)}%` }} />
+              <span className="cb-warning" style={{ left: `${Math.min(100, levels.warning)}%` }} />
+              <span className="cb-critical" style={{ left: `${Math.min(100, levels.critical)}%` }} />
+            </div>
+            <div className="fgrid cols-3">
+              {(["notice", "warning", "critical"] as const).map((k) => (
+                <div key={k} className={`credit-level ${k}`}>
+                  <NumberField
+                    form={form}
+                    path={`creditAlertPercent.${k}`}
+                    label={`${k[0]!.toUpperCase()}${k.slice(1)} at`}
+                    min={1}
+                    max={100}
+                    step={1}
+                    suffix="%"
+                    required
+                  />
+                </div>
+              ))}
+            </div>
+            {form.error("creditAlertPercent") && !form.errors["creditAlertPercent.notice"] && (
+              <span className="ff-error">{form.errors.creditAlertPercent}</span>
+            )}
+          </div>
+        </Section>
+
+        <Section
+          id="ent-contacts"
+          title="Contacts"
+          subtitle="Who we reach for each topic. Each role needs at least one email."
+          columns={1}
+        >
           <div className="contact-grid">
             {CONTACTS.map(([k, label]) => (
-              <div key={k}>
-                <h3>{label}</h3>
+              <div key={k} className={`contact-card role-${k}`}>
+                <span className="role-tag">{label}</span>
                 <TextField form={form} path={`contacts.${k}.name`} label="Name" maxLength={200} />
                 <TextField form={form} path={`contacts.${k}.phone`} label="Phone" type="tel" maxLength={50} />
                 <ListField
@@ -443,20 +481,21 @@ export function GeneralTab({
                   path={`contacts.${k}.emails`}
                   label="Emails"
                   required
-                  placeholder="name@company.com"
+                  placeholder="+ Add email"
+                  keepPlaceholder
                 />
               </div>
             ))}
           </div>
         </Section>
+        {record && (
+          <p className="muted small">
+            Added {record.createdAt?.slice(0, 10) ?? "—"}
+            {record.createdBy ? ` by ${record.createdBy}` : ""} · last updated{" "}
+            {record.updatedAt.slice(0, 16).replace("T", " ")} UTC by {record.updatedBy}
+          </p>
+        )}
       </fieldset>
-      {record && (
-        <p className="muted small">
-          Added {record.createdAt?.slice(0, 10) ?? "—"}
-          {record.createdBy ? ` by ${record.createdBy}` : ""} · last updated{" "}
-          {record.updatedAt.slice(0, 16).replace("T", " ")} UTC by {record.updatedBy}
-        </p>
-      )}
     </>
   );
 }

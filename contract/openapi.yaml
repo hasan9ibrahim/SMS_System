@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.84.0
+  version: 0.85.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1103,6 +1103,63 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/Unavailable"
+
+  /enterprises/{id}/rules:
+    get:
+      tags: [enterprises]
+      operationId: getEnterpriseRules
+      summary: Rules tab of an enterprise (team trial round 4, §13.2)
+      description: |
+        The translation rules (and for customer trunks the HLR rules) that run on the enterprise's trunks of one
+        kind, merged into one order (the trunks' own orders averaged), with how many of its trunks each reaches.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [customer, vendor]
+      responses:
+        "200":
+          description: The merged rule order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseRules"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [enterprises]
+      operationId: updateEnterpriseRules
+      summary: Set the rule order on every trunk of one kind (team trial round 4, §13.2)
+      description: |
+        Each trunk of the kind gets the order sent for the rules that reach it (rules not listed keep their place
+        after them); on / off, continue and direct links stay as they are. One change over the trunks, undone as
+        one (§13.10). A trunk can still change its own order afterwards.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterpriseRulesInput"
+      responses:
+        "200":
+          description: The merged order after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseRulesSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /vendor-trunks/query:
     post:
@@ -14221,6 +14278,36 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /route-rules/vendor-costs:
+    post:
+      tags: [routing]
+      operationId: routeVendorCosts
+      summary: "Route rules: what each picked vendor charges for the rule's destinations (team trial round 4)"
+      description: |
+        For each vendor trunk, the current rates (generic lines, not blocked, valid now) of its buy rate table over
+        the destinations the rule matches (same Destination fields as the rule, so an unsaved draft works too).
+        One figure when every destination costs the same, else the lowest and highest. In the table's currency and
+        in EUR, the base currency, at the latest exchange rates (§6.3, §13.12).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteVendorCostRequest"
+      responses:
+        "200":
+          description: One entry per vendor trunk asked for, in the same order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RouteVendorCost"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /route-rules/simulate:
     post:
       tags: [routing]
@@ -15643,6 +15730,12 @@ components:
         vatNumber:
           type: [string, "null"]
           maxLength: 100
+        accountNumber:
+          type: [string, "null"]
+          maxLength: 50
+          description: >-
+            Our account number for this client, optional; customers and bilateral partners only (a vendor's is
+            cleared). Printed in the invoice header (team trial round 4, §7).
         billingTimezone:
           type: string
           description: Day and month totals are cut at midnight in this zone (§13.31).
@@ -15689,6 +15782,8 @@ components:
             registrationNumber:
               type: [string, "null"]
             vatNumber:
+              type: [string, "null"]
+            accountNumber:
               type: [string, "null"]
             billingTimezone:
               type: string
@@ -16541,6 +16636,84 @@ components:
       properties:
         record:
           $ref: "#/components/schemas/TrunkRules"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
+
+    EnterpriseRule:
+      type: object
+      required: [ruleId, name, source, ruleActive, detail, trunks]
+      properties:
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        source:
+          type: object
+          description: How the rule reaches the trunks; `trunk` = attached to some of them directly.
+          required: [type, label]
+          properties:
+            type:
+              type: string
+              enum: [trunk, enterprise, category, all]
+            label:
+              type: string
+        ruleActive:
+          type: boolean
+        detail:
+          type: [string, "null"]
+        trunks:
+          type: integer
+          minimum: 0
+          description: How many of the enterprise's trunks of this kind the rule runs on.
+
+    EnterpriseRules:
+      type: object
+      required: [kind, trunkCount, translation, hlr]
+      properties:
+        kind:
+          type: string
+          enum: [customer, vendor]
+        trunkCount:
+          type: integer
+          minimum: 0
+        translation:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnterpriseRule"
+        hlr:
+          type: array
+          description: Customer trunks only; empty for vendor trunks.
+          items:
+            $ref: "#/components/schemas/EnterpriseRule"
+
+    EnterpriseRulesInput:
+      type: object
+      required: [kind, translationRuleIds]
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [customer, vendor]
+        translationRuleIds:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Id"
+        hlrRuleIds:
+          type: array
+          maxItems: 500
+          description: Customer trunks only.
+          items:
+            $ref: "#/components/schemas/Id"
+
+    EnterpriseRulesSaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/EnterpriseRules"
         change:
           oneOf:
             - $ref: "#/components/schemas/Change"
@@ -21648,6 +21821,9 @@ components:
       properties:
         id:
           $ref: "#/components/schemas/Id"
+        accountNumber:
+          type: [string, "null"]
+          description: The client's account number with us (team trial round 4); optional in the contract for older rows.
         invoiceNumber:
           type: string
         enterpriseId:
@@ -30667,6 +30843,55 @@ components:
     CompareOp:
       type: string
       enum: [">", ">=", "=", "<=", "<", between]
+
+    RouteVendorCostRequest:
+      type: object
+      required: [vendorTrunkIds, mccmncMode, mccmncs]
+      additionalProperties: false
+      properties:
+        vendorTrunkIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/Id"
+        mccmncMode:
+          $ref: "#/components/schemas/MatchMode"
+        mccmncs:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
+        mccmncPattern:
+          type: [string, "null"]
+          maxLength: 200
+          description: A regular expression on the MCCMNC; replaces the list when set (as on the rule).
+
+    RouteVendorCost:
+      type: object
+      required: [vendorTrunkId, currency, min, max, minEur, maxEur, destinations]
+      properties:
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        currency:
+          type: [string, "null"]
+          pattern: "^[A-Z]{3}$"
+          description: The buy rate table's currency; null when the trunk has no table.
+        min:
+          type: [number, "null"]
+          description: Lowest rate in `currency`; null when no destination has a rate. Equal to `max` for a flat rate.
+        max:
+          type: [number, "null"]
+        minEur:
+          type: [number, "null"]
+          description: "`min` in EUR, 6 decimals."
+        maxEur:
+          type: [number, "null"]
+        destinations:
+          type: integer
+          minimum: 0
+          description: How many of the rule's destinations the vendor has a rate for.
 
     MatchMode:
       type: string

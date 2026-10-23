@@ -1461,3 +1461,14 @@ textarea.mono {
 .cfg.cfg-expanded .cfg-vendors {
   grid-column: 1 / -1;
 }
+/* A vendor's cost for the rule's destinations (team trial round 4): EUR, then its own currency. */
+.vendor-cost {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.vf-backup .vendor-cost {
+  align-items: flex-start;
+}

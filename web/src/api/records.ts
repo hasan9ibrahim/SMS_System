@@ -8,6 +8,9 @@ import type {
   CustomerTrunkDetail,
   CustomerTrunkInput,
   Dependencies,
+  EnterpriseRules,
+  EnterpriseRulesInput,
+  EnterpriseRulesSaved,
   DestinationSaved,
   EnterpriseBilling,
   EnterpriseBillingInput,
@@ -237,6 +240,24 @@ export function useSaveTrunkRules(kind: TrunkKind, id: number) {
       kind === "customer"
         ? unwrap(api.PUT("/customer-trunks/{id}/rules", { params: { path: { id } }, body }))
         : unwrap(api.PUT("/vendor-trunks/{id}/rules", { params: { path: { id } }, body })),
+    onSuccess: () => void refresh(),
+  });
+}
+
+/** An enterprise's merged rule order over its trunks of one kind (team trial round 4). */
+export function useEnterpriseRules(id: number, kind: TrunkKind) {
+  return useQuery<EnterpriseRules>({
+    queryKey: ["record", "enterprise", id, "rules", kind],
+    queryFn: () => unwrap(api.GET("/enterprises/{id}/rules", { params: { path: { id }, query: { kind } } })),
+    retry: false,
+  });
+}
+
+export function useSaveEnterpriseRules(id: number) {
+  const refresh = useRefreshRecords();
+  return useMutation({
+    mutationFn: (body: EnterpriseRulesInput): Promise<EnterpriseRulesSaved> =>
+      unwrap(api.PUT("/enterprises/{id}/rules", { params: { path: { id } }, body })),
     onSuccess: () => void refresh(),
   });
 }

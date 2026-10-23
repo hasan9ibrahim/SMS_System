@@ -9,6 +9,9 @@ import type {
   ArchiveRequest,
   CustomerTrunkInput,
   DependencyItem,
+  EnterpriseRule,
+  EnterpriseRules,
+  EnterpriseRulesInput,
   TrunkRule,
   TrunkRules,
   TrunkRulesInput,
@@ -931,4 +934,141 @@ export function updateTrunkRules(kind: TrunkKind) {
       return { record: await loadRules(pool, k, id), change };
     });
   };
+}
+
+// ---------------------------------------------------------------- enterprise rule order (team trial round 4)
+
+/** The enterprise's live trunks of one kind. */
+async function enterpriseTrunkIds(db: Db, k: KindDef, enterpriseId: number): Promise<number[]> {
+  const { rows } = await db.query(`SELECT id FROM ${k.table} WHERE enterprise_id = $1 AND deleted_at IS NULL ORDER BY id`, [
+    enterpriseId,
+  ]);
+  return rows.map((r) => Number(r.id));
+}
+
+/** One merged order over the trunks: each rule ranked by its average relative place on the trunks it reaches. */
+function mergeOrder(lists: Reach[][], enterpriseName: string): EnterpriseRule[] {
+  const acc = new Map<number, { rule: TrunkRule; sum: number; n: number; direct: number; src: Source }>();
+  for (const list of lists)
+    list.forEach((x, i) => {
+      const place = list.length > 1 ? i / (list.length - 1) : 0;
+      const cur = acc.get(x.rule.ruleId);
+      const src = x.rule.source.type as Source;
+      if (!cur) acc.set(x.rule.ruleId, { rule: x.rule, sum: place, n: 1, direct: x.direct ? 1 : 0, src });
+      else {
+        cur.sum += place;
+        cur.n += 1;
+        if (x.direct) cur.direct += 1;
+        // The broadest way it reaches them names it (enterprise over a single trunk).
+        if (SPECIFICITY[src] > SPECIFICITY[cur.src]) {
+          cur.src = src;
+          cur.rule = x.rule;
+        }
+      }
+    });
+  return [...acc.values()]
+    .sort((a, b) => a.sum / a.n - b.sum / b.n || a.rule.ruleId - b.rule.ruleId)
+    .map((x) => ({
+      ruleId: x.rule.ruleId,
+      name: x.rule.name,
+      source:
+        x.src === "trunk"
+          ? { type: "trunk", label: `Direct on ${x.direct} trunk${x.direct === 1 ? "" : "s"}` }
+          : x.src === "enterprise"
+            ? { type: "enterprise", label: `Enterprise: ${enterpriseName}` }
+            : { type: x.src, label: x.rule.source.label },
+      ruleActive: x.rule.ruleActive,
+      detail: x.rule.detail ?? null,
+      trunks: x.n,
+    }));
+}
+
+async function loadEnterpriseRules(db: Db, k: KindDef, enterpriseId: number, name: string): Promise<EnterpriseRules> {
+  const ids = await enterpriseTrunkIds(db, k, enterpriseId);
+  const tr: Reach[][] = [];
+  const hl: Reach[][] = [];
+  for (const id of ids) {
+    tr.push(await reachingRules(db, k, "translation", id));
+    if (k.kind === "customer") hl.push(await reachingRules(db, k, "hlr", id));
+  }
+  return { kind: k.kind, trunkCount: ids.length, translation: mergeOrder(tr, name), hlr: mergeOrder(hl, name) };
+}
+
+async function enterpriseName(db: Db, id: number): Promise<string | null> {
+  const { rows } = await db.query("SELECT name FROM enterprises WHERE id = $1", [id]);
+  return rows[0] ? String(rows[0].name) : null;
+}
+
+export function getEnterpriseRules(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: number };
+  const { kind } = request.query as { kind: TrunkKind };
+  return withDb(reply, async (pool) => {
+    const name = await enterpriseName(pool, id);
+    if (name === null) return sendProblem(reply, 404, `Enterprise ${id} not found`);
+    return loadEnterpriseRules(pool, KINDS[kind], id, name);
+  });
+}
+
+export function updateEnterpriseRules(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: number };
+  const input = request.body as EnterpriseRulesInput;
+  const k = KINDS[input.kind];
+  return withDb(reply, async (pool) => {
+    const me = await getCurrentUser();
+    const name = await enterpriseName(pool, id);
+    if (name === null) return sendProblem(reply, 404, `Enterprise ${id} not found`);
+    if (k.kind === "vendor" && input.hlrRuleIds?.length)
+      return badInput(reply, [{ path: "/hlrRuleIds", message: "HLR rules run on customer trunks only" }]);
+    const errors: FieldError[] = [];
+    for (const [path, list] of [
+      ["/translationRuleIds", input.translationRuleIds],
+      ["/hlrRuleIds", input.hlrRuleIds ?? []],
+    ] as const)
+      if (new Set(list).size !== list.length) errors.push({ path, message: "a rule is listed twice" });
+    const trunkIds = await enterpriseTrunkIds(pool, k, id);
+    const diff: DiffEntry[] = [];
+    const plans: { trunkId: number; which: "translation" | "hlr"; next: RuleState[] }[] = [];
+    const seen = { translation: new Set<number>(), hlr: new Set<number>() };
+    for (const trunkId of trunkIds)
+      for (const which of ["translation", "hlr"] as const) {
+        if (which === "hlr" && (k.kind !== "customer" || !input.hlrRuleIds)) continue;
+        const wanted = which === "translation" ? input.translationRuleIds : input.hlrRuleIds!;
+        const reach = await reachingRules(pool, k, which, trunkId);
+        reach.forEach((x) => seen[which].add(x.rule.ruleId));
+        const here = new Set(reach.map((x) => x.rule.ruleId));
+        // The order sent for the rules on this trunk, then the others in their current order.
+        const order = [
+          ...wanted.filter((r) => here.has(r)),
+          ...reach.map((x) => x.rule.ruleId).filter((r) => !wanted.includes(r)),
+        ];
+        if (order.every((r, i) => reach[i]!.rule.ruleId === r)) continue;
+        const before = stateOf(reach);
+        const pos = new Map(order.map((r, i) => [r, i + 1]));
+        const after = before.map((st) => ({ ...st, position: pos.get(st.ruleId)! }));
+        diff.push({ entity_id: trunkId, field: `rules.${which}`, before, after });
+        plans.push({ trunkId, which, next: after });
+      }
+    input.translationRuleIds.forEach((r, i) => {
+      if (!seen.translation.has(r))
+        errors.push({ path: `/translationRuleIds/${i}`, message: `rule ${r} does not run on these trunks` });
+    });
+    (input.hlrRuleIds ?? []).forEach((r, i) => {
+      if (!seen.hlr.has(r)) errors.push({ path: `/hlrRuleIds/${i}`, message: `rule ${r} does not run on these trunks` });
+    });
+    if (errors.length) return badInput(reply, errors);
+    if (!diff.length) return { record: await loadEnterpriseRules(pool, k, id, name), change: null };
+    const change = await inTransaction(pool, async (c) => {
+      for (const p of plans) await applyRuleState(c, k.kind, p.which, p.trunkId, p.next);
+      return recordChange(c, {
+        entityType: k.entity,
+        entityIds: [...new Set(plans.map((p) => p.trunkId))],
+        changeType: "reorder",
+        diff,
+        note: `Rule order from ${name}`,
+        userId: me.id,
+        ip: request.ip,
+      });
+    });
+    return { record: await loadEnterpriseRules(pool, k, id, name), change };
+  });
 }

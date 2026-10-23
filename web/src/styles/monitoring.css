@@ -684,6 +684,11 @@
   background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
   font-weight: 700;
 }
+/* An expanded row carries the total row's tint (team trial round 4); warning / problem cells keep their colour. */
+.la-grid tr.la-open > td:not(.la-warn):not(.la-bad),
+.la-grid tr.la-open:hover > td:not(.la-warn):not(.la-bad) {
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
+}
 /* Columns picker (team trial round 3): grouped checkboxes like the dashboard's panels menu. */
 .la-cols {
   display: grid;

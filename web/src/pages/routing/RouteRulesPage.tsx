@@ -457,7 +457,7 @@ export function RouteRulesPage() {
     () => ({
       id: { width: 70, render: (r: RouteRuleRow) => <span className="muted num">{r.id}</span> },
       name: { width: 200, render: (r: RouteRuleRow) => <span className="strong">{r.name}</span> },
-      priority: { width: 56 },
+      priority: { width: 80 },
       routeType: {
         width: 110,
         render: (r: RouteRuleRow) => {
