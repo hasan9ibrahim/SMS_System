@@ -1108,7 +1108,8 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "For each destination the platform keeps the **top vendors**: the cheapest N vendor trunks, plus Tier 1 vendors if set.",
+              "For each destination the platform keeps the **top vendors**. A destination with a hand-picked list (**Top vendors** in the header, or **Top vendors…** on a move) uses exactly those vendor trunks, plus the Tier 1 vendors pricing it when its Tier 1 box is ticked. Other destinations use the settings: the cheapest N vendor trunks plus Tier 1 vendors if set, or are not watched.",
+              "**Top vendors per destination:** the header button lists every destination with its own list (search starts with; `%` anywhere), with **Edit**, **Remove** (back to the settings) and **Add destinations…**. In the editor, pick the destinations in the country/network tree, tick the vendor trunks that count (the list shows the trunks pricing the first destination, cheapest first, with their EUR rate and a Tier 1 tag; the search box above it finds a trunk or vendor by the start of its name, `%` anywhere), and choose whether Tier 1 vendors count too. The same choice is saved for every destination picked; the next scan uses it.",
               "It looks at their rate changes over the look-back period (from imports, accepted RNs and manual edits).",
               "When at least the minimum number of top vendors move in the same direction by at least the minimum %, with start dates within the window of each other, that is one move.",
               "A move is **Urgent** when it is an increase of at least the urgent % starting within the urgent days.",
@@ -1213,10 +1214,17 @@ export const topics: HelpTopic[] = [
             title: "Detection",
             fields: [
               {
-                name: "Cheapest N vendors count",
-                what: "How many of the cheapest vendor trunks per destination are top vendors.",
+                name: "Destinations without a top vendor list",
+                what: "**Cheapest N vendors** (the two settings below) or **Not watched**: then only destinations with a hand-picked list can have moves.",
               },
-              { name: "Tier 1 vendors count too", what: "Also treat Tier 1 vendors as top vendors." },
+              {
+                name: "Cheapest N vendors count",
+                what: "How many of the cheapest vendor trunks per destination are top vendors, for destinations without their own list.",
+              },
+              {
+                name: "Tier 1 vendors count too",
+                what: "Also treat Tier 1 vendors as top vendors, for destinations without their own list (a list has its own Tier 1 box).",
+              },
               { name: "Dates within (days)", what: "Start dates must fall within this many days of each other." },
               { name: "At least N vendors", what: "Minimum number of top vendors that must move." },
               { name: "Moving by at least (%)", what: "Minimum change per vendor." },

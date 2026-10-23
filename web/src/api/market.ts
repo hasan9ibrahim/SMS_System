@@ -10,6 +10,9 @@ import type {
   MarketMoveSettings,
   MarketMoveSummary,
   MarketScanResult,
+  MarketTopVendorCandidates,
+  MarketTopVendorInput,
+  MarketTopVendorPage,
 } from "@sms/contract";
 import { api, unwrap } from "./client";
 import { useRefreshRecords } from "./records";
@@ -70,3 +73,25 @@ export const useArchiveAutoRule = () =>
   useWrite((id: number): Promise<MarketAutoRule> =>
     unwrap(api.POST("/market-moves/auto-rules/{id}/archive", path(id))),
   );
+
+// Hand-picked top vendors per destination (team trial round 5, §13.14).
+export function useTopVendorList(search: string, limit: number) {
+  return useQuery<MarketTopVendorPage>({
+    queryKey: ["record", "market-top-vendors", search, limit],
+    queryFn: () =>
+      unwrap(api.GET("/market-moves/top-vendors", { params: { query: { ...(search ? { search } : {}), limit } } })),
+    staleTime: 10_000,
+  });
+}
+export function useTopVendorCandidates(mccmnc: string | null) {
+  return useQuery<MarketTopVendorCandidates>({
+    queryKey: ["record", "market-top-candidates", mccmnc],
+    queryFn: () => unwrap(api.GET("/market-moves/top-vendors/candidates", { params: { query: { mccmnc: mccmnc! } } })),
+    enabled: !!mccmnc,
+    staleTime: 30_000,
+  });
+}
+export const useSaveTopVendors = () =>
+  useWrite((body: MarketTopVendorInput) => unwrap(api.PUT("/market-moves/top-vendors", { body })));
+export const useRemoveTopVendors = () =>
+  useWrite((mccmncs: string[]) => unwrap(api.POST("/market-moves/top-vendors/remove", { body: { mccmncs } })));

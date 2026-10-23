@@ -231,6 +231,84 @@ describe("market moves (§13.14)", { skip }, () => {
     assert.ok(Date.parse(row.effectiveFrom) >= Date.parse(client.suggestedFrom) - 1000);
   });
 
+  test("hand-picked top vendors per destination (team trial round 5)", async () => {
+    // A destination priced by at least four live vendor trunks.
+    const { rows: d } = await db().query(
+      `SELECT l.mccmnc_id, l.mccmnc FROM rate_lines l
+         JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
+         JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id AND vt.deleted_at IS NULL AND vt.status = 'active'
+        WHERE l.sender_id IS NULL AND NOT l.is_blocked AND l.valid_from <= now() AND l.valid_to IS NULL
+          AND length(l.mccmnc) = 5
+        GROUP BY 1, 2 HAVING count(DISTINCT vt.id) >= 4 ORDER BY 1 LIMIT 1`,
+    );
+    const code = String(d[0].mccmnc);
+    const cand = await ok(
+      "marketTopVendorCandidates",
+      call("GET", `/market-moves/top-vendors/candidates?mccmnc=${code}`),
+    );
+    assert.ok(cand.vendors.length >= 4);
+    const rates = cand.vendors.map((v: { rateEur: number }) => v.rateEur);
+    assert.deepEqual(
+      rates,
+      [...rates].sort((a, b) => a - b),
+      "cheapest first",
+    );
+    // Pick the 3rd and 4th cheapest, without Tier 1: only they count.
+    const picked = cand.vendors.slice(2, 4).map((v: { vendorTrunkId: number }) => v.vendorTrunkId);
+    const bad = await call("PUT", "/market-moves/top-vendors", {
+      mccmncs: [code],
+      vendorTrunkIds: [],
+      includeTier1: false,
+    });
+    assert.equal(bad.statusCode, 400, "a list needs vendors or Tier 1");
+    await ok(
+      "saveMarketTopVendors",
+      call("PUT", "/market-moves/top-vendors", { mccmncs: [code], vendorTrunkIds: picked, includeTier1: false }),
+    );
+    cleanup.push(() => call("POST", "/market-moves/top-vendors/remove", { mccmncs: [code] }));
+    const list = await ok("listMarketTopVendors", call("GET", `/market-moves/top-vendors?search=${code}`));
+    const row = list.rows.find((r: { mccmnc: string }) => r.mccmnc === code);
+    assert.deepEqual(row.vendors.map((v: { vendorTrunkId: number }) => v.vendorTrunkId).sort(), [...picked].sort());
+    assert.equal(row.includeTier1, false);
+    // Both picked vendors raise their rate: one move, counting only the two picked trunks.
+    const at = new Date(Math.ceil(Date.now() / DAY) * DAY + 3 * DAY + Math.floor((Date.now() % DAY) / 1000) * 1000);
+    for (const [i, vt] of picked.entries()) {
+      const { rows: l } = await db().query(
+        `SELECT l.id, l.rate, rt.id AS table_id FROM rate_lines l JOIN rate_tables rt ON rt.id = l.rate_table_id
+          WHERE rt.vendor_trunk_id = $1 AND rt.kind = 'vendor' AND rt.deleted_at IS NULL AND l.mccmnc_id = $2
+            AND l.sender_id IS NULL AND l.valid_from <= now() AND l.valid_to IS NULL LIMIT 1`,
+        [vt, d[0].mccmnc_id],
+      );
+      const saved = await ok(
+        "changeRateLines",
+        call("POST", `/rate-tables/${l[0].table_id}/lines/changes`, {
+          items: [
+            {
+              action: "set",
+              lineId: Number(l[0].id),
+              rate: Math.round(Number(l[0].rate) * 1.09 * 1e6) / 1e6,
+              effectiveFrom: new Date(at.getTime() + i * 3600_000).toISOString(),
+            },
+          ],
+        }),
+      );
+      cleanup.push(() => call("POST", `/changes/${saved.change.id}/undo`, {}));
+    }
+    await ok("scanMarketMoves", call("POST", "/market-moves/scan"));
+    const { rows: mv } = await db().query(
+      "SELECT top_count, moved_count FROM market_moves WHERE mccmnc_id = $1 AND direction = 'up' AND first_effective = $2",
+      [d[0].mccmnc_id, at],
+    );
+    assert.equal(mv.length, 1, "the move is recorded");
+    assert.equal(Number(mv[0].top_count), 2, "only the hand-picked trunks count");
+    assert.equal(Number(mv[0].moved_count), 2);
+    const gone = await ok(
+      "removeMarketTopVendors",
+      call("POST", "/market-moves/top-vendors/remove", { mccmncs: [code] }),
+    );
+    assert.equal(gone.sent, 1);
+  });
+
   test("digest e-mail per account manager", async () => {
     const r = await ok("sendMarketMoveDigest", call("POST", "/market-moves/digest"));
     assert.ok(r.sent >= 0);

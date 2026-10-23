@@ -1,6 +1,6 @@
 // Market rate movements (§13.14). A scan looks at vendor rate changes of the last weeks (imports,
-// incoming RNs §13.13, manual edits), keeps the top vendors of each destination (Tier 1 plus the
-// cheapest N), and records a move when enough of them change in the same direction within the window
+// incoming RNs §13.13, manual edits), keeps the top vendors of each destination (hand-picked per
+// destination, team trial round 5; otherwise Tier 1 plus the cheapest N), and records a move when enough of them change in the same direction within the window
 // (market/detect.ts). The market cost is the average rate of the vendors that moved, before and after. Each move lists the affected client tables with a suggested sell rate; account
 // managers update them through Bulk rating, reroute, snooze or dismiss, and every action is logged.
 // Optional auto-apply rules re-price a client's table to keep a margin, with the contractual notice.
@@ -16,6 +16,9 @@ import type {
   MarketMoveRow,
   MarketMoveSettings,
   MarketMoveVendor,
+  MarketTopVendor,
+  MarketTopVendorInput,
+  MarketTopVendorRow,
   RateLineEdit,
 } from "@sms/contract";
 import { PLATFORM_CURRENCY } from "../currency.js";
@@ -59,6 +62,7 @@ const toSettings = (r: Record<string, unknown>): MarketMoveSettings => ({
   urgentDays: Number(r.urgent_days),
   targetMarginPct: r.target_margin_pct === null ? null : Number(r.target_margin_pct),
   digestHour: Number(r.digest_hour),
+  unlistedMode: (r.unlisted_mode as MarketMoveSettings["unlistedMode"]) ?? "cheapest",
   updatedBy: (r.updated_by as string | null) ?? null,
   updatedAt: iso(r.updated_at),
 });
@@ -74,7 +78,7 @@ export function updateMarketMoveSettings(request: FastifyRequest, reply: Fastify
     await pool.query(
       `UPDATE market_move_settings SET cheapest_n = $1, include_tier1 = $2, window_days = $3, min_vendors = $4,
          min_change_pct = $5, lookback_days = $6, urgent_change_pct = $7, urgent_days = $8, target_margin_pct = $9,
-         digest_hour = $10, updated_by_id = $11, updated_at = now() WHERE id = 1`,
+         digest_hour = $10, updated_by_id = $11, unlisted_mode = $12, updated_at = now() WHERE id = 1`,
       [
         b.cheapestN,
         b.includeTier1,
@@ -87,6 +91,7 @@ export function updateMarketMoveSettings(request: FastifyRequest, reply: Fastify
         b.targetMarginPct,
         b.digestHour,
         me.id,
+        b.unlistedMode ?? "cheapest",
       ],
     );
     return toSettings(await loadSettings(pool));
@@ -397,6 +402,145 @@ export function actOnMarketMove(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
+// ---------------------------------------------------------------- hand-picked top vendors (team trial round 5)
+
+const TOP_FROM = `market_top_vendors tv JOIN mccmnc m ON m.id = tv.mccmnc_id LEFT JOIN countries co ON co.id = m.country_id
+  LEFT JOIN users u ON u.id = tv.updated_by_id`;
+
+/** Search box: starts with on country, network or MCCMNC; % anywhere (§13.25). */
+const startsWith = (q: string) => (q.includes("%") || q.includes("_") ? q : `${q}%`);
+
+async function vendorsOf(c: Db, ids: number[]): Promise<Map<number, MarketTopVendor>> {
+  if (!ids.length) return new Map();
+  const { rows } = await c.query(
+    `SELECT vt.id, vt.name, e.name AS vendor, e.tier FROM vendor_trunks vt JOIN enterprises e ON e.id = vt.enterprise_id
+      WHERE vt.id = ANY($1::bigint[]) AND vt.deleted_at IS NULL`,
+    [ids],
+  );
+  return new Map(
+    rows.map((r) => [
+      Number(r.id),
+      { vendorTrunkId: Number(r.id), vendorTrunk: r.name, vendor: r.vendor, tier: r.tier ?? null },
+    ]),
+  );
+}
+
+export function listMarketTopVendors(request: FastifyRequest, reply: FastifyReply) {
+  const q = request.query as { search?: string; limit?: number; offset?: number };
+  const search = (q.search ?? "").trim();
+  return withDb(reply, async (pool) => {
+    const where = search ? "WHERE (co.name ILIKE $1 OR m.network ILIKE $1 OR m.mccmnc LIKE $1)" : "";
+    const args = search ? [startsWith(search)] : [];
+    const { rows } = await pool.query(
+      `SELECT tv.*, m.mccmnc, m.network, co.name AS country, u.username AS updated_by, count(*) OVER () AS total
+         FROM ${TOP_FROM} ${where} ORDER BY co.name NULLS LAST, m.network NULLS FIRST, m.mccmnc
+        LIMIT ${Number(q.limit ?? 100)} OFFSET ${Number(q.offset ?? 0)}`,
+      args,
+    );
+    const names = await vendorsOf(pool, [
+      ...new Set(rows.flatMap((r) => (r.vendor_trunk_ids as string[]).map(Number))),
+    ]);
+    const total = rows.length
+      ? Number(rows[0].total)
+      : Number((await pool.query(`SELECT count(*)::int AS n FROM ${TOP_FROM} ${where}`, args)).rows[0].n);
+    return {
+      total,
+      rows: rows.map((r): MarketTopVendorRow => ({
+        mccmnc: r.mccmnc,
+        country: r.country ?? null,
+        network: r.network ?? null,
+        vendors: (r.vendor_trunk_ids as string[])
+          .map((id) => names.get(Number(id)))
+          .filter((v): v is MarketTopVendor => !!v),
+        includeTier1: r.include_tier1,
+        updatedBy: r.updated_by ?? null,
+        updatedAt: iso(r.updated_at)!,
+      })),
+    };
+  });
+}
+
+/** MCCMNC codes → ids; unknown codes are reported back. */
+async function mccmncIds(c: Db, codes: string[]): Promise<{ ids: number[]; unknown: string[] }> {
+  const { rows } = await c.query("SELECT id, mccmnc FROM mccmnc WHERE mccmnc = ANY($1::text[])", [codes]);
+  const found = new Set(rows.map((r) => String(r.mccmnc)));
+  return { ids: rows.map((r) => Number(r.id)), unknown: codes.filter((x) => !found.has(x)) };
+}
+
+export function saveMarketTopVendors(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as MarketTopVendorInput;
+  if (!b.vendorTrunkIds.length && !b.includeTier1)
+    return sendProblem(reply, 400, "Pick at least one vendor trunk, or count Tier 1 vendors", {
+      errors: [{ path: "/vendorTrunkIds", message: "pick at least one vendor trunk or tick Tier 1" }],
+    });
+  return withDb(reply, async (pool) => {
+    const me = await getCurrentUser();
+    const { ids, unknown } = await mccmncIds(pool, [...new Set(b.mccmncs)]);
+    if (unknown.length)
+      return sendProblem(reply, 400, `Unknown MCCMNC: ${unknown.slice(0, 5).join(", ")}`, {
+        errors: [{ path: "/mccmncs", message: `unknown: ${unknown.join(", ")}` }],
+      });
+    const trunks = await vendorsOf(pool, [...new Set(b.vendorTrunkIds)]);
+    if (trunks.size !== new Set(b.vendorTrunkIds).size)
+      return sendProblem(reply, 400, "Some vendor trunks do not exist", {
+        errors: [{ path: "/vendorTrunkIds", message: "unknown or deleted vendor trunk" }],
+      });
+    await pool.query(
+      `INSERT INTO market_top_vendors (mccmnc_id, vendor_trunk_ids, include_tier1, updated_by_id)
+       SELECT unnest($1::bigint[]), $2::bigint[], $3, $4
+       ON CONFLICT (mccmnc_id) DO UPDATE SET vendor_trunk_ids = EXCLUDED.vendor_trunk_ids,
+         include_tier1 = EXCLUDED.include_tier1, updated_by_id = EXCLUDED.updated_by_id, updated_at = now()`,
+      [ids, [...trunks.keys()], b.includeTier1, me.id],
+    );
+    scheduleMarketScan(5_000);
+    return { sent: ids.length };
+  });
+}
+
+export function removeMarketTopVendors(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as { mccmncs: string[] };
+  return withDb(reply, async (pool) => {
+    const { ids } = await mccmncIds(pool, [...new Set(b.mccmncs)]);
+    const { rowCount } = await pool.query("DELETE FROM market_top_vendors WHERE mccmnc_id = ANY($1::bigint[])", [ids]);
+    scheduleMarketScan(5_000);
+    return { sent: rowCount ?? 0 };
+  });
+}
+
+export function marketTopVendorCandidates(request: FastifyRequest, reply: FastifyReply) {
+  const { mccmnc } = request.query as { mccmnc: string };
+  return withDb(reply, async (pool) => {
+    const { rows: dest } = await pool.query(
+      `SELECT m.id, m.mccmnc, m.network, co.name AS country FROM mccmnc m LEFT JOIN countries co ON co.id = m.country_id
+        WHERE m.mccmnc = $1`,
+      [mccmnc],
+    );
+    if (!dest[0]) return sendProblem(reply, 400, `Unknown MCCMNC ${mccmnc}`);
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (vt.id) vt.id, vt.name, e.name AS vendor, e.tier, l.rate / cl.rate_per_eur AS eur
+         FROM rate_lines l
+         JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
+         JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id AND vt.deleted_at IS NULL AND vt.status = 'active'
+         JOIN enterprises e ON e.id = vt.enterprise_id
+         JOIN currency_latest cl ON cl.iso = l.currency
+        WHERE l.mccmnc_id = $1 AND l.sender_id IS NULL AND NOT l.is_blocked AND l.valid_from <= now()
+          AND (l.valid_to IS NULL OR l.valid_to > now())
+        ORDER BY vt.id, eur`,
+      [dest[0].id],
+    );
+    const vendors = rows
+      .map((r) => ({
+        vendorTrunkId: Number(r.id),
+        vendorTrunk: r.name as string,
+        vendor: r.vendor as string,
+        tier: (r.tier as MarketTopVendor["tier"]) ?? null,
+        rateEur: r6(Number(r.eur)),
+      }))
+      .sort((a, b) => a.rateEur - b.rateEur);
+    return { mccmnc: dest[0].mccmnc, country: dest[0].country ?? null, network: dest[0].network ?? null, vendors };
+  });
+}
+
 // ---------------------------------------------------------------- scan
 
 interface Candidate {
@@ -418,11 +562,16 @@ async function loadCandidates(c: Db, s: MarketMoveSettings): Promise<Map<number,
          JOIN enterprises e ON e.id = v.enterprise_id
          JOIN currency_latest cl ON cl.iso = l.currency
         WHERE l.sender_id IS NULL AND NOT l.is_blocked AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now()))
-     SELECT m, mccmnc, vt, usd FROM (
+     SELECT x.m, x.mccmnc, x.vt, x.usd FROM (
        SELECT cur.*, row_number() OVER (PARTITION BY m, vt ORDER BY usd) AS dup,
               dense_rank() OVER (PARTITION BY m ORDER BY usd, vt) AS rn FROM cur) x
-      WHERE dup = 1 AND (rn <= $1 OR ($2 AND tier = 'tier1'))`,
-    [s.cheapestN, s.includeTier1],
+       LEFT JOIN market_top_vendors tv ON tv.mccmnc_id = x.m
+      WHERE x.dup = 1 AND CASE
+        -- A hand-picked list (team trial round 5): its vendor trunks, plus Tier 1 when the destination says so.
+        WHEN tv.mccmnc_id IS NOT NULL THEN x.vt = ANY(tv.vendor_trunk_ids) OR (tv.include_tier1 AND x.tier = 'tier1')
+        WHEN $3 = 'skip' THEN false
+        ELSE x.rn <= $1 OR ($2 AND x.tier = 'tier1') END`,
+    [s.cheapestN, s.includeTier1, s.unlistedMode],
   );
   const out = new Map<number, Candidate>();
   for (const t of top) {

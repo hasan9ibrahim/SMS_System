@@ -1443,6 +1443,67 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/market-moves/top-vendors": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Destinations with a hand-picked top vendor list (§13.14)
+     * @description Team trial round 5. Each row is one destination whose top vendors are picked by hand instead of the cheapest N; searched and paged on the server. Destinations without a row follow the settings (`unlistedMode`).
+     */
+    get: operations["listMarketTopVendors"];
+    /**
+     * Set the top vendors of one or more destinations
+     * @description The same vendor trunks and Tier 1 choice are stored for every destination given (replacing what each had). The next scan uses them.
+     */
+    put: operations["saveMarketTopVendors"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/top-vendors/remove": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Go back to the default rule for some destinations */
+    post: operations["removeMarketTopVendors"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/market-moves/top-vendors/candidates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Vendor trunks that price a destination, cheapest first
+     * @description For the picker. Each live vendor trunk with a current rate for the MCCMNC, in EUR, with its tier.
+     */
+    get: operations["marketTopVendorCandidates"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/market-moves/auto-rules": {
     parameters: {
       query?: never;
@@ -11783,6 +11844,11 @@ export type components = {
       targetMarginPct: number | null;
       /** @description Daily digest e-mail to account managers, UTC. */
       digestHour: number;
+      /**
+       * @description Destinations without a hand-picked top vendor list: `cheapest` = the cheapest N (plus Tier 1 when `includeTier1`); `skip` = not watched (team trial round 5).
+       * @enum {string}
+       */
+      unlistedMode: "cheapest" | "skip";
       readonly updatedBy?: string | null;
       readonly updatedAt?: components["schemas"]["Timestamp"] | null;
     };
@@ -11809,6 +11875,47 @@ export type components = {
     };
     MarketAutoRuleList: {
       rules: components["schemas"]["MarketAutoRule"][];
+    };
+    MarketTopVendor: {
+      vendorTrunkId: components["schemas"]["Id"];
+      vendorTrunk: string;
+      vendor: string;
+      /** @enum {string|null} */
+      tier: "tier1" | "tier2" | "tier3" | null;
+    };
+    MarketTopVendorRow: {
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      /** @description The hand-picked vendor trunks (removed or deleted trunks are left out). */
+      vendors: components["schemas"]["MarketTopVendor"][];
+      /** @description Tier 1 vendors pricing the destination count too. */
+      includeTier1: boolean;
+      updatedBy: string | null;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    MarketTopVendorPage: {
+      rows: components["schemas"]["MarketTopVendorRow"][];
+      total: number;
+    };
+    MarketTopVendorInput: {
+      mccmncs: string[];
+      /** @description May be empty when `includeTier1` is true (Tier 1 vendors only). */
+      vendorTrunkIds: components["schemas"]["Id"][];
+      includeTier1: boolean;
+    };
+    MarketTopVendorRemove: {
+      mccmncs: string[];
+    };
+    MarketTopVendorCandidates: {
+      mccmnc: string;
+      country: string | null;
+      network: string | null;
+      vendors: (components["schemas"]["MarketTopVendor"] & {
+        /** @description Current rate in EUR. */
+        rateEur: number;
+      })[];
     };
     MarketScanResult: {
       created: number;
@@ -20982,6 +21089,112 @@ export interface operations {
           "application/json": components["schemas"]["SentCount"];
         };
       };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listMarketTopVendors: {
+    parameters: {
+      query?: {
+        /** @description Starts with, on country, network or MCCMNC; `%` matches anywhere. */
+        search?: string;
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of destinations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketTopVendorPage"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  saveMarketTopVendors: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketTopVendorInput"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentCount"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  removeMarketTopVendors: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketTopVendorRemove"];
+      };
+    };
+    responses: {
+      /** @description Removed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentCount"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  marketTopVendorCandidates: {
+    parameters: {
+      query: {
+        mccmnc: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The vendor trunks */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MarketTopVendorCandidates"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       503: components["responses"]["Unavailable"];
     };

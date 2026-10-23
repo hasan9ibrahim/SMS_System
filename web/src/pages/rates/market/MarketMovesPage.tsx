@@ -38,6 +38,7 @@ import { fmtWhen } from "../../reference/shared";
 import { Kv } from "../../admin/parts";
 import { formatPct, formatRate, relDays, shortDate } from "../format";
 import { AmFilter } from "../RateManagerPage";
+import { editTopVendorsFor, openTopVendors } from "./TopVendors";
 import { moveLabel, routeRulesFor, STATE_LABEL, STATE_TONE, updateRatesUrl, vendorChart } from "./marketModel";
 
 const page = pageForPath("/rates/market-moves")!;
@@ -120,6 +121,13 @@ function MoveCard({ r }: { r: MarketMoveRow }) {
         </span>
         {r.urgent && <span className="chip-mini tone-error">Urgent</span>}
         <span className="fb-spacer" />
+        <Button
+          small
+          title="Pick the vendor trunks that count for this destination (team trial round 5)"
+          onClick={() => void editTopVendorsFor(r.mccmnc)}
+        >
+          Top vendors…
+        </Button>
         {r.state === "open" ? (
           <>
             <select
@@ -487,6 +495,16 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
         <>
           <h3 className="part-title">Detection (§13.14)</h3>
           <div className="rn-form-grid">
+            <label className="field">
+              <span>Destinations without a top vendor list</span>
+              <select
+                value={s.unlistedMode}
+                onChange={(e) => setD({ ...s, unlistedMode: e.target.value as MarketMoveSettings["unlistedMode"] })}
+              >
+                <option value="cheapest">Cheapest N vendors (+ Tier 1 if ticked)</option>
+                <option value="skip">Not watched</option>
+              </select>
+            </label>
             {num("cheapestN", "Cheapest N vendors count")}
             <label className="toggle-inline">
               <input
@@ -505,6 +523,13 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
             {num("targetMarginPct", "Target margin for suggestions (%)", 0.5)}
             {num("digestHour", "Daily digest at (UTC hour)")}
           </div>
+          <p className="muted small">
+            Destinations can have their own hand-picked top vendors (with or without Tier 1): use{" "}
+            <button type="button" className="link" onClick={() => void openTopVendors()}>
+              Top vendors per destination
+            </button>
+            . The two settings above only apply to destinations without one.
+          </p>
           <h3 className="part-title">Auto-apply rules</h3>
           <p className="muted small">
             Follow market moves automatically for a client: re-price when the margin at the new market cost falls below
@@ -689,9 +714,14 @@ export function MarketMovesPage() {
           }),
       }}
       actions={
-        <Button icon="gauge" onClick={() => void ask<null>((done) => <SettingsDialog done={done} />)}>
-          Settings
-        </Button>
+        <>
+          <Button icon="users" onClick={() => void openTopVendors()}>
+            Top vendors
+          </Button>
+          <Button icon="gauge" onClick={() => void ask<null>((done) => <SettingsDialog done={done} />)}>
+            Settings
+          </Button>
+        </>
       }
       // Queue redesign (team trial round 5, like Incidents and Alert rules): summary tiles, a filter bar of chips,
       // and each move as a card row with a direction edge.

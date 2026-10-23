@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.86.0
+  version: 0.87.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -2307,6 +2307,128 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SentCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/top-vendors:
+    get:
+      tags:
+      - rates
+      operationId: listMarketTopVendors
+      summary: Destinations with a hand-picked top vendor list (§13.14)
+      description: >-
+        Team trial round 5. Each row is one destination whose top vendors are picked by hand instead of the cheapest
+        N; searched and paged on the server. Destinations without a row follow the settings (`unlistedMode`).
+      parameters:
+      - name: search
+        in: query
+        required: false
+        description: Starts with, on country, network or MCCMNC; `%` matches anywhere.
+        schema:
+          type: string
+          maxLength: 100
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: One page of destinations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketTopVendorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags:
+      - rates
+      operationId: saveMarketTopVendors
+      summary: Set the top vendors of one or more destinations
+      description: >-
+        The same vendor trunks and Tier 1 choice are stored for every destination given (replacing what each had).
+        The next scan uses them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketTopVendorInput'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentCount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/top-vendors/remove:
+    post:
+      tags:
+      - rates
+      operationId: removeMarketTopVendors
+      summary: Go back to the default rule for some destinations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketTopVendorRemove'
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentCount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /market-moves/top-vendors/candidates:
+    get:
+      tags:
+      - rates
+      operationId: marketTopVendorCandidates
+      summary: Vendor trunks that price a destination, cheapest first
+      description: For the picker. Each live vendor trunk with a current rate for the MCCMNC, in EUR, with its tier.
+      parameters:
+      - name: mccmnc
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{3,6}$
+      responses:
+        '200':
+          description: The vendor trunks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketTopVendorCandidates'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '503':
@@ -18491,6 +18613,7 @@ components:
       - urgentDays
       - targetMarginPct
       - digestHour
+      - unlistedMode
       properties:
         cheapestN:
           type: integer
@@ -18534,6 +18657,14 @@ components:
           minimum: 0
           maximum: 23
           description: Daily digest e-mail to account managers, UTC.
+        unlistedMode:
+          type: string
+          enum:
+          - cheapest
+          - skip
+          description: >-
+            Destinations without a hand-picked top vendor list: `cheapest` = the cheapest N (plus Tier 1 when
+            `includeTier1`); `skip` = not watched (team trial round 5).
         updatedBy:
           type:
           - string
@@ -18600,6 +18731,143 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MarketAutoRule'
+    MarketTopVendor:
+      type: object
+      required:
+      - vendorTrunkId
+      - vendorTrunk
+      - vendor
+      - tier
+      properties:
+        vendorTrunkId:
+          $ref: '#/components/schemas/Id'
+        vendorTrunk:
+          type: string
+        vendor:
+          type: string
+        tier:
+          type:
+          - string
+          - 'null'
+          enum:
+          - tier1
+          - tier2
+          - tier3
+          - null
+    MarketTopVendorRow:
+      type: object
+      required:
+      - mccmnc
+      - country
+      - network
+      - vendors
+      - includeTier1
+      - updatedBy
+      - updatedAt
+      properties:
+        mccmnc:
+          type: string
+        country:
+          type:
+          - string
+          - 'null'
+        network:
+          type:
+          - string
+          - 'null'
+        vendors:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketTopVendor'
+          description: The hand-picked vendor trunks (removed or deleted trunks are left out).
+        includeTier1:
+          type: boolean
+          description: Tier 1 vendors pricing the destination count too.
+        updatedBy:
+          type:
+          - string
+          - 'null'
+        updatedAt:
+          type: string
+          format: date-time
+    MarketTopVendorPage:
+      type: object
+      required:
+      - rows
+      - total
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketTopVendorRow'
+        total:
+          type: integer
+    MarketTopVendorInput:
+      type: object
+      additionalProperties: false
+      required:
+      - mccmncs
+      - vendorTrunkIds
+      - includeTier1
+      properties:
+        mccmncs:
+          type: array
+          minItems: 1
+          maxItems: 2000
+          items:
+            type: string
+            pattern: ^[0-9]{3,6}$
+        vendorTrunkIds:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Id'
+          description: May be empty when `includeTier1` is true (Tier 1 vendors only).
+        includeTier1:
+          type: boolean
+    MarketTopVendorRemove:
+      type: object
+      additionalProperties: false
+      required:
+      - mccmncs
+      properties:
+        mccmncs:
+          type: array
+          minItems: 1
+          maxItems: 2000
+          items:
+            type: string
+            pattern: ^[0-9]{3,6}$
+    MarketTopVendorCandidates:
+      type: object
+      required:
+      - mccmnc
+      - country
+      - network
+      - vendors
+      properties:
+        mccmnc:
+          type: string
+        country:
+          type:
+          - string
+          - 'null'
+        network:
+          type:
+          - string
+          - 'null'
+        vendors:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/MarketTopVendor'
+            - type: object
+              required:
+              - rateEur
+              properties:
+                rateEur:
+                  type: number
+                  description: Current rate in EUR.
     MarketScanResult:
       type: object
       required:
