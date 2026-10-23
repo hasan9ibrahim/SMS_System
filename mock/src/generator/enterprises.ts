@@ -147,6 +147,8 @@ export async function generateEnterprises(world: World, rng: Rng, sink: TableSin
       website: `https://www.${e.domain}`,
       registration_number: `REG-${rng.digits(8)}`,
       vat_number: rng.chance(0.7) ? `${country.iso}${rng.digits(9)}` : null,
+      // Our account number for clients (team trial round 4); from the id, so the random sequence stays the same.
+      account_number: type === "vendor" || id % 5 === 0 ? null : `ACC-${String(100000 + id)}`,
       billing_timezone: (e.billingTimezone = rng.pick(TIMEZONES)),
       rate_notice_days: rng.pick([0, 3, 7, 7, 7, 14, 30]),
       created_by_id: editor,

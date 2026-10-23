@@ -7,10 +7,9 @@ import { ApiError } from "../../api/client";
 import { useAmHistory, useHandover, useReference } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
 import { Button, Modal } from "../../ui/primitives";
-import { HeaderAction, type SectionProps } from "../../records/parts";
+import { type SectionProps } from "../../records/parts";
+import { Avatar } from "../../page/PageHeader";
 import { DateTimeInput } from "../../ui/DateTimeInput";
-
-const utc = (s: string) => `${s.slice(0, 16).replace("T", " ")} UTC`;
 
 function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail; onClose: () => void }) {
   const ref = useReference();
@@ -132,54 +131,80 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
   );
 }
 
-export function AccountManagersTab({ enterprise, slot }: SectionProps & { enterprise: EnterpriseDetail }) {
+const day = (s: string) =>
+  `${new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`;
+const dayTime = (s: string) => `${day(s)}, ${s.slice(11, 16)} UTC`;
+
+/**
+ * Account managers (record redesign, team trial round 4): the current AM in a card with Hand over, and the
+ * assignment history as a timeline, newest first.
+ */
+export function AccountManagersTab({ enterprise }: SectionProps & { enterprise: EnterpriseDetail }) {
   const periods = useAmHistory(enterprise.id);
   const [open, setOpen] = useState(false);
   const now = Date.now();
+  const list = [...(periods.data ?? [])].sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt));
+  const current = list.find((p) => Date.parse(p.startsAt) <= now && (!p.endsAt || Date.parse(p.endsAt) > now));
   return (
     <>
-      <HeaderAction slot={slot}>
-        <Button variant="primary" icon="users" disabled={!!enterprise.archived} onClick={() => setOpen(true)}>
-          Hand over
-        </Button>
-      </HeaderAction>
-      <div className="card">
-        {periods.isError && <p className="error-text">{(periods.error as Error).message}</p>}
-        {periods.data && (
-          <table className="rtable">
-            <thead>
-              <tr>
-                <th>Account manager</th>
-                <th>From</th>
-                <th>Until</th>
-                <th>Note</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {periods.data.map((p) => {
-                const start = Date.parse(p.startsAt);
-                const current = start <= now && (!p.endsAt || Date.parse(p.endsAt) > now);
-                return (
-                  <tr key={`${p.userId}-${p.startsAt}`}>
-                    <td className="strong">{p.userName}</td>
-                    <td className="tnum">{utc(p.startsAt)}</td>
-                    <td className="tnum">{p.endsAt ? utc(p.endsAt) : "—"}</td>
-                    <td className="muted">{p.note ?? ""}</td>
-                    <td>
-                      {current && <span className="tag tag-accent">Current</span>}
-                      {start > now && <span className="tag">Scheduled</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+      <div className="am-layout">
+        <section className="fsection am-current">
+          <h3 className="fsub">Current account manager</h3>
+          {current ? (
+            <div className="am-person">
+              <Avatar name={current.userName} size="md" />
+              <div>
+                <div className="strong">{current.userName}</div>
+                <div className="muted small">Since {day(current.startsAt)}</div>
+              </div>
+            </div>
+          ) : (
+            <p className="muted">{enterprise.accountManagerName ?? "No account manager"}</p>
+          )}
+          <Button
+            variant="primary"
+            icon="users"
+            className="am-handover"
+            disabled={!!enterprise.archived}
+            onClick={() => setOpen(true)}
+          >
+            Hand over to someone else
+          </Button>
+        </section>
+        <section className="fsection am-history">
+          <header>
+            <div className="fsection-title">
+              <h2>Assignment history</h2>
+            </div>
+          </header>
+          {periods.isError && <p className="error-text">{(periods.error as Error).message}</p>}
+          <ol className="am-timeline">
+            {list.map((p, i) => {
+              const start = Date.parse(p.startsAt);
+              const isCurrent = p === current;
+              const scheduled = start > now;
+              return (
+                <li key={`${p.userId}-${p.startsAt}`} className={isCurrent ? "current" : scheduled ? "scheduled" : ""}>
+                  <span className="am-dot" aria-hidden="true" />
+                  <div className="am-entry">
+                    <div>
+                      <span className="strong">{p.userName}</span>
+                      {isCurrent && <span className="chip-tag blue">Current</span>}
+                      {scheduled && <span className="chip-tag amber">Scheduled</span>}
+                      <div className="muted small">
+                        {p.note ?? (i === list.length - 1 ? "Initial assignment" : "Handover")}
+                      </div>
+                    </div>
+                    <span className="muted small tnum am-when">
+                      {dayTime(p.startsAt)} → {p.endsAt ? dayTime(p.endsAt) : "now"}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
       </div>
-      <p className="muted small">
-        Reports split results by the AM at send time (§13.30). Undo a handover from History until it takes effect.
-      </p>
       {open && <HandoverDialog enterprise={enterprise} onClose={() => setOpen(false)} />}
     </>
   );

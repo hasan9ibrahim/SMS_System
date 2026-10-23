@@ -4,7 +4,9 @@
 import { useTabShown } from "../../api/access";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router";
-import type { Enterprise } from "@sms/contract";
+import { useQuery } from "@tanstack/react-query";
+import type { Enterprise, TrunkListRow } from "@sms/contract";
+import { fetchListPage } from "../../api/hooks";
 import {
   useEnterprise,
   useReference,
@@ -16,7 +18,7 @@ import {
 import { FormBanner, FormField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
-import { PageHeader } from "../../page/PageHeader";
+import { Avatar, PageHeader } from "../../page/PageHeader";
 import {
   ArchivedBanner,
   EnterprisePicker,
@@ -28,7 +30,7 @@ import {
 } from "../../records/parts";
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
 import { Icon } from "../../ui/Icon";
-import { Button } from "../../ui/primitives";
+import { Button, StatusPill } from "../../ui/primitives";
 import { RateTableView } from "../rates/RateTableView";
 import { RulesTab } from "./RulesTab";
 import {
@@ -43,18 +45,36 @@ import {
 const SECTIONS = ["general", "rates", "rules", "history"] as const;
 const LABEL = { customer: "Customer trunk", vendor: "Vendor trunk" } as const;
 
+/** The trunk's live connection, from its list row (the record has no live state). */
+function useTrunkConnection(kind: TrunkKind, id: number | null) {
+  const q = useQuery({
+    queryKey: ["list", `${kind}_trunks`, "connection", id],
+    queryFn: () =>
+      fetchListPage<TrunkListRow>(kind === "customer" ? "customer_trunks" : "vendor_trunks", {
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: id! }] },
+        limit: 1,
+        withTotal: false,
+      }),
+    enabled: id !== null,
+    refetchInterval: 30_000,
+  });
+  return q.data?.rows[0]?.connection ?? null;
+}
+
 function GeneralSection({
   kind,
   record,
   seed,
   slot,
   onDirty,
+  connection,
 }: {
   kind: TrunkKind;
   record: TrunkDetail | null;
   seed: TrunkForm;
   slot: HTMLElement | null;
   onDirty: (d: boolean) => void;
+  connection: TrunkListRow["connection"] | null;
 }) {
   const isNew = record === null;
   const form = useForm<TrunkForm>(seed);
@@ -112,9 +132,10 @@ function GeneralSection({
         )}
       </HeaderAction>
       <FormBanner message={banner} onClose={() => setBanner(null)} />
-      <fieldset disabled={readOnly} className="plain-fieldset">
-        <section className="fsection">
-          <div className="fgrid cols-3">
+      <fieldset disabled={readOnly} className="plain-fieldset form-main">
+        {/* Enterprise, trunk ID and buy table as three small cards (record redesign, team trial round 4). */}
+        <section className="info-cards">
+          <div className="info-card-grid">
             <FormField
               label="Enterprise"
               required
@@ -161,7 +182,12 @@ function GeneralSection({
         {kind === "customer" ? (
           <CustomerTrunkFields form={form} isNew={isNew} passwordSet={record?.passwordSet ?? false} />
         ) : (
-          <VendorTrunkFields form={form} isNew={isNew} passwordSet={record?.passwordSet ?? false} />
+          <VendorTrunkFields
+            form={form}
+            isNew={isNew}
+            passwordSet={record?.passwordSet ?? false}
+            connected={connection ? connection === "up" : null}
+          />
         )}
       </fieldset>
       {record && (
@@ -188,6 +214,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
   const q = useTrunk(kind, id !== null && Number.isInteger(id) && id > 0 ? id : null);
   const source = useTrunk(kind, cloneOf);
   const t = q.data;
+  const connection = useTrunkConnection(kind, t?.id ?? null);
   const [section, setSection] = useSectionTab(SECTIONS);
   const shownTab = useTabShown();
   // A hidden tab opened from a link falls back to General (§11, trial round 2).
@@ -249,6 +276,32 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
         helpTopic="trunk-record"
         page={page}
         title={title}
+        // Record header (team trial round 4): breadcrumb through the enterprise, a tile, chips with the live bind.
+        crumbs={[
+          { label: "Enterprises", path: "/enterprises" },
+          ...(t ? [{ label: t.enterpriseName, path: `/enterprises/${t.enterpriseId}` }] : []),
+          { label: `${LABEL[kind]}s`, path: `/enterprises/${kind}-trunks` },
+          { label: t ? t.name : title },
+        ]}
+        avatar={<Avatar name={title} icon={<Icon name={kind === "vendor" ? "arrowUpRight" : "arrowDownLeft"} />} />}
+        meta={
+          t && (
+            <>
+              <span className={`chip-tag ${kind === "vendor" ? "amber" : "blue"}`}>{LABEL[kind]}</span>
+              {connection && (
+                <span
+                  className={`chip-tag ${connection === "up" ? "green" : connection === "reconnecting" ? "amber" : ""}`}
+                >
+                  <span className="dot-mini" />
+                  {connection === "up" ? "Connected" : connection === "reconnecting" ? "Reconnecting" : "Down"}
+                </span>
+              )}
+              <span className="chip-tag">{t.protocol.toUpperCase()}</span>
+              <span className="chip-tag">{t.tps.toLocaleString("en-US")} TPS</span>
+              <StatusPill active={t.status === "active"} />
+            </>
+          )
+        }
         actions={
           <>
             {t && (
@@ -279,12 +332,6 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
           </>
         }
       />
-      {t && (
-        <div className="record-meta muted">
-          {LABEL[kind]} of {t.enterpriseName} · {t.protocol.toUpperCase()} · {t.tps.toLocaleString("en-US")} TPS ·{" "}
-          {t.status === "active" ? "Active" : "Inactive"}
-        </div>
-      )}
       {t && <ArchivedBanner kind={kind} id={t.id} archived={t.archived} what="trunk" />}
       <SectionTabs
         tabs={[
@@ -306,6 +353,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
               seed={seed}
               slot={section === "general" ? slot : null}
               onDirty={onGeneral}
+              connection={connection}
             />
           </div>
         )}

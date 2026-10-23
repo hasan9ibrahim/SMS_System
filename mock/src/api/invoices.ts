@@ -237,7 +237,7 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
         409,
         `Invoice ${inv.invoiceNumber} is ${inv.status}; the PDF exists once it is completed`,
       );
-    const { rows } = await pool.query("SELECT name, address_line1, city, vat_number FROM enterprises WHERE id = $1", [
+    const { rows } = await pool.query("SELECT name, address_line1, city, vat_number, account_number FROM enterprises WHERE id = $1", [
       inv.enterpriseId,
     ]);
     const p = rows[0]!;
@@ -251,6 +251,8 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
       { text: bc?.website ?? "" },
       { text: inv.kind === "proforma" ? "PROFORMA INVOICE" : "INVOICE", size: 14, bold: true, gap: 30 },
       { text: `Invoice No: ${inv.invoiceNumber}` },
+      // The client's account number with us, when set (team trial round 4).
+      ...(p.account_number ? [{ text: `Account No: ${p.account_number}` }] : []),
       { text: `Invoice Date: ${inv.invoiceDate}    Payment Due Date: ${inv.dueDate}` },
       { text: `Usage period: ${inv.usageStart} to ${inv.usageEnd} (${inv.timezone})` },
       { text: "Bill to", bold: true, gap: 24 },

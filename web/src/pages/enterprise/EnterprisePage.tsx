@@ -9,7 +9,7 @@ import type { TrunkListRow } from "@sms/contract";
 import { useEnterprise } from "../../api/records";
 import { HistoryList } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
-import { PageHeader } from "../../page/PageHeader";
+import { Avatar, PageHeader } from "../../page/PageHeader";
 import {
   ArchivedBanner,
   ChildGrid,
@@ -27,11 +27,12 @@ import { fetchListPage } from "../../api/hooks";
 import { openSendRate, openTechInfo } from "../switch/tools/NotificationsPage";
 import { problemText } from "../routing/dialogs";
 import { Icon } from "../../ui/Icon";
-import { Button, Menu, Popover } from "../../ui/primitives";
+import { Button, Menu, Popover, StatusPill } from "../../ui/primitives";
 import { AccountManagersTab } from "./AccountManagersTab";
 import { BillingTab } from "./BillingTab";
 import { DocsTab } from "./DocsTab";
 import { GeneralTab } from "./GeneralTab";
+import { EnterpriseRulesTab } from "./RulesTab";
 
 const page = pageForPath("/enterprises")!;
 const SECTIONS = [
@@ -40,6 +41,7 @@ const SECTIONS = [
   "billing",
   "customer-trunks",
   "vendor-trunks",
+  "rules",
   "account-managers",
   "history",
 ] as const;
@@ -107,6 +109,9 @@ function NotificationsMenu({ enterpriseId, trunks }: { enterpriseId: number; tru
   );
 }
 
+const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" } as const;
+const TYPE_TONE = { customer: "blue", vendor: "amber", reciprocal: "violet" } as const;
+
 export function EnterprisePage() {
   const raw = useParams().id;
   const id = raw === undefined || raw === "new" ? null : Number(raw);
@@ -136,7 +141,11 @@ export function EnterprisePage() {
     (key: string) => (d: boolean) => setDirty((m) => (m[key] === d ? m : { ...m, [key]: d })),
     [],
   );
-  const [onDirty] = useState(() => ({ general: dirtyFor("general"), billing: dirtyFor("billing") }));
+  const [onDirty] = useState(() => ({
+    general: dirtyFor("general"),
+    billing: dirtyFor("billing"),
+    rules: dirtyFor("rules"),
+  }));
 
   const goTo = async (path: string) => {
     if (
@@ -163,6 +172,8 @@ export function EnterprisePage() {
       ? [{ key: "customer-trunks", label: "Customer trunks", count: e?.trunkCounts.customer ?? null }]
       : []),
     ...(hasVendor ? [{ key: "vendor-trunks", label: "Vendor trunks", count: e?.trunkCounts.vendor ?? null }] : []),
+    // Rule order over the enterprise's trunks (team trial round 4).
+    { key: "rules", label: "Rules", disabled: id === null },
     { key: "account-managers", label: "Account managers", disabled: id === null },
     { key: "history", label: "History", disabled: id === null },
   ].filter((t) => shownTab(`enterprises.${t.key}`)); // tabs an access group can hide (§11, trial round 2)
@@ -202,11 +213,27 @@ export function EnterprisePage() {
         helpTopic="enterprise-record"
         page={page}
         title="New enterprise"
+        // Record header (team trial round 4): breadcrumb, initials tile, chips and facts under the name.
+        crumbs={[{ label: "Enterprises", path: "/enterprises" }, { label: e ? e.name : "New enterprise" }]}
+        avatar={<Avatar name={e?.name ?? "New"} />}
+        meta={
+          e && (
+            <>
+              <span className={`chip-tag ${TYPE_TONE[e.type]}`}>{TYPE_LABEL[e.type]}</span>
+              <span className="chip-tag">{e.tier.replace("tier", "Tier ")}</span>
+              <StatusPill active={e.status === "active"} />
+              <span className="meta">
+                {e.alias} · ID {e.id} · {e.businessCompanyName}
+                {e.accountManagerName ? ` · AM ${e.accountManagerName}` : ""}
+              </span>
+            </>
+          )
+        }
         heading={
           e && (
             <>
               <h1 className="sr-only">{enterpriseLabel(e)}</h1>
-              <EnterprisePicker label={enterpriseLabel(e)} onPick={(x) => void goTo(`/enterprises/${x.id}`)} />
+              <EnterprisePicker label={e.name} onPick={(x) => void goTo(`/enterprises/${x.id}`)} />
             </>
           )
         }
@@ -228,13 +255,6 @@ export function EnterprisePage() {
           </>
         }
       />
-      {e && (
-        <div className="record-meta muted">
-          {e.type[0]!.toUpperCase() + e.type.slice(1)} · {e.tier.replace("tier", "Tier ")} · {e.businessCompanyName}
-          {e.accountManagerName ? ` · AM ${e.accountManagerName}` : ""} ·{" "}
-          {e.status === "active" ? "Active" : "Inactive"}
-        </div>
-      )}
       {e && <ArchivedBanner kind="enterprise" id={e.id} archived={e.archived} what="enterprise" />}
       <SectionTabs tabs={tabs} current={section} onChange={setSection} />
       <div className={`record-body${section.endsWith("trunks") ? " fill" : ""}`}>
@@ -303,6 +323,7 @@ export function EnterprisePage() {
             }
           />
         )}
+        {e && section === "rules" && <EnterpriseRulesTab enterprise={e} {...props("rules")} />}
         {e && section === "account-managers" && <AccountManagersTab enterprise={e} {...props("account-managers")} />}
         {e && section === "history" && (
           <div className="card">

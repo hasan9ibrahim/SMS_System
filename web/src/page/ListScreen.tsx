@@ -25,6 +25,7 @@ import { HistoryDrawer, useUndoLast, useUndoShortcut, type HistoryScope } from "
 import type { PageDef } from "../nav/registry";
 import { usePageStatus, useTab, useTabNavigate } from "../shell/tabContext";
 import { Icon, type IconName } from "../ui/Icon";
+import { confirmDialog } from "../ui/feedback";
 import { Button, Menu, Popover, type MenuItem } from "../ui/primitives";
 import { PageHeader } from "./PageHeader";
 
@@ -41,7 +42,7 @@ export interface ListScreenProps<Row extends { id: number }> {
   title?: string;
   columns?: Partial<Record<string, ColumnOverride<Row>>>;
   trailing?: { header: string; width: number; render: (row: Row) => ReactNode };
-  /** A "⋯" menu at the end of each row: act on a record without opening it (team trial round 1). */
+  /** Actions on one record, shown in the header's record bar (team trial round 1; no row "⋯" menu since round 4). */
   rowActions?: (row: Row) => (MenuItem | "separator")[];
   detail?: (row: Row) => DetailContent;
   onOpen?: (row: Row, e: MouseEvent | KeyboardEvent) => void;
@@ -50,6 +51,8 @@ export interface ListScreenProps<Row extends { id: number }> {
    * highlighted row until closed (Route rules, team trial round 3). Default: a click opens it.
    */
   detailOpensOn?: "click" | "double";
+  /** Taller grid rows for two-line cells (team trial round 4). */
+  rowHeight?: number;
   /** Records this page edits; enables the header Undo and History buttons (§13.10). */
   historyScope?: HistoryScope | null;
   primary?: { label: string; icon?: IconName; onClick?: () => void; disabled?: boolean; title?: string };
@@ -73,7 +76,7 @@ export interface ListScreenProps<Row extends { id: number }> {
   noRecordBar?: boolean;
   /** Filters the page's toolbar shows itself, so they get no chip (e.g. EDR search's period). */
   toolbarFields?: string[];
-  /** Selection summary and the Bulk edit menu (§13.11). */
+  /** Selection summary, and the actions the header's record bar offers while several rows are selected (§13.11). */
   selection?: {
     summary?: (rows: Row[], ids: ReadonlySet<number>) => ReactNode;
     /** Actions on the selection; `rows` are the selected rows loaded on screen. */
@@ -94,7 +97,7 @@ export interface ListScreenProps<Row extends { id: number }> {
   enabled?: boolean;
   /** What to choose or press first, shown while `enabled` is false. */
   idleMessage?: ReactNode;
-  /** Hides selection and Bulk edit (e.g. reports). */
+  /** Hides selection (e.g. reports). */
   noSelection?: boolean;
 }
 
@@ -305,58 +308,64 @@ function DetailPanel({
   );
 }
 
-/** The "⋯" button of a row; the items are built when it opens. */
-function RowMenu({ items }: { items: () => (MenuItem | "separator")[] }) {
-  const [open, setOpen] = useState(false);
-  const anchor = useRef<HTMLButtonElement>(null);
-  return (
-    <>
-      <button
-        ref={anchor}
-        type="button"
-        className="icon-btn"
-        aria-label="Actions"
-        title="Actions"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-        onDoubleClick={(e) => e.stopPropagation()}
-      >
-        <Icon name="more" size={15} />
-      </button>
-      <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} align="end">
-        {open && <Menu items={items()} onClose={() => setOpen(false)} />}
-      </Popover>
-    </>
-  );
+/** A selection action without its own dialog (no "…") asks first, naming how many rows it applies to. */
+function confirmFirst(it: MenuItem, count: number): MenuItem {
+  if (/…$/.test(it.label)) return it;
+  return {
+    ...it,
+    onSelect: async () => {
+      const ok = await confirmDialog({
+        title: it.label,
+        message: `${it.label} for the ${count.toLocaleString("en-US")} selected rows?`,
+        ok: it.label,
+        ...(it.danger ? { danger: true } : {}),
+      });
+      if (ok) it.onSelect();
+    },
+  };
 }
 
 /**
  * Record actions next to New (team trial round 1): Clone, Delete and the page's main action in sight,
- * the rest under More; greyed while nothing (or more than one row) is selected or when the action does
- * not apply. A double-click or Enter on a row opens it; the "⋯" row menu offers the same actions.
+ * the rest under More; greyed while nothing is selected or when the action does not apply. A double-click
+ * or Enter on a row opens it. With several rows selected the bar offers the page's actions on the selection
+ * instead (team trial round 4, replacing Bulk edit); one without its own dialog asks first, naming the count.
  */
 function RecordActionBar<Row extends { id: number }>({
   target,
   multi,
   template,
   rowActions,
+  bulk,
+  count,
 }: {
   target: Row | null;
   multi: boolean;
   template: Row | null;
   rowActions?: (row: Row) => (MenuItem | "separator")[];
+  /** The page's actions on the selected rows (several selected). */
+  bulk?: (MenuItem | "separator")[];
+  count: number;
 }) {
+  const onSelection = multi && !!bulk;
   // Labels come from the selected row, or from any loaded row while nothing is selected.
-  const items = (rowActions && (target ?? template) ? rowActions((target ?? template)!) : [])
+  const items = (
+    onSelection
+      ? bulk.map((it) => (it === "separator" ? it : confirmFirst(it, count)))
+      : rowActions && (target ?? template)
+        ? rowActions((target ?? template)!)
+        : []
+  )
     .filter((it): it is MenuItem => it !== "separator")
     // Opening is a double-click or Enter on the row, so Open is left out of the bar.
-    .filter((it) => !/^open\b/i.test(it.label));
+    .filter((it) => !/^open\b/i.test(it.label))
+    // One-record actions (Clone) have no place on a selection.
+    .filter((it) => !onSelection || !/^(clone|duplicate)\b/i.test(it.label));
+  const enabled = onSelection || !!target;
   const moreRef = useRef<HTMLButtonElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   if (!items.length) return null;
-  const why = multi ? "Select one row (Bulk edit acts on several)" : "Select a row first";
+  const why = multi ? "Select one row for this action" : "Select a row first";
   // In sight: Clone, Delete and the page's main action (marked `main`, else the first other one);
   // everything else goes under More (team trial round 1).
   const isClone = (it: MenuItem) => /^(clone|duplicate)\b/i.test(it.label);
@@ -372,16 +381,21 @@ function RecordActionBar<Row extends { id: number }>({
       key={it.label}
       type="button"
       className={`ra-btn${it.danger ? " danger" : ""}`}
-      disabled={!target || it.disabled}
-      title={!target ? why : (it.hint ?? it.label)}
-      onClick={() => target && !it.disabled && it.onSelect()}
+      disabled={!enabled || it.disabled}
+      title={!enabled ? why : (it.hint ?? it.label)}
+      onClick={() => enabled && !it.disabled && it.onSelect()}
     >
       {it.icon && <Icon name={it.icon} size={13} />}
       <span>{it.label.replace(/…$/, "")}</span>
     </button>
   );
   return (
-    <span className="record-actions" role="group" aria-label="Actions on the selected row">
+    <span
+      className={`record-actions${onSelection ? " on-selection" : ""}`}
+      role="group"
+      aria-label={onSelection ? `Actions on the ${count} selected rows` : "Actions on the selected row"}
+    >
+      {onSelection && <span className="ra-count">{count.toLocaleString("en-US")} selected</span>}
       {clone.map(button)}
       {del.map(button)}
       {main.map(button)}
@@ -391,15 +405,15 @@ function RecordActionBar<Row extends { id: number }>({
             ref={moreRef}
             type="button"
             className="ra-btn"
-            disabled={!target}
-            title={target ? "More actions" : why}
+            disabled={!enabled}
+            title={enabled ? "More actions" : why}
             aria-haspopup="menu"
             onClick={() => setMoreOpen((o) => !o)}
           >
             <span>More</span>
             <Icon name="chevronDown" size={12} />
           </button>
-          <Popover anchor={moreRef} open={moreOpen && !!target} onClose={() => setMoreOpen(false)} align="end">
+          <Popover anchor={moreRef} open={moreOpen && enabled} onClose={() => setMoreOpen(false)} align="end">
             <Menu items={rest} onClose={() => setMoreOpen(false)} />
           </Popover>
         </>
@@ -440,21 +454,13 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     idleMessage,
     noSelection,
     detailOpensOn = "click",
+    rowHeight,
   } = props;
   const bodyRef = useRef<HTMLDivElement>(null);
   const [detailWidth, setDetailWidth] = useDetailWidth(list);
-  const trailing = rowActions
-    ? {
-        header: trailingProp?.header ?? "",
-        width: (trailingProp?.width ?? 0) + 40,
-        render: (row: Row) => (
-          <span className="row-actions">
-            {trailingProp?.render(row)}
-            <RowMenu items={() => rowActions(row)} />
-          </span>
-        ),
-      }
-    : trailingProp;
+  // No "⋯" menu at the end of each row any more (team trial round 4): the record actions in the header act on the
+  // highlighted row or on the selected rows.
+  const trailing = trailingProp;
   const { active } = useTab();
   const fields = useListFields(list);
   const [state, setState] = useGridUrlState(initialState);
@@ -466,8 +472,6 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   const ownSection = useState<string | null>(null);
   const [section, setSection] = props.section ?? ownSection;
   const [rows, setRows] = useState<Row[]>([]);
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const bulkRef = useRef<HTMLButtonElement>(null);
   const [meta, setMeta] = useState<GridMeta>({
     total: null,
     loaded: 0,
@@ -511,7 +515,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     if (fresh && fresh !== activeRow) setActiveRow(fresh);
   }, [rows, selectId]); // eslint-disable-line react-hooks/exhaustive-deps
   // A new filter or search changes the rows: drop a selection the user can no longer see,
-  // so Bulk edit never acts on hidden rows.
+  // so the selection actions never act on hidden rows.
   const filterKey = JSON.stringify([state.columns, state.builder, state.search]);
   useEffect(() => setSelected(new Set()), [filterKey]);
   const onActive = useCallback((row: Row | null) => setActiveRow(row), []);
@@ -615,7 +619,17 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 }
                 multi={selected.size > 1}
                 template={rows[0] ?? null}
+                count={selected.size}
                 {...(rowActions ? { rowActions } : {})}
+                {...(selection?.bulk && selected.size > 1
+                  ? {
+                      bulk: selection.bulk(
+                        [...selected],
+                        () => setSelected(new Set()),
+                        rows.filter((r) => selected.has(r.id)),
+                      ),
+                    }
+                  : {})}
               />
             )}
           </>
@@ -663,7 +677,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               Clear all
             </button>
           )}
-          {/* Views, selection, Bulk edit and Columns at the end of the filter row (team trial round 3). */}
+          {/* Views, selection and Columns at the end of the filter row (team trial round 3). */}
           <span className="fb-spacer" />
           {/* Saved views sit with Columns (compact layout, team trial round 2). */}
           {isFiltered(state) && !state.viewId && <SaveViewButton list={list} state={state} onSaved={setState} />}
@@ -678,39 +692,6 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               </button>
             </>
           )}
-          {noSelection ? null : selection?.bulk ? (
-            <>
-              <button
-                ref={bulkRef}
-                type="button"
-                className="btn btn-default btn-sm"
-                disabled={selected.size === 0}
-                aria-haspopup="menu"
-                onClick={() => setBulkOpen((v) => !v)}
-              >
-                Bulk edit <Icon name="chevronDown" size={12} />
-              </button>
-              <Popover anchor={bulkRef} open={bulkOpen} onClose={() => setBulkOpen(false)} align="end">
-                <Menu
-                  items={selection.bulk(
-                    [...selected],
-                    () => setSelected(new Set()),
-                    rows.filter((r) => selected.has(r.id)),
-                  )}
-                  onClose={() => setBulkOpen(false)}
-                />
-              </Popover>
-            </>
-          ) : (
-            <Button
-              small
-              icon="layers"
-              disabled={selected.size === 0}
-              title="Bulk edit opens the bulk workspace (§13.11, build step 5)"
-            >
-              Bulk edit
-            </Button>
-          )}
           <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
         </div>
       </div>
@@ -720,6 +701,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
           {fields.data ? (
             <DataGrid<Row>
               list={list}
+              {...(rowHeight ? { rowHeight } : {})}
               fields={fields.data}
               state={state}
               onStateChange={setState}

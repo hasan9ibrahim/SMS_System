@@ -76,6 +76,7 @@ const SPECS: FieldSpec[] = [
   { api: "fax", col: "fax" },
   { api: "registrationNumber", col: "registration_number" },
   { api: "vatNumber", col: "vat_number" },
+  { api: "accountNumber", col: "account_number" },
   { api: "billingTimezone", col: "billing_timezone" },
   { api: "rateNoticeDays", col: "rate_notice_days" },
   { api: "rateNoticeDaysDecrease", col: "rate_notice_days_decrease" },
@@ -187,7 +188,9 @@ async function checkInput(db: Db, input: EnterpriseInput, id: number | null): Pr
     input.businessCompanyId,
   ]);
   if (!bc[0]) errors.push({ path: "/businessCompanyId", message: "unknown business company" });
-  if (input.address.countryId != null) {
+  // The country is required (team trial round 4).
+  if (input.address.countryId == null) errors.push({ path: "/address/countryId", message: "required" });
+  else {
     const { rows } = await db.query("SELECT 1 FROM countries WHERE id = $1", [input.address.countryId]);
     if (!rows[0]) errors.push({ path: "/address/countryId", message: "unknown country" });
   }
@@ -239,6 +242,8 @@ export function getEnterprise(request: FastifyRequest, reply: FastifyReply) {
 
 export function createEnterprise(request: FastifyRequest, reply: FastifyReply) {
   const input = request.body as EnterpriseInput;
+  // A vendor has no client account number (team trial round 4).
+  if (input.type === "vendor") input.accountNumber = null;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const errors = await checkInput(pool, input, null);
@@ -273,6 +278,7 @@ export function createEnterprise(request: FastifyRequest, reply: FastifyReply) {
 export function updateEnterprise(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   const input = request.body as EnterpriseInput;
+  if (input.type === "vendor") input.accountNumber = null;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const before = await loadEnterprise(pool, id);
@@ -280,6 +286,10 @@ export function updateEnterprise(request: FastifyRequest, reply: FastifyReply) {
     if (await refuseMasked(reply, id)) return reply;
     if (before.archived) return sendProblem(reply, 400, "This enterprise is archived; restore it before editing");
     const errors = await checkInput(pool, input, id);
+    if (input.type !== before.type && input.type !== "reciprocal")
+      // Team trial round 4: a customer or a vendor can only become Bilateral, never the other side (and a
+      // Bilateral partner stays Bilateral).
+      errors.push({ path: "/type", message: "a customer or a vendor can only be changed to Bilateral" });
     if (input.type !== before.type) {
       // A side that has trunks can't disappear (§5.3: trunks need their billing side).
       const keep = sidesOf(input.type);

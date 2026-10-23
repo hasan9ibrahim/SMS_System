@@ -576,3 +576,783 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* Trunk and enterprise Rules (team trial round 4): translation and HLR rules side by side, rows dragged to reorder. */
+.rules-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.rules-split.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 1200px) {
+  .rules-split.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.rules-split > .fsection {
+  margin: 0;
+  min-width: 0;
+}
+.rules-order td {
+  vertical-align: top;
+}
+.rules-order .drag-handle {
+  width: 18px;
+  padding-right: 0;
+  color: var(--color-text-secondary);
+  cursor: grab;
+  user-select: none;
+}
+.rules-order tr[draggable="true"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+.rules-order tr.dragging {
+  opacity: 0.45;
+}
+.rules-order tr.drop-target > td {
+  box-shadow: inset 0 2px 0 var(--color-accent);
+}
+.rule-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.rule-detail {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.rules-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.rules-top p {
+  margin: 0;
+}
+
+/* ---------- record redesign (team trial round 4): header, cards, choices, save bar ---------- */
+.record-header .crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  margin-bottom: 2px;
+}
+.crumbs .crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.crumbs a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+.crumbs a:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.crumbs [aria-current] {
+  color: var(--color-text);
+  font-weight: 500;
+}
+.record-header .page-header-top {
+  align-items: center;
+}
+.record-header h1 {
+  font-size: 22px;
+}
+.record-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+.record-chips .meta {
+  color: var(--color-text-secondary);
+  margin-left: 2px;
+}
+.chip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  background: color-mix(in srgb, var(--color-text) 7%, var(--color-panel));
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.chip-tag.amber {
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text));
+}
+.chip-tag.violet {
+  background: color-mix(in srgb, #7c3aed 13%, var(--color-panel));
+  color: color-mix(in srgb, #7c3aed 75%, var(--color-text));
+}
+.chip-tag.blue {
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-accent) 85%, var(--color-text));
+}
+.chip-tag.green {
+  background: color-mix(in srgb, var(--color-good) 13%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+}
+.chip-tag .dot-mini {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.avatar-tile {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.avatar-tile.size-lg {
+  width: 46px;
+  height: 46px;
+  font-size: 16px;
+}
+.avatar-tile.size-md {
+  width: 38px;
+  height: 38px;
+  font-size: 14px;
+  border-radius: 50%;
+}
+.avatar-tile.size-sm {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+  border-radius: 50%;
+}
+.avatar-tile.hue-0 {
+  background: color-mix(in srgb, #f59e0b 20%, var(--color-panel));
+  color: color-mix(in srgb, #b45309 85%, var(--color-text));
+}
+.avatar-tile.hue-1 {
+  background: color-mix(in srgb, #8b5cf6 18%, var(--color-panel));
+  color: color-mix(in srgb, #6d28d9 85%, var(--color-text));
+}
+.avatar-tile.hue-2 {
+  background: color-mix(in srgb, #3b82f6 18%, var(--color-panel));
+  color: color-mix(in srgb, #1d4ed8 85%, var(--color-text));
+}
+.avatar-tile.hue-3 {
+  background: color-mix(in srgb, #10b981 18%, var(--color-panel));
+  color: color-mix(in srgb, #047857 85%, var(--color-text));
+}
+.avatar-tile.hue-4 {
+  background: color-mix(in srgb, #ec4899 16%, var(--color-panel));
+  color: color-mix(in srgb, #be185d 85%, var(--color-text));
+}
+.avatar-tile.hue-5 {
+  background: color-mix(in srgb, #14b8a6 18%, var(--color-panel));
+  color: color-mix(in srgb, #0f766e 85%, var(--color-text));
+}
+
+/* Sections: title with a one-line purpose under it. */
+.fsection {
+  border-radius: var(--radius-lg);
+  padding: 16px 20px 12px;
+  box-shadow: var(--card-shadow);
+}
+.fsection > header {
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.fsection-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fsection h2 {
+  font-size: 15px;
+}
+.fsection-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+.fgrid {
+  gap: 6px 16px;
+}
+.fsub {
+  margin: 10px 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.fgrid > .fsub:first-child {
+  margin-top: 0;
+}
+
+/* Choices: joined buttons and radio cards. */
+.choice-seg {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--color-panel));
+}
+.choice-seg label {
+  padding: 4px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.choice-seg label.on {
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px color-mix(in srgb, #101828 12%, transparent);
+}
+.choice-seg label:has(input:focus-visible),
+.choice-cards label:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.choice-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* Compact (team trial round 4): as tall as an input. */
+.choice-cards label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  cursor: pointer;
+  font-size: 13px;
+}
+.choice-cards label.on {
+  border-color: color-mix(in srgb, var(--color-warning) 70%, var(--color-border));
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-panel));
+  font-weight: 600;
+}
+.choice-cards input {
+  margin: 0;
+}
+.choice-seg label.disabled,
+.choice-cards label.disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.status-card {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  cursor: pointer;
+  font-size: 13px;
+}
+.status-card.on {
+  border-color: color-mix(in srgb, var(--color-good) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-good) 9%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-good) 80%, var(--color-text));
+  font-weight: 600;
+}
+.toggle-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  cursor: pointer;
+}
+.toggle-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.toggle-card.on {
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+}
+.toggle-card input {
+  width: 18px;
+  height: 18px;
+}
+
+/* Rate notice periods as tinted tiles: increase amber, decrease green, new destination blue. */
+.notice-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--color-border);
+}
+.notice-tile-label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.notice-tile .input-suffix input {
+  max-width: 96px;
+}
+.notice-tile.up {
+  background: color-mix(in srgb, var(--color-warning) 7%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--color-warning) 30%, var(--color-border));
+}
+.notice-tile.up .notice-tile-label {
+  color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+}
+.notice-tile.down {
+  background: color-mix(in srgb, var(--color-good) 7%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--color-good) 30%, var(--color-border));
+}
+.notice-tile.down .notice-tile-label {
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+}
+.notice-tile.new {
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+}
+.notice-tile.new .notice-tile-label {
+  color: var(--color-accent);
+}
+/* Credit alert levels: a bar with the three markers, then the three inputs. */
+.credit-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
+}
+.credit-levels-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.credit-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-accent) 25%, var(--color-panel)) 0 50%,
+    color-mix(in srgb, var(--color-warning) 30%, var(--color-panel)) 50% 80%,
+    color-mix(in srgb, var(--color-error) 35%, var(--color-panel)) 80%
+  );
+}
+.credit-bar span {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+.cb-notice {
+  background: var(--color-accent);
+}
+.cb-warning {
+  background: var(--color-warning);
+}
+.cb-critical {
+  background: var(--color-error);
+}
+.credit-level.notice .ff-label {
+  color: var(--color-accent);
+}
+.credit-level.warning .ff-label {
+  color: var(--color-warning);
+}
+.credit-level.critical .ff-label {
+  color: var(--color-error);
+}
+/* Contacts: one card per role with a coloured role tag; emails one per line with "+ Add email" under them. */
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1200px) {
+  .contact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.contact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+.role-tag {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.role-commercial .role-tag {
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-panel));
+  color: var(--color-accent);
+}
+.role-technical .role-tag {
+  background: color-mix(in srgb, var(--color-good) 13%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+}
+.role-rates .role-tag {
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-panel));
+  color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+}
+.role-finance .role-tag {
+  background: color-mix(in srgb, #7c3aed 13%, var(--color-panel));
+  color: color-mix(in srgb, #7c3aed 80%, var(--color-text));
+}
+.contact-card .tag-input {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.contact-card .tag-input .chip {
+  justify-content: space-between;
+  max-width: none;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-panel));
+  overflow-wrap: anywhere;
+}
+.contact-card .tag-input input {
+  width: 100%;
+  min-height: 32px;
+  border: var(--border-width) dashed var(--color-border);
+  border-radius: 8px;
+  text-align: center;
+}
+.contact-card .tag-input input:focus {
+  text-align: left;
+  border-style: solid;
+}
+/* The record picker reads as the title in a record header. */
+.record-header .record-picker {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.record-header .record-picker > button {
+  height: 34px;
+  padding: 0 6px 0 2px;
+  border-color: transparent;
+  background: none;
+  font-size: 22px;
+  font-weight: 700;
+}
+.record-header .record-picker > button:hover {
+  border-color: var(--color-border);
+  background: var(--color-panel);
+}
+.plain-fieldset.form-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+/* Billing summary cards (team trial round 4). */
+.bill-summary {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.bill-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  box-shadow: var(--card-shadow);
+}
+.bill-card-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.bill-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.bill-card-value small {
+  font-size: 13px;
+  font-weight: 600;
+}
+.bill-card-value.small-value {
+  font-size: 18px;
+}
+.bill-card.balance.credit {
+  border-color: color-mix(in srgb, var(--color-good) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-good) 7%, var(--color-panel));
+}
+.bill-card.balance.credit .bill-card-value,
+.bill-card.balance.credit .bill-card-label {
+  color: color-mix(in srgb, var(--color-good) 80%, var(--color-text));
+}
+.bill-card.balance.owed {
+  border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-error) 6%, var(--color-panel));
+}
+.bill-card.balance.owed .bill-card-value {
+  color: var(--color-error);
+}
+/* A tinted group inside a section (e.g. the beneficiary's account). */
+.sub-panel {
+  margin-top: 8px;
+  padding: 10px 14px 6px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 3.5%, var(--color-panel));
+}
+.fgrid.cols-1 > .fgrid {
+  gap: 6px 16px;
+}
+/* Account managers (team trial round 4): current AM card and a timeline of assignments. */
+.am-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .am-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.am-current {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.am-current .fsub {
+  margin: 0;
+}
+.am-current p {
+  margin: 0;
+}
+.am-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.am-person .strong {
+  font-size: 15px;
+}
+.am-handover {
+  justify-content: center;
+  width: 100%;
+}
+.am-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.am-timeline li {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding: 0 0 18px;
+}
+.am-timeline li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border);
+}
+.am-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-text-secondary) 45%, var(--color-panel));
+}
+.am-timeline li.current .am-dot {
+  background: var(--color-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+.am-timeline li.scheduled .am-dot {
+  background: var(--color-warning);
+}
+.am-entry {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.am-entry .chip-tag {
+  margin-left: 8px;
+}
+.am-when {
+  white-space: nowrap;
+}
+/* Trunk: enterprise, ID and buy table as small cards; the bind drawn as us → far side. */
+.info-cards {
+  min-width: 0;
+}
+.info-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.info-card-grid > .ff {
+  padding: 12px 16px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  box-shadow: var(--card-shadow);
+}
+.info-card-grid .ff-label {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.info-card-grid .ff-readonly {
+  font-weight: 650;
+}
+.bind-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 3.5%, var(--color-panel));
+}
+.bind-line code {
+  padding: 3px 8px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-panel);
+  font-size: 12.5px;
+}
+.bind-arrow {
+  width: 48px;
+  height: 2px;
+  background: var(--color-accent);
+  position: relative;
+}
+.bind-arrow::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  border: 5px solid transparent;
+  border-left: 7px solid var(--color-accent);
+  border-right: 0;
+}
+.bill-card-link {
+  align-self: flex-start;
+  margin-top: auto;
+}
+/* Enterprise detail panel as a card (team trial round 4). */
+.ent-card-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ent-kv {
+  grid-template-columns: max-content 1fr;
+}
+.ent-kv dd {
+  font-weight: 600;
+}
+.ent-aside .ent-detail-h {
+  margin: 12px 0 6px;
+}
+.ent-aside .kv dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.copy-emails {
+  order: 99;
+  margin-left: 2px;
+}
+/* Compact top cards (team trial round 4): summary cards stay short so the page's main content gets the room. */
+.bill-summary,
+.info-card-grid {
+  gap: 10px;
+}
+.bill-summary {
+  margin-bottom: 12px;
+}
+.bill-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 0;
+  padding: 8px 14px;
+}
+.bill-card-label {
+  flex-basis: 100%;
+}
+.bill-card-value {
+  font-size: 19px;
+}
+.bill-card-value.small-value {
+  font-size: 15px;
+}
+.bill-card-link {
+  margin-top: 0;
+  margin-left: auto;
+}
+.info-card-grid > .ff {
+  padding: 8px 14px;
+  gap: 2px;
+}
+.info-card-grid .ff-hint {
+  display: none;
+}

@@ -515,7 +515,7 @@ export const listFields: Record<ListId, ListFields> = {
       }),
       field({ field: "ruleName", label: "Rule", type: "text", defaultOperator: "like" }),
       field({ field: "ruleId", label: "Rule ID", type: "integer", defaultOperator: "eq", hidden: true }),
-      field({ field: "rulePriority", label: "Pri", type: "integer", defaultOperator: "between", hidden: true }),
+      field({ field: "rulePriority", label: "Priority", type: "integer", defaultOperator: "between", hidden: true }),
       field({
         field: "routeType",
         label: "Type",
@@ -1014,6 +1014,8 @@ export const listFields: Record<ListId, ListFields> = {
     fields: [
       field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq", hidden: true }),
       field({ field: "invoiceNumber", label: "Invoice No", type: "text", defaultOperator: "like" }),
+      // The client's account number with us, a header of the invoice (team trial round 4).
+      field({ field: "accountNumber", label: "Account No", type: "text", defaultOperator: "like" }),
       field({ field: "enterprise", label: "Enterprise Name", type: "text", defaultOperator: "like" }),
       field({ field: "enterpriseId", label: "Enterprise ID", type: "integer", defaultOperator: "eq", hidden: true }),
       field({
@@ -2521,7 +2523,7 @@ export const listFields: Record<ListId, ListFields> = {
     fields: [
       field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
       field({ field: "name", label: "Rule", type: "text", defaultOperator: "like" }),
-      field({ field: "priority", label: "Pri", type: "integer", defaultOperator: "between" }),
+      field({ field: "priority", label: "Priority", type: "integer", defaultOperator: "between" }),
       field({
         field: "routeType",
         label: "Type",

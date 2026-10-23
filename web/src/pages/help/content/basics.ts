@@ -277,7 +277,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Under the header, list pages show a filter card: the quick search box (with a pill for every column filter), the page's own controls, **Show deleted** where the list has archived records and **Clear all**; on the right **Save as view**, **Views**, the selection summary, **Bulk edit** and **Columns**. The grid follows straight after; its footer gives the row count, for example **Showing 400 of 12,480 records · scroll for more**. See [[grids-and-filters]].",
+            text: "Under the header, list pages show a filter card: the quick search box (with a pill for every column filter), the page's own controls, **Show deleted** where the list has archived records and **Clear all**; on the right **Save as view**, **Views**, the selection summary and **Columns**. The grid follows straight after; its footer gives the row count, for example **Showing 400 of 12,480 records · scroll for more**. See [[grids-and-filters]].",
           },
         ],
       },
@@ -630,7 +630,7 @@ export const topics: HelpTopic[] = [
               "Click a row to make it the active row and show its details on the right. Double-click (or middle-click) a row to open the full record; **Ctrl-click** opens it in a new tab where the page supports it.",
               "Tick the checkbox at the start of a row to select it. **Shift**-tick selects every row between the last one you ticked and this one.",
               "The checkbox in the header selects all loaded rows. When more rows match, a line offers **Select all … matching**, which loads and selects every matching row, up to 5,000.",
-              "The selection summary appears on the right of the filter card, next to **Bulk edit**. **Bulk edit** acts on the selected rows (for example change status or delete several at once).",
+              "The selection summary appears on the right of the filter card. With several rows ticked, the actions in the header (Delete, More…) act on all of them; an action without its own window asks first, naming how many rows.",
               "Changing a filter or the quick search clears the selection, so a bulk action never touches rows you can no longer see.",
             ],
           },
@@ -1034,7 +1034,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "On lists that allow it, select rows and use **Bulk edit › Delete**. The window checks each record and shows **can be deleted** or **blocked: …**. Blocked records are skipped unless an administrator ticks **Override the blockers** and gives a reason. **Delete N** deletes the rest. Each delete is its own change, so each can be undone from History.",
+            text: "On lists that allow it, select rows and use the header's **Delete**. The window checks each record and shows **can be deleted** or **blocked: …**. Blocked records are skipped unless an administrator ticks **Override the blockers** and gives a reason. **Delete N** deletes the rest. Each delete is its own change, so each can be undone from History.",
           },
         ],
       },

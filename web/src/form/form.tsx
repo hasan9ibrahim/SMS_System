@@ -73,23 +73,122 @@ export function Section({
   columns = 3,
   actions,
   note,
+  subtitle,
+  id,
 }: {
   title: string;
   children: ReactNode;
   columns?: 1 | 2 | 3 | 4;
   actions?: ReactNode;
   note?: ReactNode;
+  /** One line under the title saying what the section is for (record redesign, team trial round 4). */
+  subtitle?: ReactNode;
+  /** Anchor for the "On this page" list. */
+  id?: string;
 }) {
   return (
-    <section className="fsection">
+    <section className="fsection" id={id}>
       <header>
-        <h2>{title}</h2>
-        {note && <span className="muted small">{note}</span>}
+        <div className="fsection-title">
+          <h2>{title}</h2>
+          {(subtitle ?? note) && <p className="fsection-sub">{subtitle ?? note}</p>}
+        </div>
         <span className="fb-spacer" />
         {actions}
       </header>
       <div className={`fgrid cols-${columns}`}>{children}</div>
     </section>
+  );
+}
+
+/** A small capitals heading across the grid, grouping fields inside a section (e.g. Endpoint, Credentials). */
+export function SubHead({ children }: { children: ReactNode }) {
+  return <h3 className="fsub wide">{children}</h3>;
+}
+
+/**
+ * A short list of choices (record redesign, team trial round 4): `segmented` = joined buttons (Tier 1 / 2 / 3,
+ * SMPP / HTTP), `cards` = radio cards (Customer / Vendor / Bilateral).
+ */
+export function ChoiceField<T>({
+  form,
+  path,
+  label,
+  required,
+  hint,
+  disabled,
+  wide,
+  options,
+  variant = "segmented",
+}: BaseProps<T> & { options: Option[]; variant?: "segmented" | "cards" }) {
+  const v = form.get(path);
+  return (
+    <FormField label={label} required={required} error={form.error(path)} hint={hint} wide={wide}>
+      <div className={variant === "cards" ? "choice-cards" : "choice-seg"} role="radiogroup" aria-label={label}>
+        {options.map((o) => {
+          const on = v === o.value;
+          const off = disabled || o.disabled;
+          return (
+            <label key={o.value} className={`${on ? "on" : ""}${off ? " disabled" : ""}`} title={o.hint}>
+              <input
+                type="radio"
+                checked={on}
+                disabled={off}
+                onChange={() => form.set(path, o.value)}
+                className={variant === "cards" ? "" : "sr-only"}
+              />
+              {o.label}
+            </label>
+          );
+        })}
+      </div>
+    </FormField>
+  );
+}
+
+/** Active / inactive as a checkbox card that says what it means (record redesign, team trial round 4). */
+export function StatusField<T>({
+  form,
+  path,
+  label = "Status",
+  required,
+  disabled,
+  onText,
+  offText = "Inactive",
+}: Omit<BaseProps<T>, "label"> & { label?: string; onText: string; offText?: string }) {
+  const on = form.get(path) === "active";
+  return (
+    <FormField label={label} required={required} error={form.error(path)}>
+      <label className={`status-card${on ? " on" : ""}`}>
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={disabled}
+          onChange={(e) => form.set(path, e.target.checked ? "active" : "inactive")}
+        />
+        <span>{on ? onText : offText}</span>
+      </label>
+    </FormField>
+  );
+}
+
+/** A yes / no setting as a card with its explanation and the box on the right (Alerts, team trial round 4). */
+export function ToggleCard<T>({
+  form,
+  path,
+  label,
+  hint,
+  disabled,
+}: Omit<BaseProps<T>, "required" | "hint"> & { hint: string }) {
+  const on = form.get(path) === true;
+  return (
+    <label className={`toggle-card${on ? " on" : ""}`}>
+      <span className="toggle-card-text">
+        <span className="strong">{label}</span>
+        <span className="muted small">{hint}</span>
+      </span>
+      <input type="checkbox" checked={on} disabled={disabled} onChange={(e) => form.set(path, e.target.checked)} />
+    </label>
   );
 }
 
@@ -251,6 +350,9 @@ export function NumberField<T>({
 export interface Option {
   value: string | number;
   label: string;
+  /** Not available here (ChoiceField greys it out, with `hint` as its tooltip). */
+  disabled?: boolean;
+  hint?: string;
 }
 
 export function SelectField<T>({
@@ -321,7 +423,12 @@ export function ListField<T>({
   disabled,
   wide,
   placeholder,
-}: BaseProps<T> & { placeholder?: string }) {
+  keepPlaceholder,
+}: BaseProps<T> & {
+  placeholder?: string;
+  /** Show the placeholder after the first value too (e.g. "+ Add email" under the list). */
+  keepPlaceholder?: boolean;
+}) {
   const id = useId();
   const list = ((form.get(path) as string[] | null) ?? []).slice();
   const [draft, setDraft] = useState("");
@@ -359,7 +466,7 @@ export function ListField<T>({
           <input
             id={id}
             value={draft}
-            placeholder={list.length ? "" : placeholder}
+            placeholder={list.length && !keepPlaceholder ? "" : placeholder}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === ",") {

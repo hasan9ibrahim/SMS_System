@@ -662,6 +662,33 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/enterprises/{id}/rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Rules tab of an enterprise (team trial round 4, §13.2)
+     * @description The translation rules (and for customer trunks the HLR rules) that run on the enterprise's trunks of one
+     *     kind, merged into one order (the trunks' own orders averaged), with how many of its trunks each reaches.
+     */
+    get: operations["getEnterpriseRules"];
+    /**
+     * Set the rule order on every trunk of one kind (team trial round 4, §13.2)
+     * @description Each trunk of the kind gets the order sent for the rules that reach it (rules not listed keep their place
+     *     after them); on / off, continue and direct links stay as they are. One change over the trunks, undone as
+     *     one (§13.10). A trunk can still change its own order afterwards.
+     */
+    put: operations["updateEnterpriseRules"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/vendor-trunks/query": {
     parameters: {
       query?: never;
@@ -9759,6 +9786,29 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/route-rules/vendor-costs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Route rules: what each picked vendor charges for the rule's destinations (team trial round 4)
+     * @description For each vendor trunk, the current rates (generic lines, not blocked, valid now) of its buy rate table over
+     *     the destinations the rule matches (same Destination fields as the rule, so an unsaved draft works too).
+     *     One figure when every destination costs the same, else the lowest and highest. In the table's currency and
+     *     in EUR, the base currency, at the latest exchange rates (§6.3, §13.12).
+     */
+    post: operations["routeVendorCosts"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/simulate": {
     parameters: {
       query?: never;
@@ -10445,6 +10495,8 @@ export type components = {
       fax?: string | null;
       registrationNumber?: string | null;
       vatNumber?: string | null;
+      /** @description Our account number for this client, optional; customers and bilateral partners only (a vendor's is cleared). Printed in the invoice header (team trial round 4, §7). */
+      accountNumber?: string | null;
       /** @description Day and month totals are cut at midnight in this zone (§13.31). */
       billingTimezone?: string;
       /** @description Notice period for rate increases (§13.14, §13.32). */
@@ -10471,6 +10523,7 @@ export type components = {
       fax?: string | null;
       registrationNumber?: string | null;
       vatNumber?: string | null;
+      accountNumber?: string | null;
       billingTimezone: string;
       rateNoticeDays: number;
       rateNoticeDaysDecrease: number;
@@ -10908,6 +10961,39 @@ export type components = {
     };
     TrunkRulesSaved: {
       record: components["schemas"]["TrunkRules"];
+      change: components["schemas"]["Change"] | null;
+    };
+    EnterpriseRule: {
+      ruleId: components["schemas"]["Id"];
+      name: string;
+      /** @description How the rule reaches the trunks; `trunk` = attached to some of them directly. */
+      source: {
+        /** @enum {string} */
+        type: "trunk" | "enterprise" | "category" | "all";
+        label: string;
+      };
+      ruleActive: boolean;
+      detail: string | null;
+      /** @description How many of the enterprise's trunks of this kind the rule runs on. */
+      trunks: number;
+    };
+    EnterpriseRules: {
+      /** @enum {string} */
+      kind: "customer" | "vendor";
+      trunkCount: number;
+      translation: components["schemas"]["EnterpriseRule"][];
+      /** @description Customer trunks only; empty for vendor trunks. */
+      hlr: components["schemas"]["EnterpriseRule"][];
+    };
+    EnterpriseRulesInput: {
+      /** @enum {string} */
+      kind: "customer" | "vendor";
+      translationRuleIds: components["schemas"]["Id"][];
+      /** @description Customer trunks only. */
+      hlrRuleIds?: components["schemas"]["Id"][];
+    };
+    EnterpriseRulesSaved: {
+      record: components["schemas"]["EnterpriseRules"];
       change: components["schemas"]["Change"] | null;
     };
     RateTableRow: {
@@ -13362,6 +13448,8 @@ export type components = {
     };
     InvoiceRow: {
       id: components["schemas"]["Id"];
+      /** @description The client's account number with us (team trial round 4); optional in the contract for older rows. */
+      accountNumber?: string | null;
       invoiceNumber: string;
       enterpriseId: components["schemas"]["Id"];
       enterprise: string;
@@ -14724,6 +14812,11 @@ export type components = {
       trunkName: string;
       /** @description Remote IPs of the bound sessions (customer) or the vendor's host IPs. */
       ipAddresses: string[];
+      /** @description Each IP with its bound sessions now (team trial round 4): a customer trunk's allowed IPs (0 = allowed, no session) plus any bound from elsewhere; a vendor trunk's host with the switch's binds. */
+      ipSessions?: {
+        ip: string;
+        sessions: number;
+      }[];
       /** @description Bound sessions now. */
       connections: number;
       maxConnections: number;
@@ -17215,6 +17308,26 @@ export type components = {
     TrafficWindow: "15m" | "1h" | "24h" | "7d" | "30d";
     /** @enum {string} */
     CompareOp: ">" | ">=" | "=" | "<=" | "<" | "between";
+    RouteVendorCostRequest: {
+      vendorTrunkIds: components["schemas"]["Id"][];
+      mccmncMode: components["schemas"]["MatchMode"];
+      mccmncs: string[];
+      /** @description A regular expression on the MCCMNC; replaces the list when set (as on the rule). */
+      mccmncPattern?: string | null;
+    };
+    RouteVendorCost: {
+      vendorTrunkId: components["schemas"]["Id"];
+      /** @description The buy rate table's currency; null when the trunk has no table. */
+      currency: string | null;
+      /** @description Lowest rate in `currency`; null when no destination has a rate. Equal to `max` for a flat rate. */
+      min: number | null;
+      max: number | null;
+      /** @description `min` in EUR, 6 decimals. */
+      minEur: number | null;
+      maxEur: number | null;
+      /** @description How many of the rule's destinations the vendor has a rate for. */
+      destinations: number;
+    };
     /**
      * @description All, only the listed ones (inclusive) or all but them (exclusive).
      * @enum {string}
@@ -19629,6 +19742,61 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  getEnterpriseRules: {
+    parameters: {
+      query: {
+        kind: "customer" | "vendor";
+      };
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The merged rule order */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseRules"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  updateEnterpriseRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnterpriseRulesInput"];
+      };
+    };
+    responses: {
+      /** @description The merged order after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnterpriseRulesSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
     };
   };
   queryVendorTrunks: {
@@ -32847,6 +33015,32 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  routeVendorCosts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RouteVendorCostRequest"];
+      };
+    };
+    responses: {
+      /** @description One entry per vendor trunk asked for, in the same order */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteVendorCost"][];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
     };
   };
   simulateRoute: {

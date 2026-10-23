@@ -66,7 +66,7 @@ export const topics: HelpTopic[] = [
               "**Any of (OR)…** in the search card opens the filter builder for conditions on several fields joined with AND or OR. See [[filter-builder]].",
               "**Show deleted** adds deleted (archived) enterprises to the list, greyed out.",
               "**Clear all** removes every filter and the search.",
-              "On the right: **Save as view** keeps the current filters as a named view and **Views** reapplies a saved view; then the selection summary, **Bulk edit** (enterprises have no bulk actions yet) and **Columns** to show or hide columns.",
+              "On the right: **Save as view** keeps the current filters as a named view and **Views** reapplies a saved view; then the selection summary, the header actions and **Columns** to show or hide columns.",
             ],
           },
           {
@@ -120,10 +120,10 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "list",
-            title: "Row menu (⋯)",
+            title: "Actions in the header",
             items: [
-              "**Open**: opens the record in a new tab.",
-              "**Delete…**: starts the safe delete check. Greyed out for an enterprise that is already deleted.",
+              "**Edit**: opens the highlighted enterprise in a new tab (or double-click the row).",
+              "**Delete**: starts the safe delete check. With several rows ticked, it deletes all of them after one confirmation that names how many.",
             ],
           },
         ],
@@ -175,7 +175,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "Open the row menu (⋯) and choose **Delete…**, or click **Delete** in the open record.",
+              "Highlight the row and click **Delete** in the header (or tick several rows), or click **Delete** in the open record.",
               "The dialog checks what depends on the partner: live binds, customer and vendor trunks, route rules using its trunks, unpaid or draft invoices, customer and vendor balances, open disputes, and traffic in the last 30 days.",
               "Items in red block the delete. Settle them first (pay or credit the invoices, bring balances to zero, close disputes).",
               "An enterprise that still has any customer or vendor trunk that is not deleted cannot be deleted or archived, not even with an administrator override. Delete its trunks first.",
@@ -387,6 +387,11 @@ export const topics: HelpTopic[] = [
                 name: "VAT number",
                 what: "Tax / VAT number. Also used to warn about possible duplicate partners.",
                 values: "Optional, up to 100 characters.",
+              },
+              {
+                name: "Account number",
+                what: "Our account number for this client, shown in the header of its invoices and as **Account No** on the Invoices list. Customers and bilateral partners only.",
+                values: "Optional, up to 50 characters.",
               },
               {
                 name: "Billing time zone",
@@ -650,6 +655,23 @@ export const topics: HelpTopic[] = [
         ],
       },
       {
+        id: "rules",
+        title: "Rules tab",
+        blocks: [
+          {
+            kind: "text",
+            text: "The translation rules (and, for customer trunks, the HLR rules) that run on this enterprise's trunks, side by side, in one order. A bilateral partner switches between **Customer trunks** and **Vendor trunks**. **Trunks** says how many of its trunks each rule runs on.",
+          },
+          {
+            kind: "steps",
+            items: [
+              "Drag a rule by its handle (⠿) to its new place, or focus a row and press **Alt+↑** / **Alt+↓**.",
+              "Click **Save order**. Every trunk of that kind gets this order for the rules that reach it, as one change you can undo. A trunk can still change its own order on its Rules tab.",
+            ],
+          },
+        ],
+      },
+      {
         id: "account-managers",
         title: "Account managers tab and Hand over",
         blocks: [
@@ -849,8 +871,10 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "list",
-            title: "Row menu (⋯)",
-            items: ["**Open**", "**Clone…**", "**Delete…**"],
+            title: "Actions in the header",
+            items: [
+              "**Edit**, **Clone** and **Delete** act on the highlighted trunk. With several rows ticked, **Delete** acts on all of them.",
+            ],
           },
           {
             kind: "text",
@@ -874,7 +898,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "Clone",
             items: [
-              "Choose **Clone…** from the row menu, or select exactly one trunk and choose **Bulk edit › Clone…**.",
+              "Highlight the trunk and click **Clone** in the header.",
               "A new form opens with every setting copied. The name becomes the old name plus `_copy`; **Username** and **Password** are empty.",
               "Change the name, enter a new username and password, adjust anything else, and click **Add customer trunk**.",
             ],
@@ -894,7 +918,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "For one trunk: row menu › **Delete…**.",
-              "For many: tick the rows, then **Bulk edit › Delete N trunks…**. Deleted rows in the selection are skipped.",
+              "For many: tick the rows, then the header's **Delete N trunks…**. Deleted rows in the selection are skipped.",
               "The dialog checks each trunk and shows **can be deleted** or **blocked:** with the reason (for example live binds).",
               "Write a **Reason** if you like, then click **Delete N**. Blocked trunks are skipped unless an administrator ticks **Override the blockers** and writes a reason.",
             ],
@@ -966,7 +990,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** (not active yet) and **New vendor trunk** in the header; per-column filters; quick search matching the start of a value (type `%text` to find it anywhere); detail panel on the right; row menu with **Open**, **Clone…** and **Delete…**; and **Bulk edit** with **Clone…** (one trunk) and **Delete N trunks…**.",
+            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** (not active yet) and **New vendor trunk** in the header; per-column filters; quick search matching the start of a value (type `%text` to find it anywhere); detail panel on the right; row menu with **Open**, **Clone…** and **Delete…**; and the header actions with **Clone…** (one trunk) and **Delete N trunks…**.",
           },
           {
             kind: "fields",
@@ -1013,7 +1037,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "Clone",
             items: [
-              "Row menu › **Clone…**, or select one trunk › **Bulk edit › Clone…**.",
+              "Highlight the trunk and click **Clone** in the header.",
               "Everything is copied except the name (gets `_copy`), username and password. Fill those in and click **Add vendor trunk**.",
             ],
           },
@@ -1021,7 +1045,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "Delete",
             items: [
-              "Row menu › **Delete…**, or tick several rows › **Bulk edit › Delete N trunks…**.",
+              "Highlight the trunk and click **Delete** in the header; for several, tick them first.",
               "The check lists route rules sending to the trunk (routing skips it from now on), customer trunks using it as express vendor (they fall back to normal routing), its own buy rate table (kept with full history) and rules attached directly.",
               "Live binds block the delete. Click **Delete** to archive.",
             ],
@@ -1697,8 +1721,8 @@ export const topics: HelpTopic[] = [
                 what: "Translation rules only. When ticked, the next rule also runs after this one matches.",
               },
               {
-                name: "↑ ↓ / Detach",
-                what: "Change the order. **Detach** (direct rules only) removes the rule's link to this trunk on save; **Keep** undoes that before saving.",
+                name: "⠿ / Detach",
+                what: "Drag the handle to change the order (or Alt+↑ / Alt+↓ on a focused row). **Detach** (direct rules only) removes the rule's link to this trunk on save; **Keep** undoes that before saving.",
               },
             ],
           },
@@ -1706,7 +1730,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "How to change the rules on a trunk",
             items: [
-              "Move rules with ↑ and ↓, tick or untick **On** and **Continue**, or click **Detach**.",
+              "Drag rules to reorder them (translation and HLR rules sit side by side), tick or untick **On** and **Continue**, or click **Detach**.",
               "Click **Save rules**. **Discard** drops your edits.",
             ],
           },
@@ -1774,7 +1798,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Click **Delete** in the header. The check shows live binds (blocking), route rules that use it, rate tables attached (customer) or its own buy rate table (vendor), customer trunks using it as express vendor (vendor) and rules attached directly. The trunk is archived, not erased. To delete many at once use **Bulk edit** on the [[customer-trunks|Customer trunks]] or [[vendor-trunks|Vendor trunks]] list. See [[safe-delete]].",
+            text: "Click **Delete** in the header. The check shows live binds (blocking), route rules that use it, rate tables attached (customer) or its own buy rate table (vendor), customer trunks using it as express vendor (vendor) and rules attached directly. The trunk is archived, not erased. To delete many at once use the header actions on the [[customer-trunks|Customer trunks]] or [[vendor-trunks|Vendor trunks]] list. See [[safe-delete]].",
           },
         ],
       },

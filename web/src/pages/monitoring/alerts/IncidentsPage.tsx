@@ -12,21 +12,16 @@ import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { toast } from "../../../ui/feedback";
-import { Button, StatusDot } from "../../../ui/primitives";
+import { Button } from "../../../ui/primitives";
 import { metricQualityClass } from "../../../ui/quality";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
 import { Kv } from "../../admin/parts";
 import { analyticsFor, duration, METRIC_SHORT } from "./alertsModel";
-import { severityCell } from "./parts";
+import { IncidentFilters, todayCondition } from "./IncidentFilters";
 
 const page = pageForPath("/monitoring/incidents")!;
 const STATE = { open: "Open", acknowledged: "Acknowledged", recovered: "Recovered" } as const;
-const stateCell = (s: IncidentRow["state"]) => (
-  <span>
-    <StatusDot tone={s === "recovered" ? "good" : s === "acknowledged" ? "warning" : "error"} /> {STATE[s]}
-  </span>
-);
 const num = (v: number | null) => (v === null ? "—" : Math.round(v * 100) / 100);
 /** An incident value; ASR and DLR values are coloured by value (§13.4). */
 const valueCell = (r: IncidentRow, v: number | null) => (
@@ -179,25 +174,94 @@ export function IncidentsPage() {
           toast({ tone: "error", message: problemText(e) }),
         )
       }
+      // Incident log redesign (team trial round 4): a filter bar of periods and Rule / Severity / State chips,
+      // state and severity as pills, scope over its rule, start → end, duration with a bar, the peak.
+      rowHeight={60}
+      initialState={{
+        columns: { startedAt: todayCondition() },
+        visible: ["id", "state", "severity", "entityName", "message", "startedAt", "durationSeconds", "peakValue"],
+      }}
+      toolbar={(state, setState) => <IncidentFilters state={state} setState={setState} />}
+      toolbarFields={["startedAt", "ruleName", "severity", "state"]}
       columns={{
-        id: { width: 90 },
-        startedAt: { width: 165, render: (r) => fmtWhen(r.startedAt) },
+        id: { width: 80, label: "#", render: (r) => <span className="num muted">{r.id}</span> },
+        startedAt: {
+          width: 170,
+          label: "Start → end",
+          render: (r) => (
+            <span className="num">
+              {r.startedAt.slice(11, 16)} → {r.endedAt ? r.endedAt.slice(11, 16) : "ongoing"}
+            </span>
+          ),
+        },
         endedAt: {
           width: 165,
           render: (r) => (r.endedAt ? fmtWhen(r.endedAt) : <span className="tone-error">open</span>),
         },
         durationSeconds: {
-          width: 110,
-          align: "right",
-          render: (r) => <span className="num">{duration(r.durationSeconds)}</span>,
+          width: 200,
+          label: "Duration",
+          render: (r) => (
+            <span className="two-line">
+              <strong className="num">
+                {duration(r.durationSeconds)}
+                {r.endedAt ? "" : " so far"}
+              </strong>
+              <span className={`dur-bar${r.endedAt ? "" : " open"}`}>
+                <span style={{ width: `${Math.min(100, (r.durationSeconds / 3600) * 100)}%` }} />
+              </span>
+            </span>
+          ),
         },
-        severity: { width: 105, render: (r) => severityCell(r.severity) },
-        state: { width: 130, render: (r) => stateCell(r.state) },
+        severity: {
+          width: 110,
+          render: (r) => (
+            <span
+              className={`chip-tag ${r.severity === "critical" ? "red" : r.severity === "warning" ? "amber" : "blue"}`}
+            >
+              {r.severity[0]!.toUpperCase() + r.severity.slice(1)}
+            </span>
+          ),
+        },
+        state: {
+          width: 130,
+          render: (r) => (
+            <span
+              className={`chip-tag ${r.state === "recovered" ? "green" : r.state === "acknowledged" ? "amber" : "red"}`}
+            >
+              <span className="dot-mini" />
+              {STATE[r.state]}
+            </span>
+          ),
+        },
         ruleName: { width: 230 },
-        entityName: { width: 200 },
+        entityName: {
+          width: 260,
+          label: "Scope · rule",
+          render: (r) => (
+            <span className="two-line">
+              <strong>{r.entityName}</strong>
+              <button
+                type="button"
+                className="link small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/monitoring/alert-rules");
+                }}
+              >
+                {r.ruleName}
+              </button>
+            </span>
+          ),
+        },
         metric: { width: 90, render: (r) => METRIC_SHORT[r.metric] },
-        message: { width: 420 },
-        peakValue: { width: 90, align: "right", render: (r) => valueCell(r, r.peakValue) },
+        message: { width: 440, label: "What happened" },
+        peakValue: {
+          width: 100,
+          align: "right",
+          label: "Peak",
+          render: (r) => <strong>{valueCell(r, r.peakValue)}</strong>,
+        },
         acknowledgedBy: { width: 140, render: (r) => r.acknowledgedBy ?? <span className="muted">—</span> },
       }}
       rowActions={(r) => [

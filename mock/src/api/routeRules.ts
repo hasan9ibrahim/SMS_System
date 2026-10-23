@@ -6,6 +6,8 @@ import type { LcrProfileCore } from "../lcr/rank.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
+  RouteVendorCost,
+  RouteVendorCostRequest,
   ArchiveRequest,
   ListQuery,
   RouteBulkRequest,
@@ -1187,3 +1189,49 @@ const testMessage = (input: RouteTestRequest) => ({
   receiver: input.receiver ?? "",
   text: input.content ?? "",
 });
+
+/**
+ * What each picked vendor charges for the rule's destinations (team trial round 4): current generic, unblocked
+ * lines of the trunk's buy table over the destinations the rule matches; one figure when flat, else min and max,
+ * in the table's currency and in EUR (the base) at the latest exchange rates.
+ */
+export function routeVendorCosts(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as RouteVendorCostRequest;
+  return withDb(reply, async (pool): Promise<RouteVendorCost[]> => {
+    const params: unknown[] = [b.vendorTrunkIds];
+    let where = "";
+    if (b.mccmncPattern) {
+      params.push(b.mccmncPattern);
+      where = `AND l.mccmnc ~* $${params.length}`;
+    } else if (b.mccmncMode !== "all") {
+      params.push(b.mccmncs);
+      where = `AND ${b.mccmncMode === "exclusive" ? "NOT " : ""}(l.mccmnc = ANY($${params.length}::text[]))`;
+    }
+    const { rows } = await pool.query(
+      `SELECT rt.vendor_trunk_id AS id, rt.currency, min(l.rate) AS min, max(l.rate) AS max,
+              min(l.rate / cl.rate_per_eur) AS min_eur, max(l.rate / cl.rate_per_eur) AS max_eur,
+              count(l.id)::int AS destinations
+         FROM rate_tables rt
+         LEFT JOIN rate_lines l ON l.rate_table_id = rt.id AND l.sender_id IS NULL AND NOT l.is_blocked
+              AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now()) ${where}
+         LEFT JOIN currency_latest cl ON cl.iso = l.currency
+        WHERE rt.kind = 'vendor' AND rt.deleted_at IS NULL AND rt.vendor_trunk_id = ANY($1::bigint[])
+        GROUP BY rt.vendor_trunk_id, rt.currency`,
+      params,
+    );
+    const byId = new Map(rows.map((r) => [Number(r.id), r]));
+    const num = (v: unknown, d: number) => (v === null || v === undefined ? null : Number(Number(v).toFixed(d)));
+    return b.vendorTrunkIds.map((id) => {
+      const r = byId.get(id);
+      return {
+        vendorTrunkId: id,
+        currency: r ? String(r.currency).trim() : null,
+        min: num(r?.min, 6),
+        max: num(r?.max, 6),
+        minEur: num(r?.min_eur, 6),
+        maxEur: num(r?.max_eur, 6),
+        destinations: r ? Number(r.destinations) : 0,
+      };
+    });
+  });
+}

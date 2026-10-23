@@ -2376,9 +2376,20 @@ select.chip-select {
   min-height: 0;
   background: none;
 }
-/* Help must stay visible on laptop screens (team trial round 3): a narrower search, then icon only. */
+/* Help must stay visible on laptop screens (team trial round 3): a narrower search, then icon only. The label
+   stays on one line (team trial round 4). */
 .jump {
-  width: 180px;
+  width: 220px;
+}
+.jump > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.jump kbd {
+  flex: none;
+  white-space: nowrap;
 }
 @media (max-width: 1750px) {
   .jump {
@@ -2428,4 +2439,66 @@ select.chip-select {
 }
 .pill-card-foot {
   gap: 16px;
+}
+/* Sibling pills beside the title (team trial round 4): one header line; the pills scroll sideways when crowded. */
+.page-header-top {
+  align-items: center;
+}
+.page-header-top > .siblings {
+  flex: 1 1 240px;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+.page-header-top > .siblings a {
+  flex: none;
+  white-space: nowrap;
+}
+.page-header-top .page-actions {
+  margin-left: auto;
+}
+/* Several rows selected (team trial round 4): the record bar acts on the selection and says how many. */
+.record-actions.on-selection {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+}
+.ra-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
+  white-space: nowrap;
+}
+.ra-count + .ra-btn {
+  border-left: var(--border-width) solid var(--color-border);
+}
+/* Status pill (team trial round 4): green when active, grey when not. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 8px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-pill.on {
+  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  background: color-mix(in srgb, var(--color-good) 13%, var(--color-panel));
+}
+.status-pill.off {
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text) 7%, var(--color-panel));
 }

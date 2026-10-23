@@ -110,6 +110,8 @@ import {
   restoreTrunk,
   updateTrunk,
   updateTrunkRules,
+  getEnterpriseRules,
+  updateEnterpriseRules,
 } from "./api/trunks.js";
 import { getReference } from "./api/reference.js";
 import {
@@ -125,6 +127,7 @@ import {
   restoreRouteRule,
   discardRouteRule,
   simulateRoute,
+  routeVendorCosts,
   testRouteRule,
   updateRouteRule,
 } from "./api/routeRules.js";
@@ -614,6 +617,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   restoreCustomerTrunk: restoreTrunk("customer"),
   getCustomerTrunkRules: getTrunkRules("customer"),
   updateCustomerTrunkRules: updateTrunkRules("customer"),
+  getEnterpriseRules,
+  updateEnterpriseRules,
   queryVendorTrunks: queryList("vendor_trunks"),
   createVendorTrunk: createTrunk("vendor"),
   getVendorTrunk: getTrunk("vendor"),
@@ -774,6 +779,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   testRouteRule,
   simulateRoute,
   setDestinationDlrTarget,
+  routeVendorCosts,
   queryEnterpriseReport,
   exportEnterpriseReport,
   resolveLookupDestinations,

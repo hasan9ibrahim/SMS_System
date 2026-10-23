@@ -302,7 +302,7 @@ export function SimulateDialog({ onClose, onOpenRule }: { onClose: () => void; o
           <table className="mini-table">
             <thead>
               <tr>
-                <th className="num">Pri</th>
+                <th className="num">Priority</th>
                 <th>Rule</th>
                 <th>Result</th>
               </tr>

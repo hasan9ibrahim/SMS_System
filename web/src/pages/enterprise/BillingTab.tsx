@@ -2,21 +2,26 @@
 // currency, billing cycle, time zone and opening balance, the live balance, and the
 // beneficiary (bank) details. Credit use is coloured only past the alert levels (§15.3).
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type {
   BillingSide,
   BillingSideInput,
   EnterpriseBilling,
   EnterpriseBillingInput,
   EnterpriseDetail,
+  InvoiceRow,
 } from "@sms/contract";
+import { fetchListPage } from "../../api/hooks";
 import { useBilling, useReference, useSaveBilling } from "../../api/records";
+import { emptyState, encodeState } from "../../grid/filterModel";
+import { useTabNavigate } from "../../shell/tabContext";
 import {
   CheckField,
   FormBanner,
   NumberField,
-  ReadOnly,
   Section,
   SelectField,
+  SubHead,
   TextArea,
   TextField,
   useForm,
@@ -117,11 +122,8 @@ function SideSection({
   return (
     <Section
       title={title}
-      note={
-        saved
-          ? `Updated ${saved.updatedAt.slice(0, 10)}${saved.updatedBy ? ` by ${saved.updatedBy}` : ""}`
-          : "Not saved yet"
-      }
+      subtitle={`How and when we settle with this partner${saved ? "" : " · not saved yet"}.`}
+      columns={4}
     >
       <SelectField
         form={form}
@@ -129,7 +131,7 @@ function SideSection({
         label="Currency"
         required
         options={(ref.data?.currencies ?? []).map((c) => ({ value: c.iso, label: `${c.iso} – ${c.name}` }))}
-        hint={saved ? "Fixed once invoices exist" : undefined}
+        hint={saved ? "Locked: fixed once invoices exist" : undefined}
       />
       <SelectField
         form={form}
@@ -169,15 +171,6 @@ function SideSection({
         step={0.01}
         suffix={v.currency}
       />
-      {saved && (
-        <ReadOnly label="Balance" hint="Opening balance + payments − usage: positive = credit, negative = owed">
-          <span className="balance">{money(saved.balance, saved.currency)}</span>{" "}
-          <span className={`small ${balanceWords(saved.balance, side).tone || "muted"}`}>
-            {balanceWords(saved.balance, side).text}
-          </span>
-          <CreditUse side={saved} enterprise={enterprise} />
-        </ReadOnly>
-      )}
       {side === "customer" && <CheckField form={form} path={p("autoInvoicing")} label="Auto invoicing" />}
       <CheckField
         form={form}
@@ -185,8 +178,110 @@ function SideSection({
         label="Send payment confirmation"
         hint="Default for new payments (§13.33)"
       />
-      <TextArea form={form} path={p("description")} label="Description" rows={2} />
+      <TextArea
+        form={form}
+        path={p("description")}
+        label="Description"
+        rows={2}
+        placeholder="Optional notes about this partner's billing"
+      />
     </Section>
+  );
+}
+
+/** The latest invoice: what is due, by when and whether it is paid (team trial round 4; replaces the formula). */
+function LastInvoiceCard({ enterpriseId }: { enterpriseId: number }) {
+  const navigate = useTabNavigate();
+  const q = useQuery({
+    queryKey: ["list", "invoices", "last", enterpriseId],
+    queryFn: () =>
+      fetchListPage<InvoiceRow>("invoices", {
+        filter: { logic: "and", conditions: [{ field: "enterpriseId", op: "eq", value: enterpriseId }] },
+        sort: [
+          { field: "invoiceDate", dir: "desc" },
+          { field: "id", dir: "desc" },
+        ],
+        limit: 1,
+        withTotal: false,
+      }),
+    staleTime: 60_000,
+  });
+  const inv = q.data?.rows[0];
+  const overdue = inv && inv.paymentStatus !== "paid" && inv.dueDate < new Date().toISOString().slice(0, 10);
+  const all = `/finance/invoices?g=${encodeState({
+    ...emptyState(),
+    columns: { enterpriseId: { field: "enterpriseId", op: "eq", value: enterpriseId } },
+  })}`;
+  return (
+    <div className="bill-card">
+      <span className="bill-card-label">Last invoice</span>
+      {!inv ? (
+        <span className="muted">{q.isLoading ? "Loading…" : "No invoices yet"}</span>
+      ) : (
+        <>
+          <span className="bill-card-value small-value">
+            {(inv.dueAmount ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+            <small>{inv.currency}</small>
+          </span>
+          <span className="small">
+            {inv.invoiceNumber} · due {inv.dueDate} ·{" "}
+            <span className={inv.paymentStatus === "paid" ? "tone-good" : overdue ? "tone-error" : "tone-warning"}>
+              {inv.paymentStatus === "paid"
+                ? "Paid"
+                : overdue
+                  ? "Overdue"
+                  : inv.paymentStatus === "partial"
+                    ? "Partly paid"
+                    : "Unpaid"}
+            </span>
+          </span>
+        </>
+      )}
+      <button type="button" className="link small bill-card-link" onClick={() => navigate(all, { newTab: true })}>
+        All invoices of this partner
+      </button>
+    </div>
+  );
+}
+
+/** The billing summary (record redesign, team trial round 4): balance, how it is worked out, billing cycle. */
+function BillingSummary({ billing, enterprise }: { billing: EnterpriseBilling; enterprise: EnterpriseDetail }) {
+  const ref = useReference();
+  const sides = (["customer", "vendor"] as const).filter((k) => billing[k]);
+  const first = billing[sides[0] ?? "customer"];
+  const cycle = first ? ref.data?.billingCycles.find((c) => c.id === first.billingCycleId)?.name : null;
+  return (
+    <div className="bill-summary">
+      {sides.map((k) => {
+        const b = billing[k]!;
+        const words = balanceWords(b.balance, k);
+        return (
+          <div key={k} className={`bill-card balance ${b.balance >= 0 ? "credit" : "owed"}`}>
+            <span className="bill-card-label">
+              Current balance{sides.length > 1 ? ` · ${k === "customer" ? "customer" : "vendor"}` : ""}
+            </span>
+            <span className="bill-card-value">
+              {b.balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+              <small>{b.currency}</small>
+            </span>
+            <span className="small">
+              {words.text} <CreditUse side={b} enterprise={enterprise} />
+            </span>
+          </div>
+        );
+      })}
+      <LastInvoiceCard enterpriseId={enterprise.id} />
+      {first && (
+        <div className="bill-card">
+          <span className="bill-card-label">Billing cycle</span>
+          <span className="bill-card-value small-value">{cycle ?? `#${first.billingCycleId}`}</span>
+          <span className="muted small">
+            Updated {first.updatedAt.slice(0, 10)}
+            {first.updatedBy ? ` by ${first.updatedBy}` : ""}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -237,20 +332,32 @@ export function BillingTab({ enterprise, slot, onDirty }: SectionProps & { enter
         )}
       </HeaderAction>
       <FormBanner message={banner} onClose={() => setBanner(null)} />
-      <fieldset disabled={readOnly} className="plain-fieldset">
+      {q.data && <BillingSummary billing={q.data} enterprise={enterprise} />}
+      <fieldset disabled={readOnly} className="plain-fieldset form-main">
         {sides.map((s) => (
           <SideSection key={s} form={form} side={s} saved={q.data?.[s] ?? null} enterprise={enterprise} />
         ))}
-        <Section title="Beneficiary" note="Bank details for payments to this partner">
-          <TextField form={form} path="beneficiary.beneficiaryName" label="Beneficiary name" />
-          <TextField form={form} path="beneficiary.bank" label="Bank" />
-          <TextField form={form} path="beneficiary.bankAddress" label="Bank address" />
-          <TextField form={form} path="beneficiary.address" label="Beneficiary address" />
-          <TextField form={form} path="beneficiary.accountNumber" label="Account number" />
-          <TextField form={form} path="beneficiary.iban" label="IBAN" />
-          <TextField form={form} path="beneficiary.swift" label="SWIFT / BIC" />
-          <TextField form={form} path="beneficiary.currency" label="Account currency" maxLength={3} />
-          <TextField form={form} path="beneficiary.walletAddress" label="Crypto wallet" />
+        <Section title="Beneficiary" subtitle="Bank details for payments to this partner." columns={1}>
+          <SubHead>Account holder</SubHead>
+          <div className="fgrid cols-2">
+            <TextField form={form} path="beneficiary.beneficiaryName" label="Beneficiary name" />
+            <TextField form={form} path="beneficiary.address" label="Beneficiary address" />
+          </div>
+          <SubHead>Bank</SubHead>
+          <div className="fgrid cols-3">
+            <TextField form={form} path="beneficiary.bank" label="Bank" />
+            <TextField form={form} path="beneficiary.bankAddress" label="Bank address" />
+            <TextField form={form} path="beneficiary.swift" label="SWIFT / BIC" />
+          </div>
+          <div className="sub-panel">
+            <SubHead>Account</SubHead>
+            <div className="fgrid cols-4">
+              <TextField form={form} path="beneficiary.iban" label="IBAN" />
+              <TextField form={form} path="beneficiary.accountNumber" label="Account number" />
+              <TextField form={form} path="beneficiary.currency" label="Account currency" maxLength={3} />
+              <TextField form={form} path="beneficiary.walletAddress" label="Crypto wallet" placeholder="Optional" />
+            </div>
+          </div>
         </Section>
       </fieldset>
     </>

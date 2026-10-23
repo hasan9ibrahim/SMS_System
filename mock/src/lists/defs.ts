@@ -1775,6 +1775,7 @@ export const invoiceList: ListDef<InvoiceRow> = {
   columns: {
     id: { sql: "inv.id" },
     invoiceNumber: { sql: "inv.invoice_number" },
+    accountNumber: { sql: "e.account_number" },
     enterpriseId: { sql: "inv.enterprise_id" },
     enterprise: visCol(enterpriseMask("e")),
     enterpriseType: { sql: "e.type" },
@@ -1800,9 +1801,9 @@ export const invoiceList: ListDef<InvoiceRow> = {
     remarks: { sql: "inv.remarks" },
     archived: { sql: "(inv.deleted_at IS NOT NULL)" },
   },
-  search: ["invoiceNumber", "enterprise"],
+  search: ["invoiceNumber", "enterprise", "accountNumber"],
   idSql: "inv.id",
-  select: `inv.*, e.name AS enterprise, e.type AS enterprise_type, bco.name AS business_company`,
+  select: `inv.*, e.name AS enterprise, e.type AS enterprise_type, e.account_number, bco.name AS business_company`,
   mapRow: (r) => mapInvoiceRow(r),
 };
 
@@ -1811,6 +1812,7 @@ export function mapInvoiceRow(r: Record<string, unknown>): InvoiceRow {
   return {
     id: Number(r.id),
     invoiceNumber: r.invoice_number as string,
+    accountNumber: (r.account_number as string | null | undefined) ?? null,
     enterpriseId: Number(r.enterprise_id),
     enterprise: r.enterprise as string,
     enterpriseType: r.enterprise_type as string,
@@ -2426,14 +2428,23 @@ export const NETWORK_FROM = `(
     SELECT 'customer' AS side, t.id AS trunk_id, t.enterprise_id, e.name AS enterprise_name, t.name AS trunk_name,
            t.max_connections, tb.status, tb.connections, tb.queue, tb.tps, tb.since, u.username AS changed_by,
            coalesce((SELECT array_agg(DISTINCT host(s.ip) ORDER BY host(s.ip)) FROM bind_sessions s
-                      WHERE s.side = 'customer' AND s.trunk_id = t.id), '{}') AS ips
+                      WHERE s.side = 'customer' AND s.trunk_id = t.id), '{}') AS ips,
+           -- Allowed IPs and any bound IP, each with its sessions now (team trial round 4).
+           (SELECT coalesce(jsonb_agg(jsonb_build_object('ip', x.ip, 'sessions', x.n) ORDER BY x.n DESC, x.ip), '[]')
+              FROM (SELECT ips.addr AS ip, count(s.session_id)::int AS n
+                      FROM (SELECT host(a) AS addr FROM unnest(t.host_ips) a
+                            UNION SELECT host(s2.ip) FROM bind_sessions s2
+                             WHERE s2.side = 'customer' AND s2.trunk_id = t.id) ips
+                      LEFT JOIN bind_sessions s ON s.side = 'customer' AND s.trunk_id = t.id AND host(s.ip) = ips.addr
+                     GROUP BY ips.addr) x) AS ip_sessions
       FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
       JOIN trunk_binds tb ON tb.side = 'customer' AND tb.trunk_id = t.id
       LEFT JOIN users u ON u.id = tb.changed_by_id
      WHERE t.deleted_at IS NULL
     UNION ALL
     SELECT 'vendor', t.id, t.enterprise_id, e.name, t.name, t.max_connections, tb.status, tb.connections, tb.queue,
-           tb.tps, tb.since, u.username, ARRAY[t.host]
+           tb.tps, tb.since, u.username, ARRAY[t.host],
+           jsonb_build_array(jsonb_build_object('ip', t.host, 'sessions', tb.connections))
       FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
       JOIN trunk_binds tb ON tb.side = 'vendor' AND tb.trunk_id = t.id
       LEFT JOIN users u ON u.id = tb.changed_by_id
@@ -2471,6 +2482,7 @@ export function mapNetworkBind(r: Record<string, unknown>): NetworkBindRow {
     enterpriseName: r.enterprise_name as string,
     trunkName: r.trunk_name as string,
     ipAddresses: (r.ips as string[]) ?? [],
+    ipSessions: (r.ip_sessions as { ip: string; sessions: number }[] | null) ?? [],
     connections: Number(r.connections),
     maxConnections: Number(r.max_connections),
     status: r.status as string,

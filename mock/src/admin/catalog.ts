@@ -54,6 +54,7 @@ export const MODULES: AccessCatalog["modules"] = [
       ["billing", "Billing tab"],
       ["customer-trunks", "Customer trunks tab"],
       ["vendor-trunks", "Vendor trunks tab"],
+      ["rules", "Rules tab"],
       ["account-managers", "Account managers tab"],
       ["history", "History tab"],
     ],

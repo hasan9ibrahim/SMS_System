@@ -681,3 +681,10 @@
 .mc-deals-pop {
   min-width: 340px;
 }
+/* Compact summary cards (team trial round 4). */
+.mc-card {
+  padding: 7px 14px;
+}
+.mc-card strong {
+  font-size: 18px;
+}

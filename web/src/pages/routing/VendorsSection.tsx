@@ -2,7 +2,15 @@
 // warm-up threshold and number whitelists). Edits stay local until Save, which writes the
 // rule once (one undoable change, §13.10).
 import { Fragment, useMemo, useRef, useState } from "react";
-import type { RouteRuleDetail, RouteRuleInput, RouteVendor, RouteWhitelist, TrunkListRow } from "@sms/contract";
+import type {
+  RouteRuleDetail,
+  RouteRuleInput,
+  RouteVendor,
+  RouteVendorCost,
+  RouteWhitelist,
+  TrunkListRow,
+} from "@sms/contract";
+import { useVendorCosts } from "../../api/routing";
 import { useReference } from "../../api/records";
 import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
@@ -58,6 +66,44 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
 
 const numOrNull = (v: string) => (v === "" ? null : Number(v));
 
+/** Rates to 6 decimals without trailing zeros. */
+const rate = (v: number) => String(Number(v.toFixed(6)));
+const span = (min: number, max: number) => (min === max ? rate(min) : `${rate(min)}–${rate(max)}`);
+
+/**
+ * A vendor's cost for the rule's destinations (team trial round 4): EUR (the base) first, one figure when flat,
+ * else min–max; the vendor's own currency under it when that is not EUR.
+ */
+export function VendorCost({ cost }: { cost: RouteVendorCost | undefined }) {
+  if (!cost) return <span className="muted">…</span>;
+  if (cost.minEur === null || cost.maxEur === null || cost.min === null || cost.max === null)
+    return (
+      <span className="muted" title="No current rate for the rule's destinations">
+        no rate
+      </span>
+    );
+  const flat = cost.min === cost.max;
+  return (
+    <span
+      className="vendor-cost"
+      title={`${cost.destinations} destination${cost.destinations === 1 ? "" : "s"} with a rate${flat ? " · flat" : ""}`}
+    >
+      <span className="num strong">€{span(cost.minEur, cost.maxEur)}</span>
+      {cost.currency && cost.currency !== "EUR" && (
+        <span className="num muted small">
+          {cost.currency} {span(cost.min, cost.max)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const destOf = (r: Pick<RouteRuleDetail, "mccmncMode" | "mccmncs" | "mccmncPattern">) => ({
+  mccmncMode: r.mccmncMode,
+  mccmncs: r.mccmncs ?? [],
+  mccmncPattern: r.mccmncPattern ?? null,
+});
+
 /** Read-only vendors of a rule for the detail panel; editing opens the popup. */
 /** Quality (QBR) ranking: the defaults decided 2026-10-18, changeable per rule (team trial round 1). */
 const QBR_DEFAULT = { asr: 35, dlr: 35, delay: 20, cost: 10 };
@@ -78,6 +124,10 @@ export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (
     ...primaries.flatMap((p) => [p, ...all.filter((b) => b.isBackup && b.backupForVendorTrunkId === p.vendorTrunkId)]),
     ...all.filter((b) => b.isBackup && !b.backupForVendorTrunkId),
   ];
+  const costs = useVendorCosts(
+    all.map((v) => v.vendorTrunkId),
+    destOf(rule),
+  );
   const hunt = { top_down: "Top down (by level)", round_robin: "Round robin", percentage: "Percentage split" }[
     rule.huntPolicy ?? "top_down"
   ];
@@ -120,6 +170,9 @@ export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (
             <tr>
               <th>Level</th>
               <th>Vendor trunk</th>
+              <th className="num" title="Cost for the rule's destinations: EUR, and the vendor's currency">
+                Cost
+              </th>
               <th className="num">Share</th>
               <th>Backup</th>
               <th>Warm-up</th>
@@ -130,6 +183,9 @@ export function VendorsView({ rule, onEdit }: { rule: RouteRuleDetail; onEdit: (
               <tr key={i} className={v.isBackup ? "muted" : ""}>
                 <td className="num">{v.level}</td>
                 <td className="strong">{name(v.vendorTrunkId)}</td>
+                <td className="num">
+                  <VendorCost cost={costs.get(v.vendorTrunkId)} />
+                </td>
                 <td className="num">{v.sharePct === null || v.sharePct === undefined ? "—" : `${v.sharePct}%`}</td>
                 <td>
                   {v.backupForVendorTrunkId ? `for ${name(v.backupForVendorTrunkId)}` : v.isBackup ? "last resort" : ""}
@@ -194,6 +250,10 @@ export function VendorsSection({
     set({ whitelists: d.whitelists!.map((w, j) => (j === i ? { ...w, ...patch } : w)) });
   const vendors = d.vendors ?? [];
   const whitelists = d.whitelists ?? [];
+  const costs = useVendorCosts(
+    vendors.map((v) => v.vendorTrunkId),
+    destOf(rule),
+  );
   const block = d.routeType === "block";
   const scoped = d.routeType === "dynamic" || d.routeType === "qbr";
   const vendorName = (id: number) => rule.labels.vendorTrunks.find((v) => v.id === id)?.name ?? `#${id}`;
@@ -285,6 +345,9 @@ export function VendorsSection({
               <tr>
                 <th>Level</th>
                 <th>Vendor trunk</th>
+                <th className="num" title="Cost for the rule's destinations: EUR, and the vendor's currency">
+                  Cost
+                </th>
                 {d.huntPolicy === "percentage" && <th className="num">Share %</th>}
                 <th>Backup</th>
                 <th title="Send the first N messages to this vendor before the normal split (§13.27)">Warm-up first</th>
@@ -337,6 +400,9 @@ export function VendorsSection({
                           detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
                           placeholder="Vendor trunk…"
                         />
+                      </td>
+                      <td className="num">
+                        {v.vendorTrunkId ? <VendorCost cost={costs.get(v.vendorTrunkId)} /> : null}
                       </td>
                       {d.huntPolicy === "percentage" && (
                         <td>
@@ -474,7 +540,7 @@ export function VendorsSection({
                     {own.length > 0 && (
                       <tr className="vf-backups">
                         <td />
-                        <td colSpan={d.huntPolicy === "percentage" ? 7 : 6}>
+                        <td colSpan={d.huntPolicy === "percentage" ? 8 : 7}>
                           <div className="vf-backup-list">
                             <span className="muted small">Backups for this vendor (share of its traffic):</span>
                             {own.map(({ b, j }) => (
@@ -488,6 +554,7 @@ export function VendorsSection({
                                   detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
                                   placeholder="Backup vendor…"
                                 />
+                                {b.vendorTrunkId ? <VendorCost cost={costs.get(b.vendorTrunkId)} /> : null}
                                 <input
                                   className="num w-num"
                                   type="number"
