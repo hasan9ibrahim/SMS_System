@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.88.0
+  version: 0.89.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -25190,8 +25190,10 @@ components:
           pattern: "^[0-9]{5,15}$"
         mccmnc:
           type: [string, "null"]
-          pattern: "^[0-9]{5,6}$"
-          description: Overrides the destination found from the number.
+          pattern: "^[0-9]{3,6}$"
+          description: >-
+            Overrides the destination found from the number. A 3-digit code is a country's All networks (default)
+            entry (team trial round 5).
         sourceTon:
           type: integer
           minimum: 0

@@ -554,6 +554,27 @@ describe("§9 network status, captures, simulator, diagnosis", { skip }, () => {
     assert.equal(sim.encoding.segments, 1);
     assert.ok(sim.testSms);
     if (sim.blocked) assert.equal(sim.testSms.status, "REJECTD");
+    // A country's All networks (3-digit) code alone: one run on the default network (team trial round 5).
+    const { rows: mcc } = await db().query(
+      `SELECT m.mccmnc FROM mccmnc m JOIN dial_codes d ON d.mccmnc_id = m.id AND d.deleted_at IS NULL AND d.profile = 'All'
+        WHERE length(m.mccmnc) = 3 ORDER BY m.mccmnc LIMIT 1`,
+    );
+    const all = await ok(
+      "runRouteSimulator",
+      call("POST", "/route-simulator", {
+        customerTrunkId: Number(rows[0].id),
+        senderId: "INFO",
+        mccmnc: mcc[0].mccmnc,
+        sourceTon: 5,
+        sourceNpi: 0,
+        destTon: 1,
+        destNpi: 1,
+        text: "Your code is 1234",
+        dataCoding: 0,
+        testSms: false,
+      }),
+    );
+    assert.equal(all.mccmnc, mcc[0].mccmnc);
     const unknown = await call("POST", "/route-simulator", {
       customerTrunkId: 999999,
       receiver: "447700900123",
