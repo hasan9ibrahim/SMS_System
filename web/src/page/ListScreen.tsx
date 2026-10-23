@@ -51,6 +51,8 @@ export interface ListScreenProps<Row extends { id: number }> {
    * highlighted row until closed (Route rules, team trial round 3). Default: a click opens it.
    */
   detailOpensOn?: "click" | "double";
+  /** Taller grid rows for two-line cells (team trial round 4). */
+  rowHeight?: number;
   /** Records this page edits; enables the header Undo and History buttons (§13.10). */
   historyScope?: HistoryScope | null;
   primary?: { label: string; icon?: IconName; onClick?: () => void; disabled?: boolean; title?: string };
@@ -452,6 +454,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     idleMessage,
     noSelection,
     detailOpensOn = "click",
+    rowHeight,
   } = props;
   const bodyRef = useRef<HTMLDivElement>(null);
   const [detailWidth, setDetailWidth] = useDetailWidth(list);
@@ -698,6 +701,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
           {fields.data ? (
             <DataGrid<Row>
               list={list}
+              {...(rowHeight ? { rowHeight } : {})}
               fields={fields.data}
               state={state}
               onStateChange={setState}

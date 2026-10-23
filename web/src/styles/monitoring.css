@@ -741,3 +741,241 @@
   min-width: 360px;
   margin-top: 0;
 }
+/* Network status (team trial round 4): two-line cells, IP chips with sessions, a connections bar. */
+.two-line {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  line-height: 1.25;
+}
+.two-line > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ip-chips {
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+}
+.ip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: var(--border-width) dashed var(--color-border);
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.ip-chip.on {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--color-good) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-good) 8%, var(--color-panel));
+  color: var(--color-text);
+}
+.ip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-text-secondary);
+}
+.ip-chip.on .ip-dot {
+  border: 0;
+  background: var(--color-good);
+}
+.ip-count {
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
+}
+.ip-chip.on .ip-count {
+  background: var(--color-good);
+  color: #fff;
+}
+.conn-bar-cell {
+  width: 100%;
+}
+.conn-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
+  overflow: hidden;
+}
+.conn-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+.conn-bar.full > span {
+  background: var(--color-good);
+}
+.btn.btn-outline-danger {
+  background: var(--color-panel);
+  color: var(--color-error);
+  border: var(--border-width) solid color-mix(in srgb, var(--color-error) 40%, var(--color-border));
+}
+/* Incident log (team trial round 4): filter bar, pills, duration bar. */
+.incident-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+}
+.dur-bar {
+  display: block;
+  height: 5px;
+  width: 100%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
+  overflow: hidden;
+}
+.dur-bar > span {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text-secondary) 70%, var(--color-panel));
+}
+.dur-bar.open > span {
+  background: var(--color-error);
+}
+.chip-tag.red {
+  background: color-mix(in srgb, var(--color-error) 11%, var(--color-panel));
+  color: var(--color-error);
+}
+/* Alert rules (team trial round 4): summary tiles and rules as cards with a severity edge. */
+.kpi-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  box-shadow: var(--card-shadow);
+}
+.kpi-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.kpi-label.tone-dot::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+.kpi-label.red::before {
+  background: var(--color-error);
+}
+.kpi-label.amber::before {
+  background: var(--color-warning);
+}
+.kpi-label.blue::before {
+  background: var(--color-accent);
+}
+.kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-value small {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.gr.rule-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  z-index: 2;
+  background: var(--sev-edge, transparent);
+}
+.gr.rule-row.sev-critical {
+  --sev-edge: var(--color-error);
+}
+.gr.rule-row.sev-warning {
+  --sev-edge: var(--color-warning);
+}
+.gr.rule-row.sev-info {
+  --sev-edge: var(--color-accent);
+}
+.gr.rule-row.has-open {
+  background: color-mix(in srgb, var(--color-error) 4%, var(--color-panel));
+}
+.rule-card-main .chip-tag {
+  vertical-align: 1px;
+}
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chip-tag.open-inc {
+  align-self: flex-start;
+  border: 0;
+  cursor: pointer;
+}
+.open-inc-btn {
+  color: var(--color-error);
+  border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-error) 6%, var(--color-panel));
+  gap: 6px;
+}
+.open-inc-btn .dot-mini {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+.two-line > .link {
+  align-self: flex-start;
+  text-align: left;
+  padding: 0;
+}
+/* Compact KPI tiles (team trial round 4). */
+.kpi-tiles {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.kpi-tile {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 0;
+  padding: 8px 14px;
+}
+.kpi-label {
+  flex-basis: 100%;
+}
+.kpi-value {
+  font-size: 19px;
+}

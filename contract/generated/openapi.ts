@@ -14812,6 +14812,11 @@ export type components = {
       trunkName: string;
       /** @description Remote IPs of the bound sessions (customer) or the vendor's host IPs. */
       ipAddresses: string[];
+      /** @description Each IP with its bound sessions now (team trial round 4): a customer trunk's allowed IPs (0 = allowed, no session) plus any bound from elsewhere; a vendor trunk's host with the switch's binds. */
+      ipSessions?: {
+        ip: string;
+        sessions: number;
+      }[];
       /** @description Bound sessions now. */
       connections: number;
       maxConnections: number;

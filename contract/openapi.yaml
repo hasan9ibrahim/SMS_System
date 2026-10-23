@@ -24614,6 +24614,20 @@ components:
           items:
             type: string
           description: "Remote IPs of the bound sessions (customer) or the vendor's host IPs."
+        ipSessions:
+          type: array
+          description: >-
+            Each IP with its bound sessions now (team trial round 4): a customer trunk's allowed IPs (0 = allowed, no
+            session) plus any bound from elsewhere; a vendor trunk's host with the switch's binds.
+          items:
+            type: object
+            required: [ip, sessions]
+            properties:
+              ip:
+                type: string
+              sessions:
+                type: integer
+                minimum: 0
         connections:
           type: integer
           description: "Bound sessions now."

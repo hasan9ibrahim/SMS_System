@@ -11,6 +11,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
+  type CSSProperties,
 } from "react";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useReactTable, getCoreRowModel, type ColumnDef, type ColumnSizingState } from "@tanstack/react-table";
@@ -69,6 +70,8 @@ export interface DataGridProps<Row extends { id: number }> {
   queryScope?: unknown;
   /** False holds the query (e.g. until a report is run). */
   enabled?: boolean;
+  /** Taller rows for two-line cells (e.g. Network status, Incidents; team trial round 4). */
+  rowHeight?: number;
   /** Shown instead of "Loading…" while the query is held (what to choose or press first). */
   idleMessage?: ReactNode;
 }
@@ -264,6 +267,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     queryScope = null,
     enabled = true,
     idleMessage = "Choose the settings above to see rows.",
+    rowHeight = ROW_HEIGHT,
   } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastChecked = useRef<number | null>(null);
@@ -372,7 +376,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
   const virtualizer = useVirtualizer({
     count: rows.length + (result.hasNextPage ? 1 : 0),
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: 12,
   });
   const items = virtualizer.getVirtualItems();
@@ -462,6 +466,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
       tabIndex={0}
       onKeyDown={onKeyDown}
       role="grid"
+      style={rowHeight !== ROW_HEIGHT ? ({ "--grid-body-row-height": `${rowHeight}px` } as CSSProperties) : undefined}
       aria-rowcount={first?.total ?? -1}
       aria-busy={result.isFetching}
     >

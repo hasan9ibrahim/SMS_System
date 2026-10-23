@@ -13,7 +13,8 @@ import { useTabNavigate } from "../shell/tabContext";
 import { toast } from "../ui/feedback";
 import { problemText } from "./routing/dialogs";
 import { Avatar } from "../page/PageHeader";
-import { Button, StatusPill } from "../ui/primitives";
+import { StatusPill } from "../ui/primitives";
+import { Icon } from "../ui/Icon";
 
 const page = pageForPath("/enterprises")!;
 const CONTACT_LABEL = { commercial: "Commercial", technical: "Technical", rates: "Rates", finance: "Finance" } as const;
@@ -30,6 +31,28 @@ function EnterpriseEmails({ id }: { id: number }) {
           <Fragment key={k}>
             <dt>{CONTACT_LABEL[k]}</dt>
             <dd>
+              {/* Copy every email of the role at once (team trial round 4). */}
+              {!!c?.emails.length && (
+                <button
+                  type="button"
+                  className="icon-btn copy-emails"
+                  title={`Copy the ${CONTACT_LABEL[k].toLowerCase()} emails`}
+                  aria-label={`Copy the ${CONTACT_LABEL[k].toLowerCase()} emails`}
+                  onClick={() =>
+                    void navigator.clipboard
+                      .writeText(c.emails.join("; "))
+                      .then(() =>
+                        toast({
+                          tone: "good",
+                          message: `Copied ${c.emails.length} ${CONTACT_LABEL[k].toLowerCase()} email${c.emails.length === 1 ? "" : "s"}`,
+                        }),
+                      )
+                      .catch(() => toast({ tone: "error", message: "The browser did not allow copying" }))
+                  }
+                >
+                  <Icon name="copy" size={13} />
+                </button>
+              )}
               {c?.emails.length ? (
                 c.emails.map((m) => (
                   <a key={m} href={`mailto:${m}`} className="email-chip">
@@ -160,23 +183,6 @@ export function EnterprisesPage() {
           {
             key: "general",
             label: "General",
-            actions: (
-              <>
-                <Button
-                  small
-                  onClick={() => navigate(`/enterprises/${r.id}`, { newTab: true, title: `Enterprise · ${r.name}` })}
-                >
-                  Edit
-                </Button>
-                <Button
-                  small
-                  variant="primary"
-                  onClick={() => navigate(`/enterprises/${r.id}`, { newTab: true, title: `Enterprise · ${r.name}` })}
-                >
-                  Open full profile
-                </Button>
-              </>
-            ),
             content: (
               <div className="ent-card">
                 <div className="record-chips">

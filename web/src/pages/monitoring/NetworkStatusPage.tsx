@@ -82,6 +82,37 @@ function ConfirmStop({ row, done }: { row: Row; done: (ok: boolean) => void }) {
   );
 }
 
+/** Each IP as a chip with its bound sessions; an allowed IP with none is dashed (team trial round 4). */
+function IpSessions({ row }: { row: Row }) {
+  const ips = row.ipSessions ?? row.ipAddresses.map((ip) => ({ ip, sessions: 1 }));
+  if (!ips.length) return muted("—");
+  const up = ips.filter((x) => x.sessions > 0).length;
+  const summary =
+    ips.length === 1
+      ? up
+        ? "Up on its only IP"
+        : "Down on its only IP"
+      : up === ips.length
+        ? `Up on all ${ips.length} IPs`
+        : `Up on ${up} of ${ips.length} IPs`;
+  return (
+    <span className="two-line">
+      <span className={`small strong ${up === ips.length ? "tone-good" : up ? "tone-warning" : "tone-error"}`}>
+        {summary}
+      </span>
+      <span className="ip-chips">
+        {ips.map((x) => (
+          <span key={x.ip} className={`ip-chip${x.sessions ? " on" : ""}`}>
+            <span className="ip-dot" aria-hidden="true" />
+            <span className="num">{x.ip}</span>
+            <span className="ip-count">{x.sessions ? `×${x.sessions}` : "none"}</span>
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 export function NetworkStatusPage() {
   const [side, go] = useView<Side>("/monitoring/network-status", ["customer", "vendor"], "side");
   const bind = useTrunkBind();
@@ -128,19 +159,11 @@ export function NetworkStatusPage() {
       fetchPage={fetchPage}
       noSelection
       historyScope={null}
+      // Two-line rows (team trial round 4): enterprise over trunk and IDs, IP chips with their sessions, a bar for
+      // connections used, the status over its time.
+      rowHeight={64}
       initialState={{
-        visible: [
-          "enterpriseId",
-          "trunkId",
-          "enterpriseName",
-          "trunkName",
-          "ipAddresses",
-          "connections",
-          ...(vendor ? ["queue"] : []),
-          "tps",
-          "status",
-          "since",
-        ],
+        visible: ["enterpriseName", "ipAddresses", "connections", ...(vendor ? ["queue"] : []), "tps", "since"],
       }}
       above={
         <div className="deck-above">
@@ -174,24 +197,43 @@ export function NetworkStatusPage() {
       columns={{
         enterpriseId: { width: 110 },
         trunkId: { width: 90 },
-        enterpriseName: { width: 220, render: (r) => <strong>{r.enterpriseName}</strong> },
-        trunkName: { width: 190 },
-        ipAddresses: {
-          width: 220,
-          render: (r) =>
-            r.ipAddresses.length ? <span className="num small">{r.ipAddresses.join(", ")}</span> : muted("—"),
+        enterpriseName: {
+          width: 300,
+          label: "Enterprise · trunk",
+          render: (r) => (
+            <span className="two-line">
+              <strong>{r.enterpriseName}</strong>
+              <span className="muted small">
+                {r.trunkName} · ID {r.trunkId} · Ent {r.enterpriseId}
+              </span>
+            </span>
+          ),
         },
+        trunkName: { width: 190 },
+        ipAddresses: { width: 520, label: "IPs and sessions", render: (r) => <IpSessions row={r} /> },
         connections: {
-          width: 120,
-          align: "right",
-          render: (r) => <span className="num">{`${r.connections} / ${r.maxConnections}`}</span>,
+          width: 220,
+          label: "Connections",
+          render: (r) => {
+            const pct = r.maxConnections ? Math.min(100, (r.connections / r.maxConnections) * 100) : 0;
+            return (
+              <span className="two-line conn-bar-cell">
+                <span className="num">
+                  <strong>{r.connections}</strong> <span className="muted">/ {r.maxConnections}</span>
+                </span>
+                <span className={`conn-bar${pct >= 100 ? " full" : ""}`}>
+                  <span style={{ width: `${pct}%` }} />
+                </span>
+              </span>
+            );
+          },
         },
         queue: {
           width: 90,
           align: "right",
           render: (r) => <span className={`num${(r.queue ?? 0) > 200 ? " tone-warning" : ""}`}>{r.queue ?? "—"}</span>,
         },
-        tps: { width: 80, align: "right", render: (r) => <span className="num">{r.tps.toFixed(1)}</span> },
+        tps: { width: 80, align: "right", render: (r) => <strong className="num">{r.tps.toFixed(1)}</strong> },
         status: {
           width: 110,
           render: (r) => (
@@ -200,7 +242,18 @@ export function NetworkStatusPage() {
             </span>
           ),
         },
-        since: { width: 170, render: (r) => fmtWhen(r.since) },
+        since: {
+          width: 170,
+          label: "Online since",
+          render: (r) => (
+            <span className="two-line">
+              <span className={r.status === "online" ? "tone-good strong" : "muted strong"}>
+                <StatusDot tone={bindTone(r.status)} /> {r.status[0]!.toUpperCase() + r.status.slice(1)}
+              </span>
+              <span className="muted small">{fmtWhen(r.since)}</span>
+            </span>
+          ),
+        },
       }}
       rowActions={(r) => [
         {
@@ -226,11 +279,11 @@ export function NetworkStatusPage() {
         },
       ]}
       trailing={{
-        header: "Action",
+        header: "",
         width: 90,
         render: (r) =>
           r.status === "online" ? (
-            <Button small onClick={() => void act(r, "stop")}>
+            <Button small variant="danger" className="btn-outline-danger" onClick={() => void act(r, "stop")}>
               Stop
             </Button>
           ) : (

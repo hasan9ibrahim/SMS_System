@@ -303,7 +303,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**Page header**: links to the other routing pages (Route map, LCR, Re-rating, Rate lookup, Simulator) and the actions **Undo**, **History**, **Export**, **Cleanup** (only when there are findings), **Simulate** and the blue **New rule** button.",
-              '**Filter card**: the quick search box with a pill for every field filter (click the box to pick a field; **Any of (OR)…** opens the filter builder), its own controls, **Clear all**, and on the right **Save as view**, **Views**, the selection summary (for example "2 selected · 28.2k msgs"), **Bulk edit** and **Columns**.',
+              '**Filter card**: the quick search box with a pill for every field filter (click the box to pick a field; **Any of (OR)…** opens the filter builder), its own controls, **Clear all**, and on the right **Save as view**, **Views**, the selection summary (for example "2 selected · 28.2k msgs") and **Columns**.',
               "**Grid**: one row per rule, sorted by priority then ID, with a filter box under every column header. The footer shows the row count. See [[grids-and-filters]].",
               "**Detail panel**: opens on the right of the grid when you **double-click** a rule (a single click only highlights it). Its sections are tabs across the top: **Edit**, **Configuration** (with the vendors), **Conditions**, **Traffic**, **History** and **Test**; at the bottom the **Traffic 24h** trend line with Messages and Margin for the last 24 hours. Drag its left edge to resize it.",
               "**Status bar**: row counts and the shortcuts ↑↓ move · Space select · E edit · D duplicate · Ctrl+Z undo.",
@@ -352,7 +352,10 @@ export const topics: HelpTopic[] = [
           {
             kind: "fields",
             fields: [
-              { name: "Checkbox", what: "Selects the row for Bulk edit. The header box selects all loaded rows." },
+              {
+                name: "Checkbox",
+                what: "Selects the row; the header actions then act on every selected rule. The header box selects all loaded rows.",
+              },
               { name: "ID", what: "The rule number. Filter: equals." },
               { name: "Rule", what: "The rule name. Filter: contains, with `%` and `_` wildcards." },
               {
@@ -708,7 +711,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'The panel shows the route type, hunt policy, max level and minimum margin, then a table of the vendors: **Level**, **Vendor trunk**, **Share**, **Backup** ("for" the vendor it stands in for, or "last resort") and **Warm-up**. Each vendor is followed by its backups. Click **Edit vendors…** to change them in a wide popup.',
+            text: 'The panel shows the route type, hunt policy, max level and minimum margin, then a table of the vendors: **Level**, **Vendor trunk**, **Cost** (what the vendor charges for the rule\'s destinations: in EUR, the base currency, and under it in the vendor\'s own currency when that is not EUR; one figure when every destination costs the same, else lowest–highest), **Share**, **Backup** ("for" the vendor it stands in for, or "last resort") and **Warm-up**. Each vendor is followed by its backups. Click **Edit vendors…** to change them in a wide popup.',
           },
           {
             kind: "fields",
@@ -1001,7 +1004,7 @@ export const topics: HelpTopic[] = [
             items: [
               "Filter the grid, e.g. type the vendor name in the **Vendors** filter.",
               "Tick the rules (or the header box to select all loaded rows).",
-              "Click **Bulk edit** › **Replace vendor…**, choose the vendor trunk to replace and the one to use instead, add a note and click **Apply**.",
+              "Click **More** › **Replace vendor…**, choose the vendor trunk to replace and the one to use instead, add a note and click **Apply**.",
               "The vendor is swapped on every level, in the vendor scope and in number whitelists of those rules. One Undo restores them all.",
             ],
           },
@@ -1009,7 +1012,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "Delete (archive) a rule",
             items: [
-              "Select the rule and click **Bulk edit** › **Delete…**.",
+              "Select the rule and click **More** › **Delete…**.",
               "The delete dialog shows what depends on the rule. Confirm to archive it: it stops routing at once but stays in reports and history.",
               "Undo brings it back with the same ID. Restoring an archived rule later needs an administrator. See [[safe-delete]].",
             ],
@@ -1027,11 +1030,11 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "bulk",
-        title: "Bulk edit",
+        title: "Actions on several rules",
         blocks: [
           {
             kind: "text",
-            text: "Select rules with the checkboxes (or Space), then open **Bulk edit**. Each bulk action is one change and is undone as one.",
+            text: "Select rules with the checkboxes (or Space); the actions in the header (Delete and those under **More**) then act on all of them, after a confirmation naming how many. Each one is one change and is undone as one.",
           },
           {
             kind: "fields",
@@ -1086,7 +1089,7 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             fields: [
               { name: "↑ ↓", what: "Move between rules." },
-              { name: "Space", what: "Select or unselect the rule for Bulk edit." },
+              { name: "Space", what: "Select or unselect the rule." },
               {
                 name: "E",
                 what: "Edit the rule's settings (name, priority, continue routing, group, DLR target, comment, on/off).",
@@ -1317,7 +1320,7 @@ export const topics: HelpTopic[] = [
               { name: "Export", what: "Downloads the table on screen as CSV." },
               {
                 name: "Apply to route rules",
-                what: "Opens Route rules filtered to this destination in a new tab. There, select rules and use Bulk edit › Apply LCR profile.",
+                what: "Opens Route rules filtered to this destination in a new tab. There, select rules and use More › Apply LCR profile in the header.",
               },
               {
                 name: "Price clients from LCR",

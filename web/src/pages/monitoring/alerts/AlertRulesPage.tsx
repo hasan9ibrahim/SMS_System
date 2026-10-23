@@ -5,9 +5,10 @@
 // notified and how (pop-up, sound, e-mail with extra addresses and the partner's contact), repeat,
 // cooldown and recovery notice. Test evaluates the form on live traffic without raising anything.
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { AlertRuleInput, AlertRuleRow, AlertRuleTest, DepartmentRow, UserRow } from "@sms/contract";
 import { useAllRows } from "../../../api/admin";
-import { useMe } from "../../../api/hooks";
+import { fetchListPage, useMe } from "../../../api/hooks";
 import { useRestore } from "../../../api/records";
 import { testAlertRule, useCloneAlertRule, useSaveAlertRule, useSetAlertRuleStatus } from "../../../api/alerts";
 import { emptyState, encodeState } from "../../../grid/filterModel";
@@ -35,6 +36,7 @@ import {
   needsValue,
   ruleInput,
   SCOPES,
+  SEVERITY_LABEL,
 } from "./alertsModel";
 import { IdChips, severityCell } from "./parts";
 
@@ -512,6 +514,70 @@ function RuleActions({ r }: { r: AlertRuleRow }) {
   );
 }
 
+const SEV_TONE = { critical: "red", warning: "amber", info: "blue" } as const;
+
+/** "11 open incidents" in the header, opening Incidents on the open ones (team trial round 4). */
+function OpenIncidentsButton() {
+  const navigate = useTabNavigate();
+  const q = useQuery({
+    queryKey: ["list", "incidents", "open-count"],
+    queryFn: () =>
+      fetchListPage<{ id: number }>("incidents", {
+        filter: { logic: "and", conditions: [{ field: "state", op: "eq", value: "open" }] },
+        limit: 1,
+        withTotal: true,
+      }),
+    refetchInterval: 30_000,
+  });
+  const n = q.data?.total ?? 0;
+  if (!n) return null;
+  return (
+    <button
+      type="button"
+      className="btn btn-default open-inc-btn"
+      onClick={() =>
+        navigate(
+          `/monitoring/incidents?g=${encodeState({ ...emptyState(), columns: { state: { field: "state", op: "in", values: ["open"] } } })}`,
+        )
+      }
+    >
+      <span className="dot-mini" /> {n.toLocaleString("en-US")} open incident{n === 1 ? "" : "s"}
+    </button>
+  );
+}
+
+/** Summary tiles over the rules (team trial round 4): totals by severity and the ones that never fired. */
+function AlertKpis() {
+  const rules = useQuery({
+    queryKey: ["list", "alert_rules", "kpis"],
+    queryFn: () => fetchListPage<AlertRuleRow>("alert_rules", { limit: 200, withTotal: false }),
+    staleTime: 30_000,
+  });
+  const rows = rules.data?.rows ?? [];
+  const count = (f: (r: AlertRuleRow) => boolean) => rows.filter(f).length;
+  const tiles: { label: string; value: number; note?: string; tone?: string }[] = [
+    { label: "Rules", value: rows.length, note: `${count((r) => r.status === "inactive")} paused` },
+    { label: "Critical", value: count((r) => r.severity === "critical"), tone: "red" },
+    { label: "Warning", value: count((r) => r.severity === "warning"), tone: "amber" },
+    { label: "Info", value: count((r) => r.severity === "info"), tone: "blue" },
+    { label: "Never triggered", value: count((r) => !r.lastTriggeredAt), note: "Worth checking they still fit" },
+  ];
+  return (
+    <div className="kpi-tiles">
+      {tiles.map((t) => (
+        <div key={t.label} className="kpi-tile">
+          <span className={`kpi-label${t.tone ? ` tone-dot ${t.tone}` : ""}`}>{t.label}</span>
+          <span className="kpi-value">
+            {rules.data ? t.value : "…"}
+            {t.note && t.label === "Rules" && <small> · {t.note}</small>}
+          </span>
+          {t.note && t.label !== "Rules" && <span className="muted small">{t.note}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AlertRulesPage() {
   const h = useRuleHandlers();
   const { data: me } = useMe();
@@ -526,17 +592,87 @@ export function AlertRulesPage() {
       noSelection
       historyScope={{ entityTypes: ["alert_rule"] }}
       primary={{ label: "Add rule", icon: "plus", onClick: () => void openDialog(null) }}
+      actions={<OpenIncidentsButton />}
+      // Rules as cards (team trial round 4): a severity edge, the name with its severity and metric, the condition
+      // and what it applies to; channels as tags; when it last fired with its open incidents; an Active box.
+      rowHeight={78}
+      above={<AlertKpis />}
+      initialState={{ visible: ["name", "channels", "lastTriggeredAt", "status"] }}
       columns={{
-        name: { width: 280, render: (r) => <strong>{r.name}</strong> },
+        name: {
+          width: 620,
+          label: "Rule",
+          render: (r) => (
+            <span className="two-line rule-card-main">
+              <span>
+                <strong>{r.name}</strong>{" "}
+                <span className={`chip-tag ${SEV_TONE[r.severity]}`}>{SEVERITY_LABEL[r.severity]}</span>{" "}
+                <span className="chip-tag">{METRIC_SHORT[r.metric]}</span>
+              </span>
+              <span className="small">{r.conditionLabel}</span>
+              <span className="muted small">Applies to: {r.scopeLabel}</span>
+            </span>
+          ),
+        },
         scopeLabel: { width: 260 },
         metric: { width: 110, render: (r) => METRIC_SHORT[r.metric] },
         conditionType: { width: 320, render: (r) => r.conditionLabel },
         severity: { width: 110, render: (r) => severityCell(r.severity) },
-        channels: { width: 170, render: (r) => channelsLabel(r.channels) },
-        status: { width: 100, render: (r) => statusCell(r.status) },
+        channels: {
+          width: 260,
+          render: (r) => (
+            <span className="tag-row">
+              {channelsLabel(r.channels)
+                .split(", ")
+                .filter((c) => c && c !== "—")
+                .map((c) => (
+                  <span key={c} className="chip-tag">
+                    {c}
+                  </span>
+                ))}
+            </span>
+          ),
+        },
+        status: {
+          width: 130,
+          render: (r) => (
+            <label className="toggle-inline rule-active" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={r.status === "active"}
+                disabled={!!r.archivedAt || h.statusPending}
+                onChange={() => h.toggle(r)}
+              />
+              <span className={r.status === "active" ? "tone-good strong" : "muted"}>
+                {r.status === "active" ? "Active" : "Paused"}
+              </span>
+            </label>
+          ),
+        },
         lastTriggeredAt: {
-          width: 170,
-          render: (r) => (r.lastTriggeredAt ? fmtWhen(r.lastTriggeredAt) : <span className="muted">never</span>),
+          width: 260,
+          label: "Last triggered",
+          render: (r) => (
+            <span className="two-line">
+              {r.openIncidents > 0 && (
+                <button
+                  type="button"
+                  className="chip-tag red open-inc"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    h.incidents(r);
+                  }}
+                >
+                  <span className="dot-mini" />
+                  {r.openIncidents} open · view
+                </button>
+              )}
+              <span className="muted small">
+                {r.lastTriggeredAt ? `Last triggered ${fmtWhen(r.lastTriggeredAt)}` : "Never triggered"}
+              </span>
+              {r.updatedBy && <span className="muted small">by {r.updatedBy}</span>}
+            </span>
+          ),
         },
         openIncidents: {
           width: 80,
@@ -545,7 +681,9 @@ export function AlertRulesPage() {
         },
         updatedBy: { width: 140 },
       }}
-      rowClass={(r) => (r.archivedAt ? "row-muted" : r.status === "inactive" ? "row-muted" : undefined)}
+      rowClass={(r) =>
+        `rule-row sev-${r.severity}${r.archivedAt || r.status === "inactive" ? " row-muted" : ""}${r.openIncidents ? " has-open" : ""}`
+      }
       onOpen={(r) => !r.archivedAt && void openDialog(r)}
       rowActions={(r) => {
         const gone = r.archivedAt ? "Deleted rule" : undefined;

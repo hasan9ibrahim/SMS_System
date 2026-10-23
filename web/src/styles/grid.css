@@ -151,7 +151,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: var(--grid-row-height);
+  height: var(--grid-body-row-height, var(--grid-row-height));
   display: flex;
   align-items: center;
   border-bottom: var(--border-width) solid color-mix(in srgb, var(--color-border) 65%, var(--color-panel));

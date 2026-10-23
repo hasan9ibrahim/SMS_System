@@ -753,7 +753,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Rows of flagged RNs that are due soon are highlighted. Tick several RNs and choose **Bulk edit › Accept n pending RNs** to accept them all at once (each RN is still its own change you can undo; the confirmation warns when some have live traffic flags or notice breaches).",
+            text: "Header buttons: **Add RN** (upload a sheet or simulate an e-mail) and **Settings**. Rows of flagged RNs that are due soon are highlighted. Tick several RNs and choose the header's **Accept n pending RNs** to accept them all at once (each RN is still its own change you can undo; the confirmation warns when some have live traffic flags or notice breaches).",
           },
           {
             kind: "fields",

@@ -1316,3 +1316,43 @@
   flex-wrap: wrap;
   gap: 4px;
 }
+.copy-emails {
+  order: 99;
+  margin-left: 2px;
+}
+/* Compact top cards (team trial round 4): summary cards stay short so the page's main content gets the room. */
+.bill-summary,
+.info-card-grid {
+  gap: 10px;
+}
+.bill-summary {
+  margin-bottom: 12px;
+}
+.bill-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 0;
+  padding: 8px 14px;
+}
+.bill-card-label {
+  flex-basis: 100%;
+}
+.bill-card-value {
+  font-size: 19px;
+}
+.bill-card-value.small-value {
+  font-size: 15px;
+}
+.bill-card-link {
+  margin-top: 0;
+  margin-left: auto;
+}
+.info-card-grid > .ff {
+  padding: 8px 14px;
+  gap: 2px;
+}
+.info-card-grid .ff-hint {
+  display: none;
+}
