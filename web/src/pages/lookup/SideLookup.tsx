@@ -36,6 +36,91 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
+/** A text filter under a column header: applied after a short pause, like the other grids. */
+function TextFilter({
+  value,
+  onChange,
+  label,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  placeholder?: string;
+}) {
+  const [v, setV] = useState(value);
+  const d = useDebounced(v, 350);
+  useEffect(() => setV(value), [value]);
+  useEffect(() => {
+    if (d !== value) onChange(d);
+  }, [d]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input
+      value={v}
+      aria-label={`Filter ${label}`}
+      placeholder={placeholder ?? "Filter…"}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setV(e.target.value)}
+    />
+  );
+}
+
+/** A number filter under a column header: ≥, ≤ or between (team trial round 2). */
+function RangeInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: RangeFilter;
+  onChange: (v: RangeFilter) => void;
+  label: string;
+}) {
+  const [r, setR] = useState(value);
+  useEffect(() => setR(value), [value]);
+  const commit = (next: RangeFilter) => {
+    setR(next);
+    const a = rangeBounds(next);
+    const b = rangeBounds(value);
+    if (a.min !== b.min || a.max !== b.max || (!next.op && value.op)) onChange(next);
+  };
+  return (
+    <span className="vt-range" onClick={(e) => e.stopPropagation()}>
+      <select
+        aria-label={`${label} filter`}
+        value={r.op}
+        onChange={(e) => commit({ ...r, op: e.target.value as RangeFilter["op"] })}
+      >
+        <option value="">Any</option>
+        <option value="gte">≥</option>
+        <option value="lte">≤</option>
+        <option value="between">Range</option>
+      </select>
+      {r.op && (
+        <input
+          inputMode="decimal"
+          aria-label={`${label} ${r.op === "lte" ? "at most" : "at least"}`}
+          placeholder={r.op === "between" ? "from" : ""}
+          value={r.a}
+          onChange={(e) => setR({ ...r, a: e.target.value })}
+          onBlur={() => commit(r)}
+          onKeyDown={(e) => e.key === "Enter" && commit(r)}
+        />
+      )}
+      {r.op === "between" && (
+        <input
+          inputMode="decimal"
+          aria-label={`${label} at most`}
+          placeholder="to"
+          value={r.b}
+          onChange={(e) => setR({ ...r, b: e.target.value })}
+          onBlur={() => commit(r)}
+          onKeyDown={(e) => e.key === "Enter" && commit(r)}
+        />
+      )}
+    </span>
+  );
+}
+
 export function SidePanel({
   side,
   state,
@@ -46,18 +131,6 @@ export function SidePanel({
   setState: (s: SideState) => void;
 }) {
   const navigate = useTabNavigate();
-  // Country and the column filters were removed (team trial round 3); a saved link that still has them is cleared.
-  const stale =
-    state.mccs.length > 0 ||
-    !!state.destination ||
-    !!state.code ||
-    !!state.tables?.op ||
-    !!state.price?.op ||
-    !!state.sys?.op;
-  useEffect(() => {
-    if (stale)
-      setState({ ...state, mccs: [], destination: "", code: "", tables: noRange(), price: noRange(), sys: noRange() });
-  }, [stale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const options = useQuery({
     queryKey: ["lookup-side-options", side],
@@ -127,6 +200,14 @@ export function SidePanel({
       key: "dest",
       header: sortHead("Destination", "destination"),
       width: 250,
+      filter: (
+        <TextFilter
+          label="destination"
+          placeholder="Country or network…"
+          value={state.destination ?? ""}
+          onChange={(destination) => set({ destination })}
+        />
+      ),
       render: (r) =>
         r.kind === "dest" ? (
           <span className="sl-dest">
@@ -159,6 +240,9 @@ export function SidePanel({
       key: "code",
       header: "MCCMNC",
       width: 84,
+      filter: (
+        <TextFilter label="MCCMNC" placeholder="262…" value={state.code ?? ""} onChange={(code) => set({ code })} />
+      ),
       render: (r) =>
         r.kind === "dest" ? (
           <span className="mono">{r.row.mccmnc}</span>
@@ -170,6 +254,7 @@ export function SidePanel({
       key: "tables",
       header: sortHead("Tables", "tables"),
       width: 96,
+      filter: <RangeInput label="Tables" value={state.tables ?? noRange()} onChange={(tables) => set({ tables })} />,
       align: "right",
       render: (r) => (r.kind === "dest" ? <span className="strong">{r.row.tables}</span> : null),
     },
@@ -178,6 +263,7 @@ export function SidePanel({
       header: "Price",
       title: "In the table currency",
       width: 160,
+      filter: <RangeInput label="Price" value={state.price ?? noRange()} onChange={(price) => set({ price })} />,
       align: "right",
       render: (r) =>
         r.kind === "dest" ? (
@@ -213,6 +299,7 @@ export function SidePanel({
       header: sortHead(`Sys price${currency ? ` (${currency})` : ""}`, "minSys"),
       title: "In the platform currency",
       width: 150,
+      filter: <RangeInput label="Sys price" value={state.sys ?? noRange()} onChange={(sys) => set({ sys })} />,
       align: "right",
       render: (r) =>
         r.kind === "dest" ? (
@@ -223,7 +310,17 @@ export function SidePanel({
     },
   ];
 
-  const chosen = state.categoryIds.length + state.trunkIds.length + state.mccmncs.length;
+  // The filters under the column headers stay (team trial round 3: destination, MCCMNC, tables and price ranges).
+  const chosen =
+    state.categoryIds.length +
+    state.trunkIds.length +
+    state.mccmncs.length +
+    state.mccs.length +
+    (state.destination ? 1 : 0) +
+    (state.code ? 1 : 0) +
+    (state.tables?.op ? 1 : 0) +
+    (state.price?.op ? 1 : 0) +
+    (state.sys?.op ? 1 : 0);
   return (
     <section className={`sl-side sl-${side}`} aria-label={TITLE[side]}>
       {/* Title, count and this side's own filters in one compact header (team trial round 3). */}
@@ -260,6 +357,16 @@ export function SidePanel({
           onChange={(trunkIds) => set({ trunkIds })}
         />
         <CheckListButton
+          title="Country"
+          items={items.countries}
+          selected={state.mccs}
+          onChange={(mccs) => {
+            // Codes outside the chosen countries drop out.
+            const keep = mccs.length ? state.mccmncs.filter((c) => mccs.includes(c.slice(0, 3))) : state.mccmncs;
+            set({ mccs, mccmncs: keep });
+          }}
+        />
+        <CheckListButton
           title="MCCMNC"
           items={items.codes}
           selected={state.mccmncs}
@@ -269,7 +376,20 @@ export function SidePanel({
           <button
             type="button"
             className="link small"
-            onClick={() => setState({ ...state, categoryIds: [], trunkIds: [], mccmncs: [] })}
+            onClick={() =>
+              setState({
+                ...state,
+                categoryIds: [],
+                trunkIds: [],
+                mccs: [],
+                mccmncs: [],
+                destination: "",
+                code: "",
+                tables: noRange(),
+                price: noRange(),
+                sys: noRange(),
+              })
+            }
           >
             Clear
           </button>

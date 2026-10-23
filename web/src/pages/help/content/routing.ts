@@ -1666,13 +1666,14 @@ export const topics: HelpTopic[] = [
               { name: "Search chip", what: "The search from the common bar, shown as a chip; × clears it." },
               { name: "Product", what: "Checklist: tick product categories." },
               { name: "Customer trunk / Vendor trunk", what: "Checklist: tick trunks." },
+              { name: "Country", what: "Checklist: tick countries; MCCMNC codes outside them drop out." },
               { name: "MCCMNC", what: "Checklist: tick single destinations." },
-              { name: "Clear", what: "Clears that side's filters." },
+              { name: "Clear", what: "Clears that side's filters, the ones under the column headers too." },
             ],
           },
           {
             kind: "text",
-            text: "Click a column header to sort. There are no filter boxes under the headers on this page.",
+            text: "Click a column header to sort. Under the headers: **Destination** (country or network, `%` `_` wildcards), **MCCMNC** (starts with), and **Tables**, **Price** and **Sys price** as a range: Any, ≥, ≤ or Range (from … to).",
           },
           {
             kind: "fields",

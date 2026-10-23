@@ -668,3 +668,14 @@ button.chip.accent {
 .sl-side .sl-table {
   border: 0;
 }
+/* Four compact checklists fit beside the title (team trial round 3). */
+.sl-head .checklist-btn {
+  height: 28px;
+  padding: 0 8px;
+  gap: 4px;
+  font-size: 12.5px;
+}
+.sl-head .checklist-btn svg {
+  width: 11px;
+  height: 11px;
+}
