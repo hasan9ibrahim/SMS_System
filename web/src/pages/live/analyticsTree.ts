@@ -282,12 +282,53 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   { metric: "moCount", label: "MO", title: "Mobile originated messages", fmt: "int", shown: false, group: "Traffic" },
 ];
 /** The default columns, in order. */
+/**
+ * Header bands over the columns (team trial round 5): Traffic, Quality, Money, Network. A band's columns sit
+ * together, in the catalogue's order within the band.
+ */
+export type Band = "traffic" | "quality" | "money" | "network";
+export const BANDS: { key: Band; label: string }[] = [
+  { key: "traffic", label: "Traffic" },
+  { key: "quality", label: "Quality" },
+  { key: "money", label: "Money" },
+  { key: "network", label: "Network" },
+];
+const NETWORK = new Set<string>([
+  "deliveryDelayS",
+  "hlrTotal",
+  "hlrPorted",
+  "hlrCached",
+  "hlrLive",
+  "hlrAccomplished",
+  "tpsNow",
+  "tpsAvg",
+  "tpsPeak",
+]);
+export function bandOf(c: Pick<Column, "metric" | "fmt">): Band {
+  if (NETWORK.has(c.metric)) return "network";
+  const g = ALL_COLUMNS.find((x) => x.metric === c.metric)?.group;
+  return g === "Quality" ? "quality" : g === "Money" || g === "HLR/MNP" ? "money" : "traffic";
+}
+const bandIndex = (c: Column) => BANDS.findIndex((b) => b.key === bandOf(c));
+/** Consecutive columns of one band, for the band row of the header. */
+export function bandSpans(cols: Column[]): { band: Band; label: string; span: number }[] {
+  const out: { band: Band; label: string; span: number }[] = [];
+  for (const c of cols) {
+    const b = bandOf(c);
+    const last = out.at(-1);
+    if (last?.band === b) last.span++;
+    else out.push({ band: b, label: BANDS.find((x) => x.key === b)!.label, span: 1 });
+  }
+  return out;
+}
+
 export const DEFAULT_COLUMNS: ReportMetric[] = ALL_COLUMNS.filter((c) => c.shown).map((c) => c.metric);
-/** The user's saved columns (unknown ones dropped), else the default set. Shown in the catalogue's order. */
+/** The user's saved columns (unknown ones dropped), else the default set. Grouped by band, catalogue order within. */
 export function columnsFor(saved: readonly string[] | undefined): Column[] {
   const pick = saved?.length ? new Set(saved) : new Set<string>(DEFAULT_COLUMNS);
   const out = ALL_COLUMNS.filter((c) => pick.has(c.metric));
-  return out.length ? out : ALL_COLUMNS.filter((c) => c.shown);
+  const list = out.length ? out : ALL_COLUMNS.filter((c) => c.shown);
+  return [...list].sort((a, b) => bandIndex(a) - bandIndex(b));
 }
 /** The default columns (tests and the detail panel before preferences load). */
 export const COLUMNS: Column[] = columnsFor(undefined);

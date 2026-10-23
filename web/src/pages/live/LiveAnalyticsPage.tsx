@@ -30,6 +30,8 @@ import { edrGridState } from "../reports/masterModel";
 import { problemText } from "../routing/dialogs";
 import {
   ALL_COLUMNS,
+  bandOf,
+  bandSpans,
   cellTone,
   childConditions,
   columnsFor,
@@ -878,8 +880,9 @@ export function LiveAnalyticsPage() {
                 <col className="la-col-act" />
               </colgroup>
               <thead>
-                <tr>
-                  <th className="la-th-name" title="Use + on a row to break it down by any level">
+                {/* Header bands (team trial round 5): Traffic, Quality, Money (currency), Network. */}
+                <tr className="la-bands">
+                  <th className="la-th-name" rowSpan={2} title="Use + on a row to break it down by any level">
                     {top ? (
                       <span className="la-th-search">
                         <input
@@ -903,10 +906,18 @@ export function LiveAnalyticsPage() {
                       "Total"
                     )}
                   </th>
+                  {bandSpans(cols).map((b, i) => (
+                    <th key={`${b.band}${i}`} colSpan={b.span} className={`la-band la-band-${b.band}`}>
+                      {b.band === "money" ? `${b.label} (${currency})` : b.label}
+                    </th>
+                  ))}
+                  <th rowSpan={2}>EDRs</th>
+                </tr>
+                <tr className="la-col-titles">
                   {cols.map((c) => (
                     <th
                       key={c.metric}
-                      className="num"
+                      className={`num la-band-${bandOf(c)}`}
                       title={moneyCols.has(c.fmt) ? `${c.title} · in ${currency}` : c.title}
                       aria-sort={sort?.key === c.metric ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                     >
@@ -918,7 +929,6 @@ export function LiveAnalyticsPage() {
                       </button>
                     </th>
                   ))}
-                  <th>EDRs</th>
                 </tr>
               </thead>
               <tbody>

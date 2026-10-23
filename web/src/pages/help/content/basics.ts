@@ -2032,6 +2032,10 @@ export const topics: HelpTopic[] = [
         title: "Columns",
         blocks: [
           {
+            kind: "text",
+            text: "A coloured band over the column titles groups them: **Traffic** (blue), **Quality** (green), **Money** (amber, with the currency) and **Network** (violet: delivery delay, HLR/MNP and TPS). The columns of a band always sit together.",
+          },
+          {
             kind: "fields",
             fields: [
               { name: "Attempts", what: "Messages received from customers." },
