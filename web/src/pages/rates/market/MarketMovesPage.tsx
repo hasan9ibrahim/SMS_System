@@ -4,13 +4,23 @@
 // cost, 7-day volume, notice period and a suggested rate. "Update rates" opens Bulk rating pre-filled
 // with the chosen clients' suggestions; reroute, snooze, dismiss and handled are logged on the move.
 import { useState } from "react";
-import type { MarketAutoRule, MarketMoveDetail, MarketMoveRow, MarketMoveSettings } from "@sms/contract";
+import { useQuery } from "@tanstack/react-query";
+import type {
+  Enterprise,
+  FilterCondition,
+  MarketAutoRule,
+  MarketMoveDetail,
+  MarketMoveRow,
+  MarketMoveSettings,
+} from "@sms/contract";
+import { fetchListPage } from "../../../api/hooks";
 import {
   useActOnMove,
   useArchiveAutoRule,
   useAutoRules,
   useMarketMove,
   useMarketSettings,
+  useMarketSummary,
   useSaveAutoRule,
   useSaveMarketSettings,
   useScanMoves,
@@ -18,16 +28,17 @@ import {
 } from "../../../api/market";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
-import { ListLookup } from "../../../records/parts";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { Chart, useChartColors } from "../../../ui/Chart";
+import { ChecklistChip } from "../../../ui/ChecklistChip";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
 import { Kv } from "../../admin/parts";
-import { formatPct, formatRate, shortDate } from "../format";
+import { formatPct, formatRate, relDays, shortDate } from "../format";
 import { AmFilter } from "../RateManagerPage";
+import { editTopVendorsFor, openTopVendors } from "./TopVendors";
 import { moveLabel, routeRulesFor, STATE_LABEL, STATE_TONE, updateRatesUrl, vendorChart } from "./marketModel";
 
 const page = pageForPath("/rates/market-moves")!;
@@ -103,10 +114,20 @@ function MoveCard({ r }: { r: MarketMoveRow }) {
           {r.lastEffective !== r.firstEffective ? ` to ${shortDate(r.lastEffective)}` : ""}
         </span>
         <span className="muted">
-          market cost {formatRate(r.oldCost)} → {formatRate(r.newCost)} {r.currency}
+          market cost (average of the vendors that moved) {formatRate(r.oldCost)} → {formatRate(r.newCost)} {r.currency}
+          {r.oldCost && r.newCost !== null
+            ? ` (${formatPct(Math.round((r.newCost / r.oldCost - 1) * 10000) / 100, true)})`
+            : ""}
         </span>
         {r.urgent && <span className="chip-mini tone-error">Urgent</span>}
         <span className="fb-spacer" />
+        <Button
+          small
+          title="Pick the vendor trunks that count for this destination (team trial round 5)"
+          onClick={() => void editTopVendorsFor(r.mccmnc)}
+        >
+          Top vendors…
+        </Button>
         {r.state === "open" ? (
           <>
             <select
@@ -249,7 +270,12 @@ function Clients({ r }: { r: MarketMoveRow }) {
               <th className="num">At new cost</th>
               <th className="num">Msgs 7d</th>
               <th className="num">Notice</th>
-              <th className="num">Suggested</th>
+              <th className="num" title="New market cost plus the client's current margin (or the target margin)">
+                Suggested
+              </th>
+              <th className="num" title="Suggested rate against today's sell rate">
+                Change
+              </th>
               <th>From</th>
               <th>Auto-apply</th>
             </tr>
@@ -276,6 +302,11 @@ function Clients({ r }: { r: MarketMoveRow }) {
                 <td className="num">{c.messages7d.toLocaleString("en-US")}</td>
                 <td className="num">{c.noticeDays} d</td>
                 <td className="num strong">{formatRate(c.suggestedRate)}</td>
+                <td className="num">
+                  {c.suggestedRate !== null && c.sellRate > 0
+                    ? formatPct(Math.round((c.suggestedRate / c.sellRate - 1) * 10000) / 100, true)
+                    : "—"}
+                </td>
                 <td>{shortDate(c.suggestedFrom)}</td>
                 <td className="muted small">{c.autoRule ?? "—"}</td>
               </tr>
@@ -316,6 +347,88 @@ function AutoRuleRow({ rule }: { rule: MarketAutoRule }) {
   );
 }
 
+/**
+ * Every client (customers and bilateral partners), searched on the server, with tick boxes (team trial round 4,
+ * §13.14). Clients that already have a rule are shown but cannot be ticked again.
+ */
+function ClientChecklist({
+  ids,
+  onChange,
+  taken,
+}: {
+  ids: number[];
+  onChange: (ids: number[]) => void;
+  taken: Set<number>;
+}) {
+  const [q, setQ] = useState("");
+  const results = useQuery({
+    queryKey: ["list", "market-rule-clients", q],
+    queryFn: () =>
+      fetchListPage<Enterprise>("enterprises", {
+        limit: 500,
+        withTotal: true,
+        ...(q.trim() ? { search: q.trim() } : {}),
+        filter: { logic: "and", conditions: [{ field: "type", op: "in", values: ["customer", "reciprocal"] }] },
+        sort: [{ field: "name", dir: "asc" }],
+      }),
+    staleTime: 30_000,
+  });
+  const rows = (results.data?.rows ?? []).filter((r) => !r.archivedAt);
+  const free = rows.filter((r) => !taken.has(r.id));
+  const allShown = free.length > 0 && free.every((r) => ids.includes(r.id));
+  const toggle = (id: number) => onChange(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  return (
+    <div className="multi-pick table-scope">
+      <input
+        type="search"
+        placeholder="Search clients…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        aria-label="Search clients"
+      />
+      <div className="pick-list">
+        {free.length > 0 && (
+          <label className="choice-row select-all">
+            <input
+              type="checkbox"
+              checked={allShown}
+              onChange={() =>
+                onChange(
+                  allShown
+                    ? ids.filter((id) => !free.some((r) => r.id === id))
+                    : [...new Set([...ids, ...free.map((r) => r.id)])],
+                )
+              }
+            />
+            <span className="strong">Select all shown</span>
+            <span className="muted small">
+              {rows.length}
+              {results.data?.total && results.data.total > rows.length ? ` of ${results.data.total}` : ""} clients
+            </span>
+          </label>
+        )}
+        {rows.map((r) => (
+          <label key={r.id} className="choice-row" title={taken.has(r.id) ? "Already has a rule" : undefined}>
+            <input
+              type="checkbox"
+              disabled={taken.has(r.id)}
+              checked={taken.has(r.id) || ids.includes(r.id)}
+              onChange={() => toggle(r.id)}
+            />
+            <span>{r.name}</span>
+            <span className="muted small">
+              {taken.has(r.id)
+                ? "has a rule"
+                : [r.type === "reciprocal" ? "Bilateral" : null, r.accountManagerName].filter(Boolean).join(" · ")}
+            </span>
+          </label>
+        ))}
+        {results.isSuccess && rows.length === 0 && <p className="muted small pad">No matches.</p>}
+      </div>
+    </div>
+  );
+}
+
 function SettingsDialog({ done }: { done: (v: null) => void }) {
   const q = useMarketSettings();
   const save = useSaveMarketSettings();
@@ -324,7 +437,8 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
   const digest = useSendDigest();
   const [d, setD] = useState<MarketMoveSettings | null>(null);
   const s = d ?? q.data ?? null;
-  const [ent, setEnt] = useState<number | null>(null);
+  const [ents, setEnts] = useState<number[]>([]);
+  const [adding, setAdding] = useState(false);
   const [min, setMin] = useState("10");
   const [both, setBoth] = useState(false);
   const num = (k: keyof MarketMoveSettings, label: string, step = 1) =>
@@ -381,15 +495,30 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
         <>
           <h3 className="part-title">Detection (§13.14)</h3>
           <div className="rn-form-grid">
-            {num("cheapestN", "Cheapest N vendors count")}
-            <label className="toggle-inline">
-              <input
-                type="checkbox"
-                checked={s.includeTier1}
-                onChange={(e) => setD({ ...s, includeTier1: e.target.checked })}
-              />
-              Tier 1 vendors count too
+            <label className="field">
+              <span>Destinations without a top vendor list</span>
+              <select
+                value={s.unlistedMode}
+                onChange={(e) => setD({ ...s, unlistedMode: e.target.value as MarketMoveSettings["unlistedMode"] })}
+              >
+                <option value="tier1">Tier 1 vendors (not watched with fewer than N)</option>
+                <option value="cheapest">Cheapest N vendors (+ Tier 1 if ticked)</option>
+                <option value="skip">Not watched</option>
+              </select>
             </label>
+            {s.unlistedMode === "cheapest" && (
+              <>
+                {num("cheapestN", "Cheapest N vendors count")}
+                <label className="toggle-inline">
+                  <input
+                    type="checkbox"
+                    checked={s.includeTier1}
+                    onChange={(e) => setD({ ...s, includeTier1: e.target.checked })}
+                  />
+                  Tier 1 vendors count too
+                </label>
+              </>
+            )}
             {num("windowDays", "Dates within (days)")}
             {num("minVendors", "At least N vendors")}
             {num("minChangePct", "Moving by at least (%)", 0.5)}
@@ -399,11 +528,20 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
             {num("targetMarginPct", "Target margin for suggestions (%)", 0.5)}
             {num("digestHour", "Daily digest at (UTC hour)")}
           </div>
+          <p className="muted small">
+            Destinations can have their own hand-picked top vendors (with or without Tier 1): use{" "}
+            <button type="button" className="link" onClick={() => void openTopVendors()}>
+              Top vendors per destination
+            </button>
+            . Destinations without one use the choice above: by default their Tier 1 vendors, and a destination with
+            fewer Tier 1 vendors than &quot;At least N vendors&quot; is not watched.
+          </p>
           <h3 className="part-title">Auto-apply rules</h3>
           <p className="muted small">
-            Follow market moves automatically for a client: re-price when the margin at the new cost falls below the
-            minimum, from the move's date or the client's notice period, whichever is later. Each re-price is one
-            undoable change.
+            Follow market moves automatically for a client: re-price when the margin at the new market cost falls below
+            the minimum, from the move&apos;s date or the client&apos;s increase (or decrease) notice, whichever is
+            later. Each re-price is one undoable change, and the client&apos;s customer trunks get the normal rate
+            notification e-mail at once, showing the new rate and its start date.
           </p>
           <ul className="mm-rules">
             {rules.data?.rules.map((r) => (
@@ -411,15 +549,21 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
             ))}
             {rules.data && !rules.data.rules.length && <li className="muted small">No rules yet.</li>}
           </ul>
+          <ClientChecklist
+            ids={ents}
+            onChange={setEnts}
+            taken={
+              new Set(
+                (rules.data?.rules ?? [])
+                  .filter((r) => r.enterpriseId !== null && r.status === "active")
+                  .map((r) => r.enterpriseId!),
+              )
+            }
+          />
           <div className="bulk-row">
-            <ListLookup<{ id: number; name: string }>
-              list="enterprises"
-              value={ent}
-              fixed={[{ field: "type", op: "in", values: ["customer", "both"] }]}
-              onChange={(r) => setEnt(r?.id ?? null)}
-              labelOf={(r) => r.name}
-              placeholder="Client…"
-            />
+            <span className="muted small">
+              {ents.length ? `${ents.length} client${ents.length === 1 ? "" : "s"} ticked` : "Tick clients above"}
+            </span>
             <label className="toggle-inline">
               keep margin ≥
               <input className="mm-num" type="number" value={min} onChange={(e) => setMin(e.target.value)} /> %
@@ -429,29 +573,72 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
             </label>
             <Button
               small
-              disabled={!ent || saveRule.isPending}
-              onClick={() =>
-                saveRule.mutate(
-                  {
-                    id: null,
-                    body: {
-                      enterpriseId: ent,
-                      categoryId: null,
-                      direction: both ? "both" : "increases",
-                      minMarginPct: Number(min),
-                      status: "active",
-                    },
-                  },
-                  { onSuccess: () => setEnt(null), onError: fail },
-                )
-              }
+              disabled={!ents.length || adding}
+              onClick={async () => {
+                // One rule per client (the contract keeps one client per rule).
+                setAdding(true);
+                let added = 0;
+                try {
+                  for (const enterpriseId of ents) {
+                    await saveRule.mutateAsync({
+                      id: null,
+                      body: {
+                        enterpriseId,
+                        categoryId: null,
+                        direction: both ? "both" : "increases",
+                        minMarginPct: Number(min),
+                        status: "active",
+                      },
+                    });
+                    added++;
+                  }
+                  toast({ tone: "good", message: `${added} rule${added === 1 ? "" : "s"} added` });
+                  setEnts([]);
+                } catch (e) {
+                  fail(e);
+                } finally {
+                  setAdding(false);
+                }
+              }}
             >
-              Add rule
+              {adding ? "Adding…" : ents.length > 1 ? `Add ${ents.length} rules` : "Add rule"}
             </Button>
           </div>
         </>
       )}
     </Modal>
+  );
+}
+
+const STATE_CHIP: Record<MarketMoveRow["state"], string> = {
+  open: "amber",
+  snoozed: "blue",
+  handled: "green",
+  dismissed: "",
+  expired: "",
+};
+
+/** Summary tiles over the open moves (team trial round 5). */
+function MoveKpis() {
+  const q = useMarketSummary();
+  const d = q.data;
+  const tiles: { label: string; value: number | undefined; tone?: string; note?: string }[] = [
+    { label: "Open moves", value: d?.open },
+    { label: "Urgent", value: d?.urgent, tone: "red", note: "Large increases starting soon" },
+    { label: "Increases", value: d?.up, tone: "red" },
+    { label: "Decreases", value: d?.down, tone: "green" },
+    { label: "For my clients", value: d?.mine, tone: "blue" },
+  ];
+  return (
+    <div className="kpi-tiles">
+      {tiles.map((t) => (
+        <div key={t.label} className="kpi-tile">
+          <span className={`kpi-label${t.tone ? ` tone-dot ${t.tone}` : ""}`}>{t.label}</span>
+          <span className="kpi-value">{t.value === undefined ? "…" : t.value.toLocaleString("en-US")}</span>
+          {t.note && <span className="muted small">{t.note}</span>}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -518,7 +705,6 @@ export function MarketMovesPage() {
           { label: "Add note…", icon: "file", disabled: act.isPending, onSelect: () => void run(r, "note") },
         ];
       }}
-      initialState={{ columns: { state: { field: "state", op: "in", values: ["open"] } } }}
       primary={{
         label: scan.isPending ? "Scanning…" : "Scan now",
         icon: "refresh",
@@ -534,30 +720,103 @@ export function MarketMovesPage() {
           }),
       }}
       actions={
-        <Button icon="gauge" onClick={() => void ask<null>((done) => <SettingsDialog done={done} />)}>
-          Settings
-        </Button>
+        <>
+          <Button icon="users" onClick={() => void openTopVendors()}>
+            Top vendors
+          </Button>
+          <Button icon="gauge" onClick={() => void ask<null>((done) => <SettingsDialog done={done} />)}>
+            Settings
+          </Button>
+        </>
       }
+      // Queue redesign (team trial round 5, like Incidents and Alert rules): summary tiles, a filter bar of chips,
+      // and each move as a card row with a direction edge.
+      above={<MoveKpis />}
+      rowHeight={62}
+      initialState={{
+        columns: { state: { field: "state", op: "in", values: ["open"] } },
+        visible: ["country", "avgChangePct", "firstEffective", "newCost", "affectedClients", "state"],
+      }}
+      toolbarFields={["state", "direction", "urgent", "amUserId"]}
       toolbar={(state, setState) => {
-        const c = state.columns.amUserId;
+        const set = (field: string, c: FilterCondition | null) => {
+          const columns = { ...state.columns };
+          if (c) columns[field] = c;
+          else delete columns[field];
+          setState({ ...state, columns });
+        };
+        const am = state.columns.amUserId;
+        const urgent = state.columns.urgent;
         return (
-          <AmFilter
-            value={c ? Number(c.value) : null}
-            onChange={(id) => {
-              const columns = { ...state.columns };
-              if (id === null) delete columns.amUserId;
-              else columns.amUserId = { field: "amUserId", op: "eq", value: id };
-              setState({ ...state, columns });
-            }}
-          />
+          <div className="incident-filters">
+            <ChecklistChip
+              label="State"
+              field="state"
+              condition={state.columns.state}
+              options={Object.entries(STATE_LABEL).map(([value, label]) => ({ value, label }))}
+              onChange={(c) => set("state", c)}
+            />
+            <ChecklistChip
+              label="Direction"
+              field="direction"
+              condition={state.columns.direction}
+              options={[
+                { value: "up", label: "↑ Increases" },
+                { value: "down", label: "↓ Decreases" },
+              ]}
+              onChange={(c) => set("direction", c)}
+            />
+            <button
+              type="button"
+              className={`range-chip plain${urgent ? " set" : ""}`}
+              aria-pressed={!!urgent}
+              onClick={() => set("urgent", urgent ? null : { field: "urgent", op: "eq", value: true })}
+            >
+              {urgent ? "Urgent only" : "Urgent: All"}
+            </button>
+            <AmFilter
+              value={am ? Number(am.value) : null}
+              onChange={(id) => set("amUserId", id === null ? null : { field: "amUserId", op: "eq", value: id })}
+            />
+          </div>
         );
       }}
       columns={{
-        country: { width: 140 },
+        country: {
+          width: 300,
+          label: "Destination",
+          render: (r) => (
+            <span className="two-line">
+              <strong>
+                {r.country ?? "—"}
+                {r.urgent && r.state === "open" && (
+                  <>
+                    {" "}
+                    <span className="chip-tag red">Urgent</span>
+                  </>
+                )}
+              </strong>
+              <span className="muted small">
+                {r.network ?? "All networks"} · {r.mccmnc}
+              </span>
+            </span>
+          ),
+        },
         network: { width: 170 },
         mccmnc: { width: 80, align: "right" },
         direction: { width: 70, render: (r) => (r.direction === "up" ? "↑ Up" : "↓ Down") },
-        avgChangePct: { width: 100, align: "right", render: (r) => arrow(r) },
+        avgChangePct: {
+          width: 190,
+          label: "Change",
+          render: (r) => (
+            <span className="two-line">
+              <span className="mm-change">{arrow(r)}</span>
+              <span className="muted small">
+                {r.movedCount} of {r.topCount} top vendors moved
+              </span>
+            </span>
+          ),
+        },
         movedCount: {
           width: 90,
           align: "right",
@@ -567,34 +826,81 @@ export function MarketMovesPage() {
             </span>
           ),
         },
-        firstEffective: { width: 110, render: (r) => shortDate(r.firstEffective) },
-        newCost: {
-          width: 180,
-          align: "right",
+        firstEffective: {
+          width: 230,
+          label: "Effective",
           render: (r) => (
-            <span className="num">
-              {formatRate(r.oldCost)} → {formatRate(r.newCost)}
+            <span className="two-line">
+              <strong className="num">
+                {shortDate(r.firstEffective)}
+                {r.lastEffective.slice(0, 10) !== r.firstEffective.slice(0, 10)
+                  ? ` – ${shortDate(r.lastEffective)}`
+                  : ""}
+              </strong>
+              <span className="muted small">{relDays(r.firstEffective)}</span>
             </span>
           ),
         },
-        affectedClients: { width: 80, align: "right" },
+        newCost: {
+          width: 220,
+          align: "right",
+          label: "Market cost",
+          render: (r) => (
+            <span className="two-line right">
+              <span className="num">
+                {formatRate(r.oldCost)} → <strong>{formatRate(r.newCost)}</strong>
+              </span>
+              <span className="muted small">
+                {r.currency}
+                {r.oldCost && r.newCost !== null
+                  ? ` · ${formatPct(Math.round((r.newCost / r.oldCost - 1) * 10000) / 100, true)}`
+                  : ""}
+              </span>
+            </span>
+          ),
+        },
+        affectedClients: {
+          width: 170,
+          align: "right",
+          label: "Clients",
+          render: (r) => (
+            <span className="two-line right">
+              <strong className="num">
+                {r.affectedClients} client{r.affectedClients === 1 ? "" : "s"}
+              </strong>
+              <span className="muted small">{r.volume7d.toLocaleString("en-US")} msgs in 7 days</span>
+            </span>
+          ),
+        },
         volume7d: {
           width: 90,
           align: "right",
           render: (r) => <span className="num">{r.volume7d.toLocaleString("en-US")}</span>,
         },
-        urgent: { width: 80, render: (r) => (r.urgent ? <span className="chip-mini tone-error">Urgent</span> : "") },
+        urgent: { width: 80, render: (r) => (r.urgent ? <span className="chip-tag red">Urgent</span> : "") },
         state: {
-          width: 110,
+          width: 190,
           render: (r) => (
-            <span>
-              <StatusDot tone={STATE_TONE[r.state]} /> {STATE_LABEL[r.state]}
+            <span className="two-line">
+              <span className={`chip-tag ${STATE_CHIP[r.state]}`}>
+                <span className="dot-mini" />
+                {STATE_LABEL[r.state]}
+              </span>
+              <span className="muted small">
+                {r.state === "snoozed" && r.snoozedUntil
+                  ? `until ${shortDate(r.snoozedUntil)}`
+                  : r.handledBy
+                    ? `by ${r.handledBy}`
+                    : `detected ${shortDate(r.detectedAt)}`}
+              </span>
             </span>
           ),
         },
         detectedAt: { width: 160, render: (r) => fmtWhen(r.detectedAt) },
       }}
-      rowClass={(r) => (r.urgent && r.state === "open" ? "row-alert" : undefined)}
+      rowClass={(r) =>
+        `rule-row ${r.direction === "up" ? "sev-critical" : "sev-good"}${r.state === "open" ? "" : " row-muted"}`
+      }
       detail={(r) => ({
         title: (
           <>
@@ -611,7 +917,7 @@ export function MarketMovesPage() {
           { key: "log", label: "Log", content: <Log key={r.id} r={r} /> },
         ],
       })}
-      shortcuts="↑↓ move · the account manager filter keeps moves for that AM's clients"
+      shortcuts="↑↓ move · Enter opens the move"
     />
   );
 }

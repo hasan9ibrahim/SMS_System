@@ -13,7 +13,6 @@ import type {
   RateBulkPreview,
   RateBulkScope,
   RateTableRow,
-  TrunkListRow,
 } from "@sms/contract";
 import { actOnMove, fetchMarketMove } from "../../api/market";
 import { moveLabel } from "./market/marketModel";
@@ -23,6 +22,7 @@ import { previewRateBulk, useApplyRateBulk } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { PageHeader } from "../../page/PageHeader";
+import { Icon } from "../../ui/Icon";
 import { ListLookup } from "../../records/parts";
 import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { ask, toast } from "../../ui/feedback";
@@ -82,190 +82,140 @@ const CHANGE_LABEL: Record<string, string> = {
   skip: "Skip",
 };
 
-/** Chosen sell tables as chips, with a lookup that adds more. */
-function TablePicker({ ids, onChange }: { ids: number[]; onChange: (ids: number[]) => void }) {
-  const names = useQuery({
-    queryKey: ["list", "names", "rate_tables", ids],
+/**
+ * Clients' rate tables as a searchable checklist (team trial round 4, like the route rule trunk picker): Inclusive =
+ * the ticked tables, Exclusive = every client table except the ticked ones. The search also finds a table by its
+ * customer trunks and enterprises. `ids` is the resulting scope.
+ */
+function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]) => void }) {
+  const [mode, setMode] = useState<"inclusive" | "exclusive">("inclusive");
+  const [excluded, setExcluded] = useState<number[]>([]);
+  const [q, setQ] = useState("");
+  const ticked = mode === "inclusive" ? ids : excluded;
+  const results = useQuery({
+    queryKey: ["list", "bulk-tables", q],
     queryFn: () =>
       fetchListPage<RateTableRow>("rate_tables", {
-        limit: 500,
-        withTotal: false,
-        filter: { logic: "and", conditions: [{ field: "id", op: "in", values: ids }] },
-      }),
-    enabled: ids.length > 0,
-    staleTime: 60_000,
-  });
-  const byId = new Map(names.data?.rows.map((r) => [r.id, r]));
-  return (
-    <div className="id-chips">
-      {ids.map((id) => {
-        const r = byId.get(id);
-        return (
-          <span key={id} className="chip" title={r?.enterpriseNames.join(", ")}>
-            {r?.name ?? `#${id}`}
-            <button
-              type="button"
-              aria-label={`Remove ${r?.name ?? id}`}
-              onClick={() => onChange(ids.filter((x) => x !== id))}
-            >
-              ×
-            </button>
-          </span>
-        );
-      })}
-      <ListLookup<RateTableRow>
-        list="rate_tables"
-        value={null}
-        exclude={ids}
-        fixed={[{ field: "kind", op: "in", values: ["customer"] }]}
-        onChange={(r) => r && onChange([...ids, r.id])}
-        labelOf={(r) => r.name}
-        detailOf={(r) => [r.enterpriseNames.slice(0, 2).join(", "), r.currency].filter(Boolean).join(" · ")}
-        placeholder="Add a client's rate table…"
-      />
-    </div>
-  );
-}
-
-/** Tick customer trunks; their sell tables join the scope (team trial round 2). */
-function TrunkPickDialog({ done }: { done: (tableIds: number[] | null) => void }) {
-  const [search, setSearch] = useState("");
-  const [picked, setPicked] = useState<number[]>([]);
-  const [busy, setBusy] = useState(false);
-  const trunks = useQuery({
-    queryKey: ["list", "bulk-trunk-pick", search],
-    queryFn: () =>
-      fetchListPage<TrunkListRow>("customer_trunks", {
-        limit: 300,
+        limit: 60,
         withTotal: true,
-        ...(search.trim() ? { search: search.trim() } : {}),
+        ...(q.trim() ? { search: q.trim() } : {}),
+        filter: { logic: "and", conditions: [{ field: "kind", op: "in", values: ["customer"] }] },
         sort: [{ field: "name", dir: "asc" }],
       }),
     staleTime: 30_000,
   });
-  const rows = trunks.data?.rows ?? [];
-  const shown = rows.map((r) => r.id);
-  const allShown = shown.length > 0 && shown.every((id) => picked.includes(id));
-  const toggle = (id: number) => setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id]);
-  const apply = async () => {
-    setBusy(true);
-    try {
-      const page = await fetchListPage<RateTableRow>("rate_tables", {
+  // Every client table, for Exclusive.
+  const all = useQuery({
+    queryKey: ["list", "bulk-tables", "all"],
+    queryFn: () =>
+      fetchListPage<RateTableRow>("rate_tables", {
         limit: 4000,
         withTotal: false,
-        filter: {
-          logic: "and",
-          conditions: [
-            { field: "kind", op: "in", values: ["customer"] },
-            { field: "customerTrunkId", op: "in", values: picked },
-          ],
-        },
-      });
-      if (!page.rows.length) toast({ tone: "warning", message: "These trunks have no client rate table yet." });
-      done(page.rows.map((r) => r.id));
-    } catch (e) {
-      toast({ tone: "error", message: e instanceof ApiError ? e.message : String(e) });
-      setBusy(false);
-    }
-  };
+        filter: { logic: "and", conditions: [{ field: "kind", op: "in", values: ["customer"] }] },
+      }),
+    enabled: mode === "exclusive",
+    staleTime: 60_000,
+  });
+  useEffect(() => {
+    if (mode === "exclusive" && all.data)
+      onChange(all.data.rows.map((r) => r.id).filter((id) => !excluded.includes(id)));
+  }, [mode, excluded, all.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const names = useQuery({
+    queryKey: ["list", "names", "rate_tables", ticked],
+    queryFn: () =>
+      fetchListPage<RateTableRow>("rate_tables", {
+        limit: 500,
+        withTotal: false,
+        filter: { logic: "and", conditions: [{ field: "id", op: "in", values: ticked }] },
+      }),
+    enabled: ticked.length > 0,
+    staleTime: 60_000,
+  });
+  const byId = new Map(names.data?.rows.map((r) => [r.id, r]));
+  const setTicked = (next: number[]) => (mode === "inclusive" ? onChange(next) : setExcluded(next));
+  const toggle = (id: number) => setTicked(ticked.includes(id) ? ticked.filter((x) => x !== id) : [...ticked, id]);
+  const rows = results.data?.rows ?? [];
+  const allShown = rows.length > 0 && rows.every((r) => ticked.includes(r.id));
   return (
-    <Modal
-      title="Pick customer trunks"
-      width={640}
-      onClose={() => done(null)}
-      footer={
-        <>
-          <span className="muted small fb-spacer">
-            {picked.length} trunk{picked.length === 1 ? "" : "s"} ticked
-          </span>
-          <Button onClick={() => done(null)}>Cancel</Button>
-          <Button variant="primary" disabled={!picked.length || busy} onClick={apply}>
-            Add their rate tables
-          </Button>
-        </>
-      }
-    >
-      <div className="bulk-row">
-        <input
-          type="search"
-          autoFocus
-          placeholder="Search trunk, client, username… (% and _ wildcards)"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search customer trunks"
-          style={{ flex: 1 }}
-        />
-        <label className="small">
-          <input
-            type="checkbox"
-            checked={allShown}
-            disabled={!shown.length}
-            onChange={() =>
-              setPicked(allShown ? picked.filter((id) => !shown.includes(id)) : [...new Set([...picked, ...shown])])
-            }
-          />{" "}
-          Select all shown
-        </label>
+    <div className="multi-pick table-scope">
+      <div className="table-scope-head">
+        <div className="choice-seg" role="radiogroup" aria-label="Clients' rate tables">
+          {(["inclusive", "exclusive"] as const).map((m) => (
+            <label key={m} className={mode === m ? "on" : ""}>
+              <input
+                type="radio"
+                className="sr-only"
+                checked={mode === m}
+                onChange={() => {
+                  setMode(m);
+                  if (m === "inclusive") onChange([]);
+                  else setExcluded([]);
+                }}
+              />
+              {m === "inclusive" ? "Inclusive" : "Exclusive"}
+            </label>
+          ))}
+        </div>
+        <span className="muted small">
+          {mode === "inclusive"
+            ? `${ids.length} table${ids.length === 1 ? "" : "s"} chosen`
+            : `All client tables except ${excluded.length} · ${ids.length} in scope`}
+        </span>
       </div>
-      <div className="trunk-pick-list" role="list" aria-label="Customer trunks">
-        {trunks.isLoading && <p className="muted small">Loading…</p>}
-        {!trunks.isLoading && !rows.length && <p className="muted small">No customer trunk matches.</p>}
-        {rows.map((r) => (
-          <label key={r.id} className="trunk-pick-row" role="listitem">
-            <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} />
-            <strong>{r.name}</strong>
+      <div className="chips">
+        {ticked.map((id) => (
+          <span key={id} className="chip" title={byId.get(id)?.enterpriseNames.join(", ")}>
+            {byId.get(id)?.name ?? `#${id}`}
+            <button type="button" aria-label={`Remove ${byId.get(id)?.name ?? id}`} onClick={() => toggle(id)}>
+              <Icon name="x" size={11} />
+            </button>
+          </span>
+        ))}
+        {ticked.length === 0 && (
+          <span className="muted small">{mode === "inclusive" ? "Nothing chosen yet." : "Nothing excluded."}</span>
+        )}
+      </div>
+      <input
+        type="search"
+        placeholder="Search tables, customer trunks or enterprises…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        aria-label="Search client rate tables"
+      />
+      <div className="pick-list">
+        {rows.length > 0 && (
+          <label className="choice-row select-all">
+            <input
+              type="checkbox"
+              checked={allShown}
+              onChange={() =>
+                setTicked(
+                  allShown
+                    ? ticked.filter((id) => !rows.some((r) => r.id === id))
+                    : [...new Set([...ticked, ...rows.map((r) => r.id)])],
+                )
+              }
+            />
+            <span className="strong">Select all shown</span>
             <span className="muted small">
-              {[r.enterpriseName, r.category, r.currency].filter(Boolean).join(" · ")}
+              {rows.length}
+              {results.data?.total && results.data.total > rows.length ? ` of ${results.data.total}` : ""}
+            </span>
+          </label>
+        )}
+        {rows.map((r) => (
+          <label key={r.id} className="choice-row">
+            <input type="checkbox" checked={ticked.includes(r.id)} onChange={() => toggle(r.id)} />
+            <span>{r.name}</span>
+            <span className="muted small">
+              {[r.trunkNames.slice(0, 2).join(", ") || r.enterpriseNames.slice(0, 2).join(", "), r.currency]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           </label>
         ))}
+        {results.isSuccess && rows.length === 0 && <p className="muted small pad">No matches.</p>}
       </div>
-      {trunks.data?.total != null && trunks.data.total > rows.length && (
-        <p className="muted small">
-          Showing {rows.length} of {trunks.data.total.toLocaleString("en-US")}: search to narrow the list.
-        </p>
-      )}
-    </Modal>
-  );
-}
-
-function CodeChips({
-  codes,
-  onChange,
-  list,
-}: {
-  codes: string[];
-  onChange: (codes: string[]) => void;
-  list: "destinations" | "countries";
-}) {
-  return (
-    <div className="id-chips">
-      {codes.map((c) => (
-        <span key={c} className="chip">
-          {c}
-          <button type="button" aria-label={`Remove ${c}`} onClick={() => onChange(codes.filter((x) => x !== c))}>
-            ×
-          </button>
-        </span>
-      ))}
-      {list === "destinations" ? (
-        <ListLookup<{ id: number; mccmnc: string; network: string; country: string }>
-          list="destinations"
-          value={null}
-          onChange={(r) => r && !codes.includes(r.mccmnc) && onChange([...codes, r.mccmnc])}
-          labelOf={(r) => `${r.mccmnc} ${r.network}`}
-          detailOf={(r) => r.country}
-          placeholder="Add an MCCMNC…"
-        />
-      ) : (
-        <ListLookup<{ id: number; name: string; iso: string }>
-          list="countries"
-          value={null}
-          onChange={(r) => r && !codes.includes(r.iso) && onChange([...codes, r.iso])}
-          labelOf={(r) => `${r.name} (${r.iso})`}
-          placeholder="Add a country…"
-        />
-      )}
     </div>
   );
 }
@@ -358,7 +308,8 @@ export function BulkRatingPage() {
   // Default start: today 00:00 in the platform time zone; applies from the save (team trial round 2).
   const [from, setFrom] = useState(() => todayMidnight(tz));
   const [respectNotice, setRespectNotice] = useState(true);
-  const [addMissing, setAddMissing] = useState(false);
+  // New destinations are added by default; "Don't add if new" keeps to the rates a table already has (round 4).
+  const [skipNew, setSkipNew] = useState(false);
   const [preview, setPreview] = useState<RateBulkPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [edits, setEdits] = useState<Edits>(noEdits);
@@ -440,7 +391,7 @@ export function BulkRatingPage() {
       rateTableIds: tables,
       ...(mccmncs.length ? { mccmncs } : {}),
       ...(countries.length ? { countryIsos: countries } : {}),
-      onlyExisting: !addMissing,
+      onlyExisting: skipNew,
       respectNotice,
       effectiveFrom: effectiveIso(from, tz),
       ...(overrides.length ? { overrides } : {}),
@@ -688,26 +639,33 @@ export function BulkRatingPage() {
           <h2>1 · Scope</h2>
           <div className="field">
             <span>Clients' rate tables</span>
-            <TablePicker ids={tables} onChange={setTables} />
-            <Button
-              small
-              icon="check"
-              onClick={async () => {
-                const ids = await ask<number[]>((done) => <TrunkPickDialog done={done} />);
-                if (ids) setTables([...new Set([...tables, ...ids])]);
-              }}
-            >
-              Pick customer trunks…
-            </Button>
+            <TableScope ids={tables} onChange={setTables} />
           </div>
-          <div className="field">
-            <span>Destinations by MCCMNC</span>
-            <CodeChips list="destinations" codes={mccmncs} onChange={setMccmncs} />
-          </div>
-          <div className="field">
-            <span>Destinations by country (every network)</span>
-            <CodeChips list="countries" codes={countries} onChange={setCountries} />
-          </div>
+          {/* Destinations come from the tree or a pasted list (team trial round 4: no separate MCCMNC / country
+              boxes); what is picked shows as a count with Clear. */}
+          {mccmncs.length + countries.length > 0 && (
+            <div className="bulk-row">
+              <span className="small">
+                Destinations: <strong>{mccmncs.length}</strong> network{mccmncs.length === 1 ? "" : "s"}
+                {countries.length ? (
+                  <>
+                    {" "}
+                    and <strong>{countries.length}</strong> whole countr{countries.length === 1 ? "y" : "ies"}
+                  </>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                className="link small"
+                onClick={() => {
+                  setMccmncs([]);
+                  setCountries([]);
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
           <div className="bulk-row">
             <Button
               small
@@ -808,8 +766,8 @@ export function BulkRatingPage() {
             </label>
             {(type === "set" || costPlus) && (
               <label className="toggle-inline">
-                <input type="checkbox" checked={addMissing} onChange={(e) => setAddMissing(e.target.checked)} />
-                Also add destinations a table lacks
+                <input type="checkbox" checked={skipNew} onChange={(e) => setSkipNew(e.target.checked)} />
+                Don&apos;t add if new
               </label>
             )}
             <span className="fb-spacer" />

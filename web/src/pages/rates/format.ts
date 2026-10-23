@@ -38,3 +38,12 @@ export const shortDate = (s: string | null | undefined) =>
 
 export const shortDateTime = (s: string | null | undefined) =>
   s ? `${isoToZoned(s, displayTz()).replace("T", " ")} ${displayTz() === "UTC" ? "UTC" : zoneAbbr(s)}` : "—";
+
+/** "starts in 3 days", "starts today", "started 5 days ago" (market moves, incoming RNs; team trial round 5). */
+export function relDays(at: string, now = Date.now()): string {
+  const d = Math.round(
+    (Date.parse(at.slice(0, 10)) - Date.parse(new Date(now).toISOString().slice(0, 10))) / 86_400_000,
+  );
+  if (d === 0) return "starts today";
+  return d > 0 ? `starts in ${d} day${d === 1 ? "" : "s"}` : `started ${-d} day${d === -1 ? "" : "s"} ago`;
+}

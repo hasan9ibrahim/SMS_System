@@ -21,6 +21,7 @@ import { scopeUrl } from "./bulkModel";
 import { NewRateTableDialog } from "./dialogs";
 import { RateTablePanel } from "./RateTablePanel";
 import { RateTableView } from "./RateTableView";
+import { openSendRates } from "./SendRatesDialog";
 
 const page = pageForPath("/rates/manager")!;
 
@@ -137,6 +138,21 @@ function FullList() {
           icon: "external",
           onSelect: () => open(r.id, { newTab: true, name: r.name }),
         },
+        // Send the rate sheet to every customer trunk using the table (team trial round 4).
+        {
+          label: "Send rates…",
+          icon: "send",
+          main: true,
+          disabled: r.kind !== "customer" || r.archived || !r.trunkCount,
+          hint: r.archived
+            ? "Deleted table"
+            : r.kind !== "customer"
+              ? "Rate sheets go to clients: customer tables only"
+              : !r.trunkCount
+                ? "No customer trunk uses this table"
+                : undefined,
+          onSelect: () => void openSendRates([r]),
+        },
         {
           label: "Bulk rating…",
           icon: "layers",
@@ -167,7 +183,14 @@ function FullList() {
       // Several clients' tables at once open the bulk rating workspace (§13.11, §13.12).
       selection={{
         summary: (_rows, ids) => `${ids.size} table${ids.size === 1 ? "" : "s"} selected`,
-        bulk: (ids, clear) => [
+        bulk: (ids, clear, rows) => [
+          {
+            label: `Send rates (${ids.length} tables)…`,
+            icon: "send",
+            disabled: !rows.some((r) => r.kind === "customer" && !r.archived),
+            hint: "Customer tables only",
+            onSelect: () => void openSendRates(rows.filter((r) => r.kind === "customer" && !r.archived)).then(clear),
+          },
           {
             label: `Bulk rating (${ids.length} table${ids.length === 1 ? "" : "s"})…`,
             icon: "layers",

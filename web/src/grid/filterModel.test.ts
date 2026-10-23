@@ -62,12 +62,13 @@ const type: FieldDescriptor = {
   ],
 };
 
-test("text: plain text is contains, wildcards as typed, = equals, ! excludes, /re/ regex", () => {
-  assert.deepEqual(parseColumnFilter(name, "au"), { field: "name", op: "like", value: "%au%" });
+test("text: plain text starts with, %x anywhere, wildcards as typed, = equals, ! excludes, /re/ regex", () => {
+  assert.deepEqual(parseColumnFilter(name, "au"), { field: "name", op: "like", value: "au%" });
+  assert.deepEqual(parseColumnFilter(name, "%au"), { field: "name", op: "like", value: "%au%" });
   assert.deepEqual(parseColumnFilter(name, "re%"), { field: "name", op: "like", value: "re%" });
   assert.deepEqual(parseColumnFilter(name, "a_c"), { field: "name", op: "like", value: "a_c" });
   assert.deepEqual(parseColumnFilter(name, "=ACME"), { field: "name", op: "eq", value: "ACME" });
-  assert.deepEqual(parseColumnFilter(name, "!test"), { field: "name", op: "not_like", value: "%test%" });
+  assert.deepEqual(parseColumnFilter(name, "!test"), { field: "name", op: "not_like", value: "test%" });
   assert.deepEqual(parseColumnFilter(name, "/^ab/"), { field: "name", op: "regex", value: "^ab" });
   assert.ok(parseColumnFilter(name, "/(/") instanceof Error);
   assert.deepEqual(parseColumnFilter(name, "empty"), { field: "name", op: "empty" });
@@ -115,7 +116,7 @@ test("what the box shows round-trips through the parser", () => {
     [name, "=ACME"],
     [name, "!test"],
     [name, "/^ab/"],
-    [name, "re%"],
+    [name, "%re%"],
     [dest, "505"],
     [margin, ">=5"],
     [margin, "-3..10"],
@@ -130,7 +131,8 @@ test("what the box shows round-trips through the parser", () => {
 });
 
 test("chips read like the design: 'Rule au', 'Type Customer, Vendor', 'Margin < 0'", () => {
-  assert.equal(conditionLabel(name, { field: "name", op: "like", value: "%au%" }), "Rule au");
+  assert.equal(conditionLabel(name, { field: "name", op: "like", value: "au%" }), "Rule au");
+  assert.equal(conditionLabel(name, { field: "name", op: "like", value: "%au%" }), "Rule %au%");
   assert.equal(
     conditionLabel(type, { field: "type", op: "in", values: ["customer", "vendor"] }),
     "Type Customer, Vendor",

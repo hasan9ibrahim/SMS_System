@@ -33,12 +33,19 @@ const problemText = (e: unknown) => {
   return errors.length ? errors.map((x) => `${x.path.replace(/^\//, "")}: ${x.message}`).join("; ") : e.message;
 };
 
-export function NewRateTableDialog({ done }: { done: (id: number | null) => void }) {
+export function NewRateTableDialog({
+  done,
+  initial,
+}: {
+  done: (id: number | null) => void;
+  /** Starting values, e.g. from the customer trunk the table is created for (team trial round 5). */
+  initial?: { name?: string; categoryId?: number | null };
+}) {
   const ref = useReference();
   const save = useSaveRateTable();
   const notifySaved = useNotifySaved();
-  const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [categoryId, setCategoryId] = useState<number | null>(initial?.categoryId || null);
   const [currency, setCurrency] = useState(usePlatformCurrency());
   const [description, setDescription] = useState("");
   const [copy, setCopy] = useState(false);

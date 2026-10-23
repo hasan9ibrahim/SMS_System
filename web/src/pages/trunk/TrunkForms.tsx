@@ -19,10 +19,13 @@ import {
   TextField,
   type FormApi,
 } from "../../form/form";
+import { useDragOrder, moveItem } from "../../records/dragOrder";
 import { ListLookup } from "../../records/parts";
+import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { tzOptions } from "../../ui/timezones";
+import { NewRateTableDialog } from "../rates/dialogs";
 
 export type TrunkForm = (CustomerTrunkInput | VendorTrunkInput) & { password?: string };
 
@@ -271,22 +274,34 @@ function BindLine({ from, to, up }: { from: string; to: string; up: boolean | nu
 
 function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
   const ids = ((form.values as CustomerTrunkInput).rateTableIds ?? []) as number[];
-  const move = (i: number, d: number) => {
-    const next = [...ids];
-    const [x] = next.splice(i, 1);
-    next.splice(i + d, 0, x!);
-    form.set("rateTableIds", next);
+  const setIds = (next: number[]) => form.set("rateTableIds", next);
+  // Drag a row by its handle to reorder (team trial round 5); ↑ / ↓ and Alt+↑ / Alt+↓ still work.
+  const { rowProps } = useDragOrder(ids, setIds);
+  const move = (i: number, d: number) => setIds(moveItem(ids, i, i + d));
+  // Quick create (team trial round 5): a new customer table, named after the trunk, added at the end.
+  const createTable = async () => {
+    const v = form.values as CustomerTrunkInput;
+    const id = await ask<number>((done) => (
+      <NewRateTableDialog
+        done={done}
+        initial={{ name: v.name ? `${v.name}_RATES` : "", categoryId: v.categoryId || null }}
+      />
+    ));
+    if (id) setIds([...ids, id]);
   };
   return (
     <FormField
       label="Rate tables"
       wide
       error={form.error("rateTableIds")}
-      hint="In order: the first table with a rate for the destination prices the message (§5.4)"
+      hint="In order: the first table with a rate for the destination prices the message (§5.4). Drag ⠿ to reorder."
     >
       <ol className="ordered-list">
         {ids.map((id, i) => (
-          <li key={id}>
+          <li key={id} {...rowProps(i)} aria-label={`Rate table ${i + 1}`}>
+            <span className="drag-handle" title="Drag to reorder (or Alt+↑ / Alt+↓)" aria-hidden="true">
+              ⠿
+            </span>
             <span className="pos">{i + 1}</span>
             <ListLookup<RateTableRow>
               list="rate_tables"
@@ -313,12 +328,7 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
                 small
                 variant="ghost"
                 aria-label="Remove rate table"
-                onClick={() =>
-                  form.set(
-                    "rateTableIds",
-                    ids.filter((x) => x !== id),
-                  )
-                }
+                onClick={() => setIds(ids.filter((x) => x !== id))}
               >
                 <Icon name="x" size={12} />
               </Button>
@@ -326,6 +336,7 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
           </li>
         ))}
         <li>
+          <span className="drag-handle" aria-hidden="true" />
           <span className="pos">+</span>
           <ListLookup<RateTableRow>
             list="rate_tables"
@@ -333,10 +344,13 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
             placeholder="Add a customer rate table…"
             fixed={[{ field: "kind", op: "eq", value: "customer" }]}
             exclude={ids}
-            onChange={(r) => r && form.set("rateTableIds", [...ids, r.id])}
+            onChange={(r) => r && setIds([...ids, r.id])}
             labelOf={(r) => `${r.name} (${r.currency})`}
             detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`}
           />
+          <Button small variant="ghost" icon="plus" onClick={() => void createTable()}>
+            Create new rate table
+          </Button>
         </li>
       </ol>
     </FormField>

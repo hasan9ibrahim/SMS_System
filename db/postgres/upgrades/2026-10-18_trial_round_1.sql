@@ -358,3 +358,30 @@ CREATE INDEX IF NOT EXISTS margin_deals_updated_idx ON margin_deals (updated_at 
 -- Team trial round 4: our account number for a client (customers and bilateral partners), printed in the invoice
 -- header (§7). Optional.
 ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS account_number text;
+
+-- Team trial round 5 (§13.14): hand-picked top vendors per destination for market move detection, instead of the
+-- cheapest N. Tier 1 vendors count too when include_tier1. Destinations without a row follow unlisted_mode.
+CREATE TABLE IF NOT EXISTS market_top_vendors (
+  mccmnc_id        bigint PRIMARY KEY REFERENCES mccmnc(id) ON DELETE CASCADE,
+  vendor_trunk_ids bigint[] NOT NULL DEFAULT '{}',
+  include_tier1    boolean NOT NULL DEFAULT true,
+  updated_by_id    bigint REFERENCES users(id),
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE market_move_settings ADD COLUMN IF NOT EXISTS unlisted_mode text NOT NULL DEFAULT 'cheapest'
+  CHECK (unlisted_mode IN ('cheapest', 'skip'));
+
+-- Team trial round 5 (§13.14): destinations without a hand-picked top vendor list use their Tier 1 vendors by
+-- default; with fewer Tier 1 vendors than the minimum, the destination is not watched.
+ALTER TABLE market_move_settings DROP CONSTRAINT IF EXISTS market_move_settings_unlisted_mode_check;
+ALTER TABLE market_move_settings ALTER COLUMN unlisted_mode SET DEFAULT 'tier1';
+ALTER TABLE market_move_settings ADD CONSTRAINT market_move_settings_unlisted_mode_check
+  CHECK (unlisted_mode IN ('tier1', 'cheapest', 'skip'));
+DO $$
+BEGIN
+  -- Once: later choices of "cheapest" are kept when this script runs again.
+  IF NOT EXISTS (SELECT 1 FROM upgrade_marks WHERE name = 'market_unlisted_tier1') THEN
+    UPDATE market_move_settings SET unlisted_mode = 'tier1' WHERE unlisted_mode = 'cheapest';
+    INSERT INTO upgrade_marks (name) VALUES ('market_unlisted_tier1');
+  END IF;
+END $$;

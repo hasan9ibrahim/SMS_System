@@ -36,8 +36,8 @@ export const isChoice = (f: FieldDescriptor) => f.type === "enum" || f.type === 
 export function filterPlaceholder(f: FieldDescriptor): string {
   if (isNumeric(f)) return f.defaultOperator === "eq" ? "=" : "≥ ≤";
   if (isTime(f)) return "from..to";
-  if (f.type === "prefix" || f.type === "mccmnc") return "starts with…";
-  return "contains…";
+  // Text matches from the start unless % is typed (team trial round 4).
+  return "starts with…";
 }
 
 const allowed = (f: FieldDescriptor, op: FilterOperator) => f.operators.includes(op);
@@ -60,8 +60,8 @@ function operand(f: FieldDescriptor, raw: string): string | number | null {
  * Parses a column filter box. Returns null for an empty box and an Error for text that
  * cannot be a condition on this field.
  *
- * Text:     au → contains · acme% / %re / a_c → wildcards as typed · =ACME → equals ·
- *           !test → does not contain · /^ab/ → regex · empty / !empty
+ * Text:     au → starts with (team trial round 4) · %au → contains · acme% / a_c / %re% → wildcards as
+ *           typed · =ACME → equals · !test → does not start with · /^ab/ → regex · empty / !empty
  * Prefix:   505 → starts with
  * Numbers:  5 or =5 · >5 >=5 ≥5 <5 <=5 ≤5 · !=5 · 5..10 (inclusive) · 1,2,3 (in list)
  * Dates:    2026-10-01..2026-10-16 · >=2026-10-01 · <2026-10-01
@@ -130,10 +130,18 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
   if (text.startsWith("=") && allowed(f, "eq")) return { field, op: "eq", value: text.slice(1) };
   if (text.startsWith("!") && allowed(f, "not_like")) {
     const v = text.slice(1);
-    return { field, op: "not_like", value: /[%_]/.test(v) ? v : `%${v}%` };
+    return { field, op: "not_like", value: textPattern(v) };
   }
-  return { field, op: "like", value: /[%_]/.test(text) ? text : `%${text}%` };
+  return { field, op: "like", value: textPattern(text) };
 }
+
+/** Plain text starts with; a leading % alone (`%au`) searches anywhere (team trial round 4); other wildcards as typed. */
+const textPattern = (v: string) =>
+  !/[%_]/.test(v) ? `${v}%` : v.length > 1 && v.startsWith("%") && !/[%_]/.test(v.slice(1)) ? `${v}%` : v;
+
+/** "abc%" (starts with, the plain-text default) → "abc"; anything else null. */
+const startsWithText = (s: string) =>
+  s.length > 1 && s.endsWith("%") && !/[%_]/.test(s.slice(0, -1)) ? s.slice(0, -1) : null;
 
 /** Text to show in the column filter box for a condition (inverse of parseColumnFilter). */
 export function formatColumnFilter(f: FieldDescriptor, c: FilterCondition | undefined): string {
@@ -164,13 +172,11 @@ export function formatColumnFilter(f: FieldDescriptor, c: FilterCondition | unde
       return isNumeric(f) ? v(c.value) : `=${v(c.value)}`;
     case "not_like": {
       const s = String(c.value);
-      return `!${s.startsWith("%") && s.endsWith("%") && s.length > 1 ? s.slice(1, -1) : s}`;
+      return `!${startsWithText(s) ?? s}`;
     }
     case "like": {
       const s = String(c.value);
-      if (f.type === "prefix" || f.type === "mccmnc")
-        return s.endsWith("%") && !s.slice(0, -1).includes("%") ? s.slice(0, -1) : s;
-      return s.startsWith("%") && s.endsWith("%") && s.length > 1 && !s.slice(1, -1).includes("%") ? s.slice(1, -1) : s;
+      return startsWithText(s) ?? s;
     }
     default:
       return String(c.value ?? "");
@@ -209,8 +215,7 @@ export function conditionLabel(f: FieldDescriptor | undefined, c: FilterConditio
   switch (c.op) {
     case "like": {
       const s = String(c.value);
-      const contains = s.startsWith("%") && s.endsWith("%") && !s.slice(1, -1).includes("%");
-      return contains ? `${label} ${s.slice(1, -1)}` : `${label} ${s}`;
+      return `${label} ${startsWithText(s) ?? s}`;
     }
     case "in":
       return `${label} ${vals.length > 3 ? `${vals.slice(0, 3).join(", ")} +${vals.length - 3}` : vals.join(", ")}`;

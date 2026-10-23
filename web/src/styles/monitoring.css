@@ -979,3 +979,48 @@
 .kpi-value {
   font-size: 19px;
 }
+/* Live analytics header bands (team trial round 5): Traffic blue, Quality green, Money amber, Network violet. The
+   band row is sticky at the top and the column titles stick just under it. */
+.la-grid {
+  --la-band-h: 24px;
+}
+.la-grid .la-bands th.la-band {
+  height: var(--la-band-h);
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 0;
+  border-left: var(--border-width) solid var(--color-panel);
+}
+.la-grid .la-col-titles th {
+  top: var(--la-band-h);
+}
+.la-grid .la-bands th[rowspan] {
+  vertical-align: bottom;
+}
+.la-grid th.la-band-traffic {
+  --band: var(--color-accent);
+}
+.la-grid th.la-band-quality {
+  --band: var(--color-good);
+}
+.la-grid th.la-band-money {
+  --band: var(--color-warning);
+}
+.la-grid th.la-band-network {
+  --band: #7c3aed;
+}
+.la-grid th[class*="la-band-"] {
+  background: color-mix(in srgb, var(--band) 7%, var(--color-panel));
+}
+.la-grid .la-col-titles th[class*="la-band-"] {
+  border-left: var(--border-width) solid var(--color-panel);
+}
+.la-grid .la-bands th.la-band {
+  color: color-mix(in srgb, var(--band) 85%, var(--color-text));
+}

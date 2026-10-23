@@ -24,6 +24,8 @@ export function useDragOrder<T>(rows: T[], onChange: (rows: T[]) => void, disabl
           tabIndex: 0,
           className: `${dragging === i ? "dragging" : ""}${over === i && dragging !== i ? " drop-target" : ""}`,
           onDragStart: (e: DragEvent) => {
+            // Read-only forms (a disabled fieldset, e.g. a deleted trunk) do not reorder.
+            if ((e.currentTarget as HTMLElement).closest("fieldset:disabled")) return e.preventDefault();
             setDragging(i);
             e.dataTransfer.effectAllowed = "move";
             e.dataTransfer.setData("text/plain", String(i));
@@ -46,6 +48,7 @@ export function useDragOrder<T>(rows: T[], onChange: (rows: T[]) => void, disabl
           },
           onKeyDown: (e: KeyboardEvent) => {
             if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+            if ((e.currentTarget as HTMLElement).closest("fieldset:disabled")) return;
             e.preventDefault();
             onChange(moveItem(rows, i, e.key === "ArrowUp" ? i - 1 : i + 1));
           },

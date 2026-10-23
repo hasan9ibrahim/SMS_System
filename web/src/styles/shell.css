@@ -2502,3 +2502,11 @@ select.chip-select {
   color: var(--color-text-secondary);
   background: color-mix(in srgb, var(--color-text) 7%, var(--color-panel));
 }
+/* Every sibling pill stays visible (team trial round 4): when they do not fit beside the title they wrap to a
+   second line instead of scrolling out of sight under the actions. */
+.page-header-top > .siblings {
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  overflow: visible;
+  row-gap: 6px;
+}

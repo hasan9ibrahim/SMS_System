@@ -336,40 +336,75 @@ export function previewNotification(request: FastifyRequest, reply: FastifyReply
 
 export function sendRateNotifications(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as SendRateInput;
-  return withDb(reply, async (pool) => {
-    const me = await getCurrentUser();
-    let sent = 0;
-    const failed: { trunkId: number; trunk: string; reason: string }[] = [];
-    for (const id of [...new Set(b.trunkIds)]) {
-      const t = await trunkInfo(pool, id);
-      if (!t) {
-        failed.push({ trunkId: id, trunk: `#${id}`, reason: "not found" });
-        continue;
-      }
-      if (!t.rateTableId) {
-        failed.push({ trunkId: id, trunk: t.name, reason: "no rate table" });
-        continue;
-      }
-      if (!b.sendEmail) continue;
-      const m = await rateMail(pool, t);
-      const lines = await rateSheet(pool, t);
-      const status = await logEmail(pool, {
-        type: "send_rate",
-        enterpriseId: t.enterpriseId,
-        customerTrunkId: t.id,
-        to: m.to,
-        sender: await companyMailbox(pool, t.enterpriseId, "rateSheet"),
-        subject: m.subject,
-        body: appendText(m.body, `(${lines.length} rate lines attached)`),
-        file: sheetFile(t, [], b.fileType).name,
-        rateDate: today(),
-        userId: me.id,
-      });
-      if (status === "sent") sent++;
-      else failed.push({ trunkId: id, trunk: t.name, reason: "no Rates or Commercial contact" });
+  if (!b.trunkIds?.length && !b.rateTableIds?.length)
+    return badInput(reply, [{ path: "/trunkIds", message: "choose customer trunks or rate tables" }]);
+  return withDb(reply, async (pool) => emailRateSheets(pool, b, (await getCurrentUser()).id));
+}
+
+/**
+ * E-mails the current rate sheet to customer trunks, or to every live customer trunk using the given rate tables
+ * (Rate Manager and market move auto-apply, team trial round 4, §8, §13.14). One e-mail per trunk.
+ */
+export async function emailRateSheets(pool: pg.Pool | pg.PoolClient, b: SendRateInput, userId: number | null) {
+  let sent = 0;
+  const sentTrunks: { trunkId: number; trunk: string; enterprise: string; to: string }[] = [];
+  const failed: { trunkId: number; trunk: string; enterprise: string | null; reason: string }[] = [];
+  const skippedTables: { rateTableId: number; rateTable: string; reason: string }[] = [];
+  // Rate tables (Rate Manager, team trial round 4): every live customer trunk using one of them.
+  const ids = new Set(b.trunkIds ?? []);
+  if (b.rateTableIds?.length) {
+    const { rows } = await pool.query(
+      `SELECT rt.id, rt.name, rt.kind, array_remove(array_agg(t.id ORDER BY t.id), NULL) AS trunks
+           FROM rate_tables rt
+           LEFT JOIN customer_trunk_rate_tables x ON x.rate_table_id = rt.id
+           LEFT JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL
+          WHERE rt.id = ANY($1::bigint[]) AND rt.deleted_at IS NULL
+          GROUP BY rt.id`,
+      [b.rateTableIds],
+    );
+    const found = new Map(rows.map((r) => [Number(r.id), r]));
+    for (const id of new Set(b.rateTableIds)) {
+      const r = found.get(id);
+      if (!r) skippedTables.push({ rateTableId: id, rateTable: `#${id}`, reason: "not found" });
+      else if (r.kind !== "customer")
+        skippedTables.push({ rateTableId: id, rateTable: r.name, reason: "a vendor table; rate sheets go to clients" });
+      else if (!(r.trunks as number[]).length)
+        skippedTables.push({ rateTableId: id, rateTable: r.name, reason: "no live customer trunk uses it" });
+      else for (const t of r.trunks as number[]) ids.add(Number(t));
     }
-    return { sent, failed };
-  });
+  }
+  for (const id of ids) {
+    const t = await trunkInfo(pool, id);
+    if (!t) {
+      failed.push({ trunkId: id, trunk: `#${id}`, enterprise: null, reason: "not found" });
+      continue;
+    }
+    if (!t.rateTableId) {
+      failed.push({ trunkId: id, trunk: t.name, enterprise: t.enterprise, reason: "no rate table" });
+      continue;
+    }
+    if (!b.sendEmail) continue;
+    const m = await rateMail(pool, t);
+    const lines = await rateSheet(pool, t);
+    const status = await logEmail(pool, {
+      type: "send_rate",
+      enterpriseId: t.enterpriseId,
+      customerTrunkId: t.id,
+      to: m.to,
+      sender: await companyMailbox(pool, t.enterpriseId, "rateSheet"),
+      subject: m.subject,
+      body: appendText(m.body, `(${lines.length} rate lines attached)`),
+      file: sheetFile(t, [], b.fileType).name,
+      rateDate: today(),
+      userId,
+    });
+    if (status === "sent") {
+      sent++;
+      sentTrunks.push({ trunkId: t.id, trunk: t.name, enterprise: t.enterprise, to: m.to.join(", ") });
+    } else
+      failed.push({ trunkId: id, trunk: t.name, enterprise: t.enterprise, reason: "no Rates or Commercial contact" });
+  }
+  return { sent, sentTrunks, failed, skippedTables };
 }
 
 export function sendTechInfoNotifications(request: FastifyRequest, reply: FastifyReply) {
