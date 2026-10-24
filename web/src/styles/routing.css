@@ -1472,19 +1472,23 @@ textarea.mono {
 .vf-backup .vendor-cost {
   align-items: flex-start;
 }
-/* Rule General, compact (team trial round 4): name, priority, continue, groups on one row; DLR target and
-   comment on the next. */
+/* Rule General (team trial round 4; groups removed 2026-10-24, R4): name and priority; the no-vendor choice and
+   the DLR target; the comment. */
 .rule-general-grid {
   display: grid;
-  grid-template-columns: minmax(200px, 2fr) 90px minmax(160px, 1.3fr) minmax(120px, 1fr) minmax(120px, 1fr);
-  gap: 6px 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(96px, 130px);
+  gap: 10px 12px;
   align-items: end;
+}
+.rule-general-grid .rg-name,
+.rule-general-grid .rg-cont {
+  grid-column: span 2;
 }
 .rule-general-grid .field {
   margin: 0;
 }
 .rule-general-grid .rg-comment {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
 }
 @media (max-width: 1100px) {
   .rule-general-grid {
@@ -1744,4 +1748,14 @@ svg.flip {
 }
 .match-grid .negate button {
   white-space: nowrap;
+}
+/* Sender / Receiver list with its own Match / Not match (2026-10-24, R2). */
+.cond-list {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.cond-list .field {
+  flex: 1;
+  margin: 0;
 }

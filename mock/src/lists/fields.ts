@@ -1845,13 +1845,6 @@ export const listFields: Record<ListId, ListFields> = {
         sortable: false,
       }),
       field({ field: "routeRuleId", label: "Route Rule ID", type: "integer", defaultOperator: "eq", hidden: true }),
-      field({
-        field: "routeRuleGroupId",
-        label: "Route Rule Group ID",
-        type: "integer",
-        defaultOperator: "eq",
-        hidden: true,
-      }),
       field({ field: "routeDecidedBy", label: "Decided By", type: "text", defaultOperator: "eq", hidden: true }),
       field({ field: "dlrReroute", label: "DLR ReRoute", type: "boolean", defaultOperator: "eq", hidden: true }),
       field({
@@ -2612,7 +2605,6 @@ export const listFields: Record<ListId, ListFields> = {
         hidden: true,
         sortable: false,
       }),
-      field({ field: "groupName", label: "Group", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "startsAt", label: "Start Time", type: "datetime", defaultOperator: "between", hidden: true }),
       field({ field: "stopsAt", label: "Stop Time", type: "datetime", defaultOperator: "between", hidden: true }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),

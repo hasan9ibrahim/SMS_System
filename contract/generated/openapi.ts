@@ -7129,7 +7129,7 @@ export type paths = {
     put?: never;
     /**
      * Change my password (§13.28)
-     * @description Checks the current password, the 2FA code when 2FA is on, and the new-password rules. Signs out every other session.
+     * @description Checks the current password, a code and the new-password rules, then signs out every other session. A code is always needed (decided 2026-10-24, R6): the authenticator code when the user has 2FA on, otherwise the code e-mailed by sendMyPasswordCode.
      */
     post: operations["changeMyPassword"];
     delete?: never;
@@ -9726,6 +9726,26 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/me/password/code": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * E-mail a code for my password change (§13.28)
+     * @description For users without an authenticator app (decided 2026-10-24, R6): e-mails a 6-digit code to the user's own address, valid 10 minutes and for 5 tries. A new code replaces the previous one; at most one per minute. Users with 2FA on get 409 and use their authenticator code instead.
+     */
+    post: operations["sendMyPasswordCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/me/password-status": {
     parameters: {
       query?: never;
@@ -10619,8 +10639,6 @@ export type components = {
        *     Converted rates, margins, revenue conditions and every cross-company total are in it.
        */
       platformCurrency: string;
-      /** @description Route rule groups for chaining with Next group (§6.3, optional since §13.2). */
-      routeRuleGroups: components["schemas"]["Named"][];
       /** @description Number lists for sender, receiver and whitelist conditions (§6.4, §13.27). */
       numberLists: {
         id: components["schemas"]["Id"];
@@ -10950,6 +10968,7 @@ export type components = {
       rateTableIds?: components["schemas"]["Id"][];
       /** @description Express vendor selection - bypass routing (§5.4). */
       expressVendorTrunkId?: components["schemas"]["Id"] | null;
+      /** @description Express margin in % per message, added on the express vendor's cost (decided 2026-10-24, R5); 10 means 10 %. */
       expressMargin?: number | null;
       revenueLimit?: number | null;
       revenueLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
@@ -14897,7 +14916,6 @@ export type components = {
       vendorExRate: number;
       vendorTranslationRuleIds: number[];
       routeRuleId: number;
-      routeRuleGroupId: number;
       /** @description whitelist, warmup, split … (§13.27). */
       routeDecidedBy: string;
       dlrReroute: boolean;
@@ -15833,8 +15851,15 @@ export type components = {
     PasswordChangeInput: {
       currentPassword: string;
       newPassword: string;
-      /** @description Required when 2FA is enabled (§13.28). */
+      /** @description The authenticator code; required when the user has 2FA on (§13.28, R6). */
       totpCode: string | null;
+      /** @description The e-mailed code (sendMyPasswordCode); required when the user has no authenticator app (R6). */
+      emailCode?: string | null;
+    };
+    PasswordCodeSent: {
+      /** @description The masked e-mail address the code went to, e.g. "j***@example.com". */
+      sentTo: string;
+      expiresAt: components["schemas"]["Timestamp"];
     };
     PasswordChanged: {
       changedAt: components["schemas"]["Timestamp"];
@@ -17844,13 +17869,11 @@ export type components = {
       status?: components["schemas"]["RecordStatus"];
       startsAt?: components["schemas"]["Timestamp"];
       stopsAt?: components["schemas"]["Timestamp"];
-      groupId?: components["schemas"]["Id"] | null;
-      nextGroupId?: components["schemas"]["Id"] | null;
       /**
-       * @description YES keeps evaluating, STOP ends, NEXT jumps to the next group.
+       * @description What happens when the rule matched but none of its vendors can take the message (decided 2026-10-24, R3): YES goes on to the next matching rule, STOP ends routing there. A matched rule with a working vendor always wins. Route rule groups and NEXT were removed (R4).
        * @enum {string}
        */
-      continueRouting?: "yes" | "stop" | "next";
+      continueRouting?: "yes" | "stop";
       /**
        * @description All conditions must match, or any one.
        * @enum {string}
@@ -17876,7 +17899,11 @@ export type components = {
       contentPattern?: string | null;
       contentPatternNegate?: boolean;
       senderListId?: components["schemas"]["Id"] | null;
+      /** @description Not match - the sender must not be in the list (decided 2026-10-24, R2, §6.3). */
+      senderListNegate?: boolean;
       receiverListId?: components["schemas"]["Id"] | null;
+      /** @description Not match - the receiver must not be in the list (R2, §6.3). */
+      receiverListNegate?: boolean;
       tps?: components["schemas"]["TpsCondition"] | null;
       revenue?: components["schemas"]["RevenueCondition"] | null;
       /** @description Match only ported (true) or not-ported (false) numbers; null = either. */
@@ -17949,8 +17976,6 @@ export type components = {
       | "status"
       | "startsAt"
       | "stopsAt"
-      | "groupId"
-      | "nextGroupId"
       | "continueRouting"
       | "matchMode"
       | "comment"
@@ -17969,7 +17994,9 @@ export type components = {
       | "contentPattern"
       | "contentPatternNegate"
       | "senderListId"
+      | "senderListNegate"
       | "receiverListId"
+      | "receiverListNegate"
       | "tps"
       | "revenue"
       | "hlrPorted"
@@ -18000,7 +18027,6 @@ export type components = {
         categories: components["schemas"]["Named"][];
         vendorTrunks: components["schemas"]["Named"][];
         numberLists: components["schemas"]["Named"][];
-        groups: components["schemas"]["Named"][];
         hlrPolicies: components["schemas"]["Named"][];
       };
       archived: components["schemas"]["Archived"];
@@ -18051,7 +18077,6 @@ export type components = {
       margin: number | null;
       startsAt: components["schemas"]["Timestamp"];
       stopsAt: components["schemas"]["Timestamp"];
-      groupName: string | null;
       updatedBy: string | null;
       updatedAt: components["schemas"]["Timestamp"];
       archived: boolean;
@@ -33433,6 +33458,30 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendMyPasswordCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordCodeSent"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
     };
   };

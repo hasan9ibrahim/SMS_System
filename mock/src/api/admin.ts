@@ -2,6 +2,7 @@
 // user's own password change, departments, GUI access groups (page × action matrix), logged-in users,
 // e-mail templates (placeholders, preview) and customer portal logins. Every save is one undoable
 // change (§13.10); deletes archive and are blocked by live dependencies (§13.29).
+import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -563,7 +564,74 @@ export function disableUserTotp(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
-/** §13.28: the signed-in user's own change - current password, 2FA code, rules; other sessions end. */
+// ---------------------------------------------------------------- e-mailed password-change code (R6, §13.28)
+
+/** Decided 2026-10-24 (R6): a code is always needed to change a password; without an authenticator it is e-mailed. */
+const CODE_TTL_MIN = 10;
+const CODE_TRIES = 5;
+const CODE_GAP_S = 60;
+const codeHash = (userId: number, code: string) =>
+  createHash("sha256").update(`pwcode:${userId}:${code}`).digest("hex");
+const maskEmail = (e: string) => {
+  const [local = "", domain = ""] = e.split("@");
+  return `${local.slice(0, 1)}***@${domain}`;
+};
+
+export function sendMyPasswordCode(_request: FastifyRequest, reply: FastifyReply) {
+  return withDb(reply, async (pool) => {
+    const me = await getCurrentUser();
+    const { rows } = await pool.query(
+      `SELECT first_name, email, totp_enabled, password_code_sent_at > now() - make_interval(secs => $2) AS too_soon
+         FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [me.id, CODE_GAP_S],
+    );
+    const u = rows[0];
+    if (!u) return sendProblem(reply, 401, "Sign in again");
+    if (u.totp_enabled)
+      return sendProblem(reply, 409, "Your account has 2FA on: use the code from your authenticator app");
+    if (!u.email)
+      return badInput(reply, [{ path: "/", message: "your account has no e-mail address; ask an administrator" }]);
+    if (u.too_soon) return badInput(reply, [{ path: "/", message: "a code was sent less than a minute ago" }]);
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const expiresAt = new Date(Date.now() + CODE_TTL_MIN * 60_000);
+    await inTransaction(pool, async (c) => {
+      await c.query(
+        `UPDATE users SET password_code_hash = $2, password_code_expires_at = $3, password_code_sent_at = now(),
+                password_code_tries = 0 WHERE id = $1`,
+        [me.id, codeHash(me.id, code), expiresAt],
+      );
+      // The code only; never a password or a sign-in link (§13.28).
+      await logEmail(c, {
+        type: "otp",
+        to: [u.email as string],
+        subject: "Your code to change your password",
+        body:
+          `Hello ${u.first_name},\n\nYour code to change your password is ${code}. It works for ${CODE_TTL_MIN} minutes.\n\n` +
+          `If you did not ask to change your password, ignore this e-mail and tell your administrator.`,
+      });
+    });
+    return { sentTo: maskEmail(u.email as string), expiresAt: expiresAt.toISOString() };
+  });
+}
+
+/** Checks an e-mailed code; a wrong code uses up one of the tries. */
+async function checkEmailCode(pool: pg.Pool, userId: number, code: string | null | undefined): Promise<string | null> {
+  const { rows } = await pool.query(
+    "SELECT password_code_hash, password_code_expires_at > now() AS live, password_code_tries FROM users WHERE id = $1",
+    [userId],
+  );
+  const r = rows[0];
+  if (!code) return "enter the code we e-mailed you (Send code)";
+  if (!r?.password_code_hash || !r.live) return "the code has expired; send a new one";
+  if (Number(r.password_code_tries) >= CODE_TRIES) return "too many wrong codes; send a new one";
+  const want = Buffer.from(r.password_code_hash as string, "hex");
+  const got = Buffer.from(codeHash(userId, code), "hex");
+  if (want.length === got.length && timingSafeEqual(want, got)) return null;
+  await pool.query("UPDATE users SET password_code_tries = password_code_tries + 1 WHERE id = $1", [userId]);
+  return "the code does not match";
+}
+
+/** §13.28: the signed-in user's own change - current password, a code (always, R6), rules; other sessions end. */
 export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as PasswordChangeInput;
   return withDb(reply, async (pool) => {
@@ -577,11 +645,17 @@ export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
     const errors: FieldError[] = [];
     if (!verifyPassword(b.currentPassword, u.password_hash as string))
       errors.push({ path: "/currentPassword", message: "the current password is wrong" });
-    if (u.totp_enabled && (!b.totpCode || !verifyTotp(u.totp_secret as string, b.totpCode)))
-      errors.push({
-        path: "/totpCode",
-        message: b.totpCode ? "the 2FA code does not match" : "enter the code from your 2FA app",
-      });
+    // A code is always needed (R6): the authenticator's when 2FA is on, otherwise the e-mailed one.
+    if (u.totp_enabled) {
+      if (!b.totpCode || !verifyTotp(u.totp_secret as string, b.totpCode))
+        errors.push({
+          path: "/totpCode",
+          message: b.totpCode ? "the 2FA code does not match" : "enter the code from your 2FA app",
+        });
+    } else {
+      const wrong = await checkEmailCode(pool, me.id, b.emailCode);
+      if (wrong) errors.push({ path: "/emailCode", message: wrong });
+    }
     if (b.newPassword === b.currentPassword) errors.push({ path: "/newPassword", message: "choose a new password" });
     errors.push(
       ...ruleErrors(
@@ -603,7 +677,8 @@ export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
     const signedOut = await inTransaction(pool, async (c) => {
       await c.query(
         `UPDATE users SET password_hash = $2, password_changed_at = $3, must_change_password = false,
-                temp_password_expires_at = NULL, updated_at = now() WHERE id = $1`,
+                temp_password_expires_at = NULL, password_code_hash = NULL, password_code_expires_at = NULL,
+                updated_at = now() WHERE id = $1`,
         [me.id, hash, changedAt],
       );
       await c.query("INSERT INTO password_history (user_id, password_hash, changed_at) VALUES ($1, $2, $3)", [

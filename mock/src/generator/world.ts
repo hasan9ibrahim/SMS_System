@@ -179,7 +179,8 @@ export interface RouteRule {
   startsAt: number;
   stopsAt: number;
   deletedAt: number | null;
-  groupId: number | null;
+  /** Only keeps the generator's random stream as it was before groups were removed (R4). */
+  grouped: boolean;
   categoryIds: number[]; // empty = all
   customerTrunkMode: "all" | "inclusive" | "exclusive";
   customerTrunkIds: number[];

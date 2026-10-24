@@ -172,14 +172,8 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
     "HLR first",
     "Legacy",
   ];
-  for (let i = 0; i < groupNames.length; i++) {
-    await sink.insert("route_rule_groups", {
-      id: i + 1,
-      name: groupNames[i],
-      updated_by_id: rng.pick(editors).id,
-      deleted_at: null,
-    });
-  }
+  // Route rule groups were removed (decided 2026-10-24, R4). The draws stay so the rest of the data is unchanged.
+  for (let i = 0; i < groupNames.length; i++) rng.pick(editors);
 
   const tagLists = world.numberLists.filter((l) => l.type === "tag");
   let ruleId = 1;
@@ -208,10 +202,9 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       status: r.status,
       starts_at: new Date(r.startsAt),
       stops_at: new Date(r.stopsAt),
-      route_rule_group_id: r.groupId,
-      next_route_rule_group_id: extra.next_group ?? null,
+      // R4: a rule that used to hand over to a group (NEXT) now goes on to the next rule (YES).
       continue_routing: extra.next_group
-        ? "next"
+        ? "yes"
         : r.routeType === "block"
           ? "stop"
           : rng.weighted(["stop", "yes"], [90, 10]),
@@ -307,7 +300,7 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       startsAt: world.historyStart + rng.int(0, 200) * DAY,
       stopsAt: world.anchor + 10 * 365 * DAY,
       deletedAt: null,
-      groupId: rng.chance(0.35) ? rng.int(1, groupNames.length) : null,
+      grouped: rng.chance(0.35) ? rng.int(1, groupNames.length) > 0 : false,
       categoryIds: [],
       customerTrunkMode: "all",
       customerTrunkIds: [],
@@ -488,7 +481,7 @@ async function generateRouteRules(world: World, rng: Rng, sink: TableSink, profi
       );
     }
     if (rng.chance(0.03)) extra.threshold = rng.pick([1000, 10000, 50000]);
-    if (r.groupId && rng.chance(0.05)) extra.next_group = rng.int(1, groupNames.length);
+    if (r.grouped && rng.chance(0.05)) extra.next_group = rng.int(1, groupNames.length);
     await emit(r, extra);
   }
   world.routeRules = rules;

@@ -41,7 +41,7 @@ export const topics: HelpTopic[] = [
               "The destination is found from the receiver number (the longest matching dial code gives the MCCMNC, the mobile network code). An HLR lookup can replace it with the real network of a ported number.",
               "The customer rate for that destination is found on the trunk's rate tables. No rate means the message is rejected.",
               "The route rules are tried in order: highest priority number first (100 before 1), then lowest rule ID.",
-              "The first rule that matches picks the vendor (or blocks). If it finds no usable vendor, its **Continue routing** setting says whether to try more rules.",
+              "The first rule that matches picks the vendor (or blocks). If none of its vendors can take the message, its **If no vendor can take it** setting (STOP or YES) says whether to try more rules.",
             ],
           },
         ],
@@ -67,16 +67,12 @@ export const topics: HelpTopic[] = [
             title: "Continue routing",
             fields: [
               {
-                name: "STOP – end here",
-                what: "The default. The first matching rule decides. If it finds no usable vendor, the message is rejected.",
+                name: "STOP – fail the message here",
+                what: "The default. The first matching rule decides. If none of its vendors can take the message, the message fails.",
               },
               {
-                name: "YES – keep evaluating",
-                what: "If this rule matches but no vendor qualifies, the next rules in priority order are tried.",
-              },
-              {
-                name: "NEXT – jump to group",
-                what: "If this rule matches but no vendor qualifies, only the rules of the chosen **Next group** are tried after it.",
+                name: "YES – try the next matching rule",
+                what: "If this rule matches but none of its vendors can take the message, the next matching rules in priority order are tried. A matching rule with a working vendor always wins.",
               },
             ],
           },
@@ -425,7 +421,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "**New rule** opens straight into ONE window with all sections: **General** (name, priority, route type, continue routing, groups, DLR target, comment), **Configuration** (category, customer trunks side by side with search and Check all, destination, vendors) and **Other conditions**. The rule is created as a draft, switched off, when the window opens. **Save** keeps it, on or off as set by **Rule on** in the footer. **×** discards the draft completely, as if it never existed. Clicking outside the window or pressing **Esc** does nothing.",
+            text: "**New rule** opens straight into ONE window with all sections: **General** (name, priority, route type, if no vendor can take it, DLR target, comment), **Configuration** (category, customer trunks side by side with search and Check all, destination, vendors) and **Other conditions**. The rule is created as a draft, switched off, when the window opens. **Save** keeps it, on or off as set by **Rule on** in the footer. **×** discards the draft completely, as if it never existed. Clicking outside the window or pressing **Esc** does nothing.",
           },
           {
             kind: "fields",
@@ -442,18 +438,9 @@ export const topics: HelpTopic[] = [
                 values: "1–100. Default 97. Only an administrator can set 98, 99 or 100.",
               },
               {
-                name: "Continue routing",
-                what: "What happens when this rule matches but no vendor qualifies.",
-                values: "STOP – end here (default), YES – keep evaluating, NEXT – jump to group.",
-              },
-              {
-                name: "Group",
-                what: "The route rule group this rule belongs to. Groups are used with NEXT.",
-                values: "Optional.",
-              },
-              {
-                name: "Next group",
-                what: "The group whose rules are tried next. Only for NEXT, and then required.",
+                name: "If no vendor can take it",
+                what: "What happens when this rule matches but none of its vendors can take the message.",
+                values: "STOP – fail the message here (default), YES – try the next matching rule.",
               },
               {
                 name: "DLR target %",
@@ -478,7 +465,7 @@ export const topics: HelpTopic[] = [
             title: "How to add a rule",
             items: [
               "Click **New rule**. One window opens with **General**, **Configuration** and **Other conditions**; the rule already exists as a draft, switched off.",
-              "Under **General** enter the **Name** and **Priority**, and set continue routing, groups, DLR target and comment if needed (all on two compact rows).",
+              "Under **General** enter the **Name** and **Priority**, and set **If no vendor can take it**, DLR target and comment if needed (all on two compact rows).",
               "Under **Configuration** tick the categories and customer trunks (**Inclusive** or **Exclusive**), pick the destinations, choose the **Route type** and add the vendors.",
               "Add other conditions with **+ Add condition** if needed.",
               "Check **Rule on** in the footer (it ticks itself once the rule has customer trunks and vendors) and click **Save**. To drop the rule instead, click **×**: the draft is discarded completely.",
@@ -547,7 +534,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "MCCMNC pattern (regular expression)",
-                what: "Optional. Matches the destination code with a pattern.",
+                what: "Optional. Matches the destination code with a pattern. Used only when no destinations are picked: with both set, only the picked destinations count.",
                 values: "e.g. `^50(5|6)` for codes starting 505 or 506. Must be a valid regular expression.",
               },
             ],
@@ -597,7 +584,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Sender ID list / Receiver ID list",
-                what: "Sender and Receiver only. Also requires the sender or receiver to be in a number list. The list is a separate check from the values above.",
+                what: "Sender and Receiver only. Also requires the sender or receiver to be in a number list, or with **Not match** next to the list, not to be in it. The list is a separate check from the values above.",
                 values: "Lists are kept in [[number-lists|Number lists]]. Enter values, a list, or both.",
               },
             ],
@@ -1090,7 +1077,7 @@ export const topics: HelpTopic[] = [
               { name: "Space", what: "Select or unselect the rule." },
               {
                 name: "E",
-                what: "Edit the rule's settings (name, priority, continue routing, group, DLR target, comment, on/off).",
+                what: "Edit the rule's settings (name, priority, if no vendor can take it, DLR target, comment, on/off).",
               },
               { name: "D", what: "Duplicate the rule (the copy starts off)." },
               { name: "Ctrl+Z", what: "Undo your last change on this page." },
@@ -1108,7 +1095,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "warning",
-            text: "Saves are refused when: the name is empty; stop is not after start; a pattern is not a valid regular expression; Inclusive is chosen with nothing picked; NEXT has no next group; an active static rule has no vendor; a vendor's level is above Max route level; percentage shares of a level do not add up to 100; quality weights do not add up to 100; a whitelist has no numbers or list; or an LCR profile is set on a rule that is not Least cost.",
+            text: "Saves are refused when: the name is empty; stop is not after start; a pattern is not a valid regular expression; Inclusive is chosen with nothing picked; an active static rule has no vendor; a vendor's level is above Max route level; percentage shares of a level do not add up to 100; quality weights do not add up to 100; a whitelist has no numbers or list; or an LCR profile is set on a rule that is not Least cost.",
           },
           {
             kind: "tip",

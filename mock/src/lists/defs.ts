@@ -1080,7 +1080,6 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
   // The window is one of five fixed values (checked in trafficWindow), so it is inlined.
   from: (query) => `route_rules r
     LEFT JOIN route_rule_traffic tr ON tr.route_rule_id = r.id AND tr.time_window = '${trafficWindow(query)}'
-    LEFT JOIN route_rule_groups g ON g.id = r.route_rule_group_id
     LEFT JOIN users ub ON ub.id = r.updated_by_id`,
   baseWhere: "r.deleted_at IS NULL",
   archivedField: "archived",
@@ -1151,7 +1150,6 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
           OR (r.vendor_trunk_mode = 'inclusive' AND ${id} = ANY(r.vendor_trunk_ids)))`;
       },
     },
-    groupName: { sql: "g.name" },
     startsAt: { sql: "r.starts_at" },
     stopsAt: { sql: "r.stops_at" },
     updatedBy: { sql: "ub.username" },
@@ -1169,7 +1167,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     (SELECT json_agg(json_build_object('n', ${ruleVendorName}, 's', v.share_pct, 'l', v.level, 'b', v.is_backup)
                      ORDER BY v.level, v.share_pct DESC NULLS LAST, v.id)
        FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id WHERE v.route_rule_id = r.id) AS vendors,
-    tr.messages, tr.asr, tr.dlr, ${dlrTargetSql} AS dlr_target, r.dlr_target_pct, tr.margin, r.starts_at, r.stops_at, g.name AS group_name, ub.username AS updated_by,
+    tr.messages, tr.asr, tr.dlr, ${dlrTargetSql} AS dlr_target, r.dlr_target_pct, tr.margin, r.starts_at, r.stops_at, ub.username AS updated_by,
     r.updated_at, r.deleted_at, ${ruleDestinationNames} AS dest_names`,
   mapRow: (r) => {
     const names = (r.trunk_names as string[]) ?? [];
@@ -1229,7 +1227,6 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
       margin: r.margin == null ? null : Number(r.margin),
       startsAt: iso(r.starts_at)!,
       stopsAt: iso(r.stops_at)!,
-      groupName: (r.group_name as string | null) ?? null,
       updatedBy: (r.updated_by as string | null) ?? null,
       updatedAt: iso(r.updated_at)!,
       archived: r.deleted_at != null,

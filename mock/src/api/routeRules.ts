@@ -61,8 +61,6 @@ const SCALARS: FieldSpec[] = [
   { api: "status", col: "status" },
   { api: "startsAt", col: "starts_at" },
   { api: "stopsAt", col: "stops_at" },
-  { api: "groupId", col: "route_rule_group_id" },
-  { api: "nextGroupId", col: "next_route_rule_group_id" },
   { api: "continueRouting", col: "continue_routing" },
   { api: "matchMode", col: "match_mode" },
   { api: "comment", col: "comment" },
@@ -81,7 +79,9 @@ const SCALARS: FieldSpec[] = [
   { api: "contentPattern", col: "content_pattern" },
   { api: "contentPatternNegate", col: "content_pattern_negate" },
   { api: "senderListId", col: "sender_list_id" },
+  { api: "senderListNegate", col: "sender_list_negate" },
   { api: "receiverListId", col: "receiver_list_id" },
+  { api: "receiverListNegate", col: "receiver_list_negate" },
   { api: "hlrPorted", col: "hlr_ported" },
   { api: "routeType", col: "route_type" },
   { api: "huntPolicy", col: "hunt_policy" },
@@ -219,21 +219,19 @@ async function labels(db: Db, rule: RuleCore): Promise<RouteRuleDetail["labels"]
   const listIds = [rule.senderListId, rule.receiverListId, ...rule.whitelists.map((w) => w.numberListId)].filter(
     (x): x is number => typeof x === "number",
   );
-  const groupIds = [rule.groupId, rule.nextGroupId].filter((x): x is number => typeof x === "number");
   const q = (sql: string, ids: number[]) =>
     ids.length
       ? db.query(sql, [ids]).then((r) => r.rows.map((x) => ({ id: Number(x.id), name: x.name as string })))
       : [];
   const policyIds = rule.hlrAction ? [rule.hlrAction.policyId] : [];
-  const [customerTrunks, categories, vendorTrunks, numberLists, groups, hlrPolicies] = await Promise.all([
+  const [customerTrunks, categories, vendorTrunks, numberLists, hlrPolicies] = await Promise.all([
     q("SELECT id, name FROM customer_trunks WHERE id = ANY($1)", trunkIds),
     q("SELECT id, name FROM product_categories WHERE id = ANY($1)", [...rule.categoryIds, ...rule.vendorCategoryIds]),
     q("SELECT id, name FROM vendor_trunks WHERE id = ANY($1)", vendorIds),
     q("SELECT id, name FROM number_lists WHERE id = ANY($1)", listIds),
-    q("SELECT id, name FROM route_rule_groups WHERE id = ANY($1)", groupIds),
     q("SELECT id, name FROM hlr_policies WHERE id = ANY($1)", policyIds),
   ]);
-  return { customerTrunks, categories, vendorTrunks, numberLists, groups, hlrPolicies };
+  return { customerTrunks, categories, vendorTrunks, numberLists, hlrPolicies };
 }
 
 export async function loadRule(db: Db, id: number): Promise<RouteRuleDetail | null> {
@@ -272,8 +270,6 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     status: "active",
     startsAt: new Date(now).toISOString(),
     stopsAt: new Date(now + 10 * 365 * 86_400_000).toISOString(),
-    groupId: null,
-    nextGroupId: null,
     continueRouting: "stop",
     matchMode: "all",
     comment: null,
@@ -292,7 +288,9 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     contentPattern: null,
     contentPatternNegate: false,
     senderListId: null,
+    senderListNegate: false,
     receiverListId: null,
+    receiverListNegate: false,
     tps: null,
     revenue: null,
     hlrPorted: null,
@@ -393,12 +391,6 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
       "/senderListId",
       "number list",
     ),
-    exists(
-      "route_rule_groups",
-      [r.groupId, r.nextGroupId].filter((x): x is number => !!x),
-      "/groupId",
-      "group",
-    ),
   ]);
   // HLR action (§13.24): a live policy, and trunks that are among the rule's customer trunks.
   if (r.hlrAction) {
@@ -422,8 +414,6 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
     errors.push({ path: "/customerTrunkIds", message: "pick trunks or set the mode to all" });
   if (r.categoryMode !== "all" && !r.categoryIds.length)
     errors.push({ path: "/categoryIds", message: "pick categories or set the mode to all" });
-  if (r.continueRouting === "next" && !r.nextGroupId)
-    errors.push({ path: "/nextGroupId", message: "NEXT needs the next route rule group" });
   if (r.tps?.op === "between" && !(r.tps.value2 !== null && r.tps.value2 !== undefined && r.tps.value2 > r.tps.value))
     errors.push({ path: "/tps/value2", message: "between needs an upper value above the lower one" });
   if (r.revenue?.op === "between" && !(r.revenue.value2 != null && r.revenue.value2 > r.revenue.value))
@@ -685,11 +675,6 @@ async function ruleDependencies(db: Db, id: number) {
   const traffic = await chRows<{ n: string }>(
     `SELECT count() AS n FROM edr WHERE route_rule_id = ${Number(id)} AND submit_time > now() - INTERVAL 30 DAY`,
   );
-  const { rows } = await db.query(
-    `SELECT count(*)::int AS n FROM route_rules x, route_rules r
-      WHERE r.id = $1 AND r.route_rule_group_id IS NOT NULL AND x.deleted_at IS NULL AND x.next_route_rule_group_id = r.route_rule_group_id`,
-    [id],
-  );
   return dependencies([
     {
       key: "traffic_30d",
@@ -697,13 +682,6 @@ async function ruleDependencies(db: Db, id: number) {
       count: traffic ? Number(traffic[0]?.n ?? 0) : null,
       blocking: false,
       detail: "Stays in reports with the rule's name",
-    },
-    {
-      key: "chained_rules",
-      label: "Rules handing over to its group (NEXT)",
-      count: rows[0].n,
-      blocking: false,
-      detail: null,
     },
     {
       key: "history",
@@ -1124,8 +1102,8 @@ export interface TriedRule {
 
 /**
  * Runs a message through the rules in order, as the switch will: the first matching rule
- * decides, unless it finds no vendor and says continue (YES) or jump to the next group
- * (NEXT). `keep` limits how many tried rules are listed.
+ * decides, unless it finds no vendor and says continue (YES, decided 2026-10-24, R3; groups and NEXT were removed,
+ * R4). `keep` limits how many tried rules are listed.
  */
 export function routeThrough(
   rules: RuleCore[],
@@ -1134,9 +1112,7 @@ export function routeThrough(
   keep = 100,
 ): { tried: TriedRule[]; decision: RouteDecision | null } {
   const tried: TriedRule[] = [];
-  let group: number | null = null;
   for (const rule of rules) {
-    if (group !== null && rule.groupId !== group) continue;
     // Without a list to report, skip non-matching rules cheaply.
     if (keep === 0 && !quickMatch(rule, m)) continue;
     const decision = decide(rule, m, options);
@@ -1155,10 +1131,6 @@ export function routeThrough(
     }
     if (!decision.matched) continue;
     if (decision.outcome === "no_vendor" && rule.continueRouting === "yes") continue;
-    if (rule.continueRouting === "next" && rule.nextGroupId && decision.outcome === "no_vendor") {
-      group = rule.nextGroupId;
-      continue;
-    }
     return { tried: tried.slice(-keep), decision };
   }
   return { tried: tried.slice(-keep), decision: null };

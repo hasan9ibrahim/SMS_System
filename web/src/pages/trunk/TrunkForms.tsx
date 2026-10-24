@@ -494,7 +494,17 @@ export function CustomerTrunkFields({
             />
           </FormField>
           {v.expressVendorTrunkId != null && (
-            <NumberField form={form} path="expressMargin" label="Express margin" step={0.0001} />
+            // R5 (2026-10-24): a % per message on the express vendor's cost.
+            <NumberField
+              form={form}
+              path="expressMargin"
+              label="Express margin"
+              min={0}
+              max={1000}
+              step={0.1}
+              suffix="%"
+              hint="Added on the express vendor's cost, per message"
+            />
           )}
         </Section>
       )}

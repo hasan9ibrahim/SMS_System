@@ -47,7 +47,6 @@ export const TABLE_ORDER = [
   "rate_imports",
   "number_lists",
   "number_list_entries",
-  "route_rule_groups",
   "lcr_profiles",
   "route_rules",
   "route_rule_vendors",

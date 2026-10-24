@@ -123,7 +123,6 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   vendorExRate: { sql: "toFloat64(v_ex_rate)" },
   vendorTranslationRuleIds: { sql: "v_translation_rule_ids", where: has("v_translation_rule_ids") },
   routeRuleId: { sql: "route_rule_id" },
-  routeRuleGroupId: { sql: "route_rule_group_id" },
   routeDecidedBy: { sql: "route_decided_by" },
   dlrReroute: { sql: "dlr_reroute" },
   repushRequestId: { sql: "repush_request_id" },

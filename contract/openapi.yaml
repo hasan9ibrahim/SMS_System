@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.91.0
+  version: 0.92.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -10523,7 +10523,10 @@ paths:
       - session
       operationId: changeMyPassword
       summary: Change my password (§13.28)
-      description: Checks the current password, the 2FA code when 2FA is on, and the new-password rules. Signs out every other session.
+      description: >-
+        Checks the current password, a code and the new-password rules, then signs out every other session. A code is
+        always needed (decided 2026-10-24, R6): the authenticator code when the user has 2FA on, otherwise the code
+        e-mailed by sendMyPasswordCode.
       requestBody:
         required: true
         content:
@@ -14291,6 +14294,31 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /me/password/code:
+    post:
+      tags:
+      - session
+      operationId: sendMyPasswordCode
+      summary: E-mail a code for my password change (§13.28)
+      description: >-
+        For users without an authenticator app (decided 2026-10-24, R6): e-mails a 6-digit code to the user's own
+        address, valid 10 minutes and for 5 tries. A new code replaces the previous one; at most one per minute.
+        Users with 2FA on get 409 and use their authenticator code instead.
+      responses:
+        '200':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordCodeSent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /me/password-status:
     get:
       tags:
@@ -15820,7 +15848,7 @@ components:
     # ------------------------------------------------------------- reference data
     ReferenceData:
       type: object
-      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers, routeRuleGroups, numberLists, platformCurrency, platformTimezone]
+      required: [businessCompanies, countries, productCategories, currencies, billingCycles, timezones, accountManagers, numberLists, platformCurrency, platformTimezone]
       properties:
         businessCompanies:
           type: array
@@ -15903,11 +15931,6 @@ components:
           description: |
             ISO code of the platform currency (decided 2026-10-16: EUR by default, configurable).
             Converted rates, margins, revenue conditions and every cross-company total are in it.
-        routeRuleGroups:
-          description: Route rule groups for chaining with Next group (§6.3, optional since §13.2).
-          type: array
-          items:
-            $ref: "#/components/schemas/Named"
         numberLists:
           description: Number lists for sender, receiver and whitelist conditions (§6.4, §13.27).
           type: array
@@ -16632,6 +16655,11 @@ components:
             - type: "null"
         expressMargin:
           type: [number, "null"]
+          minimum: 0
+          maximum: 1000
+          description: >-
+            Express margin in % per message, added on the express vendor's cost (decided 2026-10-24, R5); 10 means
+            10 %.
         revenueLimit:
           type: [number, "null"]
           minimum: 0
@@ -24591,7 +24619,7 @@ components:
     EdrRow:
       type: object
       description: "One message attempt with both legs (§9.1 EDR schema)."
-      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, vendorSrcTon, vendorSrcNpi, vendorDstTon, vendorDstNpi, vendorCoding, senderId, vendorSenderId, dnid, routedDnid, messageText, vendorMessageText, customerMccmnc, mcc, mnc, country, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeRuleGroupId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, customerDeliveryError, networkError, registeredDelivery, vendorRegisteredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrCostSys]
+      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, vendorSrcTon, vendorSrcNpi, vendorDstTon, vendorDstNpi, vendorCoding, senderId, vendorSenderId, dnid, routedDnid, messageText, vendorMessageText, customerMccmnc, mcc, mnc, country, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, customerDeliveryError, networkError, registeredDelivery, vendorRegisteredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrCostSys]
       properties:
         id:
           type: string
@@ -24749,8 +24777,6 @@ components:
           items:
             type: integer
         routeRuleId:
-          type: integer
-        routeRuleGroupId:
           type: integer
         routeDecidedBy:
           type: string
@@ -26755,7 +26781,25 @@ components:
           - string
           - 'null'
           pattern: ^[0-9]{6}$
-          description: Required when 2FA is enabled (§13.28).
+          description: The authenticator code; required when the user has 2FA on (§13.28, R6).
+        emailCode:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{6}$
+          description: The e-mailed code (sendMyPasswordCode); required when the user has no authenticator app (R6).
+    PasswordCodeSent:
+      type: object
+      additionalProperties: false
+      required:
+      - sentTo
+      - expiresAt
+      properties:
+        sentTo:
+          type: string
+          description: The masked e-mail address the code went to, e.g. "j***@example.com".
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
     PasswordChanged:
       type: object
       required:
@@ -31990,18 +32034,13 @@ components:
           $ref: "#/components/schemas/Timestamp"
         stopsAt:
           $ref: "#/components/schemas/Timestamp"
-        groupId:
-          oneOf:
-            - $ref: "#/components/schemas/Id"
-            - type: "null"
-        nextGroupId:
-          oneOf:
-            - $ref: "#/components/schemas/Id"
-            - type: "null"
         continueRouting:
           type: string
-          enum: ["yes", stop, next]
-          description: YES keeps evaluating, STOP ends, NEXT jumps to the next group.
+          enum: ["yes", stop]
+          description: >-
+            What happens when the rule matched but none of its vendors can take the message (decided 2026-10-24, R3):
+            YES goes on to the next matching rule, STOP ends routing there. A matched rule with a working vendor always
+            wins. Route rule groups and NEXT were removed (R4).
         matchMode:
           type: string
           enum: [all, any]
@@ -32063,10 +32102,16 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Id"
             - type: "null"
+        senderListNegate:
+          type: boolean
+          description: Not match - the sender must not be in the list (decided 2026-10-24, R2, §6.3).
         receiverListId:
           oneOf:
             - $ref: "#/components/schemas/Id"
             - type: "null"
+        receiverListNegate:
+          type: boolean
+          description: Not match - the receiver must not be in the list (R2, §6.3).
         tps:
           oneOf:
             - $ref: "#/components/schemas/TpsCondition"
@@ -32195,7 +32240,7 @@ components:
           type: string
 
     RouteRuleDetail:
-      required: [name, priority, status, startsAt, stopsAt, groupId, nextGroupId, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, receiverListId, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, lcrProfileId, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
+      required: [name, priority, status, startsAt, stopsAt, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, lcrProfileId, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
       allOf:
         - $ref: "#/components/schemas/RouteRuleFields"
         - type: object
@@ -32206,7 +32251,7 @@ components:
             labels:
               type: object
               description: Names for the ids in the rule, for chips and tables.
-              required: [customerTrunks, categories, vendorTrunks, numberLists, groups, hlrPolicies]
+              required: [customerTrunks, categories, vendorTrunks, numberLists, hlrPolicies]
               properties:
                 customerTrunks:
                   type: array
@@ -32221,10 +32266,6 @@ components:
                   items:
                     $ref: "#/components/schemas/Named"
                 numberLists:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/Named"
-                groups:
                   type: array
                   items:
                     $ref: "#/components/schemas/Named"
@@ -32249,7 +32290,7 @@ components:
 
     RouteRuleRow:
       type: object
-      required: [id, name, priority, routeType, status, categoryLabel, customerTrunksLabel, customerTrunkNames, customerTrunkCount, destinationLabel, destinationNames, destinationCount, vendorsLabel, vendorNames, messages, asr, dlr, dlrTarget, dlrTargetSource, margin, startsAt, stopsAt, groupName, updatedBy, updatedAt, archived]
+      required: [id, name, priority, routeType, status, categoryLabel, customerTrunksLabel, customerTrunkNames, customerTrunkCount, destinationLabel, destinationNames, destinationCount, vendorsLabel, vendorNames, messages, asr, dlr, dlrTarget, dlrTargetSource, margin, startsAt, stopsAt, updatedBy, updatedAt, archived]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -32319,8 +32360,6 @@ components:
           $ref: "#/components/schemas/Timestamp"
         stopsAt:
           $ref: "#/components/schemas/Timestamp"
-        groupName:
-          type: [string, "null"]
         updatedBy:
           type: [string, "null"]
         updatedAt:

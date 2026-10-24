@@ -105,7 +105,9 @@ type Rule = Pick<
   | "contentPattern"
   | "contentPatternNegate"
   | "senderListId"
+  | "senderListNegate"
   | "receiverListId"
+  | "receiverListNegate"
   | "tps"
   | "revenue"
   | "hlrPorted"
@@ -158,6 +160,15 @@ const inMode = (mode: string, hit: boolean) => (mode === "all" ? true : mode ===
  * Exact codes only: a 3-digit code is the country's "All networks" default entry (§6.1), not the whole
  * country (decided in team trial round 1); a whole country is all its codes ticked.
  */
+/**
+ * Destination condition (decided 2026-10-24, R1): whichever of the list and the pattern is set is checked; when both
+ * are set only the list counts.
+ */
+export const destinationList = (r: Pick<Rule, "mccmncMode" | "mccmncs">) =>
+  r.mccmncMode !== "all" && r.mccmncs.length > 0;
+const destinationSet = (r: Pick<Rule, "mccmncMode" | "mccmncs" | "mccmncPattern">) =>
+  destinationList(r) || !!r.mccmncPattern;
+
 export const destinationHit = (codes: string[], mccmnc: string) => {
   // A code list as a set, built once per array (rules route thousands of destinations).
   let set = codeSets.get(codes);
@@ -230,12 +241,12 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
     if (all !== ok) return ok;
     set = true;
   }
-  if (rule.mccmncMode !== "all" || rule.mccmncPattern) {
+  if (destinationSet(rule)) {
     ok = !m.mccmnc
       ? false
-      : rule.mccmncPattern
-        ? regex(rule.mccmncPattern, m.mccmnc)
-        : inMode(rule.mccmncMode, destinationHit(rule.mccmncs, m.mccmnc));
+      : destinationList(rule)
+        ? inMode(rule.mccmncMode, destinationHit(rule.mccmncs, m.mccmnc))
+        : regex(rule.mccmncPattern!, m.mccmnc);
     if (all !== ok) return ok;
     set = true;
   }
@@ -254,13 +265,14 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
     if (all !== ok) return ok;
     set = true;
   }
+  // Number lists match or, negated, must not match (decided 2026-10-24, R2, §6.3).
   if (rule.senderListId) {
-    ok = m.listHas(rule.senderListId, m.sender, !senderCase(rule));
+    ok = m.listHas(rule.senderListId, m.sender, !senderCase(rule)) !== !!rule.senderListNegate;
     if (all !== ok) return ok;
     set = true;
   }
   if (rule.receiverListId) {
-    ok = m.listHas(rule.receiverListId, m.receiver);
+    ok = m.listHas(rule.receiverListId, m.receiver) !== !!rule.receiverListNegate;
     if (all !== ok) return ok;
     set = true;
   }
@@ -335,17 +347,18 @@ export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { 
         : `${rule.customerTrunkMode} list ${hit ? "has" : "lacks"} the trunk`,
     );
   }
-  if (rule.mccmncMode !== "all" || rule.mccmncPattern) {
+  if (destinationSet(rule)) {
     let ok = true;
     let detail = m.mccmnc ? `destination ${m.mccmnc}` : "destination unknown";
     if (!m.mccmnc) ok = false;
-    else if (rule.mccmncPattern) {
-      ok = regex(rule.mccmncPattern, m.mccmnc);
-      detail += ok ? " matches the pattern" : " doesn't match the pattern";
-    } else {
+    else if (destinationList(rule)) {
       const hit = destinationHit(rule.mccmncs, m.mccmnc);
       ok = inMode(rule.mccmncMode, hit);
       detail += ` ${hit ? "is" : "isn't"} in the ${rule.mccmncMode} list`;
+      if (rule.mccmncPattern) detail += " (the list wins over the pattern)";
+    } else {
+      ok = regex(rule.mccmncPattern!, m.mccmnc);
+      detail += ok ? " matches the pattern" : " doesn't match the pattern";
     }
     add("Destination", true, ok, detail);
   }
@@ -365,11 +378,23 @@ export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { 
   pattern("Content", rule.contentPattern, rule.contentPatternNegate, m.content);
   if (rule.senderListId) {
     const hit = m.listHas(rule.senderListId, m.sender, !senderCase(rule));
-    add("Sender list", true, hit, `${hit ? "sender is in the list" : "sender isn't in the list"}${anyCase}`);
+    const neg = !!rule.senderListNegate;
+    add(
+      "Sender list",
+      true,
+      hit !== neg,
+      `${hit ? "sender is in the list" : "sender isn't in the list"}${neg ? " (must not be)" : ""}${anyCase}`,
+    );
   }
   if (rule.receiverListId) {
     const hit = m.listHas(rule.receiverListId, m.receiver);
-    add("Receiver list", true, hit, hit ? "number is in the list" : "number isn't in the list");
+    const neg = !!rule.receiverListNegate;
+    add(
+      "Receiver list",
+      true,
+      hit !== neg,
+      `${hit ? "number is in the list" : "number isn't in the list"}${neg ? " (must not be)" : ""}`,
+    );
   }
   if (rule.tps) {
     const t = rule.tps;
@@ -645,7 +670,7 @@ function destIndex(rules: Rule[]) {
   if (!ix) {
     ix = { general: [], byCode: new Map() };
     rules.forEach((r, i) => {
-      if (r.matchMode === "all" && r.mccmncMode === "inclusive" && !r.mccmncPattern) {
+      if (r.matchMode === "all" && r.mccmncMode === "inclusive" && destinationList(r)) {
         for (const c of new Set(r.mccmncs)) ix!.byCode.set(c, [...(ix!.byCode.get(c) ?? []), i]);
       } else ix!.general.push(i);
     });
@@ -664,8 +689,8 @@ export function rulesForDestination<R extends Rule>(rules: R[], mccmnc: string, 
       if (r.status !== "active") return false;
       const t = liveWindow(r);
       if (!(t[0] <= now && now < t[1])) return false;
-      if (r.matchMode !== "all" || (r.mccmncMode === "all" && !r.mccmncPattern)) return true;
-      if (r.mccmncPattern) return regex(r.mccmncPattern, mccmnc);
-      return inMode(r.mccmncMode, destinationHit(r.mccmncs, mccmnc));
+      if (r.matchMode !== "all" || !destinationSet(r)) return true;
+      if (destinationList(r)) return inMode(r.mccmncMode, destinationHit(r.mccmncs, mccmnc));
+      return regex(r.mccmncPattern!, mccmnc);
     });
 }

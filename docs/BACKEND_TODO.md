@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | Route rules, trunks, password change (R1–R6) | Contract v0.92.0. **R1** destination condition: whichever of the list and the pattern is set is checked; with both, only the list counts. **R2** `RouteRuleFields.senderListNegate` / `receiverListNegate` (Match / Not match on number lists). **R3** Continue routing: a matched rule with a working vendor always wins; YES / STOP only apply when none of its vendors can take the message. **R4** route rule groups removed: `groupId`, `nextGroupId`, `continueRouting: next`, `Reference.routeRuleGroups`, `RouteRuleRow.groupName`, `labels.groups` and `Edr.routeRuleGroupId` gone; NEXT rules become YES; General section tidied. **R5** `expressMargin` is a % per message (0–1000). **R6** a code is always needed to change a password: `PasswordChangeInput.emailCode` and new `POST /me/password/code` (`sendMyPasswordCode`, 6 digits, 10 min, 5 tries, one per minute; 409 with 2FA on). Migration 069. | §5.4, §6.3, §13.2, §13.28 | Product owner | Done (contract, mock, GUI) |
 | 2026-10-24 | Live analytics bold figures | No contract change. ASR, DLR and margin figures bold (Roboto Bold, same size as the other figures); column widths rebalanced so every figure, totals included, still shows in full. | §13.7 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics EDRs column | No contract change. The EDRs and download buttons sit side by side, fully visible (the download button was clipped); column widths rebalanced so every figure still shows in full. | §13.7 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics look | No contract change. Spreadsheet grid picked from ten style options: a thin line around every cell and slightly taller rows; ASR, DLR, margin and total colours unchanged. | §13.7, §15.1 | Product owner | Done (GUI only) |
@@ -672,16 +673,12 @@ What the Phoenix backend must match so the screens need no change:
   rounded to 4 decimals (Q20 in `docs/BACKEND_PLAN.md`). The mock and schema still use cents; to change.
 
 - *Found while writing the help center (2026-10-18), where the screens and the spec differ:*
-  - Route rules: when a rule has both a destination **pattern** and a destination **list**, the evaluator only checks the pattern. Should the pattern narrow the list (both must match) instead?
-  - Route rules: Sender ID / Receiver ID **number lists** can't be negated (spec §6.3 says lists have Match / Not match too). Add the switch to lists?
-  - Route rules: **Continue routing** YES / NEXT only act when the matched rule has no usable vendor. Is that the intended meaning?
-  - Route rules: **Group** / **Next group** fields exist but no page creates or manages groups.
-  - Trunks: is the **express margin** an amount per message or a %? (The help says amount.)
+  - Answered 2026-10-24 (R1–R5): destination list and pattern - whichever is set, only the list when both; number lists get Match / Not match; Continue routing YES / STOP only act when the matched rule has no usable vendor; route rule groups and NEXT removed; express margin is a % per message.
   - Invoices: nothing creates **Auto** invoices at the end of a cycle yet (only seeded ones exist); backend job needed.
   - Master report PDF export lists the first 2,000 rows although the dialog allows up to 100,000.
   - Sales report: the **product category** filter from §13.15 is not built.
   - Incoming RNs: §13.32 asks for reminder alerts for flagged RNs still pending near their effective date; not built.
-  - 2FA: a code is only asked on a password change when the user has an authenticator app enrolled; the Security settings page says always.
+  - Answered 2026-10-24 (R6): a code is always asked on a password change - the authenticator code with 2FA on, otherwise an e-mailed code.
 
 - Answered 2026-10-18: NOC and Support merged; tech info password in plain text in the e-mail; TPS per session on both trunk kinds; receipts per SMPP 3.4 (above); QBR weights ASR/DLR highest, then delay, then cost, changeable per rule; Rate manager opens on customer tables with a switch.
 - Answered 2026-10-18: a block by a vendor (egress) rule skips to the next vendor; a block on the customer trunk rejects the message.

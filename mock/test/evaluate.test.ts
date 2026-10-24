@@ -328,3 +328,53 @@ test("Sender ID keywords: \\Numeric and \\Alpha (team trial round 2)", () => {
   assert.ok(hit(alpha, "BANK1"));
   assert.ok(!hit(alpha, "12345"));
 });
+
+test("destination list and pattern: whichever is set; with both only the list counts (decided 2026-10-24, R1)", () => {
+  const hit = (over: Record<string, unknown>, mccmnc: string) => {
+    const r = rule({ customerTrunkMode: "all", senderPattern: null, ...over });
+    const m = msg({ mccmnc });
+    const full = matches(conditionChecks(r, m), "all");
+    assert.equal(quickMatch(r, m), full, `quick vs full for ${JSON.stringify(over)} ${mccmnc}`);
+    const kept = rulesForDestination([{ ...(r as object), id: 1 }] as never[], mccmnc, m.now).length > 0;
+    assert.equal(kept, full, `pre-filter vs full for ${JSON.stringify(over)} ${mccmnc}`);
+    return full;
+  };
+  // Only the list.
+  assert.equal(hit({ mccmncs: ["50501"] }, "50501"), true);
+  assert.equal(hit({ mccmncs: ["50501"] }, "26201"), false);
+  // Only the pattern (no list).
+  assert.equal(hit({ mccmncMode: "all", mccmncs: [], mccmncPattern: "^262" }, "26201"), true);
+  assert.equal(hit({ mccmncMode: "all", mccmncs: [], mccmncPattern: "^262" }, "50501"), false);
+  // Both: the list decides, the pattern is not checked.
+  assert.equal(hit({ mccmncs: ["50501"], mccmncPattern: "^262" }, "50501"), true);
+  assert.equal(hit({ mccmncs: ["50501"], mccmncPattern: "^262" }, "26201"), false);
+  assert.equal(hit({ mccmncMode: "exclusive", mccmncs: ["50501"], mccmncPattern: "^505" }, "50502"), true);
+  const checks = conditionChecks(
+    rule({ customerTrunkMode: "all", senderPattern: null, mccmncs: ["50501"], mccmncPattern: "^262" }),
+    msg(),
+  );
+  assert.match(checks.find((c) => c.condition === "Destination")!.detail, /list wins/);
+});
+
+test("sender and receiver lists can be negated - Not match (decided 2026-10-24, R2)", () => {
+  const entries = new Set(["BANK", "61412345678"]);
+  const listHas = (_id: number, v: string) => entries.has(v);
+  const on = (over: Record<string, unknown>, m: Partial<MessageContext>) => {
+    const r = rule({ customerTrunkMode: "all", mccmncMode: "all", mccmncs: [], senderPattern: null, ...over });
+    const mm = msg({ listHas, ...m });
+    const full = matches(conditionChecks(r, mm), "all");
+    assert.equal(quickMatch(r, mm), full);
+    return full;
+  };
+  assert.equal(on({ senderListId: 5 }, { sender: "BANK" }), true);
+  assert.equal(on({ senderListId: 5, senderListNegate: true }, { sender: "BANK" }), false);
+  assert.equal(on({ senderListId: 5, senderListNegate: true }, { sender: "SHOP" }), true);
+  assert.equal(on({ receiverListId: 6 }, { receiver: "61412345678" }), true);
+  assert.equal(on({ receiverListId: 6, receiverListNegate: true }, { receiver: "61412345678" }), false);
+  assert.equal(on({ receiverListId: 6, receiverListNegate: true }, { receiver: "61400000000" }), true);
+  const checks = conditionChecks(
+    rule({ customerTrunkMode: "all", mccmncMode: "all", senderPattern: null, senderListId: 5, senderListNegate: true }),
+    msg({ listHas, sender: "BANK" }),
+  );
+  assert.match(checks.find((c) => c.condition === "Sender list")!.detail, /must not be/);
+});

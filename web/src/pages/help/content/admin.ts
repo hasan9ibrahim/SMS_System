@@ -2239,7 +2239,7 @@ export const topics: HelpTopic[] = [
               "Type your **Current password**.",
               "Type the **New password** and repeat it in **Confirm new password**. Use **Show** to check what you typed.",
               "Watch the rules under the boxes tick as they are met.",
-              "Type the 6-digit **2FA code (from your authenticator app)**.",
+              "Enter the 6-digit code. It is always needed: with 2FA on, the **2FA code (from your authenticator app)**; without it, click **Send code** and type the **Code sent to your e-mail** (it works for 10 minutes).",
               "Click **Change password**. The message says how many other sessions were signed out and the date of your next change.",
             ],
           },

@@ -8,8 +8,6 @@ const INPUT_KEYS = [
   "status",
   "startsAt",
   "stopsAt",
-  "groupId",
-  "nextGroupId",
   "continueRouting",
   "matchMode",
   "comment",
@@ -28,7 +26,9 @@ const INPUT_KEYS = [
   "contentPattern",
   "contentPatternNegate",
   "senderListId",
+  "senderListNegate",
   "receiverListId",
+  "receiverListNegate",
   "tps",
   "revenue",
   "hlrPorted",
@@ -161,21 +161,23 @@ export function conditionChips(
       op: modeOp(rule.categoryMode),
       value: names(l.categories, rule.categoryIds),
     });
-  if (rule.mccmncMode !== "all" || rule.mccmncPattern) {
+  // R1 (2026-10-24): whichever of the list and the pattern is set is checked; with both, only the list.
+  const destList = rule.mccmncMode !== "all" && rule.mccmncs.length > 0;
+  if (destList || rule.mccmncPattern) {
     const parts = [
-      ...(rule.mccmncMode !== "all"
+      ...(destList
         ? [
             destinationText
               ? destinationText(rule.mccmncs)
               : rule.mccmncs.slice(0, 6).join(", ") + (rule.mccmncs.length > 6 ? ` +${rule.mccmncs.length - 6}` : ""),
           ]
         : []),
-      ...(rule.mccmncPattern ? [`/${rule.mccmncPattern}/`] : []),
+      ...(rule.mccmncPattern ? [destList ? "pattern not checked" : `/${rule.mccmncPattern}/`] : []),
     ];
     chips.push({
       key: "destination",
       field: "Destination",
-      op: rule.mccmncMode === "all" ? "matches" : modeOp(rule.mccmncMode),
+      op: destList ? modeOp(rule.mccmncMode) : "matches",
       value: parts.join(" · "),
     });
   }
@@ -185,6 +187,7 @@ export function conditionChips(
     negate: boolean,
     listId?: number | null,
     anyCase = false,
+    listNegate = false,
   ) => {
     const list = listId ? nameOf(l.numberLists, listId) : "";
     if (!p && !list) return;
@@ -195,14 +198,32 @@ export function conditionChips(
       key,
       field: CONDITION_LABELS[key],
       op: listed ? `${negate ? "not " : ""}${PATTERN_KINDS[parsed.kind]}` : negate ? "not" : "matches",
-      value: [listed ? parsed.values.join(", ") : p, list && `list ${list}`, anyCase && "any case"]
+      value: [
+        listed ? parsed.values.join(", ") : p,
+        list && `${listNegate ? "not in " : ""}list ${list}`,
+        anyCase && "any case",
+      ]
         .filter(Boolean)
         .join(" · "),
     });
   };
   // Sender conditions match the exact capitals unless Case sensitive is off (team trial round 1).
-  pattern("sender", rule.senderPattern, rule.senderPatternNegate, rule.senderListId, rule.senderMatchCase === false);
-  pattern("receiver", rule.receiverPattern, rule.receiverPatternNegate, rule.receiverListId);
+  pattern(
+    "sender",
+    rule.senderPattern,
+    rule.senderPatternNegate,
+    rule.senderListId,
+    rule.senderMatchCase === false,
+    !!rule.senderListNegate,
+  );
+  pattern(
+    "receiver",
+    rule.receiverPattern,
+    rule.receiverPatternNegate,
+    rule.receiverListId,
+    false,
+    !!rule.receiverListNegate,
+  );
   pattern("content", rule.contentPattern, rule.contentPatternNegate);
   if (rule.tps) {
     const t = rule.tps;
@@ -258,9 +279,15 @@ export function clearCondition(key: ConditionKey, rule: RouteRuleDetail): Partia
     case "destination":
       return { mccmncMode: "all", mccmncs: [], mccmncPattern: null };
     case "sender":
-      return { senderPattern: null, senderPatternNegate: false, senderListId: null, senderMatchCase: true };
+      return {
+        senderPattern: null,
+        senderPatternNegate: false,
+        senderListId: null,
+        senderListNegate: false,
+        senderMatchCase: true,
+      };
     case "receiver":
-      return { receiverPattern: null, receiverPatternNegate: false, receiverListId: null };
+      return { receiverPattern: null, receiverPatternNegate: false, receiverListId: null, receiverListNegate: false };
     case "content":
       return { contentPattern: null, contentPatternNegate: false };
     case "tps":

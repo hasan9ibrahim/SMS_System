@@ -276,7 +276,7 @@ Form (/customertrunk/add|edit|view/{id}):
 |  | Default Coding | GSM 7 bit (0) or Latin1 8 bit (3), applied when data\_coding = 0 |
 | Rate Table List | Category | Product Category radio list |
 |  | Rate Table | One or more rate tables (multi-select); first match wins |
-| Express Vendor Selection | Vendor Trunk + Margin | Bypass routing and pin this trunk to one vendor at a fixed margin |
+| Express Vendor Selection | Vendor Trunk + Margin | Bypass routing and pin this trunk to one vendor at a fixed margin (new platform: the margin is a % per message on the vendor's cost, decided 2026-10-24, R5) |
 
 ### 5.5 Vendor Trunk tab
 
@@ -359,6 +359,7 @@ Add form — General Information (the match side):
 - SenderID Pattern, ReceiverID Pattern, Contents Pattern (regex), each with Match / Not Match.
 - Sender ID List and Receiver ID List (from Number List) with Match / Not Match.
 - Continue Routing\*: YES (keep evaluating), STOP, NEXT (jump to Next Route Rule Group). Status\*: Active / Inactive.
+  *New platform (decided 2026-10-24):* no groups and no NEXT (R4); YES / STOP only apply when the matched rule has no usable vendor (R3). A destination list and a destination pattern: whichever is set is checked, and with both only the list (R1). Sender / Receiver number lists have Match / Not match (R2).
 
 Add form — Route Information (the action side):
 
@@ -620,7 +621,7 @@ Requirement: a translation rule takes effect as soon as it is saved with its tar
 | Module | Today | New design |
 | --- | --- | --- |
 | HLR | Provider → HLR Rule → HLR Rule Group → customer trunk (4 steps) | HLR rule with provider, DNID pattern and Applies To; HLR tab on the trunk |
-| Route rules | Route Rule Group needed for chaining | Groups optional; Next step chosen directly as another rule or rule set |
+| Route rules | Route Rule Group needed for chaining | No groups (decided 2026-10-24, R4): rules are tried in priority order; a matched rule with no usable vendor stops (STOP) or lets the next matching rule try (YES) |
 | Number lists | Created separately before use | "+ New list" inline from any rule field that uses a list |
 | All dropdowns | Leave the form to create a missing item | "+ New" inside every picker (rate table, email template, billing cycle, file template) opening a side panel, returning to the form with the item selected |
 

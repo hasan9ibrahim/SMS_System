@@ -54,6 +54,15 @@ reuse the D numbers.
   vendor was up whose vendor then failed.
 
 
+**Decided 2026-10-24, fourth round** (route rules, trunks, password change):
+
+- R1 destination condition: whichever of the list and the pattern is set is checked; with both, only the list.
+- R2 sender / receiver number lists have Match / Not match. R3 Continue routing YES / STOP only act when the matched
+  rule has no usable vendor; a matched rule with a working vendor always wins.
+- R4 route rule groups and NEXT removed. R5 express margin is a % per message on the express vendor's cost.
+- R6 a code is always needed to change a password: the authenticator code with 2FA on, otherwise an e-mailed code.
+- Hosting provider and city: still open (does not block the start; machines needed by mid-November).
+
 ## 1. Where we stand
 
 - **GUI:** every screen in spec §3–13 works on fake data.

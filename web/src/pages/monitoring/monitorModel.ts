@@ -189,7 +189,6 @@ export const EDR_SECTIONS: { key: string; label: string; fields: string[] }[] = 
       "vendorExRate",
       "vendorTranslationRuleIds",
       "routeRuleId",
-      "routeRuleGroupId",
       "routeDecidedBy",
       "dlrReroute",
       "repushRequestId",

@@ -401,6 +401,9 @@
   .fgrid > .wide {
     grid-column: 1 / -1;
   }
+  .rule-general-grid > * {
+    grid-column: 1 / -1 !important;
+  }
 
   /* ---------- wide tables scroll inside their card, never the page */
   .rtable,

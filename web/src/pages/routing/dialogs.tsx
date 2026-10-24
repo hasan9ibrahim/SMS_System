@@ -10,7 +10,6 @@ import type {
   TrunkListRow,
 } from "@sms/contract";
 import { ApiError } from "../../api/client";
-import { useReference } from "../../api/records";
 import { useBulkRouteRules, useRouteRule, useSaveRouteRule } from "../../api/routing";
 import { useNotifySaved } from "../../history/undo";
 import { useMe } from "../../api/hooks";
@@ -31,20 +30,12 @@ export const problemText = (e: unknown) => {
 
 type General = Pick<
   RouteRuleInput,
-  | "name"
-  | "priority"
-  | "status"
-  | "routeType"
-  | "groupId"
-  | "nextGroupId"
-  | "continueRouting"
-  | "comment"
-  | "dlrTargetPct"
+  "name" | "priority" | "status" | "routeType" | "continueRouting" | "comment" | "dlrTargetPct"
 >;
 
 /** New rule (rule = null) or the rule's settings (E edit). */
 /**
- * The rule's general fields (name, priority, route type for a new rule, continue routing, groups, DLR target,
+ * The rule's general fields (name, priority, route type for a new rule, continue routing, DLR target,
  * comment, on / off), shared by the Edit section of the detail panel, New rule and Duplicate (team trial round 2).
  * `onSaved` gets the rule id after a save; `onCancel` shows a Cancel button.
  */
@@ -72,7 +63,6 @@ export function RuleGeneralForm({
   draft?: boolean;
   bindSubmit?: (submit: (patch?: Partial<RouteRuleInput>) => Promise<string | null>) => void;
 }) {
-  const ref = useReference();
   const save = useSaveRouteRule();
   const notifySaved = useNotifySaved();
   const maxPriority = useMaxPriority();
@@ -83,8 +73,6 @@ export function RuleGeneralForm({
           priority: rule.priority,
           status: rule.status,
           routeType: rule.routeType,
-          groupId: rule.groupId,
-          nextGroupId: rule.nextGroupId,
           continueRouting: rule.continueRouting,
           comment: rule.comment,
           dlrTargetPct: rule.dlrTargetPct,
@@ -95,8 +83,6 @@ export function RuleGeneralForm({
           // A new rule starts off: with no conditions yet it would match all traffic.
           status: "inactive",
           routeType: "static",
-          groupId: null,
-          nextGroupId: null,
           continueRouting: "stop",
           comment: null,
           dlrTargetPct: null,
@@ -104,12 +90,10 @@ export function RuleGeneralForm({
   );
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<General>) => setG((x) => ({ ...x, ...patch }));
-  const groups = ref.data?.routeRuleGroups ?? [];
   // Saves the fields (plus `patch`, e.g. Rule on from New rule's footer); resolves with an error text or null.
   const submitAsync = async (patch: Partial<RouteRuleInput> = {}): Promise<string | null> => {
     const fail = (m: string) => (setError(m), m);
     if (!g.name.trim()) return fail("Enter the rule name.");
-    if (g.continueRouting === "next" && !g.nextGroupId) return fail("Choose the next group for NEXT.");
     const input: RouteRuleInput = rule
       ? toInput(rule, { ...g, name: g.name.trim(), ...patch })
       : ({ ...g, name: g.name.trim(), ...patch } as RouteRuleInput);
@@ -163,44 +147,19 @@ export function RuleGeneralForm({
             }
           />
         </label>
-        <label className="field">
-          <span>Continue routing</span>
+        {/* R3 (2026-10-24): a matched rule with a working vendor always wins; this only applies when none can
+            take the message. Groups and NEXT were removed (R4). */}
+        <label
+          className="field rg-cont"
+          title="What happens when this rule matches but none of its vendors can take the message"
+        >
+          <span>If no vendor can take it</span>
           <select
             value={g.continueRouting}
             onChange={(e) => set({ continueRouting: e.target.value as General["continueRouting"] })}
           >
-            <option value="stop">STOP – end here</option>
-            <option value="yes">YES – keep evaluating</option>
-            <option value="next">NEXT – jump to group</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>Group</span>
-          <select
-            value={g.groupId ?? ""}
-            onChange={(e) => set({ groupId: e.target.value ? Number(e.target.value) : null })}
-          >
-            <option value="">—</option>
-            {groups.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Next group</span>
-          <select
-            value={g.nextGroupId ?? ""}
-            disabled={g.continueRouting !== "next"}
-            onChange={(e) => set({ nextGroupId: e.target.value ? Number(e.target.value) : null })}
-          >
-            <option value="">—</option>
-            {groups.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.name}
-              </option>
-            ))}
+            <option value="stop">STOP – fail the message here</option>
+            <option value="yes">YES – try the next matching rule</option>
           </select>
         </label>
         <label

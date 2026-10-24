@@ -12,6 +12,7 @@ export const GATE_OPEN = new Set([
   "getCurrentUser",
   "getMyPasswordStatus",
   "changeMyPassword",
+  "sendMyPasswordCode",
   "checkPassword",
   "getWorkspace",
   "saveWorkspace",
