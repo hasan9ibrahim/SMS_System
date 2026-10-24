@@ -542,13 +542,32 @@ export function RouteSimulatorPage() {
             </div>
           </section>
           <section className="sim-card">
+            <h2 className="sim-step">
+              <span className="sim-num">4</span> Vendor
+            </h2>
+            <div className="field">
+              <span>Vendor trunk (test directly, skips routing)</span>
+              <ListLookup<TrunkListRow>
+                list="vendor_trunks"
+                value={vendorId}
+                onChange={setVendor}
+                labelOf={(t) => `${t.id} · ${t.name}`}
+                detailOf={(t) => t.enterpriseName}
+                placeholder="Any (by the route rules)"
+                limit={1000}
+              />
+              <span className="muted small">
+                Empty = by the route rules. Every vendor trunk is listed; type to narrow.
+              </span>
+            </div>
+          </section>
+          <section className="sim-card">
             <div className="sim-adv-head">
               <div>
                 <h2 className="sim-step">Advanced settings</h2>
                 <p className="muted small">
                   {isAuto ? "Auto · " : ""}TON {tonLabel(effSrc.ton)} · NPI {npiLabel(effSrc.npi)} → TON{" "}
-                  {tonLabel(effDst.ton)} · NPI {npiLabel(effDst.npi)} · coding {CODINGS[effCoding]} · vendor{" "}
-                  {vendor ? vendor.name : "by route rules"}
+                  {tonLabel(effDst.ton)} · NPI {npiLabel(effDst.npi)} · coding {CODINGS[effCoding]}
                 </p>
               </div>
               <button type="button" className="link" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
@@ -593,17 +612,6 @@ export function RouteSimulatorPage() {
                   CODINGS.map((l, i) => [i, l]),
                   !touched.coding,
                 )}
-                <div className="field sim-span3">
-                  <span>Vendor trunk (test directly, skips routing)</span>
-                  <ListLookup<TrunkListRow>
-                    list="vendor_trunks"
-                    value={vendorId}
-                    onChange={setVendor}
-                    labelOf={(t) => `${t.id} · ${t.name}`}
-                    detailOf={(t) => t.enterpriseName}
-                    placeholder="Any (by the route rules)"
-                  />
-                </div>
                 {!isAuto && (
                   <button
                     type="button"

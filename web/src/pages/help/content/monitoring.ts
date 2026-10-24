@@ -625,7 +625,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Use it to answer questions like: did this number get the message, why did it fail, which vendor carried it, what did we charge and pay? The NOC and support use it daily; AMs use it to answer customer complaints.",
+            text: "Use it to answer questions like: did this number get the message, why did it fail, which vendor carried it, what did we charge and pay? The NOC and support use it daily; Account Managers use it to answer customer complaints.",
           },
         ],
       },
@@ -1442,7 +1442,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Some messages never reach a vendor: the sender is invalid, there is no route, the customer is out of credit, and so on. These have no vendor leg. Support and AMs use this page to show a customer why their messages were refused.",
+            text: "Some messages never reach a vendor: the sender is invalid, there is no route, the customer is out of credit, and so on. These have no vendor leg. Support and Account Managers use this page to show a customer why their messages were refused.",
           },
           {
             kind: "text",

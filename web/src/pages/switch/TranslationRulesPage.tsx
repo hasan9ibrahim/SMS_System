@@ -45,7 +45,8 @@ import { HoverList } from "../../ui/HoverList";
 import { Button, Modal } from "../../ui/primitives";
 import { fmtWhen, RecordActions } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
-import { DestinationPick, MultiPick } from "../routing/pickers";
+import { MultiPick } from "../routing/pickers";
+import { codesText, RuleCodesDialog, useDestinationTree } from "../rates/DestinationTree";
 import { NumberListDialog } from "./NumberListsPage";
 import {
   BILLING_TYPES,
@@ -140,35 +141,6 @@ function Negate({ form, path }: { form: FormApi<TranslationRuleInput>; path: key
   );
 }
 
-function PatternField({
-  form,
-  path,
-  negate,
-  label,
-  placeholder,
-  matchCase,
-}: {
-  form: FormApi<TranslationRuleInput>;
-  path: "senderPattern" | "receiverPattern" | "contentPattern";
-  negate: keyof TranslationRuleInput;
-  label: string;
-  placeholder: string;
-  /** Sender ID only: the Case sensitive box (team trial round 1). */
-  matchCase?: boolean;
-}) {
-  return (
-    <div className={matchCase ? "cond-field with-case" : "cond-field"}>
-      <TextField form={form} path={path} label={label} placeholder={placeholder} maxLength={500} />
-      <Negate form={form} path={negate} />
-      {matchCase && <MatchCase form={form} />}
-      {/* On its own line under the row, so it never runs under the buttons (team trial round 2). */}
-      {path === "senderPattern" && (
-        <small className="cond-hint">{"Keywords: \\Numeric = numeric Sender IDs, \\Alpha = with a letter"}</small>
-      )}
-    </div>
-  );
-}
-
 /**
  * Case sensitive for the Sender ID conditions (team trial round 1): on (the default), the Sender ID pattern and
  * list must match the exact capitals; off, any case matches.
@@ -186,6 +158,185 @@ function MatchCase({ form }: { form: FormApi<TranslationRuleInput> }) {
       />
       Case sensitive
     </label>
+  );
+}
+
+/** A plain input bound to the form, for the compact match grid (the column titles are the labels). */
+function BareText({
+  form,
+  path,
+  placeholder,
+  label,
+}: {
+  form: FormApi<TranslationRuleInput>;
+  path: "senderPattern" | "receiverPattern" | "contentPattern" | "mccmncPattern";
+  placeholder: string;
+  label: string;
+}) {
+  const err = form.error(path);
+  return (
+    <span className="mg-cell">
+      <input
+        value={(form.get(path) as string | null) ?? ""}
+        placeholder={placeholder}
+        maxLength={path === "mccmncPattern" ? 200 : 500}
+        aria-label={label}
+        aria-invalid={!!err}
+        onChange={(e) => form.set(path, e.target.value || null)}
+      />
+      {err && <small className="error-text">{err}</small>}
+    </span>
+  );
+}
+
+function BareList({
+  form,
+  path,
+  label,
+}: {
+  form: FormApi<TranslationRuleInput>;
+  path: "senderListId" | "receiverListId";
+  label: string;
+}) {
+  const newList = async () => {
+    const saved = await ask<NumberList>((done) => <NumberListDialog row={null} done={done} />);
+    if (saved) form.set(path, saved.id);
+  };
+  return (
+    <span className="mg-cell mg-list" aria-label={label}>
+      <ListLookup<NumberList>
+        list="number_lists"
+        value={form.get(path) as number | null}
+        onChange={(l) => form.set(path, l?.id ?? null)}
+        labelOf={(l) => l.name}
+        detailOf={(l) => `${listTypeLabel(l.listType)} · ${l.entries} entries`}
+        placeholder="Any number list…"
+      />
+      <Button small variant="ghost" icon="plus" title="New list" aria-label="New list" onClick={() => void newList()} />
+      {form.error(path) && <small className="error-text">{form.error(path)}</small>}
+    </span>
+  );
+}
+
+function Lengths({
+  form,
+  min,
+  max,
+  label,
+}: {
+  form: FormApi<TranslationRuleInput>;
+  min: "senderMinLength" | "receiverMinLength";
+  max: "senderMaxLength" | "receiverMaxLength";
+  label: string;
+}) {
+  const num = (k: typeof min | typeof max, lo: number) => (
+    <input
+      type="number"
+      min={lo}
+      max={20}
+      step={1}
+      value={(form.get(k) as number | null) ?? ""}
+      aria-label={`${label} ${k.endsWith("MinLength") ? "min" : "max"} length`}
+      aria-invalid={!!form.error(k)}
+      onChange={(e) => form.set(k, e.target.value === "" ? (null as never) : Number(e.target.value))}
+    />
+  );
+  return (
+    <span className="mg-cell mg-len">
+      {num(min, 0)}
+      <span className="muted">–</span>
+      {num(max, 1)}
+      {(form.error(min) || form.error(max)) && (
+        <small className="error-text">{form.error(min) ?? form.error(max)}</small>
+      )}
+    </span>
+  );
+}
+
+/** The networks as a summary line with a button that opens the tree (team trial round 5). */
+function NetworksCell({ form }: { form: FormApi<TranslationRuleInput> }) {
+  const { tree } = useDestinationTree();
+  const codes = (form.get("mccmncs") as string[]) ?? [];
+  return (
+    <span className="mg-cell mg-nets">
+      <Button
+        small
+        icon="globe"
+        onClick={async () => {
+          const next = await ask<string[]>((done) => <RuleCodesDialog initial={codes} done={done} />);
+          if (next) form.set("mccmncs", next);
+        }}
+      >
+        {codes.length ? "Change…" : "Pick networks…"}
+      </Button>
+      <span className={codes.length ? "small" : "muted small"} title={codes.join(", ")}>
+        {codes.length ? `${codes.length} · ${codesText(tree, codes, 2)}` : "Any network"}
+      </span>
+      {codes.length > 0 && (
+        <button type="button" className="link small" onClick={() => form.set("mccmncs", [])}>
+          Clear
+        </button>
+      )}
+      {form.error("mccmncs") && <small className="error-text">{form.error("mccmncs")}</small>}
+    </span>
+  );
+}
+
+/**
+ * Match conditions as one compact grid (team trial round 5): Sender ID, Receiver ID, Message text and MCCMNC rows;
+ * columns Pattern (regex), Number list, Length. Every condition keeps its Match / Not Match switch.
+ */
+function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
+  const v = form.values;
+  return (
+    <div className="match-grid">
+      <span className="mg-head" />
+      <span className="mg-head">Pattern (regex)</span>
+      <span className="mg-head" />
+      <span className="mg-head">Number list / networks</span>
+      <span className="mg-head" />
+      <span className="mg-head">Length</span>
+
+      <span className="mg-label">
+        Sender ID
+        <MatchCase form={form} />
+      </span>
+      <BareText form={form} path="senderPattern" placeholder="^[A-Z]+$" label="Sender ID pattern" />
+      <Negate form={form} path="senderPatternNegate" />
+      <BareList form={form} path="senderListId" label="Sender ID list" />
+      <Negate form={form} path="senderListNegate" />
+      <Lengths form={form} min="senderMinLength" max="senderMaxLength" label="Sender ID" />
+
+      <span className="mg-label">Receiver ID</span>
+      <BareText form={form} path="receiverPattern" placeholder="^00" label="Receiver ID pattern" />
+      <Negate form={form} path="receiverPatternNegate" />
+      <BareList form={form} path="receiverListId" label="Receiver ID list" />
+      <Negate form={form} path="receiverListNegate" />
+      <Lengths form={form} min="receiverMinLength" max="receiverMaxLength" label="Receiver ID" />
+
+      <span className="mg-label">Message text</span>
+      <span className="mg-span3">
+        <BareText form={form} path="contentPattern" placeholder="bit\.ly" label="Message text pattern" />
+      </span>
+      <Negate form={form} path="contentPatternNegate" />
+      <span />
+
+      <span className="mg-label">MCCMNC</span>
+      <BareText form={form} path="mccmncPattern" placeholder="^415 or ^(415|420)" label="MCCMNC pattern" />
+      <span className="muted small mg-or">or</span>
+      <NetworksCell form={form} />
+      <Negate form={form} path="mccmncNegate" />
+      <span />
+
+      <small className="mg-foot muted">
+        {"Sender ID keywords: \\Numeric = numeric, \\Alpha = with a letter. "}
+        {v.senderMatchCase === false
+          ? "Any capitals match (Case sensitive is off). "
+          : "Exact capitals (Case sensitive is on). "}
+        A network matches when it is picked or matches the MCCMNC pattern; a 3-digit MCC is only the country&apos;s All
+        networks entry.
+      </small>
+    </div>
   );
 }
 
@@ -606,105 +757,10 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
           />
         </Section>
 
-        <Section title="Match conditions" columns={2} note="All set conditions must hold">
-          {/* Each pattern beside its list (team trial round 2). */}
-          <PatternField
-            form={form}
-            path="senderPattern"
-            negate="senderPatternNegate"
-            label="Sender ID (regex)"
-            placeholder="^[A-Z]+$"
-            matchCase
-          />
-          <div className="cond-field">
-            <ListPick form={form} path="senderListId" label="Sender ID List" />
-            <Negate form={form} path="senderListNegate" />
-            <small className="cond-hint">
-              {v.senderMatchCase === false
-                ? "Any capitals (Case sensitive is off)"
-                : "Exact capitals (Case sensitive is on)"}
-            </small>
-          </div>
-          <PatternField
-            form={form}
-            path="receiverPattern"
-            negate="receiverPatternNegate"
-            label="Receiver ID (regex)"
-            placeholder="^00"
-          />
-          <div className="cond-field">
-            <ListPick form={form} path="receiverListId" label="Receiver ID List" />
-            <Negate form={form} path="receiverListNegate" />
-          </div>
-          <div className="wide">
-            <PatternField
-              form={form}
-              path="contentPattern"
-              negate="contentPatternNegate"
-              label="Message Body Text (regex)"
-              placeholder="bit\.ly"
-            />
-          </div>
-          <div className="cond-field wide align-top">
-            <FormField label="MCCMNC" error={form.error("mccmncs")}>
-              <DestinationPick value={v.mccmncs} onChange={(c) => form.set("mccmncs", c)} />
-            </FormField>
-            <Negate form={form} path="mccmncNegate" />
-            <small className="cond-hint">
-              A 3-digit MCC is only the country’s All networks entry; tick the country to cover every network
-            </small>
-          </div>
-          <div className="cond-field wide">
-            {/* A regex instead of (or as well as) picking networks, as on route rules (team trial round 2). */}
-            <TextField
-              form={form}
-              path="mccmncPattern"
-              label="MCCMNC (regex)"
-              placeholder="^415 (every Lebanese network) or ^(415|420)"
-              maxLength={200}
-            />
-            <small className="cond-hint">
-              Matched against the MCCMNC code; a network matches when it is picked above or matches this pattern
-            </small>
-          </div>
-          <div className="fgrid cols-4 wide">
-            <NumberField
-              form={form}
-              path="senderMinLength"
-              label="Sender ID Min Length"
-              required
-              min={0}
-              max={20}
-              step={1}
-            />
-            <NumberField
-              form={form}
-              path="senderMaxLength"
-              label="Sender ID Max Length"
-              required
-              min={1}
-              max={20}
-              step={1}
-            />
-            <NumberField
-              form={form}
-              path="receiverMinLength"
-              label="Receiver ID Min Length"
-              required
-              min={0}
-              max={20}
-              step={1}
-            />
-            <NumberField
-              form={form}
-              path="receiverMaxLength"
-              label="Receiver ID Max Length"
-              required
-              min={1}
-              max={20}
-              step={1}
-            />
-          </div>
+        <Section title="Match conditions" note="All set conditions must hold">
+          {/* Compact grid (team trial round 5): a row per field, the pattern and the list each with Match / Not Match,
+              the lengths last; the networks open in a dialog instead of a tree on the page. */}
+          <MatchGrid form={form} />
         </Section>
 
         {!blocks && (

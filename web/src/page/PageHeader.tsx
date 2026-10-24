@@ -1,7 +1,7 @@
 // Page header (§15.1): title, actions on the right with the main action as the one filled button
 // (§15.3), then the sibling pages of the same section as pills (current filled).
 import { useContext, useEffect, type ReactNode } from "react";
-import { pagesOf, type PageDef } from "../nav/registry";
+import type { PageDef } from "../nav/registry";
 import { TabContext, useTabNavigate } from "../shell/tabContext";
 import { canGoBack, useTabs } from "../shell/tabs";
 import { Icon } from "../ui/Icon";
@@ -79,9 +79,8 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   const navigate = useTabNavigate();
-  const siblings = page.key === "home" || crumbs ? [] : pagesOf(page.section);
-  // Design refresh (team trial round 2): title, the sibling pages as pills beside it (team trial round 4, to keep the
-  // header to one line), and the actions on the right. The one-line purpose under the title was dropped (round 3).
+  // Design refresh (team trial round 2): title and the actions on the right. The one-line purpose under the title was
+  // dropped (round 3); the sibling page pills beside it too (round 5: the top menu already lists them).
   return (
     <div className={`page-header${crumbs ? " record-header" : ""}`}>
       {crumbs && (
@@ -116,30 +115,6 @@ export function PageHeader({
           </div>
           {meta && <div className="record-chips">{meta}</div>}
         </div>
-        {siblings.length > 1 && (
-          <nav className="siblings" aria-label={`${page.label} and related pages`}>
-            {siblings.map((s) => (
-              <a
-                key={s.key}
-                href={s.path}
-                className={s.key === page.key ? "current" : ""}
-                aria-current={s.key === page.key ? "page" : undefined}
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate(s.path, e.ctrlKey || e.metaKey ? { forceNew: true } : {});
-                }}
-                onAuxClick={(e) => {
-                  if (e.button === 1) {
-                    e.preventDefault();
-                    navigate(s.path, { forceNew: true });
-                  }
-                }}
-              >
-                {s.label}
-              </a>
-            ))}
-          </nav>
-        )}
         <div className="page-actions">{actions}</div>
       </div>
     </div>

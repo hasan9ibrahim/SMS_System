@@ -982,7 +982,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "Detail panel",
             items: [
-              "**Reconciliation** tab: their amount and count, our amount and count, the difference in money, % and messages, and the result. Below: partner and AM, period and time zone, input period, dates and source, the check reasons (one line per check), the rule used, e-mail status, whether the invoice is on the SOA, and **Notes and history** (received, checked, status changes, notes and e-mails). Buttons: **Accept**, **Reject**, **Keep pending**, **Send acceptance**, **Check again**, **Edit**, **Note** and **Delete** (only the ones that fit the current status are shown).",
+              "**Reconciliation** tab: their amount and count, our amount and count, the difference in money, % and messages, and the result. Below: partner and Account Manager, period and time zone, input period, dates and source, the check reasons (one line per check), the rule used, e-mail status, whether the invoice is on the SOA, and **Notes and history** (received, checked, status changes, notes and e-mails). Buttons: **Accept**, **Reject**, **Keep pending**, **Send acceptance**, **Check again**, **Edit**, **Note** and **Delete** (only the ones that fit the current status are shown).",
               "**Destinations** tab: our vendor cost per MCCMNC for the period. When the invoice has destination lines, their figures sit next to ours, largest difference first, and destinations beyond the rule's limit are flagged in red.",
               "**Changes** tab: every change to this record.",
             ],
@@ -1668,7 +1668,7 @@ export const topics: HelpTopic[] = [
                 name: "Net Balance",
                 what: "Customer balance minus vendor balance, in the customer currency. Negative (amber) = the partner owes us after offsetting.",
               },
-              { name: "Account Manager", what: "The partner's AM." },
+              { name: "Account Manager", what: "The partner's Account Manager." },
               { name: "Billing", what: "**Prepaid** or **Postpaid** (customer side)." },
               { name: "Customer Credit", what: "The customer's credit limit." },
               {

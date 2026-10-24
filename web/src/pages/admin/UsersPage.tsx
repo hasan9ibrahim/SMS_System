@@ -674,7 +674,7 @@ export function UsersPage() {
                     [r.address1, r.address2, r.city, r.state, r.zip, r.countryIso].filter(Boolean).join(", "),
                   ],
                   ["Multiple login", r.allowMultipleLogin ? "Allowed" : "One session at a time"],
-                  ["AM of live enterprises", r.liveEnterprises ? r.liveEnterprises.toLocaleString("en-US") : null],
+                  ["Account Manager of live enterprises", r.liveEnterprises ? r.liveEnterprises.toLocaleString("en-US") : null],
                   ["Updated", `${fmtWhen(r.updatedAt)}${r.updatedBy ? ` by ${r.updatedBy}` : ""}`],
                 ]}
               />

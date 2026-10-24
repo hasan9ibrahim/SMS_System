@@ -586,7 +586,7 @@ function GrantDialog({ done }: { done: (v: boolean | null) => void }) {
           value={enterpriseId}
           onChange={(r) => setEnterpriseId(r?.id ?? null)}
           labelOf={(r) => `${r.name} (#${r.id})`}
-          detailOf={(r) => (r.accountManagerName ? `AM ${r.accountManagerName}` : "")}
+          detailOf={(r) => (r.accountManagerName ? `Account Manager ${r.accountManagerName}` : "")}
           placeholder="Choose an enterprise…"
         />
       </div>

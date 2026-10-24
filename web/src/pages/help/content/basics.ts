@@ -30,7 +30,7 @@ export const topics: HelpTopic[] = [
               "**NOC engineers** — trunks, binds, routing, translation and HLR rules, the live dashboard, alerts and troubleshooting.",
               "**Rates team** — rate tables, vendor rate notifications, LCR (least-cost routing) and rate lookup.",
               "**Billing / finance** — transactions, invoices, SOA (statements of account), balances and vendor invoices.",
-              "**Account managers (AM)** — their enterprises, reports, market moves and traffic alerts.",
+              "**Account managers** — their enterprises, reports, market moves and traffic alerts.",
               "**Administrators** — users, access groups, visibility policies, security and the change history.",
             ],
           },
@@ -246,7 +246,6 @@ export const topics: HelpTopic[] = [
             items: [
               "**Back arrow** — goes back to the page you had open before in this tab, or, if there is none, to the tab this one was opened from. Shortcut **Alt+←**. It is greyed out when there is nowhere to go back to.",
               "**Page title** — on record pages it can be a picker to switch to another record. There is no description line under the title.",
-              "**Sibling links** — the other pages of the same menu as small links; the current one is highlighted. Ctrl-click or middle-click opens one in a new tab.",
               "**Actions** on the right (small buttons) — usually **Undo**, **History**, **Export** and the page's main action. The main action (for example **Add rule**) is the only filled, coloured button on the page.",
             ],
           },
@@ -1155,7 +1154,7 @@ export const topics: HelpTopic[] = [
     ],
   },
 
-  // ------------------------------------------------------------------ AM visibility
+  // ------------------------------------------------------------------ Account Manager visibility
   {
     id: "am-visibility",
     title: "Account manager visibility",
@@ -1180,7 +1179,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "An administrator can switch on a visibility policy for all account managers (AMs), a department or chosen users. With a policy you see the names of **your own** clients and vendors (those where you are the AM, and optionally your team's or ones shared with you). Everyone else's appear as neutral IDs, and some figures can be hidden.",
+            text: "An administrator can switch on a visibility policy for all account managers (Account Managers), a department or chosen users. With a policy you see the names of **your own** clients and vendors (those where you are the Account Manager, and optionally your team's or ones shared with you). Everyone else's appear as neutral IDs, and some figures can be hidden.",
           },
         ],
       },
@@ -1191,7 +1190,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "Other AMs' enterprises and trunks show as IDs such as `Customer #2481` or `Vendor trunk #1036`. The ID is the same everywhere, so you can still follow traffic (“vendor #1036 has low DLR”) without knowing who it is.",
+              "Other Account Managers' enterprises and trunks show as IDs such as `Customer #2481` or `Vendor trunk #1036`. The ID is the same everywhere, so you can still follow traffic (“vendor #1036 has low DLR”) without knowing who it is.",
               "Masked names cannot be searched for by name, are not shown in tooltips, and stay masked in exports, e-mails, scheduled reports and the API.",
               "You cannot save changes to a record that is masked for you.",
             ],
@@ -1226,18 +1225,18 @@ export const topics: HelpTopic[] = [
       },
       {
         id: "attribution",
-        title: "AM attribution at send time",
+        title: "Account Manager attribution at send time",
         blocks: [
           {
             kind: "text",
-            text: "Every message record (EDR) stores the customer-side and vendor-side AM **at the moment the message was sent**. Reports read the AM from the message, not from the client's current setting.",
+            text: "Every message record (EDR) stores the customer-side and vendor-side Account Manager **at the moment the message was sent**. Reports read the Account Manager from the message, not from the client's current setting.",
           },
           {
             kind: "list",
             items: [
-              "When a client moves to another AM, revenue, cost, margin and volume before the handover stay with the previous AM. The new AM is credited from the handover time on.",
-              "A client handed over mid-month shows two lines in AM reports, one per AM, each with its date range.",
-              "Invoices and SOAs belong to the client, so they do not change with the AM.",
+              "When a client moves to another Account Manager, revenue, cost, margin and volume before the handover stay with the previous Account Manager. The new Account Manager is credited from the handover time on.",
+              "A client handed over mid-month shows two lines in Account Manager reports, one per Account Manager, each with its date range.",
+              "Invoices and SOAs belong to the client, so they do not change with the Account Manager.",
             ],
           },
         ],
@@ -1497,7 +1496,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**ADD (average delivery delay)** — average number of seconds between sending a message and receiving its delivery receipt.",
-              "**AM (account manager)** — the salesperson responsible for a customer or vendor. See [[am-visibility]].",
+              "**Account Manager (account manager)** — the salesperson responsible for a customer or vendor. See [[am-visibility]].",
               "**ASR (answer-seizure ratio)** — the share of attempts the platform accepted and sent on: successful ÷ attempts, in %.",
               "**Attempt** — one message received from a customer, whatever happened to it next.",
               "**Billable (C) / (V)** — messages billable to the customer / billable by the vendor.",
@@ -1666,7 +1665,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The Dashboard shows today's traffic as it happens, without reloading. NOC engineers keep it open to see at a glance who started sending, who is ramping up or dropping, and how hard each client pushes against its TPS (messages per second) limit. Managers and AMs use it for today's volume and margin.",
+            text: "The Dashboard shows today's traffic as it happens, without reloading. NOC engineers keep it open to see at a glance who started sending, who is ramping up or dropping, and how hard each client pushes against its TPS (messages per second) limit. Managers and Account Managers use it for today's volume and margin.",
           },
           {
             kind: "text",
@@ -1914,7 +1913,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "NOC uses it to investigate incidents and drops; AMs and managers use it to check their clients' traffic and margin. The Dashboard, incident pop-ups and other pages open it already broken down by the right level.",
+            text: "NOC uses it to investigate incidents and drops; Account Managers and managers use it to check their clients' traffic and margin. The Dashboard, incident pop-ups and other pages open it already broken down by the right level.",
           },
         ],
       },
@@ -2011,7 +2010,7 @@ export const topics: HelpTopic[] = [
               { name: "Vendor country / Vendor network (MCCMNC)", what: "Destination as rated on the vendor side." },
               {
                 name: "Customer account manager / Vendor account manager",
-                what: "The AM at the time the message was sent.",
+                what: "The Account Manager at the time the message was sent.",
               },
               {
                 name: "Customer Sender ID",
@@ -2137,7 +2136,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Figures read the AM and rates as they were when each message was sent, so later handovers or rate changes do not change them ([[am-visibility#attribution]]). The status bar shows how many rows the top level has, e.g. `248 × customer`.",
+            text: "Figures read the Account Manager and rates as they were when each message was sent, so later handovers or rate changes do not change them ([[am-visibility#attribution]]). The status bar shows how many rows the top level has, e.g. `248 × customer`.",
           },
         ],
       },

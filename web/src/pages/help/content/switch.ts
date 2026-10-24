@@ -42,7 +42,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "NOC and routing staff use it daily; AMs (account managers) use it when one partner needs special handling. You assign the rule to trunks, enterprises, product categories or all trunks in the same form, so there is no separate step on the trunk.",
+            text: "NOC and routing staff use it daily; Account Managers (account managers) use it when one partner needs special handling. You assign the rule to trunks, enterprises, product categories or all trunks in the same form, so there is no separate step on the trunk.",
           },
           {
             kind: "list",
@@ -222,6 +222,10 @@ export const topics: HelpTopic[] = [
           {
             kind: "text",
             text: "All conditions you fill in must hold for the rule to match. Empty conditions are ignored, so a rule with no conditions matches every message. Most conditions have a **Match / Not Match** switch: **Not Match** turns the condition around (for example “the Sender ID is NOT in this list”).",
+          },
+          {
+            kind: "text",
+            text: "The section is one compact grid: a row each for **Sender ID** (with **Case sensitive** under its name), **Receiver ID**, **Message text** and **MCCMNC**; columns **Pattern (regex)**, **Number list / networks** and **Length** (min – max). Each pattern and list has its own Match / Not Match switch. For MCCMNC, type a pattern or click **Pick networks…** to tick countries and networks in a window (the row then shows how many and which; **Clear** empties it).",
           },
           {
             kind: "fields",
@@ -1448,7 +1452,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "AMs and rates staff use this page to send customers their current rates (**Send Rate**) or their connection details (**Send Tech Info**), for one trunk or many at once. Every e-mail sent shows in [[email-logs|Email logs]].",
+            text: "Account Managers and rates staff use this page to send customers their current rates (**Send Rate**) or their connection details (**Send Tech Info**), for one trunk or many at once. Every e-mail sent shows in [[email-logs|Email logs]].",
           },
         ],
       },
@@ -1883,7 +1887,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A traffic alert watches one customer trunk (optionally one vendor, Sender ID or network) and e-mails when quality drops. NOC staff and AMs use it to catch problems before the customer complains. For platform-wide alert rules see [[alert-rules|Alert rules]].",
+            text: "A traffic alert watches one customer trunk (optionally one vendor, Sender ID or network) and e-mails when quality drops. NOC staff and Account Managers use it to catch problems before the customer complains. For platform-wide alert rules see [[alert-rules|Alert rules]].",
           },
         ],
       },

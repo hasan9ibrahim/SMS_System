@@ -264,7 +264,7 @@ function Clients({ r }: { r: MarketMoveRow }) {
               </th>
               <th>Table</th>
               <th>Clients</th>
-              <th>AM</th>
+              <th>Account Manager</th>
               <th className="num">Sell</th>
               <th className="num">Margin now</th>
               <th className="num">At new cost</th>

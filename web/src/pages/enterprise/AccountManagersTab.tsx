@@ -6,6 +6,8 @@ import { useAllRows } from "../../api/admin";
 import { ApiError } from "../../api/client";
 import { useAmHistory, useHandover, useReference } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
+import { toast } from "../../ui/feedback";
+import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
 import { type SectionProps } from "../../records/parts";
 import { Avatar } from "../../page/PageHeader";
@@ -117,14 +119,15 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
             ))}
           </select>
           <span className="muted small">
-            Sent from the new AM to the commercial contact, both AMs in copy. Edit templates in Admin › E-mail
-            templates.
+            Sent from the new Account Manager to the commercial contact, both Account Managers in copy. Edit templates
+            in Admin › E-mail templates.
           </span>
         </label>
       )}
       <p className="muted small">
         Revenue, cost and margin before the handover stay credited to{" "}
-        {enterprise.accountManagerName ?? "the current AM"}. A scheduled handover replaces one that hasn't started yet.
+        {enterprise.accountManagerName ?? "the current Account Manager"}. A scheduled handover replaces one that hasn't
+        started yet.
       </p>
       {error && <p className="error-text">{error}</p>}
     </Modal>
@@ -134,6 +137,57 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
 const day = (s: string) =>
   `${new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`;
 const dayTime = (s: string) => `${day(s)}, ${s.slice(11, 16)} UTC`;
+
+/**
+ * The partner's own account manager (team trial round 5): the enterprise's Commercial contact, edited on the General
+ * tab. Shown under our AM and its history.
+ */
+function PartnerAm({ enterprise }: { enterprise: EnterpriseDetail }) {
+  const c = enterprise.contacts.commercial;
+  const copy = (text: string) =>
+    void navigator.clipboard
+      ?.writeText(text)
+      .then(() => toast({ tone: "good", message: "Copied" }))
+      .catch(() => undefined);
+  const empty = !c.name && !c.phone && !c.emails.length;
+  return (
+    <section className="fsection am-partner">
+      <header>
+        <div className="fsection-title">
+          <h2>Partner Account Manager</h2>
+          <p className="muted small">
+            {enterprise.name}&apos;s Account Manager on their side: the Commercial contact (edit it on the General tab).
+          </p>
+        </div>
+      </header>
+      {empty ? (
+        <p className="muted">No commercial contact yet.</p>
+      ) : (
+        <div className="am-person">
+          <Avatar name={c.name || c.emails[0] || "?"} size="md" />
+          <div className="am-partner-info">
+            <div className="strong">{c.name || "Name not set"}</div>
+            {c.phone && (
+              <a className="small" href={`tel:${c.phone}`}>
+                {c.phone}
+              </a>
+            )}
+            <div className="tag-row">
+              {c.emails.map((m) => (
+                <span key={m} className="chip-tag">
+                  <a href={`mailto:${m}`}>{m}</a>
+                  <button type="button" className="icon-btn" aria-label={`Copy ${m}`} onClick={() => copy(m)}>
+                    <Icon name="copy" size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 /**
  * Account managers (record redesign, team trial round 4): the current AM in a card with Hand over, and the
@@ -205,6 +259,7 @@ export function AccountManagersTab({ enterprise }: SectionProps & { enterprise: 
           </ol>
         </section>
       </div>
+      <PartnerAm enterprise={enterprise} />
       {open && <HandoverDialog enterprise={enterprise} onClose={() => setOpen(false)} />}
     </>
   );
