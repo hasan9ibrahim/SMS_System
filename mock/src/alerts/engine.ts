@@ -6,7 +6,7 @@
 // PostgreSQL, so acknowledgements and snoozes from the API take effect on the next round.
 import { fillBody, fillText } from "../email/html.js";
 import type pg from "pg";
-import type { AlertRuleRow, IncidentEvent, IncidentRow } from "@sms/contract";
+import type { AlertRuleRow, IncidentBreakdownItem, IncidentEvent, IncidentRow } from "@sms/contract";
 import { db } from "../db.js";
 import {
   ALERT_RULE_FROM,
@@ -15,6 +15,7 @@ import {
   INCIDENT_SELECT,
   mapAlertRule,
   mapIncident,
+  parseBreakdown,
 } from "../lists/alertDefs.js";
 import { BASE_DELAY, MINUTES, type Simulator } from "../live/simulator.js";
 import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
@@ -244,6 +245,9 @@ export function toEvent(i: IncidentRow, rule: Pick<AlertRuleRow, "channels">, re
     acknowledgedBy: i.acknowledgedBy,
     acknowledgedAt: i.acknowledgedAt,
     snoozedUntil: i.snoozedUntil,
+    condition: i.condition,
+    windowMinutes: i.windowMinutes,
+    breakdown: i.breakdown,
     channels: (["popup", "sound", "email"] as const).filter((k) => rule.channels[k]),
     repeat,
   };
@@ -330,7 +334,13 @@ export async function sendIncidentEmail(
                 `- ${i.state === "recovered" ? "[recovered] " : ""}${i.message} (since ${i.startedAt.slice(11, 16)} UTC)`,
             )
             .join("\n")}`
-        : first.message;
+        : [
+            first.message,
+            first.windowMinutes ? `Window: last ${first.windowMinutes} min` : "",
+            first.breakdown.length ? `Worst destinations: ${breakdownText(first.metric, first.breakdown)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
   const values = {
     severity: kind === "recovery" ? "OK" : first.severity.toUpperCase(),
     rule: rule.name,
@@ -365,15 +375,14 @@ interface OpenRow {
   peak: number | null;
   lastNotified: number;
   snoozedUntil: number | null;
-  breakdown: string | null;
+  breakdown: IncidentBreakdownItem[] | null;
   breakdownAt: number;
 }
-/** The window in clock time (UTC) and the destinations behind it, after the rule's own message. */
-function withDetails(message: string, windowMinutes: number, now: number, breakdown: string | null): string {
-  const hm = (t: number) => new Date(t).toISOString().slice(11, 16);
-  const end = Math.floor(now / 60_000) * 60_000 + 60_000;
-  const window = windowMinutes > 0 ? ` · ${hm(end - windowMinutes * 60_000)}–${hm(now)} UTC` : "";
-  return `${message}${window}${breakdown ? ` · ${breakdown}` : ""}`;
+/** The worst destinations in words for e-mails: "Brazil (BR) -1.07 EUR, Poland (PL) -0.60 EUR". */
+export function breakdownText(metric: IncidentRow["metric"], items: IncidentBreakdownItem[]): string {
+  return items
+    .map((b) => `${b.name}${b.code ? ` (${b.code})` : ""} ${fmtMetric(metric, b.value, PLATFORM_CURRENCY)}`)
+    .join(", ");
 }
 
 const BREAKDOWN_METRICS = new Set(["margin", "margin_pct", "asr", "dlr"]);
@@ -386,7 +395,7 @@ const BREAKDOWN_METRICS = new Set(["margin", "margin_pct", "asr", "dlr"]);
 export async function destinationBreakdown(
   rule: Pick<AlertRuleRow, "metric" | "windowMinutes">,
   entity: Entity,
-): Promise<string | null> {
+): Promise<IncidentBreakdownItem[] | null> {
   if (!BREAKDOWN_METRICS.has(rule.metric) || rule.windowMinutes <= 0) return null;
   const cust = entity.series.filter((s) => s.kind === "customer_trunk").map((s) => s.id);
   const vend = entity.series.filter((s) => s.kind === "vendor_trunk").map((s) => s.id);
@@ -410,8 +419,6 @@ export async function destinationBreakdown(
     rows.map((r) => r.iso),
   ]);
   const nameOf = new Map(names.map((r) => [String(r.iso).trim(), r.name as string]));
-  const label = (iso: string) => `${nameOf.get(iso.trim()) ?? iso} (${iso.trim()})`;
-  const money = (v: number) => `${v.toFixed(2)} ${PLATFORM_CURRENCY}`;
   const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : null);
   const sum = (k: "n" | "ok" | "dl") => rows.reduce((a, x) => a + Number(x[k]), 0);
   // Money: the ones losing it. ASR / DLR: the ones below the entity's own figure over the window.
@@ -440,8 +447,11 @@ export async function destinationBreakdown(
     .sort((a, b) => a.v - b.v)
     .slice(0, 3);
   if (!scored.length) return null;
-  const show = (x: (typeof scored)[number]) => (rule.metric === "margin" ? money(x.v) : `${x.v.toFixed(1)} %`);
-  return `Worst: ${scored.map((x) => `${label(x.r.iso)} ${show(x)}`).join(", ")}`;
+  return scored.map((x) => ({
+    name: nameOf.get(x.r.iso.trim()) ?? x.r.iso.trim(),
+    code: x.r.iso.trim() || null,
+    value: Math.round(x.v * 100) / 100,
+  }));
 }
 
 export const keyOf = (ruleId: number, e: Pick<Entity, "kind" | "id" | "name">) =>
@@ -471,7 +481,7 @@ export async function evaluateRound(
         peak: r.peak_value == null ? null : Number(r.peak_value),
         lastNotified: r.last_notified_at ? (r.last_notified_at as Date).getTime() : 0,
         snoozedUntil: r.snoozed_until ? (r.snoozed_until as Date).getTime() : null,
-        breakdown: (r.breakdown as string | null) ?? null,
+        breakdown: parseBreakdown(r.breakdown),
         breakdownAt: r.breakdown_at ? (r.breakdown_at as Date).getTime() : 0,
       },
     ]),
@@ -513,7 +523,7 @@ export async function evaluateRound(
               entity.kind,
               entity.id,
               entity.name,
-              withDetails(ev.message, rule.windowMinutes, now, breakdown),
+              ev.message,
               ev.value,
               ev.baseline,
               new Date(now),
@@ -523,7 +533,7 @@ export async function evaluateRound(
           if (breakdown)
             await c.query("UPDATE incidents SET breakdown = $2, breakdown_at = now() WHERE id = $1", [
               rows[0].id,
-              breakdown,
+              JSON.stringify(breakdown),
             ]);
           const id = Number(rows[0].id);
           await c.query("UPDATE alert_rules SET last_triggered_at = $2 WHERE id = $1", [rule.id, new Date(now)]);
@@ -541,14 +551,14 @@ export async function evaluateRound(
             breakdown = await destinationBreakdown(rule, entity);
             await c.query("UPDATE incidents SET breakdown = $2, breakdown_at = now() WHERE id = $1", [
               cur.id,
-              breakdown,
+              breakdown ? JSON.stringify(breakdown) : null,
             ]);
           }
           await c.query("UPDATE incidents SET current_value = $2, peak_value = $3, message = $4 WHERE id = $1", [
             cur.id,
             ev.value,
             peak,
-            withDetails(ev.message, rule.windowMinutes, now, breakdown),
+            ev.message,
           ]);
           const snoozed = cur.snoozedUntil !== null && cur.snoozedUntil > now;
           if (

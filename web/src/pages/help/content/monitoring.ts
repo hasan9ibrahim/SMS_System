@@ -451,7 +451,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "An incident's message ends with the window it measured in clock time (e.g. `23:49–00:49 UTC`) and, for margin, ASR and DLR, the destinations behind it, e.g. `Worst: India (IN) -9.10 EUR`. A 60-minute window can include the end of yesterday, so it can differ from Live analytics' Today, which starts at 00:00 UTC.",
+            text: "The pop-up and the incident show the value now (and what it was before), the rule's condition, the window it measured (e.g. **last 60 min**) and, for margin, ASR and DLR, the **worst destinations**, e.g. India (IN) -9.10 EUR. A 60-minute window can include the end of yesterday, so it can differ from Live analytics' Today, which starts at 00:00 UTC.",
           },
         ],
       },

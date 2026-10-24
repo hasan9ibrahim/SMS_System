@@ -1,0 +1,254 @@
+/* Calm look (team trial round 5, §15.3 "colour only carries meaning"): loaded last, so these rules win.
+   - ASR / DLR green from 80 %, amber and red below; positive margin green, negative red. Amber and red are filled
+     chips in Live analytics.
+   - Numbers keep normal weight; only totals and names are a little heavier.
+   - Live analytics headers are tinted like the date-range chip; band labels keep their colour with a thin rule. */
+
+/* ---------- Live analytics */
+.la-grid td.num {
+  font-weight: 400;
+}
+/* ASR, DLRs and margin stay bold (team trial round 5, second pass). */
+.la-grid td.num.la-strong,
+.la-grid td.num.la-strong .la-pill {
+  font-weight: 700;
+}
+.la-grid td.la-good {
+  color: var(--color-good);
+}
+.la-grid td.la-pos {
+  color: var(--color-good);
+}
+.la-grid .la-total td,
+.la-grid .la-total td.num,
+.la-grid .la-total td.num.la-strong {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
+}
+/* Amber and red figures sit in a filled, softly rounded chip like the reference platform (team trial round 5, third
+   pass): amber with dark text, red with white text. Good figures stay green text. */
+.la-grid td.num.la-warn,
+.la-grid td.num.la-bad {
+  padding: 3px 3px 3px 2px;
+}
+.la-warn .la-pill,
+.la-bad .la-pill {
+  display: block;
+  padding: 2px 4px;
+  border-radius: 5px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.la-warn .la-pill {
+  background: #f8b13d;
+  color: #3b2500;
+}
+.la-bad .la-pill {
+  background: #e5484d;
+  color: #fff;
+}
+/* Header rows tinted like the date-range chip (team trial round 5, second pass); titles on one line. */
+.la-grid thead th,
+.la-grid th[class*="la-band-"] {
+  background: color-mix(in srgb, var(--color-accent) 9%, var(--color-panel));
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.la-grid thead th .la-sort {
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.la-grid thead .la-col-titles th,
+.la-grid thead th[rowspan] {
+  white-space: nowrap;
+}
+.la-grid .la-bands th.la-band {
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--band) 35%, transparent);
+}
+@keyframes la-flash-up {
+  from {
+    background: color-mix(in srgb, var(--color-good) 10%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+@keyframes la-flash-down {
+  from {
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+/* ---------- names and figures across pages */
+.strong,
+.rr-strong {
+  font-weight: 500;
+}
+.kpi-value,
+.dash-kpi .value {
+  font-weight: 600;
+}
+.mc-table .strong {
+  font-weight: 500;
+}
+
+/* No sideways scrolling (team trial round 5): Live analytics fits its columns to the window, headers centred. */
+.la-grid col.la-col-name {
+  width: 9.5%;
+}
+.la-grid col.la-col-act {
+  width: 5.5%;
+}
+.la-grid thead th,
+.la-grid thead th.num {
+  text-align: center;
+}
+.la-grid thead th .la-sort {
+  display: block;
+  margin: 0 auto;
+  text-align: center;
+}
+.la-grid td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Grid headers centred in their cells (team trial round 5). */
+.gh-cell,
+.gh-cell.align-right,
+.gh-cell.align-center {
+  justify-content: center;
+  text-align: center;
+}
+
+/* Status: "Active" is the normal state, so plain text with a small green dot; "Inactive" is greyed. */
+.status-pill {
+  font-weight: 400;
+  padding: 0;
+  background: none;
+}
+.status-pill.on {
+  color: var(--color-text);
+  background: none;
+}
+.status-pill.on .status-pill-dot {
+  background: var(--color-good);
+}
+.status-pill.off {
+  background: none;
+}
+/* Record names in lists: medium weight, not bold. */
+.gc .strong,
+.gc strong {
+  font-weight: 500;
+}
+
+/* Fitted columns need less side padding, so short figures (ASR 0.0 %) are not cut off. */
+.gc,
+.gh-cell,
+.gf-cell {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+@media (max-width: 1500px) {
+  .la-grid td {
+    font-size: 11.5px;
+  }
+  .la-grid th {
+    font-size: 11px;
+  }
+  .la-grid td,
+  .la-grid th {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+}
+
+/* Live analytics figures like the reference platform (team trial round 5): plain figures and names in Roboto,
+   every figure left-aligned with room after it; the bold coloured ones (ASR, DLR, margin) keep the main font. */
+.la-grid td.num {
+  text-align: left;
+  padding-left: 6px;
+  padding-right: 3px;
+}
+.la-grid td.num:not(.la-strong),
+.la-grid td.la-name {
+  font-family: "Roboto", var(--font-family);
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+.la-grid td.num.la-strong {
+  font-size: 11.5px;
+}
+/* Every figure the same size and font (team trial round 5); ASR, DLRs and margin are bold. */
+.la-grid td.num.la-strong,
+.la-grid td.num.la-strong .la-pill {
+  font-family: "Roboto", var(--font-family);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+/* Names in the first column (customer, trunk, vendor, destination…) are plain, not bold. */
+.la-grid tr:not(.la-total) td.la-name,
+.la-grid tr:not(.la-total) td.la-name .la-label,
+.la-grid tr:not(.la-total) td.la-name .la-toggle {
+  font-weight: 400;
+}
+.la-grid td.num.la-strong .la-pill {
+  text-align: left;
+}
+/* Column titles a touch smaller so they fit on one line next to the smaller figures. */
+.la-grid thead tr:not(.la-bands) th {
+  font-size: 11.5px;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+.la-grid td.num.la-warn .la-pill,
+.la-grid td.num.la-bad .la-pill {
+  text-align: center;
+}
+/* ASR and DLR figures centred in their columns, plain or in a chip (team trial round 5). */
+.la-grid td.num.la-center {
+  text-align: center;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+/* Spreadsheet grid (team trial round 5, picked from the style options): a thin line around every cell, rows a touch
+   taller. Expanded-group frames keep their own heavier lines. */
+.la-grid tbody td,
+.la-grid thead th {
+  border-right: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.la-grid tbody td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+/* EDRs and download buttons side by side, both fully visible (team trial round 5). */
+.la-grid td.la-actions {
+  display: table-cell;
+  padding: 2px 3px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: visible;
+}
+.la-grid td.la-actions .la-act {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  height: 20px;
+  padding: 0 5px;
+}
+.la-grid td.la-actions .la-act + .la-act {
+  margin-left: 3px;
+}

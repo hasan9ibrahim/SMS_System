@@ -146,6 +146,89 @@
           "type": "null"
         }
       ]
+    },
+    "condition": {
+      "description": "The rule's condition (v0.90.0): type, fixed value or % change, baseline.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value",
+            "baseline"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "above",
+                "below",
+                "increase_pct",
+                "decrease_pct",
+                "started",
+                "stopped",
+                "bind_down"
+              ]
+            },
+            "value": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "baseline": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "previous_window",
+                "yesterday",
+                "last_week",
+                null
+              ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "windowMinutes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "The rule's measuring window in minutes (v0.90.0)."
+    },
+    "breakdown": {
+      "type": "array",
+      "description": "Margin, ASR and DLR rules: the worst destinations over the window, worst first, at most 3 (v0.90.0).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "code",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": "number"
+          }
+        }
+      }
     }
   },
   "examples": [
@@ -178,7 +261,20 @@
       ],
       "repeat": false,
       "snoozedUntil": null,
-      "acknowledgedAt": null
+      "acknowledgedAt": null,
+      "condition": {
+        "type": "decrease_pct",
+        "value": 20,
+        "baseline": "previous_window"
+      },
+      "windowMinutes": 15,
+      "breakdown": [
+        {
+          "name": "Brazil",
+          "code": "BR",
+          "value": 41.5
+        }
+      ]
     }
   ]
 }

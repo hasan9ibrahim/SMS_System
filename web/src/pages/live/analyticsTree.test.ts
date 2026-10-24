@@ -29,7 +29,7 @@ test("colours: ASR and DLR green from 80, orange from 60, red below; margin gree
   assert.equal(cellTone("asr", 79.9), "warn");
   assert.equal(cellTone("asr", 59.9), "bad");
   assert.equal(cellTone("margin", -0.05), "bad");
-  assert.equal(cellTone("margin", 3), "good");
+  assert.equal(cellTone("margin", 3), "pos");
   assert.equal(cellTone("margin", 0), "");
   assert.equal(cellTone("revenue", 3), "");
   // Money and rates: 6 decimals, never rounded (team trial round 3).

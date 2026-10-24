@@ -1,0 +1,277 @@
+/* Customer portal (§1, team trial round 5): the same tokens as the staff system, in a quieter window. */
+.portal {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-bg);
+}
+.portal-top {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 56px;
+  padding: 0 24px;
+  background: var(--color-panel);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.portal-brand > div {
+  display: flex;
+  flex-direction: column;
+}
+.portal-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: #fff;
+}
+.portal-nav {
+  display: flex;
+  gap: 4px;
+}
+.portal-nav a {
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+.portal-nav a:hover {
+  color: var(--color-text);
+  background: var(--color-hover, rgba(127, 127, 127, 0.08));
+}
+.portal-nav a.active {
+  color: var(--color-text);
+  font-weight: 600;
+  background: var(--color-hover, rgba(127, 127, 127, 0.1));
+}
+.portal-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.portal-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+}
+.portal-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.portal-page h1 {
+  margin: 0;
+  font-size: 17px;
+}
+.portal-card {
+  padding: 16px 18px;
+  background: var(--color-panel);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.portal-card h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.portal-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+.portal-tiles .kpi-tile {
+  box-shadow: none;
+}
+.portal-tiles .kpi-value {
+  font-size: 22px;
+  font-weight: 600;
+}
+.portal-columns {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+.portal-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.portal-table th {
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.portal-table td {
+  padding: 8px 10px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.portal-table tr:last-child td {
+  border-bottom: 0;
+}
+.portal-table .num {
+  text-align: right;
+}
+.portal-total td {
+  font-weight: 600;
+}
+.portal-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: var(--color-text-secondary);
+}
+.portal-dot.up {
+  background: var(--color-good);
+}
+.portal-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+.portal-kv dt {
+  color: var(--color-text-secondary);
+}
+.portal-kv dd {
+  margin: 0;
+}
+.portal-list {
+  height: 100%;
+  max-width: none;
+}
+.portal-list-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.portal-list-head h1 {
+  margin-right: 8px;
+}
+.portal-list-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+}
+.portal-list-body > .grid {
+  flex: 1;
+  box-shadow: none;
+}
+.portal-aside {
+  width: 360px;
+  flex: none;
+  overflow: auto;
+}
+.portal-aside-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.portal-aside-head h2 {
+  margin: 0;
+}
+.portal-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+.portal-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 32px;
+  min-width: 260px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-panel);
+  color: var(--color-text-secondary);
+}
+.portal-search input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--color-text);
+}
+.portal-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+.portal-scroll {
+  overflow: auto;
+}
+.portal-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--color-bg);
+}
+.portal-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 360px;
+}
+.portal-signin h2 {
+  margin: 0;
+}
+.portal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.portal-field span {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.good-text {
+  color: var(--color-good);
+}
+.bad-text {
+  color: var(--color-error);
+}
+@media (max-width: 900px) {
+  .portal-tiles,
+  .portal-columns {
+    grid-template-columns: 1fr;
+  }
+  .portal-top {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 16px;
+  }
+}
+/* Portal grids have no bulk actions: the selection boxes stay hidden. */
+.portal .gc-check input,
+.portal .gh-check input {
+  visibility: hidden;
+}
+.portal-tiles .kpi-tile {
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px 16px;
+}
+.portal-kv dd.num {
+  text-align: left;
+}

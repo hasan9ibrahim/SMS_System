@@ -45,6 +45,7 @@ const PROTOCOL = [
 ];
 const SSL = [
   { value: "none", label: "None" },
+  { value: "tls1.0", label: "TLS 1.0 (legacy)" },
   { value: "tls1.2", label: "TLS 1.2" },
   { value: "tls1.3", label: "TLS 1.3" },
 ];

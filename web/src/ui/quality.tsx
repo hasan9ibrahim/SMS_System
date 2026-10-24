@@ -9,7 +9,7 @@ export function qualityTone(v: number | null | undefined): QualityTone {
   return v >= 80 ? "good" : v >= 60 ? "warning" : "error";
 }
 
-/** The CSS class for a value: tone-good / tone-warning / tone-error (or none). */
+/** The CSS class for a value: tone-good (from 80 %) / tone-warning / tone-error (or none). */
 export const qualityClass = (v: number | null | undefined) => {
   const t = qualityTone(v);
   return t ? `tone-${t}` : "";

@@ -9,6 +9,7 @@ import { GATE_OPEN, isBlocked } from "./admin/gate.js";
 import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } from "./visibility/context.js";
 import { restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
+import { isPortalOperation } from "./api/portal.js";
 
 export const API_PREFIX = "/api/v1";
 
@@ -88,6 +89,8 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
                 `${op.operationId} is in the contract but not implemented by the mock yet`,
               );
             }
+            // The customer portal has its own sign-in and sees only its own data: no staff gate or visibility.
+            if (isPortalOperation(op.operationId)) return handler(request, reply);
             // An expired, temporary or must-change password opens only the Change Password screen (§13.28).
             if (!GATE_OPEN.has(op.operationId) && (await isBlocked()))
               return sendProblem(reply, 403, "Change your password to continue", {
@@ -116,7 +119,7 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   // Audit Trail (§11): every call that changes something, after its answer is sent.
   app.addHook("onResponse", async (request, reply) => {
     const op = (request.routeOptions.config as { op?: ContractOperation }).op;
-    if (op) auditCall(op, request, reply);
+    if (op && !isPortalOperation(op.operationId)) auditCall(op, request, reply);
   });
 
   app.setNotFoundHandler((request, reply) =>

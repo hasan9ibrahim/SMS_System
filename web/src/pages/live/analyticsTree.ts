@@ -92,7 +92,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   { metric: "asr", label: "ASR %", title: "Accepted / attempts", fmt: "pct", shown: true, group: "Quality" },
   {
     metric: "dlrCustomer",
-    label: "DLR (c) %",
+    label: "DLR (c)",
     title: "Delivered as reported to the customer (the receipts we send)",
     fmt: "pct",
     shown: true,
@@ -100,7 +100,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   },
   {
     metric: "dlrVendor",
-    label: "DLR (v) %",
+    label: "DLR (v)",
     title: "Delivered as reported by the vendor",
     fmt: "pct",
     shown: true,
@@ -156,7 +156,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   },
   {
     metric: "deliveryDelayS",
-    label: "Delay sec",
+    label: "Delay s",
     title: "Average delivery delay in seconds",
     fmt: "sec",
     shown: true,
@@ -358,11 +358,12 @@ export const TONED = new Set<ReportMetric>(["asr", "dlrCustomer", "dlrVendor", "
  * Cell colour (team trial round 1): ASR and both DLRs green from 80 %, black on orange from 60 % to
  * 80 %, black on red below 60 %; margin green when positive, black on red when negative.
  */
-export function cellTone(metric: ReportMetric, v: number | null | undefined): "" | "good" | "warn" | "bad" {
+export function cellTone(metric: ReportMetric, v: number | null | undefined): "" | "good" | "pos" | "warn" | "bad" {
   if (v === null || v === undefined) return "";
   if (metric === "asr" || metric === "dlrCustomer" || metric === "dlrVendor")
     return v >= 80 ? "good" : v >= 60 ? "warn" : "bad";
-  if (metric === "margin") return v > 0 ? "good" : v < 0 ? "bad" : "";
+  // Margin: green when positive, red when negative; ASR and DLRs green from 80 % (team trial round 5).
+  if (metric === "margin") return v > 0 ? "pos" : v < 0 ? "bad" : "";
   return "";
 }
 

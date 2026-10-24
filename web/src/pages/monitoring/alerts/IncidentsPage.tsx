@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import type { IncidentRow } from "@sms/contract";
 import { exportIncidents, useAcknowledge, useAddIncidentNote, useIncident, useSnooze } from "../../../api/alerts";
-import { useRefreshRecords } from "../../../api/records";
+import { usePlatformCurrency, useRefreshRecords } from "../../../api/records";
 import { toListQuery } from "../../../grid/filterModel";
 import { useLive } from "../../../live/store";
 import { pageForPath } from "../../../nav/registry";
@@ -17,7 +17,7 @@ import { metricQualityClass } from "../../../ui/quality";
 import { problemText } from "../../routing/dialogs";
 import { fmtWhen } from "../../reference/shared";
 import { Kv } from "../../admin/parts";
-import { analyticsFor, duration, METRIC_SHORT } from "./alertsModel";
+import { analyticsFor, duration, fmtAlertValue, METRIC_SHORT } from "./alertsModel";
 import { IncidentFilters, todayCondition } from "./IncidentFilters";
 
 const page = pageForPath("/monitoring/incidents")!;
@@ -35,6 +35,7 @@ function IncidentDetailView({ r }: { r: IncidentRow }) {
   const addNote = useAddIncidentNote();
   const navigate = useTabNavigate();
   const [note, setNote] = useState("");
+  const currency = usePlatformCurrency();
   const d = detail.data;
   const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
   return (
@@ -82,6 +83,20 @@ function IncidentDetailView({ r }: { r: IncidentRow }) {
             <>
               {valueCell(r, r.currentValue)} / {valueCell(r, r.baselineValue)} / {valueCell(r, r.peakValue)}
             </>,
+          ],
+          [
+            "Worst destinations",
+            r.breakdown.length ? (
+              <span className="tag-row">
+                {r.breakdown.map((b) => (
+                  <span key={`${b.code}-${b.name}`} className="chip-tag">
+                    {b.name}
+                    {b.code ? ` (${b.code})` : ""} ·{" "}
+                    <span className="num">{fmtAlertValue(r.metric, b.value, currency)}</span>
+                  </span>
+                ))}
+              </span>
+            ) : null,
           ],
           ["Started", fmtWhen(r.startedAt)],
           ["Ended", r.endedAt ? fmtWhen(r.endedAt) : "still open"],

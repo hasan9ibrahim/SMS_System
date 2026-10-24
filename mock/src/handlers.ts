@@ -10,6 +10,18 @@ import { sendProblem } from "./problem.js";
 import { getCurrentUser, getWorkspace, saveWorkspace, updatePreferences } from "./api/session.js";
 import { queryList } from "./api/lists.js";
 import {
+  portalChangePassword,
+  portalExportRates,
+  portalGetSession,
+  portalListFields,
+  portalOverview,
+  portalQueryMessages,
+  portalQueryRates,
+  portalSignIn,
+  portalSignOut,
+  portalTraffic,
+} from "./api/portal.js";
+import {
   acknowledgeIncident,
   addIncidentNote,
   archiveAlertRule,
@@ -1168,6 +1180,17 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryAuditLog: queryList("audit_log"),
   queryBusinessCompanies: queryList("business_companies"),
   queryPortalUsers: queryList("customer_portal_users"),
+  // Customer portal (§1, team trial round 5).
+  portalGetSession,
+  portalSignIn,
+  portalSignOut,
+  portalChangePassword,
+  portalOverview,
+  portalListFields,
+  portalQueryRates,
+  portalExportRates,
+  portalQueryMessages,
+  portalTraffic,
   queryChanges,
   undoChange: (request, reply) =>
     Promise.resolve(undoChange(request, reply)).finally(() => {

@@ -1,0 +1,469 @@
+/* Phones (team trial round 5): every page usable at phone width. Only applies below 760 px, so laptop and desktop
+   layouts are unchanged. Loaded last. */
+
+/* Hidden on laptops; the drawer and card styles only matter on phones. */
+.menu-burger {
+  display: none;
+}
+.mnav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: color-mix(in srgb, #101828 38%, transparent);
+}
+.mnav {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(320px, 86vw);
+  overflow-y: auto;
+  background: var(--color-panel);
+  border-right: var(--border-width) solid var(--color-border);
+  box-shadow: var(--shadow);
+  padding: 8px 8px 24px;
+}
+.mnav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 10px;
+}
+.mnav-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+}
+.mnav-top.open svg {
+  transform: rotate(180deg);
+}
+.mnav-pages {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 6px 8px;
+}
+.mnav-page {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.mnav-page.current {
+  color: var(--color-accent);
+  background: var(--accent-soft);
+}
+
+/* Grid cards (DataGrid below 640 px wide). */
+.grid.mobile .gh,
+.grid.mobile .gf,
+.grid.mobile .grid-selall {
+  display: none;
+}
+.gm-sort {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-panel);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.gm-sort select {
+  flex: 1;
+  min-width: 0;
+}
+.gcard {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 128px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-panel);
+  overflow: hidden;
+}
+.gcard.active {
+  background: var(--accent-soft);
+}
+.gcard.archived {
+  opacity: 0.6;
+}
+.gcard-title {
+  font-weight: 600;
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gcard-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+.gcard-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gcard-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gcard-value {
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gcard-value.num {
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px; /* no zoom-in on focus in mobile Safari */
+  }
+
+  /* ---------- top bar: menu button, logo mark, search, TPS, bell, avatar */
+  .topbar-main {
+    gap: 8px;
+    padding: 0 10px;
+  }
+  .menu-burger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-panel);
+    color: var(--color-text);
+  }
+  .menu-bar,
+  .logo > span:not(.logo-mark),
+  .jump span,
+  .jump kbd,
+  .top-clock {
+    display: none !important;
+  }
+  .topbar-right {
+    margin-left: auto;
+    gap: 6px;
+  }
+  .jump {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  /* ---------- tab strip: scrolls sideways, no split view */
+  .tabs-split,
+  .tabs-split-pick,
+  .tab-new {
+    display: none !important;
+  }
+  .tabstrip {
+    padding: 0 4px;
+  }
+  .tab {
+    max-width: 160px;
+  }
+  .split-divider,
+  .split-bar {
+    display: none !important;
+  }
+  .panes.split > :not(:first-child) {
+    display: none;
+  }
+
+  /* ---------- page frame, header and actions */
+  .page {
+    padding: 10px 10px 8px;
+    gap: 8px;
+  }
+  .page-header-top {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .page-header h1 {
+    font-size: 17px;
+  }
+  .page-header-top .page-actions,
+  .page-actions {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 6px;
+  }
+  .dash-avatars {
+    display: none;
+  }
+  .page-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .page-actions > * {
+    flex: none;
+  }
+  .statusbar {
+    display: none !important;
+  }
+
+  /* ---------- filter card and lists */
+  .filter-card .filter-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .filter-card .quick-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .seg,
+  .segmented {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .records-card {
+    min-height: 60vh;
+  }
+
+  /* ---------- detail panels open full screen over the list */
+  .list-body.with-detail .detail,
+  .detail {
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    flex: none !important;
+    width: auto !important;
+    max-width: none;
+    border-radius: 0;
+    border: 0;
+    flex-direction: column;
+  }
+  .detail-splitter {
+    display: none !important;
+  }
+  .detail-nav {
+    width: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: var(--border-width) solid var(--color-border);
+    scrollbar-width: none;
+  }
+  .detail-nav button {
+    white-space: nowrap;
+  }
+  .detail-main {
+    padding: 10px 12px;
+  }
+  .detail-aside {
+    width: auto;
+    border-left: 0;
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  /* ---------- dialogs and drawers fill the screen */
+  .modal-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+  .modal {
+    width: 100vw !important;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: 0;
+  }
+  .modal-head,
+  .modal-foot {
+    padding: 12px 14px;
+  }
+  .modal-body {
+    padding: 12px 14px;
+    flex: 1;
+  }
+  .modal-foot {
+    flex-wrap: wrap;
+    border-radius: 0;
+  }
+  .modal-foot .fb-spacer {
+    flex-basis: 100%;
+  }
+  .drawer {
+    width: 100vw !important;
+    max-width: 100vw;
+  }
+  .popover,
+  .menu-drop,
+  .bell-pop {
+    max-width: calc(100vw - 16px);
+  }
+
+  /* ---------- multi-column layouts become one column */
+  .fx-settings,
+  .home-body,
+  .rp-filters,
+  .rp-metrics,
+  .team-body,
+  .team-cols,
+  .lk-panels,
+  .lk-form-main,
+  .lk-filters,
+  .sl-wrap,
+  .tpl-edit,
+  .sec-body,
+  .fb-row,
+  .cond-grid,
+  .traffic-tables,
+  .charges-form,
+  .recon-summary-form,
+  .soa-form,
+  .form-grid.cols-2,
+  .bc-form,
+  .tt-form,
+  .template-cols,
+  .rs-form,
+  .rs-cards,
+  .rule-general-grid,
+  .sim-grid,
+  .sim-grid.four,
+  .fgrid.cols-2,
+  .fgrid.cols-3,
+  .fgrid.cols-4,
+  .contact-grid,
+  .rules-split.two,
+  .am-layout,
+  .bulk-setup,
+  .rn-body,
+  .mc-deal,
+  .portal-columns,
+  .noc-cards,
+  .help-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .kpi-tiles,
+  .portal-tiles,
+  .stat-cards,
+  .sales-cards,
+  .mc-summary,
+  .recon-figures,
+  .dash-pair,
+  .dash-mover-groups,
+  .cleanup-areas,
+  .imp-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .kv-pair {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+  [class*="-grid"] > *,
+  .fgrid > * {
+    grid-column: auto;
+  }
+  .ff.wide,
+  .fgrid > .wide {
+    grid-column: 1 / -1;
+  }
+
+  /* ---------- wide tables scroll inside their card, never the page */
+  .rtable,
+  .portal-table,
+  .la-table,
+  .mm-table-wrap table {
+    min-width: 560px;
+  }
+  .rtable,
+  .portal-table {
+    display: block;
+    overflow-x: auto;
+  }
+  .mm-table-wrap,
+  .portal-scroll,
+  .la-table-wrap {
+    overflow-x: auto;
+  }
+
+  /* ---------- Live analytics keeps its table and scrolls it sideways with the names pinned */
+  /* Phones size each column to its figures (no cut-off numbers) and scroll the table sideways. */
+  .la-grid {
+    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+  }
+  .la-grid col {
+    width: auto !important;
+  }
+  .la-grid td.num {
+    padding-right: 10px;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .la-grid td.la-name,
+  .la-grid th.la-th-name {
+    width: 140px;
+    min-width: 140px;
+    max-width: 140px;
+  }
+  .la-grid th.la-th-name input {
+    width: 100%;
+    min-width: 0;
+  }
+  .la-grid td.num,
+  .la-grid td.la-name {
+    font-size: 11px;
+  }
+  .la-body {
+    flex-direction: column;
+  }
+  .la-body > .la-detail {
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    flex: none;
+    border-radius: 0;
+  }
+  .la-grid td.la-name,
+  .la-grid th.la-th-name {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--color-panel);
+  }
+}

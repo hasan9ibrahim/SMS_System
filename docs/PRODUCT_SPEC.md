@@ -1427,18 +1427,18 @@ Two checkboxes are added to the payment (Transaction) form in Finance, on add an
 
 ## 14. Technology: language for each part of the system
 
-Decision: Elixir for the whole backend (SMPP switch, API, billing, jobs) and TypeScript/React for the GUI, on PostgreSQL, ClickHouse and Redis. The aim is a system that stays up with zero downtime, takes new features easily, and loads screens with little or no waiting.
+Decision (confirmed 2026-10-24, `docs/BACKEND_PLAN.md` §3.1): Elixir for the whole backend (SMPP switch, API, billing, jobs) and TypeScript/React for the GUI, on PostgreSQL, ClickHouse and Redis. The TypeScript mock server stays the reference: its HTTP tests are run against the Elixir API as acceptance tests. The aim is a system that stays up with zero downtime, takes new features easily, and loads screens with little or no waiting.
 
 | Part | Technology | Why |
 | --- | --- | --- |
 | SMPP switch (binds, routing, TPS, DLRs, session affinity §13.1) | Elixir | One isolated process per bind; a crash affects only that session and is restarted automatically; live code upgrades without dropping binds; built-in clustering |
-| Backend API and business logic (rates, rules, billing, invoices, re-rating, LCR, alerts) | Elixir (Phoenix) | One backend language and team; rating logic shared with the switch; strong background jobs |
-| Live dashboard and monitoring | Phoenix Channels (WebSockets) | Figures update live without page refresh |
+| Backend API and business logic (rates, rules, billing, invoices, re-rating, LCR, alerts) | Elixir (Phoenix) | One backend language and team; rating and routing logic shared with the switch; strong background jobs |
+| Live dashboard and monitoring | Phoenix Channels (WebSockets), message format in `contract/events/` | Figures update live without page refresh |
 | GUI (every screen in this spec) | TypeScript + React | Largest choice of tables, forms, charts and developers; fast screens after first load |
 | Configuration data | PostgreSQL with replica and automatic failover | Reliable source of truth for trunks, rates, rules, users |
 | EDRs and reports | ClickHouse | Reports over millions of records in about a second; pre-computed totals for the dashboard |
 | Live counters (TPS, balances, receipt-to-session map) | Redis or Elixir in-memory tables (ETS) | Microsecond lookups |
-| Events between services | NATS JetStream or Kafka | Heavy reports and billing never slow message traffic |
+| Events between services | NATS JetStream (decided 2026-10-24), behind one event-bus module so Kafka can replace it | Heavy reports and billing never slow message traffic |
 | Optional helper | Python, small service | Only if vendor rate-file parsing becomes complex (pandas/openpyxl) |
 
 ### 14.1 Zero downtime
@@ -1468,6 +1468,7 @@ Decided in team trial round 1 (2026-10-19).
   - today's reports and Live analytics under 500 ms;
   - reports over months under 2 s.
 - **EDR retention: 12 months online, then archive.**
+  - Message text is kept 1 year, then blanked; every other EDR field follows the retention below (decided 2026-10-24).
   - Every EDR stays online for 12 months on the fast disks: in EDR search, EDR download, reports, Live analytics, re-rating, invoices and SOAs.
   - After 12 months a daily background job moves the oldest day to compressed archive storage (cheap disk or object storage). The archive keeps the full EDR, with the rate and cost as billed.
   - The archive is kept for the legal retention period set by the admin, minimum 7 years (§13.29); after that the admin may purge, as in §13.29.

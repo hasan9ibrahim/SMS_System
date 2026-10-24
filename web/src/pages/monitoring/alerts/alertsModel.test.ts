@@ -5,12 +5,30 @@ import {
   analyticsFor,
   blankRule,
   channelsLabel,
+  conditionText,
   duration,
+  fmtAlertValue,
+  isMeasured,
   needsBaseline,
   needsValue,
 } from "./alertsModel";
 
 describe("alerts model (§13.6)", () => {
+  test("pop-up values and conditions in words (team trial round 5)", () => {
+    assert.equal(fmtAlertValue("margin", -0.02, "EUR"), "-0.02 EUR");
+    assert.equal(fmtAlertValue("dlr", 61, "EUR"), "61.0 %");
+    assert.equal(fmtAlertValue("attempts", 1250.4, "EUR"), "1,250");
+    assert.equal(fmtAlertValue("tps", null, "EUR"), "—");
+    assert.equal(conditionText("margin", { type: "below", value: 0, baseline: null }, "EUR"), "below 0.00 EUR");
+    assert.equal(
+      conditionText("dlr", { type: "decrease_pct", value: 20, baseline: "yesterday" }, "EUR"),
+      "down 20 % vs yesterday",
+    );
+    assert.equal(conditionText("bind_status", { type: "bind_down", value: null, baseline: null }, "EUR"), "bind down");
+    assert.equal(conditionText("dlr", null, "EUR"), null);
+    assert.equal(isMeasured({ type: "stopped", value: null, baseline: null }), false);
+    assert.equal(isMeasured({ type: "above", value: 5, baseline: null }), true);
+  });
   test("labels and durations", () => {
     assert.equal(channelsLabel({ popup: true, sound: false, email: true }), "Pop-up, E-mail");
     assert.equal(activeHoursLabel({ always: true, days: [], fromHour: 0, toHour: 24 }), "Always");
