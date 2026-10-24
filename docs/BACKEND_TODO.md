@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | Live analytics figures | No contract change. Figures smaller (11.5 px, 11 px on phones) so none are cut; names in the first column (customer, trunk, vendor, destination…) are plain, not bold; column titles 11.5 px. | §13.7, §15.1 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics figures | No contract change. Plain (not bold, not coloured) figures and names use Roboto at 12 px (11.5 px on phones), left-aligned with spacing like the reference platform; column widths re-weighted (money wider, name 11 %) so figures are no longer cut on a laptop. On phones each column sizes to its figures and the table scrolls inside its card with the names pinned. | §13.7, §15.1 | Product owner | Done (GUI only) |
 | 2026-10-24 | Every page on phones | No contract change. Below 760 px: menu button opens a page drawer, grids show cards with a Sort picker, detail panels and dialogs open full screen, multi-column forms stack, wide tables scroll inside their card, no sideways page scroll. Laptop and desktop layouts unchanged. | §15 | Product owner | Done (GUI only) |
 | 2026-10-24 | ASR / DLR colours | No contract change. ASR and DLR are green again from 80 % (amber 60–80 %, red below 60 %), as text, on every page including Live analytics. | §13.4, §15.3 | Product owner | Done (GUI only) |

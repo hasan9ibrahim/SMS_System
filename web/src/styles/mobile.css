@@ -447,7 +447,7 @@
   }
   .la-grid td.num,
   .la-grid td.la-name {
-    font-size: 11.5px;
+    font-size: 11px;
   }
   .la-body {
     flex-direction: column;
