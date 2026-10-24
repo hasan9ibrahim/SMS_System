@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | Live analytics EDRs column | No contract change. The EDRs and download buttons sit side by side, fully visible (the download button was clipped); column widths rebalanced so every figure still shows in full. | §13.7 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics look | No contract change. Spreadsheet grid picked from ten style options: a thin line around every cell and slightly taller rows; ASR, DLR, margin and total colours unchanged. | §13.7, §15.1 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics ASR / DLR | No contract change. ASR and DLR figures centred in their columns, plain green or in a chip. | §13.7 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics figures | No contract change. Every figure the same size and font (Roboto 11.5 px); ASR, DLRs and margin only a little bolder; figures centred in the amber and red chips. | §13.7, §15.1 | Product owner | Done (GUI only) |

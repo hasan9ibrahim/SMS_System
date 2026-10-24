@@ -104,10 +104,10 @@
 
 /* No sideways scrolling (team trial round 5): Live analytics fits its columns to the window, headers centred. */
 .la-grid col.la-col-name {
-  width: 11%;
+  width: 9.5%;
 }
 .la-grid col.la-col-act {
-  width: 4.5%;
+  width: 5.5%;
 }
 .la-grid thead th,
 .la-grid thead th.num {
@@ -233,4 +233,22 @@
 .la-grid tbody td {
   padding-top: 5px;
   padding-bottom: 5px;
+}
+/* EDRs and download buttons side by side, both fully visible (team trial round 5). */
+.la-grid td.la-actions {
+  display: table-cell;
+  padding: 2px 3px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: visible;
+}
+.la-grid td.la-actions .la-act {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  height: 20px;
+  padding: 0 5px;
+}
+.la-grid td.la-actions .la-act + .la-act {
+  margin-left: 3px;
 }
