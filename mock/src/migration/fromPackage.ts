@@ -7,7 +7,10 @@ import { ENTITY } from "./entities.js";
 
 type Row = Record<string, string>;
 
-export function packageFiles(frames: Map<string, string>): { files: MigrationFileInput[]; warnings: string[] } {
+export function packageFiles(frames: Map<string, string>): {
+  files: MigrationFileInput[];
+  warnings: string[];
+} {
   const table = (name: string): Row[] => {
     const text = frames.get(`${name}.csv`);
     return text ? csvObjects(text).rows : [];
@@ -30,9 +33,12 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   const rrv = table("route_rule_vendors");
   const warnings: string[] = [];
   if (customerTrunks.length && !("username" in customerTrunks[0]!))
-    warnings.push("The package has no credentials: trunks get placeholder connection details");
+    warnings.push(
+      "The package has no credentials: trunks get placeholder connection details",
+    );
 
-  const name = (m: Map<string, Row>, id: string | undefined) => (id ? (m.get(id)?.name ?? "") : "");
+  const name = (m: Map<string, Row>, id: string | undefined) =>
+    id ? (m.get(id)?.name ?? "") : "";
   const out: { entity: MigrationImportEntity; rows: Row[] }[] = [];
 
   out.push({
@@ -53,9 +59,13 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   const contactMap = new Map<string, string[]>();
   for (const c of contacts) {
     const k = `${c.contact_type}:${c.enterprise_id}`;
-    contactMap.set(k, [...(contactMap.get(k) ?? []), ...pgArray(c.emails ?? "")]);
+    contactMap.set(k, [
+      ...(contactMap.get(k) ?? []),
+      ...pgArray(c.emails ?? ""),
+    ]);
   }
-  const emailsOf = (type: string, id: string) => (contactMap.get(`${type}:${id}`) ?? []).join(";");
+  const emailsOf = (type: string, id: string) =>
+    (contactMap.get(`${type}:${id}`) ?? []).join(";");
   out.push({
     entity: "enterprises",
     rows: enterprises.map((e) => ({
@@ -66,7 +76,9 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       tier: e.tier ?? "",
       status: e.status ?? "",
       businessCompany: name(companies, e.business_company_id),
-      accountManager: e.account_manager_id ? (usersById.get(e.account_manager_id)?.id ?? "") : "",
+      accountManager: e.account_manager_id
+        ? (usersById.get(e.account_manager_id)?.id ?? "")
+        : "",
       country: e.country_id ? (countries.get(e.country_id)?.iso ?? "") : "",
       vatNumber: e.vat_number ?? "",
       address: e.address_line1 ?? "",
@@ -82,7 +94,6 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
     name: t.name!,
     username: t.username ?? "",
     password: t.password ?? "",
-    port: t.port ?? "",
     protocol: t.protocol ?? "",
     tps: t.tps ?? "",
     category: name(categories, t.product_category_id),
@@ -90,11 +101,26 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   });
   out.push({
     entity: "customer_trunks",
-    rows: customerTrunks.map((t) => ({ ...trunk(t), hostIps: pgArray(t.host_ips ?? "").join(";") })),
+    rows: customerTrunks.map((t) => ({
+      ...trunk(t),
+      hostIps: pgArray(t.host_ips ?? "").join(";"),
+    })),
   });
-  out.push({ entity: "vendor_trunks", rows: vendorTrunks.map((t) => ({ ...trunk(t), host: t.host ?? "" })) });
+  // Customer trunks carry no port (it follows the SSL type, migration 070); vendor trunks keep theirs.
+  out.push({
+    entity: "vendor_trunks",
+    rows: vendorTrunks.map((t) => ({
+      ...trunk(t),
+      host: t.host ?? "",
+      port: t.port ?? "",
+    })),
+  });
   const sellers = new Map<string, string[]>();
-  for (const l of ctrt) sellers.set(l.rate_table_id!, [...(sellers.get(l.rate_table_id!) ?? []), l.customer_trunk_id!]);
+  for (const l of ctrt)
+    sellers.set(l.rate_table_id!, [
+      ...(sellers.get(l.rate_table_id!) ?? []),
+      l.customer_trunk_id!,
+    ]);
   out.push({
     entity: "rate_tables",
     rows: rateTables.map((t) => ({
@@ -108,19 +134,33 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
     })),
   });
   // Rate lines can run to millions: kept as cell arrays, not objects.
-  const lines = frames.has("rate_lines.csv") ? csvTable(frames.get("rate_lines.csv")!) : null;
+  const lines = frames.has("rate_lines.csv")
+    ? csvTable(frames.get("rate_lines.csv")!)
+    : null;
   let lineFile: MigrationFileInput | null = null;
   if (lines?.rows.length) {
-    const [t, m, s, r, f, b] = ["rate_table_id", "mccmnc", "sender_id", "rate", "valid_from", "is_blocked"].map(
-      lines.col,
-    );
+    const [t, m, s, r, f, b] = [
+      "rate_table_id",
+      "mccmnc",
+      "sender_id",
+      "rate",
+      "valid_from",
+      "is_blocked",
+    ].map(lines.col);
     const fields = ENTITY.get("rate_lines")!.fields.map((x) => x.field);
     lineFile = {
       entity: "rate_lines",
       fileName: "rate_lines.csv (package)",
       content: toCsv([
         fields,
-        ...lines.rows.map((c) => [c[t!], c[m!], c[s!], c[r!], c[f!], c[b!] === "t" ? "yes" : "no"]),
+        ...lines.rows.map((c) => [
+          c[t!],
+          c[m!],
+          c[s!],
+          c[r!],
+          c[f!],
+          c[b!] === "t" ? "yes" : "no",
+        ]),
       ]),
       mappingId: null,
     };
@@ -145,21 +185,28 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
         vendors: (vendorsOf.get(r.id!) ?? []).join(";"),
       })),
   });
-  const skippedRules = routeRules.length - routeRules.filter((r) => vendorsOf.has(r.id!)).length;
+  const skippedRules =
+    routeRules.length - routeRules.filter((r) => vendorsOf.has(r.id!)).length;
   if (skippedRules)
-    warnings.push(`${skippedRules} route rules without vendors (block, dynamic or QBR) are not carried over`);
+    warnings.push(
+      `${skippedRules} route rules without vendors (block, dynamic or QBR) are not carried over`,
+    );
 
   const billing = table("enterprise_billing");
   const tx = table("transactions");
   if (billing.length) {
     const sums = new Map<string, { amount: number; currency: string }>();
     for (const b of billing)
-      sums.set(`${b.enterprise_id}|${b.side}`, { amount: Number(b.opening_balance || 0), currency: b.currency! });
+      sums.set(`${b.enterprise_id}|${b.side}`, {
+        amount: Number(b.opening_balance || 0),
+        currency: b.currency!,
+      });
     for (const t of tx) {
       const k = `${t.enterprise_id}|${t.side}`;
       const s = sums.get(k);
       if (!s || t.currency !== s.currency) continue;
-      s.amount += (t.payment_type === "credit" ? 1 : -1) * Number(t.amount || 0);
+      s.amount +=
+        (t.payment_type === "credit" ? 1 : -1) * Number(t.amount || 0);
     }
     const today = new Date().toISOString().slice(0, 10);
     out.push({
@@ -177,7 +224,9 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
           };
         }),
     });
-    warnings.push("Opening balances cover payments and adjustments; traffic charges stay in the old platform's EDRs");
+    warnings.push(
+      "Opening balances cover payments and adjustments; traffic charges stay in the old platform's EDRs",
+    );
   }
 
   const files: MigrationFileInput[] = out
@@ -187,7 +236,10 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       return {
         entity: o.entity,
         fileName: `${o.entity}.csv (package)`,
-        content: toCsv([fields, ...o.rows.map((r) => fields.map((f) => r[f] ?? ""))]),
+        content: toCsv([
+          fields,
+          ...o.rows.map((r) => fields.map((f) => r[f] ?? "")),
+        ]),
         mappingId: null,
       };
     });

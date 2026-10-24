@@ -11,7 +11,10 @@ export function parseCsv(text: string): string[][] {
   while (at < src.length) {
     let end = src.indexOf("\n", at);
     if (end < 0) end = src.length;
-    const line = src.charCodeAt(end - 1) === 13 ? src.slice(at, end - 1) : src.slice(at, end);
+    const line =
+      src.charCodeAt(end - 1) === 13
+        ? src.slice(at, end - 1)
+        : src.slice(at, end);
     // Most lines have no quotes: a plain split is many times faster than the character loop.
     if (!line.includes('"')) {
       if (line.trim()) rows.push(line.split(delim));
@@ -26,7 +29,11 @@ export function parseCsv(text: string): string[][] {
 }
 
 /** One record starting at `at` that has quotes (fields may span lines); returns it and where the next starts. */
-function quotedRecord(src: string, at: number, delim: string): [string[], number] {
+function quotedRecord(
+  src: string,
+  at: number,
+  delim: string,
+): [string[], number] {
   const row: string[] = [];
   let cell = "";
   let quoted = false;
@@ -59,7 +66,8 @@ const quote = (v: unknown) => {
   const s = v == null ? "" : String(v);
   return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
-export const toCsv = (rows: unknown[][]) => rows.map((r) => r.map(quote).join(",")).join("\n") + "\n";
+export const toCsv = (rows: unknown[][]) =>
+  rows.map((r) => r.map(quote).join(",")).join("\n") + "\n";
 
 /** Header + rows as cell arrays, with each column's index (cheaper than objects for big files). */
 export function csvTable(text: string) {
@@ -70,12 +78,17 @@ export function csvTable(text: string) {
 }
 
 /** Header + rows as objects keyed by header name (trimmed). */
-export function csvObjects(text: string): { header: string[]; rows: Record<string, string>[] } {
+export function csvObjects(text: string): {
+  header: string[];
+  rows: Record<string, string>[];
+} {
   const [head = [], ...body] = parseCsv(text);
   const header = head.map((h) => h.trim());
   return {
     header,
-    rows: body.map((cells) => Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? "").trim()]))),
+    rows: body.map((cells) =>
+      Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? "").trim()])),
+    ),
   };
 }
 

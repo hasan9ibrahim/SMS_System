@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.92.0
+  version: 0.93.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -16606,10 +16606,6 @@ components:
         systemType:
           type: [string, "null"]
           maxLength: 13
-        port:
-          type: integer
-          minimum: 1
-          maximum: 65535
         sslType:
           $ref: "#/components/schemas/SslType"
         dlrPushUrl:
@@ -16674,10 +16670,12 @@ components:
 
 
     CustomerTrunkInput:
-      description: Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26).
+      description: >-
+        Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26). No port: it follows sslType
+        (v0.93.0).
       allOf:
         - $ref: "#/components/schemas/CustomerTrunkFields"
-      required: [enterpriseId, name, protocol, billingType, status, bindType, hostIps, username, maxConnections, port, tps]
+      required: [enterpriseId, name, protocol, billingType, status, bindType, hostIps, username, maxConnections, tps]
       unevaluatedProperties: false
 
     TrunkDetailCommon:
@@ -16704,6 +16702,16 @@ components:
         - $ref: "#/components/schemas/TrunkDetailCommon"
         - $ref: "#/components/schemas/CustomerTrunkFields"
         - $ref: "#/components/schemas/Audit"
+        - type: object
+          required: [port]
+          properties:
+            port:
+              type: integer
+              enum: [2775, 2776]
+              readOnly: true
+              description: >-
+                The SMPP port the customer binds on, set by the connection type (product owner, 2026-10-24): 2775 when
+                sslType is none, 2776 for TLS. Not editable; Send Tech Info sends it.
       required: [enterpriseId, name, protocol, billingType, status, bindType, hostIps, username, maxConnections, port, tps]
 
     VendorTrunkFields:

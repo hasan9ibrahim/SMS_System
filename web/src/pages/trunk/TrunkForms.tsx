@@ -2,8 +2,17 @@
 // names follow the reference platform; passwords are write-only (never shown, §13.22).
 import { useEffect, useState } from "react";
 import { useTabShown } from "../../api/access";
-import type { CustomerTrunkInput, RateTableRow, TrunkListRow, VendorTrunkInput } from "@sms/contract";
-import { useReference, type TrunkDetail, type TrunkKind } from "../../api/records";
+import type {
+  CustomerTrunkInput,
+  RateTableRow,
+  TrunkListRow,
+  VendorTrunkInput,
+} from "@sms/contract";
+import {
+  useReference,
+  type TrunkDetail,
+  type TrunkKind,
+} from "../../api/records";
 import {
   CheckField,
   ChoiceField,
@@ -11,6 +20,7 @@ import {
   ListField,
   MultiCheck,
   NumberField,
+  ReadOnly,
   Section,
   SelectField,
   StatusField,
@@ -27,7 +37,9 @@ import { Button } from "../../ui/primitives";
 import { tzOptions } from "../../ui/timezones";
 import { NewRateTableDialog } from "../rates/dialogs";
 
-export type TrunkForm = (CustomerTrunkInput | VendorTrunkInput) & { password?: string };
+export type TrunkForm = (CustomerTrunkInput | VendorTrunkInput) & {
+  password?: string;
+};
 
 const STATUS = [
   { value: "active", label: "Active" },
@@ -57,9 +69,17 @@ const PERIOD = [
   { value: "billing_cycle", label: "Per billing cycle" },
 ];
 const TON = [0, 1, 2, 3, 4, 5, 6].map((v) => ({ value: v, label: String(v) }));
-const NPI = [0, 1, 3, 4, 6, 8, 9, 10, 14, 18].map((v) => ({ value: v, label: String(v) }));
-const CODINGS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14].map((v) => ({ value: v, label: String(v) }));
-const DLR_STATS = ["DELIVRD", "EXPIRED", "UNDELIV", "REJECTD", "UNKNOWN"].map((v) => ({ value: v, label: v }));
+const NPI = [0, 1, 3, 4, 6, 8, 9, 10, 14, 18].map((v) => ({
+  value: v,
+  label: String(v),
+}));
+const CODINGS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14].map((v) => ({
+  value: v,
+  label: String(v),
+}));
+const DLR_STATS = ["DELIVRD", "EXPIRED", "UNDELIV", "REJECTD", "UNKNOWN"].map(
+  (v) => ({ value: v, label: v }),
+);
 
 /** Fields of the detail record that are not part of the form. */
 const NOT_INPUT = new Set([
@@ -74,14 +94,29 @@ const NOT_INPUT = new Set([
   "updatedAt",
 ]);
 
+/**
+ * The port a customer binds on, set by the connection type (product owner, 2026-10-24): 2775 Non secure, 2776 TLS.
+ * The server works it out the same way; the form only shows it.
+ */
+export const customerPort = (sslType: string | null | undefined) =>
+  !sslType || sslType === "none" ? 2775 : 2776;
+
 export function toTrunkForm(d: TrunkDetail): TrunkForm {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(d)) if (!NOT_INPUT.has(k)) out[k] = Array.isArray(v) ? [...v] : v;
-  if (out.http && typeof out.http === "object") out.http = { ...(out.http as object) };
+  for (const [k, v] of Object.entries(d))
+    if (!NOT_INPUT.has(k)) out[k] = Array.isArray(v) ? [...v] : v;
+  // A customer trunk's port is not part of its form: it follows the SSL type.
+  if ("hostIps" in d) delete out.port;
+  if (out.http && typeof out.http === "object")
+    out.http = { ...(out.http as object) };
   return out as TrunkForm;
 }
 
-export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: number | null): TrunkForm {
+export function blankTrunk(
+  kind: TrunkKind,
+  enterpriseId: number,
+  categoryId: number | null,
+): TrunkForm {
   const common = {
     enterpriseId,
     name: "",
@@ -92,7 +127,6 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     password: "",
     // Defaults agreed in the team trial (2026-10-18): 2 sessions, 50 TPS each, 10K overflow buffer.
     maxConnections: 2,
-    port: 2775,
     systemType: null,
     sslType: "none" as const,
     tps: 50,
@@ -127,6 +161,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     categoryId: categoryId ?? 0,
     bindType: "TR",
     host: "",
+    port: 2775,
     sourceHost: null,
     serviceType: null,
     submitIntervalMs: 0,
@@ -174,7 +209,11 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
 }
 
 /** Required fields checked before the round trip. */
-export function checkTrunk(kind: TrunkKind, v: TrunkForm, isNew: boolean): Record<string, string> {
+export function checkTrunk(
+  kind: TrunkKind,
+  v: TrunkForm,
+  isNew: boolean,
+): Record<string, string> {
   const e: Record<string, string> = {};
   if (!v.name.trim()) e.name = "Required";
   if (!v.username.trim()) e.username = "Required";
@@ -183,13 +222,16 @@ export function checkTrunk(kind: TrunkKind, v: TrunkForm, isNew: boolean): Recor
   if (kind === "customer") {
     const c = v as CustomerTrunkInput;
     if (!c.hostIps.length) e.hostIps = "At least one IP address";
-    if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null)) e.revenueLimitPeriod = "Set both or neither";
+    if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null))
+      e.revenueLimitPeriod = "Set both or neither";
   } else {
     const x = v as VendorTrunkInput;
     if (!x.host.trim()) e.host = "Required";
     if (!x.categoryId) e.categoryId = "Required";
-    if (x.protocol === "http" && !x.http?.url) e["http.url"] = "Required for an HTTP trunk";
-    if ((x.costLimit == null) !== (x.costLimitPeriod == null)) e.costLimitPeriod = "Set both or neither";
+    if (x.protocol === "http" && !x.http?.url)
+      e["http.url"] = "Required for an HTTP trunk";
+    if ((x.costLimit == null) !== (x.costLimitPeriod == null))
+      e.costLimitPeriod = "Set both or neither";
   }
   return e;
 }
@@ -213,24 +255,42 @@ function PasswordField({
       maxLength={9}
       nullable={false}
       autoComplete="new-password"
-      placeholder={!isNew && passwordSet ? "•••••••• (set; type to change)" : ""}
+      placeholder={
+        !isNew && passwordSet ? "•••••••• (set; type to change)" : ""
+      }
       hint="Never shown again after saving (§13.22). SMPP allows 9 characters."
     />
   );
 }
 
-function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: TrunkKind }) {
+function CommonTrunkFields({
+  form,
+  kind,
+}: {
+  form: FormApi<TrunkForm>;
+  kind: TrunkKind;
+}) {
   const ref = useReference();
   // Record redesign (team trial round 4): protocol and bind type as joined buttons, status as a checkbox card.
   return (
     <>
-      <TextField form={form} path="name" label="Trunk name" required maxLength={100} nullable={false} />
+      <TextField
+        form={form}
+        path="name"
+        label="Trunk name"
+        required
+        maxLength={100}
+        nullable={false}
+      />
       <SelectField
         form={form}
         path="categoryId"
         label="Product category"
         required={kind === "vendor"}
-        options={(ref.data?.productCategories ?? []).map((c) => ({ value: c.id, label: c.name }))}
+        options={(ref.data?.productCategories ?? []).map((c) => ({
+          value: c.id,
+          label: c.name,
+        }))}
       />
       <SelectField
         form={form}
@@ -248,13 +308,24 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         options={tzOptions(ref.data?.timezones ?? ["UTC"])}
         hint="Day and month totals are cut at midnight here (§13.31)"
       />
-      <ChoiceField form={form} path="protocol" label="Protocol" required options={PROTOCOL} />
+      <ChoiceField
+        form={form}
+        path="protocol"
+        label="Protocol"
+        required
+        options={PROTOCOL}
+      />
       <ChoiceField
         form={form}
         path="bindType"
         label="Bind type"
         required
-        options={["TR", "TX", "RX", ...(kind === "customer" ? ["AUTO"] : [])].map((v) => ({ value: v, label: v }))}
+        options={[
+          "TR",
+          "TX",
+          "RX",
+          ...(kind === "customer" ? ["AUTO"] : []),
+        ].map((v) => ({ value: v, label: v }))}
       />
       <StatusField form={form} path="status" required onText="Active" />
     </>
@@ -262,19 +333,32 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
 }
 
 /** The bind at a glance (team trial round 4): our side, the far side and whether the bind is up. */
-function BindLine({ from, to, up }: { from: string; to: string; up: boolean | null }) {
+function BindLine({
+  from,
+  to,
+  up,
+}: {
+  from: string;
+  to: string;
+  up: boolean | null;
+}) {
   return (
     <div className="bind-line wide">
       <code>{from}</code>
       <span className="bind-arrow" aria-hidden="true" />
       <code>{to}</code>
-      {up !== null && <span className={up ? "tone-good small" : "muted small"}>· bind {up ? "up" : "down"}</span>}
+      {up !== null && (
+        <span className={up ? "tone-good small" : "muted small"}>
+          · bind {up ? "up" : "down"}
+        </span>
+      )}
     </div>
   );
 }
 
 function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
-  const ids = ((form.values as CustomerTrunkInput).rateTableIds ?? []) as number[];
+  const ids = ((form.values as CustomerTrunkInput).rateTableIds ??
+    []) as number[];
   const setIds = (next: number[]) => form.set("rateTableIds", next);
   // Drag a row by its handle to reorder (team trial round 5); ↑ / ↓ and Alt+↑ / Alt+↓ still work.
   const { rowProps } = useDragOrder(ids, setIds);
@@ -285,7 +369,10 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
     const id = await ask<number>((done) => (
       <NewRateTableDialog
         done={done}
-        initial={{ name: v.name ? `${v.name}_RATES` : "", categoryId: v.categoryId || null }}
+        initial={{
+          name: v.name ? `${v.name}_RATES` : "",
+          categoryId: v.categoryId || null,
+        }}
       />
     ));
     if (id) setIds([...ids, id]);
@@ -300,7 +387,11 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
       <ol className="ordered-list">
         {ids.map((id, i) => (
           <li key={id} {...rowProps(i)} aria-label={`Rate table ${i + 1}`}>
-            <span className="drag-handle" title="Drag to reorder (or Alt+↑ / Alt+↓)" aria-hidden="true">
+            <span
+              className="drag-handle"
+              title="Drag to reorder (or Alt+↑ / Alt+↓)"
+              aria-hidden="true"
+            >
               ⠿
             </span>
             <span className="pos">{i + 1}</span>
@@ -313,7 +404,13 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
               labelOf={(r) => `${r.name} (${r.currency})`}
             />
             <span className="move-btns">
-              <Button small variant="ghost" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
+              <Button
+                small
+                variant="ghost"
+                aria-label="Move up"
+                disabled={i === 0}
+                onClick={() => move(i, -1)}
+              >
                 ↑
               </Button>
               <Button
@@ -347,9 +444,16 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
             exclude={ids}
             onChange={(r) => r && setIds([...ids, r.id])}
             labelOf={(r) => `${r.name} (${r.currency})`}
-            detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`}
+            detailOf={(r) =>
+              `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`
+            }
           />
-          <Button small variant="ghost" icon="plus" onClick={() => void createTable()}>
+          <Button
+            small
+            variant="ghost"
+            icon="plus"
+            onClick={() => void createTable()}
+          >
             Create new rate table
           </Button>
         </li>
@@ -363,7 +467,9 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
  * list ("5, 10, 30, 60"); the last value repeats until the bind is up or the trunk is stopped.
  */
 function ReconnectField({ form }: { form: FormApi<TrunkForm> }) {
-  const value = ((form.values as VendorTrunkInput).reconnectScheduleS ?? []).join(", ");
+  const value = (
+    (form.values as VendorTrunkInput).reconnectScheduleS ?? []
+  ).join(", ");
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const commit = () => {
@@ -376,7 +482,11 @@ function ReconnectField({ form }: { form: FormApi<TrunkForm> }) {
     else setDraft(value);
   };
   return (
-    <FormField label="Reconnect after" error={form.error("reconnectScheduleS")} hint="Seconds; the last one repeats">
+    <FormField
+      label="Reconnect after"
+      error={form.error("reconnectScheduleS")}
+      hint="Seconds; the last one repeats"
+    >
       <input
         value={draft}
         inputMode="numeric"
@@ -407,7 +517,11 @@ export function CustomerTrunkFields({
         <CommonTrunkFields form={form} kind="customer" />
       </Section>
       {shown("customer-trunks.connection") && (
-        <Section title="Connection" subtitle="What the client binds with." columns={4}>
+        <Section
+          title="Connection"
+          subtitle="What the client binds with."
+          columns={4}
+        >
           <SubHead>Access</SubHead>
           <ListField
             form={form}
@@ -418,8 +532,19 @@ export function CustomerTrunkFields({
             placeholder="192.0.2.10, 2001:db8::1"
             hint="Binds from other addresses are refused"
           />
-          <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
-          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
+          <SelectField
+            form={form}
+            path="sslType"
+            label="SSL"
+            required
+            options={SSL}
+          />
+          <ReadOnly
+            label="Port"
+            hint="Set by SSL: 2775 without TLS, 2776 with TLS"
+          >
+            {customerPort(v.sslType)}
+          </ReadOnly>
           <SubHead>Credentials</SubHead>
           <TextField
             form={form}
@@ -430,8 +555,21 @@ export function CustomerTrunkFields({
             nullable={false}
           />
           <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
-          <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
-          <TextField form={form} path="systemType" label="System type" maxLength={13} />
+          <NumberField
+            form={form}
+            path="maxConnections"
+            label="Max connections"
+            required
+            min={1}
+            max={10}
+            step={1}
+          />
+          <TextField
+            form={form}
+            path="systemType"
+            label="System type"
+            maxLength={13}
+          />
         </Section>
       )}
       {shown("customer-trunks.receipts") && (
@@ -457,17 +595,41 @@ export function CustomerTrunkFields({
             step={1}
             suffix="hours"
           />
-          <TextField form={form} path="dlrPushUrl" label="DLR push URL" type="url" maxLength={500} />
-          <TextField form={form} path="moPushUrl" label="MO push URL" type="url" maxLength={500} />
+          <TextField
+            form={form}
+            path="dlrPushUrl"
+            label="DLR push URL"
+            type="url"
+            maxLength={500}
+          />
+          <TextField
+            form={form}
+            path="moPushUrl"
+            label="MO push URL"
+            type="url"
+            maxLength={500}
+          />
           <CheckField form={form} path="delayedSubmit" label="Delayed submit" />
           <CheckField form={form} path="sendBind" label="Send bind" />
         </Section>
       )}
       {shown("customer-trunks.routing") && (
         <Section title="Routing">
-          <CheckField form={form} path="considerHlrRate" label="Consider HLR rate" />
-          <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
-          <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
+          <CheckField
+            form={form}
+            path="considerHlrRate"
+            label="Consider HLR rate"
+          />
+          <CheckField
+            form={form}
+            path="serviceTypeRouting"
+            label="Service type routing"
+          />
+          <CheckField
+            form={form}
+            path="partWiseRouting"
+            label="Part-wise routing"
+          />
           <CheckField form={form} path="loopDetection" label="Loop detection" />
           <SelectField
             form={form}
@@ -520,7 +682,14 @@ export function CustomerTrunkFields({
             step={1}
             hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
           />
-          <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
+          <NumberField
+            form={form}
+            path="overflowBuffer"
+            label="Overflow buffer"
+            min={0}
+            step={1}
+            suffix="messages"
+          />
           <span />
           <NumberField
             form={form}
@@ -530,7 +699,12 @@ export function CustomerTrunkFields({
             step={1}
             hint="Traffic stops when reached"
           />
-          <SelectField form={form} path="revenueLimitPeriod" label="Limit period" options={PERIOD} />
+          <SelectField
+            form={form}
+            path="revenueLimitPeriod"
+            label="Limit period"
+            options={PERIOD}
+          />
         </Section>
       )}
       {shown("customer-trunks.pricing") && (
@@ -562,15 +736,34 @@ export function VendorTrunkFields({
         <CommonTrunkFields form={form} kind="vendor" />
       </Section>
       {shown("vendor-trunks.connection") && (
-        <Section title="Connection" subtitle="How we bind to the vendor." columns={4}>
+        <Section
+          title="Connection"
+          subtitle="How we bind to the vendor."
+          columns={4}
+        >
           <BindLine
             from={`Us · ${v.sourceHost || "any address"}`}
             to={`Vendor · ${v.host || "host"}:${v.port ?? ""}`}
             up={connected ?? null}
           />
           <SubHead>Endpoint</SubHead>
-          <TextField form={form} path="host" label="Host" required maxLength={255} nullable={false} />
-          <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
+          <TextField
+            form={form}
+            path="host"
+            label="Host"
+            required
+            maxLength={255}
+            nullable={false}
+          />
+          <NumberField
+            form={form}
+            path="port"
+            label="Port"
+            required
+            min={1}
+            max={65535}
+            step={1}
+          />
           <TextField
             form={form}
             path="sourceHost"
@@ -578,7 +771,13 @@ export function VendorTrunkFields({
             maxLength={64}
             hint="Our address the bind comes from"
           />
-          <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
+          <SelectField
+            form={form}
+            path="sslType"
+            label="SSL"
+            required
+            options={SSL}
+          />
           <SubHead>Credentials</SubHead>
           <TextField
             form={form}
@@ -589,18 +788,59 @@ export function VendorTrunkFields({
             nullable={false}
           />
           <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
-          <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
-          <TextField form={form} path="systemType" label="System type" maxLength={13} />
-          <TextField form={form} path="serviceType" label="Service type" maxLength={6} />
+          <NumberField
+            form={form}
+            path="maxConnections"
+            label="Max connections"
+            required
+            min={1}
+            max={10}
+            step={1}
+          />
+          <TextField
+            form={form}
+            path="systemType"
+            label="System type"
+            maxLength={13}
+          />
+          <TextField
+            form={form}
+            path="serviceType"
+            label="Service type"
+            maxLength={6}
+          />
         </Section>
       )}
       {v.protocol === "http"
         ? shown("vendor-trunks.http") && (
             <Section title="HTTP API" note="Generic HTTP adapter (§5.5)">
-              <TextField form={form} path="http.url" label="Submit URL" required wide type="url" maxLength={1000} />
-              <TextField form={form} path="http.successRegex" label="Success regex" />
-              <TextField form={form} path="http.messageIdRegex" label="Message ID regex" />
-              <NumberField form={form} path="http.receiverPort" label="Receiver port" min={1} max={65535} step={1} />
+              <TextField
+                form={form}
+                path="http.url"
+                label="Submit URL"
+                required
+                wide
+                type="url"
+                maxLength={1000}
+              />
+              <TextField
+                form={form}
+                path="http.successRegex"
+                label="Success regex"
+              />
+              <TextField
+                form={form}
+                path="http.messageIdRegex"
+                label="Message ID regex"
+              />
+              <NumberField
+                form={form}
+                path="http.receiverPort"
+                label="Receiver port"
+                min={1}
+                max={65535}
+                step={1}
+              />
               <TextArea
                 form={form}
                 path="http.extraHeaders"
@@ -615,7 +855,12 @@ export function VendorTrunkFields({
                 rows={2}
                 placeholder='{"to":"{dst}","from":"{src}","text":"{text}"}'
               />
-              <TextField form={form} path="http.callbackUrl" label="Receipt callback URL" type="url" />
+              <TextField
+                form={form}
+                path="http.callbackUrl"
+                label="Receipt callback URL"
+                type="url"
+              />
               <NumberField
                 form={form}
                 path="http.callbackIntervalS"
@@ -624,24 +869,68 @@ export function VendorTrunkFields({
                 step={1}
                 suffix="s"
               />
-              <TextField form={form} path="http.dlrStatusRegex" label="Receipt status regex" />
-              <TextField form={form} path="http.dlrMidRegex" label="Receipt message ID regex" />
+              <TextField
+                form={form}
+                path="http.dlrStatusRegex"
+                label="Receipt status regex"
+              />
+              <TextField
+                form={form}
+                path="http.dlrMidRegex"
+                label="Receipt message ID regex"
+              />
               <TextField
                 form={form}
                 path="http.dlrSuccessStats"
                 label="Success statuses"
                 placeholder="DELIVRD,DELIVERED"
               />
-              <TextField form={form} path="http.dlrFailStats" label="Failure statuses" placeholder="UNDELIV,REJECTD" />
-              <TextArea form={form} path="http.callbackExtraHeaders" label="Callback extra headers" rows={2} />
-              <TextArea form={form} path="http.callbackPostData" label="Callback POST body" rows={2} />
+              <TextField
+                form={form}
+                path="http.dlrFailStats"
+                label="Failure statuses"
+                placeholder="UNDELIV,REJECTD"
+              />
+              <TextArea
+                form={form}
+                path="http.callbackExtraHeaders"
+                label="Callback extra headers"
+                rows={2}
+              />
+              <TextArea
+                form={form}
+                path="http.callbackPostData"
+                label="Callback POST body"
+                rows={2}
+              />
             </Section>
           )
         : shown("vendor-trunks.smpp") && (
             <Section title="SMPP session">
-              <NumberField form={form} path="windowSize" label="Window size" min={1} max={1000} step={1} />
-              <NumberField form={form} path="submitIntervalMs" label="Submit interval" min={0} step={1} suffix="ms" />
-              <NumberField form={form} path="submitTimeoutS" label="Submit timeout" min={1} step={1} suffix="s" />
+              <NumberField
+                form={form}
+                path="windowSize"
+                label="Window size"
+                min={1}
+                max={1000}
+                step={1}
+              />
+              <NumberField
+                form={form}
+                path="submitIntervalMs"
+                label="Submit interval"
+                min={0}
+                step={1}
+                suffix="ms"
+              />
+              <NumberField
+                form={form}
+                path="submitTimeoutS"
+                label="Submit timeout"
+                min={1}
+                step={1}
+                suffix="s"
+              />
               <NumberField
                 form={form}
                 path="enquireLinkIntervalS"
@@ -693,14 +982,39 @@ export function VendorTrunkFields({
                   { value: "hexadecimal", label: "Hexadecimal" },
                 ]}
               />
-              <NumberField form={form} path="bindAddrTon" label="Bind address TON" min={0} max={6} step={1} />
-              <NumberField form={form} path="bindAddrNpi" label="Bind address NPI" min={0} max={18} step={1} />
-              <TextField form={form} path="bindAddrRange" label="Bind address range" maxLength={41} />
+              <NumberField
+                form={form}
+                path="bindAddrTon"
+                label="Bind address TON"
+                min={0}
+                max={6}
+                step={1}
+              />
+              <NumberField
+                form={form}
+                path="bindAddrNpi"
+                label="Bind address NPI"
+                min={0}
+                max={18}
+                step={1}
+              />
+              <TextField
+                form={form}
+                path="bindAddrRange"
+                label="Bind address range"
+                maxLength={41}
+              />
             </Section>
           )}
       {shown("vendor-trunks.messages") && (
         <Section title="Messages" columns={2}>
-          <MultiCheck form={form} path="allowedDataCodings" any label="Allowed data codings" options={CODINGS} />
+          <MultiCheck
+            form={form}
+            path="allowedDataCodings"
+            any
+            label="Allowed data codings"
+            options={CODINGS}
+          />
           <MultiCheck
             form={form}
             path="rerouteOn"
@@ -708,10 +1022,34 @@ export function VendorTrunkFields({
             options={DLR_STATS.filter((s) => s.value !== "DELIVRD")}
             hint="Failed receipts with these statuses are retried on the next vendor"
           />
-          <MultiCheck form={form} path="allowedSrcTon" any label="Allowed source TON" options={TON} />
-          <MultiCheck form={form} path="allowedDstTon" any label="Allowed destination TON" options={TON} />
-          <MultiCheck form={form} path="allowedSrcNpi" any label="Allowed source NPI" options={NPI} />
-          <MultiCheck form={form} path="allowedDstNpi" any label="Allowed destination NPI" options={NPI} />
+          <MultiCheck
+            form={form}
+            path="allowedSrcTon"
+            any
+            label="Allowed source TON"
+            options={TON}
+          />
+          <MultiCheck
+            form={form}
+            path="allowedDstTon"
+            any
+            label="Allowed destination TON"
+            options={TON}
+          />
+          <MultiCheck
+            form={form}
+            path="allowedSrcNpi"
+            any
+            label="Allowed source NPI"
+            options={NPI}
+          />
+          <MultiCheck
+            form={form}
+            path="allowedDstNpi"
+            any
+            label="Allowed destination NPI"
+            options={NPI}
+          />
           <NumberField
             form={form}
             path="maxMsgLen"
@@ -722,8 +1060,19 @@ export function VendorTrunkFields({
             placeholder="Any"
             hint="Empty = any length"
           />
-          <CheckField form={form} path="supportMultipart" label="Supports multipart" />
-          <NumberField form={form} path="dlrTimeoutS" label="Receipt timeout" min={0} step={60} suffix="s" />
+          <CheckField
+            form={form}
+            path="supportMultipart"
+            label="Supports multipart"
+          />
+          <NumberField
+            form={form}
+            path="dlrTimeoutS"
+            label="Receipt timeout"
+            min={0}
+            step={60}
+            suffix="s"
+          />
           <SelectField
             form={form}
             path="dlrTimeoutStat"
@@ -745,7 +1094,14 @@ export function VendorTrunkFields({
             step={1}
             hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
           />
-          <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
+          <NumberField
+            form={form}
+            path="overflowBuffer"
+            label="Overflow buffer"
+            min={0}
+            step={1}
+            suffix="messages"
+          />
           <span />
           <NumberField
             form={form}
@@ -755,7 +1111,12 @@ export function VendorTrunkFields({
             step={1}
             hint="Traffic stops when reached"
           />
-          <SelectField form={form} path="costLimitPeriod" label="Limit period" options={PERIOD} />
+          <SelectField
+            form={form}
+            path="costLimitPeriod"
+            label="Limit period"
+            options={PERIOD}
+          />
         </Section>
       )}
     </>

@@ -82,12 +82,19 @@ export const topics: HelpTopic[] = [
                 name: "Full Legal Name",
                 what: "The partner's full legal company name. Unique across all enterprises, deleted ones included.",
               },
-              { name: "Brand Name", what: "Short name used in trunk names and reports.", values: "e.g. `ACME`." },
+              {
+                name: "Brand Name",
+                what: "Short name used in trunk names and reports.",
+                values: "e.g. `ACME`.",
+              },
               {
                 name: "Type",
                 what: "Customer, Vendor or Bilateral (both). Decides which trunk and billing tabs the record has.",
               },
-              { name: "Category", what: "The partner's tier: Tier 1, Tier 2 or Tier 3." },
+              {
+                name: "Category",
+                what: "The partner's tier: Tier 1, Tier 2 or Tier 3.",
+              },
               { name: "Status", what: "Active or Inactive." },
               {
                 name: "Business Company",
@@ -113,7 +120,8 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "list",
-            title: "Detail panel (click a row; it opens on the right of the grid)",
+            title:
+              "Detail panel (click a row; it opens on the right of the grid)",
             items: [
               "Title: **Full Legal Name – Brand Name (ID)** and the type, with × to close.",
               "**General**: Type, Category, Status, Business company, Account manager, Country and who updated it last (UTC). Beside them, **Emails** lists the e-mail addresses of the four contacts (Commercial, Technical, Rates, Finance).",
@@ -355,20 +363,37 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Address",
             fields: [
-              { name: "Address line 1", what: "Street address. Required.", values: "Up to 200 characters." },
+              {
+                name: "Address line 1",
+                what: "Street address. Required.",
+                values: "Up to 200 characters.",
+              },
               {
                 name: "Address line 2",
                 what: "Extra address line (building, floor).",
                 values: "Optional, up to 200 characters.",
               },
-              { name: "City", what: "City.", values: "Optional, up to 100 characters." },
-              { name: "State / region", what: "State, province or region.", values: "Optional, up to 100 characters." },
+              {
+                name: "City",
+                what: "City.",
+                values: "Optional, up to 100 characters.",
+              },
+              {
+                name: "State / region",
+                what: "State, province or region.",
+                values: "Optional, up to 100 characters.",
+              },
               {
                 name: "Country",
                 what: "The partner's country.",
-                values: "Pick from the country list, shown with its ISO code, e.g. `Germany (DE)`.",
+                values:
+                  "Pick from the country list, shown with its ISO code, e.g. `Germany (DE)`.",
               },
-              { name: "ZIP / postcode", what: "Postal code.", values: "Optional, up to 20 characters." },
+              {
+                name: "ZIP / postcode",
+                what: "Postal code.",
+                values: "Optional, up to 20 characters.",
+              },
             ],
           },
           {
@@ -380,7 +405,11 @@ export const topics: HelpTopic[] = [
                 what: "The partner's website.",
                 values: "e.g. `https://acme.example`. Up to 300 characters.",
               },
-              { name: "Fax", what: "Fax number.", values: "Optional, up to 50 characters." },
+              {
+                name: "Fax",
+                what: "Fax number.",
+                values: "Optional, up to 50 characters.",
+              },
               {
                 name: "Registration number",
                 what: "Company registration number.",
@@ -455,8 +484,16 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Contacts (Commercial, Technical, Rates, Finance)",
             fields: [
-              { name: "Name", what: "Contact person for that area.", values: "Optional, up to 200 characters." },
-              { name: "Phone", what: "Contact phone number.", values: "Optional, e.g. `+44 20 7946 0000`." },
+              {
+                name: "Name",
+                what: "Contact person for that area.",
+                values: "Optional, up to 200 characters.",
+              },
+              {
+                name: "Phone",
+                what: "Contact phone number.",
+                values: "Optional, e.g. `+44 20 7946 0000`.",
+              },
               {
                 name: "Emails",
                 what: "Where e-mails for that area go: commercial matters, technical (for example tech-info mails), rate sheets and notices, finance (invoices, statements). Required: at least one per contact.",
@@ -513,12 +550,18 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Document list columns",
             fields: [
-              { name: "Name", what: "The document name: the file name without its extension." },
+              {
+                name: "Name",
+                what: "The document name: the file name without its extension.",
+              },
               { name: "File", what: "The original file name." },
               { name: "Size", what: "File size in B, KB or MB." },
               { name: "Uploaded by", what: "The user who uploaded it." },
               { name: "Uploaded (UTC)", what: "Upload date and time in UTC." },
-              { name: "Download / Delete", what: "**Download** saves the file; **Delete** archives it." },
+              {
+                name: "Download / Delete",
+                what: "**Download** saves the file; **Delete** archives it.",
+              },
             ],
           },
           {
@@ -562,7 +605,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Currency",
                 what: "The currency the partner is billed in (customer side) or bills us in (vendor side). Required.",
-                values: "Pick from the currency list, e.g. `EUR – Euro`. Fixed once invoices exist.",
+                values:
+                  "Pick from the currency list, e.g. `EUR – Euro`. Fixed once invoices exist.",
               },
               {
                 name: "Billing cycle",
@@ -573,7 +617,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Time zone",
                 what: "The time zone in which the billing period starts and ends for this side.",
-                values: "Pick a time zone. Starts as the enterprise's billing time zone.",
+                values:
+                  "Pick a time zone. Starts as the enterprise's billing time zone.",
               },
               {
                 name: "Billing type",
@@ -583,12 +628,14 @@ export const topics: HelpTopic[] = [
               {
                 name: "Credit limit",
                 what: "Customer side, Postpaid only. How much the partner may owe. Credit alerts are measured against it.",
-                values: "Amount in the side's currency, e.g. `5000`. Empty = no limit set.",
+                values:
+                  "Amount in the side's currency, e.g. `5000`. Empty = no limit set.",
               },
               {
                 name: "Opening balance",
                 what: "The balance the partner starts with. Required.",
-                values: "Positive = starts in credit, negative = starts owing. e.g. `-1250.00`.",
+                values:
+                  "Positive = starts in credit, negative = starts owing. e.g. `-1250.00`.",
               },
               {
                 name: "Balance",
@@ -604,17 +651,27 @@ export const topics: HelpTopic[] = [
                 what: "The default for new payments: whether a payment confirmation e-mail is sent to the partner. It can still be changed per payment.",
                 values: "Tick box.",
               },
-              { name: "Description", what: "Free notes about the billing arrangement.", values: "Optional text." },
+              {
+                name: "Description",
+                what: "Free notes about the billing arrangement.",
+                values: "Optional text.",
+              },
             ],
           },
           {
             kind: "fields",
             title: "Beneficiary (bank details for payments to this partner)",
             fields: [
-              { name: "Beneficiary name", what: "Name on the partner's bank account." },
+              {
+                name: "Beneficiary name",
+                what: "Name on the partner's bank account.",
+              },
               { name: "Bank", what: "Bank name." },
               { name: "Bank address", what: "Address of the bank branch." },
-              { name: "Beneficiary address", what: "Address of the account holder." },
+              {
+                name: "Beneficiary address",
+                what: "Address of the account holder.",
+              },
               { name: "Account number", what: "Bank account number." },
               {
                 name: "IBAN",
@@ -622,8 +679,15 @@ export const topics: HelpTopic[] = [
                 values: "e.g. `DE00 0000 0000 0000 0000 00` (fake).",
               },
               { name: "SWIFT / BIC", what: "The bank's SWIFT / BIC code." },
-              { name: "Account currency", what: "Currency of the bank account.", values: "3-letter code, e.g. `USD`." },
-              { name: "Crypto wallet", what: "Wallet address, for partners paid in crypto." },
+              {
+                name: "Account currency",
+                what: "Currency of the bank account.",
+                values: "3-letter code, e.g. `USD`.",
+              },
+              {
+                name: "Crypto wallet",
+                what: "Wallet address, for partners paid in crypto.",
+              },
             ],
           },
           {
@@ -698,7 +762,11 @@ export const topics: HelpTopic[] = [
                 name: "Effective",
                 what: "**Now** hands over at once. **At a set time (UTC)** schedules it; pick the date and time, which cannot be in the past.",
               },
-              { name: "Note", what: "Why the partner is handed over.", values: "Optional, up to 500 characters." },
+              {
+                name: "Note",
+                what: "Why the partner is handed over.",
+                values: "Optional, up to 500 characters.",
+              },
               {
                 name: "E-mail the client",
                 what: "Sends the client an introduction from the new Account Manager: to the commercial contact (or the rates contact), both Account Managers in copy. The note can be used in the template as {note}.",
@@ -851,26 +919,45 @@ export const topics: HelpTopic[] = [
                 values: "Convention `Partner_Category`, e.g. `ACME_OTP`.",
               },
               { name: "Enterprise", what: "The customer that owns the trunk." },
-              { name: "UserName", what: "The SMPP login (system_id) the customer binds with." },
-              { name: "Product Category", what: "The product the trunk sells, e.g. OTP, PROMO, DIRECT." },
+              {
+                name: "UserName",
+                what: "The SMPP login (system_id) the customer binds with.",
+              },
+              {
+                name: "Product Category",
+                what: "The product the trunk sells, e.g. OTP, PROMO, DIRECT.",
+              },
               { name: "Protocol", what: "SMPP or HTTP." },
-              { name: "TPS", what: "TPS (messages per second) allowed per session." },
-              { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
+              {
+                name: "TPS",
+                what: "TPS (messages per second) allowed per session.",
+              },
+              {
+                name: "State",
+                what: "Active or Inactive: whether the trunk may carry traffic.",
+              },
               {
                 name: "Connection",
                 what: "Whether the customer is bound now: green **Up** or red **Down**.",
               },
-              { name: "Bind Type", what: "TX (send only), RX (receive only), TR (both) or AUTO." },
+              {
+                name: "Bind Type",
+                what: "TX (send only), RX (receive only), TR (both) or AUTO.",
+              },
               {
                 name: "Rules",
                 what: "How many translation rules run on the trunk, in bold. Point at the number to see them by name.",
               },
-              { name: "Hidden columns", what: "Updated By and Updated Time can be turned on from the columns menu." },
+              {
+                name: "Hidden columns",
+                what: "Updated By and Updated Time can be turned on from the columns menu.",
+              },
             ],
           },
           {
             kind: "list",
-            title: "Detail panel (click a row; it opens on the right of the grid)",
+            title:
+              "Detail panel (click a row; it opens on the right of the grid)",
             items: [
               "**General**: the Enterprise (click to open it), Username, Protocol, Bind type, TPS, Category and Rules running.",
               "At the bottom: ID, who updated it last (UTC), and **Deleted (archived)** in amber for a deleted trunk.",
@@ -913,7 +1000,9 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             title: "Open",
-            items: ["Double-click the row or press **Enter**. Hold **Ctrl** / **Cmd** to force a second tab."],
+            items: [
+              "Double-click the row or press **Enter**. Hold **Ctrl** / **Cmd** to force a second tab.",
+            ],
           },
         ],
       },
@@ -1004,13 +1093,28 @@ export const topics: HelpTopic[] = [
             title: "Grid columns",
             fields: [
               { name: "ID", what: "Trunk number in the system." },
-              { name: "Trunk Name", what: "The trunk's name, unique across trunks." },
+              {
+                name: "Trunk Name",
+                what: "The trunk's name, unique across trunks.",
+              },
               { name: "Enterprise", what: "The vendor that owns the trunk." },
-              { name: "UserName", what: "Our login (system_id) at the vendor." },
-              { name: "Product Category", what: "The quality / product class of the route, e.g. DIRECT, SIM, WHS." },
+              {
+                name: "UserName",
+                what: "Our login (system_id) at the vendor.",
+              },
+              {
+                name: "Product Category",
+                what: "The quality / product class of the route, e.g. DIRECT, SIM, WHS.",
+              },
               { name: "Protocol", what: "SMPP or HTTP." },
-              { name: "TPS", what: "TPS (messages per second) we send per session." },
-              { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
+              {
+                name: "TPS",
+                what: "TPS (messages per second) we send per session.",
+              },
+              {
+                name: "State",
+                what: "Active or Inactive: whether the trunk may carry traffic.",
+              },
               {
                 name: "Connection",
                 what: "Our bind to the vendor now: green **Up** (all sessions bound), orange **Reconnecting** (some sessions missing, or down for less than the trunk's **Bind down alert after** time while we retry) or red **Down**.",
@@ -1166,7 +1270,10 @@ export const topics: HelpTopic[] = [
                 values:
                   "A customer trunk needs a Customer or Bilateral enterprise; a vendor trunk needs a Vendor or Bilateral one. A deleted enterprise cannot get new trunks.",
               },
-              { name: "Trunk ID", what: "The trunk's number. Shown after saving." },
+              {
+                name: "Trunk ID",
+                what: "The trunk's number. Shown after saving.",
+              },
               {
                 name: "Buy rate table",
                 what: "Vendor trunks only. Every vendor trunk owns one rate table with its buy rates. Click it to open it in Rate manager.",
@@ -1185,7 +1292,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Trunk name",
                 what: "The trunk's name. Required. Unique across all trunks, deleted ones included.",
-                values: "Up to 100 characters. Convention `Partner_Category`, e.g. `ACME_OTP`.",
+                values:
+                  "Up to 100 characters. Convention `Partner_Category`, e.g. `ACME_OTP`.",
               },
               {
                 name: "Protocol",
@@ -1195,7 +1303,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Product category",
                 what: "The product class of the trunk, e.g. OTP, PROMO, DIRECT, SIM. Used in routing and reports. Required on vendor trunks, optional on customer trunks.",
-                values: "Pick from the product category list (kept under [[categories|Product categories]]).",
+                values:
+                  "Pick from the product category list (kept under [[categories|Product categories]]).",
               },
               {
                 name: "Billing type",
@@ -1233,7 +1342,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Allowed host IPs",
                 what: "The IP addresses the customer may connect from. Binds from any other address are refused. Required: at least one.",
-                values: "One or more IPv4 or IPv6 addresses, e.g. `10.0.0.5`, `2001:db8::1`.",
+                values:
+                  "One or more IPv4 or IPv6 addresses, e.g. `10.0.0.5`, `2001:db8::1`.",
               },
               {
                 name: "Username (system_id)",
@@ -1247,8 +1357,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Port",
-                what: "The port the customer connects to. Required.",
-                values: "1–65535. Default `2775`.",
+                what: "The port the customer connects to. Not typed in: it follows SSL, and Send Tech Info sends it to the customer.",
+                values: "`2775` when SSL is None, `2776` for any TLS.",
               },
               {
                 name: "Max connections",
@@ -1306,7 +1416,11 @@ export const topics: HelpTopic[] = [
                 what: "When on, we confirm a message to the customer (submit_sm_resp) only after the vendor has accepted it.",
                 values: "Tick box. Off by default.",
               },
-              { name: "Send bind", what: "Notify the customer of bind events.", values: "Tick box. Off by default." },
+              {
+                name: "Send bind",
+                what: "Notify the customer of bind events.",
+                values: "Tick box. Off by default.",
+              },
             ],
           },
         ],
@@ -1341,12 +1455,14 @@ export const topics: HelpTopic[] = [
               {
                 name: "Default data coding",
                 what: "How text is read when the customer sends data coding 0.",
-                values: "**0 – SMSC default (GSM 7-bit)** (default) or **3 – Latin-1**.",
+                values:
+                  "**0 – SMSC default (GSM 7-bit)** (default) or **3 – Latin-1**.",
               },
               {
                 name: "Express vendor trunk",
                 what: "Pins the trunk to one vendor trunk. Every message skips route rules and goes straight to this vendor.",
-                values: "Search and pick a vendor trunk, or leave **None – route normally**.",
+                values:
+                  "Search and pick a vendor trunk, or leave **None – route normally**.",
               },
               {
                 name: "Express margin",
@@ -1420,9 +1536,14 @@ export const topics: HelpTopic[] = [
               {
                 name: "Host",
                 what: "The vendor's server address we connect to. Required.",
-                values: "Host name or IP, e.g. `smpp.vendor.example` or `10.0.0.5`. Up to 255 characters.",
+                values:
+                  "Host name or IP, e.g. `smpp.vendor.example` or `10.0.0.5`. Up to 255 characters.",
               },
-              { name: "Port", what: "The vendor's port. Required.", values: "1–65535. Default `2775`." },
+              {
+                name: "Port",
+                what: "The vendor's port. Required.",
+                values: "1–65535. Default `2775`.",
+              },
               {
                 name: "Source IP",
                 what: "Our own address the bind comes from (when the vendor allows only certain IPs).",
@@ -1453,7 +1574,11 @@ export const topics: HelpTopic[] = [
                 what: "SMPP service_type we send with messages.",
                 values: "Optional, up to 6 characters.",
               },
-              { name: "SSL", what: "Encryption of the connection.", values: "None (default), TLS 1.2 or TLS 1.3." },
+              {
+                name: "SSL",
+                what: "Encryption of the connection.",
+                values: "None (default), TLS 1.2 or TLS 1.3.",
+              },
             ],
           },
         ],
@@ -1493,7 +1618,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Reconnect after",
                 what: "Seconds before each new bind attempt after a session drops or a bind is refused. The last value repeats until the bind is up or the trunk is stopped. An active trunk binds all its Max connections sessions when it is activated or saved, and keeps them up.",
-                values: "A list, e.g. `5, 10, 30, 60` (default): 5 s, 10 s, 30 s, then every 60 s.",
+                values:
+                  "A list, e.g. `5, 10, 30, 60` (default): 5 s, 10 s, 30 s, then every 60 s.",
               },
               {
                 name: "Bind down alert after",
@@ -1548,7 +1674,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Success regex",
                 what: "A pattern that, when found in the vendor's answer, means the message was accepted.",
-                values: 'e.g. `"status":"ok"`. Must be a valid regular expression.',
+                values:
+                  'e.g. `"status":"ok"`. Must be a valid regular expression.',
               },
               {
                 name: "Message ID regex",
@@ -1570,9 +1697,18 @@ export const topics: HelpTopic[] = [
                 what: "The request body template. Placeholders are filled in per message.",
                 values: 'e.g. `{"to":"{dst}","from":"{src}","text":"{text}"}`.',
               },
-              { name: "Receipt callback URL", what: "The address the vendor sends receipts to." },
-              { name: "Callback interval", what: "How often receipts are collected, in seconds." },
-              { name: "Receipt status regex", what: "Pattern that picks the status out of a receipt callback." },
+              {
+                name: "Receipt callback URL",
+                what: "The address the vendor sends receipts to.",
+              },
+              {
+                name: "Callback interval",
+                what: "How often receipts are collected, in seconds.",
+              },
+              {
+                name: "Receipt status regex",
+                what: "Pattern that picks the status out of a receipt callback.",
+              },
               {
                 name: "Receipt message ID regex",
                 what: "Pattern that picks the message ID out of a receipt callback.",
@@ -1587,8 +1723,14 @@ export const topics: HelpTopic[] = [
                 what: "Receipt statuses that mean failed.",
                 values: "Comma separated, e.g. `UNDELIV,REJECTD`.",
               },
-              { name: "Callback extra headers", what: "Headers expected or sent with receipt callbacks." },
-              { name: "Callback POST body", what: "Template of the receipt callback body." },
+              {
+                name: "Callback extra headers",
+                what: "Headers expected or sent with receipt callbacks.",
+              },
+              {
+                name: "Callback POST body",
+                what: "Template of the receipt callback body.",
+              },
             ],
           },
         ],
@@ -1607,12 +1749,14 @@ export const topics: HelpTopic[] = [
               {
                 name: "Allowed data codings",
                 what: "Text encodings the vendor accepts (0 = GSM 7-bit, 3 = Latin-1, 8 = Unicode, and others).",
-                values: "**Any** (no restriction), or tick any of 0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14. Default Any.",
+                values:
+                  "**Any** (no restriction), or tick any of 0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14. Default Any.",
               },
               {
                 name: "Re-route on receipt status",
                 what: "Failed receipts with these statuses are retried on the next vendor in the route.",
-                values: "Tick any of EXPIRED, UNDELIV, REJECTD, UNKNOWN. None by default.",
+                values:
+                  "Tick any of EXPIRED, UNDELIV, REJECTD, UNKNOWN. None by default.",
               },
               {
                 name: "Allowed source TON",
@@ -1627,17 +1771,20 @@ export const topics: HelpTopic[] = [
               {
                 name: "Allowed source NPI",
                 what: "Sender numbering plans the vendor accepts (NPI = numbering plan indicator: 0 unknown, 1 ISDN/E.164…).",
-                values: "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default Any.",
+                values:
+                  "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default Any.",
               },
               {
                 name: "Allowed destination NPI",
                 what: "Receiver numbering plans the vendor accepts.",
-                values: "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default 1.",
+                values:
+                  "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default 1.",
               },
               {
                 name: "Max message length",
                 what: "The longest message the vendor takes.",
-                values: "Empty = **Any** length, or 1–2000 characters. Default Any.",
+                values:
+                  "Empty = **Any** length, or 1–2000 characters. Default Any.",
               },
               {
                 name: "Supports multipart",
@@ -1652,7 +1799,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Status on receipt timeout",
                 what: "The status recorded when no receipt arrives in time.",
-                values: "DELIVRD, EXPIRED, UNDELIV, REJECTD or UNKNOWN (default).",
+                values:
+                  "DELIVRD, EXPIRED, UNDELIV, REJECTD or UNKNOWN (default).",
               },
             ],
           },
@@ -1683,7 +1831,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Limit period",
                 what: "The period the cost limit counts over.",
-                values: "Per hour, Per day, Per week, Per month or Per billing cycle. Set both or neither.",
+                values:
+                  "Per hour, Per day, Per week, Per month or Per billing cycle. Set both or neither.",
               },
             ],
           },
@@ -1716,13 +1865,22 @@ export const topics: HelpTopic[] = [
             title: "Rule table columns",
             fields: [
               { name: "#", what: "Run order on this trunk." },
-              { name: "Rule", what: "Rule name. Tags show **Rule inactive** or **Detach on save**." },
+              {
+                name: "Rule",
+                what: "Rule name. Tags show **Rule inactive** or **Detach on save**.",
+              },
               {
                 name: "Applies through",
                 what: "Why the rule reaches this trunk: **Direct** (attached to this trunk), **Enterprise**, **Category** or **All trunks**.",
               },
-              { name: "Does", what: "A short description of what the rule does." },
-              { name: "On", what: "Untick to switch the rule off for this trunk only." },
+              {
+                name: "Does",
+                what: "A short description of what the rule does.",
+              },
+              {
+                name: "On",
+                what: "Untick to switch the rule off for this trunk only.",
+              },
               {
                 name: "Continue",
                 what: "Translation rules only. When ticked, the next rule also runs after this one matches.",
@@ -1749,9 +1907,20 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Test",
             fields: [
-              { name: "Sender ID", what: "Sample sender.", values: "e.g. `ACME`." },
-              { name: "Receiver", what: "Sample receiver number. Required.", values: "e.g. `00447700900123`." },
-              { name: "Sender TON / Sender NPI", what: "Sample type of number and numbering plan." },
+              {
+                name: "Sender ID",
+                what: "Sample sender.",
+                values: "e.g. `ACME`.",
+              },
+              {
+                name: "Receiver",
+                what: "Sample receiver number. Required.",
+                values: "e.g. `00447700900123`.",
+              },
+              {
+                name: "Sender TON / Sender NPI",
+                what: "Sample type of number and numbering plan.",
+              },
               { name: "Text", what: "Sample message text." },
               {
                 name: "Vendor DLR stat",

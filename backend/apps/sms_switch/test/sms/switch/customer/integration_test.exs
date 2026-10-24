@@ -59,9 +59,9 @@ defmodule Sms.Switch.Customer.IntegrationTest do
         insert!(
           """
           INSERT INTO customer_trunks (enterprise_id, name, protocol, billing_type, bind_type, host_ips, username,
-                                       password, max_connections, port, ssl_type, tps, dlr_session_affinity,
+                                       password, max_connections, ssl_type, tps, dlr_session_affinity,
                                        system_type, deleted_at)
-          VALUES ($1, $2, $3, 'submit', $4, '{10.20.30.40, 10.9.0.0/16}'::inet[], $2, 'pw', 3, 2776, $5, 40,
+          VALUES ($1, $2, $3, 'submit', $4, '{10.20.30.40, 10.9.0.0/16}'::inet[], $2, 'pw', 3, $5, 40,
                   'same_trunk', 'OTP', CASE WHEN $6 THEN now() END)
           RETURNING id
           """,
@@ -91,7 +91,9 @@ defmodule Sms.Switch.Customer.IntegrationTest do
       assert smpp.username == "swtest_smpp"
       assert smpp.host_ips == [{{10, 20, 30, 40}, 32}, {{10, 9, 0, 0}, 16}]
       assert smpp.max_connections == 3 and smpp.tps == 40 and Trunk.trunk_tps(smpp) == 120
+      # Worked out from ssl_type by the database (migration 070): TLS → 2776.
       assert smpp.port == 2776
+      assert by_id[ids.of_inactive].port == 2775
       assert smpp.tls == :"tls1.2"
       assert smpp.bind_type == :trx
       assert smpp.dlr_session_affinity == :same_trunk

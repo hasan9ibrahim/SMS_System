@@ -435,3 +435,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_code_hash text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_code_expires_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_code_sent_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_code_tries smallint NOT NULL DEFAULT 0;
+
+-- Customer trunk port fixed by its connection type (migration 070, §5.4): 2775 Non secure, 2776 TLS, worked out from
+-- ssl_type. Runs once: only while the column is still a plain one.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = current_schema() AND table_name = 'customer_trunks' AND column_name = 'port'
+       AND is_generated = 'NEVER'
+  ) THEN
+    ALTER TABLE customer_trunks DROP COLUMN port;
+    ALTER TABLE customer_trunks
+      ADD COLUMN port integer GENERATED ALWAYS AS (CASE WHEN ssl_type = 'none' THEN 2775 ELSE 2776 END) STORED;
+    COMMENT ON COLUMN customer_trunks.port IS 'SMPP port the customer binds on: 2775 for ssl_type none, 2776 for TLS (generated)';
+  END IF;
+END $$;
