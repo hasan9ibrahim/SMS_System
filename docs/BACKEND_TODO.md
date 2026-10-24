@@ -644,6 +644,11 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
+- **Hosting location (2026-10-24).** Provider and city of the two main servers not chosen yet. The witness VM
+  (4 vCPU, 8 GB, ~250 GB SSD; NATS 3rd node, etcd, ClickHouse Keeper, Redis Sentinel, monitoring) goes to another
+  data centre or provider in the same region, under ~20 ms from both, linked over WireGuard. Pick once the main
+  servers' location is known.
+
 - **Backend plan questions Q1–Q35 (2026-10-24, `docs/BACKEND_PLAN.md` › Questions).** Scope for 30 November, TypeScript
   API with an Elixir switch (second opinion to spec §14), volume target (10 vs 50 million a day), HTTP API format, MO,
   multi-server TPS and connections, queue times, VAT, migration from the current platform by exported files, message
