@@ -94,7 +94,7 @@ const BY: Record<string, ReportDimension> = {
 
 const metricsOf = (cols: Column[]) => cols.map((c) => c.metric);
 /** Money and rates (6 decimals) get wider columns than counts (team trial round 3). */
-const WEIGHT: Record<Fmt, number> = { money: 2, rate: 1.25, int: 1.12, pct: 1.05, sec: 0.95, tps: 0.85 };
+const WEIGHT: Record<Fmt, number> = { money: 1.95, rate: 1.33, int: 1.14, pct: 1, sec: 0.88, tps: 0.88 };
 const weightOf = (cols: Column[]) => cols.reduce((n, c) => n + WEIGHT[c.fmt], 0);
 /** The figures share what the name (9.5 %) and EDRs (5.5 %) columns leave, so the table always fits (no sideways scroll). */
 const colWidth = (cols: Column[], c: Column) => `${((WEIGHT[c.fmt] / weightOf(cols)) * 85).toFixed(2)}%`;

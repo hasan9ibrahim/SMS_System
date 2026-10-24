@@ -191,12 +191,12 @@
 .la-grid td.num.la-strong {
   font-size: 11.5px;
 }
-/* Every figure the same size and font (team trial round 5); ASR, DLRs and margin are only bolder. */
+/* Every figure the same size and font (team trial round 5); ASR, DLRs and margin are bold. */
 .la-grid td.num.la-strong,
 .la-grid td.num.la-strong .la-pill {
   font-family: "Roboto", var(--font-family);
   font-size: 11.5px;
-  font-weight: 500;
+  font-weight: 700;
 }
 /* Names in the first column (customer, trunk, vendor, destination…) are plain, not bold. */
 .la-grid tr:not(.la-total) td.la-name,

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
+import "@fontsource/roboto/700.css";
 import "./styles/base.css";
 import "./styles/shell.css";
 import "./styles/grid.css";
