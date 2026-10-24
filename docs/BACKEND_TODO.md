@@ -670,6 +670,13 @@ What the Phoenix backend must match so the screens need no change:
   an hour: about 1–2 GB of Redis (about 7–12 GB at 50 million); vendors that send few receipts raise it. Open: confirm
   the server RAM; if messages without receipts turn out to be many, keep them in Redis for less time and match late
   receipts from the ClickHouse EDRs.
+- **DLR Timeout design (decided with the product owner 2026-10-24, build step 5, §5.5, S-5.10, D5).** When a vendor
+  trunk's DLR Timeout passes with no final receipt for a message, the switch sends the customer a receipt with the
+  trunk's DLR Timeout Status (if the customer asked for one), records it in the EDR (`edr_receipt`, source switch)
+  and deletes the message from Redis, as for a real receipt. A vendor receipt that comes later never reaches the
+  customer: it is matched from ClickHouse by vendor trunk and `v_message_id` and only corrects the EDR (a late
+  `edr_receipt` row, `is_late = 1`), so vendor DLR rates, QBR and delivered-based billing use the real status. The
+  DLR Timeout therefore also bounds Redis memory (10 million a day: about 1–2 GB at 48 h, about 0.2–0.3 GB at 2 h).
 - **Vendor TLS certificates (2026-10-24, backend step 3).** Should the switch check a vendor's TLS certificate
   (trusted CA and matching host name) before binding? Checking protects the vendor password from a man-in-the-middle,
   but a vendor with a self-signed certificate then cannot bind. Built: checked by default (`VENDOR_TLS_VERIFY=peer`),
