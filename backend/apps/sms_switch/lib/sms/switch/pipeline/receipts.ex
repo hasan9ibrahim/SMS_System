@@ -111,21 +111,37 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
     with {:ok, first} <- Store.put_final(message_id, part, final) do
       vendor_row(rec.data, part, receipt, not first)
-      if first, do: maybe_forward(message_id), else: :ok
+
+      # Also on a repeated final: a receipt whose forwarding failed before is sent then (the claim stops doubles).
+      maybe_forward(message_id)
     end
   end
 
-  # Once every part has its final status, one receipt for the message (S-5.9); only one caller gets to send it.
+  # Once every part has its final status, one receipt for the message (S-5.9); only one caller gets to send it. The
+  # message is then forgotten: nothing more is done with it, and Redis keeps only messages still waiting (§13.1).
   defp maybe_forward(message_id) do
     with {:ok, rec} <- Store.message(message_id),
          true <- map_size(rec.finals) >= rec.data.parts,
          {:ok, true} <- Store.claim_forward(message_id) do
-      Forwarder.publish(rec.data, aggregate(rec.finals))
+      forward(message_id, rec)
     else
       false -> :ok
       {:ok, false} -> :ok
       :none -> :ok
       {:error, _} = error -> error
+    end
+  end
+
+  defp forward(message_id, rec) do
+    case Forwarder.publish(rec.data, aggregate(rec.finals)) do
+      :ok ->
+        # Not forgotten now is only memory: the message still expires with its DLR timeout.
+        _ = Store.forget(message_id, rec.data.vendor_trunk_id, Map.values(rec.vendor_ids))
+        :ok
+
+      {:error, _} = error ->
+        _ = Store.unclaim_forward(message_id)
+        error
     end
   end
 

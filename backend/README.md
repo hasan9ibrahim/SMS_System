@@ -124,7 +124,9 @@ loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
   With no session to take it, the receipt is held per trunk (`Pipeline.Held`) and sent as soon as one binds, up to
   the trunk's DLR hold hours (72 by default).
 - **Store** (`Pipeline.Store`): what both servers need about a message in flight lives in Redis (`m:`, `v:`, `o:`,
-  `g:`, `h:` keys), expiring after the vendor trunk's DLR timeout plus an hour.
+  `g:`, `h:` keys). A message is deleted as soon as every part has its final receipt and the customer's receipt is
+  queued; one still waiting expires after the vendor trunk's DLR timeout plus an hour. So Redis holds only messages
+  waiting for a receipt.
 - **EDRs** (`Pipeline.Edr`, `Pipeline.EdrWriter`): one `edr` row per vendor attempt (or per refused message) and one
   `edr_receipt` row per receipt from a vendor and per receipt to the customer (ClickHouse migration
   `003_edr_receipt.sql`), appended, never updated. Rows go through the bus (`sms.edr.*`) to a writer that inserts

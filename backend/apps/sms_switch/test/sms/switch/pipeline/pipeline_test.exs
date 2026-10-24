@@ -176,18 +176,21 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert sid != ""
     end
 
-    test "a second final receipt for the same part is recorded as a duplicate and not forwarded (S-5.8)" do
+    test "a finished message is forgotten; a receipt repeated after is answered OK and not forwarded (S-5.8)" do
       %{client: client, conns: [conn]} = start_all()
-      {client, _} = submit(client, %{short_message: "hello", registered_delivery: 1})
+      {client, resp} = submit(client, %{short_message: "hello", registered_delivery: 1})
+      id = resp.fields.message_id
       assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
 
       receipt(conn, "1", "DELIVRD")
       {client, _} = customer_receipt(client)
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, status: 0}}, 2_000
+      assert_eventually(fn -> Pipeline.Store.message(id) == :none end)
+      assert Pipeline.Store.find_vendor_id(1, ["1"]) == :none
+
       receipt(conn, "1", "UNDELIV")
       assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, status: 0}}, 2_000
       assert {:error, :timeout} = Client.recv(client, 500)
-
-      assert_eventually(fn -> Enum.any?(edr("edr.receipt"), &(&1["is_duplicate"] == 1)) end)
     end
 
     test "a receipt that comes before the submit_sm_resp is handled is kept and applied (S-5.5)" do
@@ -412,6 +415,11 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       receipt(conn, "1", "DELIVRD")
       assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp}}, 2_000
       assert {:error, :timeout} = Client.recv(client, 300)
+
+      # While the message waits for its other part, a repeated final is recorded as a duplicate (S-5.8).
+      receipt(conn, "1", "UNDELIV")
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp}}, 2_000
+      assert_eventually(fn -> Enum.any?(edr("edr.receipt"), &(&1["is_duplicate"] == 1)) end)
 
       receipt(conn, "2", "UNDELIV", "002")
       {_, dlr} = customer_receipt(client)

@@ -53,6 +53,22 @@ defmodule Sms.Switch.Pipeline.StoreTest do
         assert map_size(finals) == 1
       end
 
+      test "a finished message is forgotten with its vendor ids; a claim can be given back", %{
+        id: id,
+        vt: vt
+      } do
+        :ok = Store.record_sent(id, %{parts: 2}, [{1, vt, "d1"}, {2, vt, "d2"}], 60)
+        assert {:ok, true} = Store.claim_forward(id)
+        assert :ok = Store.unclaim_forward(id)
+        assert {:ok, %{forwarded: false, vendor_ids: %{1 => "d1", 2 => "d2"}}} = Store.message(id)
+        assert {:ok, true} = Store.claim_forward(id)
+
+        assert :ok = Store.forget(id, vt, ["d1", "d2"])
+        assert :none = Store.message(id)
+        assert :none = Store.find_vendor_id(vt, ["d1", "d2"])
+        refute Store.sent?(id)
+      end
+
       test "an early receipt is taken once", %{vt: vt} do
         assert :ok = Store.put_orphan(vt, "c1", %{status: "DELIVRD"})
         assert {:ok, %{status: "DELIVRD"}} = Store.take_orphan(vt, "c1")

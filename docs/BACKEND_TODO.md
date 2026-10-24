@@ -663,12 +663,13 @@ What the Phoenix backend must match so the screens need no change:
 ## Open questions
 
 - **Redis memory for messages in flight (2026-10-24, backend step 4).** To match receipts, the switch keeps each sent
-  message in Redis (about 0.75 KB with its index keys) until the vendor trunk's DLR timeout plus an hour; the default
-  DLR timeout is 48 h. At 50 million messages a day that is about 100 million messages held, roughly **75 GB of Redis
-  memory**, more than the servers should give it. Options: (a) keep messages in Redis for a shorter time (e.g. 6 h,
-  about 10 GB at that volume) and match later receipts from the ClickHouse EDRs instead (slower, but rare); (b) keep
-  48 h and size Redis for it; (c) shorten vendor DLR timeouts. Proposal: (a). Built for now: the full DLR timeout.
-
+  message in Redis (about 0.75 KB with its index keys). **Decided with the product owner:** a message is deleted as
+  soon as every part has its final receipt and the customer's receipt is queued (a vendor receipt repeated after that
+  is answered OK and not forwarded); only messages still waiting for a receipt stay, up to the vendor trunk's DLR
+  timeout plus an hour (default 48 h + 1 h). Estimate at 10 million messages a day, with 90–95 % of receipts within
+  an hour: about 1–2 GB of Redis (about 7–12 GB at 50 million); vendors that send few receipts raise it. Open: confirm
+  the server RAM; if messages without receipts turn out to be many, keep them in Redis for less time and match late
+  receipts from the ClickHouse EDRs.
 - **Vendor TLS certificates (2026-10-24, backend step 3).** Should the switch check a vendor's TLS certificate
   (trusted CA and matching host name) before binding? Checking protects the vendor password from a man-in-the-middle,
   but a vendor with a self-signed certificate then cannot bind. Built: checked by default (`VENDOR_TLS_VERIFY=peer`),

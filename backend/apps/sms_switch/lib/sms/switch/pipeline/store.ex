@@ -12,7 +12,9 @@ defmodule Sms.Switch.Pipeline.Store do
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
       by arrival; `hs` the trunks that have any, `hl:<customer trunk>` the lock of the node sending them.
 
-  Everything expires: a message after its vendor trunk's DLR timeout plus an hour. With `backend: :local` (one server,
+  A finished message (every part's final receipt in, the customer's receipt queued) is forgotten at once; one still
+  waiting expires after its vendor trunk's DLR timeout plus an hour, so Redis holds only messages waiting for a
+  receipt. With `backend: :local` (one server,
   development, tests) the same keys live in an ETS table owned by this process.
   """
   use GenServer
@@ -101,10 +103,13 @@ defmodule Sms.Switch.Pipeline.Store do
           into: %{},
           do: {String.to_integer(n), :erlang.binary_to_term(v, [:safe])}
 
+    vendor_ids = for {"s" <> n, v} <- fields, into: %{}, do: {String.to_integer(n), v}
+
     {:ok,
      %{
        data: :erlang.binary_to_term(blob, [:safe]),
        finals: finals,
+       vendor_ids: vendor_ids,
        forwarded: Map.has_key?(fields, "c")
      }}
   end
@@ -126,6 +131,26 @@ defmodule Sms.Switch.Pipeline.Store do
     case run(["HSETNX", "m:#{message_id}", "c", "1"]) do
       {:ok, n} -> {:ok, n == 1}
       error -> error
+    end
+  end
+
+  @doc "Gives the claim back when the customer's receipt could not be queued, so a retried receipt sends it."
+  @spec unclaim_forward(String.t()) :: :ok | {:error, term()}
+  def unclaim_forward(message_id), do: ok(run(["HDEL", "m:#{message_id}", "c"]))
+
+  @doc """
+  Forgets a finished message (every part has its final receipt and the customer's receipt is queued): its hash and
+  its vendor ids. A receipt that comes after is answered OK and not forwarded (S-5.12).
+  """
+  @spec forget(String.t(), integer(), [String.t()]) :: :ok | {:error, term()}
+  def forget(message_id, vendor_trunk_id, vendor_ids) do
+    commands = [
+      ["DEL", "m:#{message_id}"] | Enum.map(vendor_ids, &["DEL", "v:#{vendor_trunk_id}:#{&1}"])
+    ]
+
+    case backend() do
+      :redis -> ok(Redis.transaction(commands, @timeout))
+      :local -> ok(local(commands))
     end
   end
 
@@ -312,6 +337,17 @@ defmodule Sms.Switch.Pipeline.Store do
     else
       put(key, Map.put(hash, field, value), expiry(key))
       1
+    end
+  end
+
+  defp exec(["HDEL", key, field]) do
+    hash = get_hash(key)
+
+    if Map.has_key?(hash, field) do
+      put(key, Map.delete(hash, field), expiry(key))
+      1
+    else
+      0
     end
   end
 
