@@ -26,6 +26,9 @@ config :sms_switch, Sms.Switch.Customer, enabled: true
 
 # TPS limits shared by both servers through Redis (decision Q13); per server, divided by the cluster size, while Redis
 # is unavailable (S-7.4).
+# Failed binds counted by the Firewall filters (spec §8) are shared by both servers through Redis.
+config :sms_switch, Sms.Switch.Customer.Firewall, backend: :redis
+
 config :sms_switch, Sms.Switch.Customer.Throttle,
   backend: :redis,
   cluster_size: 2,

@@ -3,11 +3,12 @@ defmodule Sms.Switch.Customer.Listener do
   The TCP and TLS ports clients bind to (spec §2, §5.4 Port and SSLType), one ranch listener per configured port:
 
       config :sms_switch, Sms.Switch.Customer,
-        listeners: [[port: 2775], [port: 3550, tls: true], [port: 2780, proxy_protocol: true]],
+        listeners: [[port: 2775], [port: 2776, tls: true]],
         tls: [certfile: "/etc/sms/tls/smpp.pem", keyfile: "/etc/sms/tls/smpp.key"]
 
-  A trunk binds only on its own Port and, when its SSLType is TLS, only on a TLS port at that version or newer
-  (`Sms.Switch.Customer.Trunk.transport_allowed?/2`). TLS ports offer 1.3, 1.2 and, for legacy partners, 1.1 and
+  Every server listens on the same two ports for every customer: 2775 plain and 2776 TLS (product owner,
+  2026-10-24). A trunk whose SSLType is TLS binds only over TLS at that version or newer
+  (`Sms.Switch.Customer.Trunk.transport_allowed?/2`); a plain trunk may use either port. TLS ports offer 1.3, 1.2 and, for legacy partners, 1.1 and
   1.0 (decision Q9; SSLv2/SSLv3 never), each with the runtime's default cipher suites for that version.
 
   `proxy_protocol: true` reads a PROXY header (v1 or v2) before anything else, for listeners behind a load balancer

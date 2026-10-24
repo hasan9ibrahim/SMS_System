@@ -51,9 +51,9 @@ config :sms_core, Sms.Core.Bus.Nats,
   username: System.get_env("NATS_USER"),
   password: System.get_env("NATS_PASSWORD")
 
-# SMPP listeners for customers (spec §2, §5.4): comma-separated ports. A customer trunk binds only on its own Port, and
-# a TLS trunk only on a TLS port. SMPP_PROXY_PORTS are the ports behind a load balancer that sends a PROXY header
-# (S-1.15); they are listed in SMPP_PORTS or SMPP_TLS_PORTS too.
+# SMPP listeners for customers (spec §2, §5.4): 2775 plain and 2776 TLS on every server (product owner, 2026-10-24).
+# A TLS trunk binds only over TLS. SMPP_PROXY_PORTS are ports behind a load balancer that sends a PROXY header
+# (S-1.15). TLS needs a certificate: required in production; in development the TLS port is skipped without one.
 ports = fn name, default ->
   for part <- String.split(env.(name, default), ",", trim: true) do
     case Integer.parse(String.trim(part)) do
@@ -64,30 +64,42 @@ ports = fn name, default ->
 end
 
 plain_ports = ports.("SMPP_PORTS", "2775")
-tls_ports = ports.("SMPP_TLS_PORTS", "")
+tls_ports = ports.("SMPP_TLS_PORTS", "2776")
 proxy_ports = ports.("SMPP_PROXY_PORTS", "")
 
 if overlap = Enum.find(plain_ports, &(&1 in tls_ports)) do
   raise ArgumentError, "port #{overlap} is in both SMPP_PORTS and SMPP_TLS_PORTS"
 end
 
+certfile = System.get_env("SMPP_TLS_CERTFILE", "")
+keyfile = System.get_env("SMPP_TLS_KEYFILE", "")
+
+tls_ports =
+  cond do
+    tls_ports == [] or (certfile != "" and keyfile != "") ->
+      tls_ports
+
+    prod? ->
+      raise ArgumentError,
+            "SMPP_TLS_CERTFILE and SMPP_TLS_KEYFILE are required for SMPP_TLS_PORTS"
+
+    config_env() == :test ->
+      []
+
+    true ->
+      IO.warn(
+        "SMPP TLS port(s) #{inspect(tls_ports)} not opened: set SMPP_TLS_CERTFILE and SMPP_TLS_KEYFILE",
+        []
+      )
+
+      []
+  end
+
 listeners =
   Enum.map(plain_ports, &[port: &1, proxy_protocol: &1 in proxy_ports]) ++
     Enum.map(tls_ports, &[port: &1, tls: true, proxy_protocol: &1 in proxy_ports])
 
-tls =
-  if tls_ports == [] do
-    []
-  else
-    file = fn name ->
-      case System.get_env(name) do
-        path when path not in [nil, ""] -> path
-        _ -> raise ArgumentError, "#{name} is required when SMPP_TLS_PORTS is set"
-      end
-    end
-
-    [certfile: file.("SMPP_TLS_CERTFILE"), keyfile: file.("SMPP_TLS_KEYFILE")]
-  end
+tls = if tls_ports == [], do: [], else: [certfile: certfile, keyfile: keyfile]
 
 config :sms_switch, Sms.Switch.Customer,
   listeners: listeners,

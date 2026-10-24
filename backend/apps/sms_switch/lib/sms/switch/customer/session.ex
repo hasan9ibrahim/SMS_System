@@ -7,9 +7,9 @@ defmodule Sms.Switch.Customer.Session do
 
     * **open**: only a bind is accepted, within `:bind_timeout_ms`. Every other request is answered 0x04
       (incorrect bind status, S-1.11), `enquire_link` excepted.
-    * **bind** checks, in this order (S-1.1–S-1.3, S-1.17): IP not blocked by the brute-force guard, known
-      `system_id` (0x0F), client IP allowed (0x0D), password (0x0E), trunk active (0x0D), the connection arrived on
-      the trunk's port and transport (TLS version, 0x0D), `system_type` when the trunk sets one (0x53), bind type
+    * **bind** checks, in this order (S-1.1–S-1.3, S-1.17): IP not banned by the Firewall (§8), known
+      `system_id` (0x0F), client IP allowed (0x0D), password (0x0E), trunk active (0x0D), a TLS trunk on a TLS
+      connection at its version or newer (0x0D), `system_type` when the trunk sets one (0x53), bind type
       allowed (0x0D), fewer than Max Connections across every server (0x0D). A refused bind is answered, audited
       and the connection is closed; no session exists. A second bind on a bound session gets 0x05.
     * **bound**: message requests go to `Sms.Switch.Customer.Intake`, each in its own process; the answer goes back
@@ -37,7 +37,7 @@ defmodule Sms.Switch.Customer.Session do
   use GenServer
   require Logger
   alias Sms.Switch.Customer
-  alias Sms.Switch.Customer.{BindGuard, Events, Intake, Sessions, Throttle, Trunk, TrunkStore}
+  alias Sms.Switch.Customer.{Events, Firewall, Intake, Sessions, Throttle, Trunk, TrunkStore}
   alias Sms.Switch.Smpp.{Command, Pdu}
 
   @task_supervisor Sms.Switch.Customer.Tasks
@@ -535,7 +535,7 @@ defmodule Sms.Switch.Customer.Session do
   defp check_bind(state, fields, kind) do
     system_id = fields.system_id
 
-    with :ok <- check(not BindGuard.blocked?(state.ip), :esme_rbindfail, :ip_blocked, nil),
+    with :ok <- check(not Firewall.blocked?(state.ip), :esme_rbindfail, :ip_banned, nil),
          :ok <- check(TrunkStore.ready?(), :esme_rsyserr, :trunks_not_loaded, nil),
          {:ok, trunk} <- lookup(system_id),
          :ok <- check(Trunk.ip_allowed?(trunk, state.ip), :esme_rbindfail, :ip_not_allowed, trunk),
@@ -547,7 +547,6 @@ defmodule Sms.Switch.Customer.Session do
              trunk
            ),
          :ok <- check(trunk.status == :active, :esme_rbindfail, :trunk_inactive, trunk),
-         :ok <- check(trunk.port in [nil, state.local_port], :esme_rbindfail, :wrong_port, trunk),
          :ok <-
            check(
              Trunk.transport_allowed?(trunk, state.tls),
@@ -603,7 +602,7 @@ defmodule Sms.Switch.Customer.Session do
   end
 
   defp bound(state, pdu, kind, trunk) do
-    BindGuard.success(state.ip)
+    Firewall.success(state.ip)
     _ = Process.cancel_timer(state.bind_timer)
     version = pdu.fields.interface_version
     # S-1.4: sc_interface_version only to a client that speaks 3.4 (TLVs did not exist before).
@@ -644,9 +643,8 @@ defmodule Sms.Switch.Customer.Session do
   @counted_failures [:unknown_system_id, :ip_not_allowed, :invalid_password]
 
   defp refuse_bind(state, pdu, status, reason, trunk) do
-    if reason in @counted_failures and BindGuard.failure(state.ip) == :blocked do
-      Logger.warning("IP #{ip_text(state.ip)} blocked after repeated failed binds")
-    end
+    # Counted by the Firewall filters (spec §8), which ban the IP past their threshold.
+    if reason in @counted_failures, do: Firewall.failure(state.ip)
 
     Logger.warning("bind refused (#{reason}) for system_id #{inspect(pdu.fields.system_id)}")
 
@@ -723,8 +721,7 @@ defmodule Sms.Switch.Customer.Session do
       end,
       ip_not_allowed: fn -> Trunk.ip_allowed?(trunk, state.ip) end,
       tls_required: fn -> Trunk.transport_allowed?(trunk, state.tls) end,
-      bind_type_not_allowed: fn -> Trunk.bind_allowed?(trunk, state.bind) end,
-      wrong_port: fn -> trunk.port in [nil, state.local_port] end
+      bind_type_not_allowed: fn -> Trunk.bind_allowed?(trunk, state.bind) end
     ]
 
     case Enum.find(rules, fn {_reason, ok?} -> not ok?.() end) do

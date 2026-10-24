@@ -2,7 +2,7 @@ defmodule Sms.Switch.Customer.IntegrationTest do
   # Against the real PostgreSQL schema (db/postgres/migrations) and Redis (INTEGRATION=1).
   use ExUnit.Case, async: false
   alias Sms.Core.{Redis, Repo}
-  alias Sms.Switch.Customer.{Loader, Throttle, Trunk}
+  alias Sms.Switch.Customer.{Firewall, Loader, Throttle, Trunk}
 
   @moduletag :integration
 
@@ -101,6 +101,119 @@ defmodule Sms.Switch.Customer.IntegrationTest do
       assert by_id[ids.of_inactive].status == :inactive
       refute Map.has_key?(by_id, ids.http)
       refute Map.has_key?(by_id, ids.deleted)
+    end
+  end
+
+  describe "Firewall rules on the real schema (spec §8)" do
+    setup do
+      start_supervised!(Repo)
+      :ok
+    end
+
+    defp in_tx(fun) do
+      {:error, {:result, result}} = Repo.transaction(fn -> Repo.rollback({:result, fun.()}) end)
+      result
+    end
+
+    defp filter!(listener, status) do
+      %{rows: [[id]]} =
+        Repo.query!(
+          """
+          INSERT INTO firewall_filters (name, listener, status, failed_attempts, window_seconds, ban_minutes)
+          VALUES ('switch test ' || $1 || $2, $1, $2, 4, 30, 15) RETURNING id
+          """,
+          [listener, status]
+        )
+
+      id
+    end
+
+    test "loads the active SMPP and All filters with their live rules; saves, renews and counts bans" do
+      in_tx(fn ->
+        smpp = filter!("smpp", "active")
+        http = filter!("http", "active")
+        off = filter!("smpp", "inactive")
+
+        Repo.query!(
+          """
+          INSERT INTO firewall_rules (list, ip, filter_id, source, expires_at) VALUES
+            ('banned', '198.51.100.7', $1, 'manual', NULL),
+            ('banned', '198.51.100.8', $1, 'auto', now() - interval '1 minute'),
+            ('trusted', '198.51.100.0/28', $1, 'manual', NULL),
+            ('banned', '198.51.100.9', $2, 'manual', NULL),
+            ('banned', '198.51.100.10', $3, 'manual', NULL)
+          """,
+          [smpp, http, off]
+        )
+
+        {:ok, rules} = Firewall.Postgres.load()
+
+        assert Enum.any?(
+                 rules.filters,
+                 &(&1 == %{id: smpp, failed_attempts: 4, window_seconds: 30, ban_minutes: 15})
+               )
+
+        refute Enum.any?(rules.filters, &(&1.id in [http, off]))
+        banned = Enum.map(rules.banned, & &1.range)
+        assert {{198, 51, 100, 7}, 32} in banned
+        refute {{198, 51, 100, 8}, 32} in banned
+        refute {{198, 51, 100, 9}, 32} in banned
+        refute {{198, 51, 100, 10}, 32} in banned
+        assert {{198, 51, 100, 0}, 28} in rules.trusted
+
+        # A new auto ban, then renewing the expired one (one live row per IP and filter).
+        expires = System.os_time(:millisecond) + 15 * 60_000
+
+        assert {:ok, new_id} =
+                 Firewall.Postgres.ban(
+                   smpp,
+                   {203, 0, 113, 50},
+                   expires,
+                   "4 failed SMPP binds within 30 s"
+                 )
+
+        assert {:ok, renewed} = Firewall.Postgres.ban(smpp, {198, 51, 100, 8}, expires, "again")
+
+        %{rows: rows} =
+          Repo.query!(
+            "SELECT id, source, reason, expires_at > now() FROM firewall_rules WHERE filter_id = $1 AND id = ANY($2)",
+            [smpp, [new_id, renewed]]
+          )
+
+        assert Enum.sort(rows) ==
+                 Enum.sort([
+                   [new_id, "auto", "4 failed SMPP binds within 30 s", true],
+                   [renewed, "auto", "again", true]
+                 ])
+
+        assert :ok = Firewall.Postgres.add_hits([{new_id, 3}, {renewed, 1}])
+        assert :ok = Firewall.Postgres.add_hits([{new_id, 2}])
+
+        %{rows: [[5, true]]} =
+          Repo.query!("SELECT hits, last_hit_at IS NOT NULL FROM firewall_rules WHERE id = $1", [
+            new_id
+          ])
+      end)
+    end
+
+    test "failure counts are shared in Redis, so two servers add to the same count" do
+      start_supervised!(Redis)
+      wait_for_redis()
+      source = Sms.Switch.Test.FirewallSource
+
+      source.put(%{
+        filters: [%{id: 999_001, failed_attempts: 3, window_seconds: 30, ban_minutes: 1}]
+      })
+
+      start_supervised!({Firewall, source: source, refresh_ms: 60_000, backend: :redis})
+      :ok = Firewall.refresh()
+      ip = {192, 0, 2, 77}
+      {:ok, _} = Redis.command(["DEL", "fw:fail:999001:192.0.2.77"])
+      assert Firewall.failure(ip) == :ok
+      # The other server's failure, straight into the shared counter.
+      {:ok, 2} = Redis.command(["INCR", "fw:fail:999001:192.0.2.77"])
+      assert Firewall.failure(ip) == :banned
+      {:ok, nil} = Redis.command(["GET", "fw:fail:999001:192.0.2.77"])
     end
   end
 

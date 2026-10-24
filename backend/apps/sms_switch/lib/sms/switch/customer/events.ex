@@ -8,6 +8,7 @@ defmodule Sms.Switch.Customer.Events do
   | `sms.session.customer.bound` | a bind succeeded |
   | `sms.session.customer.closed` | a bound session ended (unbind, timeout, error, trunk change) |
   | `sms.session.customer.bind_failed` | a bind was refused, with the reason (never the password) |
+  | `sms.session.customer.ip_banned` | a Firewall filter banned a client IP after repeated failed binds |
 
   Publishing runs in its own process so a slow bus never delays a session; a publish that fails is logged by the
   bus.
@@ -17,7 +18,7 @@ defmodule Sms.Switch.Customer.Events do
   @task_supervisor Sms.Switch.Customer.Tasks
 
   @doc "Publishes `data` under `sms.session.customer.<what>` without waiting."
-  @spec publish(:bound | :closed | :bind_failed, map()) :: :ok
+  @spec publish(:bound | :closed | :bind_failed | :ip_banned, map()) :: :ok
   def publish(what, data) do
     subject = "sms.session.customer.#{what}"
 

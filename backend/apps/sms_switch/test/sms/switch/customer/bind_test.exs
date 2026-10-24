@@ -3,7 +3,9 @@ defmodule Sms.Switch.Customer.BindTest do
   use Sms.Switch.Test.CustomerCase, async: false
   import ExUnit.CaptureLog
   alias Sms.Core.Bus.Local
+  alias Sms.Switch.Customer.Firewall
   alias Sms.Switch.Smpp.Status
+  alias Sms.Switch.Test.FirewallSource
 
   @moduletag capture_log: true
 
@@ -92,30 +94,115 @@ defmodule Sms.Switch.Customer.BindTest do
     end)
   end
 
-  test "repeated failures block the IP, even with the right password; it lifts after the block time (S-1.1)" do
-    stop_supervised!(Sms.Switch.Customer.Supervisor)
-    %{port: port} = start_customer(bind_guard: [max_failures: 3, block_ms: 300])
+  describe "Firewall (spec §8, S-1.1)" do
+    test "past a filter's failed attempts the IP is banned with the filter's ban time, even with the right password",
+         %{port: port} do
+      for _ <- 1..3 do
+        {_client, resp} = bind(port, :bind_transceiver, %{password: "wrong"})
+        assert status(resp) == :esme_rinvpaswd
+      end
 
-    for _ <- 1..3 do
-      {_client, resp} = bind(port, :bind_transceiver, %{password: "wrong"})
-      assert status(resp) == :esme_rinvpaswd
+      assert_received {:banned, 1, {127, 0, 0, 1}, expires_at, reason}
+      assert_in_delta expires_at, System.os_time(:millisecond) + 60 * 60_000, 5_000
+      assert reason == "3 failed SMPP binds within 60 s"
+      {_client, resp} = bind(port)
+      assert status(resp) == :esme_rbindfail
+
+      assert_eventually(fn ->
+        Enum.any?(Local.published(), &(&1.subject == "sms.session.customer.ip_banned"))
+      end)
     end
 
-    {_client, resp} = bind(port)
-    assert status(resp) == :esme_rbindfail
-    Process.sleep(350)
-    {_client, resp} = bind(port)
-    assert resp.status == 0
-  end
+    test "a banned IP's attempts are counted as hits on its rule" do
+      stop_supervised!(Sms.Switch.Customer.Supervisor)
 
-  test "a successful bind clears the IP's failure count", %{port: port} do
-    for _ <- 1..2, do: bind(port, :bind_transceiver, %{password: "wrong"})
-    {client, resp} = bind(port)
-    assert resp.status == 0
-    Client.close(client)
-    for _ <- 1..2, do: bind(port, :bind_transceiver, %{password: "wrong"})
-    {_client, resp} = bind(port)
-    assert resp.status == 0
+      %{port: port} =
+        start_customer(
+          firewall_rules: %{banned: [%{id: 7, range: {{127, 0, 0, 0}, 8}, expires_at: nil}]}
+        )
+
+      for _ <- 1..2 do
+        {_client, resp} = bind(port)
+        assert status(resp) == :esme_rbindfail
+      end
+
+      :ok = Firewall.refresh()
+      assert FirewallSource.get().hits == %{7 => 2}
+    end
+
+    test "an expired ban no longer blocks" do
+      stop_supervised!(Sms.Switch.Customer.Supervisor)
+      past = System.os_time(:millisecond) - 1_000
+
+      %{port: port} =
+        start_customer(
+          firewall_rules: %{banned: [%{id: 7, range: {{127, 0, 0, 1}, 32}, expires_at: past}]}
+        )
+
+      {_client, resp} = bind(port)
+      assert resp.status == 0
+    end
+
+    test "a trusted IP is never banned and never counted" do
+      stop_supervised!(Sms.Switch.Customer.Supervisor)
+
+      %{port: port} =
+        start_customer(
+          firewall_rules: %{
+            trusted: [{{127, 0, 0, 1}, 32}],
+            banned: [%{id: 7, range: {{127, 0, 0, 0}, 8}, expires_at: nil}]
+          }
+        )
+
+      for _ <- 1..5, do: bind(port, :bind_transceiver, %{password: "wrong"})
+      refute_received {:banned, _, _, _, _}
+      {_client, resp} = bind(port)
+      assert resp.status == 0
+    end
+
+    test "without an active SMPP filter, failed binds ban nobody (and a warning says so)" do
+      stop_supervised!(Sms.Switch.Customer.Supervisor)
+
+      log =
+        capture_log(fn ->
+          %{port: port} = start_customer(firewall_rules: %{filters: []})
+          for _ <- 1..5, do: bind(port, :bind_transceiver, %{password: "wrong"})
+          {_client, resp} = bind(port)
+          assert resp.status == 0
+        end)
+
+      refute_received {:banned, _, _, _, _}
+      assert log =~ "no active Firewall filter"
+    end
+
+    test "each filter counts on its own: the first to reach its threshold bans" do
+      stop_supervised!(Sms.Switch.Customer.Supervisor)
+
+      %{port: port} =
+        start_customer(
+          firewall_rules: %{
+            filters: [
+              %{id: 1, failed_attempts: 5, window_seconds: 60, ban_minutes: 60},
+              %{id: 4, failed_attempts: 2, window_seconds: 60, ban_minutes: 1440}
+            ]
+          }
+        )
+
+      for _ <- 1..2, do: bind(port, :bind_transceiver, %{password: "wrong"})
+      assert_received {:banned, 4, {127, 0, 0, 1}, _, _}
+      refute_received {:banned, 1, _, _, _}
+    end
+
+    test "a successful bind clears the IP's failure counts", %{port: port} do
+      for _ <- 1..2, do: bind(port, :bind_transceiver, %{password: "wrong"})
+      {client, resp} = bind(port)
+      assert resp.status == 0
+      Client.close(client)
+      for _ <- 1..2, do: bind(port, :bind_transceiver, %{password: "wrong"})
+      {_client, resp} = bind(port)
+      assert resp.status == 0
+      refute_received {:banned, _, _, _, _}
+    end
   end
 
   test "an inactive trunk is refused with 0x0D", %{port: port} do
@@ -193,11 +280,10 @@ defmodule Sms.Switch.Customer.BindTest do
     assert log =~ "customer trunks not loaded"
   end
 
-  test "a trunk binds only on its own port", %{port: port} do
-    reload([trunk(port: port + 1)])
-    {_client, resp} = bind(port)
-    assert status(resp) == :esme_rbindfail
-    reload([trunk(port: port)])
+  test "the trunk's saved Port does not limit where it binds (fixed 2775 plain / 2776 TLS)", %{
+    port: port
+  } do
+    reload([trunk(port: 3700)])
     {_client, resp} = bind(port)
     assert resp.status == 0
   end
@@ -280,7 +366,7 @@ defmodule Sms.Switch.Customer.BindTest do
     %{proxied_port: port} =
       start_customer(listeners: [[port: 0, name: :proxied, proxy_protocol: true]])
 
-    reload([trunk(host_ips: [{{203, 0, 113, 9}, 32}], port: 2775)])
+    reload([trunk(host_ips: [{{203, 0, 113, 9}, 32}])])
     {:ok, client} = Client.connect(port)
     Client.send_raw(client, "PROXY TCP4 203.0.113.9 192.0.2.1 40001 2775\r\n")
 

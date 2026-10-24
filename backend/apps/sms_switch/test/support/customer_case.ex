@@ -5,7 +5,7 @@ defmodule Sms.Switch.Test.CustomerCase do
   """
   use ExUnit.CaseTemplate
   alias Sms.Switch.Customer.{Listener, Trunk}
-  alias Sms.Switch.Test.Intake
+  alias Sms.Switch.Test.{FirewallSource, Intake}
 
   using do
     quote do
@@ -47,9 +47,13 @@ defmodule Sms.Switch.Test.CustomerCase do
     end
   end
 
-  @doc "The setup: options override the supervisor's (e.g. `session: [...]`, `bind_guard: [...]`)."
+  @doc """
+  The setup: options override the supervisor's (e.g. `session: [...]`); `:trunks` and `:firewall_rules` (see
+  `Sms.Switch.Test.FirewallSource.put/1`) set the data.
+  """
   def start_customer(context_opts \\ []) do
     Intake.own()
+    FirewallSource.put(Keyword.get(context_opts, :firewall_rules, %{}))
     put_trunks(Keyword.get(context_opts, :trunks, [trunk()]))
     {certfile, keyfile} = certificate()
 
@@ -62,9 +66,9 @@ defmodule Sms.Switch.Test.CustomerCase do
           trunk_loader: &load_trunks/0,
           trunk_refresh_ms: 60_000,
           session: [bind_timeout_ms: 2_000, enquire_link_interval_ms: 60_000, tick_ms: 50],
-          bind_guard: [max_failures: 3]
+          firewall: [source: FirewallSource, refresh_ms: 60_000, backend: :local]
         ],
-        Keyword.delete(context_opts, :trunks),
+        Keyword.drop(context_opts, [:trunks, :firewall_rules]),
         fn
           :session, a, b -> Keyword.merge(a, b)
           _key, _a, b -> b

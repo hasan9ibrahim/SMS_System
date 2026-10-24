@@ -2,8 +2,10 @@ defmodule Sms.Switch.Customer.PartsTest do
   # The customer side's building blocks, without sockets.
   use ExUnit.Case, async: false
   use ExUnitProperties
+  @moduletag capture_log: true
   import ExUnit.CaptureLog
-  alias Sms.Switch.Customer.{BindGuard, IpRange, Loader, Throttle, Trunk, TrunkStore}
+  alias Sms.Switch.Customer.{Firewall, IpRange, Loader, Throttle, Trunk, TrunkStore}
+  alias Sms.Switch.Test.FirewallSource
 
   describe "IpRange" do
     test "hosts and networks, IPv4 and IPv6" do
@@ -185,31 +187,109 @@ defmodule Sms.Switch.Customer.PartsTest do
     end
   end
 
-  describe "BindGuard" do
-    test "blocks after max failures within the window; sweeps old entries" do
-      start_supervised!(
-        {BindGuard, max_failures: 2, window_ms: 1_000, block_ms: 50, sweep_ms: 3_600_000}
-      )
-
-      ip = {192, 0, 2, 1}
-      refute BindGuard.blocked?(ip)
-      assert BindGuard.failure(ip) == :ok
-      assert BindGuard.failure(ip) == :blocked
-      assert BindGuard.blocked?(ip)
-      Process.sleep(60)
-      refute BindGuard.blocked?(ip)
-      send(BindGuard, :sweep)
-      _ = :sys.get_state(BindGuard)
-      assert :ets.lookup(BindGuard, ip) == []
+  describe "Firewall" do
+    defmodule FailingSource do
+      @moduledoc false
+      @behaviour Sms.Switch.Customer.Firewall.Source
+      @impl true
+      def load, do: FirewallSource.load()
+      @impl true
+      def ban(_filter_id, _ip, _expires_at, _reason), do: {:error, :db_down}
+      @impl true
+      def add_hits(_hits), do: {:error, :db_down}
     end
 
-    test "failures outside the window start a new count" do
-      start_supervised!({BindGuard, max_failures: 2, window_ms: 30, block_ms: 1_000})
+    defp firewall(rules, source \\ FirewallSource) do
+      FirewallSource.put(rules)
+      start_supervised!({Firewall, source: source, refresh_ms: 60_000, backend: :local})
+      :ok = Firewall.refresh()
+    end
+
+    test "counts failures per filter within its window; the threshold bans" do
+      firewall(%{filters: [%{id: 1, failed_attempts: 2, window_seconds: 1, ban_minutes: 1}]})
+      ip = {192, 0, 2, 1}
+      refute Firewall.blocked?(ip)
+      assert Firewall.failure(ip) == :ok
+      assert Firewall.failure(ip) == :banned
+      assert Firewall.blocked?(ip)
+      # Already banned: further failures are not counted again.
+      assert Firewall.failure(ip) == :ok
+    end
+
+    test "failures outside the window start a new count; success clears it" do
+      firewall(%{filters: [%{id: 1, failed_attempts: 2, window_seconds: 1, ban_minutes: 1}]})
       ip = {192, 0, 2, 2}
-      assert BindGuard.failure(ip) == :ok
-      Process.sleep(40)
-      assert BindGuard.failure(ip) == :ok
-      refute BindGuard.blocked?(ip)
+      assert Firewall.failure(ip) == :ok
+      Process.sleep(1_100)
+      assert Firewall.failure(ip) == :ok
+      Firewall.success(ip)
+      assert Firewall.failure(ip) == :ok
+      refute Firewall.blocked?(ip)
+    end
+
+    test "a ban the database cannot save still applies on this server" do
+      log =
+        capture_log(fn ->
+          firewall(
+            %{filters: [%{id: 1, failed_attempts: 1, window_seconds: 60, ban_minutes: 1}]},
+            FailingSource
+          )
+
+          assert Firewall.failure({192, 0, 2, 3}) == :banned
+        end)
+
+      assert Firewall.blocked?({192, 0, 2, 3})
+      assert log =~ "not saved"
+    end
+
+    test "IPv4-mapped IPv6 clients match IPv4 rules" do
+      firewall(%{banned: [%{id: 9, range: {{10, 1, 2, 3}, 32}, expires_at: nil}]})
+      assert Firewall.blocked?({0, 0, 0, 0, 0, 0xFFFF, 0x0A01, 0x0203})
+    end
+
+    test "a failed reload keeps the previous rules; hits that cannot be written are kept for the next try" do
+      log =
+        capture_log(fn ->
+          firewall(
+            %{banned: [%{id: 9, range: {{10, 0, 0, 0}, 8}, expires_at: nil}]},
+            FailingSource
+          )
+
+          assert Firewall.blocked?({10, 9, 9, 9})
+          FirewallSource.put(%{fail: :db_down})
+          assert {:error, :db_down} = Firewall.refresh()
+          assert Firewall.blocked?({10, 9, 9, 9})
+        end)
+
+      assert log =~ "firewall rules not loaded"
+      assert log =~ "hits not written"
+      assert [{_, 2}] = :ets.lookup(Firewall, {:hits, 9})
+    end
+
+    test "nothing is blocked before the first load, or with no firewall running" do
+      refute Firewall.blocked?({10, 0, 0, 1})
+      FirewallSource.put(%{fail: :db_down})
+
+      capture_log(fn ->
+        start_supervised!({Firewall, source: FirewallSource, refresh_ms: 60_000, backend: :local})
+        assert {:error, :db_down} = Firewall.refresh()
+      end)
+
+      refute Firewall.blocked?({10, 0, 0, 1})
+    end
+
+    test "a local ban is dropped once expired" do
+      firewall(
+        %{filters: [%{id: 1, failed_attempts: 1, window_seconds: 60, ban_minutes: 1}]},
+        FailingSource
+      )
+
+      capture_log(fn -> assert Firewall.failure({192, 0, 2, 4}) == :banned end)
+      [{key, ban}] = :ets.match_object(Firewall, {{:local_ban, :_, :_}, :_})
+      :ets.insert(Firewall, {key, %{ban | expires_at: System.os_time(:millisecond) - 1}})
+      refute Firewall.blocked?({192, 0, 2, 4})
+      capture_log(fn -> Firewall.refresh() end)
+      assert :ets.match_object(Firewall, {{:local_ban, :_, :_}, :_}) == []
     end
   end
 

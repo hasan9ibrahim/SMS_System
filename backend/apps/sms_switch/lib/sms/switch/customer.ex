@@ -12,8 +12,10 @@ defmodule Sms.Switch.Customer do
   Settings live under `config :sms_switch, Sms.Switch.Customer`:
 
     * `:enabled`: start the customer side (off in unit tests, which start the parts they need);
-    * `:listeners`: e.g. `[[port: 2775], [port: 3550, tls: true], [port: 2780, proxy_protocol: true]]`;
-    * `:tls`: `[certfile: ..., keyfile: ..., cacertfile: ...]` for the TLS listeners;
+    * `:listeners`: 2775 plain and 2776 TLS (`[[port: 2775], [port: 2776, tls: true]]`), optionally with
+      `proxy_protocol: true` behind a load balancer;
+    * `:tls`: `[certfile: ..., keyfile: ..., cacertfile: ...]` for the TLS listener;
+    * `:firewall`: see `Sms.Switch.Customer.Firewall` (the Firewall screen's rules);
     * `:session`: see `Sms.Switch.Customer.Session` (timeouts, windows);
     * `:intake`: the `Sms.Switch.Customer.Intake` implementation;
     * `:trunk_refresh_ms`.

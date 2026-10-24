@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | Backend step 2, product owner decisions | No contract change. (1) SMPP ports: **2775 plain, 2776 TLS** on every server; the trunk's own Port no longer limits where it binds (open question: show it read-only). (2) Max Connections reached → 0x0D. (3) A refused bind closes the connection. (4) No separate brute-force setting: the **Firewall screen's filters** (listener SMPP or All) count failed binds, shared in Redis, and write an **auto ban** with the filter's ban time to the Banned list (seen on the screen, honoured by both servers); banned IPs refused with 0x0D and counted as Hits; trusted IPs never banned. (5) Keep-alive 30 s / 10 s. (6) Trunk changes unbind live sessions. (7) Overflow buffer from step 4. (8) Trunk passwords stored **encrypted (reversible)** before real data; staff keep seeing, copying and changing them as today | §5.4, §8, §13.22, S-1.1, S-8.4 | Product owner | Done (PR #25), (8) before migration |
 | 2026-10-24 | Backend step 2 (customer-side SMPP server) | No contract change. `Sms.Switch.Customer`: ranch listeners per configured port (plain, TLS 1.0–1.3, optional PROXY header, S-1.15); one session process per connection. Bind checks in order: IP blocked by the brute-force guard, system_id (0x0F), client IP / CIDR (0x0D), password (0x0E, constant time), trunk active, the trunk's Port and SSLType (0x0D), system_type (0x53), bind type (AUTO = any, S-1.3), Max Connections counted on every server under a cluster lock (S-1.2); a refused bind is answered, published as `sms.session.customer.bind_failed` and closed (S-1.1). Requests before bind 0x04 (S-1.11), submit on RX 0x04 (S-1.12), replace_sm / submit_multi 0x03 (D8), enquire_link keep-alive with timeout (S-1.5/1.6), unbind after in-flight answers (S-1.7), inbound window with TCP backpressure and outbound deliver_sm window (S-1.18), sequence wrap (S-1.14), duplicate sequence answered separately (S-1.13), drain with 0x58 (S-1.16). TPS: one Redis count per trunk (tps × max_connections) plus the business company limit, 0x58 over it (S-2.4, Q13), per-server fallback when Redis is down (S-7.4). §13.1: answers only on the arriving session; receipts by DLR Session Affinity (strict / same IP / same trunk, TX → RX of the same IP) across both servers; trunks reloaded every 5 s and sessions of a changed trunk re-checked. Message requests go to the `Intake` behaviour (step 4); until then they get 0x45. New env: SMPP_PORTS, SMPP_TLS_PORTS, SMPP_TLS_CERTFILE/KEYFILE, SMPP_PROXY_PORTS, SMPP_SYSTEM_ID, SWITCH_CLUSTER_SIZE | §2, §5.4, §13.1, S-1.x, S-2.4 | Backend step 2 | Done (PR) |
 | 2026-10-24 | Backend step 1 (SMPP 3.4 PDUs) | No contract change. `Sms.Switch.Smpp.Pdu` / `Tlv` / `Command` / `Status`: decode and encode every SMPP 3.4 PDU and TLV; framing strictly by command_length with a 66,000-octet maximum (S-1.8, S-1.9); unknown command id answered with generic_nack 0x03 and the same sequence (S-1.10); each malformed field answered with its own status (0x0A source, 0x0B destination, 0x01 message length, 0x61 schedule, 0xC0/0xC2 TLVs …); responses echo out-of-range sequence numbers; unknown and vendor TLVs kept; receipted_message_id accepted without its NUL. Property tests: round trip of every command, random stream splits, random and corrupted bytes never crash. | §2, §13.1 | Product owner | Done |
 | 2026-10-24 | Backend step 0 (Elixir foundations) | No contract change. `backend/` Elixir umbrella (OTP 28.5, Elixir 1.19.6): `sms_core` (PostgreSQL on the existing `sms` schema, ClickHouse, Redis, event bus on NATS JetStream with durable consumers, at-least-once delivery and de-duplication, health check) and `sms_switch` (empty, SMPP from step 1). NATS added to docker-compose (`deploy/nats/nats.conf`, `sync_interval: always`); `NATS_HOSTS` in `.env.example`; CI job `backend` runs `mix check`. Decisions: SMPP 3.4, Ubuntu 24.04, Patroni, PR review per step, machines by 15 November. | §14 | Product owner | Done |
@@ -658,23 +659,10 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- **Customer side, step 2 choices to confirm (2026-10-24, `backend/README.md` › Customer side).** Built as follows;
-  say if any should change:
-  1. **Listener ports** are set per server (`SMPP_PORTS`, `SMPP_TLS_PORTS`); a trunk binds only on its own Port, and a TLS
-     trunk only on a TLS port at its version or newer. A plain trunk may also bind over TLS.
-  2. **Max Connections reached:** answered 0x0D (bind failed). S-1.2 allowed 0x05 too; 0x05 means "this connection is
-     already bound", and some clients stop retrying on it.
-  3. **A refused bind closes the connection** after the answer (no retry on the same TCP connection).
-  4. **Brute-force guard:** 10 failed binds (unknown system_id, wrong password, IP not allowed) from one IP within 5 minutes
-     block that IP for 15 minutes, counted per server.
-  5. **Keep-alive:** enquire_link after 30 s without traffic; the session closes if nothing at all arrives within 10 s.
-     A client that sends traffic but ignores enquire_link stays up.
-  6. **Trunk changes** (deactivated, deleted, new username or password, IP removed, TLS or bind type no longer allowed)
-     unbind that trunk's live sessions within about 5 seconds.
-  7. **Customer Overflow Buffer** (§5.4): until the queue exists (step 4) a submit over TPS always gets 0x58; with a buffer,
-     step 4 will accept and pace it instead.
-  8. **Trunk passwords** are read as stored today (fake data only). Before real data they must be stored encrypted (S-8.4,
-     Q26: the same passwords are kept, so they cannot be hashed); the bind check is the only place that reads them.
+- **Trunk Port field (2026-10-24, follows the step 2 decision on ports).** Every customer binds on 2775 (plain) or
+  2776 (TLS), so a trunk's own Port no longer decides anything in the switch. Proposal: the trunk form shows the port
+  read-only from its SSLType (2775 or 2776) and Send Tech Info uses it; the stored column stays for the record.
+  Needs a small contract and GUI change.
 
 - **Hosting location (2026-10-24).** Provider and city of the two main servers not chosen yet. The witness VM
   (4 vCPU, 8 GB, ~250 GB SSD; NATS 3rd node, etcd, ClickHouse Keeper, Redis Sentinel, monitoring) goes to another
