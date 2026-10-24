@@ -9,7 +9,7 @@ reuse the D numbers.
 
 **Decided 2026-10-24** (product owner):
 
-- §3.1 API in TypeScript, Elixir only for the switch and message path (Q2); spec §14 updated.
+- §3.1 first decided as TypeScript API, then **changed the same day to Elixir for the whole backend** (Q2); spec §14 and CLAUDE.md say Elixir.
 - §3.2 receipts as appended rows; §3.3 checks before the resp, HLR after; §3.4 PCAP at OS level; §3.5 witness VM.
 - §3.6 vendor submit timeout **stays 30 s** for now (Q11).
 - §3.7 message text kept **1 year**, then blanked (Q30).
@@ -35,9 +35,23 @@ reuse the D numbers.
   messages).
 - Q30b no OTP masking for now. Q33 no VPN or office IP allow-list: the portal is reachable from the internet, so 2FA
   for staff is strongly recommended (mandatory at least for admins), with login rate limits and lockout.
-- Still open: Q9 legacy TLS for partners, Q12/Q13 shared limits (explained in chat), Q15 queue time when all vendors
-  are down, Q18 country rules, Q21 VAT, Q23 invoice timing, Q24 credit checks, and whether the API stays in TypeScript
-  long term (§3.1).
+
+**Decided 2026-10-24, third round:**
+
+- §3.1 / Q2 **Elixir for the whole backend** (API included). Timeline above updated: migration February → April 2027.
+- Q4 customer portal screens built now on fake data, at **`/portal`** with its own login, separate from the staff
+  system.
+- Q9 **TLS 1.0 offered** as a legacy option next to TLS 1.2 / 1.3 (SSLv2 / SSLv3 never).
+- Q12, Q13 as recommended: vendor connections split between the servers with one shared TPS limit per trunk; one
+  shared TPS limit per customer trunk.
+- Q18 not in v1. Q21 **no tax** on invoices. Q22 vendor balance alerts as proposed.
+- Q23 **auto invoices at the cycle end with what is known then**; receipts that arrive after the invoice do not change
+  it or a later invoice.
+- Q24 exact atomic credit check per message (all parts), 1-minute grace on the last known balance if the balance
+  store is unreachable.
+- Q15 explained: when every vendor for the route is down **at submit time**, the submit is answered at once with an
+  error (proposal: 0x58 so the client retries by itself, per trunk 0x45). The queue time (proposal 5 min per customer
+  trunk) only covers messages accepted while a vendor was up whose vendor then failed. Awaiting confirmation.
 
 
 ## 1. Where we stand
@@ -61,20 +75,20 @@ The whole spec in Elixir, meaning the switch plus rewriting all 544 API operatio
 Testing time cannot be compressed much: load tests, crash tests, interop with every real vendor and customer, and a
 parallel run.
 
-With the second opinion in §3.1 (keep the TypeScript API and write only the switch in Elixir), the rough plan is:
+**Decided 2026-10-24: Elixir for the whole backend** (§3.1). The rough plan is:
 
 | Phase | When | Result |
 | --- | --- | --- |
-| **A. Core build** | now → 30 Nov 2026 | <ul><li>Elixir switch on test traffic: binds on both sides, submit_sm and submit_sm_resp, multipart, routing, translation and rating from the same PostgreSQL config, durable queue, vendor sessions with windows and TPS, receipts mapped back, EDRs into ClickHouse, D1–D11.</li><li>TypeScript API hardened for production: real login, 2FA, permissions, audit, config change pushed to the switch.</li><li>Servers installed, with monitoring and backups.</li><li>Load test at 1,000 TPS against the SMPP simulator.</li></ul> **Not on live traffic yet.** |
-| **B. Pilot** | December 2026 | <ul><li>1–2 friendly customers and 2–3 vendors on the new platform, with the current platform running in parallel.</li><li>HLR, re-route, credit limits, auto invoices, alerts on real traffic.</li><li>Crash and failover tests on the real servers.</li></ul> |
-| **C. Migration in waves** | January → February 2027 | <ul><li>Partners move in groups.</li><li>Each group stays on the new platform for 2 weeks before the next moves.</li><li>The current platform stays as fallback until the last group is stable.</li></ul> |
+| **A. Core build** | now → 30 Nov 2026 | <ul><li>Elixir switch on test traffic: binds on both sides, submit_sm and submit_sm_resp, multipart, routing, translation and rating from the same PostgreSQL config, durable queue, vendor sessions with windows and TPS, receipts mapped back, EDRs into ClickHouse, D1–D11.</li><li>Phoenix API foundations: login, 2FA, permissions, audit, the generic list engine (filters, paging, search), config change pushed to the switch.</li><li>Servers installed, with monitoring and backups.</li><li>Load test at 1,000 TPS against the SMPP simulator.</li></ul> **Not on live traffic yet.** |
+| **B. Pilot API** | December 2026 → January 2027 | <ul><li>The endpoints a pilot needs, ported to Elixir in this order: enterprises and trunks, rates, route / translation / HLR rules, EDR search, Live dashboard, enterprise report, finance and invoices.</li><li>Each ported endpoint must pass the mock server's own HTTP tests, run against Elixir, before the screens switch to it.</li><li>Pilot: 1–2 friendly customers and 2–3 vendors, with the current platform in parallel.</li></ul> |
+| **C. Migration in waves** | February → April 2027 | <ul><li>Partners move in groups; each group stays 2 weeks before the next moves.</li><li>The rest of the API is ported in parallel.</li><li>The current platform stays as fallback until the last group is stable.</li></ul> |
 | **D. The rest** | after go-live | Advanced features that don't block traffic, where they're not already done in the mock: market moves on real data, cleanup center scans, team activity, and so on |
 
 These figures are estimates, re-checked at the end of each phase. See **Q1** for what must be true on 30 November.
 
 ## 3. Where I would change the current plan (second opinions)
 
-### 3.1 Keep the API in TypeScript; write only the switch in Elixir *(biggest change, needs your OK: Q2)*
+### 3.1 Keep the API in TypeScript; write only the switch in Elixir *(not adopted: on 2026-10-24 the product owner chose Elixir for the whole backend; kept here for the record)*
 
 Spec §14 says Elixir for the whole backend. The mock already holds the business logic as tested TypeScript on the real
 schema. Rewriting it in Elixir is months of work that adds risk and no features.
@@ -187,7 +201,7 @@ These come on top of the switch scenarios in `docs/SMPP_SCENARIOS.md`. Each gets
 | # | Question | Recommendation |
 | --- | --- | --- |
 | Q1 | **Decided: (a).** What must be true on **30 November**? (a) the switch working on test traffic and the servers ready; (b) some real partners live; (c) full cutover | **(a)**, with real partners in December (pilot) and migration in January–February. (c) isn't achievable safely |
-| Q2 | Second opinion §3.1: keep the API in TypeScript, Elixir only for the switch and message path? **Decided: yes** | — |
+| Q2 | Second opinion §3.1: keep the API in TypeScript? **Decided: no, Elixir for the whole backend** (2026-10-24) | — |
 | Q3 | **Decided: 50 million a day.** Volume target: you said **10 million a day**; the decision of 19 Oct (§14.3) says **50 million a day** at 1,000 TPS peak. Which is right? | Design and load-test for **1,000 TPS peak and 50 million a day** (headroom for growth); size disks for today's 10 million plus growth |
 | Q4 | Customer portal (spec §1, "optional"): in v1? | **Later**, after migration |
 | Q5 | How long can the current platform keep running in parallel during migration? | Until the last group has been stable for 2 weeks (about February) |

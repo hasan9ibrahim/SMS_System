@@ -46,7 +46,7 @@ Hard rules for this phase:
 | Config data | PostgreSQL (docker). The schema is written to be reused by the Elixir backend |
 | EDRs and reports | ClickHouse (docker), seeded by the generator |
 | Live counters | Redis (docker) |
-| Final backend (later phase) | Elixir: SMPP switch and the message path (routing, rating, receipts, EDRs). TypeScript: the API, reports, billing jobs (the mock hardened). NATS JetStream between services (`docs/BACKEND_PLAN.md`) |
+| Final backend (later phase) | Elixir: SMPP switch, Phoenix API and Channels, billing and jobs. NATS JetStream between services (`docs/BACKEND_PLAN.md`) |
 
 Proposed repo layout:
 

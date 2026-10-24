@@ -1427,13 +1427,13 @@ Two checkboxes are added to the payment (Transaction) form in Finance, on add an
 
 ## 14. Technology: language for each part of the system
 
-Decision (updated 2026-10-24, `docs/BACKEND_PLAN.md` §3.1): Elixir for the SMPP switch and everything on the message path (sessions, routing, translation, HLR, rating at send time, balances, receipts, EDR writing); TypeScript for the API behind the screens, reports, invoices, jobs and admin (the mock server hardened for production) and for the GUI; on PostgreSQL, ClickHouse and Redis. The aim is a system that stays up with zero downtime, takes new features easily, and loads screens with little or no waiting.
+Decision (confirmed 2026-10-24, `docs/BACKEND_PLAN.md` §3.1): Elixir for the whole backend (SMPP switch, API, billing, jobs) and TypeScript/React for the GUI, on PostgreSQL, ClickHouse and Redis. The TypeScript mock server stays the reference: its HTTP tests are run against the Elixir API as acceptance tests. The aim is a system that stays up with zero downtime, takes new features easily, and loads screens with little or no waiting.
 
 | Part | Technology | Why |
 | --- | --- | --- |
 | SMPP switch (binds, routing, TPS, DLRs, session affinity §13.1) | Elixir | One isolated process per bind; a crash affects only that session and is restarted automatically; live code upgrades without dropping binds; built-in clustering |
-| Backend API and business logic (rates, rules, billing, invoices, re-rating, LCR, alerts) | TypeScript (Fastify) | The business rules already exist and are tested in the mock server on the real schema; off the message path, so its speed never affects traffic. Routing questions from the screens (route simulator, route map, rate lookup) are answered by the switch's own evaluator |
-| Live dashboard and monitoring | WebSockets with the Phoenix Channels message format (`contract/events/`) | Figures update live without page refresh |
+| Backend API and business logic (rates, rules, billing, invoices, re-rating, LCR, alerts) | Elixir (Phoenix) | One backend language and team; rating and routing logic shared with the switch; strong background jobs |
+| Live dashboard and monitoring | Phoenix Channels (WebSockets), message format in `contract/events/` | Figures update live without page refresh |
 | GUI (every screen in this spec) | TypeScript + React | Largest choice of tables, forms, charts and developers; fast screens after first load |
 | Configuration data | PostgreSQL with replica and automatic failover | Reliable source of truth for trunks, rates, rules, users |
 | EDRs and reports | ClickHouse | Reports over millions of records in about a second; pre-computed totals for the dashboard |
