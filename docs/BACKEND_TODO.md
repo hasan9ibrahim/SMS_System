@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | (backend) SMPP switch, hosting | No contract change. `docs/SMPP_SCENARIOS.md`: D6 decided (duplicate filter per customer trunk, 60 s, shared fingerprint with Loop Detection); D11 decided (Delayed Submit kept as the spec: resp waits for the vendor, 0x45 on vendor timeout). D2 refinement and D4 re-route on timeout under discussion. New open question: one dedicated server vs §14.1 (at least 2 switch servers). | §5, §13.1, §14.1 | Product owner | Open: D2 refinement, D4, hosting |
 | 2026-10-24 | (backend) SMPP switch | No contract change. `docs/SMPP_SCENARIOS.md`: decided D1 (incomplete multipart fails, not billed), D4 (vendor submit timeout: no automatic resend or re-route, failed receipt, manual Repush only), D5 (late receipt corrects the EDR only), D7 (all esm_class modes as store-and-forward), D8 (query_sm, cancel_sm while queued, no replace_sm), D9 (no shift tables in v1), D10 (reject empty messages unless allowed). D6 duplicate filter linked to Loop Detection (S-5.16). New S-2.18 / D11: the spec's Delayed Submit customer trunk setting, the one exception to answering before the vendor. | §5, §9, §13.1 | Product owner | Open: D6, D11 |
 | 2026-10-24 | (backend) SMPP switch | No contract change. `docs/SMPP_SCENARIOS.md`: **D2 decided**: one part of a multipart message fails at the vendor: if that part is not vendor-billable under the vendor trunk's Billing Type, all parts are resent via the next vendor with a new reference; if billable, the whole message fails (S-3.11). **D3 decided**: a translation that grows the part count is blocked: REJECTD receipt, not billed (S-4.1). Proposals revised: D1 fail an incomplete group (not billed), D10 reject empty messages unless the customer trunk allows. | §6.4, §7, §13.1 | Product owner | Decided D2, D3; D1, D4–D10 open |
 | 2026-10-24 | (backend) SMPP switch | No contract change. New `docs/SMPP_SCENARIOS.md`: 93 numbered switch scenarios (binds, submit_sm_resp session and timing, client timeouts while queued, multipart and concatenation in every format, reassembly, translations changing the part count, vendor timeouts and errors, receipts, rating at send time, reliability, security), each with required behaviour and an acceptance test; 10 decisions (D1–D10) added to Open questions. | §2, §6, §13.1, §14 | Product owner | Open: needs decisions D1–D10 |
@@ -632,11 +633,16 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
+- **Hosting: one dedicated server (2026-10-24).** The product owner has one dedicated server for the whole system. Spec §14.1
+  asks for at least 2 switch servers (ideally 2 locations), a PostgreSQL standby and replicated ClickHouse / Redis. With
+  one server every hardware fault, disk failure or reboot stops all traffic and can lose accepted messages not yet sent.
+  Decide: accept that risk for launch, or add a second server (active + standby) before go-live?
+
 - **SMPP edge cases (2026-10-24, `docs/SMPP_SCENARIOS.md` › Decisions needed).** Each has a proposal; the backend
   needs the product owner's answer before implementing:
-  - D6 duplicate-submit filter per customer trunk (client re-sends after a lost resp or reconnect): wanted, which window? Proposal: 60 s, sharing the fingerprint store with Loop Detection (S-2.7, S-5.16).
-  - D11 Delayed Submit trunks (§5, resp only after the vendor accepts): how long to wait before answering anyway, and with what? Proposal: per-trunk limit, default 5 s, then OK and continue as store-and-forward (S-2.18).
-  - Decided 2026-10-24: D1 incomplete group fails (REJECTD, not billed); D2 failed part not vendor-billable → all parts via the next vendor, billable → whole message fails; D3 translation growing the part count is blocked, not billed; D4 vendor submit timeout never resent or re-routed automatically, only by manual Repush; D5 late receipt corrects the EDR only; D7 every esm_class mode handled as store-and-forward; D8 query_sm yes, cancel_sm while queued, replace_sm no; D9 no shift tables in v1 (pass through); D10 empty messages rejected unless the trunk allows.
+  - D2 refinement under discussion: retry temporary errors on the same vendor first; re-route on a receipt failure only when no part was delivered (S-3.11).
+  - D4 reconsidered: re-route automatically after a vendor submit timeout (risk of double delivery and of the first vendor still invoicing it) instead of manual Repush only (S-5.2).
+  - Decided 2026-10-24: D1 incomplete group fails (REJECTD, not billed); D2 failed part not vendor-billable → all parts via the next vendor, billable → whole message fails; D3 translation growing the part count is blocked, not billed; D4 vendor submit timeout never resent or re-routed automatically, only by manual Repush; D5 late receipt corrects the EDR only; D7 every esm_class mode handled as store-and-forward; D8 query_sm yes, cancel_sm while queued, replace_sm no; D9 no shift tables in v1 (pass through); D10 empty messages rejected unless the trunk allows; D6 duplicate filter per customer trunk, 60 s, shared with Loop Detection; D11 Delayed Submit as the spec (resp waits for the vendor, 0x45 on vendor timeout).
 
 - **Invoice and balance amounts (team trial round 3).** Traffic money (revenue, cost, margin, rates) is now calculated to
   6 decimals. Invoices, payments, SOA and balances are still stored and summed to 2 decimals (currency cents, schema
