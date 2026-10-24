@@ -7946,6 +7946,159 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/portal/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The signed-in portal user (customer portal)
+     * @description The customer portal at /portal has its own sign-in, separate from the staff system. Every portal call answers only for the signed-in user's own enterprise; nothing about vendors, costs or margins is ever returned.
+     */
+    get: operations["portalGetSession"];
+    put?: never;
+    /**
+     * Sign in to the customer portal
+     * @description Username and password of a customer portal user (Admin › Customer Portal, §11). Sets the portal session cookie. Five wrong passwords in a row lock the user for 15 minutes. A temporary or expired password signs in with mustChangePassword, and only the password change works until it is changed (§13.28).
+     */
+    post: operations["portalSignIn"];
+    /** Sign out of the customer portal */
+    delete: operations["portalSignOut"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change the portal user's own password (§13.28)
+     * @description Current password and the new one, checked against the same rules as staff passwords.
+     */
+    post: operations["portalChangePassword"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/overview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Balance, credit, traffic today and this month, trunks and the last invoice */
+    get: operations["portalOverview"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/meta/lists/{list}/fields": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Field catalogue of a portal list (§13.25) */
+    get: operations["portalListFields"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/rates/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The customer's rates per destination (server-side filter, sort and paging)
+     * @description For each of the customer's trunks and destinations, the rate in force (the first of the trunk's rate tables that prices it, §5.4) and announced future rates. Rate table names are not shown.
+     */
+    post: operations["portalQueryRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/rates/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** The filtered rates as a CSV file (rate sheet) */
+    post: operations["portalExportRates"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/messages/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The customer's message log (server-side filter, sort and paging)
+     * @description One row per message as the customer sees it (the final attempt): times, IDs, sender, receiver, destination, parts, status, error, rate and amount, and the text while it is kept (1 year). No vendor, route or cost data.
+     */
+    post: operations["portalQueryMessages"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/traffic": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** The customer's traffic summary by day, country or trunk */
+    post: operations["portalTraffic"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/customer-portal-users/query": {
     parameters: {
       query?: never;
@@ -10712,10 +10865,10 @@ export type components = {
      */
     BillingType: "attempt" | "submit" | "reported" | "delivery";
     /**
-     * @description TLS 1.2/1.3 replace the reference platform's SSLv2/SSLv3/TLSv1 (§16).
+     * @description TLS 1.2/1.3 replace the reference platform's SSLv2/SSLv3/TLSv1 (§16). tls1.0 is a legacy option for partners that cannot upgrade (team trial round 5, v0.91.0); SSLv2/SSLv3 are not offered.
      * @enum {string}
      */
-    SslType: "none" | "tls1.2" | "tls1.3";
+    SslType: "none" | "tls1.0" | "tls1.2" | "tls1.3";
     /** @enum {string} */
     LimitPeriod: "hour" | "day" | "week" | "month" | "billing_cycle";
     /**
@@ -16166,6 +16319,146 @@ export type components = {
     PortalUserPage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["PortalUserRow"][];
     };
+    /** @enum {string} */
+    PortalListId: "portal_rates" | "portal_messages";
+    PortalSignInInput: {
+      username: string;
+      password: string;
+    };
+    PortalPasswordInput: {
+      currentPassword: string;
+      newPassword: string;
+    };
+    PortalSession: {
+      user: {
+        id: number;
+        username: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+      };
+      enterprise: {
+        id: number;
+        name: string;
+      };
+      /** @description Temporary, expired or must-change password; only the password change works until it is changed. */
+      mustChangePassword: boolean;
+      /** Format: date-time */
+      passwordExpiresAt: string;
+    };
+    PortalTotals: {
+      messages: number;
+      parts: number;
+      delivered: number;
+      failed: number;
+      /** @description Delivered ÷ messages with a final status, in %. */
+      deliveredPct: number | null;
+      /** @description What the traffic costs the customer, in the billing currency. */
+      amount: number;
+    };
+    PortalOverview: {
+      enterprise: string;
+      currency: string | null;
+      /** @enum {string|null} */
+      billingType: "prepaid" | "postpaid" | null;
+      /** @description Positive = the customer's credit with us, negative = what they owe (§7 balance sign). */
+      balance: number | null;
+      creditLimit: number | null;
+      /** @description Balance plus credit limit. */
+      availableCredit: number | null;
+      today: components["schemas"]["PortalTotals"];
+      thisMonth: components["schemas"]["PortalTotals"];
+      trunks: {
+        id: number;
+        name: string;
+        connection: components["schemas"]["TrunkConnection"];
+        /** @description The trunk's TPS limit. */
+        tps: number;
+      }[];
+      lastInvoice: {
+        number: string;
+        /** Format: date */
+        date: string;
+        amount: number;
+        /** Format: date */
+        dueDate: string | null;
+      } | null;
+    };
+    PortalRateRow: {
+      id: number;
+      trunk: string;
+      country: string | null;
+      countryIso: string | null;
+      /** @description Null for the country's all-networks rate. */
+      network: string | null;
+      mccmnc: string;
+      rate: number;
+      currency: string;
+      /** Format: date-time */
+      validFrom: string;
+      /** Format: date-time */
+      validTo: string | null;
+      /** @enum {string} */
+      state: "current" | "upcoming";
+      /** @enum {string} */
+      changeType: "new" | "same" | "increase" | "decrease" | "closed";
+      /** @description The destination is closed to this customer. */
+      blocked: boolean;
+    };
+    PortalRatePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["PortalRateRow"][];
+    };
+    PortalMessageRow: {
+      id: string;
+      /** Format: date-time */
+      submitTime: string;
+      /** Format: date-time */
+      deliveryTime: string | null;
+      messageId: string;
+      trunk: string | null;
+      senderId: string;
+      receiver: string;
+      country: string;
+      mccmnc: string;
+      parts: number;
+      /** @description The status reported to the customer (DELIVRD, UNDELIV, EXPIRED…). */
+      status: string;
+      errorCode: string;
+      rate: number;
+      currency: string;
+      amount: number;
+      messageText: string;
+    };
+    PortalMessagePage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["PortalMessageRow"][];
+    };
+    PortalTrafficQuery: {
+      /** Format: date */
+      from: string;
+      /**
+       * Format: date
+       * @description Inclusive; at most 92 days after from.
+       */
+      to: string;
+      /** @enum {string} */
+      groupBy: "day" | "country" | "trunk";
+    };
+    /** @description PortalTotals for one day, country or trunk. */
+    PortalTrafficRow: {
+      key: string;
+      label: string;
+      messages: number;
+      parts: number;
+      delivered: number;
+      failed: number;
+      deliveredPct: number | null;
+      amount: number;
+    };
+    PortalTraffic: {
+      currency: string | null;
+      rows: components["schemas"]["PortalTrafficRow"][];
+      total: components["schemas"]["PortalTotals"];
+    };
     /**
      * @description Info, Warning, Critical - each with its own colour and sound (§13.6).
      * @enum {string}
@@ -17976,7 +18269,9 @@ export type components = {
       | "visibility_grants"
       | "team_timeline"
       | "cleanup_findings"
-      | "pcap_traces";
+      | "pcap_traces"
+      | "portal_rates"
+      | "portal_messages";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -30453,6 +30748,268 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalGetSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The portal session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalSession"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalSignIn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PortalSignInInput"];
+      };
+    };
+    responses: {
+      /** @description Signed in */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalSession"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      /** @description Locked after too many wrong passwords */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalSignOut: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Signed out */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+    };
+  };
+  portalChangePassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PortalPasswordInput"];
+      };
+    };
+    responses: {
+      /** @description Changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalSession"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalOverview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The overview */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalOverview"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalListFields: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        list: components["schemas"]["PortalListId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The fields */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListFields"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  portalQueryRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of rates */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalRatePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalExportRates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description CSV file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalQueryMessages: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of messages */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalMessagePage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalTraffic: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PortalTrafficQuery"];
+      };
+    };
+    responses: {
+      /** @description The summary */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalTraffic"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       503: components["responses"]["Unavailable"];
     };
   };

@@ -175,6 +175,10 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
     case "billing_report":
       // Like the Enterprise report: these pages pass their own fetchPage with the report settings.
       return Promise.reject(new Error("This report is fetched with its settings"));
+    case "portal_rates":
+    case "portal_messages":
+      // Customer portal lists (§1): the portal pages pass their own fetchPage with the portal session.
+      return Promise.reject(new Error("Portal lists are fetched by the customer portal"));
   }
 }
 

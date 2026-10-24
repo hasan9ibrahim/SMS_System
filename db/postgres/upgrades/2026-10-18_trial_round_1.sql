@@ -385,3 +385,19 @@ BEGIN
     INSERT INTO upgrade_marks (name) VALUES ('market_unlisted_tier1');
   END IF;
 END $$;
+
+-- Team trial round 5 (§2, §16): TLS 1.0 offered as a legacy option for partners that cannot move to TLS 1.2 / 1.3.
+-- SSLv2 / SSLv3 stay out (broken, removed from current TLS libraries).
+ALTER TABLE customer_trunks DROP CONSTRAINT IF EXISTS customer_trunks_ssl_type_check;
+ALTER TABLE customer_trunks ADD CONSTRAINT customer_trunks_ssl_type_check
+  CHECK (ssl_type IN ('none', 'tls1.0', 'tls1.2', 'tls1.3'));
+ALTER TABLE vendor_trunks DROP CONSTRAINT IF EXISTS vendor_trunks_ssl_type_check;
+ALTER TABLE vendor_trunks ADD CONSTRAINT vendor_trunks_ssl_type_check
+  CHECK (ssl_type IN ('none', 'tls1.0', 'tls1.2', 'tls1.3'));
+
+-- Customer portal sign-in (§1, team trial round 5): portal sessions live in user_sessions (user_kind = 'customer'),
+-- found by a hash of the session cookie. Five wrong passwords in a row lock a portal user for 15 minutes.
+ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS token_hash text;
+CREATE UNIQUE INDEX IF NOT EXISTS user_sessions_token_uq ON user_sessions (token_hash) WHERE token_hash IS NOT NULL;
+ALTER TABLE customer_portal_users ADD COLUMN IF NOT EXISTS failed_logins smallint NOT NULL DEFAULT 0;
+ALTER TABLE customer_portal_users ADD COLUMN IF NOT EXISTS locked_until timestamptz;

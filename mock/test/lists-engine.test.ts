@@ -15,6 +15,7 @@ import { billingReportList, listDefs } from "../src/lists/defs.js";
 import { checkChDef, type ChListDef } from "../src/lists/chEngine.js";
 import { edrList, failedEdrList } from "../src/lists/edrDefs.js";
 import { listFields } from "../src/lists/fields.js";
+import { messageList, rateList } from "../src/api/portal.js";
 
 const def = listDefs.enterprises as ListDef<unknown>;
 const q = (query: Partial<ListQuery>) => compileQuery(def, query as ListQuery);
@@ -25,10 +26,24 @@ test("every list field has SQL and every list has a definition", () => {
   assert.deepEqual(checkChDef("edrs", edrList as ChListDef<unknown>), []);
   assert.deepEqual(checkChDef("failed_edrs", failedEdrList as ChListDef<unknown>), []);
   assert.deepEqual(checkDef("billing_report", billingReportList as ListDef<unknown>), []);
+  // Customer portal lists (§1) are built per signed-in enterprise (api/portal.ts).
+  assert.deepEqual(checkDef("portal_rates", rateList(1) as ListDef<unknown>), []);
+  assert.deepEqual(checkChDef("portal_messages", messageList(1) as ChListDef<unknown>), []);
   assert.deepEqual(
     Object.keys(listDefs).sort(),
     Object.keys(listFields)
-      .filter((l) => !["enterprise_report", "edrs", "failed_edrs", "master_report", "billing_report"].includes(l))
+      .filter(
+        (l) =>
+          ![
+            "enterprise_report",
+            "edrs",
+            "failed_edrs",
+            "master_report",
+            "billing_report",
+            "portal_rates",
+            "portal_messages",
+          ].includes(l),
+      )
       .sort(),
   );
 });

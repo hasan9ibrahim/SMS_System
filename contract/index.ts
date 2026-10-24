@@ -702,6 +702,20 @@ export type PortalUserInput = Schemas["PortalUserInput"];
 export type PortalUserRow = Schemas["PortalUserRow"];
 export type PortalUserSaved = Schemas["PortalUserSaved"];
 export type PortalUserPage = Schemas["PortalUserPage"];
+// Customer portal (§1, team trial round 5)
+export type PortalListId = Schemas["PortalListId"];
+export type PortalSignInInput = Schemas["PortalSignInInput"];
+export type PortalPasswordInput = Schemas["PortalPasswordInput"];
+export type PortalSession = Schemas["PortalSession"];
+export type PortalTotals = Schemas["PortalTotals"];
+export type PortalOverview = Schemas["PortalOverview"];
+export type PortalRateRow = Schemas["PortalRateRow"];
+export type PortalRatePage = Schemas["PortalRatePage"];
+export type PortalMessageRow = Schemas["PortalMessageRow"];
+export type PortalMessagePage = Schemas["PortalMessagePage"];
+export type PortalTrafficQuery = Schemas["PortalTrafficQuery"];
+export type PortalTrafficRow = Schemas["PortalTrafficRow"];
+export type PortalTraffic = Schemas["PortalTraffic"];
 
 // Monitoring alerts (§13.6, §13.7)
 export type AlertSeverity = Schemas["AlertSeverity"];

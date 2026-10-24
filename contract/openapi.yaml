@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.90.0
+  version: 0.91.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -61,6 +61,8 @@ tags:
     description: Observation Deck (§9) - EDR search, downloads, repush, network status, signaling, simulator, diagnosis.
   - name: admin
     description: Admin (§11, §13.28) - business companies, departments, users, access groups, sessions, audit trail, e-mail templates, customer portal.
+  - name: portal
+    description: Customer portal (§1) - the customer's own balance, rates, traffic and messages, with its own sign-in.
   - name: monitoring
     description: Monitoring alerts (§13.6, §13.7) - alert rules evaluated on the server, incidents, e-mail alerts.
 
@@ -11717,6 +11719,270 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+  # ------------------------------------------------------------- Customer portal (§1, team trial round 5)
+  /portal/session:
+    get:
+      tags:
+      - portal
+      operationId: portalGetSession
+      summary: The signed-in portal user (customer portal)
+      description: >-
+        The customer portal at /portal has its own sign-in, separate from the staff system. Every portal call answers
+        only for the signed-in user's own enterprise; nothing about vendors, costs or margins is ever returned.
+      security:
+      - portalCookie: []
+      responses:
+        '200':
+          description: The portal session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - portal
+      operationId: portalSignIn
+      summary: Sign in to the customer portal
+      description: >-
+        Username and password of a customer portal user (Admin › Customer Portal, §11). Sets the portal session cookie.
+        Five wrong passwords in a row lock the user for 15 minutes. A temporary or expired password signs in with
+        mustChangePassword, and only the password change works until it is changed (§13.28).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalSignInInput'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Locked after too many wrong passwords
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      tags:
+      - portal
+      operationId: portalSignOut
+      summary: Sign out of the customer portal
+      security:
+      - portalCookie: []
+      responses:
+        '204':
+          description: Signed out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /portal/password:
+    post:
+      tags:
+      - portal
+      operationId: portalChangePassword
+      summary: Change the portal user's own password (§13.28)
+      description: Current password and the new one, checked against the same rules as staff passwords.
+      security:
+      - portalCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalPasswordInput'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /portal/overview:
+    get:
+      tags:
+      - portal
+      operationId: portalOverview
+      summary: Balance, credit, traffic today and this month, trunks and the last invoice
+      security:
+      - portalCookie: []
+      responses:
+        '200':
+          description: The overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalOverview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /portal/meta/lists/{list}/fields:
+    get:
+      tags:
+      - portal
+      operationId: portalListFields
+      summary: Field catalogue of a portal list (§13.25)
+      security:
+      - portalCookie: []
+      parameters:
+      - name: list
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/PortalListId'
+      responses:
+        '200':
+          description: The fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListFields'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /portal/rates/query:
+    post:
+      tags:
+      - portal
+      operationId: portalQueryRates
+      summary: The customer's rates per destination (server-side filter, sort and paging)
+      description: >-
+        For each of the customer's trunks and destinations, the rate in force (the first of the trunk's rate tables
+        that prices it, §5.4) and announced future rates. Rate table names are not shown.
+      security:
+      - portalCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of rates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalRatePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /portal/rates/export:
+    post:
+      tags:
+      - portal
+      operationId: portalExportRates
+      summary: The filtered rates as a CSV file (rate sheet)
+      security:
+      - portalCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /portal/messages/query:
+    post:
+      tags:
+      - portal
+      operationId: portalQueryMessages
+      summary: The customer's message log (server-side filter, sort and paging)
+      description: >-
+        One row per message as the customer sees it (the final attempt): times, IDs, sender, receiver, destination,
+        parts, status, error, rate and amount, and the text while it is kept (1 year). No vendor, route or cost data.
+      security:
+      - portalCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListQuery'
+      responses:
+        '200':
+          description: One page of messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalMessagePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /portal/traffic:
+    post:
+      tags:
+      - portal
+      operationId: portalTraffic
+      summary: The customer's traffic summary by day, country or trunk
+      security:
+      - portalCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalTrafficQuery'
+      responses:
+        '200':
+          description: The summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalTraffic'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /customer-portal-users/query:
     post:
       tags:
@@ -14943,6 +15209,11 @@ components:
       in: cookie
       name: sms_session
       description: Session cookie set at sign-in (login flow added in a later revision).
+    portalCookie:
+      type: apiKey
+      in: cookie
+      name: sms_portal
+      description: Customer portal session cookie, set by POST /portal/session (team trial round 5).
 
   parameters:
     ViewAs:
@@ -16168,8 +16439,10 @@ components:
       description: The event that makes a message billable (§7).
     SslType:
       type: string
-      enum: [none, tls1.2, tls1.3]
-      description: TLS 1.2/1.3 replace the reference platform's SSLv2/SSLv3/TLSv1 (§16).
+      enum: [none, tls1.0, tls1.2, tls1.3]
+      description: >-
+        TLS 1.2/1.3 replace the reference platform's SSLv2/SSLv3/TLSv1 (§16). tls1.0 is a legacy option for partners
+        that cannot upgrade (team trial round 5, v0.91.0); SSLv2/SSLv3 are not offered.
     LimitPeriod:
       type: string
       enum: [hour, day, week, month, billing_cycle]
@@ -27897,6 +28170,295 @@ components:
             items:
               $ref: '#/components/schemas/PortalUserRow'
 
+    # ------------------------------------------------------------- Customer portal (§1, team trial round 5)
+    PortalListId:
+      type: string
+      enum: [portal_rates, portal_messages]
+    PortalSignInInput:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 200
+        password:
+          type: string
+          minLength: 1
+          maxLength: 200
+    PortalPasswordInput:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 200
+        newPassword:
+          type: string
+          minLength: 1
+          maxLength: 200
+    PortalSession:
+      type: object
+      additionalProperties: false
+      required: [user, enterprise, mustChangePassword, passwordExpiresAt]
+      properties:
+        user:
+          type: object
+          additionalProperties: false
+          required: [id, username, firstName, lastName, email]
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
+              type: string
+        enterprise:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        mustChangePassword:
+          type: boolean
+          description: Temporary, expired or must-change password; only the password change works until it is changed.
+        passwordExpiresAt:
+          type: string
+          format: date-time
+    PortalTotals:
+      type: object
+      additionalProperties: false
+      required: [messages, parts, delivered, failed, deliveredPct, amount]
+      properties:
+        messages:
+          type: integer
+        parts:
+          type: integer
+        delivered:
+          type: integer
+        failed:
+          type: integer
+        deliveredPct:
+          type: [number, "null"]
+          description: Delivered ÷ messages with a final status, in %.
+        amount:
+          type: number
+          description: What the traffic costs the customer, in the billing currency.
+    PortalOverview:
+      type: object
+      additionalProperties: false
+      required: [enterprise, currency, billingType, balance, creditLimit, availableCredit, today, thisMonth, trunks, lastInvoice]
+      properties:
+        enterprise:
+          type: string
+        currency:
+          type: [string, "null"]
+        billingType:
+          type: [string, "null"]
+          enum: [prepaid, postpaid, null]
+        balance:
+          type: [number, "null"]
+          description: Positive = the customer's credit with us, negative = what they owe (§7 balance sign).
+        creditLimit:
+          type: [number, "null"]
+        availableCredit:
+          type: [number, "null"]
+          description: Balance plus credit limit.
+        today:
+          $ref: '#/components/schemas/PortalTotals'
+        thisMonth:
+          $ref: '#/components/schemas/PortalTotals'
+        trunks:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, connection, tps]
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              connection:
+                $ref: '#/components/schemas/TrunkConnection'
+              tps:
+                type: integer
+                description: The trunk's TPS limit.
+        lastInvoice:
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required: [number, date, amount, dueDate]
+            properties:
+              number:
+                type: string
+              date:
+                type: string
+                format: date
+              amount:
+                type: number
+              dueDate:
+                type: [string, "null"]
+                format: date
+          - type: 'null'
+    PortalRateRow:
+      type: object
+      additionalProperties: false
+      required: [id, trunk, country, countryIso, network, mccmnc, rate, currency, validFrom, validTo, state, changeType, blocked]
+      properties:
+        id:
+          type: integer
+        trunk:
+          type: string
+        country:
+          type: [string, "null"]
+        countryIso:
+          type: [string, "null"]
+        network:
+          type: [string, "null"]
+          description: Null for the country's all-networks rate.
+        mccmnc:
+          type: string
+        rate:
+          type: number
+        currency:
+          type: string
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: [string, "null"]
+          format: date-time
+        state:
+          type: string
+          enum: [current, upcoming]
+        changeType:
+          type: string
+          enum: [new, same, increase, decrease, closed]
+        blocked:
+          type: boolean
+          description: The destination is closed to this customer.
+    PortalRatePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required: [rows]
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/PortalRateRow'
+    PortalMessageRow:
+      type: object
+      additionalProperties: false
+      required: [id, submitTime, deliveryTime, messageId, trunk, senderId, receiver, country, mccmnc, parts, status, errorCode, rate, currency, amount, messageText]
+      properties:
+        id:
+          type: string
+        submitTime:
+          type: string
+          format: date-time
+        deliveryTime:
+          type: [string, "null"]
+          format: date-time
+        messageId:
+          type: string
+        trunk:
+          type: [string, "null"]
+        senderId:
+          type: string
+        receiver:
+          type: string
+        country:
+          type: string
+        mccmnc:
+          type: string
+        parts:
+          type: integer
+        status:
+          type: string
+          description: The status reported to the customer (DELIVRD, UNDELIV, EXPIRED…).
+        errorCode:
+          type: string
+        rate:
+          type: number
+        currency:
+          type: string
+        amount:
+          type: number
+        messageText:
+          type: string
+    PortalMessagePage:
+      allOf:
+      - $ref: '#/components/schemas/ListPageMeta'
+      - type: object
+        required: [rows]
+        properties:
+          rows:
+            type: array
+            items:
+              $ref: '#/components/schemas/PortalMessageRow'
+    PortalTrafficQuery:
+      type: object
+      additionalProperties: false
+      required: [from, to, groupBy]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+          description: Inclusive; at most 92 days after from.
+        groupBy:
+          type: string
+          enum: [day, country, trunk]
+    PortalTrafficRow:
+      type: object
+      additionalProperties: false
+      description: PortalTotals for one day, country or trunk.
+      required: [key, label, messages, parts, delivered, failed, deliveredPct, amount]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        messages:
+          type: integer
+        parts:
+          type: integer
+        delivered:
+          type: integer
+        failed:
+          type: integer
+        deliveredPct:
+          type: [number, "null"]
+        amount:
+          type: number
+    PortalTraffic:
+      type: object
+      additionalProperties: false
+      required: [currency, rows, total]
+      properties:
+        currency:
+          type: [string, "null"]
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalTrafficRow'
+        total:
+          $ref: '#/components/schemas/PortalTotals'
+
     # ------------------------------------------------------------- Monitoring alerts (§13.6, §13.7)
     AlertSeverity:
       type: string
@@ -32076,7 +32638,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings, pcap_traces]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings, pcap_traces, portal_rates, portal_messages]
 
     FilterOperator:
       type: string

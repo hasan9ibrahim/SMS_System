@@ -101,6 +101,17 @@ administrator, **Daniel Khoury** (all pages and buttons).
   name, and anyone's Undo can undo anyone's change. Agree among testers who edits what, or use separate
   records.
 
+### The customer portal
+
+Customers get their own portal at **`/portal`** on the same address (for example `http://<server>/portal`), with
+its own sign-in, separate from the staff system. It shows only that customer's balance, credit, rates per
+destination (with a rate sheet download), traffic by day / country / trunk, and their message log; never vendors,
+routes, costs or margins.
+
+- Sign in with any active user from **Admin › Customer Portal** and the fake password `demo-password-2026`
+  (for example a user whose password is not temporary or expired; those are asked to choose a new password first).
+- Five wrong passwords lock the login for 15 minutes.
+
 ## 3. What is real and what is simulated
 
 | Area | In the trial |

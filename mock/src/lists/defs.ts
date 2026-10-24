@@ -3075,7 +3075,7 @@ export const billingReportList: ListDef<BillingReportRow> = {
 /** Lists answered from PostgreSQL; the Enterprise report and EDR lists run on the EDR store (enterpriseReport.ts, edrDefs.ts). */
 export type PgListId = Exclude<
   ListId,
-  "enterprise_report" | "edrs" | "failed_edrs" | "master_report" | "billing_report"
+  "enterprise_report" | "edrs" | "failed_edrs" | "master_report" | "billing_report" | "portal_rates" | "portal_messages"
 >;
 
 /**
