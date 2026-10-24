@@ -877,7 +877,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "Pick the time frame at the top: **15m**, **1h**, **24h** (default), **7d** or **30d**.",
-              "Totals: **Messages**, **ASR**, **DLR** and **Margin** (green when positive, red when negative).",
+              "Totals: **Messages**, **ASR**, **DLR** and **Margin** (red when negative).",
               "A chart of messages (bars) and margin (line) over time.",
               "**Vendors over time**: which vendor carried the traffic in each period. Other vendors are grey; messages that were not routed are red. The table below lists each time the main vendor changed: **From**, **Until**, **Main vendor** and its **Share**.",
               "Two tables, per **Customer trunk** and per **Vendor trunk**: Msgs, Share, ASR, DLR, Margin.",

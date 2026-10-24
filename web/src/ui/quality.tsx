@@ -1,5 +1,5 @@
 // ASR and DLR coloured by value everywhere except Live analytics, which keeps its own cells
-// (team trial round 1, §13.4 consistent colours): green from 80 %, amber from 60 % to 80 %, red below 60 %.
+// (team trial round 1, §13.4 consistent colours): plain from 80 %, amber from 60 % to 80 %, red below 60 %.
 import type { ReactNode } from "react";
 
 export type QualityTone = "good" | "warning" | "error" | "";
@@ -9,10 +9,13 @@ export function qualityTone(v: number | null | undefined): QualityTone {
   return v >= 80 ? "good" : v >= 60 ? "warning" : "error";
 }
 
-/** The CSS class for a value: tone-good / tone-warning / tone-error (or none). */
+/**
+ * The CSS class for a value: tone-warning / tone-error, or none. Good values stay plain text (calm look, team trial
+ * round 5: colour only for what needs attention).
+ */
 export const qualityClass = (v: number | null | undefined) => {
   const t = qualityTone(v);
-  return t ? `tone-${t}` : "";
+  return t && t !== "good" ? `tone-${t}` : "";
 };
 
 /** An ASR or DLR percentage in its colour. `children` replaces the default "12.3%" text. */

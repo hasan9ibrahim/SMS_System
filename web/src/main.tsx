@@ -15,6 +15,7 @@ import "./styles/admin.css";
 import "./styles/monitoring.css";
 import "./styles/dashboard.css";
 import "./styles/help.css";
+import "./styles/calm.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 15_000 } },

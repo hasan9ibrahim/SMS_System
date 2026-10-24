@@ -43,6 +43,8 @@ const page = pageForPath("/routing/rules")!;
  * that would be green shows amber instead, and the value is bold.
  */
 function dlrClass(r: RouteRuleRow) {
+  // A block rule fails its traffic on purpose: no colour (calm look, team trial round 5).
+  if (r.routeType === "block") return "muted";
   const below = r.dlr !== null && r.dlrTarget !== null && r.dlr < r.dlrTarget;
   const tone = below && qualityTone(r.dlr) === "good" ? "tone-warning" : qualityClass(r.dlr);
   return below ? `${tone} strong` : tone;
@@ -502,7 +504,12 @@ export function RouteRulesPage() {
             </TrafficHover>
           ),
       },
-      asr: { width: 70, render: (r: RouteRuleRow) => <span className={qualityClass(r.asr)}>{formatPct(r.asr)}</span> },
+      asr: {
+        width: 70,
+        render: (r: RouteRuleRow) => (
+          <span className={r.routeType === "block" ? "muted" : qualityClass(r.asr)}>{formatPct(r.asr)}</span>
+        ),
+      },
       dlr: {
         width: 70,
         render: (r: RouteRuleRow) => (

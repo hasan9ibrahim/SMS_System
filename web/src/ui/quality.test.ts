@@ -10,5 +10,6 @@ test("ASR / DLR tone by value (team trial round 1)", () => {
   assert.equal(qualityTone(59), "error");
   assert.equal(qualityTone(null), "");
   assert.equal(qualityClass(70), "tone-warning");
+  assert.equal(qualityClass(95), "", "good values are plain text (team trial round 5)");
   assert.equal(qualityClass(undefined), "");
 });

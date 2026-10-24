@@ -550,7 +550,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
         render: (r) => {
           const p = pending.get(r.id)?.rate;
           const m = p !== undefined && r.routedCost !== null ? round6(p - r.routedCost) : r.margin;
-          return <span className={m === null ? "muted" : m < 0 ? "tone-error" : "tone-good"}>{formatSigned(m)}</span>;
+          return <span className={m === null ? "muted" : m < 0 ? "tone-error" : ""}>{formatSigned(m)}</span>;
         },
       },
       marginPct: {

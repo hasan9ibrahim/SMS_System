@@ -1,0 +1,69 @@
+/* Calm look (team trial round 5, §15.3 "colour only carries meaning"): loaded last, so these rules win.
+   - Good values are plain text; only warnings (amber) and problems (red) are coloured, as text, never filled boxes.
+   - Numbers keep normal weight; only totals and names are a little heavier.
+   - Header bands are a small coloured label with a thin rule, not a tinted background. */
+
+/* ---------- Live analytics */
+.la-grid td.num,
+.la-grid td.num.la-strong {
+  font-weight: 400;
+}
+.la-grid td.la-good {
+  color: inherit;
+}
+.la-grid .la-total td,
+.la-grid .la-total td.num,
+.la-grid .la-total td.num.la-strong {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
+}
+.la-warn .la-pill,
+.la-bad .la-pill {
+  display: inline;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-weight: 500;
+}
+.la-warn .la-pill {
+  color: var(--color-warning);
+}
+.la-bad .la-pill {
+  color: var(--color-error);
+}
+.la-grid th[class*="la-band-"] {
+  background: var(--color-panel);
+}
+.la-grid .la-bands th.la-band {
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--band) 35%, transparent);
+}
+@keyframes la-flash-up {
+  from {
+    background: color-mix(in srgb, var(--color-good) 10%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+@keyframes la-flash-down {
+  from {
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+/* ---------- names and figures across pages */
+.strong,
+.rr-strong {
+  font-weight: 500;
+}
+.kpi-value,
+.dash-kpi .value {
+  font-weight: 600;
+}
+.mc-table .strong {
+  font-weight: 500;
+}

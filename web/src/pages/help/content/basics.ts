@@ -2086,8 +2086,8 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "Colours",
             items: [
-              "**ASR, DLR (c), DLR (v)**: green from 80 %, amber box from 60 % to under 80 %, red box below 60 %.",
-              "**Margin**: green when positive, red box when negative.",
+              "**ASR, DLR (c), DLR (v)**: plain from 80 %, amber text from 60 % to under 80 %, red text below 60 %.",
+              "**Margin**: plain when positive, red text when negative.",
             ],
           },
         ],
