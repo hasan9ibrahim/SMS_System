@@ -92,7 +92,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   { metric: "asr", label: "ASR %", title: "Accepted / attempts", fmt: "pct", shown: true, group: "Quality" },
   {
     metric: "dlrCustomer",
-    label: "DLR (c) %",
+    label: "DLR (c)",
     title: "Delivered as reported to the customer (the receipts we send)",
     fmt: "pct",
     shown: true,
@@ -100,7 +100,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   },
   {
     metric: "dlrVendor",
-    label: "DLR (v) %",
+    label: "DLR (v)",
     title: "Delivered as reported by the vendor",
     fmt: "pct",
     shown: true,
@@ -156,7 +156,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   },
   {
     metric: "deliveryDelayS",
-    label: "Delay sec",
+    label: "Delay s",
     title: "Average delivery delay in seconds",
     fmt: "sec",
     shown: true,

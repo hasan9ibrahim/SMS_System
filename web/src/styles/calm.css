@@ -1,12 +1,16 @@
 /* Calm look (team trial round 5, §15.3 "colour only carries meaning"): loaded last, so these rules win.
    - Good values are plain text; only warnings (amber) and problems (red) are coloured, as text, never filled boxes.
    - Numbers keep normal weight; only totals and names are a little heavier.
-   - Header bands are a small coloured label with a thin rule, not a tinted background. */
+   - Live analytics headers are tinted like the date-range chip; band labels keep their colour with a thin rule. */
 
 /* ---------- Live analytics */
-.la-grid td.num,
-.la-grid td.num.la-strong {
+.la-grid td.num {
   font-weight: 400;
+}
+/* ASR, DLRs and margin stay bold (team trial round 5, second pass). */
+.la-grid td.num.la-strong,
+.la-grid td.num.la-strong .la-pill {
+  font-weight: 700;
 }
 .la-grid td.la-good {
   color: inherit;
@@ -31,8 +35,23 @@
 .la-bad .la-pill {
   color: var(--color-error);
 }
+/* Header rows tinted like the date-range chip (team trial round 5, second pass); titles on one line. */
+.la-grid thead th,
 .la-grid th[class*="la-band-"] {
-  background: var(--color-panel);
+  background: color-mix(in srgb, var(--color-accent) 9%, var(--color-panel));
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.la-grid thead th .la-sort {
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.la-grid thead .la-col-titles th,
+.la-grid thead th[rowspan] {
+  white-space: nowrap;
 }
 .la-grid .la-bands th.la-band {
   font-weight: 600;
@@ -66,4 +85,77 @@
 }
 .mc-table .strong {
   font-weight: 500;
+}
+
+/* No sideways scrolling (team trial round 5): Live analytics fits its columns to the window, headers centred. */
+.la-grid col.la-col-name {
+  width: 13%;
+}
+.la-grid col.la-col-act {
+  width: 5%;
+}
+.la-grid thead th,
+.la-grid thead th.num {
+  text-align: center;
+}
+.la-grid thead th .la-sort {
+  display: block;
+  margin: 0 auto;
+  text-align: center;
+}
+.la-grid td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Grid headers centred in their cells (team trial round 5). */
+.gh-cell,
+.gh-cell.align-right,
+.gh-cell.align-center {
+  justify-content: center;
+  text-align: center;
+}
+
+/* Status: "Active" is the normal state, so plain text with a small green dot; "Inactive" is greyed. */
+.status-pill {
+  font-weight: 400;
+  padding: 0;
+  background: none;
+}
+.status-pill.on {
+  color: var(--color-text);
+  background: none;
+}
+.status-pill.on .status-pill-dot {
+  background: var(--color-good);
+}
+.status-pill.off {
+  background: none;
+}
+/* Record names in lists: medium weight, not bold. */
+.gc .strong,
+.gc strong {
+  font-weight: 500;
+}
+
+/* Fitted columns need less side padding, so short figures (ASR 0.0 %) are not cut off. */
+.gc,
+.gh-cell,
+.gf-cell {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+@media (max-width: 1500px) {
+  .la-grid td {
+    font-size: 11.5px;
+  }
+  .la-grid th {
+    font-size: 11px;
+  }
+  .la-grid td,
+  .la-grid th {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
 }

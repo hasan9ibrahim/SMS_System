@@ -96,9 +96,8 @@ const metricsOf = (cols: Column[]) => cols.map((c) => c.metric);
 /** Money and rates (6 decimals) get wider columns than counts (team trial round 3). */
 const WEIGHT: Record<Fmt, number> = { money: 1.65, rate: 1.35, int: 1.2, pct: 0.95, sec: 0.85, tps: 0.85 };
 const weightOf = (cols: Column[]) => cols.reduce((n, c) => n + WEIGHT[c.fmt], 0);
+/** The figures share what the name (13 %) and EDRs (5 %) columns leave, so the table always fits (no sideways scroll). */
 const colWidth = (cols: Column[], c: Column) => `${((WEIGHT[c.fmt] / weightOf(cols)) * 82).toFixed(2)}%`;
-/** Below this width the table scrolls sideways instead of cutting figures off. */
-const tableMinWidth = (cols: Column[]) => Math.round(weightOf(cols) * 62 + 260);
 
 /**
  * Add or remove columns, like dashboard panels (team trial round 3): grouped checkboxes, saved in the user's
@@ -236,7 +235,7 @@ function DetailPanel({
         </button>
       </div>
       <div className="la-detail-body">
-        <table className="la-grid" style={{ minWidth: tableMinWidth(cols) }}>
+        <table className="la-grid">
           <colgroup>
             <col className="la-col-name" />
             {cols.map((c) => (
@@ -871,7 +870,7 @@ export function LiveAnalyticsPage() {
         {/* The detail panel sits on the right of the table and narrows it (team trial round 3). */}
         <div className="la-body">
           <div className="la-wrap">
-            <table className="la-grid" style={{ minWidth: tableMinWidth(cols) }}>
+            <table className="la-grid">
               <colgroup>
                 <col className="la-col-name" />
                 {cols.map((c) => (

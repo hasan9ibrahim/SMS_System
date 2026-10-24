@@ -49,9 +49,9 @@ reuse the D numbers.
   it or a later invoice.
 - Q24 exact atomic credit check per message (all parts), 1-minute grace on the last known balance if the balance
   store is unreachable.
-- Q15 explained: when every vendor for the route is down **at submit time**, the submit is answered at once with an
-  error (proposal: 0x58 so the client retries by itself, per trunk 0x45). The queue time (proposal 5 min per customer
-  trunk) only covers messages accepted while a vendor was up whose vendor then failed. Awaiting confirmation.
+- Q15 **decided**: when every vendor for the route is down **at submit time**, the submit is answered at once with
+  **0x45 (submit failed)**, not billed. The queue time (5 min per customer trunk) only covers messages accepted while a
+  vendor was up whose vendor then failed.
 
 
 ## 1. Where we stand

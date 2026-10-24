@@ -28,6 +28,8 @@ export const ROW_HEIGHT = 42;
 /** Most rows "Select all matching" takes (one bulk action stays reviewable). */
 const SELECT_ALL_MAX = 5000;
 const PAGE_SIZE = 200;
+/** Narrowest a column gets when the columns are fitted to the grid's width. */
+const FIT_MIN = 56;
 
 export interface ColumnOverride<Row> {
   width?: number;
@@ -355,7 +357,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     getRowId: (r) => String(r.id),
   });
   const headers = table.getHeaderGroups()[0]?.headers ?? [];
-  const cells = useMemo(
+  const naturalCells = useMemo(
     () =>
       headers.map((h) => {
         const f = visibleFields.find((x) => x.field === h.column.id)!;
@@ -371,6 +373,24 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [headers.map((h) => `${h.column.id}:${h.getSize()}`).join(), visibleFields, columns],
   );
+  // Columns fit the grid's width (team trial round 5: no sideways scrolling): the set widths are scaled to the
+  // space there is, never below FIT_MIN, so dragging a column wider takes the room from the others.
+  const [boxWidth, setBoxWidth] = useState(0);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBoxWidth(el.clientWidth));
+    ro.observe(el);
+    setBoxWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const cells = useMemo(() => {
+    const fixed = 40 + (trailing?.width ?? 0);
+    const sum = naturalCells.reduce((n, c) => n + c.width, 0);
+    if (boxWidth <= 0 || sum <= 0) return naturalCells;
+    const scale = (boxWidth - fixed - 2) / sum;
+    return naturalCells.map((c) => ({ ...c, width: Math.max(FIT_MIN, Math.floor(c.width * scale)) }));
+  }, [naturalCells, boxWidth, trailing?.width]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
 
   const virtualizer = useVirtualizer({
