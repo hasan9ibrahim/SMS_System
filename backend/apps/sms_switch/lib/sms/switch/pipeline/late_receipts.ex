@@ -213,6 +213,7 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
       |> Decimal.new()
       |> Decimal.mult(parts)
       |> Decimal.round(6)
+      |> Decimal.normalize()
       |> Decimal.to_string(:normal)
 
   defp ms(%DateTime{} = at), do: DateTime.to_unix(at, :millisecond)
