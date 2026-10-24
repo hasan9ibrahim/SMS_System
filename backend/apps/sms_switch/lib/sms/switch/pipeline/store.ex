@@ -13,6 +13,9 @@ defmodule Sms.Switch.Pipeline.Store do
       `rgt` their reassembly deadlines (D1);
     * `t`: the DLR timeouts of messages waiting for receipts, a sorted set by deadline (S-5.10); every server sweeps
       it and the one that removes an entry handles it;
+    * `dup:<customer trunk>:<fingerprint>`: the message id of a message, for the duplicate filter's window (D6);
+      `lp:<fingerprint>`: the customer trunk of a message in flight to a vendor, for Loop Detection (S-5.16);
+    * `pd:<message id>:<part>`: the attempt of a part whose submit timed out, for a late answer (D4);
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
       by arrival; `hs` the trunks that have any, `hl:<customer trunk>` the lock of the node sending them.
 
@@ -291,6 +294,60 @@ defmodule Sms.Switch.Pipeline.Store do
   @doc "Takes a due group: true for the one server that gets to fail it."
   @spec claim_group_timeout(String.t()) :: boolean()
   def claim_group_timeout(key), do: match?({:ok, 1}, run(["ZREM", "rgt", key]))
+
+  @doc """
+  The duplicate filter (D6): records `id` under the message's fingerprint for `ttl_s`, or returns the id of the same
+  message seen within the window.
+  """
+  @spec claim_fingerprint(integer(), String.t(), String.t(), pos_integer()) ::
+          :new | {:duplicate, String.t()} | {:error, term()}
+  def claim_fingerprint(trunk_id, fingerprint, id, ttl_s) do
+    case run(["SET", "dup:#{trunk_id}:#{fingerprint}", id, "NX", "GET", "EX", ttl_s]) do
+      {:ok, nil} -> :new
+      {:ok, first} -> {:duplicate, first}
+      error -> error
+    end
+  end
+
+  @doc "Forgets a fingerprint (its message was refused, so a resend is a new message)."
+  @spec release_fingerprint(integer(), String.t()) :: :ok | {:error, term()}
+  def release_fingerprint(trunk_id, fingerprint),
+    do: ok(run(["DEL", "dup:#{trunk_id}:#{fingerprint}"]))
+
+  @doc "Marks a message sent to a vendor from customer trunk `trunk_id`, for `ttl_s` (S-5.16)."
+  @spec mark_in_flight(String.t(), integer(), pos_integer()) :: :ok | {:error, term()}
+  def mark_in_flight(fingerprint, trunk_id, ttl_s),
+    do: ok(run(["SET", "lp:#{fingerprint}", Integer.to_string(trunk_id), "EX", ttl_s]))
+
+  @doc "The customer trunk a message with this fingerprint is in flight from, if any."
+  @spec in_flight(String.t()) :: {:ok, integer() | nil} | {:error, term()}
+  def in_flight(fingerprint) do
+    case run(["GET", "lp:#{fingerprint}"]) do
+      {:ok, nil} -> {:ok, nil}
+      {:ok, trunk} -> {:ok, String.to_integer(trunk)}
+      error -> error
+    end
+  end
+
+  @doc "Claims sending message `id` again for attempt `no` (S-5.11): true for the one handler of the resend."
+  @spec claim_resend(String.t(), pos_integer()) :: boolean()
+  def claim_resend(id, no),
+    do: match?({:ok, "OK"}, run(["SET", "rs:#{id}:#{no}", "1", "NX", "EX", 86_400]))
+
+  @doc "Remembers the attempt of a part whose submit timed out, for `ttl_s` (D4)."
+  @spec put_possibly_sent(String.t(), term(), pos_integer()) :: :ok | {:error, term()}
+  def put_possibly_sent(ref, attempt, ttl_s),
+    do: ok(run(["SET", "pd:#{ref}", :erlang.term_to_binary(attempt, [:compressed]), "EX", ttl_s]))
+
+  @doc "Takes the attempt of a timed-out part (`ref` is `<message id>:<part>`)."
+  @spec take_possibly_sent(String.t()) :: {:ok, term()} | :none | {:error, term()}
+  def take_possibly_sent(ref) do
+    case run(["GETDEL", "pd:#{ref}"]) do
+      {:ok, nil} -> :none
+      {:ok, blob} -> {:ok, :erlang.binary_to_term(blob, [:safe])}
+      error -> error
+    end
+  end
 
   @doc "Holds a customer receipt until a session of the trunk can take it (§13.1)."
   @spec hold(integer(), term(), pos_integer()) :: :ok | {:error, term()}

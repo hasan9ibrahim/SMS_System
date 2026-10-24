@@ -30,7 +30,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Customer.Intake.NotReady
   alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Message.{Concat, Text}
-  alias Sms.Switch.Pipeline.{Config, Credit, Edr, MessageId, Reassembly, Router}
+  alias Sms.Switch.Pipeline.{Config, Credit, Edr, MessageId, Reassembly, Router, Store}
   alias Sms.Switch.Rules.Translation
   alias Sms.Switch.Smpp.{Pdu, Status}
   alias Sms.Switch.Throttle
@@ -59,9 +59,8 @@ defmodule Sms.Switch.Pipeline.Intake do
         msg = new_message(context, pdu, trunk)
 
         case build(msg, pdu) do
-          {:ok, msg} -> answer(msg, process(msg))
-          {:part, msg} -> Reassembly.hold(msg)
           {:reject, status, reason, msg} -> refuse(msg, status, reason)
+          {kind, msg} -> filtered(kind, msg)
         end
     end
   end
@@ -118,6 +117,85 @@ defmodule Sms.Switch.Pipeline.Intake do
          :ok <- credit(msg) do
       store(msg)
     end
+  end
+
+  # D6, S-5.16: the same message again on this trunk within its window gets the first one's id and is not sent again;
+  # the same message coming back on another trunk while ours is in flight (a vendor routing into us) is refused.
+  defp filtered(kind, msg) do
+    fingerprint = fingerprint(msg)
+
+    case duplicate(msg, fingerprint) do
+      {:duplicate, first} ->
+        Logger.info(
+          "duplicate of #{first} on trunk #{msg.trunk.id}: answered with its id, not sent (D6)"
+        )
+
+        {:ok, %{message_id: first}, []}
+
+      :new ->
+        if loop?(msg),
+          do: refuse_filtered(msg, fingerprint, :esme_rsubmitfail, :loop),
+          else: go(kind, msg, fingerprint)
+
+      {:error, reason} ->
+        Logger.error("duplicate filter unavailable, message taken: #{inspect(reason)}")
+        go(kind, msg, nil)
+    end
+  end
+
+  defp go(:part, msg, _fingerprint), do: Reassembly.hold(msg)
+
+  defp go(:ok, msg, fingerprint) do
+    case answer(msg, process(msg)) do
+      {:ok, _, _} = ok -> ok
+      error -> forget_fingerprint(msg, fingerprint) && error
+    end
+  end
+
+  defp refuse_filtered(msg, fingerprint, status, reason) do
+    forget_fingerprint(msg, fingerprint)
+    refuse(msg, status, reason)
+  end
+
+  # A refused message is not a duplicate of anything: a resend of it is a new message.
+  defp forget_fingerprint(_msg, nil), do: true
+
+  defp forget_fingerprint(msg, fingerprint) do
+    _ = Store.release_fingerprint(msg.trunk.id, fingerprint)
+    true
+  end
+
+  defp duplicate(msg, fingerprint) do
+    case msg.trunk[:duplicate_window_s] || 0 do
+      0 -> :new
+      window -> Store.claim_fingerprint(msg.trunk.id, fingerprint, msg.id, window)
+    end
+  end
+
+  defp loop?(%{trunk: %{loop_detection: true}} = msg) do
+    f = msg.fields
+
+    case Store.in_flight(fingerprint(f[:source_addr], f[:destination_addr], msg.text || msg.body)) do
+      {:ok, trunk} when is_integer(trunk) and trunk != msg.trunk.id -> true
+      _ -> false
+    end
+  end
+
+  defp loop?(_msg), do: false
+
+  # A part's fingerprint includes its reference and number, so the parts of one message are not each other's duplicates.
+  defp fingerprint(msg) do
+    f = msg.fields
+    part = if msg.concat, do: ":#{msg.concat.ref}:#{msg.concat.seq}/#{msg.concat.total}", else: ""
+    fingerprint(f[:source_addr], f[:destination_addr], (msg.text || msg.body) <> part)
+  end
+
+  @doc "The fingerprint of a message for the duplicate filter and Loop Detection: source, destination and text (D6)."
+  @spec fingerprint(String.t() | nil, String.t() | nil, binary()) :: String.t()
+  def fingerprint(source, destination, text) do
+    :crypto.hash(:sha256, [source || "", 0, destination || "", 0, text || ""])
+    |> binary_part(0, 16)
+    |> Base.url_encode64(padding: false)
   end
 
   defp answer(msg, :ok), do: {:ok, %{message_id: msg.id}, []}

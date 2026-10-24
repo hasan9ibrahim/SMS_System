@@ -48,7 +48,8 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       end
 
     customer = Keyword.get(opts, :customer, CustomerCase.trunk())
-    %{port: port} = CustomerCase.start_customer(trunks: [customer], intake: Pipeline.Intake)
+    customers = [customer | Keyword.get(opts, :more_customers, [])]
+    %{port: port} = CustomerCase.start_customer(trunks: customers, intake: Pipeline.Intake)
     bind = Keyword.get(opts, :bind, :bind_transceiver)
     {client, resp} = Client.bind(port, bind, %{system_id: "acme", password: "secret"})
     assert resp.status == 0
@@ -960,6 +961,163 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
       assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
       refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+    end
+  end
+
+  # Two vendors at levels 1 and 2; vendor 1's trunk fields as given.
+  defp vendors_v1(v1_fields) do
+    [
+      vendor_trunks: [
+        PipelineConfig.vendor_trunk([id: 1] ++ v1_fields),
+        PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201])
+      ],
+      rates: [
+        PipelineConfig.rate(100, 1, "26201", "0.05"),
+        PipelineConfig.rate(200, 2, "26201", "0.02"),
+        PipelineConfig.rate(201, 3, "26201", "0.03")
+      ],
+      route_vendors: [PipelineConfig.route_vendor(1, 1, 1), PipelineConfig.route_vendor(1, 2, 2)]
+    ]
+  end
+
+  describe "re-route on a failed receipt (S-5.11, D2)" do
+    test "a delivery-billed vendor's UNDELIV sends the message to the next vendor; the customer gets one receipt" do
+      config = vendors_v1(billing_type: "delivery", reroute_on: ["UNDELIV", "EXPIRED"])
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+
+      {client, resp} = submit(client, %{short_message: "reroute me", registered_delivery: 1})
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      receipt(c1, "1", "UNDELIV", "005")
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "reroute me"
+
+      receipt(c2, "1", "DELIVRD")
+      {client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:DELIVRD"
+      assert {:receipted_message_id, resp.fields.message_id} in dlr.tlvs
+      assert {:error, :timeout} = Client.recv(client, 300)
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+
+      assert Enum.map(Enum.sort_by(edr("edr.attempt"), & &1["attempt_no"]), & &1["v_trunk_id"]) ==
+               [1, 2]
+    end
+
+    test "no re-route from a vendor that bills on submit: the customer gets the failure" do
+      config = vendors_v1(billing_type: "submit", reroute_on: ["UNDELIV"])
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {client, _} = submit(client, %{short_message: "billed", registered_delivery: 1})
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      receipt(c1, "1", "UNDELIV", "005")
+      {_, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:UNDELIV err:005"
+      refute_received {:smsc, ^c2, %Pdu{command: :submit_sm}}
+    end
+
+    test "no vendor left: the customer gets the failed receipt" do
+      config = [
+        vendor_trunks: [
+          PipelineConfig.vendor_trunk(billing_type: "delivery", reroute_on: ["UNDELIV"])
+        ]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {client, _} = submit(client, %{short_message: "last", registered_delivery: 1})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      receipt(conn, "1", "UNDELIV", "005")
+      {_, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:UNDELIV err:005"
+    end
+  end
+
+  describe "late vendor answer (S-5.2, D4)" do
+    test "a submit that timed out is re-routed; the vendor's late OK marks it a possible duplicate" do
+      %{client: client, smscs: [s1, _], conns: [c1, c2]} =
+        start_all(smscs: 2, config: vendors_v1([]), vendor_fields: %{1 => [submit_timeout_s: 1]})
+
+      start_supervised!(Pipeline.LateResponses)
+      FakeSmsc.set(s1, :submit, {:delay, 1_500})
+      {_, resp} = submit(client, %{short_message: "slow"})
+      assert resp.status == 0
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 4_000
+
+      assert_eventually(
+        fn ->
+          Enum.any?(
+            edr("edr.receipt"),
+            &(&1["msg_status"] == "ACCEPTD" and &1["is_duplicate"] == 1)
+          )
+        end,
+        4_000
+      )
+
+      [timed_out] = Enum.filter(edr("edr.attempt"), &(&1["command_status"] == -1))
+      flag = Enum.find(edr("edr.receipt"), &(&1["msg_status"] == "ACCEPTD"))
+      assert flag["edr_id"] == timed_out["edr_id"]
+      assert flag["v_trunk_id"] == 1
+    end
+  end
+
+  describe "duplicate filter and loop detection (S-2.7, S-5.16, D6)" do
+    test "the same message again within the window gets the first id and is not sent twice" do
+      customer = PipelineConfig.customer_trunk(duplicate_window_s: 60)
+      %{client: client, conns: [conn]} = start_all(config: [customer_trunks: [customer]])
+
+      {client, first} = submit(client, %{short_message: "only once"}, 2)
+      {client, again} = submit(client, %{short_message: "only once"}, 3)
+      {_, other} = submit(client, %{short_message: "something else"}, 4)
+      assert again.fields.message_id == first.fields.message_id
+      assert other.fields.message_id != first.fields.message_id
+
+      assert_receive {:smsc, ^conn,
+                      %Pdu{command: :submit_sm, fields: %{short_message: "only once"}}},
+                     2_000
+
+      assert_receive {:smsc, ^conn,
+                      %Pdu{command: :submit_sm, fields: %{short_message: "something else"}}},
+                     2_000
+
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "a refused message is not a duplicate: its resend is checked again" do
+      customer = PipelineConfig.customer_trunk(duplicate_window_s: 60)
+      %{client: client} = start_all(config: [customer_trunks: [customer]])
+
+      {client, r1} =
+        submit(client, %{destination_addr: "33612345678", short_message: "no rate"}, 2)
+
+      {_, r2} = submit(client, %{destination_addr: "33612345678", short_message: "no rate"}, 3)
+      assert {r1.status, r2.status} == {0x0B, 0x0B}
+    end
+
+    test "our message coming back on another trunk while in flight is refused (Loop Detection)" do
+      trunks = [
+        PipelineConfig.customer_trunk(),
+        PipelineConfig.customer_trunk(id: 2, loop_detection: true)
+      ]
+
+      %{client: client, port: port, conns: [conn]} =
+        start_all(
+          config: [customer_trunks: trunks],
+          more_customers: [CustomerCase.trunk(id: 2, username: "loop", name: "LOOPBACK")]
+        )
+
+      {_, resp} = submit(client, %{short_message: "round trip"})
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+
+      # The vendor routes it back into our trunk 2.
+      {back, _} = Client.bind(port, :bind_transceiver, %{system_id: "loop", password: "secret"})
+
+      fields = %{
+        source_addr: sent.fields.source_addr,
+        destination_addr: sent.fields.destination_addr
+      }
+
+      {_, looped} = submit(back, Map.put(fields, :short_message, "round trip"))
+      assert looped.status == 0x45
     end
   end
 

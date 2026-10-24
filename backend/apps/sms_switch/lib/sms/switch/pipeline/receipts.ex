@@ -21,7 +21,7 @@ defmodule Sms.Switch.Pipeline.Receipts do
   """
   @behaviour Sms.Switch.Vendor.Receipts
   require Logger
-  alias Sms.Switch.Pipeline.{Config, Edr, Forwarder, LateReceipts, Receipt, Store}
+  alias Sms.Switch.Pipeline.{Config, Edr, Forwarder, LateReceipts, Receipt, Sender, Store}
   alias Sms.Switch.Vendor.MessageId
 
   @impl true
@@ -119,8 +119,10 @@ defmodule Sms.Switch.Pipeline.Receipts do
     with {:ok, first} <- Store.put_final(message_id, part, final) do
       vendor_row(rec.data, part, receipt, not first, "vendor")
 
-      # Also on a repeated final: a receipt whose forwarding failed before is sent then (the claim stops doubles).
-      maybe_forward(message_id)
+      if first and reroute?(rec, receipt),
+        do: reroute(message_id, rec, final),
+        # Also on a repeated final: a receipt whose forwarding failed before is sent then (the claim stops doubles).
+        else: maybe_forward(message_id)
     end
   end
 
@@ -135,6 +137,47 @@ defmodule Sms.Switch.Pipeline.Receipts do
       false -> :ok
       {:ok, false} -> :ok
       :none -> :ok
+      {:error, _} = error -> error
+    end
+  end
+
+  # S-5.11, D2: a failed receipt sends the whole message to the next vendor when the vendor trunk re-routes on that
+  # status, bills on delivery (the failure costs nothing) and no part was delivered yet; it does not wait for the other
+  # parts.
+  defp reroute?(rec, receipt) do
+    resend = rec.data[:resend]
+    vt = (Config.ready?() && Config.vendor_trunk(rec.data.vendor_trunk_id)) || %{}
+
+    is_map(resend) and receipt.status != "DELIVRD" and receipt.status in (vt[:reroute_on] || []) and
+      vt[:billing_type] == "delivery" and
+      not Enum.any?(rec.finals, fn {_n, f} -> f.status == "DELIVRD" end)
+  end
+
+  # The old attempt is forgotten before the resend is queued: the new attempt records itself under the same message id
+  # and must start clean. Not queued: the old record is put back and the vendor's receipt is retried.
+  defp reroute(message_id, rec, final) do
+    vt = rec.data.vendor_trunk_id
+
+    with {:ok, true} <- Store.claim_forward(message_id),
+         :ok <- Store.forget(message_id, vt, Map.values(rec.vendor_ids)) do
+      resend =
+        Map.merge(rec.data.resend, %{edr_id: rec.data.edr_id, vendor_trunk_id: vt, receipt: final})
+
+      case Sender.publish_resend(rec.data.resend.msg, Map.delete(resend, :msg)) do
+        :ok ->
+          Logger.info(
+            "message #{message_id}: #{final.status} from vendor trunk #{vt}, re-routed (S-5.11)"
+          )
+
+          :ok
+
+        {:error, _} = error ->
+          parts = for {n, vid} <- rec.vendor_ids, do: {n, vt, vid}
+          _ = Store.record_sent(message_id, rec.data, parts, 86_400)
+          error
+      end
+    else
+      {:ok, false} -> :ok
       {:error, _} = error -> error
     end
   end
