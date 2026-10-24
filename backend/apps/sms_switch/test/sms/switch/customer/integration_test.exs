@@ -2,7 +2,9 @@ defmodule Sms.Switch.Customer.IntegrationTest do
   # Against the real PostgreSQL schema (db/postgres/migrations) and Redis (INTEGRATION=1).
   use ExUnit.Case, async: false
   alias Sms.Core.{Redis, Repo}
-  alias Sms.Switch.Customer.{Firewall, Loader, Throttle, Trunk}
+  alias Sms.Switch.Customer.{Firewall, Loader, Trunk}
+  alias Sms.Switch.Throttle
+  alias Sms.Switch.Vendor
 
   @moduletag :integration
 
@@ -100,6 +102,86 @@ defmodule Sms.Switch.Customer.IntegrationTest do
       assert smpp.system_type == "OTP"
       assert smpp.company_tps_limit == 900 and smpp.business_company_id == ids.company
       assert smpp.status == :active
+      assert by_id[ids.of_inactive].status == :inactive
+      refute Map.has_key?(by_id, ids.http)
+      refute Map.has_key?(by_id, ids.deleted)
+    end
+  end
+
+  describe "vendor Loader on the real schema" do
+    setup do
+      start_supervised!(Repo)
+      :ok
+    end
+
+    test "loads SMPP vendor trunks with their bind policy; leaves out HTTP and deleted ones" do
+      {ids, trunks} =
+        in_rollback(fn ->
+          Repo.query!(
+            "INSERT INTO currencies (iso, name, symbol) VALUES ('XTS', 'Test', 'T') ON CONFLICT DO NOTHING"
+          )
+
+          company =
+            insert!(
+              "INSERT INTO business_companies (name, base_currency) VALUES ('V Co', 'XTS') RETURNING id",
+              []
+            )
+
+          category =
+            insert!(
+              "INSERT INTO product_categories (name) VALUES ('switch test') RETURNING id",
+              []
+            )
+
+          enterprise = fn status ->
+            insert!(
+              """
+              INSERT INTO enterprises (business_company_id, name, alias, type, tier, status, address_line1)
+              VALUES ($1, 'Vendor Test ' || $2, 'vtest' || $2, 'vendor', 'tier2', $2, 'Street 1') RETURNING id
+              """,
+              [company, status]
+            )
+          end
+
+          active = enterprise.("active")
+          inactive = enterprise.("inactive")
+
+          trunk = fn ent, name, protocol, deleted ->
+            insert!(
+              """
+              INSERT INTO vendor_trunks (enterprise_id, name, protocol, product_category_id, billing_type, bind_type,
+                                         username, password, host, port, source_host, max_connections, ssl_type,
+                                         tps, msg_id_type, system_type, enquire_link_interval_s,
+                                         reconnect_schedule_s, bind_alert_after_min, auth_fail_retry_min,
+                                         bind_addr_ton, bind_addr_range, deleted_at)
+              VALUES ($1, $2, $3, $4, 'submit', 'TX', 'sw', 'pw', 'smsc.example', 2775, '10.0.0.9', 3, 'tls1.2',
+                      20, 'hexadecimal', 'VMA', 15, '{2,4}', 3, 20, 1, '^49', CASE WHEN $5 THEN now() END)
+              RETURNING id
+              """,
+              [ent, name, protocol, category, deleted]
+            )
+          end
+
+          ids = %{
+            smpp: trunk.(active, "vt smpp", "smpp", false),
+            http: trunk.(active, "vt http", "http", false),
+            deleted: trunk.(active, "vt deleted", "smpp", true),
+            of_inactive: trunk.(inactive, "vt inactive", "smpp", false)
+          }
+
+          {:ok, trunks} = Vendor.Loader.load()
+          {ids, trunks}
+        end)
+
+      by_id = Map.new(trunks, &{&1.id, &1})
+      assert %Vendor.Trunk{} = t = by_id[ids.smpp]
+      assert t.bind_type == :tx and t.tls == :"tls1.2" and t.msg_id_type == :hexadecimal
+      assert t.host == "smsc.example" and t.port == 2775 and t.source_host == {10, 0, 0, 9}
+      assert t.max_connections == 3 and Vendor.Trunk.trunk_tps(t) == 60
+      assert t.enquire_link_interval_s == 15 and t.reconnect_schedule_s == [2, 4]
+      assert t.bind_alert_after_min == 3 and t.auth_fail_retry_min == 20
+      assert t.bind_addr_ton == 1 and t.bind_addr_range == "^49" and t.system_type == "VMA"
+      assert t.status == :active
       assert by_id[ids.of_inactive].status == :inactive
       refute Map.has_key?(by_id, ids.http)
       refute Map.has_key?(by_id, ids.deleted)
@@ -262,7 +344,9 @@ defmodule Sms.Switch.Customer.IntegrationTest do
 
       results =
         1..30
-        |> Task.async_stream(fn _ -> Throttle.check(trunk) end, max_concurrency: 10)
+        |> Task.async_stream(fn _ -> Throttle.acquire(Trunk.tps_counters(trunk)) end,
+          max_concurrency: 10
+        )
         |> Enum.map(fn {:ok, r} -> r end)
 
       assert Enum.count(results, &(&1 == :ok)) == 10
@@ -284,7 +368,7 @@ defmodule Sms.Switch.Customer.IntegrationTest do
 
       b = %Trunk{a | id: id + 1}
       at_second_start()
-      results = for t <- [a, b, a, b, a], do: Throttle.check(t)
+      results = for t <- [a, b, a, b, a], do: Throttle.acquire(Trunk.tps_counters(t))
       assert results == [:ok, :ok, :ok, {:error, :company_tps}, {:error, :company_tps}]
       second = System.os_time(:second)
       {:ok, count} = Redis.command(["GET", "tps:ct:#{id}:#{second}"])
@@ -294,18 +378,28 @@ defmodule Sms.Switch.Customer.IntegrationTest do
     test "the script is loaded again after Redis forgets it (NOSCRIPT)", %{id: id} do
       {:ok, "OK"} = Redis.command(["SCRIPT", "FLUSH"])
 
-      assert Throttle.check(%Trunk{
-               id: id,
-               username: "u",
-               password: "p",
-               tps: 5,
-               max_connections: 1
-             }) == :ok
+      assert Throttle.acquire(
+               Trunk.tps_counters(%Trunk{
+                 id: id,
+                 username: "u",
+                 password: "p",
+                 tps: 5,
+                 max_connections: 1
+               })
+             ) == :ok
     end
 
     test "counters expire on their own", %{id: id} do
       :ok =
-        Throttle.check(%Trunk{id: id, username: "u", password: "p", tps: 5, max_connections: 1})
+        Throttle.acquire(
+          Trunk.tps_counters(%Trunk{
+            id: id,
+            username: "u",
+            password: "p",
+            tps: 5,
+            max_connections: 1
+          })
+        )
 
       {:ok, keys} = Redis.command(["KEYS", "tps:ct:#{id}:*"])
 

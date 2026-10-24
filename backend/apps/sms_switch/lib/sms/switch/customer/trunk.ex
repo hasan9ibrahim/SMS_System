@@ -63,6 +63,17 @@ defmodule Sms.Switch.Customer.Trunk do
       when is_integer(tps) and is_integer(max),
       do: tps * max
 
+  @doc "The TPS counters a submit on this trunk must fit in (`Sms.Switch.Throttle`): the trunk's, then the company's."
+  @spec tps_counters(t()) :: [Sms.Switch.Throttle.counter()]
+  def tps_counters(%__MODULE__{} = trunk) do
+    company =
+      if trunk.company_tps_limit,
+        do: [{:company_tps, "bc:#{trunk.business_company_id}", trunk.company_tps_limit}],
+        else: []
+
+    [{:trunk_tps, "ct:#{trunk.id}", trunk_tps(trunk)} | company]
+  end
+
   @doc "Whether a client at `ip` may bind (spec §5.4 Host Name)."
   @spec ip_allowed?(t(), :inet.ip_address()) :: boolean()
   def ip_allowed?(%__MODULE__{host_ips: ranges}, ip), do: IpRange.member?(ranges, ip)

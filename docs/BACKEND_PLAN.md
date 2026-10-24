@@ -81,7 +81,12 @@ event bus on NATS JetStream with an in-memory test adapter, health check, `mix c
 servers, keep-alive, windows with backpressure, one shared TPS limit per trunk and per business company in Redis (Q13),
 answers only on the arriving session and receipts by DLR Session Affinity (§13.1), drain and graceful unbind on stop. Decided with it:
 ports 2775 plain / 2776 TLS; failed binds handled by the Firewall screen's filters and Banned / Trusted lists (§8);
-trunk passwords stored encrypted (reversible, staff still see and change them) before real data.
+trunk passwords stored encrypted (reversible, staff still see and change them) before real data. Step 3 (vendor
+side) done: each vendor trunk's connections split between the servers and taken over when one stops (Q12), bind by
+bind type with the trunk's credentials and bind address, TLS 1.0–1.3 with certificate checks, reconnect schedule and
+Auth Fail Retry, Bind Down Alert events, keep-alive, Window Size, Submit Interval and Submit Timeout with late answers
+published for the possible-duplicate flag (D4), one shared TPS limit per vendor trunk, MsgID Type normalisation (S-5.6)
+and receipts handed to the pipeline (OK and logged until step 4, Q7).
 
 ## 1. Where we stand
 

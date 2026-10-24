@@ -58,6 +58,36 @@ Every server listens on **2775 (plain) and 2776 (TLS)** for all customers (`SMPP
 needs `SMPP_TLS_CERTFILE` / `SMPP_TLS_KEYFILE`). `SMPP_PROXY_PORTS` lists ports behind a load balancer that sends a
 PROXY header.
 
+## Vendor side (step 3)
+
+`Sms.Switch.Vendor` is where the switch is the client of each vendor's SMSC (spec §2, §5.5). The vendor trunks are
+loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
+
+- **Connections:** each active trunk opens its Max Connections connections, **split between the servers**
+  (`Sms.Switch.Vendor.Manager`, decision Q12): connection `i` of trunk `t` goes to the node at `rem(t + i, n)` among
+  the `n` running nodes. A server left alone opens them all and gives half back when the other returns.
+- **Each connection** (`Sms.Switch.Vendor.Session`) connects from the trunk's Source Host, over TCP or TLS at the
+  trunk's version or newer, and binds as TX, RX or TR with the username, password, System Type and bind address.
+  The vendor's certificate is checked against the system CAs and the host name (`VENDOR_TLS_VERIFY=peer`, the
+  default; `none` accepts any certificate).
+- **Reconnect:** a failed connect, a refused bind, a dropped connection or the vendor's unbind waits the next value
+  of the trunk's reconnect schedule (the last repeats; reset once bound). A refused password or system ID (0x0E,
+  0x0F) waits Auth Fail Retry instead. After Bind Alert minutes down, `sms.session.vendor.bind_down` is published
+  once, and `bind_up` when it binds again.
+- **Keep-alive:** `enquire_link` after the trunk's Enquire Link Interval of silence; no answer within its timeout
+  drops the connection and opens it again.
+- **Submits** (`Sms.Switch.Vendor.submit/5`): one TPS count per trunk (`tps × max_connections`) shared by both
+  servers in Redis; then a bound connection, this server's first. Window Size answers waiting per connection,
+  Submit Interval between submits. No answer within Submit Timeout gives `{:error, :timeout}` (the message may have
+  been sent, so the pipeline re-routes it, D4); an answer that arrives later is published as
+  `sms.session.vendor.late_response` so the message is flagged as a possible duplicate. The vendor's message id is
+  normalised by MsgID Type (`Sms.Switch.Vendor.MessageId`, S-5.6).
+- **Receipts and MO** (`deliver_sm`, `data_sm`) go to the `Sms.Switch.Vendor.Receipts` behaviour, each in its own
+  process, and are answered with its status. The message pipeline implements it in step 4; until then every one is
+  answered OK and logged (Q7, S-5.12).
+- **Trunk changes:** new connection settings (host, port, credentials, TLS, bind type or address) unbind and bind
+  again at once; other settings apply to live connections in place. A deactivated or deleted trunk is unbound.
+
 ## Run it
 
 Versions are pinned in `.tool-versions` (Erlang/OTP 28.5, Elixir 1.19.6). From the repo root:

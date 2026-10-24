@@ -106,4 +106,15 @@ config :sms_switch, Sms.Switch.Customer,
   tls: tls,
   session: [system_id: env.("SMPP_SYSTEM_ID", "SMSC")]
 
-config :sms_switch, Sms.Switch.Customer.Throttle, cluster_size: int.("SWITCH_CLUSTER_SIZE", "2")
+config :sms_switch, Sms.Switch.Throttle, cluster_size: int.("SWITCH_CLUSTER_SIZE", "2")
+
+# Vendor TLS connections check the vendor's certificate against the system CAs and its host name ("peer"); "none"
+# accepts any certificate (a vendor with a self-signed one).
+tls_verify =
+  case env.("VENDOR_TLS_VERIFY", "peer") do
+    "peer" -> :peer
+    "none" -> :none
+    other -> raise ArgumentError, "VENDOR_TLS_VERIFY must be peer or none, got #{inspect(other)}"
+  end
+
+config :sms_switch, Sms.Switch.Vendor, session: [tls_verify: tls_verify]
