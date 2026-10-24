@@ -223,3 +223,14 @@
   padding-left: 3px;
   padding-right: 3px;
 }
+/* Spreadsheet grid (team trial round 5, picked from the style options): a thin line around every cell, rows a touch
+   taller. Expanded-group frames keep their own heavier lines. */
+.la-grid tbody td,
+.la-grid thead th {
+  border-right: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.la-grid tbody td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
