@@ -2,8 +2,9 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
   # The pipeline against the real stores (INTEGRATION=1): the configuration queries on the PostgreSQL schema
   # (db/postgres/migrations) and the EDR rows on the ClickHouse schema (db/clickhouse/migrations).
   use ExUnit.Case, async: false
+  alias Sms.Core.Bus.Local
   alias Sms.Core.{ClickHouse, Repo}
-  alias Sms.Switch.Pipeline.{Config, Edr, EdrWriter}
+  alias Sms.Switch.Pipeline.{Config, Edr, EdrWriter, LateReceipts, MessageId, Queries}
   alias Sms.Switch.Pipeline.Config.Loader
   alias Sms.Switch.Test.{CustomerCase, PipelineConfig}
 
@@ -279,11 +280,11 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
         }
       end
 
-      assert :ok = Sms.Switch.Pipeline.LateReceipts.settle(vt, ["a2"], late.("a2"))
-      assert :ok = Sms.Switch.Pipeline.LateReceipts.settle(vt, ["a1"], late.("a1"))
-      assert :ok = Sms.Switch.Pipeline.LateReceipts.settle(vt, ["zz"], late.("zz"))
+      assert :ok = LateReceipts.settle(vt, ["a2"], late.("a2"))
+      assert :ok = LateReceipts.settle(vt, ["a1"], late.("a1"))
+      assert :ok = LateReceipts.settle(vt, ["zz"], late.("zz"))
 
-      rows = for e <- Sms.Core.Bus.Local.published(), e.type == "edr.receipt", do: e.data
+      rows = for e <- Local.published(), e.type == "edr.receipt", do: e.data
 
       assert [
                %{
@@ -297,6 +298,79 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
              ] = rows
 
       assert c_id == msg().id
+    end
+
+    test "query_sm reads a finished message from the EDRs: the customer's receipt, a refusal, else ENROUTE (S-2.15)" do
+      start_supervised!(Sms.Switch.Pipeline.Store)
+      ent = 700_000 + System.unique_integer([:positive])
+
+      PipelineConfig.put(
+        customer_trunks: [
+          PipelineConfig.customer_trunk(enterprise_id: ent),
+          PipelineConfig.customer_trunk(id: 2, enterprise_id: ent + 1)
+        ]
+      )
+
+      start_supervised!({Config.Server, loader: PipelineConfig})
+      CustomerCase.assert_eventually(&Config.ready?/0)
+      context = %{origin: %{trunk_id: 1}}
+
+      write = fn id, attempt ->
+        base = msg()
+        m = %{base | id: id, trunk: %{base.trunk | enterprise_id: ent}}
+        edr_id = Edr.new_id()
+
+        row =
+          Edr.attempt_row(
+            m,
+            Map.merge(%{edr_id: edr_id, no: 1, final: true, vendor: nil}, attempt)
+          )
+
+        :ok = EdrWriter.write("edr", [Map.delete(row, "row_key")])
+        {m, edr_id}
+      end
+
+      delivered = MessageId.new()
+      {m, edr_id} = write.(delivered, %{success: true, command_status: 0})
+
+      receipt =
+        Edr.receipt_row(%{
+          edr_id: edr_id,
+          kind: "customer",
+          at: System.os_time(:millisecond),
+          msg: m,
+          part: 1,
+          status: "DELIVRD",
+          customer_status: "DELIVRD",
+          customer_error: "000"
+        })
+
+      :ok = EdrWriter.write("edr_receipt", [Map.delete(receipt, "row_key")])
+
+      assert {:ok, %{message_state: 2, final_date: date, error_code: 0}, []} =
+               Queries.query(context, %{message_id: delivered})
+
+      assert date =~ ~r/\A\d{12}\d00\+\z/
+
+      refused = MessageId.new()
+      _ = write.(refused, %{success: false, command_status: 0x45})
+
+      assert {:ok, %{message_state: 8, error_code: 0x45}, []} =
+               Queries.query(context, %{message_id: refused})
+
+      waiting = MessageId.new()
+      _ = write.(waiting, %{success: true, command_status: 0})
+      assert {:ok, %{message_state: 1}, []} = Queries.query(context, %{message_id: waiting})
+
+      # Another customer's message, or none at all.
+      assert {:error, :esme_rqueryfail} =
+               Queries.query(%{origin: %{trunk_id: 2}}, %{message_id: delivered})
+
+      assert {:error, :esme_rsyserr} =
+               Queries.query(%{origin: %{trunk_id: 99}}, %{message_id: delivered})
+
+      assert {:error, :esme_rqueryfail} =
+               Queries.query(context, %{message_id: MessageId.new()})
     end
 
     defp receipt_row(edr_id, part, source) do

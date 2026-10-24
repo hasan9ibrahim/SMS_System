@@ -201,7 +201,8 @@ defmodule Sms.Switch.Test.PipelineConfig do
         vendor_trunk_ids: [],
         vendor_category_mode: "all",
         vendor_category_ids: [],
-        lcr_profile_id: nil
+        lcr_profile_id: nil,
+        skip_vendor_at_tps_pct: nil
       },
       fields
     )

@@ -11,7 +11,7 @@ defmodule Sms.Switch.Pipeline.Router do
   Vendors already tried for this message (a refusal, a timeout, no connection) are skipped the same way, so a re-route
   (S-5.2, D4) follows the rules' own order to the next vendor.
   """
-  alias Sms.Switch.Pipeline.Config
+  alias Sms.Switch.Pipeline.{Config, LiveTps}
   alias Sms.Switch.Rules.{Route, Translation}
 
   @egress_tries 10
@@ -55,7 +55,11 @@ defmodule Sms.Switch.Pipeline.Router do
       content: input.text,
       mccmnc: mccmnc,
       destination: "#{input.destination.country} · #{network(input.destination)}",
-      tps: nil,
+      # §13.8: live TPS from the switch's counters, with each rule's hysteresis.
+      tps: fn rule_id, t ->
+        LiveTps.check(rule_id, LiveTps.scope_key(t[:scope], rule_id, input), t)
+      end,
+      vendor_tps_pct: &LiveTps.vendor_pct(&1, Config.vendor_trunk(&1)[:tps_limit]),
       sell_rate: input.sell.platform,
       accumulated_revenue: nil,
       hlr_ported: nil,

@@ -4,7 +4,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   use Sms.Switch.Test.VendorCase, async: false
   @moduletag capture_log: true
 
-  alias Sms.Core.Bus.Event
+  alias Sms.Core.Bus.{Event, Local}
   alias Sms.Switch.Pipeline
   alias Sms.Switch.Pipeline.Held.OnBind
   alias Sms.Switch.Test.{Client, CustomerCase, PipelineConfig}
@@ -14,6 +14,8 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   setup do
     start_supervised!(Sms.Core.Bus)
     start_supervised!(Pipeline.Store)
+    start_supervised!(Pipeline.Delayed)
+    start_supervised!(Pipeline.LiveTps)
     :ok
   end
 
@@ -22,7 +24,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     PipelineConfig.put(Keyword.get(opts, :config, []))
     start_supervised!({Pipeline.Config.Server, loader: PipelineConfig})
     CustomerCase.assert_eventually(&Pipeline.Config.ready?/0)
-    start_supervised!(Pipeline.Sender)
+    if Keyword.get(opts, :sender, true), do: start_supervised!(Pipeline.Sender)
     start_supervised!(Pipeline.Forwarder)
     start_supervised!({Pipeline.Held, sweep_ms: 60_000})
     start_supervised!(Pipeline.Held.OnBind)
@@ -1314,6 +1316,182 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
     test "a bind event without a trunk id is ignored" do
       assert OnBind.handle_event(Event.new("sms.session.customer.bound", "t", %{})) == :ok
+    end
+  end
+
+  describe "query_sm and cancel_sm (S-2.15, D8)" do
+    defp query(client, id, seq \\ 3) do
+      Client.send_pdu(
+        client,
+        Pdu.new(:query_sm, %{message_id: id, source_addr: "FakeBank"}, sequence: seq)
+      )
+
+      assert {client, %Pdu{command: :query_sm_resp, sequence: ^seq} = resp} =
+               Client.recv(client, 5_000)
+
+      {client, resp}
+    end
+
+    defp cancel(client, id, seq) do
+      Client.send_pdu(
+        client,
+        Pdu.new(:cancel_sm, %{message_id: id, source_addr: "FakeBank"}, sequence: seq)
+      )
+
+      assert {client, %Pdu{command: :cancel_sm_resp, sequence: ^seq} = resp} =
+               Client.recv(client, 5_000)
+
+      {client, resp}
+    end
+
+    test "a message waiting for its receipt is ENROUTE; an unknown or foreign id fails 0x67" do
+      %{client: client} = start_all()
+      {client, resp} = submit(client, %{short_message: "where is it", registered_delivery: 1})
+      id = resp.fields.message_id
+
+      {client, q} = query(client, id)
+      assert q.status == 0
+      assert q.fields.message_id == id
+      assert q.fields.message_state == 1
+      assert q.fields.final_date == ""
+
+      # Not an id of ours.
+      {client, q} = query(client, "not-an-id", 4)
+      assert q.status == 0x67
+
+      # A well-formed id nobody has (no record, no EDR store in this test): failed or system error, never a state.
+      {_client, q} = query(client, Pipeline.MessageId.new(), 5)
+      assert q.status in [0x67, 0x08]
+    end
+
+    test "cancel while queued: OK, DELETED for query_sm, and the sender drops it without a vendor or receipt" do
+      %{client: client, conns: [conn]} = start_all(sender: false)
+      {client, resp} = submit(client, %{short_message: "cancel me", registered_delivery: 1})
+      id = resp.fields.message_id
+
+      {client, c} = cancel(client, id, 3)
+      assert c.status == 0
+      {client, q} = query(client, id, 4)
+      assert q.fields.message_state == 4
+
+      [event] = for e <- Local.published(), e.type == "msg.accepted", do: e
+      assert :ok = Pipeline.Sender.handle_event(event)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+      [row] = edr("edr.attempt")
+      assert row["c_msg_status"] == "DELETED"
+      assert row["c_message_id"] == id
+      assert {:error, :timeout} = Client.recv(client, 300)
+    end
+
+    test "cancel after the sender took it, or of an unknown id: 0x11" do
+      %{client: client} = start_all()
+      {client, resp} = submit(client, %{short_message: "too late"})
+      {client, c} = cancel(client, resp.fields.message_id, 3)
+      assert c.status == 0x11
+      {_client, c} = cancel(client, "", 4)
+      assert c.status == 0x11
+    end
+
+    test "replace_sm is not supported: 0x03" do
+      %{client: client} = start_all()
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:replace_sm, %{message_id: "x", source_addr: "FakeBank", short_message: "new"},
+          sequence: 3
+        )
+      )
+
+      assert {_, %Pdu{sequence: 3} = resp} = Client.recv(client, 5_000)
+      assert resp.status == 0x03
+    end
+  end
+
+  describe "Delayed Submit (S-2.18, D11)" do
+    defp delayed(opts \\ []) do
+      config =
+        Keyword.merge(
+          [customer_trunks: [PipelineConfig.customer_trunk(delayed_submit: true)]],
+          opts[:config] || []
+        )
+
+      start_all(
+        Keyword.merge(opts, config: config, customer: CustomerCase.trunk(delayed_submit: true))
+      )
+    end
+
+    test "the resp waits for the vendor's answer and carries our message id" do
+      %{client: client, smscs: [smsc]} = delayed()
+      FakeSmsc.set(smsc, :submit, {:delay, 400})
+      started = System.monotonic_time(:millisecond)
+      {_client, resp} = submit(client, %{short_message: "wait for it"})
+      assert resp.status == 0
+      assert byte_size(resp.fields.message_id) == 20
+      assert System.monotonic_time(:millisecond) - started >= 400
+    end
+
+    test "a vendor refusal with no vendor left is the resp's error, and no receipt follows" do
+      %{client: client, smscs: [smsc]} = delayed()
+      FakeSmsc.set(smsc, :submit, {:status, 0x0B})
+      {client, resp} = submit(client, %{short_message: "refused", registered_delivery: 1})
+      assert resp.status == 0x0B
+      assert {:error, :timeout} = Client.recv(client, 300)
+    end
+
+    test "a silent vendor: 0x45 at its Submit Timeout" do
+      %{client: client, smscs: [smsc]} = delayed(vendor_fields: %{1 => [submit_timeout_s: 1]})
+      FakeSmsc.set(smsc, :submit, :silent)
+      {_client, resp} = submit(client, %{short_message: "nobody home"})
+      assert resp.status == 0x45
+    end
+  end
+
+  describe "live TPS in routing (§13.8, §13.23)" do
+    defp tps_rules(condition) do
+      [
+        route_rules: [
+          %{id: 1, priority: 10, continue_routing: "stop", tps_condition: condition},
+          %{id: 2, priority: 20}
+        ],
+        route_vendors: [PipelineConfig.route_vendor(1, 2), PipelineConfig.route_vendor(2, 1)]
+      ]
+    end
+
+    defp at_tps(trunk_id, tps) do
+      now = System.os_time(:second)
+      for s <- (now - 5)..(now - 1), do: Pipeline.LiveTps.count(["ct:#{trunk_id}"], tps, s)
+    end
+
+    test "a TPS condition on the customer trunk sends the excess to its rule's vendor; the EDR records the TPS" do
+      condition = %{"op" => ">", "value" => 50, "scope" => "customer_trunk", "window_s" => 5}
+
+      %{client: client, conns: [c1, c2]} =
+        start_all(smscs: 2, config: vendors_v1([]) ++ tps_rules(condition))
+
+      {client, _} = submit(client, %{short_message: "slow"})
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+
+      at_tps(1, 80)
+      {_client, _} = submit(client, %{short_message: "fast"}, 3)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.any?(edr("edr.attempt"), &(&1["measured_tps"] >= 80))
+    end
+
+    test "a vendor at the rule's % of its TPS limit is skipped for the next level" do
+      config =
+        [tps: 10, max_connections: 1]
+        |> vendors_v1()
+        |> Keyword.put(:route_rules, [%{id: 1, skip_vendor_at_tps_pct: 80}])
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      Pipeline.LiveTps.count(["vt:1"], 9, System.os_time(:second) - 1)
+      {_client, _} = submit(client, %{short_message: "busy vendor"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
     end
   end
 end

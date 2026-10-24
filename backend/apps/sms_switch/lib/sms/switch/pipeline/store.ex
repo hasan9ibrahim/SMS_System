@@ -334,6 +334,64 @@ defmodule Sms.Switch.Pipeline.Store do
   def claim_resend(id, no),
     do: match?({:ok, "OK"}, run(["SET", "rs:#{id}:#{no}", "1", "NX", "EX", 86_400]))
 
+  @doc """
+  Marks a message queued for its vendor (S-2.15, D8): one key per customer message id, under the enterprise, so
+  `cancel_sm` and `query_sm` only see the asking customer's own messages. Set before the message goes on the bus.
+  """
+  @spec mark_queued(integer(), [String.t()], pos_integer()) :: :ok | {:error, term()}
+  def mark_queued(enterprise_id, ids, ttl_s) do
+    commands = Enum.map(ids, &["SET", "q:#{enterprise_id}:#{&1}", "q", "EX", ttl_s])
+
+    case backend() do
+      :redis -> ok(Redis.transaction(commands, @timeout))
+      :local -> ok(local(commands))
+    end
+  end
+
+  @doc """
+  Takes the queued marks of a message as the sender picks it up: `:cancelled` when the customer cancelled it (the
+  mark stays, for `query_sm`), else `:send`. A mark already gone (a redelivery, or Redis lost it) sends.
+  """
+  @spec take_queued(integer(), [String.t()], pos_integer()) :: :send | :cancelled
+  def take_queued(enterprise_id, ids, keep_s) do
+    taken = Enum.map(ids, &run(["GETDEL", "q:#{enterprise_id}:#{&1}"]))
+
+    if Enum.any?(taken, &(&1 == {:ok, "x"})) do
+      _ = Enum.map(ids, &run(["SET", "q:#{enterprise_id}:#{&1}", "x", "EX", keep_s]))
+      :cancelled
+    else
+      :send
+    end
+  end
+
+  @doc "Cancels a queued message (`cancel_sm`): `:ok`, or `:not_queued` when the sender already took it (0x11)."
+  @spec cancel_queued(integer(), String.t(), pos_integer()) ::
+          :ok | :not_queued | {:error, term()}
+  def cancel_queued(enterprise_id, id, keep_s) do
+    case run(["SET", "q:#{enterprise_id}:#{id}", "x", "XX", "GET", "EX", keep_s]) do
+      {:ok, old} when old in ["q", "x"] -> :ok
+      {:ok, _none} -> :not_queued
+      error -> error
+    end
+  end
+
+  @doc "A message's queued mark: `:queued`, `:cancelled` or `:none`."
+  @spec queued(integer(), String.t()) :: {:ok, :queued | :cancelled | :none} | {:error, term()}
+  def queued(enterprise_id, id) do
+    case run(["GET", "q:#{enterprise_id}:#{id}"]) do
+      {:ok, "q"} -> {:ok, :queued}
+      {:ok, "x"} -> {:ok, :cancelled}
+      {:ok, nil} -> {:ok, :none}
+      error -> error
+    end
+  end
+
+  @doc "Forgets the queued marks of a message that did not reach the bus."
+  @spec drop_queued(integer(), [String.t()]) :: :ok
+  def drop_queued(enterprise_id, ids) do
+    Enum.each(ids, &run(["DEL", "q:#{enterprise_id}:#{&1}"]))
+  end
+
   @doc "Remembers the attempt of a part whose submit timed out, for `ttl_s` (D4)."
   @spec put_possibly_sent(String.t(), term(), pos_integer()) :: :ok | {:error, term()}
   def put_possibly_sent(ref, attempt, ttl_s),
@@ -540,6 +598,13 @@ defmodule Sms.Switch.Pipeline.Store do
     case lookup(key) do
       nil -> put_then(key, value, ttl, "OK")
       _ -> nil
+    end
+  end
+
+  defp exec(["SET", key, value, "XX", "GET", "EX", ttl]) do
+    case lookup(key) do
+      nil -> nil
+      existing -> put_then(key, value, ttl, existing)
     end
   end
 

@@ -30,10 +30,26 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Customer.Intake.NotReady
   alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Message.{Concat, Text}
-  alias Sms.Switch.Pipeline.{Config, Credit, Edr, MessageId, Reassembly, Router, Store}
+
+  alias Sms.Switch.Pipeline.{
+    Config,
+    Credit,
+    Delayed,
+    Edr,
+    LiveTps,
+    MessageId,
+    Queries,
+    Reassembly,
+    Router,
+    Store
+  }
+
   alias Sms.Switch.Rules.Translation
   alias Sms.Switch.Smpp.{Pdu, Status}
   alias Sms.Switch.Throttle
+
+  # How long a queued mark lasts (a buffered message can wait for its TPS) and a cancelled one is remembered.
+  @queued_s 86_400
 
   @impl true
   def handle(context, %Pdu{command: command} = pdu) when command in [:submit_sm, :data_sm] do
@@ -46,7 +62,9 @@ defmodule Sms.Switch.Pipeline.Intake do
     reply
   end
 
-  # query_sm and cancel_sm come with build step 5 (decision D8).
+  # S-2.15, D8.
+  def handle(context, %Pdu{command: :query_sm} = pdu), do: Queries.query(context, pdu.fields)
+  def handle(context, %Pdu{command: :cancel_sm} = pdu), do: Queries.cancel(context, pdu.fields)
   def handle(context, pdu), do: NotReady.handle(context, pdu)
 
   defp accept(context, pdu) do
@@ -146,9 +164,29 @@ defmodule Sms.Switch.Pipeline.Intake do
   defp go(:part, msg, _fingerprint), do: Reassembly.hold(msg)
 
   defp go(:ok, msg, fingerprint) do
-    case answer(msg, process(msg)) do
-      {:ok, _, _} = ok -> ok
-      error -> forget_fingerprint(msg, fingerprint) && error
+    reply = if Delayed.delayed?(msg), do: delayed(msg), else: answer(msg, process(msg))
+
+    case reply do
+      {:ok, _, _} = ok ->
+        ok
+
+      error ->
+        forget_fingerprint(msg, fingerprint)
+        error
+    end
+  end
+
+  # S-2.18, D11: stored as usual, then the resp waits for the vendor's outcome.
+  defp delayed(msg) do
+    :ok = Delayed.join(msg.id)
+
+    case process(msg) do
+      :ok ->
+        Delayed.await(msg.id)
+
+      other ->
+        _ = Delayed.leave(msg.id)
+        answer(msg, other)
     end
   end
 
@@ -158,11 +196,11 @@ defmodule Sms.Switch.Pipeline.Intake do
   end
 
   # A refused message is not a duplicate of anything: a resend of it is a new message.
-  defp forget_fingerprint(_msg, nil), do: true
+  defp forget_fingerprint(_msg, nil), do: :ok
 
   defp forget_fingerprint(msg, fingerprint) do
     _ = Store.release_fingerprint(msg.trunk.id, fingerprint)
-    true
+    :ok
   end
 
   defp duplicate(msg, fingerprint) do
@@ -354,10 +392,16 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   defp route_now(msg) do
     input = router_input(msg)
+    # Live TPS per scope (§13.8): this message counts before its own routing.
+    LiveTps.count(LiveTps.message_keys(msg), msg.parts)
 
     case Router.route(input) do
       {:ok, routed} ->
-        {:ok, %{msg | route: route_of(routed)}}
+        route = route_of(routed)
+        if route.rule_id, do: LiveTps.count(["r:#{route.rule_id}"], msg.parts)
+        # The EDR records the customer trunk's TPS when it was routed (§13.8 Visibility).
+        {:ok,
+         %{msg | route: Map.put(route, :measured_tps, LiveTps.rate("ct:#{msg.trunk.id}", 5))}}
 
       {:error, reason, _decision} ->
         {:reject, :esme_rsubmitfail, reason, msg}
@@ -424,9 +468,24 @@ defmodule Sms.Switch.Pipeline.Intake do
       "m" => Base.encode64(:erlang.term_to_binary(msg, [:compressed]))
     }
 
+    # Queued until the sender takes it: what cancel_sm and query_sm see (S-2.15, D8). Without Redis the message still
+    # goes; it just cannot be cancelled.
+    ids = Map.get(msg, :ids, [msg.id])
+    ent = msg.trunk.enterprise_id
+
+    with {:error, reason} <- Store.mark_queued(ent, ids, @queued_s),
+         do:
+           Logger.warning(
+             "message #{msg.id} not marked queued, cannot be cancelled: #{inspect(reason)}"
+           )
+
     case Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}") do
-      {:ok, _} -> :ok
-      {:error, _} = error -> error
+      {:ok, _} ->
+        :ok
+
+      {:error, _} = error ->
+        Store.drop_queued(ent, ids)
+        error
     end
   end
 

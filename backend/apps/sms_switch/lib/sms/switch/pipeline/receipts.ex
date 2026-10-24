@@ -160,25 +160,29 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
     with {:ok, true} <- Store.claim_forward(message_id),
          :ok <- Store.forget(message_id, vt, Map.values(rec.vendor_ids)) do
-      resend =
-        Map.merge(rec.data.resend, %{edr_id: rec.data.edr_id, vendor_trunk_id: vt, receipt: final})
-
-      case Sender.publish_resend(rec.data.resend.msg, Map.delete(resend, :msg)) do
-        :ok ->
-          Logger.info(
-            "message #{message_id}: #{final.status} from vendor trunk #{vt}, re-routed (S-5.11)"
-          )
-
-          :ok
-
-        {:error, _} = error ->
-          parts = for {n, vid} <- rec.vendor_ids, do: {n, vt, vid}
-          _ = Store.record_sent(message_id, rec.data, parts, 86_400)
-          error
-      end
+      queue_resend(message_id, rec, final, vt)
     else
       {:ok, false} -> :ok
       {:error, _} = error -> error
+    end
+  end
+
+  defp queue_resend(message_id, rec, final, vt) do
+    resend =
+      Map.merge(rec.data.resend, %{edr_id: rec.data.edr_id, vendor_trunk_id: vt, receipt: final})
+
+    case Sender.publish_resend(rec.data.resend.msg, Map.delete(resend, :msg)) do
+      :ok ->
+        Logger.info(
+          "message #{message_id}: #{final.status} from vendor trunk #{vt}, re-routed (S-5.11)"
+        )
+
+        :ok
+
+      {:error, _} = error ->
+        parts = for {n, vid} <- rec.vendor_ids, do: {n, vt, vid}
+        _ = Store.record_sent(message_id, rec.data, parts, 86_400)
+        error
     end
   end
 

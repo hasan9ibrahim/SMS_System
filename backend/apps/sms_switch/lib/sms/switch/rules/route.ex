@@ -97,7 +97,8 @@ defmodule Sms.Switch.Rules.Route do
       vendor_trunk_ids: MapSet.new(),
       vendor_category_mode: :all,
       vendor_category_ids: MapSet.new(),
-      lcr_profile: nil
+      lcr_profile: nil,
+      skip_vendor_at_tps_pct: nil
     ]
 
     @condition_keys %Conditions{} |> Map.from_struct() |> Map.keys()
@@ -117,7 +118,7 @@ defmodule Sms.Switch.Rules.Route do
         r
         | starts_at: ms(r.starts_at, 0),
           stops_at: ms(r.stops_at, 253_402_300_799_000),
-          conditions: Conditions.new(conditions),
+          conditions: conditions |> Conditions.new() |> tag_tps(r.id),
           vendor_trunk_ids: MapSet.new(r.vendor_trunk_ids),
           vendor_category_ids: MapSet.new(r.vendor_category_ids),
           whitelists: Enum.map(r.whitelists, &%{&1 | numbers: MapSet.new(&1.numbers)}),
@@ -125,6 +126,10 @@ defmodule Sms.Switch.Rules.Route do
             r.lcr_profile && Map.update!(r.lcr_profile, :vendor_trunk_ids, &MapSet.new/1)
       }
     end
+
+    # A live TPS condition keeps its hysteresis per rule (§13.8).
+    defp tag_tps(%{tps: nil} = c, _id), do: c
+    defp tag_tps(%{tps: t} = c, id), do: %{c | tps: Map.put(t, :rule_id, id)}
 
     defp ms(nil, default), do: default
     defp ms(%DateTime{} = at, _), do: DateTime.to_unix(at, :millisecond)
@@ -310,8 +315,8 @@ defmodule Sms.Switch.Rules.Route do
   defp condition_ok?(:receiver_list, c, m),
     do: m.list_has?.(c.receiver_list_id, m.receiver, false) != c.receiver_list_negate
 
-  defp condition_ok?(:tps, %{tps: t}, m),
-    do: m[:tps] != nil and compare(t.op, m.tps, t.value, t[:value2], t[:tolerance_pct] || 5)
+  # The switch passes a function (its live counters with hysteresis, §13.8); the Route Simulator a number.
+  defp condition_ok?(:tps, %{tps: t}, m), do: t |> tps_check(m) |> elem(0)
 
   defp condition_ok?(:revenue, %{revenue: rev}, m) do
     actual = if rev.type == :per_message, do: m[:sell_rate], else: m[:accumulated_revenue]
@@ -319,6 +324,15 @@ defmodule Sms.Switch.Rules.Route do
   end
 
   defp condition_ok?(:hlr, c, m), do: m[:hlr_ported] == c.hlr_ported
+
+  # {matches?, measured TPS or nil}
+  defp tps_check(t, m) do
+    case m[:tps] do
+      nil -> {false, nil}
+      f when is_function(f, 2) -> f.(t[:rule_id], t)
+      tps -> {compare(t.op, tps, t.value, t[:value2], t[:tolerance_pct] || 5), tps}
+    end
+  end
 
   @doc "Every condition check with its detail; `set` = the rule uses it, `gate` = status and time (always apply)."
   @spec condition_checks(Rule.t(), context()) :: [map()]
@@ -458,14 +472,14 @@ defmodule Sms.Switch.Rules.Route do
     )
   end
 
-  defp detailed(:tps, %{tps: t} = c, m) do
-    ok = condition_ok?(:tps, c, m)
+  defp detailed(:tps, %{tps: t}, m) do
+    {ok, tps} = tps_check(t, m)
 
     detail =
-      if m[:tps] == nil,
+      if tps == nil,
         do: "no simulated TPS",
         else:
-          "#{Lcr.num(m.tps)} #{t.op} #{Lcr.num(t.value)}#{if t.op == "between", do: "–#{Lcr.num(t[:value2])}", else: ""}" <>
+          "#{Lcr.num(tps)} #{t.op} #{Lcr.num(t.value)}#{if t.op == "between", do: "–#{Lcr.num(t[:value2])}", else: ""}" <>
             " (#{t[:scope]}, #{t[:window_s] || 5}s)"
 
     check("TPS", ok, detail)
@@ -640,15 +654,35 @@ defmodule Sms.Switch.Rules.Route do
 
   defp margin_ok?(c, %{rule: rule}), do: c.margin >= rule.margin
 
-  defp usable?(c, ctx), do: not egress_blocked?(c, ctx) and margin_ok?(c, ctx)
+  defp usable?(c, ctx),
+    do: not egress_blocked?(c, ctx) and margin_ok?(c, ctx) and not tps_full?(c, ctx)
+
+  # §13.8 vendor capacity option: a vendor at the rule's % of its TPS limit is skipped, so the next level takes it.
+  defp tps_full?(c, %{rule: %{skip_vendor_at_tps_pct: pct}, m: m}) when is_integer(pct),
+    do: vendor_tps_pct(m, c.vendor_trunk_id) >= pct
+
+  defp tps_full?(_c, _ctx), do: false
+
+  defp vendor_tps_pct(m, id) do
+    case m[:vendor_tps_pct] do
+      f when is_function(f, 1) -> f.(id)
+      _ -> 0
+    end
+  end
 
   defp egress_blocked?(c, ctx), do: c.vendor_trunk_id in (ctx.m[:egress_blocked] || MapSet.new())
 
   defp skip_why(c, ctx) do
-    if egress_blocked?(c, ctx),
-      do: "blocked by its vendor translation rule",
-      else:
+    cond do
+      egress_blocked?(c, ctx) ->
+        "blocked by its vendor translation rule"
+
+      tps_full?(c, ctx) ->
+        "at #{ctx.rule.skip_vendor_at_tps_pct} % of its TPS limit"
+
+      true ->
         "margin below #{Lcr.num(ctx.rule.margin)}#{if ctx.rule.margin_type == :percent, do: " %", else: ""}"
+    end
   end
 
   # 1. Number whitelist pinned to a vendor (§13.27).
@@ -732,7 +766,7 @@ defmodule Sms.Switch.Rules.Route do
   # An LCR profile filters, orders and splits the vendors (§13.23).
   defp lcr_candidates(%{rule: rule, m: m} = ctx, pool) do
     pool
-    |> Enum.map(&lcr_candidate/1)
+    |> Enum.map(&lcr_candidate(&1, m))
     |> Lcr.rank(rule.lcr_profile)
     |> Enum.filter(& &1.pick)
     |> Lcr.split_pick(bucket(m.receiver))
@@ -750,7 +784,7 @@ defmodule Sms.Switch.Rules.Route do
     |> Enum.map(fn {o, i} -> candidate(ctx, o.vendor_trunk_id, i, nil) end)
   end
 
-  defp lcr_candidate(o) do
+  defp lcr_candidate(o, m) do
     %{
       vendor_trunk_id: o.vendor_trunk_id,
       cost: o.cost,
@@ -758,7 +792,7 @@ defmodule Sms.Switch.Rules.Route do
       dlr: o[:dlr],
       delay_s: o[:delay_s],
       tier: o[:tier],
-      at_limit: o[:at_limit] || false
+      at_limit: o[:at_limit] || vendor_tps_pct(m, o.vendor_trunk_id) >= 100
     }
   end
 

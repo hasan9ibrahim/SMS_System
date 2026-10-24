@@ -34,7 +34,19 @@ defmodule Sms.Switch.Pipeline.Sender do
   alias Sms.Core.Bus
   alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Message.{Concat, Text}
-  alias Sms.Switch.Pipeline.{Config, Edr, Forwarder, Intake, Receipts, Router, Store}
+
+  alias Sms.Switch.Pipeline.{
+    Config,
+    Delayed,
+    Edr,
+    Forwarder,
+    Intake,
+    LiveTps,
+    Receipts,
+    Router,
+    Store
+  }
+
   alias Sms.Switch.Smpp.Status
   alias Sms.Switch.{Throttle, Vendor}
 
@@ -42,6 +54,8 @@ defmodule Sms.Switch.Pipeline.Sender do
   # How long a timed-out submit waits for a late answer (D4), and a sent message counts as in flight (S-5.16).
   @late_keep_s 3_600
   @in_flight_s 120
+  # How long a cancelled message is remembered for query_sm (S-2.15).
+  @cancelled_keep_s 86_400
   @temporary [0x58, 0x14, 0x08]
   @temporary_tries 3
   @udhi 0x40
@@ -52,13 +66,11 @@ defmodule Sms.Switch.Pipeline.Sender do
   def handle_event(event) do
     msg = Intake.decode(event.data)
 
-    cond do
-      # A resend after a failed receipt (S-5.11): its message was forgotten; the claim stops a redelivery sending twice.
-      is_map(msg[:resend]) ->
-        if Store.claim_resend(msg.id, msg.resend.no), do: send_message(msg), else: :ok
-
-      true ->
-        send_unless_sent(msg)
+    # A resend after a failed receipt (S-5.11): its message was forgotten; the claim stops a redelivery sending twice.
+    if is_map(msg[:resend]) do
+      if Store.claim_resend(msg.id, msg.resend.no), do: send_message(msg), else: :ok
+    else
+      send_unless_sent(msg)
     end
   end
 
@@ -78,18 +90,45 @@ defmodule Sms.Switch.Pipeline.Sender do
   def send_message(msg) do
     pace(msg)
 
-    if grows_parts?(msg, msg.ingress[:text]) do
-      # D3: a translation that adds parts never reaches a vendor; the customer is not billed.
-      fail(msg, [], %{
-        status: "REJECTD",
-        error: "001",
-        command_status: Status.code(:esme_rsubmitfail),
-        reason: :translation_grows
-      })
-    else
-      attempt(msg, msg.route, 1, MapSet.new([msg.route.vendor_trunk_id]), [])
+    cond do
+      Store.take_queued(msg.trunk.enterprise_id, Map.get(msg, :ids, [msg.id]), @cancelled_keep_s) ==
+          :cancelled ->
+        cancelled(msg)
+
+      grows_parts?(msg, msg.ingress[:text]) ->
+        # D3: a translation that adds parts never reaches a vendor; the customer is not billed.
+        fail(msg, [], %{
+          status: "REJECTD",
+          error: "001",
+          command_status: Status.code(:esme_rsubmitfail),
+          reason: :translation_grows
+        })
+
+      true ->
+        attempt(msg, msg.route, 1, MapSet.new([msg.route.vendor_trunk_id]), [])
     end
 
+    :ok
+  end
+
+  # Cancelled by the customer while queued (S-2.15, D8): never sent, not billed, no receipt; one EDR row (attempt 0,
+  # DELETED).
+  defp cancelled(msg) do
+    Logger.info("message #{msg.id} cancelled by the customer before it was sent (S-2.15)")
+
+    row =
+      msg
+      |> Edr.attempt_row(%{
+        edr_id: Edr.new_id(),
+        no: 0,
+        final: true,
+        success: false,
+        vendor: nil,
+        command_status: 0
+      })
+      |> Map.put("c_msg_status", "DELETED")
+
+    _ = Edr.publish_attempt(row)
     :ok
   end
 
@@ -172,7 +211,7 @@ defmodule Sms.Switch.Pipeline.Sender do
             )
 
             row = Map.merge(attempt, %{success: false, command_status: -1})
-            possibly_sent(msg, attempt, length(submits))
+            _ = possibly_sent(msg, attempt, length(submits))
 
             next(
               msg,
@@ -203,23 +242,24 @@ defmodule Sms.Switch.Pipeline.Sender do
     msg = Map.delete(msg, :resend)
     tried = MapSet.new(resend.tried)
 
-    case Router.route(Intake.router_input(msg), tried) do
-      {:ok, routed} ->
-        attempt(msg, Intake.route_of(routed), resend.no + 1, tried, [])
+    _ =
+      case Router.route(Intake.router_input(msg), tried) do
+        {:ok, routed} ->
+          attempt(msg, Intake.route_of(routed), resend.no + 1, tried, [])
 
-      {:error, reason, _} ->
-        Logger.info(
-          "message #{msg.id}: no vendor left after its failed receipt (#{inspect(reason)})"
-        )
+        {:error, reason, _} ->
+          Logger.info(
+            "message #{msg.id}: no vendor left after its failed receipt (#{inspect(reason)})"
+          )
 
-        data =
-          Map.merge(Forwarder.core(msg), %{
-            edr_id: resend.edr_id,
-            vendor_trunk_id: resend.vendor_trunk_id
-          })
+          data =
+            Map.merge(Forwarder.core(msg), %{
+              edr_id: resend.edr_id,
+              vendor_trunk_id: resend.vendor_trunk_id
+            })
 
-        _ = Forwarder.publish(data, resend.receipt)
-    end
+          _ = Forwarder.publish(data, resend.receipt)
+      end
 
     :ok
   end
@@ -275,25 +315,27 @@ defmodule Sms.Switch.Pipeline.Sender do
     {bytes, alphabet, coding} = encoding(msg, text)
     vt = Config.vendor_trunk(route.vendor_trunk_id) || %{}
 
-    cond do
-      bytes == :error ->
-        {:skip, :unencodable}
-
-      grows_parts?(msg, text) ->
-        # Egress growing the part count: this vendor cannot take it unchanged (S-4.1, S-4.9).
-        {:skip, :translation_grows}
-
-      is_integer(vt[:max_msg_len]) and Text.units(bytes, alphabet) > vt[:max_msg_len] ->
-        {:skip, :too_long}
-
-      vt[:support_multipart] == false and length(Text.split(bytes, alphabet)) > 1 ->
-        {:skip, :no_multipart}
-
-      true ->
+    case skip_reason(msg, text, bytes, alphabet, vt) do
+      nil ->
         base = fields(msg, route, coding)
         tlvs = Enum.filter(msg.tlvs, fn {name, _} -> name in @passed_tlvs end)
         pieces = pieces(bytes, alphabet, vt[:multipart_format] || :udh8)
         {:ok, Enum.map(pieces, &submit_pdu(base, tlvs, &1)), coding}
+
+      reason ->
+        {:skip, reason}
+    end
+  end
+
+  defp skip_reason(_msg, _text, :error, _alphabet, _vt), do: :unencodable
+
+  defp skip_reason(msg, text, bytes, alphabet, vt) do
+    cond do
+      # Egress growing the part count: this vendor cannot take it unchanged (S-4.1, S-4.9).
+      grows_parts?(msg, text) -> :translation_grows
+      is_integer(vt[:max_msg_len]) and Text.units(bytes, alphabet) > vt[:max_msg_len] -> :too_long
+      vt[:support_multipart] == false and length(Text.split(bytes, alphabet)) > 1 -> :no_multipart
+      true -> nil
     end
   end
 
@@ -452,42 +494,30 @@ defmodule Sms.Switch.Pipeline.Sender do
   # ---------------------------------------------------------------- outcomes
 
   defp sent(msg, route, attempt, results, rows) do
+    # A Delayed Submit trunk's resp was waiting for this (S-2.18, D11).
+    _ = Delayed.notify(msg.id, :ok)
+    # The vendor's live TPS, in submits (§13.8 vendor capacity, §13.23 at limit).
+    LiveTps.count(["vt:#{route.vendor_trunk_id}"], length(results))
     vt = route.vendor_trunk_id
     trunk = Config.vendor_trunk(vt) || %{}
     ids = Enum.map(results, & &1.message_id)
     timeout_s = trunk[:dlr_timeout_s] || 172_800
-    ttl = timeout_s + 3_600
 
     # S-5.10: with no final receipt by then, the switch answers with the trunk's DLR Timeout Status.
     timeout_at = attempt.resp_time + timeout_s * 1_000
 
-    record =
-      Map.merge(Forwarder.core(msg), %{
-        edr_id: attempt.edr_id,
-        vendor_trunk_id: vt,
-        parts: length(results),
-        sent_at: attempt.resp_time,
-        # What a re-route after a failed receipt needs (S-5.11, D2), kept only where one can happen.
-        resend:
-          if(reroutable?(trunk),
-            do: %{msg: msg, tried: MapSet.to_list(attempt.tried), no: attempt.no}
-          )
-      })
-
-    mark_in_flight(msg, route)
+    _ = mark_in_flight(msg, route)
 
     # A vendor that answered without a message id cannot send a receipt we could match (S-5.12).
     parts = for {id, n} <- Enum.with_index(ids, 1), id not in [nil, ""], do: {n, vt, id}
+    record = record_of(msg, trunk, attempt, vt, length(results))
 
-    case record_sent(msg.id, record, parts, {ttl, timeout_at}, 3) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        Logger.error(
-          "message #{msg.id} sent but not recorded, its receipts will be orphans: #{inspect(reason)}"
-        )
-    end
+    with {:error, reason} <-
+           record_sent(msg.id, record, parts, {timeout_s + 3_600, timeout_at}, 3),
+         do:
+           Logger.error(
+             "message #{msg.id} sent but not recorded, its receipts will be orphans: #{inspect(reason)}"
+           )
 
     row =
       Map.merge(attempt, %{
@@ -502,17 +532,33 @@ defmodule Sms.Switch.Pipeline.Sender do
     publish_rows(msg, rows, false)
     publish_rows(msg, [row], true)
 
-    # Receipts that came before the submit_sm_resp was handled (S-5.5): kept under every key their id reads as, so
-    # the resp's normalised id finds them.
-    for {n, _vt, id} <- parts do
-      _ =
-        case Store.take_orphan(vt, id) do
-          {:ok, receipt} -> Receipts.apply_receipt(msg.id, n, receipt)
-          _ -> :ok
-        end
-    end
-
+    _ = apply_orphans(msg, vt, parts)
     :ok
+  end
+
+  defp record_of(msg, trunk, attempt, vt, parts) do
+    Map.merge(Forwarder.core(msg), %{
+      edr_id: attempt.edr_id,
+      vendor_trunk_id: vt,
+      parts: parts,
+      sent_at: attempt.resp_time,
+      # What a re-route after a failed receipt needs (S-5.11, D2), kept only where one can happen.
+      resend:
+        if(reroutable?(trunk),
+          do: %{msg: msg, tried: MapSet.to_list(attempt.tried), no: attempt.no}
+        )
+    })
+  end
+
+  # Receipts that came before the submit_sm_resp was handled (S-5.5): kept under every key their id reads as, so the
+  # resp's normalised id finds them.
+  defp apply_orphans(msg, vt, parts) do
+    for {n, _vt, id} <- parts do
+      case Store.take_orphan(vt, id) do
+        {:ok, receipt} -> Receipts.apply_receipt(msg.id, n, receipt)
+        _ -> :ok
+      end
+    end
   end
 
   # A failed receipt is re-routed only from a vendor that bills on delivery and lists that status in Re-Route On (D2).
@@ -565,7 +611,10 @@ defmodule Sms.Switch.Pipeline.Sender do
 
     publish_rows(msg, earlier, false)
     publish_rows(msg, [last], true)
-    Forwarder.switch_receipt(msg, last.edr_id, failure.status, failure.error)
+
+    # A Delayed Submit customer waiting for its resp gets the failure there, not as a receipt (S-2.18, D11).
+    unless Delayed.notify(msg.id, {:error, failure.command_status}),
+      do: Forwarder.switch_receipt(msg, last.edr_id, failure.status, failure.error)
   end
 
   defp publish_rows(msg, rows, final) do

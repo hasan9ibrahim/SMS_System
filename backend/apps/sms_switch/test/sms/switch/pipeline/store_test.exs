@@ -17,6 +17,37 @@ defmodule Sms.Switch.Pipeline.StoreTest do
         }
       end
 
+      test "queued marks: cancel while queued, the sender's take, query (S-2.15, D8)", %{
+        id: id,
+        vt: ent
+      } do
+        other = "#{id}-b"
+        assert :ok = Store.mark_queued(ent, [id, other], 60)
+        assert {:ok, :queued} = Store.queued(ent, id)
+        # Another enterprise never sees it.
+        assert {:ok, :none} = Store.queued(ent + 1, id)
+        assert :not_queued = Store.cancel_queued(ent + 1, id, 60)
+
+        assert :ok = Store.cancel_queued(ent, other, 60)
+        assert :ok = Store.cancel_queued(ent, other, 60)
+        assert {:ok, :cancelled} = Store.queued(ent, other)
+        # One part cancelled cancels the message; the marks stay for query_sm.
+        assert :cancelled = Store.take_queued(ent, [id, other], 60)
+        assert {:ok, :cancelled} = Store.queued(ent, id)
+
+        third = "#{id}-c"
+        assert :ok = Store.mark_queued(ent, [third], 60)
+        assert :send = Store.take_queued(ent, [third], 60)
+        assert {:ok, :none} = Store.queued(ent, third)
+        assert :not_queued = Store.cancel_queued(ent, third, 60)
+        # A mark gone (a redelivery) sends.
+        assert :send = Store.take_queued(ent, [third], 60)
+
+        assert :ok = Store.mark_queued(ent, [third], 60)
+        assert :ok = Store.drop_queued(ent, [third])
+        assert {:ok, :none} = Store.queued(ent, third)
+      end
+
       test "a sent message is found from each part's vendor id, with its data", %{id: id, vt: vt} do
         refute Store.sent?(id)
 

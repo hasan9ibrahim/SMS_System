@@ -13,6 +13,8 @@ defmodule Sms.Switch.Pipeline.Supervisor do
   @impl true
   def init(_opts) do
     children = [
+      Pipeline.Delayed,
+      Pipeline.LiveTps,
       Pipeline.Store,
       Pipeline.Config.Server,
       Pipeline.Held,

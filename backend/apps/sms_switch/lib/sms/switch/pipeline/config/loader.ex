@@ -398,7 +398,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       vendor_trunk_ids: r.vendor_trunk_ids || [],
       vendor_category_mode: enum!(r.vendor_category_mode, @modes),
       vendor_category_ids: r.vendor_category_ids || [],
-      lcr_profile: r.lcr_profile_id && Map.get(lcr, r.lcr_profile_id)
+      lcr_profile: r.lcr_profile_id && Map.get(lcr, r.lcr_profile_id),
+      skip_vendor_at_tps_pct: r.skip_vendor_at_tps_pct
     ]
   end
 
@@ -412,7 +413,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       value2: num(c["value2"]),
       tolerance_pct: num(c["tolerance_pct"]) || 5,
       scope: c["scope"],
-      window_s: c["window_s"]
+      window_s: c["window_s"],
+      hold_s: c["hold_s"],
+      release_pct: num(c["release_pct"])
     }
   end
 

@@ -36,7 +36,23 @@ defmodule Sms.Switch.Pipeline.Forwarder do
   What the pipeline keeps of a message for its receipts (stored with the message when it is sent, `Store`): the
   customer leg's ids, addresses and receipt request, and the trunk fields the EDR receipt rows need.
   """
-  @spec core(map()) :: map()
+  @spec core(map()) :: %{
+          id: String.t(),
+          ids: [String.t()],
+          received_at: integer(),
+          origin: map(),
+          trunk: map(),
+          source: String.t(),
+          source_ton: non_neg_integer(),
+          source_npi: non_neg_integer(),
+          destination: String.t(),
+          destination_ton: non_neg_integer(),
+          destination_npi: non_neg_integer(),
+          registered_delivery: non_neg_integer(),
+          text: String.t() | nil,
+          parts: pos_integer(),
+          vendor_trunk_id: integer() | nil
+        }
   def core(msg) do
     f = msg.fields
 
