@@ -14,6 +14,14 @@ change. It reuses the PostgreSQL schema in `db/postgres/migrations/` and the Cli
 
 The API (Phoenix, the contract) and the jobs app join in phase B.
 
+## SMPP PDUs (step 1)
+
+`Sms.Switch.Smpp.Pdu.decode/2` frames a byte stream strictly by `command_length` and returns one PDU and the rest,
+`{:incomplete, n}`, or an error that carries the SMPP status to answer with (`error_reply/1` builds the answer: the
+request's own response with that status, or `generic_nack`). A bad `command_length` is the only fatal error.
+`encode/1` checks every field against SMPP 3.4 before anything is sent. Every 3.4 command and TLV is covered; unknown
+and vendor TLVs are kept as `{tag, binary}`.
+
 ## Run it
 
 Versions are pinned in `.tool-versions` (Erlang/OTP 28.5, Elixir 1.19.6). From the repo root:
