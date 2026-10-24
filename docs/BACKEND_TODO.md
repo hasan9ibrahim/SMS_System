@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | (backend) SMPP switch | No contract change. `docs/SMPP_SCENARIOS.md`: decided D1 (incomplete multipart fails, not billed), D4 (vendor submit timeout: no automatic resend or re-route, failed receipt, manual Repush only), D5 (late receipt corrects the EDR only), D7 (all esm_class modes as store-and-forward), D8 (query_sm, cancel_sm while queued, no replace_sm), D9 (no shift tables in v1), D10 (reject empty messages unless allowed). D6 duplicate filter linked to Loop Detection (S-5.16). New S-2.18 / D11: the spec's Delayed Submit customer trunk setting, the one exception to answering before the vendor. | §5, §9, §13.1 | Product owner | Open: D6, D11 |
 | 2026-10-24 | (backend) SMPP switch | No contract change. `docs/SMPP_SCENARIOS.md`: **D2 decided**: one part of a multipart message fails at the vendor: if that part is not vendor-billable under the vendor trunk's Billing Type, all parts are resent via the next vendor with a new reference; if billable, the whole message fails (S-3.11). **D3 decided**: a translation that grows the part count is blocked: REJECTD receipt, not billed (S-4.1). Proposals revised: D1 fail an incomplete group (not billed), D10 reject empty messages unless the customer trunk allows. | §6.4, §7, §13.1 | Product owner | Decided D2, D3; D1, D4–D10 open |
 | 2026-10-24 | (backend) SMPP switch | No contract change. New `docs/SMPP_SCENARIOS.md`: 93 numbered switch scenarios (binds, submit_sm_resp session and timing, client timeouts while queued, multipart and concatenation in every format, reassembly, translations changing the part count, vendor timeouts and errors, receipts, rating at send time, reliability, security), each with required behaviour and an acceptance test; 10 decisions (D1–D10) added to Open questions. | §2, §6, §13.1, §14 | Product owner | Open: needs decisions D1–D10 |
 | 2026-10-24 | Whole GUI, enterprises, route simulator | No contract change. Page headers no longer show the sibling page pills (the top menu lists them). Enterprise › Account managers: **Partner Account Manager** card under the history = the enterprise's Commercial contact (name, phone, e-mails). Route simulator: Vendor trunk moved from Advanced to its own card under the message; the picker lists every vendor trunk (list query limit 1000) instead of the first 30. Translation rule form: Match conditions as one compact grid (rows Sender ID, Receiver ID, Message text, MCCMNC; columns pattern, list/networks, length), networks picked in a dialog instead of an inline tree. User-facing text writes **Account Manager** in full instead of "AM" (labels, columns, e-mail type name Account Manager Handover, help). | §15.1, §13.30, §9.2, §6.4 | Team trial round 5 | Done (GUI only) |
@@ -633,16 +634,9 @@ What the Phoenix backend must match so the screens need no change:
 
 - **SMPP edge cases (2026-10-24, `docs/SMPP_SCENARIOS.md` › Decisions needed).** Each has a proposal; the backend
   needs the product owner's answer before implementing:
-  - D1 incomplete multipart group after the reassembly timeout: send the parts that arrived, or fail them?
-  - ~~D2~~ decided 2026-10-24: a failed part that is not vendor-billable (vendor trunk Billing Type) → resend all parts via the next vendor; billable → fail the whole message (S-3.11).
-  - ~~D3~~ decided 2026-10-24: a translation that grows the part count is blocked, REJECTD receipt, customer not billed (S-4.1).
-  - D4 vendor submit timeout: resend (risk of double delivery) or wait for a late resp / receipt?
-  - D5 a real receipt arrives after the DLR-timeout receipt: send the customer a correction?
-  - D6 duplicate-submit filter per trunk: wanted, and which window?
-  - D7 transaction-mode submits (resp waits for the vendor): support or refuse?
-  - D8 query_sm / cancel_sm / replace_sm: which to support?
-  - D9 national language shift tables: needed in v1?
-  - D10 empty messages: accept or reject?
+  - D6 duplicate-submit filter per customer trunk (client re-sends after a lost resp or reconnect): wanted, which window? Proposal: 60 s, sharing the fingerprint store with Loop Detection (S-2.7, S-5.16).
+  - D11 Delayed Submit trunks (§5, resp only after the vendor accepts): how long to wait before answering anyway, and with what? Proposal: per-trunk limit, default 5 s, then OK and continue as store-and-forward (S-2.18).
+  - Decided 2026-10-24: D1 incomplete group fails (REJECTD, not billed); D2 failed part not vendor-billable → all parts via the next vendor, billable → whole message fails; D3 translation growing the part count is blocked, not billed; D4 vendor submit timeout never resent or re-routed automatically, only by manual Repush; D5 late receipt corrects the EDR only; D7 every esm_class mode handled as store-and-forward; D8 query_sm yes, cancel_sm while queued, replace_sm no; D9 no shift tables in v1 (pass through); D10 empty messages rejected unless the trunk allows.
 
 - **Invoice and balance amounts (team trial round 3).** Traffic money (revenue, cost, margin, rates) is now calculated to
   6 decimals. Invoices, payments, SOA and balances are still stored and summed to 2 decimals (currency cents, schema
