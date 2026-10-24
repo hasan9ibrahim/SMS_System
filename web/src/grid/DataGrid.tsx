@@ -30,6 +30,10 @@ const SELECT_ALL_MAX = 5000;
 const PAGE_SIZE = 200;
 /** Narrowest a column gets when the columns are fitted to the grid's width. */
 const FIT_MIN = 56;
+/** Phones (team trial round 5): below this grid width each row is a card instead of a table row. */
+const CARD_BELOW = 640;
+const CARD_HEIGHT = 128;
+const CARD_FIELDS = 4;
 
 export interface ColumnOverride<Row> {
   width?: number;
@@ -239,6 +243,96 @@ function GridRowInner<Row extends { id: number }>({
 }
 const GridRow = memo(GridRowInner) as typeof GridRowInner;
 
+/** Phones: sorting from a picker, since the card layout has no column headers. */
+function MobileSort({
+  cells,
+  state,
+  onStateChange,
+}: {
+  cells: { field: FieldDescriptor; label?: string | undefined }[];
+  state: GridState;
+  onStateChange: (s: GridState) => void;
+}) {
+  const first = state.sort[0];
+  const sortable = cells.filter((c) => c.field.sortable);
+  if (!sortable.length) return null;
+  return (
+    <div className="gm-sort">
+      <span className="muted small">Sort</span>
+      <select
+        aria-label="Sort by"
+        value={first?.field ?? ""}
+        onChange={(e) =>
+          onStateChange({ ...state, sort: e.target.value ? [{ field: e.target.value, dir: first?.dir ?? "asc" }] : [] })
+        }
+      >
+        <option value="">Default</option>
+        {sortable.map((c) => (
+          <option key={c.field.field} value={c.field.field}>
+            {c.label ?? c.field.label}
+          </option>
+        ))}
+      </select>
+      {first && (
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost"
+          aria-label={first.dir === "asc" ? "Ascending" : "Descending"}
+          onClick={() =>
+            onStateChange({ ...state, sort: [{ field: first.field, dir: first.dir === "asc" ? "desc" : "asc" }] })
+          }
+        >
+          {first.dir === "asc" ? "↑ A–Z" : "↓ Z–A"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A row as a card on phones: the first column as the title, the next few as label and value. */
+function MobileCardInner<Row extends { id: number }>({
+  row,
+  index,
+  top,
+  cells,
+  active,
+  checked,
+  onClick,
+  extraClass,
+  masked,
+}: RowProps<Row>) {
+  const shown = cells.filter((c) => c.field.field !== "id");
+  const [title, ...rest] = shown;
+  const value = (c: (typeof cells)[number]) =>
+    masked?.has(c.field.field) ? (
+      <Withheld text={masked.get(c.field.field)!} />
+    ) : c.render ? (
+      c.render(row)
+    ) : (
+      defaultCell(c.field, (row as Record<string, unknown>)[c.field.field])
+    );
+  return (
+    <div
+      className={`gcard${active ? " active" : ""}${checked ? " checked" : ""}${isArchived(row) ? " archived" : ""}${extraClass ? ` ${extraClass}` : ""}`}
+      style={{ transform: `translateY(${top}px)` }}
+      role="row"
+      aria-rowindex={index + 2}
+      onClick={(e) => onClick(row, e)}
+    >
+      <div className="gcard-title">{title ? value(title) : `#${row.id}`}</div>
+      <div className="gcard-fields">
+        {rest.slice(0, CARD_FIELDS).map((c) => (
+          <div key={c.field.field} className="gcard-field">
+            <span className="gcard-label">{c.label ?? c.field.label}</span>
+            <span className={`gcard-value${isNumeric(c.field) ? " num" : ""}`}>{value(c)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+const MobileCard = memo(MobileCardInner) as typeof MobileCardInner;
+
 /** A value the visibility policy withholds (§13.17): Hidden, a band (Low / Normal / High) or Above limit. */
 export function Withheld({ text }: { text: string }) {
   return (
@@ -392,13 +486,15 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     return naturalCells.map((c) => ({ ...c, width: Math.max(FIT_MIN, Math.floor(c.width * scale)) }));
   }, [naturalCells, boxWidth, trailing?.width]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
+  const mobile = boxWidth > 0 && boxWidth < CARD_BELOW;
 
   const virtualizer = useVirtualizer({
     count: rows.length + (result.hasNextPage ? 1 : 0),
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowHeight,
+    estimateSize: () => (mobile ? CARD_HEIGHT : rowHeight),
     overscan: 12,
   });
+  useEffect(() => virtualizer.measure(), [mobile]); // eslint-disable-line react-hooks/exhaustive-deps
   const items = virtualizer.getVirtualItems();
   const lastIndex = items.length ? items[items.length - 1]!.index : 0;
   useEffect(() => {
@@ -481,7 +577,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
 
   return (
     <div
-      className="grid"
+      className={`grid${mobile ? " mobile" : ""}`}
       ref={scrollRef}
       tabIndex={0}
       onKeyDown={onKeyDown}
@@ -490,7 +586,8 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
       aria-rowcount={first?.total ?? -1}
       aria-busy={result.isFetching}
     >
-      <div className="grid-inner" style={{ width: totalWidth }}>
+      <div className="grid-inner" style={{ width: mobile ? "100%" : totalWidth }}>
+        {mobile && <MobileSort cells={cells} state={state} onStateChange={onStateChange} />}
         <div className="gh" role="row">
           <div className="gh-cell gc-check">
             <input
@@ -588,8 +685,9 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
                 </div>
               );
             }
+            const Item = mobile ? MobileCard : GridRow;
             return (
-              <GridRow
+              <Item
                 key={row.id}
                 row={row}
                 index={item.index}

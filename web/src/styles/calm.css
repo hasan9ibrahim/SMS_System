@@ -92,10 +92,10 @@
 
 /* No sideways scrolling (team trial round 5): Live analytics fits its columns to the window, headers centred. */
 .la-grid col.la-col-name {
-  width: 13%;
+  width: 11%;
 }
 .la-grid col.la-col-act {
-  width: 5%;
+  width: 4.5%;
 }
 .la-grid thead th,
 .la-grid thead th.num {
@@ -161,4 +161,24 @@
     padding-left: 2px;
     padding-right: 2px;
   }
+}
+
+/* Live analytics figures like the reference platform (team trial round 5): plain figures and names in Roboto,
+   every figure left-aligned with room after it; the bold coloured ones (ASR, DLR, margin) keep the main font. */
+.la-grid td.num {
+  text-align: left;
+  padding-left: 6px;
+  padding-right: 3px;
+}
+.la-grid td.num:not(.la-strong),
+.la-grid td.la-name {
+  font-family: "Roboto", var(--font-family);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+.la-grid td.num.la-strong {
+  font-size: 12px;
+}
+.la-grid td.num.la-strong .la-pill {
+  text-align: left;
 }

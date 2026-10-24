@@ -209,7 +209,74 @@ function Avatar() {
   );
 }
 
+/** Phones (team trial round 5): the main menu as a drawer behind a menu button; every page one tap away. */
+function MobileNav({ onClose }: { onClose: () => void }) {
+  const open = useOpener();
+  const canView = useCanView();
+  const activePath = useTabs((s) => s.tabs.find((t) => t.id === s.activeId)?.path ?? "/");
+  const [section, setSection] = useState<SectionKey | null>(pageForPath(activePath)?.section ?? null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="mnav-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <nav className="mnav" aria-label="Main menu">
+        <div className="mnav-head">
+          <strong>Menu</strong>
+          <button type="button" className="icon-btn" aria-label="Close menu" onClick={onClose}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        {SECTIONS.map((sec) => {
+          const pages = pagesOf(sec.key).filter((pg) => canView(pg.key));
+          if (!pages.length) return null;
+          const expanded = section === sec.key || pages.length === 1;
+          return (
+            <div key={sec.key} className="mnav-section">
+              <button
+                type="button"
+                className={`mnav-top${expanded ? " open" : ""}`}
+                aria-expanded={expanded}
+                onClick={(e) => {
+                  if (pages.length === 1) {
+                    onClose();
+                    open(pages[0]!.path, e);
+                  } else setSection(expanded ? null : sec.key);
+                }}
+              >
+                <span>{sec.label}</span>
+                {pages.length > 1 && <Icon name="chevronDown" size={14} />}
+              </button>
+              {expanded && pages.length > 1 && (
+                <div className="mnav-pages">
+                  {pages.map((pg) => (
+                    <button
+                      key={pg.key}
+                      type="button"
+                      className={`mnav-page${pg.path === activePath ? " current" : ""}`}
+                      onClick={(e) => {
+                        onClose();
+                        open(pg.path, e);
+                      }}
+                    >
+                      <Icon name={pg.icon} size={15} />
+                      <span>{pg.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
 export function TopMenu() {
+  const [navOpen, setNavOpen] = useState(false);
   const activePath = useTabs((s) => s.tabs.find((t) => t.id === s.activeId)?.path ?? "/");
   const currentSection = pageForPath(activePath)?.section;
   const totalTps = useLive((s) => s.totalTps);
@@ -220,6 +287,9 @@ export function TopMenu() {
     // One bar (team trial round 3): logo, the main menu, then search / jump-to and the status on the right.
     <header className="topbar">
       <div className="topbar-main">
+        <button type="button" className="menu-burger" aria-label="Open menu" onClick={() => setNavOpen(true)}>
+          <Icon name="list" size={18} />
+        </button>
         <button type="button" className="logo" onClick={(e) => open("/", e)} aria-label="Home">
           <span className="logo-mark">
             <Icon name="mail" size={14} />
@@ -251,6 +321,7 @@ export function TopMenu() {
           <Avatar />
         </div>
       </div>
+      {navOpen && <MobileNav onClose={() => setNavOpen(false)} />}
     </header>
   );
 }
