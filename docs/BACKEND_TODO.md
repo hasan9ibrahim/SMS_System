@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | (backend) plan, hosting | No contract change. New `docs/BACKEND_PLAN.md`: honest timeline for one engineer (switch on test traffic by 30 Nov, pilot in December, migration January–February 2027), second opinions (keep the API in TypeScript and write only the switch in Elixir; receipts as appended rows instead of EDR updates; checks before submit_sm_resp but never HLR; PCAP at OS level; 3 voters on the witness VM; vendor submit timeout 10 s; message text kept 30 days), extra risk areas, questions Q1–Q35. Hosting decided: 2 servers + 1 witness VM, NATS JetStream behind one event-bus module. | §9.2, §14, §14.1, §14.3 | Product owner | Open: Q1–Q35 |
 | 2026-10-24 | (backend) SMPP switch, hosting | No contract change. `docs/SMPP_SCENARIOS.md`: D2 decided (temporary error → retry the part on the same vendor; submit rejection → all parts via the next vendor; failed receipt → all parts only if no part was delivered and the failed part is not vendor-billable). D4 decided (automatic re-route after a vendor submit timeout, *possibly sent* / *possible duplicate* flags). All of D1–D11 now decided. Hosting: 2 servers, NATS JetStream behind one event-bus module (Kafka-swappable); open question on a third witness VM for quorum. | §5, §6.3, §13.1, §14, §14.1 | Product owner | Decided; open: witness VM |
 | 2026-10-24 | (backend) SMPP switch, hosting | No contract change. `docs/SMPP_SCENARIOS.md`: D6 decided (duplicate filter per customer trunk, 60 s, shared fingerprint with Loop Detection); D11 decided (Delayed Submit kept as the spec: resp waits for the vendor, 0x45 on vendor timeout). D2 refinement and D4 re-route on timeout under discussion. New open question: one dedicated server vs §14.1 (at least 2 switch servers). | §5, §13.1, §14.1 | Product owner | Open: D2 refinement, D4, hosting |
 | 2026-10-24 | (backend) SMPP switch | No contract change. `docs/SMPP_SCENARIOS.md`: decided D1 (incomplete multipart fails, not billed), D4 (vendor submit timeout: no automatic resend or re-route, failed receipt, manual Repush only), D5 (late receipt corrects the EDR only), D7 (all esm_class modes as store-and-forward), D8 (query_sm, cancel_sm while queued, no replace_sm), D9 (no shift tables in v1), D10 (reject empty messages unless allowed). D6 duplicate filter linked to Loop Detection (S-5.16). New S-2.18 / D11: the spec's Delayed Submit customer trunk setting, the one exception to answering before the vendor. | §5, §9, §13.1 | Product owner | Open: D6, D11 |
@@ -634,10 +635,10 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- **Hosting (2026-10-24).** Decided: two dedicated servers (§14.1) and NATS JetStream for events, used only through one
-  internal event-bus module so it can be swapped for Kafka later. Open: quorum. NATS JetStream, PostgreSQL automatic
-  failover and the Elixir cluster all need a majority of 3 to fail over safely; with 2 servers, losing one leaves no
-  majority. Proposal: a small third VM in another location as a witness (NATS node + failover vote, no traffic).
+- **Backend plan questions Q1–Q35 (2026-10-24, `docs/BACKEND_PLAN.md` › Questions).** Scope for 30 November, TypeScript
+  API with an Elixir switch (second opinion to spec §14), volume target (10 vs 50 million a day), HTTP API format, MO,
+  multi-server TPS and connections, queue times, VAT, migration from the current platform by exported files, message
+  text retention, backups, data centres and on-call. Each has a recommendation.
 
 - **SMPP edge cases (2026-10-24, `docs/SMPP_SCENARIOS.md` › Decisions needed).** Each has a proposal; the backend
   needs the product owner's answer before implementing:
