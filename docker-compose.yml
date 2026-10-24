@@ -65,6 +65,23 @@ services:
       timeout: 3s
       retries: 20
 
+  # Event bus for the Elixir backend (docs/BACKEND_PLAN.md): NATS JetStream, durable on disk.
+  nats:
+    image: nats:2.14.8-alpine
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "127.0.0.1:${NATS_PORT:-4222}:4222"
+      - "127.0.0.1:${NATS_MONITOR_PORT:-8222}:8222"
+    volumes:
+      - ./deploy/nats/nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz | grep -q ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # ---------------------------------------------------------------- shared trial instance (build step 6)
   # Mock server answering the contract (the Elixir backend replaces it later, same contract).
   mock:
@@ -130,6 +147,7 @@ services:
       clickhouse: { condition: service_healthy }
 
 volumes:
+  nats-data:
   postgres-data:
   clickhouse-data:
   redis-data:
