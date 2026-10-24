@@ -18,6 +18,28 @@ reuse the D numbers.
   Q10 two IPs, under **one host name** (see Q10); Q25 migration by exported files; Q26 same SMPP usernames and
   passwords.
 
+**Decided 2026-10-24, second round** (product owner):
+
+- Q4 **customer portal needed**: customers log in and see only their own balance, their rates per destination and
+  their own traffic and message logs; never vendors, costs or margins. Timing open (proposal: after migration, with
+  the API's customer-scoped permissions built from the start).
+- Q5 the current platform stays as long as needed. Q6 HTTP API skipped for now.
+- Q8, Q14, Q16, Q17, Q19, Q27, Q28, Q31 as recommended; Q32 most likely as recommended; Q34 test accounts can be
+  arranged; Q35 later.
+- Q20 money calculated at 6 decimals, **invoice amounts rounded to 4 decimals** (was cents). *Backend*: invoice,
+  payment, SOA and balance columns move from `numeric(14,2)` to 4 decimals.
+- Q22 alert only, never block. Our balance with a prepaid vendor is the vendor balance (§7): payments we sent minus
+  the vendor-billable cost from our EDRs; alert below a threshold, checked against the vendor's invoice (§13.31).
+- Q29 alert channels to add later: **Telegram** (groups or people, through a bot) and **WhatsApp** (individual
+  numbers only: the official WhatsApp Business API cannot post into groups, and needs approved templates and paid
+  messages).
+- Q30b no OTP masking for now. Q33 no VPN or office IP allow-list: the portal is reachable from the internet, so 2FA
+  for staff is strongly recommended (mandatory at least for admins), with login rate limits and lockout.
+- Still open: Q9 legacy TLS for partners, Q12/Q13 shared limits (explained in chat), Q15 queue time when all vendors
+  are down, Q18 country rules, Q21 VAT, Q23 invoice timing, Q24 credit checks, and whether the API stays in TypeScript
+  long term (§3.1).
+
+
 ## 1. Where we stand
 
 - **GUI:** every screen in spec §3–13 works on fake data.
