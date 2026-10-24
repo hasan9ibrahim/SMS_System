@@ -75,7 +75,8 @@ reuse the D numbers.
 
 **Build progress:** step 0 (foundations) done: `backend/` umbrella (`sms_core`, `sms_switch`), data store modules,
 event bus on NATS JetStream with an in-memory test adapter, health check, `mix check` quality gates and the CI job
-`backend` (see `backend/README.md`).
+`backend` (see `backend/README.md`). Step 1 (SMPP 3.4 PDUs) done: every 3.4 command and TLV, strict framing
+(S-1.8, S-1.9), a precise status for every malformed PDU and the same sequence in the answer (S-1.10), fuzzed.
 
 ## 1. Where we stand
 
