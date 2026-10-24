@@ -96,6 +96,10 @@ defmodule Sms.Switch.Message.Concat do
   @spec udh8(0..255, 2..255, 1..255) :: binary()
   def udh8(ref, total, seq), do: <<5, 0x00, 3, ref, total, seq>>
 
+  @doc "A UDH with only a 16-bit concatenation element (S-3.10)."
+  @spec udh16(0..65_535, 1..255, 1..255) :: binary()
+  def udh16(ref, total, seq), do: <<6, 0x08, 4, ref::16, total, seq>>
+
   @doc "esm_class with the UDHI bit set."
   @spec with_udhi(non_neg_integer()) :: non_neg_integer()
   def with_udhi(esm_class), do: esm_class ||| @udhi

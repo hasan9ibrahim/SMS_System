@@ -21,9 +21,8 @@ defmodule Sms.Switch.Pipeline.Intake do
   Translation growing the part count (D3) does not refuse the message here: it is accepted and gets a REJECTD receipt,
   as decided.
 
-  Parts of a multipart message (UDH or SAR) share one decision (S-3.3, S-3.8): the first part to arrive translates and
-  routes, the others use its sender, receiver and vendor, so every part reaches the same vendor. Their text is passed on
-  as sent; translation on the reassembled text (S-3.2, S-4.3) comes with build step 5.
+  The parts of a multipart message (UDH or SAR) are answered at once and held until all have come
+  (`Sms.Switch.Pipeline.Reassembly`, S-3.2); steps 2–6 then run once on the whole message (S-4.3).
   """
   @behaviour Sms.Switch.Customer.Intake
   require Logger
@@ -31,12 +30,10 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Customer.Intake.NotReady
   alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Message.{Concat, Text}
-  alias Sms.Switch.Pipeline.{Config, Credit, Edr, MessageId, Router, Store}
+  alias Sms.Switch.Pipeline.{Config, Credit, Edr, MessageId, Reassembly, Router}
   alias Sms.Switch.Rules.Translation
   alias Sms.Switch.Smpp.{Pdu, Status}
   alias Sms.Switch.Throttle
-
-  @group_ttl_s 600
 
   @impl true
   def handle(context, %Pdu{command: command} = pdu) when command in [:submit_sm, :data_sm] do
@@ -62,7 +59,8 @@ defmodule Sms.Switch.Pipeline.Intake do
         msg = new_message(context, pdu, trunk)
 
         case build(msg, pdu) do
-          {:ok, msg} -> store(msg)
+          {:ok, msg} -> answer(msg, process(msg))
+          {:part, msg} -> Reassembly.hold(msg)
           {:reject, status, reason, msg} -> refuse(msg, status, reason)
         end
     end
@@ -101,60 +99,34 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   # ---------------------------------------------------------------- the steps
 
+  # The checks of the message as sent; a part of a multipart message is then held for the rest (S-3.2).
   defp build(msg, pdu) do
     with {:ok, msg} <- body(msg, pdu),
-         {:ok, msg} <- addresses(msg),
-         {:ok, msg} <- decide(msg),
-         :ok <- credit(msg) do
-      {:ok, msg}
+         {:ok, msg} <- addresses(msg) do
+      if msg.concat, do: {:part, msg}, else: {:ok, msg}
     end
   end
 
-  defp decide(%{concat: nil} = msg) do
+  @doc false
+  # The decision and storage of a whole message (one sent as one, or put together from its parts): ingress
+  # translation, rate, route and credit, then the durable bus.
+  @spec process(map()) :: :ok | {:reject, atom(), term(), map()} | {:error, term()}
+  def process(msg) do
     with {:ok, msg} <- run_ingress(msg),
          {:ok, msg} <- rate(msg),
-         do: route_now(msg)
-  end
-
-  # The parts of one multipart message share one decision (S-3.3: trunk + source + destination + reference + total
-  # parts; S-3.8): the first part to arrive decides, the others take its ingress result, rate and vendor.
-  defp decide(msg) do
-    c = msg.concat
-    f = msg.fields
-    key = "#{msg.trunk.id}:#{f[:source_addr]}:#{f[:destination_addr]}:#{c.ref}:#{c.total}"
-
-    case Store.get_group(key) do
-      {:ok, shared} -> {:ok, share(msg, shared)}
-      :none -> decide_first(msg, key)
-      {:error, reason} -> {:reject, :esme_rsyserr, {:store, reason}, msg}
+         {:ok, msg} <- route_now(msg),
+         :ok <- credit(msg) do
+      store(msg)
     end
   end
 
-  # The first part to arrive decides and stores the decision for the others.
-  defp decide_first(%{concat: c} = msg, key) do
-    case decide(%{msg | concat: nil}) do
-      {:ok, decided} ->
-        msg = %{decided | concat: c}
-        decision = Map.take(msg, [:ingress, :destination, :sell, :route])
+  defp answer(msg, :ok), do: {:ok, %{message_id: msg.id}, []}
+  defp answer(_msg, {:reject, status, reason, msg}), do: refuse(msg, status, reason)
 
-        case Store.group(key, decision, @group_ttl_s) do
-          {:ok, shared} -> {:ok, share(msg, shared)}
-          {:error, reason} -> {:reject, :esme_rsyserr, {:store, reason}, msg}
-        end
-
-      {:reject, status, reason, refused} ->
-        {:reject, status, reason, %{refused | concat: c}}
-    end
+  defp answer(msg, {:error, reason}) do
+    Logger.error("message #{msg.id} not stored, answered 0x14: #{inspect(reason)}")
+    {:error, :esme_rmsgqful}
   end
-
-  # A part's own text stays (reassembly comes with build step 5), also as the text the vendor gets: the shared route's
-  # egress text is the deciding part's, which would otherwise be sent in place of every other part's.
-  defp share(msg, shared),
-    do: %{
-      Map.merge(msg, shared)
-      | ingress: %{shared.ingress | text: msg.text, text_changed: false},
-        route: put_in(shared.route, [:egress, :text], msg.text)
-    }
 
   # S-2.8: short_message and message_payload together are refused; data_sm carries its text in message_payload only.
   defp body(msg, pdu) do
@@ -375,12 +347,8 @@ defmodule Sms.Switch.Pipeline.Intake do
     }
 
     case Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}") do
-      {:ok, _} ->
-        {:ok, %{message_id: msg.id}, []}
-
-      {:error, reason} ->
-        Logger.error("message #{msg.id} not stored, answered 0x14: #{inspect(reason)}")
-        {:error, :esme_rmsgqful}
+      {:ok, _} -> :ok
+      {:error, _} = error -> error
     end
   end
 

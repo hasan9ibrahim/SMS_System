@@ -8,7 +8,9 @@ defmodule Sms.Switch.Pipeline.Store do
     * `v:<vendor trunk>:<vendor message id>`: the message and part a vendor id belongs to (normalised, S-5.6);
     * `o:<vendor trunk>:<vendor message id>`: a receipt that arrived before its submit_sm_resp was handled (S-5.5),
       kept a minute for the sender to pick up;
-    * `g:<group key>`: the decision shared by the parts of one multipart message (S-3.3, S-3.8);
+    * `rg:<group key>`: the parts of a customer's multipart message held until all have come (S-3.2, S-3.3): each
+      part (`p<n>`), the message id it got (`i<n>`), how many are held (`count`) and whether it was taken (`done`);
+      `rgt` their reassembly deadlines (D1);
     * `t`: the DLR timeouts of messages waiting for receipts, a sorted set by deadline (S-5.10); every server sweeps
       it and the one that removes an entry handles it;
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
@@ -199,30 +201,96 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
-  @doc "The decision a multipart message's first part stored, if any."
-  @spec get_group(String.t()) :: {:ok, term()} | :none | {:error, term()}
-  def get_group(key) do
-    case run(["GET", "g:#{key}"]) do
-      {:ok, nil} -> :none
-      {:ok, blob} -> {:ok, :erlang.binary_to_term(blob, [:safe])}
-      error -> error
-    end
-  end
-
   @doc """
-  The decision shared by the parts of a multipart message: stores `value` when the group has none yet and returns
-  it, else returns the one stored by the part that came first.
+  Holds part `n` of a customer's multipart message in its group until the others come (S-3.2): `{:ok, count}` with the
+  parts held now, or `{:duplicate, id}` with the message id the same part got before (S-3.5). The group expires after
+  `ttl_s`; its reassembly deadline is `deadline_ms` (set by the first part).
   """
-  @spec group(String.t(), term(), pos_integer()) :: {:ok, term()} | {:error, term()}
-  def group(key, value, ttl_s) do
-    blob = :erlang.term_to_binary(value)
+  @spec add_part(String.t(), pos_integer(), String.t(), term(), pos_integer(), non_neg_integer()) ::
+          {:ok, pos_integer()} | {:duplicate, String.t()} | {:error, term()}
+  def add_part(key, n, id, part, ttl_s, deadline_ms) do
+    group = "rg:#{key}"
 
-    case run(["SET", "g:#{key}", blob, "NX", "GET", "EX", ttl_s]) do
-      {:ok, nil} -> {:ok, value}
-      {:ok, existing} -> {:ok, :erlang.binary_to_term(existing, [:safe])}
+    with {:ok, 1} <- run(["HSETNX", group, "p#{n}", :erlang.term_to_binary(part, [:compressed])]),
+         {:ok, _} <- run(["HSET", group, "i#{n}", id]),
+         {:ok, count} <- run(["HINCRBY", group, "count", 1]),
+         {:ok, _} <- run(["EXPIRE", group, ttl_s]),
+         {:ok, _} <- run(["ZADD", "rgt", "NX", deadline_ms, key]) do
+      {:ok, count}
+    else
+      {:ok, 0} -> duplicate_part(group, n)
+      {:error, _} = error -> error
+    end
+  end
+
+  defp duplicate_part(group, n) do
+    case run(["HGET", group, "i#{n}"]) do
+      {:ok, id} when is_binary(id) -> {:duplicate, id}
+      # The first copy is still being held this instant: the client tries again.
+      {:ok, nil} -> {:error, :part_being_held}
       error -> error
     end
   end
+
+  @doc "Gives back part `n` (its message could not be stored): a resend of it is held again."
+  @spec drop_part(String.t(), pos_integer()) :: :ok | {:error, term()}
+  def drop_part(key, n) do
+    group = "rg:#{key}"
+
+    with {:ok, _} <- run(["HDEL", group, "p#{n}"]),
+         {:ok, _} <- run(["HDEL", group, "i#{n}"]),
+         {:ok, _} <- run(["HINCRBY", group, "count", -1]) do
+      :ok
+    end
+  end
+
+  @doc "Claims a group to assemble or fail it: true for the one caller that gets it."
+  @spec claim_group(String.t()) :: boolean()
+  def claim_group(key), do: match?({:ok, 1}, run(["HSETNX", "rg:#{key}", "done", "1"]))
+
+  @doc "Gives a group's claim back (its message could not be stored)."
+  @spec unclaim_group(String.t()) :: :ok | {:error, term()}
+  def unclaim_group(key), do: ok(run(["HDEL", "rg:#{key}", "done"]))
+
+  @doc "The parts held in a group, by part number."
+  @spec group_parts(String.t()) :: {:ok, %{pos_integer() => term()}} | {:error, term()}
+  def group_parts(key) do
+    case run(["HGETALL", "rg:#{key}"]) do
+      {:ok, flat} ->
+        parts =
+          for [k, v] <- Enum.chunk_every(flat, 2),
+              String.starts_with?(k, "p"),
+              into: %{},
+              do:
+                {String.to_integer(binary_part(k, 1, byte_size(k) - 1)),
+                 :erlang.binary_to_term(v, [:safe])}
+
+        {:ok, parts}
+
+      error ->
+        error
+    end
+  end
+
+  @doc "Removes a group that was assembled or failed; a part that comes later starts a new group (S-3.7)."
+  @spec drop_group(String.t()) :: :ok | {:error, term()}
+  def drop_group(key) do
+    commands = [["DEL", "rg:#{key}"], ["ZREM", "rgt", key]]
+
+    case backend() do
+      :redis -> ok(Redis.transaction(commands, @timeout))
+      :local -> ok(local(commands))
+    end
+  end
+
+  @doc "Up to `limit` groups whose reassembly deadline passed by `now_ms` (D1)."
+  @spec due_groups(non_neg_integer(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
+  def due_groups(now_ms, limit),
+    do: run(["ZRANGEBYSCORE", "rgt", "-inf", now_ms, "LIMIT", 0, limit])
+
+  @doc "Takes a due group: true for the one server that gets to fail it."
+  @spec claim_group_timeout(String.t()) :: boolean()
+  def claim_group_timeout(key), do: match?({:ok, 1}, run(["ZREM", "rgt", key]))
 
   @doc "Holds a customer receipt until a session of the trunk can take it (§13.1)."
   @spec hold(integer(), term(), pos_integer()) :: :ok | {:error, term()}
@@ -369,6 +437,26 @@ defmodule Sms.Switch.Pipeline.Store do
       1
     else
       0
+    end
+  end
+
+  defp exec(["HGET", key, field]), do: Map.get(get_hash(key), field)
+
+  defp exec(["HINCRBY", key, field, by]) do
+    hash = get_hash(key)
+    value = String.to_integer(Map.get(hash, field, "0")) + by
+    put(key, Map.put(hash, field, Integer.to_string(value)), expiry(key))
+    value
+  end
+
+  defp exec(["ZADD", key, "NX", score, member]) do
+    zset = lookup(key) || %{}
+
+    if Map.has_key?(zset, member) do
+      0
+    else
+      put(key, Map.put(zset, member, score), System.monotonic_time(:second) + @far)
+      1
     end
   end
 

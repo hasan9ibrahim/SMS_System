@@ -175,7 +175,6 @@ defmodule Sms.Switch.Message.Text do
   @replacement "?"
 
   @single %{seven: 160, ucs2: 70, eight: 140}
-  @multi %{seven: 153, ucs2: 67, eight: 134}
 
   @doc """
   The alphabet of a `data_coding`, per SMPP 3.4 §5.2.19 and GSM 03.38 §4 coding groups. `default_coding` is the
@@ -311,18 +310,25 @@ defmodule Sms.Switch.Message.Text do
 
   @doc """
   The bytes of each part, without the concatenation header: one part when the message fits in a single SMS, else
-  parts of at most 153 septets / 67 units / 134 bytes, never cutting an escape sequence or a surrogate pair.
+  parts that leave room for a header of `header_octets` in the 140-octet user data (6: UDH with an 8-bit reference,
+  153 septets / 67 units / 134 bytes; 7: a 16-bit reference, 152 / 66 / 133; 0: SAR, the header is in TLVs, 160 /
+  70 / 140), never cutting an escape sequence or a surrogate pair (S-3.1, S-3.10).
   """
-  @spec split(binary(), alphabet()) :: [binary()]
-  def split(bytes, alphabet) do
+  @spec split(binary(), alphabet(), 0..7) :: [binary()]
+  def split(bytes, alphabet, header_octets \\ 6) do
     kind = kind(alphabet)
 
     if units(bytes, alphabet) <= @single[kind] do
       [bytes]
     else
-      chunk(bytes, alphabet, size(alphabet, @multi[kind]), [])
+      chunk(bytes, alphabet, size(alphabet, per_part(kind, header_octets)), [])
     end
   end
+
+  # Units left in one part after a header of `h` octets; a 7-bit header is padded to whole septets.
+  defp per_part(:seven, h), do: 160 - div(h * 8 + 6, 7)
+  defp per_part(:ucs2, h), do: div(140 - h, 2)
+  defp per_part(:eight, h), do: 140 - h
 
   defp kind(a) when a in [:gsm, :ascii], do: :seven
   defp kind(:ucs2), do: :ucs2

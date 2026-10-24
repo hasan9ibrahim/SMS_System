@@ -42,6 +42,8 @@ defmodule Sms.Switch.Pipeline.Forwarder do
 
     %{
       id: msg.id,
+      # A message put together from the customer's parts: each part's message id gets the receipt (S-4.2).
+      ids: Map.get(msg, :ids, [msg.id]),
       received_at: msg.received_at,
       origin: msg.origin,
       trunk: Map.take(msg.trunk, [:id, :enterprise_id, :dlr_session_affinity, :dlr_hold_hours]),
@@ -79,9 +81,23 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     end
   end
 
-  @doc "Queues the customer's receipt for message `data` (once per final status; intermediates each)."
+  @doc """
+  Queues the customer's receipt for message `data` (once per final status; intermediates each), one per customer
+  message id when the message was put together from the customer's parts (S-4.2).
+  """
   @spec publish(map(), map()) :: :ok | {:error, term()}
   def publish(data, receipt) do
+    data
+    |> Map.get(:ids, [data.id])
+    |> Enum.reduce_while(:ok, fn id, :ok ->
+      case publish_one(%{data | id: id} |> Map.put(:ids, [id]), receipt) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp publish_one(data, receipt) do
     key = if receipt[:intermediate], do: "#{receipt.status}:#{receipt.received_at}", else: "final"
     blob = Base.encode64(:erlang.term_to_binary(%{data: data, receipt: receipt}, [:compressed]))
 

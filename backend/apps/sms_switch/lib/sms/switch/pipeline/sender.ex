@@ -193,10 +193,12 @@ defmodule Sms.Switch.Pipeline.Sender do
   # ---------------------------------------------------------------- building the parts
 
   # The PDUs for this vendor: the text after its egress translation, encoded again only when a translation changed
-  # it; split when longer than one SMS (unless the customer sent it as one part of its own multipart message).
+  # it, split in the vendor trunk's multipart format when longer than one SMS (S-3.1, S-3.10). A vendor that cannot
+  # take it (no multipart, a maximum length) is skipped for the next one (S-3.9).
   defp submits(msg, route) do
     text = route.egress[:text]
     {bytes, alphabet, coding} = encoding(msg, text)
+    vt = Config.vendor_trunk(route.vendor_trunk_id) || %{}
 
     cond do
       bytes == :error ->
@@ -206,23 +208,61 @@ defmodule Sms.Switch.Pipeline.Sender do
         # Egress growing the part count: this vendor cannot take it unchanged (S-4.1, S-4.9).
         {:skip, :translation_grows}
 
+      is_integer(vt[:max_msg_len]) and Text.units(bytes, alphabet) > vt[:max_msg_len] ->
+        {:skip, :too_long}
+
+      vt[:support_multipart] == false and length(Text.split(bytes, alphabet)) > 1 ->
+        {:skip, :no_multipart}
+
       true ->
         base = fields(msg, route, coding)
-        tlvs = tlvs(msg)
-
-        parts =
-          if msg.concat != nil,
-            do: [{Concat.udhi?(msg.fields[:esm_class] || 0) && msg.udh != <<>>, msg.udh <> bytes}],
-            else: split(bytes, alphabet)
-
-        {:ok, Enum.map(parts, &submit_pdu(base, tlvs, &1)), coding}
+        tlvs = Enum.filter(msg.tlvs, fn {name, _} -> name in @passed_tlvs end)
+        pieces = pieces(bytes, alphabet, vt[:multipart_format] || :udh8)
+        {:ok, Enum.map(pieces, &submit_pdu(base, tlvs, &1)), coding}
     end
   end
 
-  defp submit_pdu(base, tlvs, {udh?, short_message}) do
-    esm = if udh?, do: @udhi, else: 0
-    {Map.merge(base, %{esm_class: esm, short_message: short_message}), tlvs}
+  defp submit_pdu(base, tlvs, {esm, short_message, extra}),
+    do: {Map.merge(base, %{esm_class: esm, short_message: short_message}), tlvs ++ extra}
+
+  @doc false
+  # The parts as {esm_class, short_message, extra TLVs}: one when the message fits in one SMS, else per the format
+  # (UDH with an 8- or 16-bit reference, SAR TLVs, or the whole message in message_payload).
+  @spec pieces(binary(), Text.alphabet(), :udh8 | :udh16 | :sar | :payload) :: [
+          {byte(), binary(), list()}
+        ]
+  def pieces(bytes, alphabet, :payload) do
+    case Text.split(bytes, alphabet) do
+      [single] -> [{0, single, []}]
+      _parts -> [{0, "", [message_payload: bytes]}]
+    end
   end
+
+  def pieces(bytes, alphabet, format) do
+    case Text.split(bytes, alphabet, header_octets(format)) do
+      [single] ->
+        [{0, single, []}]
+
+      parts ->
+        total = length(parts)
+        ref = reference(format)
+        parts |> Enum.with_index(1) |> Enum.map(fn {p, n} -> piece(format, ref, total, n, p) end)
+    end
+  end
+
+  defp header_octets(:udh8), do: 6
+  defp header_octets(:udh16), do: 7
+  defp header_octets(:sar), do: 0
+
+  # A new reference for every message, so open messages on a connection do not share one (S-3.10).
+  defp reference(:udh8), do: :rand.uniform(256) - 1
+  defp reference(_format), do: :rand.uniform(65_536) - 1
+
+  defp piece(:udh8, ref, total, n, p), do: {@udhi, Concat.udh8(ref, total, n) <> p, []}
+  defp piece(:udh16, ref, total, n, p), do: {@udhi, Concat.udh16(ref, total, n) <> p, []}
+
+  defp piece(:sar, ref, total, n, p),
+    do: {0, p, [sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n]}
 
   defp encoding(%{text: nil} = msg, _text), do: {msg.body, msg.alphabet, msg.data_coding}
 
@@ -240,27 +280,11 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   # Whether a changed text needs more parts than the customer sent (D3).
   defp grows_parts?(%{text: nil}, _text), do: false
-  defp grows_parts?(%{concat: c}, _text) when c != nil, do: false
 
   defp grows_parts?(msg, text) do
     case encoding(msg, text) do
       {:error, _, _} -> false
       {bytes, alphabet, _} -> Text.part_count(bytes, alphabet) > msg.parts
-    end
-  end
-
-  defp split(bytes, alphabet) do
-    case Text.split(bytes, alphabet) do
-      [single] ->
-        [{false, single}]
-
-      parts ->
-        ref = :rand.uniform(256) - 1
-        total = length(parts)
-
-        parts
-        |> Enum.with_index(1)
-        |> Enum.map(fn {p, i} -> {true, Concat.udh8(ref, total, i) <> p} end)
     end
   end
 
@@ -290,16 +314,6 @@ defmodule Sms.Switch.Pipeline.Sender do
   end
 
   defp first(values), do: Enum.find(values, 0, &(&1 != nil))
-
-  # A customer's SAR part keeps its SAR TLVs (format conversion per vendor comes with build step 5, S-3.10).
-  defp tlvs(msg) do
-    keep =
-      if msg.concat && msg.concat.kind == :sar, do: @passed_tlvs ++ sar_tlvs(), else: @passed_tlvs
-
-    Enum.filter(msg.tlvs, fn {name, _} -> name in keep end)
-  end
-
-  defp sar_tlvs, do: [:sar_msg_ref_num, :sar_total_segments, :sar_segment_seqnum]
 
   # ---------------------------------------------------------------- sending
 

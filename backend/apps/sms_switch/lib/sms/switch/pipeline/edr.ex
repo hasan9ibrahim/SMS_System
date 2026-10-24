@@ -92,6 +92,8 @@ defmodule Sms.Switch.Pipeline.Edr do
       "c_bind_type" => bind(msg.origin.bind),
       "c_protocol" => "SMPP",
       "c_message_id" => msg.id,
+      # Every customer message id of a message put together from its parts (S-3.2), the first one above.
+      "c_message_ids" => Map.get(msg, :ids, [msg.id]),
       "c_coding" => msg.data_coding,
       "c_translation_rule_ids" => msg.ingress[:fired] || [],
       "udh" => hex(msg.udh)

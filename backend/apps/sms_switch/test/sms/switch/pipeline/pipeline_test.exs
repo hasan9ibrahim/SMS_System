@@ -729,27 +729,6 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
              )
     end
 
-    test "SAR parts share the first part's decision and keep their SAR TLVs to the vendor (S-3.3, S-3.8)" do
-      %{client: client, conns: [conn]} = start_all()
-
-      {client, r1} =
-        submit_pdu(client, :submit_sm, %{short_message: "part one "}, sar(7, 2, 1), 2)
-
-      {_, r2} = submit_pdu(client, :submit_sm, %{short_message: "part two"}, sar(7, 2, 2), 3)
-      assert {r1.status, r2.status} == {0, 0}
-      assert r1.fields.message_id != r2.fields.message_id
-
-      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p1}, 2_000
-      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p2}, 2_000
-      assert {p1.fields.short_message, p2.fields.short_message} == {"part one ", "part two"}
-      assert {:sar_segment_seqnum, 1} in p1.tlvs
-      assert {:sar_segment_seqnum, 2} in p2.tlvs
-      assert {:sar_msg_ref_num, 7} in p2.tlvs
-
-      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
-      assert Enum.all?(edr("edr.attempt"), &(&1["route_rule_id"] == 1 and &1["v_trunk_id"] == 1))
-    end
-
     test "data_sm is accepted and goes to the vendor as submit_sm" do
       %{client: client, conns: [conn]} = start_all()
 
@@ -765,6 +744,224 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
   defp sar(ref, total, n),
     do: [sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n]
+
+  defp udh(ref, total, n), do: <<5, 0, 3, ref, total, n>>
+
+  defp udh_part(client, ref, total, n, text, seq) do
+    submit_pdu(
+      client,
+      :submit_sm,
+      %{esm_class: 0x40, short_message: udh(ref, total, n) <> text, registered_delivery: 1},
+      [],
+      seq
+    )
+  end
+
+  describe "customer multipart messages (S-3.2–S-3.7, S-4.3, D1)" do
+    test "parts are answered at once, held until all came, and go to the vendor as one message" do
+      %{client: client, conns: [conn]} = start_all()
+      one = String.duplicate("a", 150)
+      two = String.duplicate("b", 20)
+
+      # Out of order, and over two submits each answered with its own id.
+      {client, r2} = udh_part(client, 9, 2, 2, two, 2)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 200
+      {client, r1} = udh_part(client, 9, 2, 1, one, 3)
+      assert {r1.status, r2.status} == {0, 0}
+      assert r1.fields.message_id != r2.fields.message_id
+
+      # Re-split for the vendor: 153 + 17 characters with a new reference.
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p1}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p2}, 2_000
+      assert <<5, 0, 3, ref, 2, 1, body1::binary>> = p1.fields.short_message
+      assert <<5, 0, 3, ^ref, 2, 2, body2::binary>> = p2.fields.short_message
+      assert body1 <> body2 == one <> two
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      [attempt] = edr("edr.attempt")
+      assert attempt["c_message_ids"] == [r1.fields.message_id, r2.fields.message_id]
+      assert attempt["msg_count"] == 2
+
+      # One receipt per customer message id (S-4.2).
+      receipt(conn, "1", "DELIVRD")
+      receipt(conn, "2", "DELIVRD")
+      {client, d1} = customer_receipt(client)
+      {_, d2} = customer_receipt(client)
+
+      ids = for d <- [d1, d2], {:receipted_message_id, id} <- d.tlvs, do: id
+      assert Enum.sort(ids) == Enum.sort([r1.fields.message_id, r2.fields.message_id])
+    end
+
+    test "translation runs once on the whole text, across the parts' boundary (S-4.3)" do
+      rule = %{id: 5, content_regex: "ab", content_replacement: "XY"}
+
+      %{client: client, conns: [conn]} =
+        start_all(
+          config: [
+            translation_rules: [rule],
+            translation_targets: [PipelineConfig.target(5, "customer", 1)]
+          ]
+        )
+
+      {client, _} = udh_part(client, 3, 2, 1, "hello a", 2)
+      {_, _} = udh_part(client, 3, 2, 2, "b world", 3)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "hello XY world"
+    end
+
+    test "the same part again gets its first message id and is held once (S-3.5)" do
+      %{client: client, conns: [conn]} = start_all()
+      {client, first} = udh_part(client, 4, 2, 1, "one ", 2)
+      {client, again} = udh_part(client, 4, 2, 1, "one ", 3)
+      assert again.fields.message_id == first.fields.message_id
+      {_, _} = udh_part(client, 4, 2, 2, "two", 4)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "one two"
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "SAR parts are put together like UDH parts" do
+      %{client: client, conns: [conn]} = start_all()
+      {client, _} = submit_pdu(client, :submit_sm, %{short_message: "part one "}, sar(7, 2, 1), 2)
+      {_, _} = submit_pdu(client, :submit_sm, %{short_message: "part two"}, sar(7, 2, 2), 3)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "part one part two"
+      assert sent.tlvs == []
+    end
+
+    test "a group still incomplete after the trunk's timeout: REJECTD receipts, nothing sent (D1)" do
+      customer = PipelineConfig.customer_trunk(reassembly_timeout_s: 1)
+      %{client: client, conns: [conn]} = start_all(config: [customer_trunks: [customer]])
+      start_supervised!({Pipeline.Timeouts, sweep_ms: 100})
+
+      {client, r1} = udh_part(client, 5, 3, 1, "one", 2)
+      {client, r2} = udh_part(client, 5, 3, 2, "two", 3)
+      {client, d1} = customer_receipt(client, 4_000)
+      {_, d2} = customer_receipt(client, 4_000)
+
+      for d <- [d1, d2], do: assert(d.fields.short_message =~ "stat:REJECTD err:099")
+      ids = for d <- [d1, d2], {:receipted_message_id, id} <- d.tlvs, do: id
+      assert Enum.sort(ids) == Enum.sort([r1.fields.message_id, r2.fields.message_id])
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 100
+
+      assert_eventually(fn ->
+        Enum.count(edr("edr.attempt"), &(&1["c_msg_status"] == "REJECTD")) == 2
+      end)
+    end
+
+    test "a message refused once put together: its parts get REJECTD receipts" do
+      %{client: client} = start_all(config: [route_rules: [%{id: 1, status: "inactive"}]])
+      {client, r1} = udh_part(client, 6, 2, 1, "one", 2)
+
+      fields = %{
+        source_addr: "FakeBank",
+        destination_addr: @dest,
+        esm_class: 0x40,
+        registered_delivery: 1
+      }
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, Map.put(fields, :short_message, udh(6, 2, 2) <> "two"), sequence: 3)
+      )
+
+      # The last part's resp and the two receipts, in any order (the in-memory bus runs consumers in the intake).
+      pdus = collect(client, 3)
+      [resp] = for p <- pdus, p.command == :submit_sm_resp, do: p
+      receipts = for p <- pdus, p.command == :deliver_sm, do: p
+      assert resp.status == 0
+      assert length(receipts) == 2
+      assert Enum.all?(receipts, &(&1.fields.short_message =~ "stat:REJECTD err:045"))
+      ids = for d <- receipts, {:receipted_message_id, id} <- d.tlvs, do: id
+      assert Enum.sort(ids) == Enum.sort([r1.fields.message_id, resp.fields.message_id])
+    end
+  end
+
+  # The next `n` PDUs, receipts answered.
+  defp collect(client, n) do
+    {_, pdus} =
+      Enum.reduce(1..n, {client, []}, fn _, {client, acc} ->
+        assert {client, pdu} = Client.recv(client, 5_000)
+
+        if pdu.command == :deliver_sm,
+          do: Client.send_pdu(client, Pdu.response(pdu, :esme_rok, %{message_id: ""}))
+
+        {client, [pdu | acc]}
+      end)
+
+    Enum.reverse(pdus)
+  end
+
+  describe "vendor multipart formats and limits (S-3.9, S-3.10)" do
+    @long String.duplicate("x", 200)
+
+    # The first PDU the vendor gets for a 200-character message, with the vendor trunk's multipart format.
+    defp long_to_vendor(format) do
+      config = [vendor_trunks: [PipelineConfig.vendor_trunk(multipart_format: format)]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+      fields = %{source_addr: "FakeBank", destination_addr: @dest}
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, fields, tlvs: [message_payload: @long], sequence: 2)
+      )
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = first}, 2_000
+      first
+    end
+
+    test "UDH with a 16-bit reference: 152 characters a part" do
+      first = long_to_vendor("udh16")
+      assert <<6, 8, 4, _ref::16, 2, 1, body::binary>> = first.fields.short_message
+      assert byte_size(body) == 152
+    end
+
+    test "SAR: the parts in TLVs, 160 characters a part" do
+      first = long_to_vendor("sar")
+      assert first.fields.esm_class == 0
+      assert byte_size(first.fields.short_message) == 160
+      assert {:sar_total_segments, 2} in first.tlvs and {:sar_segment_seqnum, 1} in first.tlvs
+    end
+
+    test "message_payload: the whole message in one PDU" do
+      first = long_to_vendor("payload")
+      assert first.fields.short_message == ""
+      assert {:message_payload, @long} in first.tlvs
+    end
+
+    test "a vendor without multipart, or with a shorter maximum, is skipped for the next one" do
+      %{client: client, conns: [c1, c2]} =
+        start_all(
+          smscs: 2,
+          config: [
+            vendor_trunks: [
+              PipelineConfig.vendor_trunk(id: 1, support_multipart: false),
+              PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201])
+            ],
+            rates: [
+              PipelineConfig.rate(100, 1, "26201", "0.05"),
+              PipelineConfig.rate(200, 2, "26201", "0.02"),
+              PipelineConfig.rate(201, 3, "26201", "0.03")
+            ],
+            route_vendors: [
+              PipelineConfig.route_vendor(1, 1, 1),
+              PipelineConfig.route_vendor(1, 2, 2)
+            ]
+          ]
+        )
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, %{source_addr: "FakeBank", destination_addr: @dest},
+          tlvs: [message_payload: @long],
+          sequence: 2
+        )
+      )
+
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+    end
+  end
 
   describe "receipts from vendors (S-5.5–S-5.12, Q7)" do
     test "an MO message, a receipt without an id and one for an unknown message are all answered OK" do

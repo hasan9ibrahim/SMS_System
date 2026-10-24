@@ -75,11 +75,26 @@ defmodule Sms.Switch.Pipeline.StoreTest do
         assert :none = Store.take_orphan(vt, "c1")
       end
 
-      test "the first part of a multipart message decides for the group", %{id: id} do
-        assert :none = Store.get_group(id)
-        assert {:ok, :first} = Store.group(id, :first, 60)
-        assert {:ok, :first} = Store.group(id, :second, 60)
-        assert {:ok, :first} = Store.get_group(id)
+      test "multipart parts: held once each, the group claimed once, then dropped", %{id: key} do
+        far = System.os_time(:millisecond) + 60_000
+        assert {:ok, 1} = Store.add_part(key, 2, "id2", %{n: 2}, 60, far)
+        assert {:duplicate, "id2"} = Store.add_part(key, 2, "id2b", %{n: 2}, 60, far)
+        assert {:ok, 2} = Store.add_part(key, 1, "id1", %{n: 1}, 60, far)
+        assert {:ok, %{1 => %{n: 1}, 2 => %{n: 2}}} = Store.group_parts(key)
+
+        assert Store.claim_group(key)
+        refute Store.claim_group(key)
+        assert :ok = Store.unclaim_group(key)
+        assert :ok = Store.drop_part(key, 2)
+        assert {:ok, 2} = Store.add_part(key, 2, "id2c", %{n: 2}, 60, far)
+
+        assert {:ok, due} = Store.due_groups(far, 100)
+        assert key in due
+        assert Store.claim_group_timeout(key)
+        refute Store.claim_group_timeout(key)
+        assert :ok = Store.drop_group(key)
+        assert {:ok, parts} = Store.group_parts(key)
+        assert parts == %{}
       end
 
       test "held receipts: oldest first, one sender at a time, the trunk leaves the set when empty",
