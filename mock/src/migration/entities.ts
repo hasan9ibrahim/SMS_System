@@ -1,11 +1,6 @@
 // Migration Center (§13.22): what can be imported (in dependency order, with the template's fields,
 // allowed values and sensitivity) and what a full export package contains. No I/O.
-import type {
-  MigrationEntityInfo,
-  MigrationField,
-  MigrationImportEntity,
-  MigrationSensitivity,
-} from "@sms/contract";
+import type { MigrationEntityInfo, MigrationField, MigrationImportEntity, MigrationSensitivity } from "@sms/contract";
 
 const f = (
   field: string,
@@ -43,9 +38,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("email", "E-mail", "", { required: true }),
       f("department", "Department", "Name of an existing department."),
       f("accessGroup", "GUI access group", "Name of an existing access group."),
-      f("isAccountManager", "Account manager", "yes / no", {
-        allowed: ["yes", "no"],
-      }),
+      f("isAccountManager", "Account manager", "yes / no", { allowed: ["yes", "no"] }),
       f("status", "Status", "", { allowed: ["active", "inactive"] }),
     ],
   },
@@ -61,38 +54,18 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       EXT,
       f("name", "Name", "", { required: true }),
       f("alias", "Alias", "Short name; made from the name when empty."),
-      f("type", "Type", "", {
-        required: true,
-        allowed: ["customer", "vendor", "reciprocal"],
-      }),
+      f("type", "Type", "", { required: true, allowed: ["customer", "vendor", "reciprocal"] }),
       f("tier", "Tier", "", { allowed: ["tier1", "tier2", "tier3"] }),
       f("status", "Status", "", { allowed: ["active", "inactive"] }),
-      f(
-        "businessCompany",
-        "Business company",
-        "Name of an existing business company.",
-        { required: true },
-      ),
-      f(
-        "accountManager",
-        "Account manager",
-        "Username (existing or in the users file).",
-      ),
+      f("businessCompany", "Business company", "Name of an existing business company.", { required: true }),
+      f("accountManager", "Account manager", "Username (existing or in the users file)."),
       f("country", "Country", "ISO code, e.g. AE."),
       f("vatNumber", "VAT number", ""),
       f("address", "Address", "First address line."),
       f("emails", "Commercial e-mails", "Separated by , or ;"),
       f("technicalEmails", "Technical / NOC e-mails", "Separated by , or ;"),
-      f(
-        "ratesEmails",
-        "Rates e-mails",
-        "Separated by , or ; (rate notifications)",
-      ),
-      f(
-        "financeEmails",
-        "Finance / billing e-mails",
-        "Separated by , or ; (invoices, SOA)",
-      ),
+      f("ratesEmails", "Rates e-mails", "Separated by , or ; (rate notifications)"),
+      f("financeEmails", "Finance / billing e-mails", "Separated by , or ; (invoices, SOA)"),
     ],
   },
   {
@@ -105,30 +78,19 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     matchBy: "external ID, else name",
     fields: [
       EXT,
-      f("enterprise", "Enterprise", "Name or external ID of the enterprise.", {
-        required: true,
-      }),
+      f("enterprise", "Enterprise", "Name or external ID of the enterprise.", { required: true }),
       f("name", "Trunk name", "", { required: true }),
-      f("username", "System ID", "SMPP username; unique.", {
-        credential: true,
-      }),
+      f("username", "System ID", "SMPP username; unique.", { credential: true }),
       f("password", "Password", "SMPP password.", { credential: true }),
       f("hostIps", "Allowed IPs", "Separated by , or ;", { credential: true }),
-      // No port: customers bind on 2775 (Non secure) or 2776 (TLS), set by the SSL type (product owner, 2026-10-24).
-      f(
-        "sslType",
-        "SSL",
-        "Connection type; the port follows: none → 2775, TLS → 2776. Default none.",
-        {
-          allowed: ["none", "tls1.0", "tls1.2", "tls1.3"],
-        },
-      ),
+      // No port: customers bind on 2775 (no TLS) or 2776 (TLS), set by the SSL type (product owner, 2026-10-24).
+      f("sslType", "SSL", "Connection type; the port follows: none → 2775, TLS → 2776. Default none.", {
+        allowed: ["none", "tls1.0", "tls1.2", "tls1.3"],
+      }),
       f("protocol", "Protocol", "", { allowed: ["smpp", "http"] }),
       f("tps", "TPS", "Messages per second.", { required: true }),
       f("category", "Product category", "Name of an existing category."),
-      f("billingType", "Billing type", "", {
-        allowed: ["attempt", "submit", "reported", "delivery"],
-      }),
+      f("billingType", "Billing type", "", { allowed: ["attempt", "submit", "reported", "delivery"] }),
     ],
   },
   {
@@ -141,9 +103,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     matchBy: "external ID, else name",
     fields: [
       EXT,
-      f("enterprise", "Enterprise", "Name or external ID of the enterprise.", {
-        required: true,
-      }),
+      f("enterprise", "Enterprise", "Name or external ID of the enterprise.", { required: true }),
       f("name", "Trunk name", "", { required: true }),
       f("host", "Host", "Vendor SMSC address.", { credential: true }),
       f("port", "Port", "", { credential: true }),
@@ -151,12 +111,8 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("password", "Password", "", { credential: true }),
       f("protocol", "Protocol", "", { allowed: ["smpp", "http"] }),
       f("tps", "TPS", "", { required: true }),
-      f("category", "Product category", "Name of an existing category.", {
-        required: true,
-      }),
-      f("billingType", "Billing type", "", {
-        allowed: ["attempt", "submit", "reported", "delivery"],
-      }),
+      f("category", "Product category", "Name of an existing category.", { required: true }),
+      f("billingType", "Billing type", "", { allowed: ["attempt", "submit", "reported", "delivery"] }),
     ],
   },
   {
@@ -170,24 +126,11 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     fields: [
       EXT,
       f("name", "Name", "", { required: true }),
-      f("kind", "Kind", "", {
-        required: true,
-        allowed: ["customer", "vendor"],
-      }),
-      f("currency", "Currency", "ISO code of an existing currency.", {
-        required: true,
-      }),
+      f("kind", "Kind", "", { required: true, allowed: ["customer", "vendor"] }),
+      f("currency", "Currency", "ISO code of an existing currency.", { required: true }),
       f("category", "Product category", "", { required: true }),
-      f(
-        "vendorTrunk",
-        "Vendor trunk",
-        "For a vendor table: the trunk it belongs to.",
-      ),
-      f(
-        "customerTrunks",
-        "Customer trunks",
-        "For a customer table: trunks selling from it, separated by ;",
-      ),
+      f("vendorTrunk", "Vendor trunk", "For a vendor table: the trunk it belongs to."),
+      f("customerTrunks", "Customer trunks", "For a customer table: trunks selling from it, separated by ;"),
     ],
   },
   {
@@ -200,19 +143,10 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     matchBy: "lines go into rate tables created by the same import",
     fields: [
       f("rateTable", "Rate table", "Name or external ID.", { required: true }),
-      f(
-        "mccmnc",
-        "MCCMNC",
-        "A code of the MCCMNC master (3 digits = the whole country).",
-        { required: true },
-      ),
+      f("mccmnc", "MCCMNC", "A code of the MCCMNC master (3 digits = the whole country).", { required: true }),
       f("senderId", "Sender ID", ""),
       f("rate", "Rate", "In the table's currency.", { required: true }),
-      f(
-        "validFrom",
-        "Valid from",
-        "Date or date-time (UTC); today when empty.",
-      ),
+      f("validFrom", "Valid from", "Date or date-time (UTC); today when empty."),
       f("blocked", "Blocked", "yes / no", { allowed: ["yes", "no"] }),
     ],
   },
@@ -229,22 +163,9 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("name", "Name", "", { required: true }),
       f("priority", "Priority", "1 (first) to 100.", { required: true }),
       f("status", "Status", "", { allowed: ["active", "inactive"] }),
-      f(
-        "customerTrunks",
-        "Customer trunks",
-        "Separated by , or ; — empty = all trunks.",
-      ),
-      f(
-        "destinations",
-        "Destinations",
-        "MCCMNC codes separated by , or ; — empty = all.",
-      ),
-      f(
-        "vendors",
-        "Vendors",
-        "trunk:share separated by , or ; e.g. VENDOR_A:60,VENDOR_B:40",
-        { required: true },
-      ),
+      f("customerTrunks", "Customer trunks", "Separated by , or ; — empty = all trunks."),
+      f("destinations", "Destinations", "MCCMNC codes separated by , or ; — empty = all."),
+      f("vendors", "Vendors", "trunk:share separated by , or ; e.g. VENDOR_A:60,VENDOR_B:40", { required: true }),
     ],
   },
   {
@@ -257,31 +178,18 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     matchBy: "always added",
     fields: [
       f("enterprise", "Enterprise", "Name or external ID.", { required: true }),
-      f("side", "Side", "", {
-        required: true,
-        allowed: ["customer", "vendor"],
-      }),
-      f(
-        "amount",
-        "Amount",
-        "Positive = the partner's credit, negative = owed (§7).",
-        { required: true },
-      ),
+      f("side", "Side", "", { required: true, allowed: ["customer", "vendor"] }),
+      f("amount", "Amount", "Positive = the partner's credit, negative = owed (§7).", { required: true }),
       f("currency", "Currency", "", { required: true }),
       f("date", "Date", "YYYY-MM-DD", { required: true }),
     ],
   },
 ];
-export const ENTITY = new Map(
-  IMPORT_ENTITIES.map((e) => [e.entity as MigrationImportEntity, e]),
-);
+export const ENTITY = new Map(IMPORT_ENTITIES.map((e) => [e.entity as MigrationImportEntity, e]));
 
 /** Ready column mappings for the reference platform described in the spec (its grid column names). */
 export const REFERENCE_PLATFORM = "Reference platform";
-export const BUILT_IN_MAPPINGS: {
-  entity: MigrationImportEntity;
-  columns: Record<string, string>;
-}[] = [
+export const BUILT_IN_MAPPINGS: { entity: MigrationImportEntity; columns: Record<string, string> }[] = [
   {
     entity: "users",
     columns: {
@@ -405,25 +313,10 @@ export interface ExportTable {
   parents?: Record<string, string>;
 }
 export const EXPORT_TABLES: ExportTable[] = [
-  {
-    entity: "countries",
-    sensitivity: "general",
-    from: "countries",
-    live: true,
-  },
+  { entity: "countries", sensitivity: "general", from: "countries", live: true },
   { entity: "mccmnc", sensitivity: "general", from: "mccmnc", live: true },
-  {
-    entity: "product_categories",
-    sensitivity: "general",
-    from: "product_categories",
-    live: true,
-  },
-  {
-    entity: "number_lists",
-    sensitivity: "general",
-    from: "number_lists",
-    live: true,
-  },
+  { entity: "product_categories", sensitivity: "general", from: "product_categories", live: true },
+  { entity: "number_lists", sensitivity: "general", from: "number_lists", live: true },
   {
     entity: "number_list_entries",
     sensitivity: "general",
@@ -431,30 +324,11 @@ export const EXPORT_TABLES: ExportTable[] = [
     live: true,
     parents: { number_list_id: "number_lists" },
   },
-  {
-    entity: "business_companies",
-    sensitivity: "business",
-    from: "business_companies",
-  },
-  {
-    entity: "departments",
-    sensitivity: "business",
-    from: "departments",
-    live: true,
-  },
-  {
-    entity: "access_groups",
-    sensitivity: "business",
-    from: "access_groups",
-    live: true,
-  },
+  { entity: "business_companies", sensitivity: "business", from: "business_companies" },
+  { entity: "departments", sensitivity: "business", from: "departments", live: true },
+  { entity: "access_groups", sensitivity: "business", from: "access_groups", live: true },
   { entity: "users", sensitivity: "business", from: "users", live: true },
-  {
-    entity: "enterprises",
-    sensitivity: "business",
-    from: "enterprises",
-    live: true,
-  },
+  { entity: "enterprises", sensitivity: "business", from: "enterprises", live: true },
   {
     entity: "enterprise_contacts",
     sensitivity: "business",
@@ -475,57 +349,24 @@ export const EXPORT_TABLES: ExportTable[] = [
     live: true,
     parents: { enterprise_id: "enterprises" },
   },
-  {
-    entity: "rate_tables",
-    sensitivity: "business",
-    from: "rate_tables",
-    live: true,
-  },
+  { entity: "rate_tables", sensitivity: "business", from: "rate_tables", live: true },
   {
     entity: "customer_trunk_rate_tables",
     sensitivity: "business",
     from: "customer_trunk_rate_tables",
-    parents: {
-      customer_trunk_id: "customer_trunks",
-      rate_table_id: "rate_tables",
-    },
+    parents: { customer_trunk_id: "customer_trunks", rate_table_id: "rate_tables" },
   },
-  {
-    entity: "rate_lines",
-    sensitivity: "business",
-    from: "rate_lines",
-    parents: { rate_table_id: "rate_tables" },
-  },
-  {
-    entity: "translation_rules",
-    sensitivity: "business",
-    from: "translation_rules",
-    live: true,
-  },
+  { entity: "rate_lines", sensitivity: "business", from: "rate_lines", parents: { rate_table_id: "rate_tables" } },
+  { entity: "translation_rules", sensitivity: "business", from: "translation_rules", live: true },
   {
     entity: "translation_rule_targets",
     sensitivity: "business",
     from: "translation_rule_targets",
     parents: { translation_rule_id: "translation_rules" },
   },
-  {
-    entity: "hlr_providers",
-    sensitivity: "business",
-    from: "hlr_providers",
-    live: true,
-  },
-  {
-    entity: "hlr_rules",
-    sensitivity: "business",
-    from: "hlr_rules",
-    live: true,
-  },
-  {
-    entity: "route_rules",
-    sensitivity: "business",
-    from: "route_rules",
-    live: true,
-  },
+  { entity: "hlr_providers", sensitivity: "business", from: "hlr_providers", live: true },
+  { entity: "hlr_rules", sensitivity: "business", from: "hlr_rules", live: true },
+  { entity: "route_rules", sensitivity: "business", from: "route_rules", live: true },
   {
     entity: "route_rule_vendors",
     sensitivity: "business",
@@ -547,10 +388,8 @@ export const EXPORT_TABLES: ExportTable[] = [
   },
 ];
 /** Connection details (§13.22 credentials level): only with "include credentials". */
-export const CREDENTIAL =
-  /^(username|host|host_ips|port|source_host|http_url|smtp_|imap_|api_|login|endpoint|url)/;
+export const CREDENTIAL = /^(username|host|host_ips|port|source_host|http_url|smtp_|imap_|api_|login|endpoint|url)/;
 /** Passwords and keys: only with credentials and "with passwords". */
 export const SECRET = /(password|secret|api_key|token)/;
 /** Never exported: login secrets of our own users (§13.28: not kept in any file). */
-export const NEVER =
-  /^(password_hash|totp_secret|totp_pending_secret|temp_password.*)$/;
+export const NEVER = /^(password_hash|totp_secret|totp_pending_secret|temp_password.*)$/;

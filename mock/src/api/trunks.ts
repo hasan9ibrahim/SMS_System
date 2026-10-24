@@ -67,17 +67,12 @@ const COMMON: FieldSpec[] = [
 
 const CUSTOMER_SPECS: FieldSpec[] = [
   ...COMMON,
-  // 2775 Non secure / 2776 TLS, worked out from ssl_type by the database (migration 070, product owner 2026-10-24).
+  // 2775 without TLS / 2776 with TLS, from ssl_type by the database (migration 070, product owner 2026-10-24).
   { api: "port", col: "port", readOnly: true },
   { api: "considerHlrRate", col: "consider_hlr_rate" },
   { api: "serviceTypeRouting", col: "service_type_routing" },
   { api: "partWiseRouting", col: "part_wise_routing" },
-  {
-    api: "hostIps",
-    col: "host_ips",
-    read: "ARRAY(SELECT host(x) FROM unnest(t.host_ips) x)",
-    cast: "::inet[]",
-  },
+  { api: "hostIps", col: "host_ips", read: "ARRAY(SELECT host(x) FROM unnest(t.host_ips) x)", cast: "::inet[]" },
   { api: "dlrPushUrl", col: "dlr_push_url" },
   { api: "moPushUrl", col: "mo_push_url" },
   { api: "delayedSubmit", col: "delayed_submit" },
@@ -113,12 +108,7 @@ const VENDOR_SPECS: FieldSpec[] = [
   ...COMMON,
   { api: "port", col: "port" },
   { api: "host", col: "host" },
-  {
-    api: "sourceHost",
-    col: "source_host",
-    read: "host(t.source_host)",
-    cast: "::inet",
-  },
+  { api: "sourceHost", col: "source_host", read: "host(t.source_host)", cast: "::inet" },
   { api: "serviceType", col: "service_type" },
   { api: "submitIntervalMs", col: "submit_interval_ms" },
   { api: "submitTimeoutS", col: "submit_timeout_s" },
@@ -176,8 +166,7 @@ const KINDS: Record<TrunkKind, KindDef> = {
   },
 };
 
-const notFound = (reply: FastifyReply, k: KindDef, id: number) =>
-  sendProblem(reply, 404, `${k.label} ${id} not found`);
+const notFound = (reply: FastifyReply, k: KindDef, id: number) => sendProblem(reply, 404, `${k.label} ${id} not found`);
 const badInput = (reply: FastifyReply, errors: FieldError[]) =>
   sendProblem(reply, 400, "Check the highlighted fields", { errors });
 
@@ -190,15 +179,8 @@ type TrunkRecord = Record<string, unknown> & {
   archived: { at: string; by: string | null } | null;
 };
 
-async function loadTrunk(
-  db: Db,
-  k: KindDef,
-  id: number,
-): Promise<TrunkRecord | null> {
-  const own =
-    k.kind === "vendor"
-      ? "(SELECT r.id FROM rate_tables r WHERE r.vendor_trunk_id = t.id)"
-      : "NULL::bigint";
+async function loadTrunk(db: Db, k: KindDef, id: number): Promise<TrunkRecord | null> {
+  const own = k.kind === "vendor" ? "(SELECT r.id FROM rate_tables r WHERE r.vendor_trunk_id = t.id)" : "NULL::bigint";
   const tables =
     k.kind === "customer"
       ? `, ARRAY(SELECT x.rate_table_id FROM customer_trunk_rate_tables x WHERE x.customer_trunk_id = t.id ORDER BY x.position) AS rate_table_ids`
@@ -223,9 +205,7 @@ async function loadTrunk(
     archived: archivedInfo(r.deleted_at, r.deleted_by),
     ownRateTableId: r.own_rate_table_id ?? null,
     ...rowToObject(r, k.specs),
-    ...(k.kind === "customer"
-      ? { rateTableIds: (r.rate_table_ids as number[]).map(Number) }
-      : {}),
+    ...(k.kind === "customer" ? { rateTableIds: (r.rate_table_ids as number[]).map(Number) } : {}),
     createdBy: r.created_by ?? null,
     createdAt: iso(r.inserted_at),
     updatedBy: r.updated_by ?? "system",
@@ -235,46 +215,25 @@ async function loadTrunk(
 
 // ---------------------------------------------------------------- checks
 
-async function checkInput(
-  db: Db,
-  k: KindDef,
-  input: TrunkInput,
-  before: TrunkRecord | null,
-): Promise<FieldError[]> {
+async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRecord | null): Promise<FieldError[]> {
   const errors: FieldError[] = [];
   const id = before?.id ?? null;
   if (before && before.enterpriseId !== input.enterpriseId) {
-    errors.push({
-      path: "/enterpriseId",
-      message: "a trunk can't move to another enterprise; clone it instead",
-    });
+    errors.push({ path: "/enterpriseId", message: "a trunk can't move to another enterprise; clone it instead" });
   } else {
-    const { rows } = await db.query(
-      "SELECT type, deleted_at FROM enterprises WHERE id = $1",
-      [input.enterpriseId],
-    );
-    if (!rows[0])
-      errors.push({ path: "/enterpriseId", message: "unknown enterprise" });
-    else if (rows[0].deleted_at)
-      errors.push({
-        path: "/enterpriseId",
-        message: "the enterprise is archived",
-      });
+    const { rows } = await db.query("SELECT type, deleted_at FROM enterprises WHERE id = $1", [input.enterpriseId]);
+    if (!rows[0]) errors.push({ path: "/enterpriseId", message: "unknown enterprise" });
+    else if (rows[0].deleted_at) errors.push({ path: "/enterpriseId", message: "the enterprise is archived" });
     else if (!k.enterpriseTypes.includes(rows[0].type))
-      errors.push({
-        path: "/enterpriseId",
-        message: `a ${rows[0].type} can't have ${k.label.toLowerCase()}s`,
-      });
+      errors.push({ path: "/enterpriseId", message: `a ${rows[0].type} can't have ${k.label.toLowerCase()}s` });
   }
   if (input.billingTimezone != null && !isTimezone(input.billingTimezone))
     errors.push({ path: "/billingTimezone", message: "unknown time zone" });
   if (input.categoryId != null) {
-    const { rows } = await db.query(
-      "SELECT 1 FROM product_categories WHERE id = $1 AND deleted_at IS NULL",
-      [input.categoryId],
-    );
-    if (!rows[0])
-      errors.push({ path: "/categoryId", message: "unknown product category" });
+    const { rows } = await db.query("SELECT 1 FROM product_categories WHERE id = $1 AND deleted_at IS NULL", [
+      input.categoryId,
+    ]);
+    if (!rows[0]) errors.push({ path: "/categoryId", message: "unknown product category" });
   }
   // A deleted trunk's name stays reserved (§13.29), so archived trunks count too.
   const { rows: nameClash } = await db.query(
@@ -298,26 +257,18 @@ async function checkInput(
         message: `already used by customer trunk ${rows[0].id}${rows[0].deleted_at ? " (archived)" : ""}`,
       });
   }
-  if (!before && !input.password)
-    errors.push({ path: "/password", message: "required for a new trunk" });
+  if (!before && !input.password) errors.push({ path: "/password", message: "required for a new trunk" });
 
   if (k.kind === "customer") {
     const c = input as CustomerTrunkInput;
     c.hostIps.forEach((ip, i) => {
-      if (!isIP(ip))
-        errors.push({ path: `/hostIps/${i}`, message: "not an IP address" });
+      if (!isIP(ip)) errors.push({ path: `/hostIps/${i}`, message: "not an IP address" });
     });
     if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null))
-      errors.push({
-        path: "/revenueLimitPeriod",
-        message: "set both the limit and its period, or neither",
-      });
+      errors.push({ path: "/revenueLimitPeriod", message: "set both the limit and its period, or neither" });
     const ids = c.rateTableIds ?? [];
     if (new Set(ids).size !== ids.length)
-      errors.push({
-        path: "/rateTableIds",
-        message: "a rate table is listed twice",
-      });
+      errors.push({ path: "/rateTableIds", message: "a rate table is listed twice" });
     if (ids.length) {
       const { rows } = await db.query(
         "SELECT id FROM rate_tables WHERE id = ANY($1) AND kind = 'customer' AND deleted_at IS NULL",
@@ -326,84 +277,46 @@ async function checkInput(
       const ok = new Set(rows.map((r) => r.id));
       ids.forEach((rid, i) => {
         if (!ok.has(rid))
-          errors.push({
-            path: `/rateTableIds/${i}`,
-            message: `rate table ${rid} is not a live customer table`,
-          });
+          errors.push({ path: `/rateTableIds/${i}`, message: `rate table ${rid} is not a live customer table` });
       });
     }
     if (c.expressVendorTrunkId != null) {
-      const { rows } = await db.query(
-        "SELECT 1 FROM vendor_trunks WHERE id = $1 AND deleted_at IS NULL",
-        [c.expressVendorTrunkId],
-      );
-      if (!rows[0])
-        errors.push({
-          path: "/expressVendorTrunkId",
-          message: "unknown or archived vendor trunk",
-        });
+      const { rows } = await db.query("SELECT 1 FROM vendor_trunks WHERE id = $1 AND deleted_at IS NULL", [
+        c.expressVendorTrunkId,
+      ]);
+      if (!rows[0]) errors.push({ path: "/expressVendorTrunkId", message: "unknown or archived vendor trunk" });
     }
   } else {
     const v = input as VendorTrunkInput;
-    if (v.sourceHost && !isIP(v.sourceHost))
-      errors.push({ path: "/sourceHost", message: "not an IP address" });
+    if (v.sourceHost && !isIP(v.sourceHost)) errors.push({ path: "/sourceHost", message: "not an IP address" });
     if ((v.costLimit == null) !== (v.costLimitPeriod == null))
-      errors.push({
-        path: "/costLimitPeriod",
-        message: "set both the limit and its period, or neither",
-      });
-    if (
-      v.protocol === "http" &&
-      !v.http?.url &&
-      !(before && (before.http as { url?: string | null } | undefined)?.url)
-    )
+      errors.push({ path: "/costLimitPeriod", message: "set both the limit and its period, or neither" });
+    if (v.protocol === "http" && !v.http?.url && !(before && (before.http as { url?: string | null } | undefined)?.url))
       errors.push({ path: "/http/url", message: "required for an HTTP trunk" });
-    for (const key of [
-      "successRegex",
-      "messageIdRegex",
-      "dlrStatusRegex",
-      "dlrMidRegex",
-    ] as const) {
+    for (const key of ["successRegex", "messageIdRegex", "dlrStatusRegex", "dlrMidRegex"] as const) {
       const re = v.http?.[key];
       if (!re) continue;
       try {
         new RegExp(re);
       } catch {
-        errors.push({
-          path: `/http/${key}`,
-          message: "invalid regular expression",
-        });
+        errors.push({ path: `/http/${key}`, message: "invalid regular expression" });
       }
     }
   }
   return errors;
 }
 
-const fieldPaths = (k: KindDef) => [
-  ...k.specs.map((s) => s.api),
-  ...(k.kind === "customer" ? ["rateTableIds"] : []),
-];
+const fieldPaths = (k: KindDef) => [...k.specs.map((s) => s.api), ...(k.kind === "customer" ? ["rateTableIds"] : [])];
 
 function inputValues(k: KindDef, input: TrunkInput): Record<string, unknown> {
-  const values = flatten(
-    { ...input, name: input.name.trim(), username: input.username.trim() },
-    k.specs,
-  );
+  const values = flatten({ ...input, name: input.name.trim(), username: input.username.trim() }, k.specs);
   // Empty optional text becomes null so a cleared field reads the same as an unset one.
-  for (const [key, v] of Object.entries(values))
-    if (v === "") values[key] = null;
+  for (const [key, v] of Object.entries(values)) if (v === "") values[key] = null;
   return values;
 }
 
-async function writeRateTables(
-  c: pg.PoolClient,
-  trunkId: number,
-  ids: number[],
-) {
-  await c.query(
-    "DELETE FROM customer_trunk_rate_tables WHERE customer_trunk_id = $1",
-    [trunkId],
-  );
+async function writeRateTables(c: pg.PoolClient, trunkId: number, ids: number[]) {
+  await c.query("DELETE FROM customer_trunk_rate_tables WHERE customer_trunk_id = $1", [trunkId]);
   for (const [i, rid] of ids.entries()) {
     await c.query(
       "INSERT INTO customer_trunk_rate_tables (customer_trunk_id, rate_table_id, position) VALUES ($1, $2, $3)",
@@ -421,9 +334,7 @@ export function getTrunk(kind: TrunkKind) {
     return withDb(reply, async (pool) => {
       const t = await loadTrunk(pool, k, id);
       // Masked and without credentials for a viewer who does not own it (§13.17).
-      return t
-        ? maskTrunkDetail(t as unknown as Record<string, unknown>, kind)
-        : notFound(reply, k, id);
+      return t ? maskTrunkDetail(t as unknown as Record<string, unknown>, kind) : notFound(reply, k, id);
     });
   };
 }
@@ -444,12 +355,7 @@ export function createTrunk(kind: TrunkKind) {
             created_by_id: me.id,
             updated_by_id: me.id,
           });
-          if (k.kind === "customer")
-            await writeRateTables(
-              c,
-              id,
-              (input as CustomerTrunkInput).rateTableIds ?? [],
-            );
+          if (k.kind === "customer") await writeRateTables(c, id, (input as CustomerTrunkInput).rateTableIds ?? []);
           else {
             // Every vendor trunk owns exactly one buy table (§13.12), in the vendor billing currency.
             await c.query(
@@ -462,9 +368,7 @@ export function createTrunk(kind: TrunkKind) {
             entityType: k.entity,
             entityIds: [id],
             changeType: "create",
-            diff: [
-              { entity_id: id, field: "*", before: null, after: values.name },
-            ],
+            diff: [{ entity_id: id, field: "*", before: null, after: values.name }],
             userId: me.id,
             ip: request.ip,
           });
@@ -472,14 +376,9 @@ export function createTrunk(kind: TrunkKind) {
         });
         // A new active vendor trunk binds all its sessions (team trial round 2).
         if (kind === "vendor") await rebindVendorTrunk(pool, id);
-        return reply
-          .code(201)
-          .send({ record: await loadTrunk(pool, k, id), change });
+        return reply.code(201).send({ record: await loadTrunk(pool, k, id), change });
       } catch (err) {
-        if (isUniqueViolation(err))
-          return badInput(reply, [
-            { path: "/username", message: "already in use" },
-          ]);
+        if (isUniqueViolation(err)) return badInput(reply, [{ path: "/username", message: "already in use" }]);
         throw err;
       }
     });
@@ -497,59 +396,28 @@ export function updateTrunk(kind: TrunkKind) {
       if (!before) return notFound(reply, k, id);
       if (await refuseMasked(reply, before.enterpriseId)) return reply;
       if (before.archived)
-        return sendProblem(
-          reply,
-          400,
-          `This ${k.label.toLowerCase()} is archived; restore it before editing`,
-        );
+        return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
       const errors = await checkInput(pool, k, input, before);
       if (errors.length) return badInput(reply, errors);
 
       const after = structuredClone(before) as Record<string, unknown>;
-      for (const [path, v] of Object.entries(inputValues(k, input)))
-        if (v !== undefined) setPath(after, path, v);
+      for (const [path, v] of Object.entries(inputValues(k, input))) if (v !== undefined) setPath(after, path, v);
       if (k.kind === "customer" && (input as CustomerTrunkInput).rateTableIds)
         after.rateTableIds = (input as CustomerTrunkInput).rateTableIds;
       const diff = diffPaths(id, before, after, fieldPaths(k));
       // Credentials never enter the change log (§13.22): only the fact that it changed.
-      if (input.password)
-        diff.push({
-          entity_id: id,
-          field: "password",
-          before: "(hidden)",
-          after: "(changed)",
-        });
+      if (input.password) diff.push({ entity_id: id, field: "password", before: "(hidden)", after: "(changed)" });
       if (diff.length === 0) return { record: before, change: null };
       try {
         const change = await inTransaction(pool, async (c) => {
-          for (const d of diff)
-            await applyTrunkField(
-              c,
-              kind,
-              id,
-              d.field,
-              d.after,
-              d.before,
-              me.id,
-            );
-          if (input.password)
-            await c.query(`UPDATE ${k.table} SET password = $2 WHERE id = $1`, [
-              id,
-              input.password,
-            ]);
-          await c.query(
-            `UPDATE ${k.table} SET updated_by_id = $2, updated_at = now() WHERE id = $1`,
-            [id, me.id],
-          );
+          for (const d of diff) await applyTrunkField(c, kind, id, d.field, d.after, d.before, me.id);
+          if (input.password) await c.query(`UPDATE ${k.table} SET password = $2 WHERE id = $1`, [id, input.password]);
+          await c.query(`UPDATE ${k.table} SET updated_by_id = $2, updated_at = now() WHERE id = $1`, [id, me.id]);
           const onlyStatus = diff.length === 1 && diff[0]!.field === "status";
           return recordChange(c, {
             entityType: k.entity,
             entityIds: [id],
-            changeType: onlyStatus
-              ? diff[0]!.after === "active"
-                ? "enable"
-                : "disable"
-              : "edit",
+            changeType: onlyStatus ? (diff[0]!.after === "active" ? "enable" : "disable") : "edit",
             diff,
             userId: me.id,
             ip: request.ip,
@@ -559,10 +427,7 @@ export function updateTrunk(kind: TrunkKind) {
         if (kind === "vendor") await rebindVendorTrunk(pool, id);
         return { record: await loadTrunk(pool, k, id), change };
       } catch (err) {
-        if (isUniqueViolation(err))
-          return badInput(reply, [
-            { path: "/username", message: "already in use" },
-          ]);
+        if (isUniqueViolation(err)) return badInput(reply, [{ path: "/username", message: "already in use" }]);
         throw err;
       }
     });
@@ -581,12 +446,10 @@ export async function applyTrunkField(
 ): Promise<void> {
   const k = KINDS[kind];
   const spec = k.specs.find((s) => s.api === field);
-  // A read-only field (the customer port) comes back from an old change as is: nothing to write.
+  // A read-only field (the customer port) coming back from an old change: nothing to write.
   if (spec?.readOnly) return;
-  if (spec)
-    return updateColumns(c, k.table, id, [spec], { [field]: value }, userId);
-  if (field === "rateTableIds" && kind === "customer")
-    return writeRateTables(c, id, (value as number[]) ?? []);
+  if (spec) return updateColumns(c, k.table, id, [spec], { [field]: value }, userId);
+  if (field === "rateTableIds" && kind === "customer") return writeRateTables(c, id, (value as number[]) ?? []);
   if (field === "archived") {
     await c.query(
       `UPDATE ${k.table} SET deleted_at = ${value ? "now()" : "NULL"}, deleted_by_id = ${value ? "$2" : "NULL"} WHERE id = $1`,
@@ -595,13 +458,7 @@ export async function applyTrunkField(
     return;
   }
   if (field === "rules.translation" || field === "rules.hlr") {
-    await applyRuleState(
-      c,
-      kind,
-      field === "rules.hlr" ? "hlr" : "translation",
-      id,
-      (value as RuleState[]) ?? [],
-    );
+    await applyRuleState(c, kind, field === "rules.hlr" ? "hlr" : "translation", id, (value as RuleState[]) ?? []);
   }
   // "password" is recorded without its value, so undo can't bring an old password back.
   void other;
@@ -611,13 +468,7 @@ export async function applyTrunkField(
 
 async function trunkDependencies(db: Db, k: KindDef, id: number) {
   const items: DependencyItem[] = [
-    {
-      key: "live_binds",
-      label: "Live binds",
-      count: 0,
-      blocking: true,
-      detail: "Disconnect the sessions first",
-    },
+    { key: "live_binds", label: "Live binds", count: 0, blocking: true, detail: "Disconnect the sessions first" },
   ];
   if (k.kind === "customer") {
     const { rows } = await db.query(
@@ -705,10 +556,7 @@ export function getTrunkDependencies(kind: TrunkKind) {
   return (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: number };
     return withDb(reply, async (pool) => {
-      const { rows } = await pool.query(
-        `SELECT 1 FROM ${k.table} WHERE id = $1`,
-        [id],
-      );
+      const { rows } = await pool.query(`SELECT 1 FROM ${k.table} WHERE id = $1`, [id]);
       if (!rows[0]) return notFound(reply, k, id);
       return trunkDependencies(pool, k, id);
     });
@@ -725,24 +573,15 @@ export function archiveTrunk(kind: TrunkKind) {
       const before = await loadTrunk(pool, k, id);
       if (!before) return notFound(reply, k, id);
       if (before.archived) return { record: before, change: null };
-      const gate = await archiveGate(
-        reply,
-        body,
-        await trunkDependencies(pool, k, id),
-      );
+      const gate = await archiveGate(reply, body, await trunkDependencies(pool, k, id));
       if (!gate.ok) return gate.reply;
       const change = await inTransaction(pool, async (c) => {
-        await c.query(
-          `UPDATE ${k.table} SET deleted_at = now(), deleted_by_id = $2 WHERE id = $1`,
-          [id, me.id],
-        );
+        await c.query(`UPDATE ${k.table} SET deleted_at = now(), deleted_by_id = $2 WHERE id = $1`, [id, me.id]);
         return recordChange(c, {
           entityType: k.entity,
           entityIds: [id],
           changeType: "delete",
-          diff: [
-            { entity_id: id, field: "archived", before: false, after: true },
-          ],
+          diff: [{ entity_id: id, field: "archived", before: false, after: true }],
           note: gate.note,
           userId: me.id,
           ip: request.ip,
@@ -759,42 +598,23 @@ export function restoreTrunk(kind: TrunkKind) {
     const { id } = request.params as { id: number };
     return withDb(reply, async (pool) => {
       const me = await getCurrentUser();
-      if (!isAdmin(me))
-        return sendProblem(
-          reply,
-          403,
-          "Only administrators can restore archived records",
-        );
+      if (!isAdmin(me)) return sendProblem(reply, 403, "Only administrators can restore archived records");
       const { rows } = await pool.query(
         `SELECT t.deleted_at, e.deleted_at AS enterprise_deleted_at FROM ${k.table} t JOIN enterprises e ON e.id = t.enterprise_id WHERE t.id = $1`,
         [id],
       );
       if (!rows[0]) return notFound(reply, k, id);
-      if (!rows[0].deleted_at)
-        return sendProblem(
-          reply,
-          400,
-          `This ${k.label.toLowerCase()} is not archived`,
-        );
+      if (!rows[0].deleted_at) return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is not archived`);
       if (rows[0].enterprise_deleted_at)
-        return sendProblem(
-          reply,
-          400,
-          "Its enterprise is archived; restore the enterprise first",
-        );
+        return sendProblem(reply, 400, "Its enterprise is archived; restore the enterprise first");
       try {
         const change = await inTransaction(pool, async (c) => {
-          await c.query(
-            `UPDATE ${k.table} SET deleted_at = NULL, deleted_by_id = NULL WHERE id = $1`,
-            [id],
-          );
+          await c.query(`UPDATE ${k.table} SET deleted_at = NULL, deleted_by_id = NULL WHERE id = $1`, [id]);
           return recordChange(c, {
             entityType: k.entity,
             entityIds: [id],
             changeType: "edit",
-            diff: [
-              { entity_id: id, field: "archived", before: true, after: false },
-            ],
+            diff: [{ entity_id: id, field: "archived", before: true, after: false }],
             note: "Restored",
             userId: me.id,
             ip: request.ip,
@@ -803,11 +623,7 @@ export function restoreTrunk(kind: TrunkKind) {
         return { record: await loadTrunk(pool, k, id), change };
       } catch (err) {
         if (isUniqueViolation(err))
-          return sendProblem(
-            reply,
-            400,
-            "Another live trunk uses this username; rename one of them first",
-          );
+          return sendProblem(reply, 400, "Another live trunk uses this username; rename one of them first");
         throw err;
       }
     });
@@ -858,12 +674,7 @@ async function trunkRef(db: Db, k: KindDef, id: number) {
  * position on this trunk by position, unpositioned rules targeted "top" before them and the
  * rest after, ties by rule id (same order as the generator's rulesForTrunk).
  */
-async function reachingRules(
-  db: Db,
-  k: KindDef,
-  which: "translation" | "hlr",
-  trunkId: number,
-): Promise<Reach[]> {
+async function reachingRules(db: Db, k: KindDef, which: "translation" | "hlr", trunkId: number): Promise<Reach[]> {
   const t = await trunkRef(db, k, trunkId);
   if (!t) return [];
   const { rows } =
@@ -935,8 +746,7 @@ async function reachingRules(
     if (SPECIFICITY[src] < SPECIFICITY[cur.rule.source.type as Source])
       cur.rule.source = { type: src, label: label(src) };
   }
-  const rank = (x: Reach): [number, number] =>
-    x.rule.position != null ? [1, x.rule.position] : [x.top ? 0 : 2, 0];
+  const rank = (x: Reach): [number, number] => (x.rule.position != null ? [1, x.rule.position] : [x.top ? 0 : 2, 0]);
   return [...byRule.values()].sort((a, b) => {
     const [ga, pa] = rank(a);
     const [gb, pb] = rank(b);
@@ -945,12 +755,7 @@ async function reachingRules(
 }
 
 /** The rules that run on a trunk, in order (null when the trunk does not exist), for the Test (§13.2). */
-export async function trunkRuleOrder(
-  db: Db,
-  kind: TrunkKind,
-  which: "translation" | "hlr",
-  trunkId: number,
-) {
+export async function trunkRuleOrder(db: Db, kind: TrunkKind, which: "translation" | "hlr", trunkId: number) {
   const k = KINDS[kind];
   if (!(await trunkRef(db, k, trunkId))) return null;
   return (await reachingRules(db, k, which, trunkId)).map((x) => x.rule);
@@ -958,13 +763,8 @@ export async function trunkRuleOrder(
 
 async function loadRules(db: Db, k: KindDef, id: number): Promise<TrunkRules> {
   return {
-    translation: (await reachingRules(db, k, "translation", id)).map(
-      (x) => x.rule,
-    ),
-    hlr:
-      k.kind === "customer"
-        ? (await reachingRules(db, k, "hlr", id)).map((x) => x.rule)
-        : [],
+    translation: (await reachingRules(db, k, "translation", id)).map((x) => x.rule),
+    hlr: k.kind === "customer" ? (await reachingRules(db, k, "hlr", id)).map((x) => x.rule) : [],
   };
 }
 
@@ -989,14 +789,8 @@ async function applyRuleState(
   for (const s of state) {
     if (which === "translation") {
       // Continue / Stop follows the rule's own Is Continue unless this trunk overrides it.
-      const { rows: def } = await c.query(
-        "SELECT continue_after FROM translation_rules WHERE id = $1",
-        [s.ruleId],
-      );
-      const isDefault =
-        s.position === null &&
-        s.enabled &&
-        s.continueAfter === (def[0]?.continue_after ?? true);
+      const { rows: def } = await c.query("SELECT continue_after FROM translation_rules WHERE id = $1", [s.ruleId]);
+      const isDefault = s.position === null && s.enabled && s.continueAfter === (def[0]?.continue_after ?? true);
       if (s.direct)
         await c.query(
           `INSERT INTO translation_rule_targets (translation_rule_id, target_type, trunk_kind, target_id)
@@ -1033,10 +827,10 @@ async function applyRuleState(
           [s.ruleId, trunkId],
         );
       if (s.position === null && s.enabled)
-        await c.query(
-          "DELETE FROM hlr_rule_trunk_settings WHERE hlr_rule_id = $1 AND customer_trunk_id = $2",
-          [s.ruleId, trunkId],
-        );
+        await c.query("DELETE FROM hlr_rule_trunk_settings WHERE hlr_rule_id = $1 AND customer_trunk_id = $2", [
+          s.ruleId,
+          trunkId,
+        ]);
       else
         await c.query(
           `INSERT INTO hlr_rule_trunk_settings (hlr_rule_id, customer_trunk_id, position, enabled) VALUES ($1, $2, $3, $4)
@@ -1052,10 +846,7 @@ export function getTrunkRules(kind: TrunkKind) {
   return (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: number };
     return withDb(reply, async (pool) => {
-      const { rows } = await pool.query(
-        `SELECT 1 FROM ${k.table} WHERE id = $1`,
-        [id],
-      );
+      const { rows } = await pool.query(`SELECT 1 FROM ${k.table} WHERE id = $1`, [id]);
       if (!rows[0]) return notFound(reply, k, id);
       return loadRules(pool, k, id);
     });
@@ -1072,42 +863,24 @@ export function updateTrunkRules(kind: TrunkKind) {
       const t = await loadTrunk(pool, k, id);
       if (!t) return notFound(reply, k, id);
       if (t.archived)
-        return sendProblem(
-          reply,
-          400,
-          `This ${k.label.toLowerCase()} is archived; restore it before editing`,
-        );
-      if (
-        k.kind === "vendor" &&
-        (input.hlr?.length || input.detachHlrRuleIds?.length)
-      )
-        return badInput(reply, [
-          { path: "/hlr", message: "HLR rules run on customer trunks only" },
-        ]);
+        return sendProblem(reply, 400, `This ${k.label.toLowerCase()} is archived; restore it before editing`);
+      if (k.kind === "vendor" && (input.hlr?.length || input.detachHlrRuleIds?.length))
+        return badInput(reply, [{ path: "/hlr", message: "HLR rules run on customer trunks only" }]);
 
       const errors: FieldError[] = [];
       const diff: DiffEntry[] = [];
       const plans: { which: "translation" | "hlr"; next: RuleState[] }[] = [];
       for (const which of ["translation", "hlr"] as const) {
         const settings = input[which];
-        const detach =
-          which === "translation"
-            ? input.detachTranslationRuleIds
-            : input.detachHlrRuleIds;
+        const detach = which === "translation" ? input.detachTranslationRuleIds : input.detachHlrRuleIds;
         if (!settings && !detach?.length) continue;
         const reach = await reachingRules(pool, k, which, id);
         const byId = new Map(reach.map((x) => [x.rule.ruleId, x]));
         (settings ?? []).forEach((s, i) => {
           if (!byId.has(s.ruleId))
-            errors.push({
-              path: `/${which}/${i}/ruleId`,
-              message: `rule ${s.ruleId} does not run on this trunk`,
-            });
+            errors.push({ path: `/${which}/${i}/ruleId`, message: `rule ${s.ruleId} does not run on this trunk` });
         });
-        if (
-          new Set((settings ?? []).map((s) => s.ruleId)).size !==
-          (settings ?? []).length
-        )
+        if (new Set((settings ?? []).map((s) => s.ruleId)).size !== (settings ?? []).length)
           errors.push({ path: `/${which}`, message: "a rule is listed twice" });
         (detach ?? []).forEach((rid, i) => {
           if (!byId.get(rid)?.direct)
@@ -1126,13 +899,11 @@ export function updateTrunkRules(kind: TrunkKind) {
             if (!cur) return;
             cur.position = i + 1;
             cur.enabled = s.enabled;
-            if (s.continueAfter !== undefined && which === "translation")
-              cur.continueAfter = s.continueAfter;
+            if (s.continueAfter !== undefined && which === "translation") cur.continueAfter = s.continueAfter;
           });
           let pos = settings.length;
           for (const x of reach)
-            if (!listed.has(x.rule.ruleId) && x.rule.position != null)
-              next.get(x.rule.ruleId)!.position = ++pos;
+            if (!listed.has(x.rule.ruleId) && x.rule.position != null) next.get(x.rule.ruleId)!.position = ++pos;
         }
         for (const rid of detach ?? []) {
           const cur = next.get(rid);
@@ -1145,21 +916,15 @@ export function updateTrunkRules(kind: TrunkKind) {
         }
       }
       if (errors.length) return badInput(reply, errors);
-      if (diff.length === 0)
-        return { record: await loadRules(pool, k, id), change: null };
+      if (diff.length === 0) return { record: await loadRules(pool, k, id), change: null };
       const onlyOrder = diff.every((d) =>
         (d.after as RuleState[]).every((s, i) => {
           const b = (d.before as RuleState[])[i]!;
-          return (
-            s.enabled === b.enabled &&
-            s.continueAfter === b.continueAfter &&
-            s.direct === b.direct
-          );
+          return s.enabled === b.enabled && s.continueAfter === b.continueAfter && s.direct === b.direct;
         }),
       );
       const change = await inTransaction(pool, async (c) => {
-        for (const p of plans)
-          await applyRuleState(c, kind, p.which, id, p.next);
+        for (const p of plans) await applyRuleState(c, kind, p.which, id, p.next);
         return recordChange(c, {
           entityType: k.entity,
           entityIds: [id],
@@ -1178,40 +943,22 @@ export function updateTrunkRules(kind: TrunkKind) {
 // ---------------------------------------------------------------- enterprise rule order (team trial round 4)
 
 /** The enterprise's live trunks of one kind. */
-async function enterpriseTrunkIds(
-  db: Db,
-  k: KindDef,
-  enterpriseId: number,
-): Promise<number[]> {
-  const { rows } = await db.query(
-    `SELECT id FROM ${k.table} WHERE enterprise_id = $1 AND deleted_at IS NULL ORDER BY id`,
-    [enterpriseId],
-  );
+async function enterpriseTrunkIds(db: Db, k: KindDef, enterpriseId: number): Promise<number[]> {
+  const { rows } = await db.query(`SELECT id FROM ${k.table} WHERE enterprise_id = $1 AND deleted_at IS NULL ORDER BY id`, [
+    enterpriseId,
+  ]);
   return rows.map((r) => Number(r.id));
 }
 
 /** One merged order over the trunks: each rule ranked by its average relative place on the trunks it reaches. */
-function mergeOrder(
-  lists: Reach[][],
-  enterpriseName: string,
-): EnterpriseRule[] {
-  const acc = new Map<
-    number,
-    { rule: TrunkRule; sum: number; n: number; direct: number; src: Source }
-  >();
+function mergeOrder(lists: Reach[][], enterpriseName: string): EnterpriseRule[] {
+  const acc = new Map<number, { rule: TrunkRule; sum: number; n: number; direct: number; src: Source }>();
   for (const list of lists)
     list.forEach((x, i) => {
       const place = list.length > 1 ? i / (list.length - 1) : 0;
       const cur = acc.get(x.rule.ruleId);
       const src = x.rule.source.type as Source;
-      if (!cur)
-        acc.set(x.rule.ruleId, {
-          rule: x.rule,
-          sum: place,
-          n: 1,
-          direct: x.direct ? 1 : 0,
-          src,
-        });
+      if (!cur) acc.set(x.rule.ruleId, { rule: x.rule, sum: place, n: 1, direct: x.direct ? 1 : 0, src });
       else {
         cur.sum += place;
         cur.n += 1;
@@ -1230,10 +977,7 @@ function mergeOrder(
       name: x.rule.name,
       source:
         x.src === "trunk"
-          ? {
-              type: "trunk",
-              label: `Direct on ${x.direct} trunk${x.direct === 1 ? "" : "s"}`,
-            }
+          ? { type: "trunk", label: `Direct on ${x.direct} trunk${x.direct === 1 ? "" : "s"}` }
           : x.src === "enterprise"
             ? { type: "enterprise", label: `Enterprise: ${enterpriseName}` }
             : { type: x.src, label: x.rule.source.label },
@@ -1243,12 +987,7 @@ function mergeOrder(
     }));
 }
 
-async function loadEnterpriseRules(
-  db: Db,
-  k: KindDef,
-  enterpriseId: number,
-  name: string,
-): Promise<EnterpriseRules> {
+async function loadEnterpriseRules(db: Db, k: KindDef, enterpriseId: number, name: string): Promise<EnterpriseRules> {
   const ids = await enterpriseTrunkIds(db, k, enterpriseId);
   const tr: Reach[][] = [];
   const hl: Reach[][] = [];
@@ -1256,78 +995,48 @@ async function loadEnterpriseRules(
     tr.push(await reachingRules(db, k, "translation", id));
     if (k.kind === "customer") hl.push(await reachingRules(db, k, "hlr", id));
   }
-  return {
-    kind: k.kind,
-    trunkCount: ids.length,
-    translation: mergeOrder(tr, name),
-    hlr: mergeOrder(hl, name),
-  };
+  return { kind: k.kind, trunkCount: ids.length, translation: mergeOrder(tr, name), hlr: mergeOrder(hl, name) };
 }
 
 async function enterpriseName(db: Db, id: number): Promise<string | null> {
-  const { rows } = await db.query(
-    "SELECT name FROM enterprises WHERE id = $1",
-    [id],
-  );
+  const { rows } = await db.query("SELECT name FROM enterprises WHERE id = $1", [id]);
   return rows[0] ? String(rows[0].name) : null;
 }
 
-export function getEnterpriseRules(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
+export function getEnterpriseRules(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   const { kind } = request.query as { kind: TrunkKind };
   return withDb(reply, async (pool) => {
     const name = await enterpriseName(pool, id);
-    if (name === null)
-      return sendProblem(reply, 404, `Enterprise ${id} not found`);
+    if (name === null) return sendProblem(reply, 404, `Enterprise ${id} not found`);
     return loadEnterpriseRules(pool, KINDS[kind], id, name);
   });
 }
 
-export function updateEnterpriseRules(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
+export function updateEnterpriseRules(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   const input = request.body as EnterpriseRulesInput;
   const k = KINDS[input.kind];
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const name = await enterpriseName(pool, id);
-    if (name === null)
-      return sendProblem(reply, 404, `Enterprise ${id} not found`);
+    if (name === null) return sendProblem(reply, 404, `Enterprise ${id} not found`);
     if (k.kind === "vendor" && input.hlrRuleIds?.length)
-      return badInput(reply, [
-        {
-          path: "/hlrRuleIds",
-          message: "HLR rules run on customer trunks only",
-        },
-      ]);
+      return badInput(reply, [{ path: "/hlrRuleIds", message: "HLR rules run on customer trunks only" }]);
     const errors: FieldError[] = [];
     for (const [path, list] of [
       ["/translationRuleIds", input.translationRuleIds],
       ["/hlrRuleIds", input.hlrRuleIds ?? []],
     ] as const)
-      if (new Set(list).size !== list.length)
-        errors.push({ path, message: "a rule is listed twice" });
+      if (new Set(list).size !== list.length) errors.push({ path, message: "a rule is listed twice" });
     const trunkIds = await enterpriseTrunkIds(pool, k, id);
     const diff: DiffEntry[] = [];
-    const plans: {
-      trunkId: number;
-      which: "translation" | "hlr";
-      next: RuleState[];
-    }[] = [];
+    const plans: { trunkId: number; which: "translation" | "hlr"; next: RuleState[] }[] = [];
     const seen = { translation: new Set<number>(), hlr: new Set<number>() };
     for (const trunkId of trunkIds)
       for (const which of ["translation", "hlr"] as const) {
-        if (which === "hlr" && (k.kind !== "customer" || !input.hlrRuleIds))
-          continue;
-        const wanted =
-          which === "translation"
-            ? input.translationRuleIds
-            : input.hlrRuleIds!;
+        if (which === "hlr" && (k.kind !== "customer" || !input.hlrRuleIds)) continue;
+        const wanted = which === "translation" ? input.translationRuleIds : input.hlrRuleIds!;
         const reach = await reachingRules(pool, k, which, trunkId);
         reach.forEach((x) => seen[which].add(x.rule.ruleId));
         const here = new Set(reach.map((x) => x.rule.ruleId));
@@ -1339,41 +1048,21 @@ export function updateEnterpriseRules(
         if (order.every((r, i) => reach[i]!.rule.ruleId === r)) continue;
         const before = stateOf(reach);
         const pos = new Map(order.map((r, i) => [r, i + 1]));
-        const after = before.map((st) => ({
-          ...st,
-          position: pos.get(st.ruleId)!,
-        }));
-        diff.push({
-          entity_id: trunkId,
-          field: `rules.${which}`,
-          before,
-          after,
-        });
+        const after = before.map((st) => ({ ...st, position: pos.get(st.ruleId)! }));
+        diff.push({ entity_id: trunkId, field: `rules.${which}`, before, after });
         plans.push({ trunkId, which, next: after });
       }
     input.translationRuleIds.forEach((r, i) => {
       if (!seen.translation.has(r))
-        errors.push({
-          path: `/translationRuleIds/${i}`,
-          message: `rule ${r} does not run on these trunks`,
-        });
+        errors.push({ path: `/translationRuleIds/${i}`, message: `rule ${r} does not run on these trunks` });
     });
     (input.hlrRuleIds ?? []).forEach((r, i) => {
-      if (!seen.hlr.has(r))
-        errors.push({
-          path: `/hlrRuleIds/${i}`,
-          message: `rule ${r} does not run on these trunks`,
-        });
+      if (!seen.hlr.has(r)) errors.push({ path: `/hlrRuleIds/${i}`, message: `rule ${r} does not run on these trunks` });
     });
     if (errors.length) return badInput(reply, errors);
-    if (!diff.length)
-      return {
-        record: await loadEnterpriseRules(pool, k, id, name),
-        change: null,
-      };
+    if (!diff.length) return { record: await loadEnterpriseRules(pool, k, id, name), change: null };
     const change = await inTransaction(pool, async (c) => {
-      for (const p of plans)
-        await applyRuleState(c, k.kind, p.which, p.trunkId, p.next);
+      for (const p of plans) await applyRuleState(c, k.kind, p.which, p.trunkId, p.next);
       return recordChange(c, {
         entityType: k.entity,
         entityIds: [...new Set(plans.map((p) => p.trunkId))],

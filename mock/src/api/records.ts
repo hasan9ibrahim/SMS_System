@@ -1,12 +1,7 @@
 // Shared plumbing for record screens: API field <-> column maps, field-level diffs for the
 // change log (§13.10), safe-delete checks (§13.29) and save results ({record, change}).
 import type pg from "pg";
-import type {
-  Change,
-  CurrentUser,
-  Dependencies,
-  DependencyItem,
-} from "@sms/contract";
+import type { Change, CurrentUser, Dependencies, DependencyItem } from "@sms/contract";
 import { changeSelect, mapChange } from "../lists/defs.js";
 
 export interface DiffEntry {
@@ -16,8 +11,7 @@ export interface DiffEntry {
   after: unknown;
 }
 
-export const iso = (v: unknown) =>
-  v instanceof Date ? v.toISOString() : v == null ? null : String(v);
+export const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
 
 export function getPath(obj: unknown, path: string): unknown {
   let cur = obj;
@@ -28,11 +22,7 @@ export function getPath(obj: unknown, path: string): unknown {
   return cur;
 }
 
-export function setPath(
-  obj: Record<string, unknown>,
-  path: string,
-  value: unknown,
-): void {
+export function setPath(obj: Record<string, unknown>, path: string, value: unknown): void {
   const keys = path.split(".");
   let cur = obj;
   for (const key of keys.slice(0, -1)) {
@@ -50,28 +40,19 @@ function stable(v: unknown): string {
   if (typeof v === "object")
     return `{${Object.keys(v as object)
       .sort()
-      .map(
-        (k) =>
-          `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`,
-      )
+      .map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`)
       .join(",")}}`;
   return JSON.stringify(v);
 }
 export const same = (a: unknown, b: unknown) => stable(a) === stable(b);
 
 /** Field-level diff of two records over the given API paths (each changed path is one entry). */
-export function diffPaths(
-  id: number,
-  before: unknown,
-  after: unknown,
-  paths: string[],
-): DiffEntry[] {
+export function diffPaths(id: number, before: unknown, after: unknown, paths: string[]): DiffEntry[] {
   const out: DiffEntry[] = [];
   for (const path of paths) {
     const b = getPath(before, path) ?? null;
     const a = getPath(after, path) ?? null;
-    if (!same(a, b))
-      out.push({ entity_id: id, field: path, before: b, after: a });
+    if (!same(a, b)) out.push({ entity_id: id, field: path, before: b, after: a });
   }
   return out;
 }
@@ -92,10 +73,7 @@ export interface FieldSpec {
 export const selectSpecs = (alias: string, specs: FieldSpec[]) =>
   specs.map((s) => `${s.read ?? `${alias}.${s.col}`} AS "${s.api}"`).join(", ");
 
-export function rowToObject(
-  row: Record<string, unknown>,
-  specs: FieldSpec[],
-): Record<string, unknown> {
+export function rowToObject(row: Record<string, unknown>, specs: FieldSpec[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const s of specs) setPath(out, s.api, row[s.api] ?? null);
   return out;
@@ -113,16 +91,12 @@ export async function updateColumns(
   const sets: string[] = [];
   const params: unknown[] = [id, userId];
   for (const s of specs) {
-    if (s.readOnly || !(s.api in values) || values[s.api] === undefined)
-      continue;
+    if (s.readOnly || !(s.api in values) || values[s.api] === undefined) continue;
     params.push(values[s.api]);
     sets.push(`${s.col} = $${params.length}${s.cast ?? ""}`);
   }
   if (sets.length === 0) return;
-  await c.query(
-    `UPDATE ${table} SET ${sets.join(", ")}, updated_by_id = $2, updated_at = now() WHERE id = $1`,
-    params,
-  );
+  await c.query(`UPDATE ${table} SET ${sets.join(", ")}, updated_by_id = $2, updated_at = now() WHERE id = $1`, params);
 }
 
 export async function insertRow(
@@ -154,10 +128,7 @@ export async function insertRow(
 }
 
 /** Flattens a nested input to the API paths of the specs (undefined where not given). */
-export function flatten(
-  input: unknown,
-  specs: FieldSpec[],
-): Record<string, unknown> {
+export function flatten(input: unknown, specs: FieldSpec[]): Record<string, unknown> {
   return Object.fromEntries(specs.map((s) => [s.api, getPath(input, s.api)]));
 }
 
@@ -200,12 +171,7 @@ export const archivedInfo = (at: unknown, by: unknown) =>
   at ? { at: iso(at)!, by: (by as string | null) ?? null } : null;
 
 export function dependencies(items: DependencyItem[]): Dependencies {
-  return {
-    blocked: items.some(
-      (i) => i.blocking && (i.count === null ? false : i.count !== 0),
-    ),
-    items,
-  };
+  return { blocked: items.some((i) => i.blocking && (i.count === null ? false : i.count !== 0)), items };
 }
 
 /** Field error for a 400 answer, in the contract's Problem.errors shape. */
@@ -215,12 +181,8 @@ export interface FieldError {
 }
 
 /** Unique violation (23505) from a partial unique index, e.g. a live trunk username. */
-export const isUniqueViolation = (err: unknown) =>
-  (err as { code?: string }).code === "23505";
+export const isUniqueViolation = (err: unknown) => (err as { code?: string }).code === "23505";
 
 /** IANA time zones offered by forms (§13.31 billing time zone). */
-export const TIMEZONES: string[] = [
-  "UTC",
-  ...Intl.supportedValuesOf("timeZone").filter((z) => z !== "UTC"),
-];
+export const TIMEZONES: string[] = ["UTC", ...Intl.supportedValuesOf("timeZone").filter((z) => z !== "UTC")];
 export const isTimezone = (z: string) => TIMEZONES.includes(z);

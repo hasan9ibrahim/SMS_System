@@ -73,8 +73,7 @@ export const CONTACT_FIELDS = [
   ["financeEmails", "finance"],
 ] as const;
 const yes = (s: string | undefined) => /^(yes|y|true|1)$/i.test(s ?? "");
-const num = (s: string | undefined) =>
-  s == null || s.trim() === "" ? null : Number(s.replace(/,/g, ""));
+const num = (s: string | undefined) => (s == null || s.trim() === "" ? null : Number(s.replace(/,/g, "")));
 
 interface Lookups {
   departments: Map<string, number>;
@@ -98,16 +97,10 @@ interface Lookups {
 
 async function loadLookups(c: Db, source: string): Promise<Lookups> {
   const map = async (sql: string, args: unknown[] = []) =>
-    new Map<string, number>(
-      (await c.query(sql, args)).rows.map((r) => [String(r.k), Number(r.id)]),
-    );
+    new Map<string, number>((await c.query(sql, args)).rows.map((r) => [String(r.k), Number(r.id)]));
   const count = async (sql: string) => Number((await c.query(sql)).rows[0].n);
   const companies = new Map<string, { id: number; currency: string }>(
-    (
-      await c.query(
-        "SELECT id, lower(name) AS k, base_currency FROM business_companies",
-      )
-    ).rows.map((r) => [
+    (await c.query("SELECT id, lower(name) AS k, base_currency FROM business_companies")).rows.map((r) => [
       r.k,
       { id: Number(r.id), currency: String(r.base_currency).trim() },
     ]),
@@ -126,25 +119,13 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
     [source],
   );
   return {
-    departments: await map(
-      "SELECT lower(name) AS k, id FROM departments WHERE deleted_at IS NULL",
-    ),
-    accessGroups: await map(
-      "SELECT lower(name) AS k, id FROM access_groups WHERE deleted_at IS NULL",
-    ),
+    departments: await map("SELECT lower(name) AS k, id FROM departments WHERE deleted_at IS NULL"),
+    accessGroups: await map("SELECT lower(name) AS k, id FROM access_groups WHERE deleted_at IS NULL"),
     companies,
-    categories: await map(
-      "SELECT lower(name) AS k, id FROM product_categories WHERE deleted_at IS NULL",
-    ),
-    currencies: new Set(
-      (
-        await c.query("SELECT iso FROM currencies WHERE deleted_at IS NULL")
-      ).rows.map((r) => r.iso),
-    ),
+    categories: await map("SELECT lower(name) AS k, id FROM product_categories WHERE deleted_at IS NULL"),
+    currencies: new Set((await c.query("SELECT iso FROM currencies WHERE deleted_at IS NULL")).rows.map((r) => r.iso)),
     countries: await map("SELECT upper(iso) AS k, id FROM countries"),
-    mccmnc: await map(
-      "SELECT mccmnc AS k, id FROM mccmnc WHERE deleted_at IS NULL",
-    ),
+    mccmnc: await map("SELECT mccmnc AS k, id FROM mccmnc WHERE deleted_at IS NULL"),
     // Usernames are unique across archived users too.
     users: await map("SELECT lower(username) AS k, id FROM users"),
     enterprises: await map(
@@ -153,18 +134,15 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
     customerTrunks: await map(
       "SELECT lower(name) AS k, min(id) AS id FROM customer_trunks WHERE deleted_at IS NULL GROUP BY 1",
     ),
-    customerUsernames: await map(
-      "SELECT username AS k, id FROM customer_trunks WHERE deleted_at IS NULL",
-    ),
+    customerUsernames: await map("SELECT username AS k, id FROM customer_trunks WHERE deleted_at IS NULL"),
     vendorTrunks: await map(
       "SELECT lower(name) AS k, min(id) AS id FROM vendor_trunks WHERE deleted_at IS NULL GROUP BY 1",
     ),
     vendorTables: new Map(
-      (
-        await c.query(
-          "SELECT vendor_trunk_id, id FROM rate_tables WHERE vendor_trunk_id IS NOT NULL",
-        )
-      ).rows.map((r) => [Number(r.vendor_trunk_id), Number(r.id)]),
+      (await c.query("SELECT vendor_trunk_id, id FROM rate_tables WHERE vendor_trunk_id IS NOT NULL")).rows.map((r) => [
+        Number(r.vendor_trunk_id),
+        Number(r.id),
+      ]),
     ),
     rateTables: await map(
       "SELECT kind || ':' || lower(name) AS k, min(id) AS id FROM rate_tables WHERE deleted_at IS NULL GROUP BY 1",
@@ -172,41 +150,22 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
     routeRules: await map(
       "SELECT lower(name) AS k, min(id) AS id FROM route_rules WHERE deleted_at IS NULL GROUP BY 1",
     ),
-    refs: new Map(
-      refRows.map((r) => [`${r.entity}:${r.external_id}`, Number(r.record_id)]),
-    ),
+    refs: new Map(refRows.map((r) => [`${r.entity}:${r.external_id}`, Number(r.record_id)])),
     counts: {
-      users: await count(
-        "SELECT count(*) AS n FROM users WHERE deleted_at IS NULL",
-      ),
-      enterprises: await count(
-        "SELECT count(*) AS n FROM enterprises WHERE deleted_at IS NULL",
-      ),
-      customer_trunks: await count(
-        "SELECT count(*) AS n FROM customer_trunks WHERE deleted_at IS NULL",
-      ),
-      vendor_trunks: await count(
-        "SELECT count(*) AS n FROM vendor_trunks WHERE deleted_at IS NULL",
-      ),
-      rate_tables: await count(
-        "SELECT count(*) AS n FROM rate_tables WHERE deleted_at IS NULL",
-      ),
-      rate_lines: await count(
-        "SELECT count(*) AS n FROM rate_lines WHERE valid_to IS NULL OR valid_to > now()",
-      ),
-      route_rules: await count(
-        "SELECT count(*) AS n FROM route_rules WHERE deleted_at IS NULL",
-      ),
+      users: await count("SELECT count(*) AS n FROM users WHERE deleted_at IS NULL"),
+      enterprises: await count("SELECT count(*) AS n FROM enterprises WHERE deleted_at IS NULL"),
+      customer_trunks: await count("SELECT count(*) AS n FROM customer_trunks WHERE deleted_at IS NULL"),
+      vendor_trunks: await count("SELECT count(*) AS n FROM vendor_trunks WHERE deleted_at IS NULL"),
+      rate_tables: await count("SELECT count(*) AS n FROM rate_tables WHERE deleted_at IS NULL"),
+      rate_lines: await count("SELECT count(*) AS n FROM rate_lines WHERE valid_to IS NULL OR valid_to > now()"),
+      route_rules: await count("SELECT count(*) AS n FROM route_rules WHERE deleted_at IS NULL"),
       opening_balances: null,
     },
   };
 }
 
 /** Rows of one file as template fields: through the mapping, else by field key or label (any case). */
-export function mapRows(
-  file: MigrationFileInput,
-  mapping: Record<string, string> | null,
-) {
+export function mapRows(file: MigrationFileInput, mapping: Record<string, string> | null) {
   const info = ENTITY.get(file.entity)!;
   const { header, rows } = csvTable(file.content);
   const byLower = new Map(header.map((h, i) => [lower(h), i]));
@@ -214,12 +173,9 @@ export function mapRows(
   const missing: string[] = [];
   for (const f of info.fields) {
     const want = mapping?.[f.field];
-    const col = want
-      ? byLower.get(lower(want))
-      : (byLower.get(lower(f.field)) ?? byLower.get(lower(f.label)));
+    const col = want ? byLower.get(lower(want)) : (byLower.get(lower(f.field)) ?? byLower.get(lower(f.label)));
     if (col != null) at.push([f.field, col]);
-    else if (f.required)
-      missing.push(want ? `${f.label} (column "${want}")` : f.label);
+    else if (f.required) missing.push(want ? `${f.label} (column "${want}")` : f.label);
   }
   const out = rows.map((cells) => {
     const o: Record<string, string> = {};
@@ -246,13 +202,7 @@ class Planner {
   ) {}
 
   private readonly perEntity = new Map<string, number>();
-  issue(
-    entity: Ent,
-    line: number,
-    field: string | null,
-    message: string,
-    severity: "error" | "warning" = "error",
-  ) {
+  issue(entity: Ent, line: number, field: string | null, message: string, severity: "error" | "warning" = "error") {
     this.issueCount++;
     // Each entity keeps its own share of the list, so one noisy file does not hide the others.
     const n = this.perEntity.get(entity) ?? 0;
@@ -274,17 +224,10 @@ class Planner {
   }
 
   /** A record by external ID or name: this import first, then imported earlier (refs), then the system. */
-  resolve(
-    entity: Ent,
-    key: string,
-    system: Map<string, number>,
-    systemKey = lower(key),
-  ): Ref | number | null {
+  resolve(entity: Ent, key: string, system: Map<string, number>, systemKey = lower(key)): Ref | number | null {
     const k = key.trim();
     if (!k) return null;
-    const inFile =
-      this.byExt.get(`${entity}:${k}`) ??
-      this.byKey.get(`${entity}:${systemKey}`);
+    const inFile = this.byExt.get(`${entity}:${k}`) ?? this.byKey.get(`${entity}:${systemKey}`);
     if (inFile != null) {
       const r = this.rows.get(entity)![inFile]!;
       if (r.action === "create") return new Ref(entity, inFile);
@@ -295,14 +238,8 @@ class Planner {
   }
 
   /** Matches a row to an existing record; decides create / update / skip by the conflict setting. */
-  match(
-    entity: Ent,
-    line: number,
-    ext: string | null,
-    existing: number | null,
-  ): { action: Action; id: number | null } {
-    const id =
-      (ext ? this.lk.refs.get(`${entity}:${ext}`) : undefined) ?? existing;
+  match(entity: Ent, line: number, ext: string | null, existing: number | null): { action: Action; id: number | null } {
+    const id = (ext ? this.lk.refs.get(`${entity}:${ext}`) : undefined) ?? existing;
     if (id == null) return { action: "create", id: null };
     const how = this.conflicts[entity] ?? "skip";
     if (how === "create") return { action: "create", id: null };
@@ -314,76 +251,29 @@ class Planner {
 const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
   users: {
     table: "users",
-    columns: [
-      "first_name",
-      "last_name",
-      "email",
-      "department_id",
-      "access_group_id",
-      "is_account_manager",
-      "status",
-    ],
+    columns: ["first_name", "last_name", "email", "department_id", "access_group_id", "is_account_manager", "status"],
   },
   enterprises: {
     table: "enterprises",
-    columns: [
-      "alias",
-      "type",
-      "tier",
-      "status",
-      "account_manager_id",
-      "address_line1",
-      "country_id",
-      "vat_number",
-    ],
+    columns: ["alias", "type", "tier", "status", "account_manager_id", "address_line1", "country_id", "vat_number"],
   },
   customer_trunks: {
     table: "customer_trunks",
-    columns: [
-      "host_ips",
-      "ssl_type",
-      "protocol",
-      "tps",
-      "product_category_id",
-      "billing_type",
-      "username",
-      "password",
-    ],
+    columns: ["host_ips", "ssl_type", "protocol", "tps", "product_category_id", "billing_type", "username", "password"],
   },
   vendor_trunks: {
     table: "vendor_trunks",
-    columns: [
-      "host",
-      "port",
-      "username",
-      "password",
-      "protocol",
-      "tps",
-      "product_category_id",
-      "billing_type",
-    ],
+    columns: ["host", "port", "username", "password", "protocol", "tps", "product_category_id", "billing_type"],
   },
   rate_tables: { table: "rate_tables", columns: ["product_category_id"] },
   route_rules: {
     table: "route_rules",
-    columns: [
-      "priority",
-      "status",
-      "customer_trunk_mode",
-      "customer_trunk_ids",
-      "mccmnc_mode",
-      "mccmncs",
-    ],
+    columns: ["priority", "status", "customer_trunk_mode", "customer_trunk_ids", "mccmnc_mode", "mccmncs"],
   },
 };
 
 const same = (a: unknown, b: unknown) => {
-  const norm = (v: unknown) =>
-    Array.isArray(v)
-      ? JSON.stringify(v.map(String))
-      : v == null
-        ? ""
-        : String(v);
+  const norm = (v: unknown) => (Array.isArray(v) ? JSON.stringify(v.map(String)) : v == null ? "" : String(v));
   return norm(a) === norm(b);
 };
 
@@ -392,10 +282,9 @@ async function diffUpdates(c: Db, entity: Ent, rows: PlanRow[]) {
   const u = UPDATABLE[entity];
   const todo = rows.filter((r) => r.action === "update");
   if (!u || !todo.length) return;
-  const { rows: cur } = await c.query(
-    `SELECT id, ${u.columns.join(", ")} FROM ${u.table} WHERE id = ANY($1)`,
-    [todo.map((r) => r.existingId)],
-  );
+  const { rows: cur } = await c.query(`SELECT id, ${u.columns.join(", ")} FROM ${u.table} WHERE id = ANY($1)`, [
+    todo.map((r) => r.existingId),
+  ]);
   const byId = new Map(cur.map((r) => [Number(r.id), r]));
   for (const r of todo) {
     const now = byId.get(r.existingId!);
@@ -404,11 +293,7 @@ async function diffUpdates(c: Db, entity: Ent, rows: PlanRow[]) {
     for (const col of u.columns) {
       if (!(col in r.values) || r.values[col] === undefined) continue;
       const v = r.values[col];
-      if (
-        v instanceof Ref ||
-        (Array.isArray(v) && v.some((x) => x instanceof Ref)) ||
-        !same(v, now?.[col])
-      ) {
+      if (v instanceof Ref || (Array.isArray(v) && v.some((x) => x instanceof Ref)) || !same(v, now?.[col])) {
         before[col] = now?.[col] ?? null;
         after[col] = v;
       }
@@ -439,17 +324,8 @@ function required(p: Planner, entity: Ent, line: number, r: Raw): boolean {
     if (f.required && !v.trim()) {
       p.issue(entity, line, f.field, `${f.label} is required`);
       ok = false;
-    } else if (
-      v.trim() &&
-      f.allowed.length &&
-      !f.allowed.includes(v.trim().toLowerCase())
-    ) {
-      p.issue(
-        entity,
-        line,
-        f.field,
-        `${f.label} "${v}" is not one of ${f.allowed.join(", ")}`,
-      );
+    } else if (v.trim() && f.allowed.length && !f.allowed.includes(v.trim().toLowerCase())) {
+      p.issue(entity, line, f.field, `${f.label} "${v}" is not one of ${f.allowed.join(", ")}`);
       ok = false;
     }
   }
@@ -467,12 +343,7 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
     if (!required(p, "users", line, r)) return void (pr.action = "error");
     const uname = lower(r.username!);
     if (seen.has(uname)) {
-      p.issue(
-        "users",
-        line,
-        "username",
-        `Username "${r.username}" appears twice in the file`,
-      );
+      p.issue("users", line, "username", `Username "${r.username}" appears twice in the file`);
       return void (pr.action = "error");
     }
     seen.add(uname);
@@ -480,36 +351,15 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
     pr.action = m.action;
     pr.existingId = m.id;
     if (m.action === "create" && p.lk.users.has(uname)) {
-      p.issue(
-        "users",
-        line,
-        "username",
-        `Username "${r.username}" is taken: choose skip or update for users`,
-      );
+      p.issue("users", line, "username", `Username "${r.username}" is taken: choose skip or update for users`);
       return void (pr.action = "error");
     }
-    const dept = r.department?.trim()
-      ? (p.lk.departments.get(lower(r.department)) ?? null)
-      : null;
+    const dept = r.department?.trim() ? (p.lk.departments.get(lower(r.department)) ?? null) : null;
     if (r.department?.trim() && dept == null)
-      p.issue(
-        "users",
-        line,
-        "department",
-        `Department "${r.department}" does not exist; left empty`,
-        "warning",
-      );
-    const group = r.accessGroup?.trim()
-      ? (p.lk.accessGroups.get(lower(r.accessGroup)) ?? null)
-      : null;
+      p.issue("users", line, "department", `Department "${r.department}" does not exist; left empty`, "warning");
+    const group = r.accessGroup?.trim() ? (p.lk.accessGroups.get(lower(r.accessGroup)) ?? null) : null;
     if (r.accessGroup?.trim() && group == null)
-      p.issue(
-        "users",
-        line,
-        "accessGroup",
-        `Access group "${r.accessGroup}" does not exist; left empty`,
-        "warning",
-      );
+      p.issue("users", line, "accessGroup", `Access group "${r.accessGroup}" does not exist; left empty`, "warning");
     pr.values = {
       username: r.username!.trim(),
       first_name: r.firstName!.trim(),
@@ -521,11 +371,7 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
       status: r.status?.trim() || "active",
     };
   });
-  out.forEach(
-    (r, i) =>
-      r.action !== "error" &&
-      p.index("users", i, r.externalId, lower(String(r.values.username))),
-  );
+  out.forEach((r, i) => r.action !== "error" && p.index("users", i, r.externalId, lower(String(r.values.username))));
   return out;
 }
 
@@ -540,54 +386,25 @@ function planEnterprises(p: Planner, raws: Raw[]): PlanRow[] {
     if (!required(p, "enterprises", line, r)) return void (pr.action = "error");
     const name = r.name!.trim();
     if (seen.has(lower(name)) && !ext) {
-      p.issue(
-        "enterprises",
-        line,
-        "name",
-        `"${name}" appears twice in the file: give each row its external ID`,
-      );
+      p.issue("enterprises", line, "name", `"${name}" appears twice in the file: give each row its external ID`);
       return void (pr.action = "error");
     }
     seen.add(lower(name));
     const company = p.lk.companies.get(lower(r.businessCompany!));
     if (!company) {
-      p.issue(
-        "enterprises",
-        line,
-        "businessCompany",
-        `Business company "${r.businessCompany}" does not exist`,
-      );
+      p.issue("enterprises", line, "businessCompany", `Business company "${r.businessCompany}" does not exist`);
       return void (pr.action = "error");
     }
     let am: Ref | number | null = null;
     if (r.accountManager?.trim()) {
       am = p.resolve("users", r.accountManager, p.lk.users);
       if (am == null)
-        p.issue(
-          "enterprises",
-          line,
-          "accountManager",
-          `User "${r.accountManager}" not found; no AM set`,
-          "warning",
-        );
+        p.issue("enterprises", line, "accountManager", `User "${r.accountManager}" not found; no AM set`, "warning");
     }
-    const country = r.country?.trim()
-      ? (p.lk.countries.get(r.country.trim().toUpperCase()) ?? null)
-      : null;
+    const country = r.country?.trim() ? (p.lk.countries.get(r.country.trim().toUpperCase()) ?? null) : null;
     if (r.country?.trim() && country == null)
-      p.issue(
-        "enterprises",
-        line,
-        "country",
-        `Country "${r.country}" not found; left empty`,
-        "warning",
-      );
-    const m = p.match(
-      "enterprises",
-      line,
-      ext,
-      p.lk.enterprises.get(lower(name)) ?? null,
-    );
+      p.issue("enterprises", line, "country", `Country "${r.country}" not found; left empty`, "warning");
+    const m = p.match("enterprises", line, ext, p.lk.enterprises.get(lower(name)) ?? null);
     pr.action = m.action;
     pr.existingId = m.id;
     pr.values = {
@@ -610,24 +427,14 @@ function planEnterprises(p: Planner, raws: Raw[]): PlanRow[] {
     };
     pr.extra = {
       currency: company.currency,
-      contacts: Object.fromEntries(
-        CONTACT_FIELDS.map(([field, type]) => [type, list(r[field])]),
-      ),
+      contacts: Object.fromEntries(CONTACT_FIELDS.map(([field, type]) => [type, list(r[field])])),
     };
   });
-  out.forEach(
-    (r, i) =>
-      r.action !== "error" &&
-      p.index("enterprises", i, r.externalId, lower(String(r.values.name))),
-  );
+  out.forEach((r, i) => r.action !== "error" && p.index("enterprises", i, r.externalId, lower(String(r.values.name))));
   return out;
 }
 
-function planTrunks(
-  p: Planner,
-  kind: "customer" | "vendor",
-  raws: Raw[],
-): PlanRow[] {
+function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanRow[] {
   const entity: Ent = kind === "customer" ? "customer_trunks" : "vendor_trunks";
   const system = kind === "customer" ? p.lk.customerTrunks : p.lk.vendorTrunks;
   const out: PlanRow[] = [];
@@ -641,41 +448,22 @@ function planTrunks(
     if (!required(p, entity, line, r)) return void (pr.action = "error");
     const name = r.name!.trim();
     if (seen.has(lower(name)) && !ext) {
-      p.issue(
-        entity,
-        line,
-        "name",
-        `"${name}" appears twice in the file: give each row its external ID`,
-      );
+      p.issue(entity, line, "name", `"${name}" appears twice in the file: give each row its external ID`);
       return void (pr.action = "error");
     }
     seen.add(lower(name));
     const ent = p.resolve("enterprises", r.enterprise!, p.lk.enterprises);
     if (ent == null) {
-      p.issue(
-        entity,
-        line,
-        "enterprise",
-        `Enterprise "${r.enterprise}" not found in the system or the file`,
-      );
+      p.issue(entity, line, "enterprise", `Enterprise "${r.enterprise}" not found in the system or the file`);
       return void (pr.action = "error");
     }
     const tps = num(r.tps);
     if (tps == null || !Number.isInteger(tps) || tps < 1) {
-      p.issue(
-        entity,
-        line,
-        "tps",
-        `TPS "${r.tps}" must be a whole number of 1 or more`,
-      );
+      p.issue(entity, line, "tps", `TPS "${r.tps}" must be a whole number of 1 or more`);
       return void (pr.action = "error");
     }
     const port = num(r.port);
-    if (
-      kind === "vendor" &&
-      r.port?.trim() &&
-      (port == null || !Number.isInteger(port) || port < 1 || port > 65535)
-    ) {
+    if (kind === "vendor" && r.port?.trim() && (port == null || !Number.isInteger(port) || port < 1 || port > 65535)) {
       p.issue(entity, line, "port", `Port "${r.port}" is not a valid port`);
       return void (pr.action = "error");
     }
@@ -684,32 +472,16 @@ function planTrunks(
       category = p.lk.categories.get(lower(r.category)) ?? null;
       if (category == null) {
         if (kind === "vendor") {
-          p.issue(
-            entity,
-            line,
-            "category",
-            `Product category "${r.category}" does not exist`,
-          );
+          p.issue(entity, line, "category", `Product category "${r.category}" does not exist`);
           return void (pr.action = "error");
         }
-        p.issue(
-          entity,
-          line,
-          "category",
-          `Product category "${r.category}" does not exist; left empty`,
-          "warning",
-        );
+        p.issue(entity, line, "category", `Product category "${r.category}" does not exist; left empty`, "warning");
       }
     }
     const m = p.match(entity, line, ext, system.get(lower(name)) ?? null);
     pr.action = m.action;
     pr.existingId = m.id;
-    if (
-      ["username", "password", "hostIps", "host", "port"].some((f) =>
-        r[f]?.trim(),
-      )
-    )
-      p.includesCredentials = true;
+    if (["username", "password", "hostIps", "host", "port"].some((f) => r[f]?.trim())) p.includesCredentials = true;
     const v: Record<string, Value> = {
       enterprise_id: ent,
       name,
@@ -739,56 +511,25 @@ function planTrunks(
       } else {
         const owner = usernames.get(username);
         if (owner != null && owner !== m.id) {
-          p.issue(
-            entity,
-            line,
-            "username",
-            `System ID "${username}" is used by another customer trunk`,
-          );
+          p.issue(entity, line, "username", `System ID "${username}" is used by another customer trunk`);
           return void (pr.action = "error");
         }
         usernames.set(username, m.id ?? -1 - i);
       }
       v.username = username;
-      v.password =
-        r.password?.trim() ||
-        (m.action === "create"
-          ? randomBytes(6).toString("base64url")
-          : undefined);
+      v.password = r.password?.trim() || (m.action === "create" ? randomBytes(6).toString("base64url") : undefined);
       if (!r.password?.trim() && m.action === "create")
-        p.issue(
-          entity,
-          line,
-          "password",
-          "No password in the file: a random one is set",
-          "warning",
-        );
-      v.host_ips = r.hostIps?.trim()
-        ? list(r.hostIps)
-        : m.action === "create"
-          ? []
-          : undefined;
+        p.issue(entity, line, "password", "No password in the file: a random one is set", "warning");
+      v.host_ips = r.hostIps?.trim() ? list(r.hostIps) : m.action === "create" ? [] : undefined;
       // The port is not imported: it follows the SSL type (2775 / 2776, migration 070).
-      v.ssl_type =
-        r.sslType?.trim().toLowerCase() ||
-        (m.action === "create" ? "none" : undefined);
+      v.ssl_type = r.sslType?.trim().toLowerCase() || (m.action === "create" ? "none" : undefined);
     } else {
       v.port = port ?? 2775;
-      v.host =
-        r.host?.trim() ||
-        (m.action === "create" ? "not-set.invalid" : undefined);
+      v.host = r.host?.trim() || (m.action === "create" ? "not-set.invalid" : undefined);
       if (!r.host?.trim() && m.action === "create")
-        p.issue(
-          entity,
-          line,
-          "host",
-          "No host in the file: the trunk cannot bind until one is set",
-          "warning",
-        );
-      v.username =
-        r.username?.trim() || (m.action === "create" ? "not-set" : undefined);
-      v.password =
-        r.password?.trim() || (m.action === "create" ? "not-set" : undefined);
+        p.issue(entity, line, "host", "No host in the file: the trunk cannot bind until one is set", "warning");
+      v.username = r.username?.trim() || (m.action === "create" ? "not-set" : undefined);
+      v.password = r.password?.trim() || (m.action === "create" ? "not-set" : undefined);
     }
     if (m.action !== "create") {
       if (!r.port?.trim()) delete v.port;
@@ -796,11 +537,7 @@ function planTrunks(
     }
     pr.values = v;
   });
-  out.forEach(
-    (r, i) =>
-      r.action !== "error" &&
-      p.index(entity, i, r.externalId, lower(String(r.values.name))),
-  );
+  out.forEach((r, i) => r.action !== "error" && p.index(entity, i, r.externalId, lower(String(r.values.name))));
   return out;
 }
 
@@ -818,48 +555,26 @@ function planRateTables(p: Planner, raws: Raw[]): PlanRow[] {
     const kind = r.kind!.trim().toLowerCase();
     const key = `${kind}:${lower(name)}`;
     if (seen.has(key) && !ext) {
-      p.issue(
-        "rate_tables",
-        line,
-        "name",
-        `"${name}" appears twice in the file: give each row its external ID`,
-      );
+      p.issue("rate_tables", line, "name", `"${name}" appears twice in the file: give each row its external ID`);
       return void (pr.action = "error");
     }
     seen.add(key);
     const currency = r.currency!.trim().toUpperCase();
     if (!p.lk.currencies.has(currency)) {
-      p.issue(
-        "rate_tables",
-        line,
-        "currency",
-        `Currency "${r.currency}" does not exist`,
-      );
+      p.issue("rate_tables", line, "currency", `Currency "${r.currency}" does not exist`);
       return void (pr.action = "error");
     }
     const category = p.lk.categories.get(lower(r.category!));
     if (category == null) {
-      p.issue(
-        "rate_tables",
-        line,
-        "category",
-        `Product category "${r.category}" does not exist`,
-      );
+      p.issue("rate_tables", line, "category", `Product category "${r.category}" does not exist`);
       return void (pr.action = "error");
     }
-    const m = p.match(
-      "rate_tables",
-      line,
-      ext,
-      p.lk.rateTables.get(key) ?? null,
-    );
+    const m = p.match("rate_tables", line, ext, p.lk.rateTables.get(key) ?? null);
     pr.action = m.action;
     pr.existingId = m.id;
     let vendor: Ref | number | null = null;
     if (kind === "vendor") {
-      vendor = r.vendorTrunk?.trim()
-        ? p.resolve("vendor_trunks", r.vendorTrunk, p.lk.vendorTrunks)
-        : null;
+      vendor = r.vendorTrunk?.trim() ? p.resolve("vendor_trunks", r.vendorTrunk, p.lk.vendorTrunks) : null;
       if (vendor == null) {
         p.issue(
           "rate_tables",
@@ -870,15 +585,9 @@ function planRateTables(p: Planner, raws: Raw[]): PlanRow[] {
         return void (pr.action = "error");
       }
       const k = vendor instanceof Ref ? `new:${vendor.row}` : `id:${vendor}`;
-      const has =
-        vendor instanceof Ref ? undefined : p.lk.vendorTables.get(vendor);
+      const has = vendor instanceof Ref ? undefined : p.lk.vendorTables.get(vendor);
       if (m.action === "create" && (trunkTables.has(k) || has != null)) {
-        p.issue(
-          "rate_tables",
-          line,
-          "vendorTrunk",
-          "That vendor trunk already has a rate table",
-        );
+        p.issue("rate_tables", line, "vendorTrunk", "That vendor trunk already has a rate table");
         return void (pr.action = "error");
       }
       trunkTables.set(k, i);
@@ -887,13 +596,7 @@ function planRateTables(p: Planner, raws: Raw[]): PlanRow[] {
     for (const t of list(r.customerTrunks)) {
       const id = p.resolve("customer_trunks", t, p.lk.customerTrunks);
       if (id == null)
-        p.issue(
-          "rate_tables",
-          line,
-          "customerTrunks",
-          `Customer trunk "${t}" not found; not linked`,
-          "warning",
-        );
+        p.issue("rate_tables", line, "customerTrunks", `Customer trunk "${t}" not found; not linked`, "warning");
       else trunks.push(id);
     }
     pr.values = {
@@ -907,15 +610,8 @@ function planRateTables(p: Planner, raws: Raw[]): PlanRow[] {
   });
   out.forEach((r, i) => {
     const raw = raws[i]!;
-    if (r.action === "error")
-      p.fail("rate_tables", r.externalId, lower(raw.name ?? ""));
-    else
-      p.index(
-        "rate_tables",
-        i,
-        r.externalId,
-        `${r.values.kind}:${lower(String(r.values.name))}`,
-      );
+    if (r.action === "error") p.fail("rate_tables", r.externalId, lower(raw.name ?? ""));
+    else p.index("rate_tables", i, r.externalId, `${r.values.kind}:${lower(String(r.values.name))}`);
   });
   return out;
 }
@@ -932,10 +628,7 @@ function planRateLines(p: Planner, raws: Raw[], tables: PlanRow[]): PlanRow[] {
     out.push(pr);
     if (!required(p, "rate_lines", line, r)) return void (pr.action = "error");
     const tableKey = r.rateTable!.trim();
-    if (
-      p.failed.has(`rate_tables:${tableKey}`) ||
-      p.failed.has(`rate_tables:${lower(tableKey)}`)
-    )
+    if (p.failed.has(`rate_tables:${tableKey}`) || p.failed.has(`rate_tables:${lower(tableKey)}`))
       return void (pr.action = "skip");
     const ref =
       p.resolve("rate_tables", tableKey, NONE, `customer:${lower(tableKey)}`) ??
@@ -943,12 +636,7 @@ function planRateLines(p: Planner, raws: Raw[], tables: PlanRow[]): PlanRow[] {
     if (!(ref instanceof Ref)) {
       if (ref == null && !warned.has(tableKey)) {
         warned.add(tableKey);
-        p.issue(
-          "rate_lines",
-          line,
-          "rateTable",
-          `Rate table "${tableKey}" is not in this import`,
-        );
+        p.issue("rate_lines", line, "rateTable", `Rate table "${tableKey}" is not in this import`);
       }
       if (ref != null) existing.add(tableKey);
       pr.action = ref == null ? "error" : "skip";
@@ -957,38 +645,21 @@ function planRateLines(p: Planner, raws: Raw[], tables: PlanRow[]): PlanRow[] {
     const mcc = r.mccmnc!.trim();
     const mccId = p.lk.mccmnc.get(mcc);
     if (mccId == null) {
-      p.issue(
-        "rate_lines",
-        line,
-        "mccmnc",
-        `MCCMNC "${mcc}" is not in the master`,
-      );
+      p.issue("rate_lines", line, "mccmnc", `MCCMNC "${mcc}" is not in the master`);
       return void (pr.action = "error");
     }
     const rate = num(r.rate);
     if (rate == null || !Number.isFinite(rate) || rate < 0) {
-      p.issue(
-        "rate_lines",
-        line,
-        "rate",
-        `Rate "${r.rate}" must be a number of 0 or more`,
-      );
+      p.issue("rate_lines", line, "rate", `Rate "${r.rate}" must be a number of 0 or more`);
       return void (pr.action = "error");
     }
     const from = r.validFrom?.trim()
       ? new Date(
-          /^\d{4}-\d{2}-\d{2}$/.test(r.validFrom.trim())
-            ? `${r.validFrom.trim()}T00:00:00Z`
-            : r.validFrom.trim(),
+          /^\d{4}-\d{2}-\d{2}$/.test(r.validFrom.trim()) ? `${r.validFrom.trim()}T00:00:00Z` : r.validFrom.trim(),
         )
       : now;
     if (Number.isNaN(from.getTime())) {
-      p.issue(
-        "rate_lines",
-        line,
-        "validFrom",
-        `"${r.validFrom}" is not a date`,
-      );
+      p.issue("rate_lines", line, "validFrom", `"${r.validFrom}" is not a date`);
       return void (pr.action = "error");
     }
     const sender = r.senderId?.trim() || null;
@@ -1016,9 +687,7 @@ function planRateLines(p: Planner, raws: Raw[], tables: PlanRow[]): PlanRow[] {
     );
   // Versions of one destination follow each other: each ends where the next starts.
   for (const g of groups.values()) {
-    g.sort((a, b) =>
-      String(a.values.valid_from).localeCompare(String(b.values.valid_from)),
-    );
+    g.sort((a, b) => String(a.values.valid_from).localeCompare(String(b.values.valid_from)));
     for (let k = 0; k < g.length - 1; k++) {
       if (g[k]!.values.valid_from === g[k + 1]!.values.valid_from) {
         p.issue(
@@ -1046,40 +715,20 @@ function planRouteRules(p: Planner, raws: Raw[]): PlanRow[] {
     if (!required(p, "route_rules", line, r)) return void (pr.action = "error");
     const name = r.name!.trim();
     if (seen.has(lower(name)) && !ext) {
-      p.issue(
-        "route_rules",
-        line,
-        "name",
-        `"${name}" appears twice in the file: give each row its external ID`,
-      );
+      p.issue("route_rules", line, "name", `"${name}" appears twice in the file: give each row its external ID`);
       return void (pr.action = "error");
     }
     seen.add(lower(name));
     const priority = num(r.priority);
-    if (
-      priority == null ||
-      !Number.isInteger(priority) ||
-      priority < 1 ||
-      priority > 100
-    ) {
-      p.issue(
-        "route_rules",
-        line,
-        "priority",
-        `Priority "${r.priority}" must be 1 to 100`,
-      );
+    if (priority == null || !Number.isInteger(priority) || priority < 1 || priority > 100) {
+      p.issue("route_rules", line, "priority", `Priority "${r.priority}" must be 1 to 100`);
       return void (pr.action = "error");
     }
     const trunks: (Ref | number)[] = [];
     for (const t of list(r.customerTrunks)) {
       const id = p.resolve("customer_trunks", t, p.lk.customerTrunks);
       if (id == null) {
-        p.issue(
-          "route_rules",
-          line,
-          "customerTrunks",
-          `Customer trunk "${t}" not found`,
-        );
+        p.issue("route_rules", line, "customerTrunks", `Customer trunk "${t}" not found`);
         return void (pr.action = "error");
       }
       trunks.push(id);
@@ -1087,12 +736,7 @@ function planRouteRules(p: Planner, raws: Raw[]): PlanRow[] {
     const dest = list(r.destinations);
     const bad = dest.filter((d) => !p.lk.mccmnc.has(d));
     if (bad.length) {
-      p.issue(
-        "route_rules",
-        line,
-        "destinations",
-        `Not in the MCCMNC master: ${bad.slice(0, 5).join(", ")}`,
-      );
+      p.issue("route_rules", line, "destinations", `Not in the MCCMNC master: ${bad.slice(0, 5).join(", ")}`);
       return void (pr.action = "error");
     }
     const vendors: { trunk: Ref | number; share: number | null }[] = [];
@@ -1102,43 +746,19 @@ function planRouteRules(p: Planner, raws: Raw[]): PlanRow[] {
       const share = at > 0 ? num(part.slice(at + 1)) : null;
       const id = p.resolve("vendor_trunks", key, p.lk.vendorTrunks);
       if (id == null) {
-        p.issue(
-          "route_rules",
-          line,
-          "vendors",
-          `Vendor trunk "${key}" not found`,
-        );
+        p.issue("route_rules", line, "vendors", `Vendor trunk "${key}" not found`);
         return void (pr.action = "error");
       }
-      if (
-        share != null &&
-        (!Number.isInteger(share) || share < 0 || share > 100)
-      ) {
-        p.issue(
-          "route_rules",
-          line,
-          "vendors",
-          `Share "${part}" must be 0 to 100`,
-        );
+      if (share != null && (!Number.isInteger(share) || share < 0 || share > 100)) {
+        p.issue("route_rules", line, "vendors", `Share "${part}" must be 0 to 100`);
         return void (pr.action = "error");
       }
       vendors.push({ trunk: id, share });
     }
     const shares = vendors.filter((v) => v.share != null);
     if (shares.length && shares.reduce((s, v) => s + v.share!, 0) !== 100)
-      p.issue(
-        "route_rules",
-        line,
-        "vendors",
-        "Vendor shares do not add up to 100",
-        "warning",
-      );
-    const m = p.match(
-      "route_rules",
-      line,
-      ext,
-      p.lk.routeRules.get(lower(name)) ?? null,
-    );
+      p.issue("route_rules", line, "vendors", "Vendor shares do not add up to 100", "warning");
+    const m = p.match("route_rules", line, ext, p.lk.routeRules.get(lower(name)) ?? null);
     pr.action = m.action;
     pr.existingId = m.id;
     pr.values = {
@@ -1152,11 +772,7 @@ function planRouteRules(p: Planner, raws: Raw[]): PlanRow[] {
     };
     pr.extra = { vendors, percentage: shares.length > 0 };
   });
-  out.forEach(
-    (r, i) =>
-      r.action !== "error" &&
-      p.index("route_rules", i, r.externalId, lower(String(r.values.name))),
-  );
+  out.forEach((r, i) => r.action !== "error" && p.index("route_rules", i, r.externalId, lower(String(r.values.name))));
   return out;
 }
 
@@ -1165,45 +781,24 @@ function planBalances(p: Planner, raws: Raw[]): PlanRow[] {
   const out = raws.map((r, i) => {
     const line = i + 2;
     const pr = row(line, null);
-    if (!required(p, "opening_balances", line, r))
-      return { ...pr, action: "error" as const };
+    if (!required(p, "opening_balances", line, r)) return { ...pr, action: "error" as const };
     const ent = p.resolve("enterprises", r.enterprise!, p.lk.enterprises);
     if (ent == null) {
-      p.issue(
-        "opening_balances",
-        line,
-        "enterprise",
-        `Enterprise "${r.enterprise}" not found`,
-      );
+      p.issue("opening_balances", line, "enterprise", `Enterprise "${r.enterprise}" not found`);
       return { ...pr, action: "error" as const };
     }
     const amount = num(r.amount);
     if (amount == null || !Number.isFinite(amount)) {
-      p.issue(
-        "opening_balances",
-        line,
-        "amount",
-        `Amount "${r.amount}" is not a number`,
-      );
+      p.issue("opening_balances", line, "amount", `Amount "${r.amount}" is not a number`);
       return { ...pr, action: "error" as const };
     }
     const currency = r.currency!.trim().toUpperCase();
     if (!p.lk.currencies.has(currency)) {
-      p.issue(
-        "opening_balances",
-        line,
-        "currency",
-        `Currency "${r.currency}" does not exist`,
-      );
+      p.issue("opening_balances", line, "currency", `Currency "${r.currency}" does not exist`);
       return { ...pr, action: "error" as const };
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date!.trim())) {
-      p.issue(
-        "opening_balances",
-        line,
-        "date",
-        `Date "${r.date}" must be YYYY-MM-DD`,
-      );
+      p.issue("opening_balances", line, "date", `Date "${r.date}" must be YYYY-MM-DD`);
       return { ...pr, action: "error" as const };
     }
     if (amount === 0) return { ...pr, action: "skip" as const };
@@ -1214,13 +809,7 @@ function planBalances(p: Planner, raws: Raw[]): PlanRow[] {
     }
     return {
       ...pr,
-      values: {
-        enterprise_id: ent,
-        side: r.side!.trim().toLowerCase(),
-        amount,
-        currency,
-        date: r.date!.trim(),
-      },
+      values: { enterprise_id: ent, side: r.side!.trim().toLowerCase(), amount, currency, date: r.date!.trim() },
     };
   });
   if (kept)
@@ -1248,33 +837,18 @@ export async function planImport(
   const source = new Map<Ent, number>();
   for (const f of settings.files) {
     if (raws.has(f.entity)) {
-      p.issue(
-        f.entity,
-        0,
-        null,
-        `Two files for ${ENTITY.get(f.entity)!.label}: send one per entity`,
-      );
+      p.issue(f.entity, 0, null, `Two files for ${ENTITY.get(f.entity)!.label}: send one per entity`);
       continue;
     }
     const mapping = f.mappingId != null ? mappings.get(f.mappingId) : null;
     if (f.mappingId != null && (!mapping || mapping.entity !== f.entity)) {
-      p.issue(
-        f.entity,
-        0,
-        null,
-        `Mapping ${f.mappingId} is not a mapping for ${f.entity}`,
-      );
+      p.issue(f.entity, 0, null, `Mapping ${f.mappingId} is not a mapping for ${f.entity}`);
       continue;
     }
     const { rows, missing } = mapRows(f, mapping?.columns ?? null);
     source.set(f.entity, rows.length);
     if (missing.length) {
-      p.issue(
-        f.entity,
-        1,
-        null,
-        `${f.fileName}: missing columns ${missing.join(", ")}`,
-      );
+      p.issue(f.entity, 1, null, `${f.fileName}: missing columns ${missing.join(", ")}`);
       continue;
     }
     raws.set(f.entity, rows);
@@ -1318,16 +892,9 @@ export async function planImport(
   const tables = p.rows.get("rate_tables") ?? [];
   for (const l of p.rows.get("rate_lines") ?? []) {
     const ref = l.values.rate_table_id;
-    if (
-      ref instanceof Ref &&
-      tables[ref.row]?.action !== "create" &&
-      l.action !== "error"
-    )
-      l.action = "skip";
+    if (ref instanceof Ref && tables[ref.row]?.action !== "create" && l.action !== "error") l.action = "skip";
   }
-  const entities: MigrationEntityReport[] = IMPORT_ENTITIES.filter((i) =>
-    source.has(i.entity as Ent),
-  ).map((i) => {
+  const entities: MigrationEntityReport[] = IMPORT_ENTITIES.filter((i) => source.has(i.entity as Ent)).map((i) => {
     const e = i.entity as Ent;
     const rs = p.rows.get(e) ?? [];
     const n = (a: Action) => rs.filter((r) => r.action === a).length;
@@ -1342,9 +909,7 @@ export async function planImport(
       inSystem: lk.counts[e],
     };
   });
-  const errors =
-    p.issues.some((x) => x.severity === "error") ||
-    entities.some((x) => x.errors > 0);
+  const errors = p.issues.some((x) => x.severity === "error") || entities.some((x) => x.errors > 0);
   return {
     sourceSystem: settings.sourceSystem,
     trunksInactive: settings.trunksInactive,
@@ -1370,20 +935,14 @@ export interface Entry {
 }
 
 /** Runs the plan inside the caller's transaction; returns the History entries and created trunk IDs. */
-export async function applyPlan(
-  c: pg.PoolClient,
-  plan: Plan,
-  importId: number,
-  userId: number,
-) {
+export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, userId: number) {
   await c.query("SET LOCAL statement_timeout = 0");
   const ids = new Map<Ent, (number | null)[]>();
   const entries: Entry[] = [];
   const resolve = (v: Value): Value => {
     if (v instanceof Ref) {
       const id = ids.get(v.entity)?.[v.row];
-      if (id == null)
-        throw new Error(`Unresolved link to ${v.entity} row ${v.row + 2}`);
+      if (id == null) throw new Error(`Unresolved link to ${v.entity} row ${v.row + 2}`);
       return id;
     }
     return Array.isArray(v) ? v.map(resolve) : v;
@@ -1407,8 +966,7 @@ export async function applyPlan(
     route_rules: "route_rules",
     opening_balances: "transactions",
   };
-  const label = (v: Record<string, Value>) =>
-    (v.name ?? v.username ?? null) as string | null;
+  const label = (v: Record<string, Value>) => (v.name ?? v.username ?? null) as string | null;
 
   for (const info of IMPORT_ENTITIES) {
     const e = info.entity as Ent;
@@ -1424,15 +982,11 @@ export async function applyPlan(
       for (let k = 0; k < todo.length; k += 5000) {
         const part = todo
           .slice(k, k + 5000)
-          .map((r): Record<string, Value> => ({
-            ...r.values,
-            rate_table_id: resolve(r.values.rate_table_id),
-          }));
+          .map((r): Record<string, Value> => ({ ...r.values, rate_table_id: resolve(r.values.rate_table_id) }));
         const tableIds = part.map((v) => v.rate_table_id as number);
-        const { rows: cur } = await c.query(
-          "SELECT id, currency FROM rate_tables WHERE id = ANY($1)",
-          [[...new Set(tableIds)]],
-        );
+        const { rows: cur } = await c.query("SELECT id, currency FROM rate_tables WHERE id = ANY($1)", [
+          [...new Set(tableIds)],
+        ]);
         const currency = new Map(cur.map((x) => [Number(x.id), x.currency]));
         await c.query(
           `INSERT INTO rate_lines (rate_table_id, mccmnc_id, mccmnc, sender_id, rate, currency, valid_from, valid_to,
@@ -1463,23 +1017,14 @@ export async function applyPlan(
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i]!;
       if (r.action === "update" && r.existingId != null) {
-        const after = Object.fromEntries(
-          Object.entries(r.values).map(([k, v]) => [k, resolve(v)]),
-        );
+        const after = Object.fromEntries(Object.entries(r.values).map(([k, v]) => [k, resolve(v)]));
         const cols = Object.keys(after);
         await c.query(
           `UPDATE ${table} SET ${cols.map((k, n) => `${k} = $${n + 2}`).join(", ")}, updated_at = now() WHERE id = $1`,
           [r.existingId, ...cols.map((k) => after[k])],
         );
-        entries.push({
-          table,
-          entity_id: r.existingId,
-          field: "row",
-          before: r.before,
-          after,
-        });
-        if (r.externalId)
-          refs.push({ entity: e, ext: r.externalId, id: r.existingId });
+        entries.push({ table, entity_id: r.existingId, field: "row", before: r.before, after });
+        if (r.externalId) refs.push({ entity: e, ext: r.externalId, id: r.existingId });
         continue;
       }
       if (r.action === "skip" && r.existingId != null && r.externalId)
@@ -1498,22 +1043,15 @@ export async function applyPlan(
           });
           break;
         case "enterprises": {
-          id = await insert("enterprises", {
-            ...v,
-            created_by_id: userId,
-            updated_by_id: userId,
-          });
-          const sides =
-            v.type === "reciprocal" ? ["customer", "vendor"] : [String(v.type)];
+          id = await insert("enterprises", { ...v, created_by_id: userId, updated_by_id: userId });
+          const sides = v.type === "reciprocal" ? ["customer", "vendor"] : [String(v.type)];
           for (const side of sides)
             await c.query(
               `INSERT INTO enterprise_billing (enterprise_id, side, currency, billing_cycle_id, billing_type, updated_by_id)
                VALUES ($1, $2, $3, 1, 'postpaid', $4)`,
               [id, side, r.extra.currency, userId],
             );
-          for (const [type, emails] of Object.entries(
-            r.extra.contacts as Record<string, string[]>,
-          ))
+          for (const [type, emails] of Object.entries(r.extra.contacts as Record<string, string[]>))
             if (emails.length)
               await c.query(
                 "INSERT INTO enterprise_contacts (enterprise_id, contact_type, emails) VALUES ($1, $2, $3)",
@@ -1549,16 +1087,11 @@ export async function applyPlan(
           break;
         }
         case "route_rules": {
-          const vendors = r.extra.vendors as {
-            trunk: Value;
-            share: number | null;
-          }[];
+          const vendors = r.extra.vendors as { trunk: Value; share: number | null }[];
           id = await insert("route_rules", {
             ...v,
             starts_at: new Date().toISOString(),
-            stops_at: new Date(
-              Date.now() + 10 * 365 * 86_400_000,
-            ).toISOString(),
+            stops_at: new Date(Date.now() + 10 * 365 * 86_400_000).toISOString(),
             route_type: vendors.length ? "static" : "block",
             hunt_policy: r.extra.percentage ? "percentage" : "top_down",
             max_route_level: Math.min(10, Math.max(1, vendors.length)),
@@ -1571,12 +1104,7 @@ export async function applyPlan(
             await c.query(
               `INSERT INTO route_rule_vendors (route_rule_id, level, vendor_trunk_id, share_pct)
                VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-              [
-                id,
-                r.extra.percentage ? 1 : Math.min(10, ++level),
-                resolve(vd.trunk),
-                vd.share,
-              ],
+              [id, r.extra.percentage ? 1 : Math.min(10, ++level), resolve(vd.trunk), vd.share],
             );
           break;
         }
