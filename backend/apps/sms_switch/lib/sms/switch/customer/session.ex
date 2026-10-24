@@ -63,6 +63,8 @@ defmodule Sms.Switch.Customer.Session do
     outbound_window: 10,
     deliver_timeout_ms: 30_000,
     intake_timeout_ms: 120_000,
+    # A Delayed Submit trunk's resp waits for the vendor (S-2.18, D11): the pipeline answers within its own 10 minutes.
+    delayed_intake_timeout_ms: 660_000,
     unbind_timeout_ms: 5_000,
     max_pdu_length: 66_000,
     proxy_header_timeout_ms: 5_000
@@ -796,8 +798,12 @@ defmodule Sms.Switch.Customer.Session do
         run_intake(session, intake, context, pdu, metadata)
       end)
 
-    timer =
-      Process.send_after(self(), {:intake_timeout, task.ref}, state.settings.intake_timeout_ms)
+    timeout =
+      if state.trunk.delayed_submit and pdu.command in [:submit_sm, :data_sm],
+        do: state.settings.delayed_intake_timeout_ms,
+        else: state.settings.intake_timeout_ms
+
+    timer = Process.send_after(self(), {:intake_timeout, task.ref}, timeout)
 
     %{state | inflight: Map.put(state.inflight, task.ref, %{pdu: pdu, timer: timer})}
   end

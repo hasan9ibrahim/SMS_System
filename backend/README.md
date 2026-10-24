@@ -109,22 +109,39 @@ loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
   addresses; empty messages refused, D10), runs the customer trunk's translation rules, finds the destination and
   the customer's rate, routes it (`Pipeline.Router`), checks credit (`Pipeline.Credit`), and publishes it on the bus
   (`sms.msg.accepted`). The `submit_sm_resp` goes out only once the bus has stored it (S-2.2); a refused message
-  gets its status at once and an EDR row. The parts of one multipart message share the first part's decision
-  (S-3.3, S-3.8).
+  gets its status at once and an EDR row. A Delayed Submit trunk's resp waits for the vendor's final outcome instead
+  (`Pipeline.Delayed`, S-2.18, D11). Duplicates within the trunk's window get the first message's id and are not sent
+  again; a message coming back from a vendor on another trunk while ours is in flight is refused (D6, S-5.16).
+- **Reassembly** (`Pipeline.Reassembly`): each part of a customer multipart message (UDH or SAR) is answered at once
+  and held in Redis; with the last part the whole text is translated, rated and routed once (S-3.2–S-3.7). A group
+  still incomplete after the trunk's reassembly timeout (default 120 s), or refused once put together, gets a REJECTD
+  receipt per part (error 099, or the refusal's code) and is not billed (D1).
 - **Sender** (`Pipeline.Sender`, consumer `pipeline-sender`): runs the vendor's egress translation, encodes again
   when the text changed (UCS-2 when it no longer fits), splits with UDH when needed, always asks the vendor for
-  receipts, and sends. Temporary refusals are tried again on the same vendor; any other refusal, a timeout or a lost
-  connection moves to the next vendor in the rules' order; none left → the customer gets a REJECTD receipt (UNKNOWN
-  when the last vendor may have it). A translation that adds parts is blocked (D3).
+  receipts, and sends, split in the vendor trunk's multipart format (8- or 16-bit UDH, SAR, message_payload); a
+  vendor without multipart or with a shorter Max Msg Len is skipped (S-3.9, S-3.10). Temporary refusals are tried
+  again on the same vendor; any other refusal, a timeout or a lost connection moves to the next vendor in the rules'
+  order; none left → the customer gets a REJECTD receipt (UNKNOWN when the last vendor may have it). A translation
+  that adds parts is blocked (D3). A late OK after a timeout is written as a possible duplicate (D4,
+  `Pipeline.LateResponses`).
 - **Receipts** (`Pipeline.Receipts`, the vendor side's handler) and **forwarding** (`Pipeline.Forwarder`, consumer
   `pipeline-forwarder`): a receipt finds its message by the vendor's id in either base (S-5.6), the first final
   status of each part wins (S-5.8), and a split message gets one receipt once all its parts have one (S-5.9). The
   customer gets what it asked for (registered_delivery), after the DLR status maps of the vendor trunk's and the
   customer trunk's rules. A receipt that came before its `submit_sm_resp` is kept a minute and applied (S-5.5).
   With no session to take it, the receipt is held per trunk (`Pipeline.Held`) and sent as soon as one binds, up to
-  the trunk's DLR hold hours (72 by default).
+  the trunk's DLR hold hours (72 by default). A failed receipt from a delivery-billed vendor whose Re-Route on lists
+  its status sends the message to the next vendor when no part was delivered (S-5.11, D2).
+- **Timeouts** (`Pipeline.Timeouts`): with no final receipt by the vendor trunk's DLR Timeout the customer gets the
+  trunk's DLR Timeout Status (S-5.10); a vendor receipt that comes later is matched from the EDRs and only corrects
+  them (`Pipeline.LateReceipts`, D5).
+- **query_sm and cancel_sm** (`Pipeline.Queries`, S-2.15, D8): query_sm from Redis and the EDRs, only for the asking
+  customer's own messages; cancel_sm only while the message is still queued (0x11 after); replace_sm 0x03.
+- **Live TPS** (`Pipeline.LiveTps`, §13.8, §13.23): counts per customer trunk, enterprise, destination, sender, rule
+  and vendor trunk, shared between the servers through Redis once a second; route rules' TPS conditions (with hold
+  and release hysteresis), the rule's "skip a vendor at N % of its TPS limit" and LCR's "at its TPS limit".
 - **Store** (`Pipeline.Store`): what both servers need about a message in flight lives in Redis (`m:`, `v:`, `o:`,
-  `g:`, `h:` keys). A message is deleted as soon as every part has its final receipt and the customer's receipt is
+  `h:`, `t`, `rg:`, `dup:`, `lp:`, `pd:`, `rs:`, `q:`, `lt:` keys). A message is deleted as soon as every part has its final receipt and the customer's receipt is
   queued; one still waiting expires after the vendor trunk's DLR timeout plus an hour. So Redis holds only messages
   waiting for a receipt.
 - **EDRs** (`Pipeline.Edr`, `Pipeline.EdrWriter`): one `edr` row per vendor attempt (or per refused message) and one
@@ -136,10 +153,8 @@ loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
 Message ids given to customers are 20 hex characters: milliseconds, the server's `SWITCH_NODE_ID` (0–255, different
 on each server) and a counter. Rates and margins compare in `PLATFORM_CURRENCY` (default EUR).
 
-Not in step 4 (planned): balances and the real credit check, revenue / cost / billable flags (step 6); `query_sm` and
-`cancel_sm`, reassembly of customer multipart messages and translation of the whole text (until then each part goes with its own text; content translation is not applied to them), DLR timeouts with the
-trunk's timeout status, TPS and accumulated revenue conditions and live "at TPS limit" for LCR (step 5); HLR
-lookups.
+Not yet built (planned): balances and the real credit check, revenue / cost / billable flags and accumulated revenue
+conditions (step 6); HLR lookups.
 
 ## Run it
 

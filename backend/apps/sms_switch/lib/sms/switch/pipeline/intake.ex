@@ -21,9 +21,8 @@ defmodule Sms.Switch.Pipeline.Intake do
   Translation growing the part count (D3) does not refuse the message here: it is accepted and gets a REJECTD receipt,
   as decided.
 
-  Parts of a multipart message (UDH or SAR) share one decision (S-3.3, S-3.8): the first part to arrive translates and
-  routes, the others use its sender, receiver and vendor, so every part reaches the same vendor. Their text is passed on
-  as sent; translation on the reassembled text (S-3.2, S-4.3) comes with build step 5.
+  The parts of a multipart message (UDH or SAR) are answered at once and held until all have come
+  (`Sms.Switch.Pipeline.Reassembly`, S-3.2); steps 2–6 then run once on the whole message (S-4.3).
   """
   @behaviour Sms.Switch.Customer.Intake
   require Logger
@@ -31,12 +30,26 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Customer.Intake.NotReady
   alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Message.{Concat, Text}
-  alias Sms.Switch.Pipeline.{Config, Credit, Edr, MessageId, Router, Store}
+
+  alias Sms.Switch.Pipeline.{
+    Config,
+    Credit,
+    Delayed,
+    Edr,
+    LiveTps,
+    MessageId,
+    Queries,
+    Reassembly,
+    Router,
+    Store
+  }
+
   alias Sms.Switch.Rules.Translation
   alias Sms.Switch.Smpp.{Pdu, Status}
   alias Sms.Switch.Throttle
 
-  @group_ttl_s 600
+  # How long a queued mark lasts (a buffered message can wait for its TPS) and a cancelled one is remembered.
+  @queued_s 86_400
 
   @impl true
   def handle(context, %Pdu{command: command} = pdu) when command in [:submit_sm, :data_sm] do
@@ -49,7 +62,9 @@ defmodule Sms.Switch.Pipeline.Intake do
     reply
   end
 
-  # query_sm and cancel_sm come with build step 5 (decision D8).
+  # S-2.15, D8.
+  def handle(context, %Pdu{command: :query_sm} = pdu), do: Queries.query(context, pdu.fields)
+  def handle(context, %Pdu{command: :cancel_sm} = pdu), do: Queries.cancel(context, pdu.fields)
   def handle(context, pdu), do: NotReady.handle(context, pdu)
 
   defp accept(context, pdu) do
@@ -62,8 +77,8 @@ defmodule Sms.Switch.Pipeline.Intake do
         msg = new_message(context, pdu, trunk)
 
         case build(msg, pdu) do
-          {:ok, msg} -> store(msg)
           {:reject, status, reason, msg} -> refuse(msg, status, reason)
+          {kind, msg} -> filtered(kind, msg)
         end
     end
   end
@@ -101,60 +116,133 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   # ---------------------------------------------------------------- the steps
 
+  # The checks of the message as sent; a part of a multipart message is then held for the rest (S-3.2).
   defp build(msg, pdu) do
     with {:ok, msg} <- body(msg, pdu),
-         {:ok, msg} <- addresses(msg),
-         {:ok, msg} <- decide(msg),
-         :ok <- credit(msg) do
-      {:ok, msg}
+         {:ok, msg} <- addresses(msg) do
+      if msg.concat, do: {:part, msg}, else: {:ok, msg}
     end
   end
 
-  defp decide(%{concat: nil} = msg) do
+  @doc false
+  # The decision and storage of a whole message (one sent as one, or put together from its parts): ingress
+  # translation, rate, route and credit, then the durable bus.
+  @spec process(map()) :: :ok | {:reject, atom(), term(), map()} | {:error, term()}
+  def process(msg) do
     with {:ok, msg} <- run_ingress(msg),
          {:ok, msg} <- rate(msg),
-         do: route_now(msg)
+         {:ok, msg} <- route_now(msg),
+         :ok <- credit(msg) do
+      store(msg)
+    end
   end
 
-  # The parts of one multipart message share one decision (S-3.3: trunk + source + destination + reference + total
-  # parts; S-3.8): the first part to arrive decides, the others take its ingress result, rate and vendor.
-  defp decide(msg) do
-    c = msg.concat
+  # D6, S-5.16: the same message again on this trunk within its window gets the first one's id and is not sent again;
+  # the same message coming back on another trunk while ours is in flight (a vendor routing into us) is refused.
+  defp filtered(kind, msg) do
+    fingerprint = fingerprint(msg)
+
+    case duplicate(msg, fingerprint) do
+      {:duplicate, first} ->
+        Logger.info(
+          "duplicate of #{first} on trunk #{msg.trunk.id}: answered with its id, not sent (D6)"
+        )
+
+        {:ok, %{message_id: first}, []}
+
+      :new ->
+        if loop?(msg),
+          do: refuse_filtered(msg, fingerprint, :esme_rsubmitfail, :loop),
+          else: go(kind, msg, fingerprint)
+
+      {:error, reason} ->
+        Logger.error("duplicate filter unavailable, message taken: #{inspect(reason)}")
+        go(kind, msg, nil)
+    end
+  end
+
+  defp go(:part, msg, _fingerprint), do: Reassembly.hold(msg)
+
+  defp go(:ok, msg, fingerprint) do
+    reply = if Delayed.delayed?(msg), do: delayed(msg), else: answer(msg, process(msg))
+
+    case reply do
+      {:ok, _, _} = ok ->
+        ok
+
+      error ->
+        forget_fingerprint(msg, fingerprint)
+        error
+    end
+  end
+
+  # S-2.18, D11: stored as usual, then the resp waits for the vendor's outcome.
+  defp delayed(msg) do
+    :ok = Delayed.join(msg.id)
+
+    case process(msg) do
+      :ok ->
+        Delayed.await(msg.id)
+
+      other ->
+        _ = Delayed.leave(msg.id)
+        answer(msg, other)
+    end
+  end
+
+  defp refuse_filtered(msg, fingerprint, status, reason) do
+    forget_fingerprint(msg, fingerprint)
+    refuse(msg, status, reason)
+  end
+
+  # A refused message is not a duplicate of anything: a resend of it is a new message.
+  defp forget_fingerprint(_msg, nil), do: :ok
+
+  defp forget_fingerprint(msg, fingerprint) do
+    _ = Store.release_fingerprint(msg.trunk.id, fingerprint)
+    :ok
+  end
+
+  defp duplicate(msg, fingerprint) do
+    case msg.trunk[:duplicate_window_s] || 0 do
+      0 -> :new
+      window -> Store.claim_fingerprint(msg.trunk.id, fingerprint, msg.id, window)
+    end
+  end
+
+  defp loop?(%{trunk: %{loop_detection: true}} = msg) do
     f = msg.fields
-    key = "#{msg.trunk.id}:#{f[:source_addr]}:#{f[:destination_addr]}:#{c.ref}:#{c.total}"
 
-    case Store.get_group(key) do
-      {:ok, shared} -> {:ok, share(msg, shared)}
-      :none -> decide_first(msg, key)
-      {:error, reason} -> {:reject, :esme_rsyserr, {:store, reason}, msg}
+    case Store.in_flight(fingerprint(f[:source_addr], f[:destination_addr], msg.text || msg.body)) do
+      {:ok, trunk} when is_integer(trunk) and trunk != msg.trunk.id -> true
+      _ -> false
     end
   end
 
-  # The first part to arrive decides and stores the decision for the others.
-  defp decide_first(%{concat: c} = msg, key) do
-    case decide(%{msg | concat: nil}) do
-      {:ok, decided} ->
-        msg = %{decided | concat: c}
-        decision = Map.take(msg, [:ingress, :destination, :sell, :route])
+  defp loop?(_msg), do: false
 
-        case Store.group(key, decision, @group_ttl_s) do
-          {:ok, shared} -> {:ok, share(msg, shared)}
-          {:error, reason} -> {:reject, :esme_rsyserr, {:store, reason}, msg}
-        end
-
-      {:reject, status, reason, refused} ->
-        {:reject, status, reason, %{refused | concat: c}}
-    end
+  # A part's fingerprint includes its reference and number, so the parts of one message are not each other's duplicates.
+  defp fingerprint(msg) do
+    f = msg.fields
+    part = if msg.concat, do: ":#{msg.concat.ref}:#{msg.concat.seq}/#{msg.concat.total}", else: ""
+    fingerprint(f[:source_addr], f[:destination_addr], (msg.text || msg.body) <> part)
   end
 
-  # A part's own text stays (reassembly comes with build step 5), also as the text the vendor gets: the shared route's
-  # egress text is the deciding part's, which would otherwise be sent in place of every other part's.
-  defp share(msg, shared),
-    do: %{
-      Map.merge(msg, shared)
-      | ingress: %{shared.ingress | text: msg.text, text_changed: false},
-        route: put_in(shared.route, [:egress, :text], msg.text)
-    }
+  @doc "The fingerprint of a message for the duplicate filter and Loop Detection: source, destination and text (D6)."
+  @spec fingerprint(String.t() | nil, String.t() | nil, binary()) :: String.t()
+  def fingerprint(source, destination, text) do
+    :crypto.hash(:sha256, [source || "", 0, destination || "", 0, text || ""])
+    |> binary_part(0, 16)
+    |> Base.url_encode64(padding: false)
+  end
+
+  defp answer(msg, :ok), do: {:ok, %{message_id: msg.id}, []}
+  defp answer(_msg, {:reject, status, reason, msg}), do: refuse(msg, status, reason)
+
+  defp answer(msg, {:error, reason}) do
+    Logger.error("message #{msg.id} not stored, answered 0x14: #{inspect(reason)}")
+    {:error, :esme_rmsgqful}
+  end
 
   # S-2.8: short_message and message_payload together are refused; data_sm carries its text in message_payload only.
   defp body(msg, pdu) do
@@ -186,9 +274,10 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
-  defp decoded(msg, _raw, _udh, <<>>, _concat, _alphabet, _payload),
-    # D10: an empty message is refused (0x01).
-    do: {:reject, :esme_rinvmsglen, :empty_message, msg}
+  # D10: an empty message is refused (0x01) unless the customer trunk allows empty messages.
+  defp decoded(%{trunk: trunk} = msg, _raw, _udh, <<>>, _concat, _alphabet, _payload)
+       when trunk.allow_empty_messages != true,
+       do: {:reject, :esme_rinvmsglen, :empty_message, msg}
 
   defp decoded(msg, _raw, udh, data, concat, alphabet, payload) do
     text =
@@ -303,10 +392,16 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   defp route_now(msg) do
     input = router_input(msg)
+    # Live TPS per scope (§13.8): this message counts before its own routing.
+    LiveTps.count(LiveTps.message_keys(msg), msg.parts)
 
     case Router.route(input) do
       {:ok, routed} ->
-        {:ok, %{msg | route: route_of(routed)}}
+        route = route_of(routed)
+        if route.rule_id, do: LiveTps.count(["r:#{route.rule_id}"], msg.parts)
+        # The EDR records the customer trunk's TPS when it was routed (§13.8 Visibility).
+        {:ok,
+         %{msg | route: Map.put(route, :measured_tps, LiveTps.rate("ct:#{msg.trunk.id}", 5))}}
 
       {:error, reason, _decision} ->
         {:reject, :esme_rsubmitfail, reason, msg}
@@ -373,13 +468,24 @@ defmodule Sms.Switch.Pipeline.Intake do
       "m" => Base.encode64(:erlang.term_to_binary(msg, [:compressed]))
     }
 
+    # Queued until the sender takes it: what cancel_sm and query_sm see (S-2.15, D8). Without Redis the message still
+    # goes; it just cannot be cancelled.
+    ids = Map.get(msg, :ids, [msg.id])
+    ent = msg.trunk.enterprise_id
+
+    with {:error, reason} <- Store.mark_queued(ent, ids, @queued_s),
+         do:
+           Logger.warning(
+             "message #{msg.id} not marked queued, cannot be cancelled: #{inspect(reason)}"
+           )
+
     case Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}") do
       {:ok, _} ->
-        {:ok, %{message_id: msg.id}, []}
+        :ok
 
-      {:error, reason} ->
-        Logger.error("message #{msg.id} not stored, answered 0x14: #{inspect(reason)}")
-        {:error, :esme_rmsgqful}
+      {:error, _} = error ->
+        Store.drop_queued(ent, ids)
+        error
     end
   end
 

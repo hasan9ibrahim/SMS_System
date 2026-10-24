@@ -8,7 +8,14 @@ defmodule Sms.Switch.Pipeline.Store do
     * `v:<vendor trunk>:<vendor message id>`: the message and part a vendor id belongs to (normalised, S-5.6);
     * `o:<vendor trunk>:<vendor message id>`: a receipt that arrived before its submit_sm_resp was handled (S-5.5),
       kept a minute for the sender to pick up;
-    * `g:<group key>`: the decision shared by the parts of one multipart message (S-3.3, S-3.8);
+    * `rg:<group key>`: the parts of a customer's multipart message held until all have come (S-3.2, S-3.3): each
+      part (`p<n>`), the message id it got (`i<n>`), how many are held (`count`) and whether it was taken (`done`);
+      `rgt` their reassembly deadlines (D1);
+    * `t`: the DLR timeouts of messages waiting for receipts, a sorted set by deadline (S-5.10); every server sweeps
+      it and the one that removes an entry handles it;
+    * `dup:<customer trunk>:<fingerprint>`: the message id of a message, for the duplicate filter's window (D6);
+      `lp:<fingerprint>`: the customer trunk of a message in flight to a vendor, for Loop Detection (S-5.16);
+    * `pd:<message id>:<part>`: the attempt of a part whose submit timed out, for a late answer (D4);
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
       by arrival; `hs` the trunks that have any, `hl:<customer trunk>` the lock of the node sending them.
 
@@ -32,9 +39,14 @@ defmodule Sms.Switch.Pipeline.Store do
   Records a message as sent: its data and each part's vendor message id, with the index from vendor ids back to it.
   `parts` are `{part, vendor_trunk_id, normalised_vendor_id}`.
   """
-  @spec record_sent(String.t(), term(), [{part(), integer(), String.t()}], pos_integer()) ::
-          :ok | {:error, term()}
-  def record_sent(message_id, data, parts, ttl_s) do
+  @spec record_sent(
+          String.t(),
+          term(),
+          [{part(), integer(), String.t()}],
+          pos_integer(),
+          non_neg_integer() | nil
+        ) :: :ok | {:error, term()}
+  def record_sent(message_id, data, parts, ttl_s, timeout_at_ms \\ nil) do
     hash = "m:#{message_id}"
     blob = :erlang.term_to_binary(data, [:compressed])
 
@@ -45,7 +57,8 @@ defmodule Sms.Switch.Pipeline.Store do
       ] ++
         Enum.map(parts, fn {n, vt, vid} ->
           ["SET", "v:#{vt}:#{vid}", "#{message_id}:#{n}", "EX", ttl_s]
-        end)
+        end) ++
+        if(timeout_at_ms, do: [["ZADD", "t", timeout_at_ms, message_id]], else: [])
 
     case backend() do
       :redis -> ok(Redis.transaction(commands, @timeout))
@@ -144,15 +157,28 @@ defmodule Sms.Switch.Pipeline.Store do
   """
   @spec forget(String.t(), integer(), [String.t()]) :: :ok | {:error, term()}
   def forget(message_id, vendor_trunk_id, vendor_ids) do
-    commands = [
-      ["DEL", "m:#{message_id}"] | Enum.map(vendor_ids, &["DEL", "v:#{vendor_trunk_id}:#{&1}"])
-    ]
+    commands =
+      [["DEL", "m:#{message_id}"], ["ZREM", "t", message_id]] ++
+        Enum.map(vendor_ids, &["DEL", "v:#{vendor_trunk_id}:#{&1}"])
 
     case backend() do
       :redis -> ok(Redis.transaction(commands, @timeout))
       :local -> ok(local(commands))
     end
   end
+
+  @doc "Up to `limit` messages whose DLR timeout has passed by `now_ms`, earliest first (S-5.10)."
+  @spec due_timeouts(non_neg_integer(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
+  def due_timeouts(now_ms, limit),
+    do: run(["ZRANGEBYSCORE", "t", "-inf", now_ms, "LIMIT", 0, limit])
+
+  @doc "Puts a message's DLR timeout (back) on the list, due at `at_ms`."
+  @spec schedule_timeout(String.t(), non_neg_integer()) :: :ok | {:error, term()}
+  def schedule_timeout(message_id, at_ms), do: ok(run(["ZADD", "t", at_ms, message_id]))
+
+  @doc "Takes a due DLR timeout: true for the one server that gets to handle it."
+  @spec claim_timeout(String.t()) :: boolean()
+  def claim_timeout(message_id), do: match?({:ok, 1}, run(["ZREM", "t", message_id]))
 
   @doc "Keeps a receipt whose vendor id is not known yet (S-5.5)."
   @spec put_orphan(integer(), String.t(), term()) :: :ok | {:error, term()}
@@ -178,27 +204,205 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
-  @doc "The decision a multipart message's first part stored, if any."
-  @spec get_group(String.t()) :: {:ok, term()} | :none | {:error, term()}
-  def get_group(key) do
-    case run(["GET", "g:#{key}"]) do
-      {:ok, nil} -> :none
-      {:ok, blob} -> {:ok, :erlang.binary_to_term(blob, [:safe])}
+  @doc """
+  Holds part `n` of a customer's multipart message in its group until the others come (S-3.2): `{:ok, count}` with the
+  parts held now, or `{:duplicate, id}` with the message id the same part got before (S-3.5). The group expires after
+  `ttl_s`; its reassembly deadline is `deadline_ms` (set by the first part).
+  """
+  @spec add_part(String.t(), pos_integer(), String.t(), term(), pos_integer(), non_neg_integer()) ::
+          {:ok, pos_integer()} | {:duplicate, String.t()} | {:error, term()}
+  def add_part(key, n, id, part, ttl_s, deadline_ms) do
+    group = "rg:#{key}"
+
+    with {:ok, 1} <- run(["HSETNX", group, "p#{n}", :erlang.term_to_binary(part, [:compressed])]),
+         {:ok, _} <- run(["HSET", group, "i#{n}", id]),
+         {:ok, count} <- run(["HINCRBY", group, "count", 1]),
+         {:ok, _} <- run(["EXPIRE", group, ttl_s]),
+         {:ok, _} <- run(["ZADD", "rgt", "NX", deadline_ms, key]) do
+      {:ok, count}
+    else
+      {:ok, 0} -> duplicate_part(group, n)
+      {:error, _} = error -> error
+    end
+  end
+
+  defp duplicate_part(group, n) do
+    case run(["HGET", group, "i#{n}"]) do
+      {:ok, id} when is_binary(id) -> {:duplicate, id}
+      # The first copy is still being held this instant: the client tries again.
+      {:ok, nil} -> {:error, :part_being_held}
       error -> error
     end
   end
 
-  @doc """
-  The decision shared by the parts of a multipart message: stores `value` when the group has none yet and returns
-  it, else returns the one stored by the part that came first.
-  """
-  @spec group(String.t(), term(), pos_integer()) :: {:ok, term()} | {:error, term()}
-  def group(key, value, ttl_s) do
-    blob = :erlang.term_to_binary(value)
+  @doc "Gives back part `n` (its message could not be stored): a resend of it is held again."
+  @spec drop_part(String.t(), pos_integer()) :: :ok | {:error, term()}
+  def drop_part(key, n) do
+    group = "rg:#{key}"
 
-    case run(["SET", "g:#{key}", blob, "NX", "GET", "EX", ttl_s]) do
-      {:ok, nil} -> {:ok, value}
-      {:ok, existing} -> {:ok, :erlang.binary_to_term(existing, [:safe])}
+    with {:ok, _} <- run(["HDEL", group, "p#{n}"]),
+         {:ok, _} <- run(["HDEL", group, "i#{n}"]),
+         {:ok, _} <- run(["HINCRBY", group, "count", -1]) do
+      :ok
+    end
+  end
+
+  @doc "Claims a group to assemble or fail it: true for the one caller that gets it."
+  @spec claim_group(String.t()) :: boolean()
+  def claim_group(key), do: match?({:ok, 1}, run(["HSETNX", "rg:#{key}", "done", "1"]))
+
+  @doc "Gives a group's claim back (its message could not be stored)."
+  @spec unclaim_group(String.t()) :: :ok | {:error, term()}
+  def unclaim_group(key), do: ok(run(["HDEL", "rg:#{key}", "done"]))
+
+  @doc "The parts held in a group, by part number."
+  @spec group_parts(String.t()) :: {:ok, %{pos_integer() => term()}} | {:error, term()}
+  def group_parts(key) do
+    case run(["HGETALL", "rg:#{key}"]) do
+      {:ok, flat} ->
+        parts =
+          for [k, v] <- Enum.chunk_every(flat, 2),
+              String.starts_with?(k, "p"),
+              into: %{},
+              do:
+                {String.to_integer(binary_part(k, 1, byte_size(k) - 1)),
+                 :erlang.binary_to_term(v, [:safe])}
+
+        {:ok, parts}
+
+      error ->
+        error
+    end
+  end
+
+  @doc "Removes a group that was assembled or failed; a part that comes later starts a new group (S-3.7)."
+  @spec drop_group(String.t()) :: :ok | {:error, term()}
+  def drop_group(key) do
+    commands = [["DEL", "rg:#{key}"], ["ZREM", "rgt", key]]
+
+    case backend() do
+      :redis -> ok(Redis.transaction(commands, @timeout))
+      :local -> ok(local(commands))
+    end
+  end
+
+  @doc "Up to `limit` groups whose reassembly deadline passed by `now_ms` (D1)."
+  @spec due_groups(non_neg_integer(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
+  def due_groups(now_ms, limit),
+    do: run(["ZRANGEBYSCORE", "rgt", "-inf", now_ms, "LIMIT", 0, limit])
+
+  @doc "Takes a due group: true for the one server that gets to fail it."
+  @spec claim_group_timeout(String.t()) :: boolean()
+  def claim_group_timeout(key), do: match?({:ok, 1}, run(["ZREM", "rgt", key]))
+
+  @doc """
+  The duplicate filter (D6): records `id` under the message's fingerprint for `ttl_s`, or returns the id of the same
+  message seen within the window.
+  """
+  @spec claim_fingerprint(integer(), String.t(), String.t(), pos_integer()) ::
+          :new | {:duplicate, String.t()} | {:error, term()}
+  def claim_fingerprint(trunk_id, fingerprint, id, ttl_s) do
+    case run(["SET", "dup:#{trunk_id}:#{fingerprint}", id, "NX", "GET", "EX", ttl_s]) do
+      {:ok, nil} -> :new
+      {:ok, first} -> {:duplicate, first}
+      error -> error
+    end
+  end
+
+  @doc "Forgets a fingerprint (its message was refused, so a resend is a new message)."
+  @spec release_fingerprint(integer(), String.t()) :: :ok | {:error, term()}
+  def release_fingerprint(trunk_id, fingerprint),
+    do: ok(run(["DEL", "dup:#{trunk_id}:#{fingerprint}"]))
+
+  @doc "Marks a message sent to a vendor from customer trunk `trunk_id`, for `ttl_s` (S-5.16)."
+  @spec mark_in_flight(String.t(), integer(), pos_integer()) :: :ok | {:error, term()}
+  def mark_in_flight(fingerprint, trunk_id, ttl_s),
+    do: ok(run(["SET", "lp:#{fingerprint}", Integer.to_string(trunk_id), "EX", ttl_s]))
+
+  @doc "The customer trunk a message with this fingerprint is in flight from, if any."
+  @spec in_flight(String.t()) :: {:ok, integer() | nil} | {:error, term()}
+  def in_flight(fingerprint) do
+    case run(["GET", "lp:#{fingerprint}"]) do
+      {:ok, nil} -> {:ok, nil}
+      {:ok, trunk} -> {:ok, String.to_integer(trunk)}
+      error -> error
+    end
+  end
+
+  @doc "Claims sending message `id` again for attempt `no` (S-5.11): true for the one handler of the resend."
+  @spec claim_resend(String.t(), pos_integer()) :: boolean()
+  def claim_resend(id, no),
+    do: match?({:ok, "OK"}, run(["SET", "rs:#{id}:#{no}", "1", "NX", "EX", 86_400]))
+
+  @doc """
+  Marks a message queued for its vendor (S-2.15, D8): one key per customer message id, under the enterprise, so
+  `cancel_sm` and `query_sm` only see the asking customer's own messages. Set before the message goes on the bus.
+  """
+  @spec mark_queued(integer(), [String.t()], pos_integer()) :: :ok | {:error, term()}
+  def mark_queued(enterprise_id, ids, ttl_s) do
+    commands = Enum.map(ids, &["SET", "q:#{enterprise_id}:#{&1}", "q", "EX", ttl_s])
+
+    case backend() do
+      :redis -> ok(Redis.transaction(commands, @timeout))
+      :local -> ok(local(commands))
+    end
+  end
+
+  @doc """
+  Takes the queued marks of a message as the sender picks it up: `:cancelled` when the customer cancelled it (the
+  mark stays, for `query_sm`), else `:send`. A mark already gone (a redelivery, or Redis lost it) sends.
+  """
+  @spec take_queued(integer(), [String.t()], pos_integer()) :: :send | :cancelled
+  def take_queued(enterprise_id, ids, keep_s) do
+    taken = Enum.map(ids, &run(["GETDEL", "q:#{enterprise_id}:#{&1}"]))
+
+    if Enum.any?(taken, &(&1 == {:ok, "x"})) do
+      _ = Enum.map(ids, &run(["SET", "q:#{enterprise_id}:#{&1}", "x", "EX", keep_s]))
+      :cancelled
+    else
+      :send
+    end
+  end
+
+  @doc "Cancels a queued message (`cancel_sm`): `:ok`, or `:not_queued` when the sender already took it (0x11)."
+  @spec cancel_queued(integer(), String.t(), pos_integer()) ::
+          :ok | :not_queued | {:error, term()}
+  def cancel_queued(enterprise_id, id, keep_s) do
+    case run(["SET", "q:#{enterprise_id}:#{id}", "x", "XX", "GET", "EX", keep_s]) do
+      {:ok, old} when old in ["q", "x"] -> :ok
+      {:ok, _none} -> :not_queued
+      error -> error
+    end
+  end
+
+  @doc "A message's queued mark: `:queued`, `:cancelled` or `:none`."
+  @spec queued(integer(), String.t()) :: {:ok, :queued | :cancelled | :none} | {:error, term()}
+  def queued(enterprise_id, id) do
+    case run(["GET", "q:#{enterprise_id}:#{id}"]) do
+      {:ok, "q"} -> {:ok, :queued}
+      {:ok, "x"} -> {:ok, :cancelled}
+      {:ok, nil} -> {:ok, :none}
+      error -> error
+    end
+  end
+
+  @doc "Forgets the queued marks of a message that did not reach the bus."
+  @spec drop_queued(integer(), [String.t()]) :: :ok
+  def drop_queued(enterprise_id, ids) do
+    Enum.each(ids, &run(["DEL", "q:#{enterprise_id}:#{&1}"]))
+  end
+
+  @doc "Remembers the attempt of a part whose submit timed out, for `ttl_s` (D4)."
+  @spec put_possibly_sent(String.t(), term(), pos_integer()) :: :ok | {:error, term()}
+  def put_possibly_sent(ref, attempt, ttl_s),
+    do: ok(run(["SET", "pd:#{ref}", :erlang.term_to_binary(attempt, [:compressed]), "EX", ttl_s]))
+
+  @doc "Takes the attempt of a timed-out part (`ref` is `<message id>:<part>`)."
+  @spec take_possibly_sent(String.t()) :: {:ok, term()} | :none | {:error, term()}
+  def take_possibly_sent(ref) do
+    case run(["GETDEL", "pd:#{ref}"]) do
+      {:ok, nil} -> :none
+      {:ok, blob} -> {:ok, :erlang.binary_to_term(blob, [:safe])}
       error -> error
     end
   end
@@ -351,6 +555,26 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
+  defp exec(["HGET", key, field]), do: Map.get(get_hash(key), field)
+
+  defp exec(["HINCRBY", key, field, by]) do
+    hash = get_hash(key)
+    value = String.to_integer(Map.get(hash, field, "0")) + by
+    put(key, Map.put(hash, field, Integer.to_string(value)), expiry(key))
+    value
+  end
+
+  defp exec(["ZADD", key, "NX", score, member]) do
+    zset = lookup(key) || %{}
+
+    if Map.has_key?(zset, member) do
+      0
+    else
+      put(key, Map.put(zset, member, score), System.monotonic_time(:second) + @far)
+      1
+    end
+  end
+
   defp exec(["HEXISTS", key, field]), do: if(Map.has_key?(get_hash(key), field), do: 1, else: 0)
   defp exec(["HGETALL", key]), do: key |> get_hash() |> Enum.flat_map(fn {k, v} -> [k, v] end)
 
@@ -374,6 +598,13 @@ defmodule Sms.Switch.Pipeline.Store do
     case lookup(key) do
       nil -> put_then(key, value, ttl, "OK")
       _ -> nil
+    end
+  end
+
+  defp exec(["SET", key, value, "XX", "GET", "EX", ttl]) do
+    case lookup(key) do
+      nil -> nil
+      existing -> put_then(key, value, ttl, existing)
     end
   end
 
@@ -403,6 +634,15 @@ defmodule Sms.Switch.Pipeline.Store do
     zset = lookup(key) || %{}
     put(key, Map.delete(zset, member), System.monotonic_time(:second) + @far)
     if Map.has_key?(zset, member), do: 1, else: 0
+  end
+
+  defp exec(["ZRANGEBYSCORE", key, "-inf", max, "LIMIT", offset, count]) do
+    (lookup(key) || %{})
+    |> Enum.filter(fn {_m, score} -> score <= max end)
+    |> Enum.sort_by(fn {m, score} -> {score, m} end)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.drop(offset)
+    |> Enum.take(count)
   end
 
   defp exec(["ZCARD", key]), do: map_size(lookup(key) || %{})

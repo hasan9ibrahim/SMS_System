@@ -123,6 +123,9 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
       dlrSessionAffinity: "strict",
       dlrHoldHours: 72,
       loopDetection: true,
+      reassemblyTimeoutS: 120,
+      duplicateWindowS: 60,
+      allowEmptyMessages: false,
       defaultCoding: 0,
       rateTableIds: [],
       expressVendorTrunkId: null,
@@ -172,6 +175,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     allowedDstNpi: [1],
     maxMsgLen: null,
     supportMultipart: true,
+    multipartFormat: "udh8",
     dlrTimeoutS: 172800,
     dlrTimeoutStat: "UNKNOWN",
     bindAddrTon: 0,
@@ -480,6 +484,27 @@ export function CustomerTrunkFields({
           <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
           <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
           <CheckField form={form} path="loopDetection" label="Loop detection" />
+          <NumberField
+            form={form}
+            path="reassemblyTimeoutS"
+            label="Multipart wait"
+            min={10}
+            max={600}
+            step={10}
+            suffix="s"
+            hint="How long the parts of a long message wait for the rest"
+          />
+          <NumberField
+            form={form}
+            path="duplicateWindowS"
+            label="Duplicate filter"
+            min={0}
+            max={3600}
+            step={10}
+            suffix="s"
+            hint="The same message again within this time is not sent twice. 0 = off"
+          />
+          <CheckField form={form} path="allowEmptyMessages" label="Allow empty messages" />
           <SelectField
             form={form}
             path="defaultCoding"
@@ -734,6 +759,18 @@ export function VendorTrunkFields({
             hint="Empty = any length"
           />
           <CheckField form={form} path="supportMultipart" label="Supports multipart" />
+          <SelectField
+            form={form}
+            path="multipartFormat"
+            label="Multipart format"
+            required
+            options={[
+              { value: "udh8", label: "UDH, 8-bit reference" },
+              { value: "udh16", label: "UDH, 16-bit reference" },
+              { value: "sar", label: "SAR parameters" },
+              { value: "payload", label: "Whole text in message_payload" },
+            ]}
+          />
           <NumberField form={form} path="dlrTimeoutS" label="Receipt timeout" min={0} step={60} suffix="s" />
           <SelectField
             form={form}

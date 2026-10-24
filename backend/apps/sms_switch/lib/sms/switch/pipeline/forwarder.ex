@@ -36,12 +36,30 @@ defmodule Sms.Switch.Pipeline.Forwarder do
   What the pipeline keeps of a message for its receipts (stored with the message when it is sent, `Store`): the
   customer leg's ids, addresses and receipt request, and the trunk fields the EDR receipt rows need.
   """
-  @spec core(map()) :: map()
+  @spec core(map()) :: %{
+          id: String.t(),
+          ids: [String.t()],
+          received_at: integer(),
+          origin: map(),
+          trunk: map(),
+          source: String.t(),
+          source_ton: non_neg_integer(),
+          source_npi: non_neg_integer(),
+          destination: String.t(),
+          destination_ton: non_neg_integer(),
+          destination_npi: non_neg_integer(),
+          registered_delivery: non_neg_integer(),
+          text: String.t() | nil,
+          parts: pos_integer(),
+          vendor_trunk_id: integer() | nil
+        }
   def core(msg) do
     f = msg.fields
 
     %{
       id: msg.id,
+      # A message put together from the customer's parts: each part's message id gets the receipt (S-4.2).
+      ids: Map.get(msg, :ids, [msg.id]),
       received_at: msg.received_at,
       origin: msg.origin,
       trunk: Map.take(msg.trunk, [:id, :enterprise_id, :dlr_session_affinity, :dlr_hold_hours]),
@@ -79,9 +97,23 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     end
   end
 
-  @doc "Queues the customer's receipt for message `data` (once per final status; intermediates each)."
+  @doc """
+  Queues the customer's receipt for message `data` (once per final status; intermediates each), one per customer
+  message id when the message was put together from the customer's parts (S-4.2).
+  """
   @spec publish(map(), map()) :: :ok | {:error, term()}
   def publish(data, receipt) do
+    data
+    |> Map.get(:ids, [data.id])
+    |> Enum.reduce_while(:ok, fn id, :ok ->
+      case publish_one(%{data | id: id} |> Map.put(:ids, [id]), receipt) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp publish_one(data, receipt) do
     key = if receipt[:intermediate], do: "#{receipt.status}:#{receipt.received_at}", else: "final"
     blob = Base.encode64(:erlang.term_to_binary(%{data: data, receipt: receipt}, [:compressed]))
 

@@ -451,3 +451,13 @@ BEGIN
     COMMENT ON COLUMN customer_trunks.port IS 'SMPP port the customer binds on: 2775 for ssl_type none, 2776 for TLS (generated)';
   END IF;
 END $$;
+
+-- Switch settings for backend step 5 (migration 071): reassembly timeout, duplicate filter window, empty messages on
+-- customer trunks; multipart format on vendor trunks.
+ALTER TABLE customer_trunks
+  ADD COLUMN IF NOT EXISTS reassembly_timeout_s integer NOT NULL DEFAULT 120 CHECK (reassembly_timeout_s BETWEEN 10 AND 600),
+  ADD COLUMN IF NOT EXISTS duplicate_window_s integer NOT NULL DEFAULT 60 CHECK (duplicate_window_s BETWEEN 0 AND 3600),
+  ADD COLUMN IF NOT EXISTS allow_empty_messages boolean NOT NULL DEFAULT false;
+ALTER TABLE vendor_trunks
+  ADD COLUMN IF NOT EXISTS multipart_format text NOT NULL DEFAULT 'udh8'
+    CHECK (multipart_format IN ('udh8', 'udh16', 'sar', 'payload'));

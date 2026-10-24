@@ -59,7 +59,7 @@ defmodule Sms.Switch.Pipeline.Edr do
       "command_status" => attempt.command_status,
       "msg_count" => attempt[:msg_count] || msg.parts,
       "is_buffered" => flag(msg[:buffered]),
-      "measured_tps" => 0,
+      "measured_tps" => get_in(msg, [Access.key(:route), :measured_tps]) || 0,
       "revenue_checked" => decimal(msg.sell && msg.sell.platform)
     }
     |> Map.merge(customer_leg(msg))
@@ -92,6 +92,8 @@ defmodule Sms.Switch.Pipeline.Edr do
       "c_bind_type" => bind(msg.origin.bind),
       "c_protocol" => "SMPP",
       "c_message_id" => msg.id,
+      # Every customer message id of a message put together from its parts (S-3.2), the first one above.
+      "c_message_ids" => Map.get(msg, :ids, [msg.id]),
       "c_coding" => msg.data_coding,
       "c_translation_rule_ids" => msg.ingress[:fired] || [],
       "udh" => hex(msg.udh)
@@ -170,12 +172,16 @@ defmodule Sms.Switch.Pipeline.Edr do
       "v_trunk_id" => vendor.vendor_trunk_id,
       "v_am_user_id" => vt[:account_manager_id] || 0,
       "v_message_id" => attempt[:vendor_message_id] || "",
-      "v_mccmnc" => (msg.destination && msg.destination.mccmnc) || "",
+      "v_message_keys" => attempt[:vendor_message_keys] || [],
+      "v_mccmnc" => mccmnc(msg.destination),
       "v_billing_type" => to_string(vt[:billing_type] || ""),
       "v_translation_rule_ids" => egress[:fired] || []
     })
     |> Map.merge(route(vendor))
   end
+
+  defp mccmnc(nil), do: ""
+  defp mccmnc(destination), do: destination.mccmnc || ""
 
   defp vendor_rate(_msg, cost) when cost in [nil, false], do: %{}
 

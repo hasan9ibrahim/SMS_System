@@ -10961,6 +10961,12 @@ export type components = {
       tps?: number;
       overflowBuffer?: number;
       loopDetection?: boolean;
+      /** @description How long the parts of a multipart message wait for the rest (SMPP scenarios S-3.2); a group still incomplete then is refused (D1). Default 120. */
+      reassemblyTimeoutS?: number;
+      /** @description Duplicate filter (D6): the same message (source, destination, text) again within this many seconds gets the first message's id and is not sent again. 0 = off. Default 60. */
+      duplicateWindowS?: number;
+      /** @description Accept messages with no text (D10). Default false (refused with 0x01). */
+      allowEmptyMessages?: boolean;
       /** @enum {integer} */
       defaultCoding?: 0 | 3;
       /** @description Rate tables in order; the first with a line for the destination wins (§5.4). */
@@ -11088,6 +11094,11 @@ export type components = {
       maxMsgLen?: number | null;
       /** @description The vendor accepts long messages in several parts. Default true. */
       supportMultipart?: boolean;
+      /**
+       * @description How long messages are sent to this vendor (S-3.10): UDH with an 8-bit or 16-bit reference, SAR TLVs, or the whole text in message_payload. Default udh8.
+       * @enum {string}
+       */
+      multipartFormat?: "udh8" | "udh16" | "sar" | "payload";
       dlrTimeoutS?: number;
       /** @enum {string} */
       dlrTimeoutStat?: "DELIVRD" | "EXPIRED" | "UNDELIV" | "REJECTD" | "UNKNOWN";

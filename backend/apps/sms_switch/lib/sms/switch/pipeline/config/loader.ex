@@ -145,22 +145,24 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
        WHERE d.profile = 'All' AND d.deleted_at IS NULL AND m.deleted_at IS NULL
       """,
       customer_trunks: """
-      SELECT t.id, t.name, t.enterprise_id, e.business_company_id, trim(bc.base_currency), t.product_category_id,
-             t.billing_type, t.status = 'active' AND e.status = 'active', e.account_manager_id, t.default_coding,
-             t.dlr_session_affinity, t.dlr_hold_hours, t.delayed_submit, t.loop_detection,
+      SELECT t.id, t.name, t.enterprise_id, e.business_company_id, trim(bc.base_currency) AS base_currency,
+             t.product_category_id, t.billing_type, t.status = 'active' AND e.status = 'active' AS active,
+             e.account_manager_id, t.default_coding, t.dlr_session_affinity, t.dlr_hold_hours, t.delayed_submit,
+             t.loop_detection, t.reassembly_timeout_s, t.duplicate_window_s, t.allow_empty_messages,
              coalesce((SELECT array_agg(x.rate_table_id ORDER BY x.position, x.rate_table_id)
                          FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
-                        WHERE x.customer_trunk_id = t.id AND rt.deleted_at IS NULL), '{}')
+                        WHERE x.customer_trunk_id = t.id AND rt.deleted_at IS NULL), '{}') AS rate_table_ids
         FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
         JOIN business_companies bc ON bc.id = e.business_company_id
        WHERE t.deleted_at IS NULL AND e.deleted_at IS NULL
       """,
       vendor_trunks: """
       SELECT t.id, t.name, t.enterprise_id, t.product_category_id, t.billing_type,
-             t.status = 'active' AND e.status = 'active', e.account_manager_id, e.tier, t.dlr_timeout_s,
-             t.dlr_timeout_stat, t.reroute_on,
+             t.status = 'active' AND e.status = 'active' AS active, e.account_manager_id, e.tier, t.dlr_timeout_s,
+             t.dlr_timeout_stat, t.reroute_on, t.tps, t.max_connections, t.support_multipart, t.max_msg_len,
+             t.multipart_format,
              coalesce((SELECT array_agg(rt.id ORDER BY rt.id) FROM rate_tables rt
-                        WHERE rt.vendor_trunk_id = t.id AND rt.deleted_at IS NULL), '{}')
+                        WHERE rt.vendor_trunk_id = t.id AND rt.deleted_at IS NULL), '{}') AS rate_table_ids
         FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
        WHERE t.deleted_at IS NULL AND e.deleted_at IS NULL
       """,
@@ -274,70 +276,23 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
     %{prefixes: prefixes, mccmnc: by_id, longest: longest}
   end
 
-  defp customer_trunks({_keys, rows}) do
-    for [
-          id,
-          name,
-          ent,
-          bc,
-          base,
-          cat,
-          billing,
-          active,
-          am,
-          coding,
-          affinity,
-          hold,
-          delayed,
-          loop,
-          tables
-        ] <- rows,
-        into: %{} do
-      {id,
-       %{
-         id: id,
-         name: name,
-         enterprise_id: ent,
-         business_company_id: bc,
-         base_currency: base,
-         product_category_id: cat,
-         billing_type: billing,
-         active: active,
-         account_manager_id: am,
-         default_coding: coding,
-         dlr_session_affinity:
-           enum!(affinity, %{
-             "strict" => :strict,
-             "same_ip" => :same_ip,
-             "same_trunk" => :same_trunk
-           }),
-         dlr_hold_hours: hold,
-         delayed_submit: delayed,
-         loop_detection: loop,
-         rate_table_ids: tables
-       }}
+  @affinities %{"strict" => :strict, "same_ip" => :same_ip, "same_trunk" => :same_trunk}
+
+  defp customer_trunks(rows) do
+    for t <- maps(rows), into: %{} do
+      {t.id, %{t | dlr_session_affinity: enum!(t.dlr_session_affinity, @affinities)}}
     end
   end
 
-  defp vendor_trunks({_keys, rows}) do
-    for [id, name, ent, cat, billing, active, am, tier, dlr_timeout, dlr_stat, reroute_on, tables] <-
-          rows,
-        into: %{} do
-      {id,
-       %{
-         id: id,
-         name: name,
-         enterprise_id: ent,
-         product_category_id: cat,
-         billing_type: billing,
-         active: active,
-         account_manager_id: am,
-         tier: tier,
-         dlr_timeout_s: dlr_timeout,
-         dlr_timeout_stat: dlr_stat,
-         reroute_on: reroute_on,
-         rate_table_ids: tables
-       }}
+  @multipart_formats %{"udh8" => :udh8, "udh16" => :udh16, "sar" => :sar, "payload" => :payload}
+
+  # A vendor trunk's TPS is per connection: the trunk's limit is tps × max_connections (migration 034).
+  defp vendor_trunks(rows) do
+    for t <- maps(rows), into: %{} do
+      {t.id,
+       t
+       |> Map.put(:multipart_format, enum!(t.multipart_format, @multipart_formats))
+       |> Map.put(:tps_limit, t.tps * t.max_connections)}
     end
   end
 
@@ -443,7 +398,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       vendor_trunk_ids: r.vendor_trunk_ids || [],
       vendor_category_mode: enum!(r.vendor_category_mode, @modes),
       vendor_category_ids: r.vendor_category_ids || [],
-      lcr_profile: r.lcr_profile_id && Map.get(lcr, r.lcr_profile_id)
+      lcr_profile: r.lcr_profile_id && Map.get(lcr, r.lcr_profile_id),
+      skip_vendor_at_tps_pct: r.skip_vendor_at_tps_pct
     ]
   end
 
@@ -457,7 +413,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       value2: num(c["value2"]),
       tolerance_pct: num(c["tolerance_pct"]) || 5,
       scope: c["scope"],
-      window_s: c["window_s"]
+      window_s: c["window_s"],
+      hold_s: c["hold_s"],
+      release_pct: num(c["release_pct"])
     }
   end
 
