@@ -121,63 +121,70 @@ defmodule Sms.Switch.Pipeline.Config.Server do
   end
 
   defp load_snapshot(state) do
-    with {:ok, fp} <- state.loader.fingerprint() do
-      if fp == state.fingerprint do
-        {:ok, state}
-      else
-        case state.loader.load_snapshot(state.platform_currency) do
-          {:ok, snapshot} ->
-            Config.put_snapshot(snapshot)
-            Logger.info("pipeline configuration loaded")
-            {:ok, %{state | fingerprint: fp}}
+    case state.loader.fingerprint() do
+      {:ok, fp} ->
+        if fp == state.fingerprint, do: {:ok, state}, else: load_snapshot(state, fp)
 
-          {:error, reason} ->
-            {:error, reason, state}
-        end
-      end
-    else
-      {:error, reason} -> {:error, reason, state}
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  defp load_snapshot(state, fp) do
+    case state.loader.load_snapshot(state.platform_currency) do
+      {:ok, snapshot} ->
+        Config.put_snapshot(snapshot)
+        Logger.info("pipeline configuration loaded")
+        {:ok, %{state | fingerprint: fp}}
+
+      {:error, reason} ->
+        {:error, reason, state}
     end
   end
 
   defp load_rates(state) do
-    with {:ok, fps} <- state.loader.rate_fingerprints() do
-      changed = for {table, fp} <- fps, Map.get(state.rate_fingerprints, table) != fp, do: table
-      gone = Map.keys(state.rate_fingerprints) -- Map.keys(fps)
-
-      case load_tables(state.loader, changed) do
-        :ok ->
-          Enum.each(gone, &replace_table(&1, %{}))
-          if changed != [] or gone != [], do: Config.clear_options()
-          {:ok, %{state | rate_fingerprints: fps}}
-
-        {:error, reason, loaded} ->
-          # Keep the fingerprints of the tables that did load, so only the rest is read again.
-          fps = Map.merge(state.rate_fingerprints, Map.take(fps, loaded))
-          Config.clear_options()
-          {:error, reason, %{state | rate_fingerprints: fps}}
-      end
-    else
+    case state.loader.rate_fingerprints() do
+      {:ok, fps} -> load_rates(state, fps)
       {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  defp load_rates(state, fps) do
+    changed = for {table, fp} <- fps, Map.get(state.rate_fingerprints, table) != fp, do: table
+    gone = Map.keys(state.rate_fingerprints) -- Map.keys(fps)
+
+    case load_tables(state.loader, changed) do
+      :ok ->
+        Enum.each(gone, &replace_table(&1, %{}))
+        if changed != [] or gone != [], do: Config.clear_options()
+        {:ok, %{state | rate_fingerprints: fps}}
+
+      {:error, reason, loaded} ->
+        # Keep the fingerprints of the tables that did load, so only the rest is read again.
+        fps = Map.merge(state.rate_fingerprints, Map.take(fps, loaded))
+        Config.clear_options()
+        {:error, reason, %{state | rate_fingerprints: fps}}
     end
   end
 
   defp load_tables(loader, tables) do
     tables
     |> Enum.chunk_every(@rate_batch)
-    |> Enum.reduce_while({:ok, []}, fn batch, {:ok, done} ->
-      case loader.load_rates(batch) do
-        {:ok, by_table} ->
-          Enum.each(by_table, fn {table, by_code} -> replace_table(table, by_code) end)
-          {:cont, {:ok, batch ++ done}}
-
-        {:error, reason} ->
-          {:halt, {:error, reason, done}}
-      end
-    end)
+    |> Enum.reduce_while({:ok, []}, fn batch, {:ok, done} -> load_batch(loader, batch, done) end)
     |> case do
       {:ok, _} -> :ok
       error -> error
+    end
+  end
+
+  defp load_batch(loader, batch, done) do
+    case loader.load_rates(batch) do
+      {:ok, by_table} ->
+        Enum.each(by_table, fn {table, by_code} -> replace_table(table, by_code) end)
+        {:cont, {:ok, batch ++ done}}
+
+      {:error, reason} ->
+        {:halt, {:error, reason, done}}
     end
   end
 

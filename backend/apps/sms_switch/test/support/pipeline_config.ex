@@ -278,7 +278,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
     )
   end
 
-  @doc "A translation target row: rule `rule_id` on trunk `trunk_id` of `kind` (\"customer\" / \"vendor\")."
+  @doc ~s[A translation target row: rule `rule_id` on trunk `trunk_id` of `kind` ("customer" / "vendor").]
   def target(rule_id, kind, trunk_id),
     do: %{
       translation_rule_id: rule_id,

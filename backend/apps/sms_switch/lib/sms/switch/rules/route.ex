@@ -183,10 +183,12 @@ defmodule Sms.Switch.Rules.Route do
       "<" -> actual < value
       "<=" -> actual <= value
       "=" -> abs(actual - value) <= abs(value) * tolerance_pct / 100
-      "between" -> actual >= value and actual <= (value2 || value)
+      "between" -> between?(actual, value, value2 || value)
       _ -> false
     end
   end
+
+  defp between?(actual, low, high), do: actual >= low and actual <= high
 
   defp in_mode(:all, _hit), do: true
   defp in_mode(:inclusive, hit), do: hit
@@ -262,56 +264,51 @@ defmodule Sms.Switch.Rules.Route do
   end
 
   # The conditions a rule sets, in the mock's order.
-  defp conditions(r) do
-    [
-      r.category_mode != :all && :category,
-      r.customer_trunk_mode != :all && :trunk,
-      destination_set?(r) && :destination,
-      r.sender_pattern && :sender,
-      r.receiver_pattern && :receiver,
-      r.content_pattern && :content,
-      r.sender_list_id && :sender_list,
-      r.receiver_list_id && :receiver_list,
-      r.tps && :tps,
-      r.revenue && :revenue,
-      r.hlr_ported != nil && :hlr
+  defp conditions(c) do
+    set = [
+      category: c.category_mode != :all,
+      trunk: c.customer_trunk_mode != :all,
+      destination: destination_set?(c),
+      sender: c.sender_pattern,
+      receiver: c.receiver_pattern,
+      content: c.content_pattern,
+      sender_list: c.sender_list_id,
+      receiver_list: c.receiver_list_id,
+      tps: c.tps,
+      revenue: c.revenue,
+      hlr: c.hlr_ported != nil
     ]
-    |> Enum.filter(& &1)
+
+    for {condition, value} <- set, value, do: condition
   end
 
-  defp condition_ok?(:category, r, m),
-    do: in_mode(r.category_mode, m.category_id != nil and m.category_id in r.category_ids)
+  defp condition_ok?(:category, c, m),
+    do: in_mode(c.category_mode, m.category_id != nil and m.category_id in c.category_ids)
 
-  defp condition_ok?(:trunk, r, m),
+  defp condition_ok?(:trunk, c, m),
     do:
       in_mode(
-        r.customer_trunk_mode,
-        m.customer_trunk_id != nil and m.customer_trunk_id in r.customer_trunk_ids
+        c.customer_trunk_mode,
+        m.customer_trunk_id != nil and m.customer_trunk_id in c.customer_trunk_ids
       )
 
-  defp condition_ok?(:destination, r, m) do
-    cond do
-      is_nil(m.mccmnc) -> false
-      destination_list?(r) -> in_mode(r.mccmnc_mode, destination_hit?(r.mccmncs, m.mccmnc))
-      true -> Pattern.match?(r.compiled.mccmnc, m.mccmnc)
-    end
-  end
+  defp condition_ok?(:destination, c, m), do: destination_ok?(c, m.mccmnc)
 
-  defp condition_ok?(:sender, r, m),
-    do: Pattern.match?(r.compiled.sender, m.sender) != r.sender_pattern_negate
+  defp condition_ok?(:sender, c, m),
+    do: Pattern.match?(c.compiled.sender, m.sender) != c.sender_pattern_negate
 
-  defp condition_ok?(:receiver, r, m),
-    do: Pattern.match?(r.compiled.receiver, m.receiver) != r.receiver_pattern_negate
+  defp condition_ok?(:receiver, c, m),
+    do: Pattern.match?(c.compiled.receiver, m.receiver) != c.receiver_pattern_negate
 
-  defp condition_ok?(:content, r, m),
-    do: Pattern.match?(r.compiled.content, m.content) != r.content_pattern_negate
+  defp condition_ok?(:content, c, m),
+    do: Pattern.match?(c.compiled.content, m.content) != c.content_pattern_negate
 
   # Number lists match or, negated, must not match (R2, §6.3).
-  defp condition_ok?(:sender_list, r, m),
-    do: m.list_has?.(r.sender_list_id, m.sender, not sender_case(r)) != r.sender_list_negate
+  defp condition_ok?(:sender_list, c, m),
+    do: m.list_has?.(c.sender_list_id, m.sender, not sender_case(c)) != c.sender_list_negate
 
-  defp condition_ok?(:receiver_list, r, m),
-    do: m.list_has?.(r.receiver_list_id, m.receiver, false) != r.receiver_list_negate
+  defp condition_ok?(:receiver_list, c, m),
+    do: m.list_has?.(c.receiver_list_id, m.receiver, false) != c.receiver_list_negate
 
   defp condition_ok?(:tps, %{tps: t}, m),
     do: m[:tps] != nil and compare(t.op, m.tps, t.value, t[:value2], t[:tolerance_pct] || 5)
@@ -321,7 +318,7 @@ defmodule Sms.Switch.Rules.Route do
     actual != nil and compare(rev.op, actual, rev.value, rev[:value2])
   end
 
-  defp condition_ok?(:hlr, r, m), do: m[:hlr_ported] == r.hlr_ported
+  defp condition_ok?(:hlr, c, m), do: m[:hlr_ported] == c.hlr_ported
 
   @doc "Every condition check with its detail; `set` = the rule uses it, `gate` = status and time (always apply)."
   @spec condition_checks(Rule.t(), context()) :: [map()]
@@ -346,54 +343,54 @@ defmodule Sms.Switch.Rules.Route do
       )
     ]
 
-    gates ++ Enum.map(conditions(r), &detailed(&1, r, m))
+    gates ++ Enum.map(conditions(r.conditions), &detailed(&1, r.conditions, m))
   end
 
   defp check(condition, ok, detail, gate \\ false),
     do: %{condition: condition, set: true, ok: ok, detail: detail, gate: gate}
 
-  defp detailed(:category, r, m) do
-    hit = m.category_id != nil and m.category_id in r.category_ids
+  defp detailed(:category, c, m) do
+    hit = m.category_id != nil and m.category_id in c.category_ids
 
     check(
       "Category",
-      in_mode(r.category_mode, hit),
+      in_mode(c.category_mode, hit),
       if(is_nil(m.category_id),
         do: "no customer trunk given",
-        else: "#{r.category_mode} list #{if hit, do: "has", else: "lacks"} the trunk's category"
+        else: "#{c.category_mode} list #{if hit, do: "has", else: "lacks"} the trunk's category"
       )
     )
   end
 
-  defp detailed(:trunk, r, m) do
-    hit = m.customer_trunk_id != nil and m.customer_trunk_id in r.customer_trunk_ids
+  defp detailed(:trunk, c, m) do
+    hit = m.customer_trunk_id != nil and m.customer_trunk_id in c.customer_trunk_ids
 
     check(
       "Trunk",
-      in_mode(r.customer_trunk_mode, hit),
+      in_mode(c.customer_trunk_mode, hit),
       if(is_nil(m.customer_trunk_id),
         do: "no customer trunk given",
-        else: "#{r.customer_trunk_mode} list #{if hit, do: "has", else: "lacks"} the trunk"
+        else: "#{c.customer_trunk_mode} list #{if hit, do: "has", else: "lacks"} the trunk"
       )
     )
   end
 
-  defp detailed(:destination, r, m) do
+  defp detailed(:destination, c, m) do
     cond do
       is_nil(m.mccmnc) ->
         check("Destination", false, "destination unknown")
 
-      destination_list?(r) ->
-        hit = destination_hit?(r.mccmncs, m.mccmnc)
+      code_list?(c) ->
+        hit = destination_hit?(c.mccmncs, m.mccmnc)
 
         detail =
-          "destination #{m.mccmnc} #{if hit, do: "is", else: "isn't"} in the #{r.mccmnc_mode} list" <>
-            if(r.mccmnc_pattern, do: " (the list wins over the pattern)", else: "")
+          "destination #{m.mccmnc} #{if hit, do: "is", else: "isn't"} in the #{c.mccmnc_mode} list" <>
+            if(c.mccmnc_pattern, do: " (the list wins over the pattern)", else: "")
 
-        check("Destination", in_mode(r.mccmnc_mode, hit), detail)
+        check("Destination", in_mode(c.mccmnc_mode, hit), detail)
 
       true ->
-        ok = Pattern.match?(r.compiled.mccmnc, m.mccmnc)
+        ok = Pattern.match?(c.compiled.mccmnc, m.mccmnc)
 
         check(
           "Destination",
@@ -403,56 +400,56 @@ defmodule Sms.Switch.Rules.Route do
     end
   end
 
-  defp detailed(:sender, r, m) do
-    note = if sender_case(r), do: "", else: " (any case)"
+  defp detailed(:sender, c, m) do
+    note = if sender_case(c), do: "", else: " (any case)"
 
     pattern_check(
       "Sender",
-      r.sender_pattern,
-      r.compiled.sender,
-      r.sender_pattern_negate,
+      c.sender_pattern,
+      c.compiled.sender,
+      c.sender_pattern_negate,
       m.sender,
       note
     )
   end
 
-  defp detailed(:receiver, r, m),
+  defp detailed(:receiver, c, m),
     do:
       pattern_check(
         "Receiver",
-        r.receiver_pattern,
-        r.compiled.receiver,
-        r.receiver_pattern_negate,
+        c.receiver_pattern,
+        c.compiled.receiver,
+        c.receiver_pattern_negate,
         m.receiver,
         ""
       )
 
-  defp detailed(:content, r, m),
+  defp detailed(:content, c, m),
     do:
       pattern_check(
         "Content",
-        r.content_pattern,
-        r.compiled.content,
-        r.content_pattern_negate,
+        c.content_pattern,
+        c.compiled.content,
+        c.content_pattern_negate,
         m.content,
         ""
       )
 
-  defp detailed(:sender_list, r, m) do
-    hit = m.list_has?.(r.sender_list_id, m.sender, not sender_case(r))
-    neg = r.sender_list_negate
+  defp detailed(:sender_list, c, m) do
+    hit = m.list_has?.(c.sender_list_id, m.sender, not sender_case(c))
+    neg = c.sender_list_negate
 
     check(
       "Sender list",
       hit != neg,
       "#{if hit, do: "sender is in the list", else: "sender isn't in the list"}#{if neg, do: " (must not be)", else: ""}" <>
-        if(sender_case(r), do: "", else: " (any case)")
+        if(sender_case(c), do: "", else: " (any case)")
     )
   end
 
-  defp detailed(:receiver_list, r, m) do
-    hit = m.list_has?.(r.receiver_list_id, m.receiver, false)
-    neg = r.receiver_list_negate
+  defp detailed(:receiver_list, c, m) do
+    hit = m.list_has?.(c.receiver_list_id, m.receiver, false)
+    neg = c.receiver_list_negate
 
     check(
       "Receiver list",
@@ -461,8 +458,8 @@ defmodule Sms.Switch.Rules.Route do
     )
   end
 
-  defp detailed(:tps, %{tps: t} = r, m) do
-    ok = condition_ok?(:tps, r, m)
+  defp detailed(:tps, %{tps: t} = c, m) do
+    ok = condition_ok?(:tps, c, m)
 
     detail =
       if m[:tps] == nil,
@@ -474,7 +471,7 @@ defmodule Sms.Switch.Rules.Route do
     check("TPS", ok, detail)
   end
 
-  defp detailed(:revenue, %{revenue: rev} = r, m) do
+  defp detailed(:revenue, %{revenue: rev} = c, m) do
     actual = if rev.type == :per_message, do: m[:sell_rate], else: m[:accumulated_revenue]
 
     detail =
@@ -492,10 +489,10 @@ defmodule Sms.Switch.Rules.Route do
           "accumulated #{rev[:period] || ""} #{Lcr.num(actual)} #{rev.op} #{Lcr.num(rev.value)}"
       end
 
-    check("Revenue", condition_ok?(:revenue, r, m), detail)
+    check("Revenue", condition_ok?(:revenue, c, m), detail)
   end
 
-  defp detailed(:hlr, r, m) do
+  defp detailed(:hlr, c, m) do
     detail =
       case m[:hlr_ported] do
         nil -> "no HLR result"
@@ -503,7 +500,7 @@ defmodule Sms.Switch.Rules.Route do
         false -> "number is not ported"
       end
 
-    check("HLR ported", condition_ok?(:hlr, r, m), detail)
+    check("HLR ported", condition_ok?(:hlr, c, m), detail)
   end
 
   defp pattern_check(name, pattern, re, negate, value, note) do
@@ -557,10 +554,7 @@ defmodule Sms.Switch.Rules.Route do
     xs
     |> Enum.map(&{&1, qbr_score(&1, cheapest, weights)})
     |> Enum.sort(fn {a, sa}, {b, sb} ->
-      cond do
-        sa != sb -> sa > sb
-        true -> cost_or_inf(a) <= cost_or_inf(b)
-      end
+      if sa != sb, do: sa > sb, else: cost_or_inf(a) <= cost_or_inf(b)
     end)
     |> Enum.map(&elem(&1, 0))
   end
@@ -688,27 +682,14 @@ defmodule Sms.Switch.Rules.Route do
   end
 
   # 3. Least cost and quality: every vendor in scope with a rate for the destination.
-  defp pool(%{rule: rule, m: m, options: options} = ctx, base) do
+  defp pool(%{rule: rule, options: options} = ctx, base) do
     listed = MapSet.new(rule.vendors, & &1.vendor_trunk_id)
-
-    in_scope = fn o ->
-      trunk_ok =
-        if MapSet.size(listed) > 0,
-          do: o.vendor_trunk_id in listed,
-          else: in_mode(rule.vendor_trunk_mode, o.vendor_trunk_id in rule.vendor_trunk_ids)
-
-      trunk_ok and
-        in_mode(
-          rule.vendor_category_mode,
-          o[:category_id] != nil and o.category_id in rule.vendor_category_ids
-        )
-    end
 
     pool =
       options
       |> Map.values()
       |> Enum.sort_by(& &1.vendor_trunk_id)
-      |> Enum.filter(&(&1.cost != nil and in_scope.(&1)))
+      |> Enum.filter(&(&1.cost != nil and in_scope?(rule, listed, &1)))
 
     pool =
       if rule.route_type == :qbr,
@@ -716,23 +697,9 @@ defmodule Sms.Switch.Rules.Route do
         else: Enum.sort(pool, &(&1.cost <= &2.cost))
 
     candidates =
-      if rule.route_type == :dynamic and rule.lcr_profile do
-        # An LCR profile filters, orders and splits the vendors (§13.23).
-        pool
-        |> Enum.map(&lcr_candidate/1)
-        |> Lcr.rank(rule.lcr_profile)
-        |> Enum.filter(& &1.pick)
-        |> Lcr.split_pick(bucket(m.receiver))
-        |> Enum.with_index(1)
-        |> Enum.map(fn {r, i} ->
-          candidate(ctx, r.c.vendor_trunk_id, i, if(r.share != nil, do: "#{Lcr.num(r.share)}%"))
-        end)
-      else
-        pool
-        |> Enum.take(10)
-        |> Enum.with_index(1)
-        |> Enum.map(fn {o, i} -> candidate(ctx, o.vendor_trunk_id, i, nil) end)
-      end
+      if rule.route_type == :dynamic and rule.lcr_profile,
+        do: lcr_candidates(ctx, pool),
+        else: pool_candidates(ctx, pool)
 
     candidates =
       Enum.map(candidates, fn c ->
@@ -747,6 +714,40 @@ defmodule Sms.Switch.Rules.Route do
         decided_by = if rule.route_type == :qbr, do: :qbr, else: :lcr
         %{base | outcome: :route, vendor: vendor(pick, decided_by), candidates: candidates}
     end
+  end
+
+  defp in_scope?(rule, listed, o) do
+    trunk_ok =
+      if MapSet.size(listed) > 0,
+        do: o.vendor_trunk_id in listed,
+        else: in_mode(rule.vendor_trunk_mode, o.vendor_trunk_id in rule.vendor_trunk_ids)
+
+    trunk_ok and
+      in_mode(
+        rule.vendor_category_mode,
+        o[:category_id] != nil and o.category_id in rule.vendor_category_ids
+      )
+  end
+
+  # An LCR profile filters, orders and splits the vendors (§13.23).
+  defp lcr_candidates(%{rule: rule, m: m} = ctx, pool) do
+    pool
+    |> Enum.map(&lcr_candidate/1)
+    |> Lcr.rank(rule.lcr_profile)
+    |> Enum.filter(& &1.pick)
+    |> Lcr.split_pick(bucket(m.receiver))
+    |> Enum.with_index(1)
+    |> Enum.map(fn {r, i} -> candidate(ctx, r.c.vendor_trunk_id, i, share_note(r.share)) end)
+  end
+
+  defp share_note(nil), do: nil
+  defp share_note(share), do: "#{Lcr.num(share)}%"
+
+  defp pool_candidates(ctx, pool) do
+    pool
+    |> Enum.take(10)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {o, i} -> candidate(ctx, o.vendor_trunk_id, i, nil) end)
   end
 
   defp lcr_candidate(o) do
@@ -794,61 +795,65 @@ defmodule Sms.Switch.Rules.Route do
     end
   end
 
-  defp try_level(%{rule: rule, m: m, options: options} = ctx, level, acc) do
+  defp try_level(%{rule: rule} = ctx, level, acc) do
     at = Enum.filter(rule.vendors, &(&1.level == level and not &1.is_backup))
-
-    {ordered, decided_by} =
-      cond do
-        rule.route_type == :qbr ->
-          none = %{asr: nil, dlr: nil, delay_s: nil, cost: nil}
-
-          ordered =
-            at
-            |> Enum.map(fn v ->
-              {v,
-               Map.merge(
-                 none,
-                 Map.take(Map.get(options, v.vendor_trunk_id, %{}), [:asr, :dlr, :delay_s, :cost])
-               )}
-            end)
-            |> Enum.map(fn {v, q} -> Map.put(q, :__vendor, v) end)
-            |> by_qbr(rule.qbr_weights)
-            |> Enum.map(& &1.__vendor)
-
-          {ordered, :qbr}
-
-        rule.hunt_policy == :percentage ->
-          # Each customer trunk's own traffic follows the shares unless switched off (team trial round 1).
-          key =
-            if rule.percentage_per_customer_trunk != false,
-              do: "#{m.customer_trunk_id || 0}:#{m.receiver}",
-              else: m.receiver
-
-          {first_over(at, & &1[:share_pct], bucket(key)), :percentage}
-
-        rule.hunt_policy == :round_robin ->
-          start = if at == [], do: 0, else: rem(bucket(m.receiver), length(at))
-          {Enum.drop(at, start) ++ Enum.take(at, start), :round_robin}
-
-        true ->
-          {at, :top_down}
-      end
+    {ordered, decided_by} = level_order(ctx, at)
 
     Enum.reduce_while(ordered, {:none, acc}, fn v, {:none, acc} ->
-      share = if v[:share_pct] != nil, do: "#{Lcr.num(v.share_pct)}%"
-      c = candidate(ctx, v.vendor_trunk_id, level, share)
-
-      if usable?(c, ctx) do
-        {:halt, {:route, c, decided_by, [c | acc]}}
-      else
-        c = %{c | note: skip_why(c, ctx)}
-
-        case try_backups(ctx, v, c, level, [c | acc]) do
-          {:route, bc, acc} -> {:halt, {:route, bc, decided_by, acc}}
-          {:none, acc} -> {:cont, {:none, acc}}
-        end
-      end
+      try_vendor(ctx, v, level, decided_by, acc)
     end)
+  end
+
+  # The vendors of a level in the order they are tried, and what decided it.
+  defp level_order(%{rule: %{route_type: :qbr} = rule, options: options}, at) do
+    none = %{asr: nil, dlr: nil, delay_s: nil, cost: nil}
+
+    ordered =
+      at
+      |> Enum.map(fn v ->
+        {v,
+         Map.merge(
+           none,
+           Map.take(Map.get(options, v.vendor_trunk_id, %{}), [:asr, :dlr, :delay_s, :cost])
+         )}
+      end)
+      |> Enum.map(fn {v, q} -> Map.put(q, :__vendor, v) end)
+      |> by_qbr(rule.qbr_weights)
+      |> Enum.map(& &1.__vendor)
+
+    {ordered, :qbr}
+  end
+
+  defp level_order(%{rule: %{hunt_policy: :percentage} = rule, m: m}, at) do
+    # Each customer trunk's own traffic follows the shares unless switched off (team trial round 1).
+    key =
+      if rule.percentage_per_customer_trunk == false,
+        do: m.receiver,
+        else: "#{m.customer_trunk_id || 0}:#{m.receiver}"
+
+    {first_over(at, & &1[:share_pct], bucket(key)), :percentage}
+  end
+
+  defp level_order(%{rule: %{hunt_policy: :round_robin}, m: m}, at) do
+    start = if at == [], do: 0, else: rem(bucket(m.receiver), length(at))
+    {Enum.drop(at, start) ++ Enum.take(at, start), :round_robin}
+  end
+
+  defp level_order(_ctx, at), do: {at, :top_down}
+
+  defp try_vendor(ctx, v, level, decided_by, acc) do
+    c = candidate(ctx, v.vendor_trunk_id, level, share_note(v[:share_pct]))
+
+    if usable?(c, ctx) do
+      {:halt, {:route, c, decided_by, [c | acc]}}
+    else
+      c = %{c | note: skip_why(c, ctx)}
+
+      case try_backups(ctx, v, c, level, [c | acc]) do
+        {:route, bc, acc} -> {:halt, {:route, bc, decided_by, acc}}
+        {:none, acc} -> {:cont, {:none, acc}}
+      end
+    end
   end
 
   # Backups of one vendor stand in for it first (team trial round 1).
@@ -856,29 +861,33 @@ defmodule Sms.Switch.Rules.Route do
     ctx
     |> backups_of(v.vendor_trunk_id)
     |> Enum.reduce_while({:none, acc}, fn bv, {:none, acc} ->
-      extra = if bv[:share_pct] not in [nil, 0], do: " (#{Lcr.num(bv.share_pct)}%)", else: ""
-      bc = candidate(ctx, bv.vendor_trunk_id, level, "backup for #{c.name}#{extra}")
-
-      if usable?(bc, ctx),
-        do: {:halt, {:route, bc, [bc | acc]}},
-        else: {:cont, {:none, [%{bc | note: "#{bc.note}; #{skip_why(bc, ctx)}"} | acc]}}
+      try_backup(ctx, bv, c, level, acc)
     end)
+  end
+
+  defp try_backup(ctx, bv, c, level, acc) do
+    extra = if bv[:share_pct] in [nil, 0], do: "", else: " (#{Lcr.num(bv.share_pct)}%)"
+    bc = candidate(ctx, bv.vendor_trunk_id, level, "backup for #{c.name}#{extra}")
+
+    if usable?(bc, ctx),
+      do: {:halt, {:route, bc, [bc | acc]}},
+      else: {:cont, {:none, [%{bc | note: "#{bc.note}; #{skip_why(bc, ctx)}"} | acc]}}
   end
 
   defp backups_of(%{rule: rule, m: m}, id) do
     bs = Enum.filter(rule.vendors, &(&1.is_backup and &1[:backup_for_vendor_trunk_id] == id))
 
-    if length(bs) < 2 do
-      bs
-    else
-      # Split the vendor's traffic between its backups by their share %.
-      b = bucket("#{m.receiver}:b")
-      total = bs |> Enum.map(&(&1[:share_pct] || 0)) |> Enum.sum()
-      total = if total == 0, do: length(bs), else: total
-      equal = total == length(bs)
-      weight = fn v -> (v[:share_pct] || if(equal, do: 1, else: 0)) * 100 / total end
-      first_over(bs, weight, b)
-    end
+    if length(bs) < 2, do: bs, else: split_backups(bs, m)
+  end
+
+  # Split the vendor's traffic between its backups by their share %.
+  defp split_backups(bs, m) do
+    b = bucket("#{m.receiver}:b")
+    total = bs |> Enum.map(&(&1[:share_pct] || 0)) |> Enum.sum()
+    total = if total == 0, do: length(bs), else: total
+    equal = total == length(bs)
+    weight = fn v -> (v[:share_pct] || if(equal, do: 1, else: 0)) * 100 / total end
+    first_over(bs, weight, b)
   end
 
   # The first entry whose running total passes the bucket goes first; else the first entry.
@@ -923,27 +932,29 @@ defmodule Sms.Switch.Rules.Route do
   def route_through(rules, m, options, keep \\ 100) do
     result =
       Enum.reduce_while(rules, [], fn rule, tried ->
-        if keep == 0 and not quick_match?(rule, m) do
-          {:cont, tried}
-        else
-          d = decide(rule, m, options)
-
-          tried =
-            if keep > 0 and (d.matched or length(tried) < keep),
-              do: [tried_entry(rule, d) | tried],
-              else: tried
-
-          cond do
-            not d.matched -> {:cont, tried}
-            d.outcome == :no_vendor and rule.continue_routing == :yes -> {:cont, tried}
-            true -> {:halt, {:decided, tried, d}}
-          end
-        end
+        if keep == 0 and not quick_match?(rule, m),
+          do: {:cont, tried},
+          else: route_step(rule, m, options, keep, tried)
       end)
 
     case result do
       {:decided, tried, d} -> %{tried: tried |> Enum.reverse() |> Enum.take(-keep), decision: d}
       tried -> %{tried: tried |> Enum.reverse() |> Enum.take(-keep), decision: nil}
+    end
+  end
+
+  defp route_step(rule, m, options, keep, tried) do
+    d = decide(rule, m, options)
+
+    tried =
+      if keep > 0 and (d.matched or length(tried) < keep),
+        do: [tried_entry(rule, d) | tried],
+        else: tried
+
+    cond do
+      not d.matched -> {:cont, tried}
+      d.outcome == :no_vendor and rule.continue_routing == :yes -> {:cont, tried}
+      true -> {:halt, {:decided, tried, d}}
     end
   end
 
@@ -990,12 +1001,9 @@ defmodule Sms.Switch.Rules.Route do
       rules
       |> Enum.with_index()
       |> Enum.reduce({[], %{}}, fn {r, i}, {general, by_code} ->
-        if r.match_mode == :all and r.mccmnc_mode == :inclusive and destination_list?(r) do
-          {general,
-           Enum.reduce(r.mccmncs, by_code, fn c, acc -> Map.update(acc, c, [i], &[i | &1]) end)}
-        else
-          {[i | general], by_code}
-        end
+        if by_code?(r),
+          do: {general, add_codes(by_code, r.conditions.mccmncs, i)},
+          else: {[i | general], by_code}
       end)
 
     %{
@@ -1004,6 +1012,12 @@ defmodule Sms.Switch.Rules.Route do
       by_code: Map.new(by_code, fn {c, is} -> {c, Enum.reverse(is)} end)
     }
   end
+
+  defp by_code?(r),
+    do: r.match_mode == :all and r.conditions.mccmnc_mode == :inclusive and destination_list?(r)
+
+  defp add_codes(by_code, codes, i),
+    do: Enum.reduce(codes, by_code, fn c, acc -> Map.update(acc, c, [i], &[i | &1]) end)
 
   @doc """
   The rules that can still match a message to this destination at `now`, in order: on, live, and (for "all must
@@ -1016,14 +1030,8 @@ defmodule Sms.Switch.Rules.Route do
     |> Enum.dedup()
     |> Enum.map(&elem(rules, &1))
     |> Enum.filter(fn r ->
-      cond do
-        r.status != :active -> false
-        not live?(r, now) -> false
-        r.match_mode != :all or not destination_set?(r) -> true
-        is_nil(mccmnc) -> false
-        destination_list?(r) -> in_mode(r.mccmnc_mode, destination_hit?(r.mccmncs, mccmnc))
-        true -> Pattern.match?(r.compiled.mccmnc, mccmnc)
-      end
+      r.status == :active and live?(r, now) and
+        (r.match_mode != :all or destination_ok?(r.conditions, mccmnc))
     end)
   end
 end

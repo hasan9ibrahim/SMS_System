@@ -33,7 +33,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Message.{Concat, Text}
   alias Sms.Switch.Pipeline.{Config, Credit, Edr, MessageId, Router, Store}
   alias Sms.Switch.Rules.Translation
-  alias Sms.Switch.Smpp.Pdu
+  alias Sms.Switch.Smpp.{Pdu, Status}
   alias Sms.Switch.Throttle
 
   @group_ttl_s 600
@@ -124,26 +124,26 @@ defmodule Sms.Switch.Pipeline.Intake do
     key = "#{msg.trunk.id}:#{f[:source_addr]}:#{f[:destination_addr]}:#{c.ref}:#{c.total}"
 
     case Store.get_group(key) do
-      {:ok, shared} ->
-        {:ok, share(msg, shared)}
+      {:ok, shared} -> {:ok, share(msg, shared)}
+      :none -> decide_first(msg, key)
+      {:error, reason} -> {:reject, :esme_rsyserr, {:store, reason}, msg}
+    end
+  end
 
-      :none ->
-        case decide(%{msg | concat: nil}) do
-          {:ok, decided} ->
-            msg = %{decided | concat: c}
-            decision = Map.take(msg, [:ingress, :destination, :sell, :route])
+  # The first part to arrive decides and stores the decision for the others.
+  defp decide_first(%{concat: c} = msg, key) do
+    case decide(%{msg | concat: nil}) do
+      {:ok, decided} ->
+        msg = %{decided | concat: c}
+        decision = Map.take(msg, [:ingress, :destination, :sell, :route])
 
-            case Store.group(key, decision, @group_ttl_s) do
-              {:ok, shared} -> {:ok, share(msg, shared)}
-              {:error, reason} -> {:reject, :esme_rsyserr, {:store, reason}, msg}
-            end
-
-          {:reject, status, reason, refused} ->
-            {:reject, status, reason, %{refused | concat: c}}
+        case Store.group(key, decision, @group_ttl_s) do
+          {:ok, shared} -> {:ok, share(msg, shared)}
+          {:error, reason} -> {:reject, :esme_rsyserr, {:store, reason}, msg}
         end
 
-      {:error, reason} ->
-        {:reject, :esme_rsyserr, {:store, reason}, msg}
+      {:reject, status, reason, refused} ->
+        {:reject, status, reason, %{refused | concat: c}}
     end
   end
 
@@ -164,24 +164,23 @@ defmodule Sms.Switch.Pipeline.Intake do
         nil -> nil
       end
 
-    cond do
-      short != "" and payload != nil ->
-        {:reject, :esme_rinvoptparamval, :short_message_and_payload, msg}
+    if short != "" and payload != nil,
+      do: {:reject, :esme_rinvoptparamval, :short_message_and_payload, msg},
+      else: parse_body(msg, pdu, payload || short, payload != nil)
+  end
 
-      true ->
-        raw = payload || short
-        alphabet = Text.alphabet(msg.data_coding, msg.trunk.default_coding)
+  defp parse_body(msg, pdu, raw, payload) do
+    alphabet = Text.alphabet(msg.data_coding, msg.trunk.default_coding)
 
-        case Concat.parse(raw, Map.get(msg.fields, :esm_class, 0), pdu.tlvs) do
-          {:ok, udh, data, concat} ->
-            decoded(msg, raw, udh, data, concat, alphabet, payload != nil)
+    case Concat.parse(raw, Map.get(msg.fields, :esm_class, 0), pdu.tlvs) do
+      {:ok, udh, data, concat} ->
+        decoded(msg, raw, udh, data, concat, alphabet, payload)
 
-          {:error, :incomplete_sar} ->
-            {:reject, :esme_rmissingoptparam, :incomplete_sar, msg}
+      {:error, :incomplete_sar} ->
+        {:reject, :esme_rmissingoptparam, :incomplete_sar, msg}
 
-          {:error, reason} ->
-            {:reject, :esme_rinvmsglen, reason, msg}
-        end
+      {:error, reason} ->
+        {:reject, :esme_rinvmsglen, reason, msg}
     end
   end
 
@@ -383,7 +382,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   end
 
   defp refuse(msg, status, reason) do
-    code = Sms.Switch.Smpp.Status.code(status)
+    code = Status.code(status)
     Logger.info("message refused (#{inspect(reason)}): 0x#{Integer.to_string(code, 16)}")
 
     row =

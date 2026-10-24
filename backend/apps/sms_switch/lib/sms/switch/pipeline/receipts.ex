@@ -96,21 +96,22 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
   defp apply_to(message_id, part, receipt, rec) do
     if Receipt.final?(receipt.status) do
-      with {:ok, first} <-
-             Store.put_final(
-               message_id,
-               part,
-               Map.take(receipt, [:status, :error, :network_error, :done_at, :received_at])
-             ) do
-        vendor_row(rec.data, part, receipt, not first)
-        if first, do: maybe_forward(message_id), else: :ok
-      end
+      apply_final(message_id, part, receipt, rec)
     else
       vendor_row(rec.data, part, receipt, false)
       # Intermediate statuses only when the customer asked for them (registered_delivery bit 4).
       if Forwarder.wants_intermediate?(rec.data) and rec.data.parts == 1,
         do: Forwarder.publish(rec.data, Map.put(receipt, :intermediate, true)),
         else: :ok
+    end
+  end
+
+  defp apply_final(message_id, part, receipt, rec) do
+    final = Map.take(receipt, [:status, :error, :network_error, :done_at, :received_at])
+
+    with {:ok, first} <- Store.put_final(message_id, part, final) do
+      vendor_row(rec.data, part, receipt, not first)
+      if first, do: maybe_forward(message_id), else: :ok
     end
   end
 

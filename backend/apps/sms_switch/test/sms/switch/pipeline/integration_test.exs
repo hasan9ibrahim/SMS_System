@@ -5,7 +5,7 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
   alias Sms.Core.{ClickHouse, Repo}
   alias Sms.Switch.Pipeline.{Config, Edr, EdrWriter}
   alias Sms.Switch.Pipeline.Config.Loader
-  alias Sms.Switch.Test.PipelineConfig
+  alias Sms.Switch.Test.{CustomerCase, PipelineConfig}
 
   @moduletag :integration
 
@@ -132,7 +132,7 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
     test "every key of a full attempt row (vendor leg, rates) and of a receipt row is a column" do
       PipelineConfig.put()
       start_supervised!({Config.Server, loader: PipelineConfig})
-      Sms.Switch.Test.CustomerCase.assert_eventually(&Config.ready?/0)
+      CustomerCase.assert_eventually(&Config.ready?/0)
 
       now = System.os_time(:millisecond)
       sell = Config.sell_rate(1, "26201", now)

@@ -57,8 +57,7 @@ defmodule Sms.Switch.Rules.Pattern do
 
     case found do
       {:match, [{start, len} | groups]} ->
-        values =
-          Enum.map(groups, fn {s, l} -> if s < 0, do: nil, else: binary_part(input, s, l) end)
+        values = Enum.map(groups, &group_value(input, &1))
 
         before = binary_part(input, 0, start)
         after_ = binary_part(input, start + len, byte_size(input) - start - len)
@@ -81,6 +80,9 @@ defmodule Sms.Switch.Rules.Pattern do
         IO.iodata_to_binary(Enum.reverse([rest | acc]))
     end
   end
+
+  defp group_value(_input, {s, _l}) when s < 0, do: nil
+  defp group_value(input, {s, l}), do: binary_part(input, s, l)
 
   # After an empty match, the next character is copied as is and the search goes on after it (as JavaScript does).
   defp after_empty(regex, input, at, fun, acc) do
@@ -113,10 +115,9 @@ defmodule Sms.Switch.Rules.Pattern do
        when d1 in ?0..?9 and d2 in ?0..?9 do
     two = (d1 - ?0) * 10 + (d2 - ?0)
 
-    cond do
-      two >= 1 and two <= length(g) -> expand(rest, m, g, b, a, [Enum.at(g, two - 1) || "" | acc])
-      true -> expand(<<d2, rest::binary>>, m, g, b, a, one(d1, m, g, acc))
-    end
+    if two >= 1 and two <= length(g),
+      do: expand(rest, m, g, b, a, [Enum.at(g, two - 1) || "" | acc]),
+      else: expand(<<d2, rest::binary>>, m, g, b, a, one(d1, m, g, acc))
   end
 
   defp expand(<<"$", d1, rest::binary>>, m, g, b, a, acc) when d1 in ?0..?9,

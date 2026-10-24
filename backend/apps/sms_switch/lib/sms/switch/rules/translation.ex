@@ -86,15 +86,14 @@ defmodule Sms.Switch.Rules.Translation do
         mccmnc: r.mccmnc_pattern && Pattern.compile(r.mccmnc_pattern),
         content: r.content_pattern && Pattern.compile(r.content_pattern),
         content_regex: r.content_regex && Pattern.compile(r.content_regex),
-        sender_conversion:
-          r.sender_conversion == :regex_replace &&
-            Pattern.compile(r.sender_conversion_value || ""),
-        receiver_conversion:
-          r.receiver_conversion == :regex_replace &&
-            Pattern.compile(r.receiver_conversion_value || ""),
+        sender_conversion: conversion_regex(r.sender_conversion, r.sender_conversion_value),
+        receiver_conversion: conversion_regex(r.receiver_conversion, r.receiver_conversion_value),
         words: Enum.map(r.content_words, &word_regex/1)
       }
     end
+
+    defp conversion_regex(:regex_replace, value), do: Pattern.compile(value || "")
+    defp conversion_regex(_kind, _value), do: false
 
     # Whole words (not part of a word, Unicode-aware) and exact case unless switched off (team trial round 1).
     defp word_regex(%{find: find} = w) when is_binary(find) and find != "" do
@@ -449,13 +448,7 @@ defmodule Sms.Switch.Rules.Translation do
     else
       picked = pick(entries, ctx)
 
-      sender =
-        if sc == :random_number,
-          do: picked,
-          else:
-            Regex.replace(~r/\{n\}/, picked, fn _ -> Integer.to_string(floor(rand(ctx) * 10)) end)
-
-      acc = set(acc, :sender, sender)
+      acc = set(acc, :sender, picked_sender(sc, picked, ctx))
 
       # A Sender ID template with content: our text, with the code taken from the original (team trial round 1).
       contents =
@@ -484,6 +477,11 @@ defmodule Sms.Switch.Rules.Translation do
   end
 
   defp sender_conversion(acc, _rule, _ctx), do: acc
+
+  defp picked_sender(:random_number, picked, _ctx), do: picked
+
+  defp picked_sender(_template, picked, ctx),
+    do: Regex.replace(~r/\{n\}/, picked, fn _ -> Integer.to_string(floor(rand(ctx) * 10)) end)
 
   defp receiver_conversion({state, _} = acc, %Rule{receiver_conversion: rc} = rule, ctx)
        when rc != nil do
@@ -540,13 +538,10 @@ defmodule Sms.Switch.Rules.Translation do
 
     case kind do
       :left_strip ->
-        drop = v |> number() |> trunc() |> max(0)
-        input |> String.to_charlist() |> Enum.drop(drop) |> List.to_string()
+        left_strip(v, input)
 
       :right_strip ->
-        chars = String.to_charlist(input)
-        keep = max(0, length(chars) - number(v)) |> trunc()
-        chars |> Enum.take(keep) |> List.to_string()
+        right_strip(v, input)
 
       :prepend ->
         v <> input
@@ -558,12 +553,26 @@ defmodule Sms.Switch.Rules.Translation do
         translation(v, input)
 
       :regex_replace ->
-        Pattern.replace_js(compiled || Pattern.compile(v), input, replacement || "")
+        regex_replace(v, input, replacement, compiled)
 
       _ ->
         input
     end
   end
+
+  defp left_strip(v, input) do
+    drop = v |> number() |> trunc() |> max(0)
+    input |> String.to_charlist() |> Enum.drop(drop) |> List.to_string()
+  end
+
+  defp right_strip(v, input) do
+    chars = String.to_charlist(input)
+    keep = max(0, length(chars) - number(v)) |> trunc()
+    chars |> Enum.take(keep) |> List.to_string()
+  end
+
+  defp regex_replace(v, input, replacement, compiled),
+    do: Pattern.replace_js(compiled || Pattern.compile(v), input, replacement || "")
 
   # JavaScript's Number(v) || 0 for a strip count: a number, else 0.
   defp number(v) do
@@ -589,7 +598,7 @@ defmodule Sms.Switch.Rules.Translation do
   @spec code_in(String.t()) :: String.t()
   def code_in(text) do
     case Regex.run(~r/(?<!\d)\d{4,8}(?!\d)/, text) do
-      [code] -> code
+      [code] when is_binary(code) -> code
       nil -> ""
     end
   end

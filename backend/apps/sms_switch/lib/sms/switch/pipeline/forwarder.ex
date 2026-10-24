@@ -26,7 +26,7 @@ defmodule Sms.Switch.Pipeline.Forwarder do
   import Bitwise
   alias Sms.Core.Bus
   alias Sms.Switch.Customer
-  alias Sms.Switch.Pipeline.{Config, Edr, Router, Store}
+  alias Sms.Switch.Pipeline.{Config, Edr, Receipt, Router, Store}
   alias Sms.Switch.Rules.Translation
 
   @default_hold_hours 72
@@ -92,7 +92,8 @@ defmodule Sms.Switch.Pipeline.Forwarder do
         :ok
 
       {:error, reason} = error ->
-        Logger.error("receipt of message #{data.id} not queued: #{inspect(reason)}") && error
+        Logger.error("receipt of message #{data.id} not queued: #{inspect(reason)}")
+        error
     end
   end
 
@@ -105,18 +106,19 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     data = Map.put(core(msg), :edr_id, edr_id)
     now = System.os_time(:millisecond)
 
-    if wants?(data, status) do
-      receipt = %{
-        status: status,
-        error: error,
-        network_error: 0,
-        done_at: now,
-        received_at: now,
-        source: "switch"
-      }
+    _ =
+      if wants?(data, status) do
+        receipt = %{
+          status: status,
+          error: error,
+          network_error: 0,
+          done_at: now,
+          received_at: now,
+          source: "switch"
+        }
 
-      _ = publish(data, receipt)
-    end
+        publish(data, receipt)
+      end
 
     :ok
   end
@@ -136,38 +138,42 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     intermediate = receipt[:intermediate] == true
     {status, error} = mapped(data, receipt)
 
-    if wants?(data, status, intermediate) do
-      trunk = trunk(data)
+    if wants?(data, status, intermediate),
+      do: send_receipt(data, receipt, status, error, held_ms),
+      else: :ok
+  end
 
-      {fields, tlvs} =
-        Sms.Switch.Pipeline.Receipt.build(build_input(data, receipt, status, error))
+  defp send_receipt(data, receipt, status, error, held_ms) do
+    trunk = trunk(data)
+    {fields, tlvs} = Receipt.build(build_input(data, receipt, status, error))
 
-      case Customer.deliver(data.origin, trunk.dlr_session_affinity, fields, tlvs) do
-        {:ok, session_id, response} ->
-          if response.status != 0,
-            do:
-              Logger.info(
-                "customer refused the receipt of #{data.id}: 0x#{Integer.to_string(response.status, 16)}"
-              )
+    case Customer.deliver(data.origin, trunk.dlr_session_affinity, fields, tlvs) do
+      {:ok, session_id, response} ->
+        if response.status != 0,
+          do:
+            Logger.info(
+              "customer refused the receipt of #{data.id}: 0x#{Integer.to_string(response.status, 16)}"
+            )
 
-          customer_row(data, receipt, status, error, session_id, held_ms)
+        customer_row(data, receipt, status, error, session_id, held_ms)
 
-        # The session did not answer; it may have it. Tried again later, the same session first (S-5.14).
-        {:error, :timeout, _session} ->
-          if held_ms > 0, do: :hold, else: {:error, :timeout}
+      # The session did not answer; it may have it. Held and tried again on the next sweep, the same session first
+      # (S-5.14), so a slow client never makes the bus give the receipt up.
+      {:error, :timeout, _session} when held_ms > 0 ->
+        :hold
 
-        {:error, {:invalid_pdu, reason}} ->
-          Logger.error("receipt of #{data.id} could not be encoded, dropped: #{inspect(reason)}")
-          :ok
+      {:error, :timeout, _session} ->
+        hold(data, receipt, trunk)
 
-        :hold when held_ms > 0 ->
-          :hold
+      {:error, {:invalid_pdu, reason}} ->
+        Logger.error("receipt of #{data.id} could not be encoded, dropped: #{inspect(reason)}")
+        :ok
 
-        :hold ->
-          hold(data, receipt, trunk)
-      end
-    else
-      :ok
+      :hold when held_ms > 0 ->
+        :hold
+
+      :hold ->
+        hold(data, receipt, trunk)
     end
   end
 
@@ -184,7 +190,7 @@ defmodule Sms.Switch.Pipeline.Forwarder do
 
   @doc false
   # A held receipt whose hold hours ran out: recorded as never sent.
-  @spec give_up(map()) :: :ok
+  @spec give_up(%{data: map(), receipt: map(), held_at: integer()}) :: :ok
   def give_up(%{data: data, receipt: receipt, held_at: held_at}) do
     Logger.warning(
       "receipt of message #{data.id} given up: no session of trunk #{data.trunk.id} took it in time (§13.1)"

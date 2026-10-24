@@ -373,8 +373,12 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
 
     rule_rows
     |> maps()
-    |> each_row("route rule", fn r ->
-      Route.Rule.new(
+    |> each_row("route rule", &route_rule(&1, vendors, whitelists, lcr))
+  end
+
+  defp route_rule(r, vendors, whitelists, lcr) do
+    Route.Rule.new(
+      [
         id: r.id,
         name: r.name,
         priority: r.priority,
@@ -382,55 +386,65 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
         starts_at: r.starts_at,
         stops_at: r.stops_at,
         continue_routing: enum!(r.continue_routing, %{"yes" => :yes, "stop" => :stop}),
-        match_mode: enum!(r.match_mode, %{"all" => :all, "any" => :any}),
-        category_mode: enum!(r.category_mode, @modes),
-        category_ids: r.category_ids || [],
-        customer_trunk_mode: enum!(r.customer_trunk_mode, @modes),
-        customer_trunk_ids: r.customer_trunk_ids || [],
-        mccmnc_mode: enum!(r.mccmnc_mode, @modes),
-        mccmncs: r.mccmncs || [],
-        mccmnc_pattern: r.mccmnc_pattern,
-        sender_pattern: r.sender_pattern,
-        sender_pattern_negate: r.sender_pattern_negate,
-        sender_match_case: r.sender_match_case,
-        receiver_pattern: r.receiver_pattern,
-        receiver_pattern_negate: r.receiver_pattern_negate,
-        content_pattern: r.content_pattern,
-        content_pattern_negate: r.content_pattern_negate,
-        sender_list_id: r.sender_list_id,
-        sender_list_negate: r.sender_list_negate || false,
-        receiver_list_id: r.receiver_list_id,
-        receiver_list_negate: r.receiver_list_negate || false,
-        tps: tps(r.tps_condition),
-        revenue: revenue(r.revenue_condition),
-        hlr_ported: r.hlr_ported,
-        route_type:
-          enum!(r.route_type, %{
-            "static" => :static,
-            "dynamic" => :dynamic,
-            "qbr" => :qbr,
-            "block" => :block
-          }),
-        hunt_policy:
-          enum!(r.hunt_policy, %{
-            "percentage" => :percentage,
-            "top_down" => :top_down,
-            "round_robin" => :round_robin
-          }),
-        margin: num(r.margin) || 0,
-        margin_type:
-          enum!(r.margin_type || "amount", %{"amount" => :amount, "percent" => :percent}),
-        vendors: Map.get(vendors, r.id, []),
-        whitelists: Map.get(whitelists, r.id, []),
-        qbr_weights: weights(r.qbr_weights),
-        percentage_per_customer_trunk: r.percentage_per_customer_trunk != false,
-        vendor_trunk_mode: enum!(r.vendor_trunk_mode, @modes),
-        vendor_trunk_ids: r.vendor_trunk_ids || [],
-        vendor_category_mode: enum!(r.vendor_category_mode, @modes),
-        vendor_category_ids: r.vendor_category_ids || [],
-        lcr_profile: r.lcr_profile_id && Map.get(lcr, r.lcr_profile_id)
-      )
-    end)
+        match_mode: enum!(r.match_mode, %{"all" => :all, "any" => :any})
+      ] ++ route_conditions(r) ++ route_vendors(r, vendors, whitelists, lcr)
+    )
+  end
+
+  defp route_conditions(r) do
+    [
+      category_mode: enum!(r.category_mode, @modes),
+      category_ids: r.category_ids || [],
+      customer_trunk_mode: enum!(r.customer_trunk_mode, @modes),
+      customer_trunk_ids: r.customer_trunk_ids || [],
+      mccmnc_mode: enum!(r.mccmnc_mode, @modes),
+      mccmncs: r.mccmncs || [],
+      mccmnc_pattern: r.mccmnc_pattern,
+      sender_pattern: r.sender_pattern,
+      sender_pattern_negate: r.sender_pattern_negate,
+      sender_match_case: r.sender_match_case,
+      receiver_pattern: r.receiver_pattern,
+      receiver_pattern_negate: r.receiver_pattern_negate,
+      content_pattern: r.content_pattern,
+      content_pattern_negate: r.content_pattern_negate,
+      sender_list_id: r.sender_list_id,
+      sender_list_negate: r.sender_list_negate || false,
+      receiver_list_id: r.receiver_list_id,
+      receiver_list_negate: r.receiver_list_negate || false,
+      tps: tps(r.tps_condition),
+      revenue: revenue(r.revenue_condition),
+      hlr_ported: r.hlr_ported
+    ]
+  end
+
+  defp route_vendors(r, vendors, whitelists, lcr) do
+    [
+      route_type:
+        enum!(r.route_type, %{
+          "static" => :static,
+          "dynamic" => :dynamic,
+          "qbr" => :qbr,
+          "block" => :block
+        }),
+      hunt_policy:
+        enum!(r.hunt_policy, %{
+          "percentage" => :percentage,
+          "top_down" => :top_down,
+          "round_robin" => :round_robin
+        }),
+      margin: num(r.margin) || 0,
+      margin_type:
+        enum!(r.margin_type || "amount", %{"amount" => :amount, "percent" => :percent}),
+      vendors: Map.get(vendors, r.id, []),
+      whitelists: Map.get(whitelists, r.id, []),
+      qbr_weights: weights(r.qbr_weights),
+      percentage_per_customer_trunk: r.percentage_per_customer_trunk != false,
+      vendor_trunk_mode: enum!(r.vendor_trunk_mode, @modes),
+      vendor_trunk_ids: r.vendor_trunk_ids || [],
+      vendor_category_mode: enum!(r.vendor_category_mode, @modes),
+      vendor_category_ids: r.vendor_category_ids || [],
+      lcr_profile: r.lcr_profile_id && Map.get(lcr, r.lcr_profile_id)
+    ]
   end
 
   # The stored jsonb keys are snake_case (§13.8).
@@ -541,21 +555,30 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
     |> Enum.filter(&(&1.trunk_kind == kind and reaches?(&1, id, trunk)))
     |> Enum.group_by(& &1.translation_rule_id)
     |> Enum.map(fn {rule_id, ts} ->
-      rule = Map.fetch!(rules, rule_id)
-      s = Map.get(settings, {kind, id, rule_id})
-      top = Enum.any?(ts, &(&1.insert_at == "top"))
-      position = s && s.position
-      rank = if position, do: {1, position}, else: {if(top, do: 0, else: 2), 0}
-
-      continue_after =
-        if s && not is_nil(s.continue_after), do: s.continue_after, else: rule.continue_after
-
-      enabled = if s && not is_nil(s.enabled), do: s.enabled, else: true
-      {rank, rule_id, rule, continue_after, enabled and rule.status == :active}
+      trunk_rule(rule_id, ts, Map.fetch!(rules, rule_id), Map.get(settings, {kind, id, rule_id}))
     end)
     |> Enum.sort_by(fn {rank, rule_id, _, _, _} -> {rank, rule_id} end)
     |> Enum.filter(fn {_, _, _, _, running} -> running end)
     |> Enum.map(fn {_, rule_id, _, continue_after, _} -> {rule_id, continue_after} end)
+  end
+
+  # A rule as it runs on one trunk: its rank, and its continue-after and enabled with the trunk's setting `s` applied.
+  defp trunk_rule(rule_id, ts, rule, s) do
+    top = Enum.any?(ts, &(&1.insert_at == "top"))
+    position = s && s.position
+    rank = if position, do: {1, position}, else: {if(top, do: 0, else: 2), 0}
+    continue_after = setting(s, :continue_after, rule.continue_after)
+    enabled = setting(s, :enabled, true)
+    {rank, rule_id, rule, continue_after, enabled and rule.status == :active}
+  end
+
+  defp setting(nil, _key, default), do: default
+
+  defp setting(s, key, default) do
+    case Map.fetch!(s, key) do
+      nil -> default
+      value -> value
+    end
   end
 
   defp reaches?(%{target_type: "all"}, _id, _trunk), do: true

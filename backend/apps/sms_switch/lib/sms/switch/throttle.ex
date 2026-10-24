@@ -97,21 +97,22 @@ defmodule Sms.Switch.Throttle do
   @doc "Gives a buffered message's place back (it left the buffer: sent on, or refused)."
   @spec buffer_release(String.t()) :: :ok
   def buffer_release(key) do
-    if config(:backend) == :redis and not redis_paused?() do
-      case Redis.command(["DECR", "buf:#{key}"], config(:redis_timeout_ms)) do
-        {:ok, n} when n < 0 -> Redis.command(["SET", "buf:#{key}", "0", "KEEPTTL"])
-        _ -> :ok
+    _ =
+      if config(:backend) == :redis and not redis_paused?() do
+        case Redis.command(["DECR", "buf:#{key}"], config(:redis_timeout_ms)) do
+          {:ok, n} when n < 0 -> Redis.command(["SET", "buf:#{key}", "0", "KEEPTTL"])
+          _ -> :ok
+        end
       end
-    end
 
     # The local count (used while Redis was unavailable) is given back too, never below zero.
-    :ets.update_counter(@table, {:buffer, key}, {2, -1, 0, 0}, {{:buffer, key}, 0})
+    _ = :ets.update_counter(@table, {:buffer, key}, {2, -1, 0, 0}, {{:buffer, key}, 0})
     :ok
   end
 
   defp local_buffer_take(key, size) do
     if :ets.update_counter(@table, {:buffer, key}, 1, {{:buffer, key}, 0}) > size do
-      :ets.update_counter(@table, {:buffer, key}, -1)
+      _ = :ets.update_counter(@table, {:buffer, key}, -1)
       false
     else
       true

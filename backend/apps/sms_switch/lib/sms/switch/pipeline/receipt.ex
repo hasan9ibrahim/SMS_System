@@ -63,15 +63,6 @@ defmodule Sms.Switch.Pipeline.Receipt do
         do: Map.get(@by_state, tlv_state, "UNKNOWN"),
         else: normal_status(text["stat"])
 
-    mismatch =
-      [
-        (tlv_id != nil and text["id"] != nil and tlv_id != text["id"]) && :id,
-        (tlv_state != nil and text["stat"] != nil and
-           Map.get(@by_state, tlv_state) != normal_status(text["stat"])) &&
-          :status
-      ]
-      |> Enum.filter(& &1)
-
     if is_nil(id) do
       {:error, :no_message_id}
     else
@@ -82,9 +73,20 @@ defmodule Sms.Switch.Pipeline.Receipt do
          error: error_text(text["err"]),
          network_error: network_error(tlv_network),
          done_at: parse_date(text["done date"]),
-         mismatch: mismatch
+         mismatch: mismatch(tlv_id, tlv_state, text)
        }}
     end
+  end
+
+  # Where the TLVs and the receipt text disagree.
+  defp mismatch(tlv_id, tlv_state, text) do
+    [
+      (tlv_id != nil and text["id"] != nil and tlv_id != text["id"]) && :id,
+      (tlv_state != nil and text["stat"] != nil and
+         Map.get(@by_state, tlv_state) != normal_status(text["stat"])) &&
+        :status
+    ]
+    |> Enum.filter(& &1)
   end
 
   defp tlv(pdu, name) do
@@ -183,9 +185,9 @@ defmodule Sms.Switch.Pipeline.Receipt do
     }
 
     network =
-      if r[:network_error] not in [nil, 0],
-        do: [network_error_code: <<3, r.network_error::16>>],
-        else: []
+      if r[:network_error] in [nil, 0],
+        do: [],
+        else: [network_error_code: <<3, r.network_error::16>>]
 
     tlvs = [receipted_message_id: r.message_id, message_state: state(r.status)] ++ network
     {fields, tlvs}

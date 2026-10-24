@@ -42,9 +42,6 @@ defmodule Sms.Switch.Pipeline.Edr do
   def attempt_row(msg, attempt) do
     vendor = attempt[:vendor]
     egress = (vendor && vendor.egress) || %{}
-    ingress = msg.ingress
-    f = msg.fields
-    trunk = msg.trunk
 
     %{
       "edr_id" => attempt.edr_id,
@@ -54,6 +51,36 @@ defmodule Sms.Switch.Pipeline.Edr do
       "submit_resp_time" => attempt[:resp_time] && time(attempt.resp_time),
       "delivery_time" => nil,
       "msg_type" => "MT",
+      "c_msg_status" => msg_status(attempt),
+      "v_registered_delivery" => flag(vendor),
+      "attempt_no" => attempt.no,
+      "is_final_attempt" => flag(attempt.final),
+      "is_submit_success" => flag(attempt.success),
+      "command_status" => attempt.command_status,
+      "msg_count" => attempt[:msg_count] || msg.parts,
+      "is_buffered" => flag(msg[:buffered]),
+      "measured_tps" => 0,
+      "revenue_checked" => decimal(msg.sell && msg.sell.platform)
+    }
+    |> Map.merge(customer_leg(msg))
+    |> Map.merge(customer_addresses(msg.fields))
+    |> Map.merge(vendor_addresses(msg, vendor, egress))
+    |> Map.merge(destination(msg.destination))
+    |> Map.merge(customer_rate(msg))
+    |> Map.merge(vendor_leg(msg, vendor, egress, attempt))
+  end
+
+  defp msg_status(%{success: success}) when success not in [nil, false], do: "ACCEPTD"
+  defp msg_status(%{final: final}) when final not in [nil, false], do: "REJECTD"
+  defp msg_status(_attempt), do: ""
+
+  defp flag(value) when value in [nil, false], do: 0
+  defp flag(_value), do: 1
+
+  defp customer_leg(msg) do
+    trunk = msg.trunk
+
+    %{
       "business_company_id" => trunk.business_company_id || 0,
       "product_category_id" => trunk.product_category_id || 0,
       "c_enterprise_id" => trunk.enterprise_id,
@@ -65,41 +92,43 @@ defmodule Sms.Switch.Pipeline.Edr do
       "c_bind_type" => bind(msg.origin.bind),
       "c_protocol" => "SMPP",
       "c_message_id" => msg.id,
+      "c_coding" => msg.data_coding,
+      "c_translation_rule_ids" => msg.ingress[:fired] || [],
+      "udh" => hex(msg.udh)
+    }
+  end
+
+  defp customer_addresses(f) do
+    %{
       "c_src_ton" => f[:source_addr_ton] || 0,
       "c_src_npi" => f[:source_addr_npi] || 0,
       "c_dst_ton" => f[:dest_addr_ton] || 0,
       "c_dst_npi" => f[:dest_addr_npi] || 0,
-      "c_coding" => msg.data_coding,
       "src_addr" => f[:source_addr] || "",
       "dst_addr" => f[:destination_addr] || "",
+      "registered_delivery" => f[:registered_delivery] || 0
+    }
+  end
+
+  # What the vendor was sent: the egress translation's result, else the ingress one, else the customer's.
+  defp vendor_addresses(msg, vendor, egress) do
+    ingress = msg.ingress
+    f = msg.fields
+
+    %{
       "routed_dst_addr" => Map.get(egress, :receiver, ingress[:receiver] || ""),
       "v_src_addr" => Map.get(egress, :sender, ingress[:sender] || ""),
       "message_text" => msg.text || hex(msg.body),
       "v_message_text" => Map.get(egress, :text) || msg.text || hex(msg.body),
-      "v_src_ton" => Map.get(egress, :sender_ton) || f[:source_addr_ton] || 0,
-      "v_src_npi" => Map.get(egress, :sender_npi) || f[:source_addr_npi] || 0,
-      "v_dst_ton" => Map.get(egress, :dest_ton) || f[:dest_addr_ton] || 0,
-      "v_dst_npi" => Map.get(egress, :dest_npi) || f[:dest_addr_npi] || 0,
-      "v_coding" => (vendor && vendor[:data_coding]) || msg.data_coding,
-      "c_translation_rule_ids" => ingress[:fired] || [],
-      "c_msg_status" =>
-        if(attempt.success, do: "ACCEPTD", else: if(attempt.final, do: "REJECTD", else: "")),
-      "registered_delivery" => f[:registered_delivery] || 0,
-      "v_registered_delivery" => if(vendor, do: 1, else: 0),
-      "attempt_no" => attempt.no,
-      "is_final_attempt" => if(attempt.final, do: 1, else: 0),
-      "is_submit_success" => if(attempt.success, do: 1, else: 0),
-      "command_status" => attempt.command_status,
-      "msg_count" => attempt[:msg_count] || msg.parts,
-      "udh" => hex(msg.udh),
-      "is_buffered" => if(msg[:buffered], do: 1, else: 0),
-      "measured_tps" => 0,
-      "revenue_checked" => decimal(msg.sell && msg.sell.platform)
+      "v_src_ton" => egress_or(egress, :sender_ton, f, :source_addr_ton),
+      "v_src_npi" => egress_or(egress, :sender_npi, f, :source_addr_npi),
+      "v_dst_ton" => egress_or(egress, :dest_ton, f, :dest_addr_ton),
+      "v_dst_npi" => egress_or(egress, :dest_npi, f, :dest_addr_npi),
+      "v_coding" => (vendor && vendor[:data_coding]) || msg.data_coding
     }
-    |> Map.merge(destination(msg.destination))
-    |> Map.merge(customer_rate(msg))
-    |> Map.merge(vendor_leg(msg, vendor, egress, attempt))
   end
+
+  defp egress_or(egress, key, f, field), do: Map.get(egress, key) || f[field] || 0
 
   defp destination(nil),
     do: %{"c_mccmnc" => "", "c_mcc" => "", "c_mnc" => "", "c_country_iso" => ""}
@@ -133,37 +162,43 @@ defmodule Sms.Switch.Pipeline.Edr do
 
   defp vendor_leg(msg, vendor, egress, attempt) do
     vt = Config.vendor_trunk(vendor.vendor_trunk_id) || %{}
-    cost = vendor[:cost]
 
-    rate =
-      if cost do
-        {ex, sys} = exchange(cost, msg.trunk.base_currency)
-
-        %{
-          "v_rate_table_id" => cost.rate_table_id,
-          "v_rate_line_id" => cost.line_id,
-          "v_rate" => Decimal.to_string(cost.rate, :normal),
-          "v_currency" => cost.currency,
-          "v_ex_rate" => ex,
-          "v_sys_rate" => sys
-        }
-      else
-        %{}
-      end
-
-    Map.merge(rate, %{
+    msg
+    |> vendor_rate(vendor[:cost])
+    |> Map.merge(%{
       "v_enterprise_id" => vt[:enterprise_id] || 0,
       "v_trunk_id" => vendor.vendor_trunk_id,
       "v_am_user_id" => vt[:account_manager_id] || 0,
       "v_message_id" => attempt[:vendor_message_id] || "",
       "v_mccmnc" => (msg.destination && msg.destination.mccmnc) || "",
       "v_billing_type" => to_string(vt[:billing_type] || ""),
-      "v_translation_rule_ids" => egress[:fired] || [],
+      "v_translation_rule_ids" => egress[:fired] || []
+    })
+    |> Map.merge(route(vendor))
+  end
+
+  defp vendor_rate(_msg, cost) when cost in [nil, false], do: %{}
+
+  defp vendor_rate(msg, cost) do
+    {ex, sys} = exchange(cost, msg.trunk.base_currency)
+
+    %{
+      "v_rate_table_id" => cost.rate_table_id,
+      "v_rate_line_id" => cost.line_id,
+      "v_rate" => Decimal.to_string(cost.rate, :normal),
+      "v_currency" => cost.currency,
+      "v_ex_rate" => ex,
+      "v_sys_rate" => sys
+    }
+  end
+
+  defp route(vendor) do
+    %{
       "route_rule_id" => vendor[:rule_id] || 0,
       "route_type" => to_string(vendor[:route_type] || ""),
       "route_level" => vendor[:level] || 0,
       "route_decided_by" => to_string(vendor[:decided_by] || "")
-    })
+    }
   end
 
   # Units of the rate's currency per unit of the business company's base currency, and the rate in that base.
@@ -204,17 +239,23 @@ defmodule Sms.Switch.Pipeline.Edr do
       "c_message_id" => msg.id,
       "part_no" => r.part,
       "v_message_id" => r[:vendor_message_id] || "",
+      "delivery_delay_ms" => max(0, r.at - msg.received_at),
+      "receipt_session_id" => r[:session_id] || "",
+      "receipt_held_ms" => r[:held_ms] || 0,
+      "is_late" => flag(r[:late]),
+      "is_duplicate" => flag(r[:duplicate]),
+      "source" => r[:source] || "vendor"
+    }
+    |> Map.merge(receipt_status(r))
+  end
+
+  defp receipt_status(r) do
+    %{
       "msg_status" => r[:status] || "",
       "delivery_error" => r[:error] || "",
       "network_error" => r[:network_error] || 0,
       "c_msg_status" => r[:customer_status] || "",
-      "c_delivery_error" => r[:customer_error] || "",
-      "delivery_delay_ms" => max(0, r.at - msg.received_at),
-      "receipt_session_id" => r[:session_id] || "",
-      "receipt_held_ms" => r[:held_ms] || 0,
-      "is_late" => if(r[:late], do: 1, else: 0),
-      "is_duplicate" => if(r[:duplicate], do: 1, else: 0),
-      "source" => r[:source] || "vendor"
+      "c_delivery_error" => r[:customer_error] || ""
     }
   end
 

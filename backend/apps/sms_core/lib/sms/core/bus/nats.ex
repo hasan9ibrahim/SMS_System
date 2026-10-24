@@ -68,7 +68,12 @@ defmodule Sms.Core.Bus.Nats do
     # batcher, which acknowledges the batch once the handler has stored it.
     workers =
       if opts[:batch_size] do
-        [{__MODULE__.Batcher, {module, opts}}, {__MODULE__.Puller, {module, stream, opts, 0}}]
+        [
+          {__MODULE__.Batcher, {module, opts}},
+          Supervisor.child_spec({__MODULE__.Puller, {module, stream, opts, 0}},
+            id: {__MODULE__.Puller, module, 0}
+          )
+        ]
       else
         for i <- 1..opts[:concurrency],
             do:
@@ -249,9 +254,6 @@ defmodule Sms.Core.Bus.Nats do
     alias Sms.Core.Bus.{Consumer, Event, Nats}
 
     def start_link(arg), do: PullConsumer.start_link(__MODULE__, arg)
-
-    def child_spec({module, _stream, _opts, i} = arg),
-      do: %{id: {__MODULE__, module, i}, start: {__MODULE__, :start_link, [arg]}}
 
     @impl true
     def init({module, stream, opts, _i}) do

@@ -31,9 +31,9 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   require Logger
   import Bitwise
+  alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Message.{Concat, Text}
   alias Sms.Switch.Pipeline.{Config, Edr, Forwarder, Intake, Receipts, Router, Store}
-  alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Smpp.Status
   alias Sms.Switch.{Throttle, Vendor}
 
@@ -57,22 +57,20 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   @doc false
   # Sends one message; public for tests that run the vendor leg without the bus.
-  @spec send_message(map()) :: :ok
+  @spec send_message(%{required(:ingress) => map() | nil, optional(atom()) => term()}) :: :ok
   def send_message(msg) do
     pace(msg)
 
-    cond do
-      grows_parts?(msg, msg.ingress[:text]) ->
-        # D3: a translation that adds parts never reaches a vendor; the customer is not billed.
-        fail(msg, [], %{
-          status: "REJECTD",
-          error: "001",
-          command_status: Status.code(:esme_rsubmitfail),
-          reason: :translation_grows
-        })
-
-      true ->
-        attempt(msg, msg.route, 1, MapSet.new(), [])
+    if grows_parts?(msg, msg.ingress[:text]) do
+      # D3: a translation that adds parts never reaches a vendor; the customer is not billed.
+      fail(msg, [], %{
+        status: "REJECTD",
+        error: "001",
+        command_status: Status.code(:esme_rsubmitfail),
+        reason: :translation_grows
+      })
+    else
+      attempt(msg, msg.route, 1, MapSet.new([msg.route.vendor_trunk_id]), [])
     end
 
     :ok
@@ -213,22 +211,17 @@ defmodule Sms.Switch.Pipeline.Sender do
         tlvs = tlvs(msg)
 
         parts =
-          cond do
-            msg.concat != nil ->
-              [{Concat.udhi?(msg.fields[:esm_class] || 0) && msg.udh != <<>>, msg.udh <> bytes}]
+          if msg.concat != nil,
+            do: [{Concat.udhi?(msg.fields[:esm_class] || 0) && msg.udh != <<>>, msg.udh <> bytes}],
+            else: split(bytes, alphabet)
 
-            true ->
-              split(bytes, alphabet)
-          end
-
-        submits =
-          Enum.map(parts, fn {udh?, short_message} ->
-            esm = if udh?, do: @udhi, else: 0
-            {Map.merge(base, %{esm_class: esm, short_message: short_message}), tlvs}
-          end)
-
-        {:ok, submits, coding}
+        {:ok, Enum.map(parts, &submit_pdu(base, tlvs, &1)), coding}
     end
+  end
+
+  defp submit_pdu(base, tlvs, {udh?, short_message}) do
+    esm = if udh?, do: @udhi, else: 0
+    {Map.merge(base, %{esm_class: esm, short_message: short_message}), tlvs}
   end
 
   defp encoding(%{text: nil} = msg, _text), do: {msg.body, msg.alphabet, msg.data_coding}
@@ -330,9 +323,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   end
 
   defp submit(vt, fields, tlvs, ref, prefer, temporary \\ 0, waited \\ 0) do
-    opts = [ref: ref] ++ if(prefer, do: [prefer: prefer], else: [])
-
-    case Vendor.submit(vt, :submit_sm, fields, tlvs, opts) do
+    case Vendor.submit(vt, :submit_sm, fields, tlvs, submit_opts(ref, prefer)) do
       {:ok, %{status: 0} = result} ->
         {:ok, result}
 
@@ -358,6 +349,10 @@ defmodule Sms.Switch.Pipeline.Sender do
         {:unavailable, reason}
     end
   end
+
+  defp submit_opts(ref, nil), do: [ref: ref]
+  defp submit_opts(ref, false), do: [ref: ref]
+  defp submit_opts(ref, prefer), do: [ref: ref, prefer: prefer]
 
   defp vendor_wait_ms,
     do:
@@ -399,7 +394,7 @@ defmodule Sms.Switch.Pipeline.Sender do
         success: true,
         final: true,
         command_status: 0,
-        vendor_message_id: Enum.join(Enum.map(results, & &1.raw_message_id), ",")
+        vendor_message_id: Enum.map_join(results, ",", & &1.raw_message_id)
       })
 
     publish_rows(msg, rows, false)
@@ -408,10 +403,11 @@ defmodule Sms.Switch.Pipeline.Sender do
     # Receipts that came before the submit_sm_resp was handled (S-5.5): kept under every key their id reads as, so
     # the resp's normalised id finds them.
     for {n, _vt, id} <- parts do
-      case Store.take_orphan(vt, id) do
-        {:ok, receipt} -> Receipts.apply_receipt(msg.id, n, receipt)
-        _ -> :ok
-      end
+      _ =
+        case Store.take_orphan(vt, id) do
+          {:ok, receipt} -> Receipts.apply_receipt(msg.id, n, receipt)
+          _ -> :ok
+        end
     end
 
     :ok
@@ -423,7 +419,8 @@ defmodule Sms.Switch.Pipeline.Sender do
         :ok
 
       {:error, _} when tries > 1 ->
-        Process.sleep(200) && record_sent(id, record, parts, ttl, tries - 1)
+        Process.sleep(200)
+        record_sent(id, record, parts, ttl, tries - 1)
 
       error ->
         error

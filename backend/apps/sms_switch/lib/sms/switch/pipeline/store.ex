@@ -88,30 +88,28 @@ defmodule Sms.Switch.Pipeline.Store do
         :none
 
       {:ok, flat} ->
-        fields = flat |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, v} end)
-
-        case fields do
-          %{"d" => blob} ->
-            finals =
-              for {"f" <> n, v} <- fields,
-                  into: %{},
-                  do: {String.to_integer(n), :erlang.binary_to_term(v, [:safe])}
-
-            {:ok,
-             %{
-               data: :erlang.binary_to_term(blob, [:safe]),
-               finals: finals,
-               forwarded: Map.has_key?(fields, "c")
-             }}
-
-          _ ->
-            :none
-        end
+        flat |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, v} end) |> decode_message()
 
       {:error, _} = error ->
         error
     end
   end
+
+  defp decode_message(%{"d" => blob} = fields) do
+    finals =
+      for {"f" <> n, v} <- fields,
+          into: %{},
+          do: {String.to_integer(n), :erlang.binary_to_term(v, [:safe])}
+
+    {:ok,
+     %{
+       data: :erlang.binary_to_term(blob, [:safe]),
+       finals: finals,
+       forwarded: Map.has_key?(fields, "c")
+     }}
+  end
+
+  defp decode_message(_fields), do: :none
 
   @doc "Keeps a part's final receipt unless it already has one (the first final status wins, S-5.8)."
   @spec put_final(String.t(), part(), term()) :: {:ok, boolean()} | {:error, term()}
@@ -323,23 +321,22 @@ defmodule Sms.Switch.Pipeline.Store do
   defp exec(["EXPIRE", key, ttl]) do
     case lookup(key) do
       nil -> 0
-      value -> put(key, value, System.monotonic_time(:second) + ttl) && 1
+      value -> put_then(key, value, ttl, 1)
     end
   end
 
-  defp exec(["SET", key, value, "EX", ttl]),
-    do: put(key, value, System.monotonic_time(:second) + ttl) && "OK"
+  defp exec(["SET", key, value, "EX", ttl]), do: put_then(key, value, ttl, "OK")
 
   defp exec(["SET", key, value, "NX", "GET", "EX", ttl]) do
     case lookup(key) do
-      nil -> put(key, value, System.monotonic_time(:second) + ttl) && nil
+      nil -> put_then(key, value, ttl, nil)
       existing -> existing
     end
   end
 
   defp exec(["SET", key, value, "NX", "EX", ttl]) do
     case lookup(key) do
-      nil -> put(key, value, System.monotonic_time(:second) + ttl) && "OK"
+      nil -> put_then(key, value, ttl, "OK")
       _ -> nil
     end
   end
@@ -413,4 +410,9 @@ defmodule Sms.Switch.Pipeline.Store do
   end
 
   defp put(key, value, until), do: :ets.insert(@table, {key, value, until})
+
+  defp put_then(key, value, ttl, reply) do
+    put(key, value, System.monotonic_time(:second) + ttl)
+    reply
+  end
 end

@@ -57,19 +57,21 @@ defmodule Sms.Switch.Pipeline.EdrWriter do
   def handle_batch(events) do
     events
     |> Enum.group_by(& &1.type)
-    |> Enum.reduce_while(:ok, fn {type, group}, :ok ->
-      case Map.fetch(@tables, type) do
-        {:ok, table} ->
-          case write(table, Enum.map(group, &row(&1.data))) do
-            :ok -> {:cont, :ok}
-            {:error, _} = error -> {:halt, error}
-          end
+    |> Enum.reduce_while(:ok, fn {type, group}, :ok -> write_group(type, group) end)
+  end
 
-        :error ->
-          Logger.error("EDR event of unknown type #{inspect(type)} dropped")
-          {:cont, :ok}
-      end
-    end)
+  defp write_group(type, group) do
+    case Map.fetch(@tables, type) do
+      {:ok, table} ->
+        case write(table, Enum.map(group, &row(&1.data))) do
+          :ok -> {:cont, :ok}
+          {:error, _} = error -> {:halt, error}
+        end
+
+      :error ->
+        Logger.error("EDR event of unknown type #{inspect(type)} dropped")
+        {:cont, :ok}
+    end
   end
 
   # The bus key is not a column.

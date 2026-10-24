@@ -79,12 +79,12 @@ defmodule Sms.Switch.Pipeline.Held do
 
     if now > entry.until do
       Forwarder.give_up(entry)
-      Store.release(trunk_id, member)
+      _ = Store.release(trunk_id, member)
       true
     else
       case Forwarder.deliver(entry.data, entry.receipt, max(1, now - entry.held_at)) do
         :ok ->
-          Store.release(trunk_id, member)
+          _ = Store.release(trunk_id, member)
           true
 
         _hold_or_error ->
@@ -100,9 +100,11 @@ defmodule Sms.Switch.Pipeline.Held do
       filter: "sms.session.customer.bound",
       max_deliver: 3
 
+    alias Sms.Switch.Pipeline.Held
+
     @impl true
     def handle_event(%{data: %{"trunk_id" => trunk_id}}) when is_integer(trunk_id) do
-      Sms.Switch.Pipeline.Held.drain(trunk_id)
+      Held.drain(trunk_id)
     end
 
     def handle_event(_event), do: :ok
