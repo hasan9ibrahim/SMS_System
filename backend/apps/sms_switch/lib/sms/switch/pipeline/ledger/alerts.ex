@@ -36,16 +36,21 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
       balance = account.base - used
       level = level(account, balance)
 
-      case Store.command(["SET", "cal:#{account.key}", Integer.to_string(level), "GET"]) do
-        {:ok, old} ->
-          if level > to_int(old), do: publish(account, level, balance)
-
-        {:error, reason} ->
-          Logger.warning("credit alert of #{account.key} not checked: #{inspect(reason)}")
-      end
+      raise_level(account, level, balance)
     end
 
     :ok
+  end
+
+  # The level is swapped in Redis: only the server that raises it alerts.
+  defp raise_level(account, level, balance) do
+    case Store.command(["SET", "cal:#{account.key}", Integer.to_string(level), "GET"]) do
+      {:ok, old} ->
+        if level > to_int(old), do: publish(account, level, balance)
+
+      {:error, reason} ->
+        Logger.warning("credit alert of #{account.key} not checked: #{inspect(reason)}")
+    end
   end
 
   @doc false
@@ -57,10 +62,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
   def level(%{limit: limit, alerts: alerts}, balance) do
     pct = max(0, -balance) * 100 / limit
 
-    cond do
-      pct >= 100 -> 4
-      true -> alerts |> Enum.take_while(&(pct >= &1)) |> length()
-    end
+    if pct >= 100, do: 4, else: alerts |> Enum.take_while(&(pct >= &1)) |> length()
   end
 
   defp publish(account, level, balance) do

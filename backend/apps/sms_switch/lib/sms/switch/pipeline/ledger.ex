@@ -33,14 +33,17 @@ defmodule Sms.Switch.Pipeline.Ledger do
 
   @typedoc "One billing side of an enterprise, as `Sync` loads it."
   @type account :: %{
-          key: String.t(),
-          enterprise_id: integer(),
-          side: :customer | :vendor,
-          currency: String.t(),
-          base: integer(),
-          limit: integer(),
-          cutoff: integer(),
-          prepaid: boolean()
+          required(:key) => String.t(),
+          required(:enterprise_id) => integer(),
+          required(:side) => :customer | :vendor,
+          required(:currency) => String.t(),
+          required(:base) => integer(),
+          required(:limit) => integer(),
+          required(:cutoff) => integer(),
+          required(:prepaid) => boolean(),
+          optional(:credit_limit) => integer(),
+          optional(:alerts) => [number()],
+          optional(:periods) => %{optional(String.t()) => integer()}
         }
 
   @doc false
@@ -59,7 +62,7 @@ defmodule Sms.Switch.Pipeline.Ledger do
   def bucket(unix_s), do: div(unix_s, @bucket_s)
 
   @doc "The bucket length in seconds."
-  @spec bucket_s() :: pos_integer()
+  @spec bucket_s() :: 900
   def bucket_s, do: @bucket_s
 
   @doc "An account, if the enterprise has billing set up for that side."

@@ -282,16 +282,7 @@ defmodule Sms.Switch.Pipeline.Receipts do
         source: final[:source]
       })
 
-    if row["is_customer_billable"] == 1,
-      do:
-        Ledger.charge(:customer, data.trunk.enterprise_id, data.id, bill.sell, bill.c_parts, {
-          bill.rev_keys,
-          Revenue.platform_micro(bill.sell, bill.c_parts)
-        })
-
-    if row["is_vendor_billable"] == 1,
-      do:
-        Ledger.charge(:vendor, bill.dims["v_enterprise_id"], data.edr_id, bill.cost, bill.v_parts)
+    _ = charge(data, row)
 
     case Edr.publish_receipt(row) do
       :ok -> :ok
@@ -301,6 +292,27 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
   # A message sent before billing was kept with it.
   defp outcome(_data, _final, _message_final), do: :ok
+
+  # The balances, and the customer's revenue (§13.9), charged as the outcome row bills them.
+  defp charge(%{bill: bill} = data, row) do
+    _ =
+      if row["is_customer_billable"] == 1 do
+        revenue = {bill.rev_keys, Revenue.platform_micro(bill.sell, bill.c_parts)}
+
+        Ledger.charge(
+          :customer,
+          data.trunk.enterprise_id,
+          data.id,
+          bill.sell,
+          bill.c_parts,
+          revenue
+        )
+      end
+
+    if row["is_vendor_billable"] == 1,
+      do:
+        Ledger.charge(:vendor, bill.dims["v_enterprise_id"], data.edr_id, bill.cost, bill.v_parts)
+  end
 
   @doc false
   # DELIVRD when every part was delivered; else the first part that was not, with its error.

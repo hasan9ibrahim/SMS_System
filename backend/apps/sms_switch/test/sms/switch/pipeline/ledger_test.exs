@@ -1,6 +1,7 @@
 defmodule Sms.Switch.Pipeline.LedgerTest do
   # Live balances and the credit check (§7, Q24, product owner 2026-10-24).
   use ExUnit.Case, async: false
+  alias Sms.Core.Bus.Local
   alias Sms.Switch.Pipeline.{Ledger, Store}
   alias Sms.Switch.Pipeline.Ledger.Sync
   alias Sms.Switch.Test.LedgerSource
@@ -153,7 +154,7 @@ defmodule Sms.Switch.Pipeline.LedgerTest do
 
   describe "credit alerts" do
     defp alerts,
-      do: for(e <- Sms.Core.Bus.Local.published(), e.type == "billing.credit_alert", do: e.data)
+      do: for(e <- Local.published(), e.type == "billing.credit_alert", do: e.data)
 
     test "Notice, Warning and Critical as the credit limit is used, once each; the limit reached; re-armed by a payment" do
       start([[enterprise_id: 21, base: "0", limit: "1", alerts: [50, 70, 90]]])

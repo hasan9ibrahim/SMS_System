@@ -132,8 +132,9 @@ defmodule Sms.Switch.Pipeline.Revenue do
 
   @doc false
   def start_cache do
-    if :ets.whereis(@cache) == :undefined,
-      do: :ets.new(@cache, [:named_table, :public, :set, read_concurrency: true])
+    _ =
+      if :ets.whereis(@cache) == :undefined,
+        do: :ets.new(@cache, [:named_table, :public, :set, read_concurrency: true])
 
     :ok
   end

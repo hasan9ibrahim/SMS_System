@@ -4,8 +4,20 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
   use ExUnit.Case, async: false
   alias Sms.Core.Bus.Local
   alias Sms.Core.{ClickHouse, Repo}
-  alias Sms.Switch.Pipeline.{Config, Edr, EdrWriter, LateReceipts, MessageId, Queries}
+
+  alias Sms.Switch.Pipeline.{
+    Billing,
+    Config,
+    Edr,
+    EdrWriter,
+    LateReceipts,
+    Ledger,
+    MessageId,
+    Queries
+  }
+
   alias Sms.Switch.Pipeline.Config.Loader
+  alias Sms.Switch.Pipeline.Ledger.Source.Postgres
   alias Sms.Switch.Test.{CustomerCase, PipelineConfig}
 
   @moduletag :integration
@@ -47,9 +59,6 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
     end
 
     test "accounts come from balance_ledger; buckets are written to traffic_charges and read back" do
-      alias Sms.Switch.Pipeline.Ledger
-      alias Sms.Switch.Pipeline.Ledger.Source.Postgres
-
       assert {:ok, accounts} = Postgres.accounts()
 
       case accounts do
@@ -234,7 +243,7 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
       bill =
         full
         |> Map.put(:route, nil)
-        |> Sms.Switch.Pipeline.Billing.of_attempt(vendor, 1)
+        |> Billing.of_attempt(vendor, 1)
         |> Map.merge(%{c_type: "delivery", v_type: "delivery", attempt_no: 1})
 
       data =

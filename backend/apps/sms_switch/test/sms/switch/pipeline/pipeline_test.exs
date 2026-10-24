@@ -7,7 +7,8 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   alias Sms.Core.Bus.{Event, Local}
   alias Sms.Switch.Pipeline
   alias Sms.Switch.Pipeline.Held.OnBind
-  alias Sms.Switch.Test.{Client, CustomerCase, PipelineConfig}
+  alias Sms.Switch.Pipeline.Ledger.Sync
+  alias Sms.Switch.Test.{Client, CustomerCase, LedgerSource, PipelineConfig}
 
   @dest "4915112345678"
 
@@ -1623,14 +1624,12 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
   describe "credit check (§7, Q24)" do
     test "a prepaid customer is refused 0x45 once its balance no longer covers a message; billed messages count" do
-      Sms.Switch.Test.LedgerSource.put([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+      LedgerSource.put([[enterprise_id: 11, prepaid: true, base: "0.06"]])
 
-      start_supervised!(
-        {Pipeline.Ledger.Sync, source: Sms.Switch.Test.LedgerSource, interval_ms: 3_600_000}
-      )
+      start_supervised!({Sync, source: LedgerSource, interval_ms: 3_600_000})
 
       start_supervised!(Pipeline.Ledger.Charges)
-      :ok = Pipeline.Ledger.Sync.sync()
+      :ok = Sync.sync()
 
       %{client: client, conns: [conn]} = start_all()
       {client, resp} = submit(client, %{short_message: "first"})

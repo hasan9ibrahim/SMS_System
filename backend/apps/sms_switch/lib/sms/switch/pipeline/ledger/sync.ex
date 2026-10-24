@@ -29,15 +29,21 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
 
   @impl true
   def init(opts) do
-    for t <- [Ledger.accounts_table(), Ledger.seen_table()],
-        :ets.whereis(t) == :undefined,
-        do: :ets.new(t, [:named_table, :public, :set, read_concurrency: true])
+    Enum.each([Ledger.accounts_table(), Ledger.seen_table()], &new_table/1)
 
     Revenue.start_cache()
     source = Keyword.get(opts, :source, Ledger.Source.Postgres)
     {:ok, _} = :timer.send_interval(Keyword.get(opts, :interval_ms, @interval_ms), :tick)
     send(self(), :tick)
     {:ok, %{source: source}}
+  end
+
+  defp new_table(name) do
+    if :ets.whereis(name) == :undefined do
+      ^name = :ets.new(name, [:named_table, :public, :set, read_concurrency: true])
+    end
+
+    :ok
   end
 
   @impl true
@@ -77,34 +83,21 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
   # bucket a charge already started is left as it is.
   defp seed(source, account) do
     case Store.command(["SET", "lgs:#{account.key}", "1", "NX"]) do
-      {:ok, "OK"} ->
-        with {:ok, buckets} <- source.charges(account, account.cutoff) do
-          Enum.each(buckets, fn {bucket, micro, n} ->
-            _ =
-              Store.command([
-                "HSETNX",
-                "chg:#{account.key}",
-                Integer.to_string(bucket),
-                Integer.to_string(micro)
-              ])
+      {:ok, "OK"} -> seed_buckets(source, account)
+      {:ok, nil} -> :ok
+      {:error, _} = error -> error
+    end
+  end
 
-            _ =
-              Store.command([
-                "HSETNX",
-                "chm:#{account.key}",
-                Integer.to_string(bucket),
-                Integer.to_string(n)
-              ])
-          end)
+  defp seed_buckets(source, account) do
+    with {:ok, buckets} <- source.charges(account, account.cutoff) do
+      Enum.each(buckets, fn {bucket, micro, n} ->
+        b = Integer.to_string(bucket)
+        _ = Store.command(["HSETNX", "chg:#{account.key}", b, Integer.to_string(micro)])
+        Store.command(["HSETNX", "chm:#{account.key}", b, Integer.to_string(n)])
+      end)
 
-          rebase(account)
-        end
-
-      {:ok, nil} ->
-        :ok
-
-      {:error, _} = error ->
-        error
+      rebase(account)
     end
   end
 
@@ -117,22 +110,24 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
 
   # The buckets of accounts charged since the last run, written whole; an account whose write failed is marked again.
   defp flush(source) do
-    with {:ok, keys} when keys != [] <- Store.command(["SMEMBERS", "chd"]) do
-      Enum.each(keys, &Store.command(["SREM", "chd", &1]))
-      rows = Enum.flat_map(keys, &rows/1)
-
-      case source.persist(rows) do
-        :ok ->
-          Enum.each(keys, &prune/1)
-
-        {:error, reason} = error ->
-          Enum.each(keys, &Store.command(["SADD", "chd", &1]))
-          Logger.warning("traffic charges not written, tried again: #{inspect(reason)}")
-          error
-      end
-    else
+    case Store.command(["SMEMBERS", "chd"]) do
       {:ok, []} -> :ok
+      {:ok, keys} -> write(source, keys)
       {:error, _} = error -> error
+    end
+  end
+
+  defp write(source, keys) do
+    Enum.each(keys, &Store.command(["SREM", "chd", &1]))
+
+    case source.persist(Enum.flat_map(keys, &rows/1)) do
+      :ok ->
+        Enum.each(keys, &prune/1)
+
+      {:error, reason} = error ->
+        Enum.each(keys, &Store.command(["SADD", "chd", &1]))
+        Logger.warning("traffic charges not written, tried again: #{inspect(reason)}")
+        error
     end
   end
 
@@ -148,13 +143,17 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
   end
 
   defp prune(key) do
-    with %{} = account <- Ledger.account(key),
-         {:ok, amounts} <- hash("chg:#{key}") do
-      for {bucket, _} <- amounts, bucket < account.cutoff - @keep_buckets do
-        _ = Store.command(["HDEL", "chg:#{key}", Integer.to_string(bucket)])
-        Store.command(["HDEL", "chm:#{key}", Integer.to_string(bucket)])
+    _ =
+      with %{} = account <- Ledger.account(key),
+           {:ok, amounts} <- hash("chg:#{key}") do
+        amounts
+        |> Map.keys()
+        |> Enum.filter(&(&1 < account.cutoff - @keep_buckets))
+        |> Enum.each(fn bucket ->
+          _ = Store.command(["HDEL", "chg:#{key}", Integer.to_string(bucket)])
+          Store.command(["HDEL", "chm:#{key}", Integer.to_string(bucket)])
+        end)
       end
-    end
 
     :ok
   end

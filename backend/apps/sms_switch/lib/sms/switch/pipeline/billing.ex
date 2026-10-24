@@ -80,7 +80,6 @@ defmodule Sms.Switch.Pipeline.Billing do
   def of_attempt(msg, route, submits) do
     vt = Config.vendor_trunk(route.vendor_trunk_id) || %{}
     trunk = msg.trunk
-    d = msg.destination || %{}
 
     %{
       c_type: customer_type(msg),
@@ -94,16 +93,21 @@ defmodule Sms.Switch.Pipeline.Billing do
       attempt_no: 0,
       # §13.9: where its revenue counts once billed.
       rev_keys: Revenue.keys(msg, route[:rule_id]),
-      dims: %{
-        "business_company_id" => trunk[:business_company_id] || 0,
-        "product_category_id" => trunk[:product_category_id] || 0,
-        "c_am_user_id" => trunk[:account_manager_id] || 0,
-        "v_enterprise_id" => vt[:enterprise_id] || 0,
-        "v_am_user_id" => vt[:account_manager_id] || 0,
-        "c_mccmnc" => d[:mccmnc] || "",
-        "c_country_iso" => d[:country_iso] || "",
-        "route_rule_id" => route[:rule_id] || 0
-      }
+      dims: dims(trunk, vt, msg.destination || %{}, route)
+    }
+  end
+
+  # The report dimensions of the attempt (edr_hourly's key).
+  defp dims(trunk, vt, d, route) do
+    %{
+      "business_company_id" => trunk[:business_company_id] || 0,
+      "product_category_id" => trunk[:product_category_id] || 0,
+      "c_am_user_id" => trunk[:account_manager_id] || 0,
+      "v_enterprise_id" => vt[:enterprise_id] || 0,
+      "v_am_user_id" => vt[:account_manager_id] || 0,
+      "c_mccmnc" => d[:mccmnc] || "",
+      "c_country_iso" => d[:country_iso] || "",
+      "route_rule_id" => route[:rule_id] || 0
     }
   end
 

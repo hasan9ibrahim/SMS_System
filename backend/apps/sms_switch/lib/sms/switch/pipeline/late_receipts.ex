@@ -147,13 +147,15 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
             source: "vendor"
           })
 
-        with :ok <- Edr.publish_receipt(row),
-             do: if(duplicate, do: :ok, else: vendor_cost(attempt, receipt))
+        stored(Edr.publish_receipt(row), duplicate, attempt, receipt)
 
       {:error, _} = error ->
         error
     end
   end
+
+  defp stored(:ok, false, attempt, receipt), do: vendor_cost(attempt, receipt)
+  defp stored(result, _duplicate, _attempt, _receipt), do: result
 
   # §7, D5: a vendor billing on its receipt bills on the real status, even after the DLR timeout answered the customer;
   # the outcome row carries that cost only (no status, so delivered counts are not taken twice).
