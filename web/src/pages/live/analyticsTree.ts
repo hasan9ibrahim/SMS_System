@@ -358,11 +358,12 @@ export const TONED = new Set<ReportMetric>(["asr", "dlrCustomer", "dlrVendor", "
  * Cell colour (team trial round 1): ASR and both DLRs green from 80 %, black on orange from 60 % to
  * 80 %, black on red below 60 %; margin green when positive, black on red when negative.
  */
-export function cellTone(metric: ReportMetric, v: number | null | undefined): "" | "good" | "warn" | "bad" {
+export function cellTone(metric: ReportMetric, v: number | null | undefined): "" | "good" | "pos" | "warn" | "bad" {
   if (v === null || v === undefined) return "";
   if (metric === "asr" || metric === "dlrCustomer" || metric === "dlrVendor")
     return v >= 80 ? "good" : v >= 60 ? "warn" : "bad";
-  if (metric === "margin") return v > 0 ? "good" : v < 0 ? "bad" : "";
+  // Margin: green when positive, red when negative (team trial round 5); ASR and DLRs are coloured only when low.
+  if (metric === "margin") return v > 0 ? "pos" : v < 0 ? "bad" : "";
   return "";
 }
 

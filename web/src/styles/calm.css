@@ -15,6 +15,9 @@
 .la-grid td.la-good {
   color: inherit;
 }
+.la-grid td.la-pos {
+  color: var(--color-good);
+}
 .la-grid .la-total td,
 .la-grid .la-total td.num,
 .la-grid .la-total td.num.la-strong {

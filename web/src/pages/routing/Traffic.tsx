@@ -269,7 +269,7 @@ export function TrafficSection({ ruleId }: { ruleId: number }) {
             </div>
             <div>
               <dt>Margin</dt>
-              <dd className={`num${d.total.margin < 0 ? " tone-error" : ""}`}>{money(d.total.margin, ccy)}</dd>
+              <dd className={`num ${d.total.margin < 0 ? "tone-error" : "tone-good"}`}>{money(d.total.margin, ccy)}</dd>
             </div>
           </dl>
         )}
@@ -335,7 +335,7 @@ export function TrafficAside({ ruleId }: { ruleId: number }) {
         <dt>Messages</dt>
         <dd className="num strong">{d ? d.total.messages.toLocaleString("en-US") : "—"}</dd>
         <dt>Margin</dt>
-        <dd className={`num strong${d && d.total.margin < 0 ? " tone-error" : ""}`}>
+        <dd className={`num strong ${d && d.total.margin < 0 ? "tone-error" : "tone-good"}`}>
           {d ? money(d.total.margin, ccy) : "—"}
         </dd>
       </dl>
