@@ -468,6 +468,42 @@ defmodule Sms.Switch.Pipeline.Store do
     :ok
   end
 
+  @doc false
+  # One command on the configured backend, for the ledger (`Sms.Switch.Pipeline.Ledger`).
+  @spec command(list()) :: {:ok, term()} | {:error, term()}
+  def command(command), do: run(command)
+
+  @doc false
+  # Commands as one transaction on the configured backend.
+  @spec transaction([list()]) :: {:ok, list()} | {:error, term()}
+  def transaction(commands) do
+    case backend() do
+      :redis -> Redis.transaction(commands, @timeout)
+      :local -> local(commands)
+    end
+  end
+
+  # Sets `total` to the sum of the hash's fields from bucket `cutoff` on, atomically with the charges that add to both.
+  @rebase """
+  local sum = 0
+  local flat = redis.call('HGETALL', KEYS[1])
+  for i = 1, #flat, 2 do
+    if tonumber(flat[i]) >= tonumber(ARGV[1]) then sum = sum + tonumber(flat[i + 1]) end
+  end
+  redis.call('SET', KEYS[2], sum)
+  return sum
+  """
+
+  @doc false
+  # The ledger's uninvoiced total from its buckets, after an invoice moved the cut-off (`Sms.Switch.Pipeline.Ledger`).
+  @spec rebase(String.t(), String.t(), integer()) :: {:ok, integer()} | {:error, term()}
+  def rebase(hash, total, cutoff) do
+    case backend() do
+      :redis -> Redis.command(["EVAL", @rebase, 2, hash, total, cutoff], @timeout)
+      :local -> local_one(["REBASE", hash, total, cutoff])
+    end
+  end
+
   defp ok({:ok, _}), do: :ok
   defp ok(:ok), do: :ok
   defp ok({:error, _} = error), do: error
@@ -594,6 +630,13 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
+  defp exec(["SET", key, value, "NX"]) do
+    case lookup(key) do
+      nil -> put_then(key, value, @far, "OK")
+      _ -> nil
+    end
+  end
+
   defp exec(["SET", key, value, "NX", "EX", ttl]) do
     case lookup(key) do
       nil -> put_then(key, value, ttl, "OK")
@@ -609,6 +652,22 @@ defmodule Sms.Switch.Pipeline.Store do
   end
 
   defp exec(["GET", key]), do: lookup(key)
+
+  defp exec(["INCRBY", key, by]) do
+    n = String.to_integer(lookup(key) || "0") + by
+    put(key, Integer.to_string(n), expiry(key))
+    n
+  end
+
+  defp exec(["REBASE", hash, total, cutoff]) do
+    sum =
+      for {bucket, v} <- get_hash(hash), int(bucket) >= cutoff, reduce: 0 do
+        acc -> acc + int(v)
+      end
+
+    put(total, Integer.to_string(sum), System.monotonic_time(:second) + @far)
+    sum
+  end
 
   defp exec(["DEL", key]) do
     found = if lookup(key), do: 1, else: 0
@@ -666,6 +725,9 @@ defmodule Sms.Switch.Pipeline.Store do
     :ets.delete(@table, key)
     value
   end
+
+  defp int(v) when is_integer(v), do: v
+  defp int(v), do: String.to_integer(v)
 
   defp lookup(key) do
     now = System.monotonic_time(:second)

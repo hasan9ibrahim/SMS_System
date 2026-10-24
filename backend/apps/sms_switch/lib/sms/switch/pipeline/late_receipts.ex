@@ -19,7 +19,7 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
 
   require Logger
   alias Sms.Core.{Bus, ClickHouse}
-  alias Sms.Switch.Pipeline.{Billing, Edr, Store}
+  alias Sms.Switch.Pipeline.{Billing, Edr, Ledger, Store}
 
   # How far back an attempt is looked for: the longest DLR timeout plus the hold of a late receipt.
   @days 7
@@ -89,7 +89,7 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
   @attempt """
   SELECT toString(edr_id), start_time, c_enterprise_id, c_trunk_id, c_message_id,
          arrayFirstIndex(k -> has({keys:Array(String)}, k), v_message_keys) AS part,
-         v_billing_type, toString(v_rate), toString(v_sys_rate), msg_count, attempt_no, business_company_id,
+         v_billing_type, toString(v_rate), toString(v_sys_rate), msg_count, attempt_no, v_currency, business_company_id,
          product_category_id, c_am_user_id, v_enterprise_id, v_am_user_id, c_mccmnc, c_country_iso, route_rule_id
     FROM edr
    WHERE v_trunk_id = {vt:UInt32} AND is_submit_success = 1 AND hasAny(v_message_keys, {keys:Array(String)})
@@ -157,7 +157,7 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
 
   # §7, D5: a vendor billing on its receipt bills on the real status, even after the DLR timeout answered the customer;
   # the outcome row carries that cost only (no status, so delivered counts are not taken twice).
-  defp vendor_cost(%{billing: [type, rate, sys, parts, no | dims]} = attempt, receipt) do
+  defp vendor_cost(%{billing: [type, rate, sys, parts, no, currency | dims]} = attempt, receipt) do
     if Billing.on_receipt?(type, receipt.status) do
       keys =
         ~w(business_company_id product_category_id c_am_user_id v_enterprise_id v_am_user_id c_mccmnc
@@ -177,6 +177,15 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
             dims: Map.new(Enum.zip(keys, dims))
           }
         })
+
+      _ =
+        Ledger.charge(
+          :vendor,
+          data.bill.dims["v_enterprise_id"],
+          "#{attempt.edr_id}:late",
+          %{rate: Decimal.new(rate), currency: currency},
+          parts
+        )
 
       data
       |> Edr.outcome_row(%{

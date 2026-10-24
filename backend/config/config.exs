@@ -29,7 +29,7 @@ config :sms_switch, Sms.Switch.Pipeline,
   node_id: 0,
   platform_currency: "EUR",
   vendor_wait_ms: 10_000,
-  credit: Sms.Switch.Pipeline.Credit.Open
+  credit: Sms.Switch.Pipeline.Ledger
 
 # What the pipeline keeps about messages in flight is shared by both servers through Redis (§13.1).
 config :sms_switch, Sms.Switch.Pipeline.Store, backend: :redis

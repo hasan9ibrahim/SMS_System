@@ -40,6 +40,41 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
     end
   end
 
+  describe "Ledger on the real schema (migration 072)" do
+    setup do
+      start_supervised!(Repo)
+      :ok
+    end
+
+    test "accounts come from balance_ledger; buckets are written to traffic_charges and read back" do
+      alias Sms.Switch.Pipeline.Ledger
+      alias Sms.Switch.Pipeline.Ledger.Source.Postgres
+
+      assert {:ok, accounts} = Postgres.accounts()
+
+      case accounts do
+        [] ->
+          :ok
+
+        [account | _] ->
+          assert account.key == Ledger.key(account.side, account.enterprise_id)
+          bucket = Ledger.bucket(System.os_time(:second)) + 100_000
+
+          try do
+            assert :ok = Postgres.persist([{account, bucket, 1_234_567, 3}])
+            assert :ok = Postgres.persist([{account, bucket, 2_000_000, 4}])
+            assert {:ok, buckets} = Postgres.charges(account, bucket)
+            assert {bucket, 2_000_000, 4} in buckets
+            assert :ok = Postgres.persist([])
+          after
+            Repo.query!("DELETE FROM traffic_charges WHERE bucket = to_timestamp($1)", [
+              bucket * Ledger.bucket_s()
+            ])
+          end
+      end
+    end
+  end
+
   describe "EdrWriter on the real schema" do
     setup do
       start_supervised!(ClickHouse)

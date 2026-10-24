@@ -28,6 +28,7 @@ defmodule Sms.Switch.Pipeline.Receipts do
     Edr,
     Forwarder,
     LateReceipts,
+    Ledger,
     Receipt,
     Sender,
     Store
@@ -279,6 +280,13 @@ defmodule Sms.Switch.Pipeline.Receipts do
             Billing.on_receipt?(bill.v_type, final.status),
         source: final[:source]
       })
+
+    if row["is_customer_billable"] == 1,
+      do: Ledger.charge(:customer, data.trunk.enterprise_id, data.id, bill.sell, bill.c_parts)
+
+    if row["is_vendor_billable"] == 1,
+      do:
+        Ledger.charge(:vendor, bill.dims["v_enterprise_id"], data.edr_id, bill.cost, bill.v_parts)
 
     case Edr.publish_receipt(row) do
       :ok -> :ok

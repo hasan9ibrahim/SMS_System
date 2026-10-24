@@ -24,6 +24,8 @@ defmodule Sms.Switch.Pipeline.Supervisor do
       Pipeline.Forwarder,
       Pipeline.Held.OnBind,
       Pipeline.LateReceipts,
+      Pipeline.Ledger.Sync,
+      Pipeline.Ledger.Charges,
       Pipeline.LateResponses
     ]
 

@@ -1620,4 +1620,28 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert Enum.all?(outcome_rows(), &(&1["is_customer_billable"] == 0))
     end
   end
+
+  describe "credit check (§7, Q24)" do
+    test "a prepaid customer is refused 0x45 once its balance no longer covers a message; billed messages count" do
+      Sms.Switch.Test.LedgerSource.put([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+
+      start_supervised!(
+        {Pipeline.Ledger.Sync, source: Sms.Switch.Test.LedgerSource, interval_ms: 3_600_000}
+      )
+
+      start_supervised!(Pipeline.Ledger.Charges)
+      :ok = Pipeline.Ledger.Sync.sync()
+
+      %{client: client, conns: [conn]} = start_all()
+      {client, resp} = submit(client, %{short_message: "first"})
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      # Billed on submit: 0.05 of the 0.06 used.
+      assert_eventually(fn -> Pipeline.Ledger.balance("c11") == 10_000 end)
+
+      {_client, resp} = submit(client, %{short_message: "second"}, 3)
+      assert resp.status == 0x45
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+  end
 end

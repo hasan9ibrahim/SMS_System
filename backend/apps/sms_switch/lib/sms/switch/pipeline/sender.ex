@@ -42,6 +42,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     Edr,
     Forwarder,
     Intake,
+    Ledger,
     LiveTps,
     Receipts,
     Router,
@@ -541,6 +542,24 @@ defmodule Sms.Switch.Pipeline.Sender do
     :ok
   end
 
+  # §7: the balances are charged when the attempt row makes the message billable (`Sms.Switch.Pipeline.Ledger`).
+  defp charge(msg, row) do
+    if row.customer_billable,
+      do: Ledger.charge(:customer, msg.trunk.enterprise_id, msg.id, msg.sell, msg.parts)
+
+    if row.vendor_billable do
+      vt = Config.vendor_trunk(row.vendor.vendor_trunk_id) || %{}
+
+      Ledger.charge(
+        :vendor,
+        vt[:enterprise_id],
+        row.edr_id,
+        row.vendor[:cost],
+        row[:msg_count] || msg.parts
+      )
+    end
+  end
+
   defp record_of(msg, route, trunk, attempt, parts) do
     Map.merge(Forwarder.core(msg), %{
       edr_id: attempt.edr_id,
@@ -630,6 +649,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     |> Enum.each(fn row ->
       row = row |> Map.put_new(:final, final) |> Map.put_new(:success, false)
       row = Map.merge(Billing.flags(msg, row), row)
+      charge(msg, row)
 
       case Edr.publish_attempt(Edr.attempt_row(msg, row)) do
         :ok ->
