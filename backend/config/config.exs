@@ -24,12 +24,16 @@ config :sms_core, Sms.Core.Bus,
 # in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session.
 config :sms_switch, Sms.Switch.Customer, enabled: true
 
-# TPS limits shared by both servers through Redis (decision Q13); per server, divided by the cluster size, while Redis
-# is unavailable (S-7.4).
+# The vendor side (build step 3, Sms.Switch.Vendor): connections come from the vendor trunks; timeouts and TLS
+# certificate checks are in Sms.Switch.Vendor.Session.
+config :sms_switch, Sms.Switch.Vendor, enabled: true
+
 # Failed binds counted by the Firewall filters (spec §8) are shared by both servers through Redis.
 config :sms_switch, Sms.Switch.Customer.Firewall, backend: :redis
 
-config :sms_switch, Sms.Switch.Customer.Throttle,
+# TPS limits shared by both servers through Redis (decision Q13), for customer and vendor trunks alike; per server,
+# divided by the cluster size, while Redis is unavailable (S-7.4).
+config :sms_switch, Sms.Switch.Throttle,
   backend: :redis,
   cluster_size: 2,
   redis_timeout_ms: 50,
@@ -37,6 +41,16 @@ config :sms_switch, Sms.Switch.Customer.Throttle,
 
 config :logger, :default_formatter,
   format: "$date $time [$level] $metadata$message\n",
-  metadata: [:event_id, :subject, :consumer, :reason, :session_id, :trunk_id, :peer]
+  metadata: [
+    :event_id,
+    :subject,
+    :consumer,
+    :reason,
+    :session_id,
+    :trunk_id,
+    :peer,
+    :vendor_trunk_id,
+    :connection
+  ]
 
 import_config "#{config_env()}.exs"

@@ -21,7 +21,7 @@ defmodule Sms.Switch.Customer.Session do
 
     * At most `:inbound_window` requests are processed at once; past that the session stops reading the socket,
       so TCP pushes back on the client instead of the switch buffering without limit (S-1.18).
-    * `submit_sm` and `data_sm` count against the trunk's and the company's TPS (`Sms.Switch.Customer.Throttle`);
+    * `submit_sm` and `data_sm` count against the trunk's and the company's TPS (`Sms.Switch.Throttle`);
       over the limit they get 0x58 (S-2.4). While the node drains, they get 0x58 too (S-1.16).
     * Our own requests to the client (`deliver_sm` receipts, `enquire_link`) use sequence numbers 1–0x7FFFFFFF,
       wrapping and never reusing one still waiting (S-1.14). At most `:outbound_window` `deliver_sm` wait for their
@@ -37,8 +37,9 @@ defmodule Sms.Switch.Customer.Session do
   use GenServer
   require Logger
   alias Sms.Switch.Customer
-  alias Sms.Switch.Customer.{Events, Firewall, Intake, Sessions, Throttle, Trunk, TrunkStore}
+  alias Sms.Switch.Customer.{Events, Firewall, Intake, Sessions, Trunk, TrunkStore}
   alias Sms.Switch.Smpp.{Command, Pdu}
+  alias Sms.Switch.Throttle
 
   @task_supervisor Sms.Switch.Customer.Tasks
   @max_sequence 0x7FFFFFFF
@@ -751,7 +752,7 @@ defmodule Sms.Switch.Customer.Session do
   defp throttled(state) do
     cond do
       Customer.draining?() -> :esme_rthrottled
-      Throttle.check(state.trunk) != :ok -> :esme_rthrottled
+      Throttle.acquire(Trunk.tps_counters(state.trunk)) != :ok -> :esme_rthrottled
       true -> nil
     end
   end

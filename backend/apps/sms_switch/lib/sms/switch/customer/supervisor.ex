@@ -1,12 +1,13 @@
 defmodule Sms.Switch.Customer.Supervisor do
   @moduledoc """
   The customer side's processes. In start order: the task supervisor (intake calls, events), the session registry
-  and its cluster scope, the services (Firewall, TPS counters, trunks), and the listeners last, so a
+  and its cluster scope, the services (Firewall, trunks); the TPS counters (`Sms.Switch.Throttle`) are shared
+  with the vendor side and started by the application, and the listeners last, so a
   client is never accepted before everything it needs is up. A crash of the registry restarts the listeners (and
   so the sessions) with it; the services restart on their own without touching bound sessions.
   """
   use Supervisor
-  alias Sms.Switch.Customer.{Firewall, Listener, Sessions, Throttle, TrunkStore}
+  alias Sms.Switch.Customer.{Firewall, Listener, Sessions, TrunkStore}
 
   @doc """
   Options: `:listeners`, `:tls`, `:session`, `:intake`, `:trunk_loader`, `:trunk_refresh_ms`, `:firewall`
@@ -24,7 +25,6 @@ defmodule Sms.Switch.Customer.Supervisor do
 
     services = [
       {Firewall, Keyword.get(config, :firewall, [])},
-      Throttle,
       {TrunkStore, store_opts}
     ]
 

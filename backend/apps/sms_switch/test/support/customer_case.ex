@@ -75,6 +75,8 @@ defmodule Sms.Switch.Test.CustomerCase do
         end
       )
 
+    # Shared with the vendor side; tests that restart the customer side keep the one already running.
+    _ = unless Process.whereis(Sms.Switch.Throttle), do: start_supervised!(Sms.Switch.Throttle)
     start_supervised!({Sms.Switch.Customer.Supervisor, opts})
 
     for listener <- opts[:listeners], into: %{} do

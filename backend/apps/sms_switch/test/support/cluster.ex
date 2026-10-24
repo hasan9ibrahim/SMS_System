@@ -3,7 +3,10 @@ defmodule Sms.Switch.Test.Cluster do
   Helpers for tests with a second BEAM node (`:peer`), standing in for the second server: the session registry runs
   on both, and fake sessions register on either.
   """
+  alias Sms.Core.Bus
   alias Sms.Switch.Customer.{Sessions, Trunk}
+  alias Sms.Switch.Test.VendorCase
+  alias Sms.Switch.Vendor
 
   @doc "Starts a peer node (not linked: stop it with `:peer.stop/1`); the calling node becomes distributed if it is not."
   def start_peer(name) do
@@ -26,6 +29,25 @@ defmodule Sms.Switch.Test.Cluster do
   @doc "Starts the session registry and cluster scope on this node, not linked to the caller."
   def start_sessions do
     {:ok, pid} = Supervisor.start_link(Sessions.child_specs(), strategy: :one_for_one)
+    Process.unlink(pid)
+    pid
+  end
+
+  @doc """
+  Starts the vendor side on this node with `trunks`, not linked to the caller: the event bus in memory and trunks
+  served from memory (`Sms.Switch.Test.VendorCase.load_trunks/0`).
+  """
+  def start_vendor(trunks, session \\ []) do
+    Application.put_env(:sms_core, Bus, adapter: Bus.Local)
+    VendorCase.put_trunks(trunks)
+
+    children = [
+      Bus,
+      {Vendor.Supervisor,
+       trunk_loader: &VendorCase.load_trunks/0, trunk_refresh_ms: 60_000, session: session}
+    ]
+
+    {:ok, pid} = Supervisor.start_link(children, strategy: :one_for_one)
     Process.unlink(pid)
     pid
   end

@@ -4,8 +4,9 @@ defmodule Sms.Switch.Customer.PartsTest do
   use ExUnitProperties
   @moduletag capture_log: true
   import ExUnit.CaptureLog
-  alias Sms.Switch.Customer.{Firewall, IpRange, Loader, Throttle, Trunk, TrunkStore}
+  alias Sms.Switch.Customer.{Firewall, IpRange, Loader, Trunk, TrunkStore}
   alias Sms.Switch.Test.FirewallSource
+  alias Sms.Switch.Throttle
 
   describe "IpRange" do
     test "hosts and networks, IPv4 and IPv6" do
@@ -104,7 +105,7 @@ defmodule Sms.Switch.Customer.PartsTest do
 
     test "counts per second up to the trunk limit; the company limit applies on top" do
       trunk = %Trunk{id: 1, username: "u", password: "p", tps: 3, max_connections: 1}
-      results = for _ <- 1..5, do: Throttle.check(trunk)
+      results = for _ <- 1..5, do: Throttle.acquire(Trunk.tps_counters(trunk))
       assert length(Enum.filter(results, &(&1 == :ok))) in 1..3
       assert {:error, :trunk_tps} in results
 
@@ -119,7 +120,10 @@ defmodule Sms.Switch.Customer.PartsTest do
       }
 
       other = %Trunk{company | id: 3}
-      results = for t <- [company, other, company, other], do: Throttle.check(t)
+
+      results =
+        for t <- [company, other, company, other], do: Throttle.acquire(Trunk.tps_counters(t))
+
       assert {:error, :company_tps} in results
     end
 
@@ -135,21 +139,21 @@ defmodule Sms.Switch.Customer.PartsTest do
       }
 
       second = System.os_time(:second)
-      _ = Throttle.check(trunk)
-      _ = Throttle.check(trunk)
+      _ = Throttle.acquire(Trunk.tps_counters(trunk))
+      _ = Throttle.acquire(Trunk.tps_counters(trunk))
 
       # The table holds the counted submits only (one, under the company limit), unless the second changed.
       if System.os_time(:second) == second do
-        assert :ets.lookup(Throttle, {:ct, 9, second}) == [{{:ct, 9, second}, 1}]
-        assert :ets.lookup(Throttle, {:bc, 1, second}) == [{{:bc, 1, second}, 1}]
+        assert :ets.lookup(Throttle, {"ct:9", second}) == [{{"ct:9", second}, 1}]
+        assert :ets.lookup(Throttle, {"bc:1", second}) == [{{"bc:1", second}, 1}]
       end
     end
 
     test "old seconds are swept" do
-      :ets.insert(Throttle, {{:ct, 1, 0}, 5})
+      :ets.insert(Throttle, {{"ct:1", 0}, 5})
       send(Throttle, :sweep)
       _ = :sys.get_state(Throttle)
-      assert :ets.lookup(Throttle, {:ct, 1, 0}) == []
+      assert :ets.lookup(Throttle, {"ct:1", 0}) == []
     end
   end
 
@@ -178,7 +182,7 @@ defmodule Sms.Switch.Customer.PartsTest do
 
       log =
         capture_log(fn ->
-          results = for _ <- 1..4, do: Throttle.check(trunk)
+          results = for _ <- 1..4, do: Throttle.acquire(Trunk.tps_counters(trunk))
           ok = Enum.count(results, &(&1 == :ok))
           assert ok >= 1 and ok <= 2
         end)
