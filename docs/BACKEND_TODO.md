@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | (backend) SMPP switch | No contract change. New `docs/SMPP_SCENARIOS.md`: 93 numbered switch scenarios (binds, submit_sm_resp session and timing, client timeouts while queued, multipart and concatenation in every format, reassembly, translations changing the part count, vendor timeouts and errors, receipts, rating at send time, reliability, security), each with required behaviour and an acceptance test; 10 decisions (D1–D10) added to Open questions. | §2, §6, §13.1, §14 | Product owner | Open: needs decisions D1–D10 |
 | 2026-10-24 | Whole GUI, enterprises, route simulator | No contract change. Page headers no longer show the sibling page pills (the top menu lists them). Enterprise › Account managers: **Partner Account Manager** card under the history = the enterprise's Commercial contact (name, phone, e-mails). Route simulator: Vendor trunk moved from Advanced to its own card under the message; the picker lists every vendor trunk (list query limit 1000) instead of the first 30. Translation rule form: Match conditions as one compact grid (rows Sender ID, Receiver ID, Message text, MCCMNC; columns pattern, list/networks, length), networks picked in a dialog instead of an inline tree. User-facing text writes **Account Manager** in full instead of "AM" (labels, columns, e-mail type name Account Manager Handover, help). | §15.1, §13.30, §9.2, §6.4 | Team trial round 5 | Done (GUI only) |
 | 2026-10-23 | Route simulator | Contract v0.89.0. `RouteSimulatorInput.mccmnc` accepts 3-digit codes (`^[0-9]{3,6}$`): a country's All networks (default) entry, simulated with a test number from its dial code (it was rejected before). GUI: two-column layout (numbered cards; summary, test SMS switch and Simulate route on the right, result under it); translation results list only the rules that matched (others counted); Destination mode: a whole country ticked = its All networks entry only, at most 5 networks per run. | §9.2, §6.4 | Team trial round 5 | Mock done |
 | 2026-10-23 | Market moves | Contract v0.88.0. `MarketMoveSettings.unlistedMode` gains **`tier1`, now the default** (migration 066 also switches the stored setting): destinations without a hand-picked list count only their Tier 1 vendors, so one with fewer Tier 1 vendors than `minVendors` is not watched. `cheapest` and `skip` unchanged. | §13.14 | Team trial round 5 | Mock done |
@@ -628,6 +629,19 @@ What the Phoenix backend must match so the screens need no change:
 - Converted at the latest rate today: Rate Lookup, route evaluation, the Rate Manager system-rate column and money today (shown back in the table's currency).
 
 ## Open questions
+
+- **SMPP edge cases (2026-10-24, `docs/SMPP_SCENARIOS.md` › Decisions needed).** Each has a proposal; the backend
+  needs the product owner's answer before implementing:
+  - D1 incomplete multipart group after the reassembly timeout: send the parts that arrived, or fail them?
+  - D2 one part of a multipart message fails at the vendor: resend all parts via the next vendor, and who pays the first attempt?
+  - D3 a translation grows the part count (e.g. 1 → 2): re-segment (margin loss) or block; bill the customer on sent or delivered parts?
+  - D4 vendor submit timeout: resend (risk of double delivery) or wait for a late resp / receipt?
+  - D5 a real receipt arrives after the DLR-timeout receipt: send the customer a correction?
+  - D6 duplicate-submit filter per trunk: wanted, and which window?
+  - D7 transaction-mode submits (resp waits for the vendor): support or refuse?
+  - D8 query_sm / cancel_sm / replace_sm: which to support?
+  - D9 national language shift tables: needed in v1?
+  - D10 empty messages: accept or reject?
 
 - **Invoice and balance amounts (team trial round 3).** Traffic money (revenue, cost, margin, rates) is now calculated to
   6 decimals. Invoices, payments, SOA and balances are still stored and summed to 2 decimals (currency cents, schema
