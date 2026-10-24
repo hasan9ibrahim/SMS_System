@@ -130,6 +130,8 @@ jobs:
           PGUSER: sms_dev
           PGPASSWORD: sms_dev_password
           PGDATABASE: sms_config
+          # As the mock applies them: the migrations name tables without the schema.
+          PGOPTIONS: "-c search_path=sms,public"
         run: |
           for f in db/postgres/init/*.sql db/postgres/migrations/*.sql; do
             psql -q -v ON_ERROR_STOP=1 -f "$f" > /dev/null
