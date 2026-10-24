@@ -680,6 +680,10 @@ export const topics: HelpTopic[] = [
             text: "Lists every AM the partner has had: **Account manager**, **From**, **Until** (UTC), **Note**, and a tag **Current** or **Scheduled**.",
           },
           {
+            kind: "text",
+            text: "Under it, **Partner AM** shows the partner's own account manager on their side: the **Commercial** contact from the General tab, with name, phone and e-mails (click to write, copy icon to copy). Change it on the General tab.",
+          },
+          {
             kind: "fields",
             title: "Hand over dialog",
             fields: [

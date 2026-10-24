@@ -1664,3 +1664,84 @@ svg.flip {
 .sim-card .field > span.muted {
   font-weight: 400;
 }
+/* Translation rule match conditions as one compact grid (team trial round 5): a row per field; pattern, list and
+   length columns, each condition with its Match / Not Match switch. */
+.match-grid {
+  display: grid;
+  grid-template-columns: 130px minmax(160px, 1.2fr) auto minmax(200px, 1.3fr) auto 130px;
+  gap: 8px 10px;
+  align-items: center;
+}
+.match-grid .mg-head {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.match-grid .mg-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 600;
+}
+.match-grid .mg-label .match-case {
+  font-weight: 400;
+  font-size: 12px;
+}
+.match-grid .mg-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.match-grid .mg-cell > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+.match-grid .mg-list .lookup {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.match-grid .mg-len input {
+  width: 52px;
+  flex: none;
+}
+.match-grid .mg-span3 {
+  grid-column: span 3;
+  min-width: 0;
+}
+.match-grid .mg-or {
+  justify-self: center;
+}
+.match-grid .mg-nets .small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.match-grid .mg-foot {
+  grid-column: 1 / -1;
+}
+.match-grid .error-text {
+  flex-basis: 100%;
+}
+@media (max-width: 1000px) {
+  .match-grid {
+    grid-template-columns: 1fr auto;
+  }
+  .match-grid .mg-head {
+    display: none;
+  }
+  .match-grid .mg-span3 {
+    grid-column: auto;
+  }
+}
+.match-grid .negate {
+  min-width: max-content;
+  white-space: nowrap;
+  flex: none;
+}
+.match-grid .negate button {
+  white-space: nowrap;
+}

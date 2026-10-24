@@ -1841,7 +1841,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The page has two columns. On the left, numbered cards: **1 Who is sending**, **2 Send to** and **3 Message**, then **Advanced settings** folded up (its line shows the TON / NPI, coding and vendor in use; **Change** opens them). On the right, the **Summary** (From, Sender ID, To, Message, Vendor), **Also send a real test SMS** and the **Simulate route** button; the result appears under it, step by step.",
+            text: "The page has two columns. On the left, numbered cards: **1 Who is sending**, **2 Send to** and **3 Message**, **4 Vendor** (optional), then **Advanced settings** folded up (its line shows the TON / NPI and coding in use; **Change** opens them). On the right, the **Summary** (From, Sender ID, To, Message, Vendor), **Also send a real test SMS** and the **Simulate route** button; the result appears under it, step by step.",
           },
           {
             kind: "fields",
@@ -1876,7 +1876,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Vendor trunk (test directly, skips routing)",
-                what: "Send straight to this vendor at its own rate. The route rules are still shown for reference.",
+                what: "Card **4 Vendor**, under the message. Send straight to this vendor at its own rate. The route rules are still shown for reference. Every vendor trunk is listed when it opens; type to narrow.",
                 values: "Empty = by the route rules.",
               },
               {

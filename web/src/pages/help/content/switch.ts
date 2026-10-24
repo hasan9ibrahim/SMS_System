@@ -224,6 +224,10 @@ export const topics: HelpTopic[] = [
             text: "All conditions you fill in must hold for the rule to match. Empty conditions are ignored, so a rule with no conditions matches every message. Most conditions have a **Match / Not Match** switch: **Not Match** turns the condition around (for example “the Sender ID is NOT in this list”).",
           },
           {
+            kind: "text",
+            text: "The section is one compact grid: a row each for **Sender ID** (with **Case sensitive** under its name), **Receiver ID**, **Message text** and **MCCMNC**; columns **Pattern (regex)**, **Number list / networks** and **Length** (min – max). Each pattern and list has its own Match / Not Match switch. For MCCMNC, type a pattern or click **Pick networks…** to tick countries and networks in a window (the row then shows how many and which; **Clear** empties it).",
+          },
+          {
             kind: "fields",
             title: "Match conditions section",
             fields: [

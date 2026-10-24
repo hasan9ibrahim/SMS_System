@@ -1372,3 +1372,24 @@
   border-color: var(--color-accent);
   box-shadow: inset 0 2px 0 var(--color-accent);
 }
+/* Partner AM (team trial round 5): the client's Commercial contact under our AM. */
+.am-partner {
+  margin-top: 14px;
+}
+.am-partner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.am-partner .chip-tag .icon-btn {
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+}
+.am-partner a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.am-partner a:hover {
+  text-decoration: underline;
+}

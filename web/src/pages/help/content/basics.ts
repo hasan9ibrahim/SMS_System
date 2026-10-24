@@ -246,7 +246,6 @@ export const topics: HelpTopic[] = [
             items: [
               "**Back arrow** — goes back to the page you had open before in this tab, or, if there is none, to the tab this one was opened from. Shortcut **Alt+←**. It is greyed out when there is nowhere to go back to.",
               "**Page title** — on record pages it can be a picker to switch to another record. There is no description line under the title.",
-              "**Sibling links** — the other pages of the same menu as small links; the current one is highlighted. Ctrl-click or middle-click opens one in a new tab.",
               "**Actions** on the right (small buttons) — usually **Undo**, **History**, **Export** and the page's main action. The main action (for example **Add rule**) is the only filled, coloured button on the page.",
             ],
           },

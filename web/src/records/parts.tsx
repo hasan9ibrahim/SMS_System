@@ -538,6 +538,7 @@ export function ListLookup<Row extends { id: number }>({
   disabled,
   exclude = [],
   clearable = true,
+  limit = 30,
 }: {
   list: ListId;
   value: number | null;
@@ -549,6 +550,8 @@ export function ListLookup<Row extends { id: number }>({
   disabled?: boolean;
   exclude?: number[];
   clearable?: boolean;
+  /** Rows offered before typing (team trial round 5: the simulator lists every vendor trunk). */
+  limit?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -565,12 +568,12 @@ export function ListLookup<Row extends { id: number }>({
     staleTime: 60_000,
   });
   const results = useQuery({
-    queryKey: ["lookup", list, q, fixed],
+    queryKey: ["lookup", list, q, fixed, limit],
     queryFn: () =>
       fetchListPage<Row>(list, {
         ...(q.trim() ? { search: q.trim() } : {}),
         ...(fixed?.length ? { filter: { logic: "and", conditions: fixed } } : {}),
-        limit: 30,
+        limit,
         withTotal: false,
       }),
     enabled: open,
