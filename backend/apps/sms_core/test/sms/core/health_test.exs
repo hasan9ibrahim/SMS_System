@@ -4,6 +4,8 @@ defmodule Sms.Core.HealthTest do
 
   test "nothing to check is healthy" do
     assert Health.check([]) == %{overall: :ok, services: %{}}
+    # The configured services by default; the test config checks none.
+    assert Health.check() == %{overall: :ok, services: %{}}
   end
 
   test "a running bus is ok; a store that is not started is reported, not raised" do

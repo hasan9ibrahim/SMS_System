@@ -47,7 +47,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
       translation_rules: maps(Enum.map(d.translation_rules, &translation_rule/1)),
       translation_targets: maps(d.translation_targets),
       translation_settings: maps([]),
-      list_entries: {[], []},
+      list_entries: {[], d.list_entries},
       quality: {[], []},
       fx: {[], [["EUR", Decimal.new(1)], ["USD", Decimal.new("1.1")]]}
     }
@@ -81,7 +81,9 @@ defmodule Sms.Switch.Test.PipelineConfig do
       route_rules: [%{id: 1}],
       route_vendors: [route_vendor(1, 1)],
       translation_rules: [],
-      translation_targets: []
+      translation_targets: [],
+      # [list_id, value, content | nil]
+      list_entries: []
     }
   end
 

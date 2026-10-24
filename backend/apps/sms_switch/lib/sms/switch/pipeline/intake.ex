@@ -147,11 +147,13 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
-  # A part's own text stays (reassembly comes with build step 5).
+  # A part's own text stays (reassembly comes with build step 5), also as the text the vendor gets: the shared route's
+  # egress text is the deciding part's, which would otherwise be sent in place of every other part's.
   defp share(msg, shared),
     do: %{
       Map.merge(msg, shared)
-      | ingress: %{shared.ingress | text: msg.text, text_changed: false}
+      | ingress: %{shared.ingress | text: msg.text, text_changed: false},
+        route: put_in(shared.route, [:egress, :text], msg.text)
     }
 
   # S-2.8: short_message and message_payload together are refused; data_sm carries its text in message_payload only.

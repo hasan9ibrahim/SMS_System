@@ -4,7 +4,9 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   use Sms.Switch.Test.VendorCase, async: false
   @moduletag capture_log: true
 
+  alias Sms.Core.Bus.Event
   alias Sms.Switch.Pipeline
+  alias Sms.Switch.Pipeline.Held.OnBind
   alias Sms.Switch.Test.{Client, CustomerCase, PipelineConfig}
 
   @dest "4915112345678"
@@ -27,10 +29,14 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
     smscs = for _ <- 1..Keyword.get(opts, :smscs, 1), do: start_smsc()
 
+    vendor_fields = Keyword.get(opts, :vendor_fields, %{})
+
     vendors =
       smscs
       |> Enum.with_index(1)
-      |> Enum.map(fn {s, id} -> trunk(FakeSmsc.port(s), id: id, name: "V#{id}") end)
+      |> Enum.map(fn {s, id} ->
+        trunk(FakeSmsc.port(s), [id: id, name: "V#{id}"] ++ Map.get(vendor_fields, id, []))
+      end)
 
     start_vendor(vendors, receipts: Pipeline.Receipts)
     for v <- vendors, do: await_bound(v.id, 1)
@@ -432,6 +438,405 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert_eventually(fn -> Enum.any?(edr("edr.receipt"), &(&1["kind"] == "customer")) end)
       row = Enum.find(edr("edr.receipt"), &(&1["kind"] == "customer"))
       assert row["receipt_held_ms"] > 0
+    end
+  end
+
+  # Two vendors on one rule, vendor 1 first; `vendor_trunks` overrides the trunks' fields.
+  defp two_vendors(extra \\ []) do
+    Keyword.merge(
+      [
+        vendor_trunks: [
+          PipelineConfig.vendor_trunk(id: 1),
+          PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201])
+        ],
+        rates: [
+          PipelineConfig.rate(100, 1, "26201", "0.05"),
+          PipelineConfig.rate(200, 2, "26201", "0.02"),
+          PipelineConfig.rate(201, 3, "26201", "0.03")
+        ],
+        route_vendors: [
+          PipelineConfig.route_vendor(1, 1, 1),
+          PipelineConfig.route_vendor(1, 2, 2)
+        ]
+      ],
+      extra
+    )
+  end
+
+  # `raw:` in the TLVs is appended as it is: bytes our own encoder refuses to make (a PDU a client may still send).
+  defp submit_pdu(client, command, fields, tlvs, seq) do
+    fields = Map.merge(%{source_addr: "FakeBank", destination_addr: @dest}, fields)
+    {raw, tlvs} = Keyword.pop(tlvs, :raw, <<>>)
+
+    <<length::32, rest::binary>> =
+      IO.iodata_to_binary(Pdu.encode!(Pdu.new(command, fields, tlvs: tlvs, sequence: seq)))
+
+    Client.send_raw(client, <<length + byte_size(raw)::32, rest::binary, raw::binary>>)
+    assert {client, %Pdu{sequence: ^seq} = resp} = Client.recv(client, 5_000)
+    {client, resp}
+  end
+
+  # The start of the next second, so a test's submits meet one TPS window.
+  defp align_second, do: Process.sleep(1_000 - rem(System.os_time(:millisecond), 1_000) + 5)
+
+  defp attempts, do: Enum.sort_by(edr("edr.attempt"), &{&1["attempt_no"], &1["submit_time"]})
+
+  describe "vendor answers (S-5.1–S-5.4, D2, D4)" do
+    test "a temporary refusal (0x58) is tried again on the same vendor, which then takes it (S-5.3)" do
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all()
+      FakeSmsc.set(smsc, :submit, [{:status, 0x58}, :ok])
+
+      {_, resp} = submit(client, %{short_message: "again"})
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 3_000
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"attempt_no" => 1, "is_submit_success" => 1, "v_trunk_id" => 1}] =
+               edr("edr.attempt")
+    end
+
+    test "a vendor at its TPS limit is waited for up to vendor_wait_ms, then the next vendor takes it (S-5.1)" do
+      %{client: client, conns: [c1, c2]} =
+        start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [tps: 1]})
+
+      align_second()
+      {client, %{status: 0}} = submit(client, %{short_message: "first"}, 2)
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      {_, %{status: 0}} = submit(client, %{short_message: "second"}, 3)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "second"
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+
+      # Waiting is not an attempt: both messages have one row, each sent at its first attempt.
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.map(attempts(), &{&1["attempt_no"], &1["v_trunk_id"]}) == [{1, 1}, {1, 2}]
+    end
+
+    test "a part held back after others went counts as possibly sent: the whole message moves on (D2)" do
+      %{client: client, conns: [c1, c2]} =
+        start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [tps: 1]})
+
+      align_second()
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("b", 200)})
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm, fields: %{esm_class: 0x40}}}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = p1}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = p2}, 2_000
+      assert <<5, 0, 3, _, 2, 1, _::binary>> = p1.fields.short_message
+      assert <<5, 0, 3, _, 2, 2, _::binary>> = p2.fields.short_message
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, second] = attempts()
+
+      assert %{"attempt_no" => 1, "v_trunk_id" => 1, "is_submit_success" => 0} = first
+      assert first["command_status"] == -1
+      assert %{"attempt_no" => 2, "v_trunk_id" => 2, "is_submit_success" => 1} = second
+    end
+
+    test "no answer within Submit Timeout: possibly sent, re-routed, the attempt recorded with status -1 (D4)" do
+      %{client: client, smscs: [s1, _], conns: [c1, c2]} =
+        start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [submit_timeout_s: 1]})
+
+      FakeSmsc.set(s1, :submit, :silent)
+      {_, resp} = submit(client, %{short_message: "slow vendor"})
+      assert resp.status == 0
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 3_000
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, second] = attempts()
+      assert %{"attempt_no" => 1, "v_trunk_id" => 1, "is_submit_success" => 0} = first
+      assert first["command_status"] == -1
+      assert %{"attempt_no" => 2, "v_trunk_id" => 2, "is_submit_success" => 1} = second
+    end
+
+    test "a routed vendor with no bound connection is skipped for the next (S-5.4)" do
+      config =
+        two_vendors(
+          vendor_trunks: [
+            PipelineConfig.vendor_trunk(id: 1),
+            PipelineConfig.vendor_trunk(id: 3, rate_table_ids: [203])
+          ],
+          rates: [
+            PipelineConfig.rate(100, 1, "26201", "0.05"),
+            PipelineConfig.rate(200, 2, "26201", "0.02"),
+            PipelineConfig.rate(203, 4, "26201", "0.01")
+          ],
+          route_vendors: [
+            PipelineConfig.route_vendor(1, 3, 1),
+            PipelineConfig.route_vendor(1, 1, 2)
+          ]
+        )
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "skip 3"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      # Nothing reached vendor 3, so there is no attempt row for it.
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 1, "v_trunk_id" => 1, "is_submit_success" => 1}] = attempts()
+    end
+
+    test "a message delivered to the sender again after it was sent is not sent twice (S-7.1)" do
+      %{client: client, conns: [conn]} = start_all()
+      {_, %{status: 0}} = submit(client, %{short_message: "once"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      event = Enum.find(Local.published(), &(&1.subject == "sms.msg.accepted"))
+      assert Pipeline.Sender.handle_event(event) == :ok
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert length(edr("edr.attempt")) == 1
+    end
+  end
+
+  describe "translation and routing outcomes (§6.3, §6.4, D3)" do
+    test "an ingress translation that adds parts: accepted, never sent, a REJECTD receipt (D3)" do
+      %{client: client, conns: [conn]} =
+        start_all(
+          config: [
+            translation_rules: [%{id: 7, msg_template: String.duplicate("x", 200) <> " {text}"}],
+            translation_targets: [PipelineConfig.target(7, "customer", 1)]
+          ]
+        )
+
+      fields = %{
+        source_addr: "FakeBank",
+        destination_addr: @dest,
+        short_message: "grow",
+        registered_delivery: 1
+      }
+
+      Client.send_pdu(client, Pdu.new(:submit_sm, fields, sequence: 2))
+      {_, resp, dlr} = resp_and_receipt(client)
+      assert resp.status == 0
+      assert dlr.fields.short_message =~ "stat:REJECTD err:001"
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 200
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"attempt_no" => 0, "command_status" => 0x45, "c_msg_status" => "REJECTD"}] =
+               edr("edr.attempt")
+    end
+
+    test "a vendor whose egress translation adds parts is skipped; the next vendor gets the message as sent" do
+      config =
+        two_vendors(
+          translation_rules: [%{id: 8, msg_template: String.duplicate("y", 200) <> " {text}"}],
+          translation_targets: [PipelineConfig.target(8, "vendor", 1)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "short"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "short"
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+    end
+
+    test "a vendor whose egress translation blocks is passed over for the next (§6.4)" do
+      config =
+        two_vendors(
+          translation_rules: [%{id: 9, action: "block"}],
+          translation_targets: [PipelineConfig.target(9, "vendor", 1)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "not via 1"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+    end
+
+    test "egress blocked on the only vendor, or a blocking rule: refused 0x45 (Q15)" do
+      %{client: client} =
+        start_all(
+          config: [
+            translation_rules: [%{id: 9, action: "block"}],
+            translation_targets: [PipelineConfig.target(9, "vendor", 1)]
+          ]
+        )
+
+      {_, resp} = submit(client, %{short_message: "nowhere"})
+      assert resp.status == 0x45
+    end
+
+    test "a block route rule refuses the message 0x45 (§6.3)" do
+      %{client: client, conns: [conn]} =
+        start_all(config: [route_rules: [%{id: 1, route_type: "block"}]])
+
+      {_, resp} = submit(client, %{short_message: "blocked"})
+      assert resp.status == 0x45
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 200
+    end
+
+    test "an ingress translation that blocks refuses the message 0x45 (§6.4)" do
+      %{client: client, conns: [conn]} =
+        start_all(
+          config: [
+            translation_rules: [%{id: 5, action: "block"}],
+            translation_targets: [PipelineConfig.target(5, "customer", 1)]
+          ]
+        )
+
+      {_, resp} = submit(client, %{short_message: "blocked"})
+      assert resp.status == 0x45
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 200
+    end
+  end
+
+  describe "intake checks (S-2.8, S-2.10, S-3.6, D10)" do
+    test "each malformed submit is refused with its status and recorded" do
+      %{client: client} = start_all()
+
+      cases = [
+        {"empty message (D10)", %{short_message: ""}, [], 0x01},
+        {"short_message and message_payload (S-2.8)", %{short_message: "a"},
+         [raw: <<0x0424::16, 1::16, "b">>], 0xC4},
+        {"invalid UDH (S-3.6)", %{esm_class: 0x40, short_message: <<5, 0, 3, 1>>}, [], 0x01},
+        {"incomplete SAR (S-3.6)", %{short_message: "a"}, [sar_msg_ref_num: 1], 0xC3},
+        {"receiver not a number (S-2.10)", %{short_message: "a", destination_addr: "12ab"}, [],
+         0x0B},
+        {"no sender (S-2.10)", %{short_message: "a", source_addr: ""}, [], 0x0A},
+        {"alphanumeric sender over 11 (S-2.10)",
+         %{short_message: "a", source_addr: "ABCDEFGHIJKL", source_addr_ton: 5}, [], 0x0A},
+        {"no customer rate for the destination (S-6.2)",
+         %{short_message: "a", destination_addr: "4917012345678"}, [], 0x0B}
+      ]
+
+      cases
+      |> Enum.with_index(2)
+      |> Enum.reduce(client, fn {{name, fields, tlvs, status}, seq}, client ->
+        {client, resp} = submit_pdu(client, :submit_sm, fields, tlvs, seq)
+        assert {name, resp.status} == {name, status}
+        client
+      end)
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == length(cases) end)
+
+      assert Enum.all?(
+               edr("edr.attempt"),
+               &(&1["attempt_no"] == 0 and &1["c_msg_status"] == "REJECTD")
+             )
+    end
+
+    test "SAR parts share the first part's decision and keep their SAR TLVs to the vendor (S-3.3, S-3.8)" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {client, r1} =
+        submit_pdu(client, :submit_sm, %{short_message: "part one "}, sar(7, 2, 1), 2)
+
+      {_, r2} = submit_pdu(client, :submit_sm, %{short_message: "part two"}, sar(7, 2, 2), 3)
+      assert {r1.status, r2.status} == {0, 0}
+      assert r1.fields.message_id != r2.fields.message_id
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p1}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p2}, 2_000
+      assert {p1.fields.short_message, p2.fields.short_message} == {"part one ", "part two"}
+      assert {:sar_segment_seqnum, 1} in p1.tlvs
+      assert {:sar_segment_seqnum, 2} in p2.tlvs
+      assert {:sar_msg_ref_num, 7} in p2.tlvs
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.all?(edr("edr.attempt"), &(&1["route_rule_id"] == 1 and &1["v_trunk_id"] == 1))
+    end
+
+    test "data_sm is accepted and goes to the vendor as submit_sm" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {_, resp} =
+        submit_pdu(client, :data_sm, %{source_addr_ton: 5}, [message_payload: "data sm text"], 2)
+
+      assert %Pdu{command: :data_sm_resp, status: 0} = resp
+      assert resp.fields.message_id =~ ~r/\A[0-9a-f]{20}\z/
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "data sm text"
+    end
+  end
+
+  defp sar(ref, total, n),
+    do: [sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n]
+
+  describe "receipts from vendors (S-5.5–S-5.12, Q7)" do
+    test "an MO message, a receipt without an id and one for an unknown message are all answered OK" do
+      %{client: client, conns: [conn]} = start_all()
+
+      FakeSmsc.send_pdu(
+        conn,
+        Pdu.new(:deliver_sm, %{esm_class: 0, short_message: "MO"}, sequence: 901)
+      )
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, sequence: 901, status: 0}},
+                     2_000
+
+      FakeSmsc.send_pdu(
+        conn,
+        Pdu.new(:deliver_sm, %{esm_class: 0x04, short_message: "stat:DELIVRD"}, sequence: 902)
+      )
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, sequence: 902, status: 0}},
+                     2_000
+
+      receipt(conn, "no-such-id", "DELIVRD")
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, sequence: 900, status: 0}},
+                     2_000
+
+      assert {:error, :timeout} = Client.recv(client, 300)
+      assert edr("edr.receipt") == []
+    end
+
+    test "a receipt for a message that is no longer stored is answered OK (S-5.12)" do
+      start_all()
+
+      assert Pipeline.Receipts.apply_receipt("00000000000000000000", 1, %{status: "DELIVRD"}) ==
+               :ok
+    end
+
+    test "intermediate statuses are forwarded when the customer asked for them (registered_delivery 0x11)" do
+      %{client: client, conns: [conn]} = start_all()
+      {client, _} = submit(client, %{short_message: "steps", registered_delivery: 0x11})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      receipt(conn, "1", "ENROUTE")
+      {client, enroute} = customer_receipt(client)
+      assert enroute.fields.short_message =~ "stat:ENROUTE"
+      assert {:message_state, 1} in enroute.tlvs
+
+      receipt(conn, "1", "DELIVRD")
+      {_, final} = customer_receipt(client)
+      assert final.fields.short_message =~ "stat:DELIVRD"
+
+      assert_eventually(fn -> Enum.count(edr("edr.receipt"), &(&1["kind"] == "vendor")) == 2 end)
+    end
+  end
+
+  describe "held receipts (§13.1)" do
+    test "a held receipt whose hold hours ran out is given up on the next sweep and recorded unsent" do
+      %{conns: [conn], client: tx} = start_all(bind: :bind_transmitter)
+      {_tx, _} = submit(tx, %{short_message: "too late", registered_delivery: 1})
+      receipt(conn, "1", "DELIVRD")
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, status: 0}}, 2_000
+      assert_eventually(fn -> Pipeline.Store.held_trunks() == {:ok, [1]} end)
+
+      # The hold hours run out.
+      {:ok, [{member, entry}]} = Pipeline.Store.held(1, 10)
+      :ok = Pipeline.Store.release(1, member)
+      expired = %{entry | until: System.os_time(:millisecond) - 1}
+      :ok = Pipeline.Store.hold(1, expired, entry.held_at)
+
+      send(Pipeline.Held, :sweep)
+      assert_eventually(fn -> Pipeline.Store.held_trunks() == {:ok, []} end)
+      assert_eventually(fn -> Enum.any?(edr("edr.receipt"), &(&1["kind"] == "customer")) end)
+      row = Enum.find(edr("edr.receipt"), &(&1["kind"] == "customer"))
+      assert row["receipt_session_id"] == ""
+      assert row["c_msg_status"] == "DELIVRD"
+      assert row["receipt_held_ms"] >= 0
+    end
+
+    test "a bind event without a trunk id is ignored" do
+      assert OnBind.handle_event(Event.new("sms.session.customer.bound", "t", %{})) == :ok
     end
   end
 end

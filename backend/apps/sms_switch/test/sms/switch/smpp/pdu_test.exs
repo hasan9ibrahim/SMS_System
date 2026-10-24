@@ -375,4 +375,19 @@ defmodule Sms.Switch.Smpp.PduTest do
     assert Status.name(0x0A) == :esme_rinvsrcadr
     assert Status.name(0x401) == 0x401
   end
+
+  describe "the decode error" do
+    test "is an exception that names the status, the command and the sequence" do
+      e =
+        assert_raise Error, fn ->
+          raise Error, status: :esme_rinvcmdlen, command: :submit_sm, sequence: 9, reason: :short
+        end
+
+      assert e.fatal == false
+      assert Exception.message(e) == "esme_rinvcmdlen on submit_sm (sequence 9): :short"
+
+      e = Error.exception(status: :esme_rinvcmdid, command_id: 0x99, fatal: true)
+      assert Exception.message(e) == "esme_rinvcmdid on 153 (sequence nil): nil"
+    end
+  end
 end

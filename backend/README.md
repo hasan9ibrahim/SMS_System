@@ -135,7 +135,7 @@ Message ids given to customers are 20 hex characters: milliseconds, the server's
 on each server) and a counter. Rates and margins compare in `PLATFORM_CURRENCY` (default EUR).
 
 Not in step 4 (planned): balances and the real credit check, revenue / cost / billable flags (step 6); `query_sm` and
-`cancel_sm`, reassembly of customer multipart messages and translation of the whole text, DLR timeouts with the
+`cancel_sm`, reassembly of customer multipart messages and translation of the whole text (until then each part goes with its own text; content translation is not applied to them), DLR timeouts with the
 trunk's timeout status, TPS and accumulated revenue conditions and live "at TPS limit" for LCR (step 5); HLR
 lookups.
 

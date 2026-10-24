@@ -3,9 +3,9 @@ defmodule Sms.Core.IntegrationTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureLog
   alias Gnat.Jetstream.API.{Consumer, Stream}
-  alias Sms.Core.{Bus, Health}
+  alias Sms.Core.{Bus, ClickHouse, Health}
   alias Sms.Core.Bus.{Event, Nats}
-  alias Sms.Core.Test.{AllConsumer, MsgConsumer, Recorder}
+  alias Sms.Core.Test.{AllConsumer, BatchConsumer, ConcurrentConsumer, MsgConsumer, Recorder}
 
   @moduletag :integration
   @stream "SMS_TEST"
@@ -138,5 +138,87 @@ defmodule Sms.Core.IntegrationTest do
     for s <- [Sms.Core.Repo, Sms.Core.Redis, Sms.Core.ClickHouse], do: start_supervised!(s)
     assert %{overall: :ok, services: services} = Health.check([:repo, :redis, :clickhouse, :bus])
     assert services == %{repo: :ok, redis: :ok, clickhouse: :ok, bus: :ok}
+    assert {:ok, %{rows: [[1]]}} = ClickHouse.query("SELECT 1")
+  end
+
+  test "a restarted node brings the existing stream to the configured settings and keeps its events" do
+    {:ok, _} = Bus.publish("sms.msg.kept", "t", %{})
+    :ok = stop_supervised(Bus)
+    start_supervised!(Bus)
+    assert Bus.health() == :ok
+    {:ok, %{state: state}} = Stream.info(Nats.connection(), @stream)
+    assert state.messages == 1
+  end
+
+  test "a publish to a subject no stream stores is an error, never :ok" do
+    assert {:error, _} = Nats.publish("other.nothing", "{}", "id-x", 500)
+  end
+
+  test "a batch consumer gets the events in one batch and acknowledges it once" do
+    start_supervised!({Recorder, self()})
+    start_supervised!(BatchConsumer)
+
+    ids =
+      for n <- 1..3 do
+        {:ok, %Event{id: id}} = Bus.publish("sms.batch.ok", "t", %{"n" => n})
+        id
+      end
+
+    assert collect_batches(ids, 1) == MapSet.new(ids)
+    # Acknowledged: nothing comes back after ack_wait (1 s).
+    refute_receive {:batch, :batch, _, _}, 2_000
+  end
+
+  test "a failed batch is delivered again after ack_wait and then handled; an unreadable event is dropped" do
+    start_supervised!({Recorder, self()})
+    start_supervised!(BatchConsumer)
+
+    log =
+      capture_log(fn ->
+        {:ok, _} = Gnat.request(Nats.connection(), "sms.batch.junk", "not json")
+
+        {:ok, %Event{id: id}} =
+          Bus.publish("sms.batch.retry", "t", %{"fail_batch_times" => 1})
+
+        # Fewer than batch_size events: the batch goes after batch_wait_ms.
+        assert_receive {:batch, :batch, [%Event{id: ^id}], 1}, 5_000
+        assert_receive {:batch, :batch, [%Event{id: ^id}], 2}, 5_000
+        refute_receive {:batch, :batch, _, _}, 2_000
+      end)
+
+    assert log =~ "batch failed, will be delivered again"
+    assert log =~ "unreadable event discarded"
+  end
+
+  test "a concurrent consumer handles several events at once, each once" do
+    start_supervised!({Recorder, self()})
+    start_supervised!(ConcurrentConsumer)
+
+    ids =
+      for n <- 1..8 do
+        {:ok, %Event{id: id}} = Bus.publish("sms.conc.x", "t", %{"n" => n, "sleep_ms" => 300})
+        id
+      end
+
+    workers =
+      for id <- ids, into: MapSet.new() do
+        assert_receive {:started, ^id, pid}, 5_000
+        assert_receive {:delivered, :conc, %Event{id: ^id}, 1}, 5_000
+        pid
+      end
+
+    assert MapSet.size(workers) > 1
+    refute_receive {:delivered, :conc, _, 2}, 1_500
+  end
+
+  # Receives batches (all at `attempt`) until every id was seen.
+  defp collect_batches(ids, attempt, seen \\ MapSet.new()) do
+    if MapSet.equal?(seen, MapSet.new(ids)) do
+      seen
+    else
+      assert_receive {:batch, :batch, events, ^attempt}, 5_000
+      assert length(events) <= 3
+      collect_batches(ids, attempt, Enum.reduce(events, seen, &MapSet.put(&2, &1.id)))
+    end
   end
 end
