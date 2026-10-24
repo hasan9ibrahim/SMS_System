@@ -1,5 +1,5 @@
 /* Calm look (team trial round 5, §15.3 "colour only carries meaning"): loaded last, so these rules win.
-   - Good values are plain text; only warnings (amber) and problems (red) are coloured, as text, never filled boxes.
+   - ASR / DLR green from 80 %, amber and red below; positive margin green, negative red; text colour, never boxes.
    - Numbers keep normal weight; only totals and names are a little heavier.
    - Live analytics headers are tinted like the date-range chip; band labels keep their colour with a thin rule. */
 
@@ -13,7 +13,7 @@
   font-weight: 700;
 }
 .la-grid td.la-good {
-  color: inherit;
+  color: var(--color-good);
 }
 .la-grid td.la-pos {
   color: var(--color-good);

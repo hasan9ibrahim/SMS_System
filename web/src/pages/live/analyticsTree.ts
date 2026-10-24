@@ -362,7 +362,7 @@ export function cellTone(metric: ReportMetric, v: number | null | undefined): ""
   if (v === null || v === undefined) return "";
   if (metric === "asr" || metric === "dlrCustomer" || metric === "dlrVendor")
     return v >= 80 ? "good" : v >= 60 ? "warn" : "bad";
-  // Margin: green when positive, red when negative (team trial round 5); ASR and DLRs are coloured only when low.
+  // Margin: green when positive, red when negative; ASR and DLRs green from 80 % (team trial round 5).
   if (metric === "margin") return v > 0 ? "pos" : v < 0 ? "bad" : "";
   return "";
 }
