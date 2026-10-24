@@ -149,12 +149,26 @@ loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
   `003_edr_receipt.sql`), appended, never updated. Rows go through the bus (`sms.edr.*`) to a writer that inserts
   them in batches of up to 1,000 and retries until ClickHouse takes them; only a row ClickHouse cannot read is
   dropped (logged), never a batch.
+- **Billing** (`Pipeline.Billing`, §7): revenue, cost and the billable flags at the rates in force when the message
+  was submitted, per trunk Billing Type. Attempt and submit are decided when the attempt ends (on the `edr` row);
+  reported and delivery when its final status is known, on an `edr_receipt` **outcome** row (ClickHouse
+  `005_outcome_billing.sql`), which also carries the attempt's final status into `edr_hourly` through its own view.
+  The customer is billed once per message, on the status it is told; a vendor on its own status.
+- **Ledger** (`Pipeline.Ledger`, `Ledger.Sync`, `Ledger.Charges`, §7, Q24): live balances. The base (opening +
+  payments − invoices) comes from PostgreSQL's `balance_ledger` view every 5 s; traffic is charged when it becomes
+  billable, through the bus, into 15-minute buckets in Redis (`chg:`, `chm:`, `cht:`, `cd:`, `chd`) written back to
+  `traffic_charges` (migration 072). The credit check before the resp: balance + credit limit must cover the message
+  (prepaid stops at 0), else 0x45; one minute of grace on the last total when Redis is unreachable. Credit alerts
+  (`Ledger.Alerts`): Notice / Warning / Critical / limit reached, and prepaid balances used up (vendors alert only,
+  Q22), as `sms.billing.credit_alert` events (`cal:` keys).
+- **Accumulated revenue** (`Pipeline.Revenue`, §13.9): revenue earned per customer trunk, enterprise, destination,
+  sender and rule in 15-minute buckets (`rv:`), counted with the customer's charge; route rules read it over 15 / 60
+  minutes, today, week, month (the customer's time zone) or the billing cycle.
 
 Message ids given to customers are 20 hex characters: milliseconds, the server's `SWITCH_NODE_ID` (0–255, different
 on each server) and a counter. Rates and margins compare in `PLATFORM_CURRENCY` (default EUR).
 
-Not yet built (planned): balances and the real credit check, revenue / cost / billable flags and accumulated revenue
-conditions (step 6); HLR lookups.
+Not yet built (planned): HLR lookups; e-mails for credit alerts (the API sends them from the events).
 
 ## Run it
 
