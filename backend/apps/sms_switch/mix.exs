@@ -34,6 +34,8 @@ defmodule Sms.Switch.MixProject do
   defp deps do
     [
       {:sms_core, in_umbrella: true},
+      {:ch, "~> 0.9"},
+      {:jason, "~> 1.4"},
       {:ranch, "~> 2.2"},
       {:telemetry, "~> 1.3"},
       {:stream_data, "~> 1.1", only: :test}

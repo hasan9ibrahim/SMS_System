@@ -32,13 +32,15 @@ defmodule Sms.Switch.Vendor do
   `{:error, :throttled}` (over the TPS limit this second) or `{:error, :window_full}` (every connection is full).
   `:timeout` and `:connection_lost` mean the message may have been sent (decision D4).
 
-  Options: `:ref`, the caller's id for the message, returned in a `late_response` event.
+  Options: `:ref`, the caller's id for the message, returned in a `late_response` event; `:prefer`, a connection
+  (the `pid` of an earlier result) to try first, so the parts of one message go on the same session where possible
+  (S-3.8). A successful result carries the connection's `pid`.
   """
   @spec submit(pos_integer(), :submit_sm | :data_sm, map(), list(), keyword()) ::
           {:ok, map()} | {:error, term()}
   def submit(trunk_id, command, fields, tlvs \\ [], opts \\ []) do
     with {:ok, trunk} <- trunk(trunk_id),
-         [_ | _] = pids <- connections(trunk_id),
+         [_ | _] = pids <- connections(trunk_id, opts[:prefer]),
          :ok <- throttle(trunk) do
       try_submit(pids, command, fields, tlvs, opts)
     else
@@ -63,10 +65,11 @@ defmodule Sms.Switch.Vendor do
   end
 
   # The trunk's bound connections that can send, this node's first, each group in random order to spread the load.
-  defp connections(trunk_id) do
+  defp connections(trunk_id, prefer) do
     local = :pg.get_local_members(@scope, {:tx, trunk_id})
     remote = :pg.get_members(@scope, {:tx, trunk_id}) -- local
-    Enum.shuffle(local) ++ Enum.shuffle(remote)
+    pids = Enum.shuffle(local) ++ Enum.shuffle(remote)
+    if prefer in pids, do: [prefer | List.delete(pids, prefer)], else: pids
   rescue
     # The vendor side is not running on this node.
     ArgumentError -> []
@@ -74,6 +77,9 @@ defmodule Sms.Switch.Vendor do
 
   defp try_submit([pid | rest], command, fields, tlvs, opts) do
     case Session.submit(pid, command, fields, tlvs, opts) do
+      {:ok, result} ->
+        {:ok, Map.put(result, :pid, pid)}
+
       {:error, reason} when reason in [:window_full, :closed] and rest != [] ->
         try_submit(rest, command, fields, tlvs, opts)
 

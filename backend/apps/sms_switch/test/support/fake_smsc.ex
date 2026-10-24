@@ -8,7 +8,7 @@ defmodule Sms.Switch.Test.FakeSmsc do
 
     * `:bind_status`: the bind response's status (default 0);
     * `:submit`: `:ok` (answer with the next message id), `:silent` (never answer), `{:status, code}` or
-      `{:delay, ms}` (answer OK after `ms`);
+      `{:delay, ms}` (answer OK after `ms`), or a list of these used one per submit, the last one for the rest;
     * `:message_id`: a function from the submit's number (1, 2, …) to its message id (default decimal);
     * `:enquire_link`: `:answer` or `:silent`.
 
@@ -80,6 +80,15 @@ defmodule Sms.Switch.Test.FakeSmsc do
     do: {:reply, Enum.filter(state.connections, &Process.alive?/1), state}
 
   def handle_call(:behaviour, _from, state), do: {:reply, state.behaviour, state}
+
+  # A list of submit behaviours is used up one per submit; its last one stays.
+  def handle_call(:next_submit, _from, state) do
+    case state.behaviour.submit do
+      [only] -> {:reply, only, state}
+      [next | rest] -> {:reply, next, put_in(state.behaviour.submit, rest)}
+      behaviour -> {:reply, behaviour, state}
+    end
+  end
 
   def handle_call(:next_message_id, _from, state) do
     n = state.submits + 1
@@ -192,7 +201,7 @@ defmodule Sms.Switch.Test.FakeSmsc do
   end
 
   defp answer(conn, %Pdu{command: c} = pdu) when c in [:submit_sm, :data_sm] do
-    case GenServer.call(conn.server, :behaviour).submit do
+    case GenServer.call(conn.server, :next_submit) do
       :ok ->
         write(
           conn,

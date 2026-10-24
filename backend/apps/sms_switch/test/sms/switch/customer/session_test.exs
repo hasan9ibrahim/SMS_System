@@ -547,6 +547,54 @@ defmodule Sms.Switch.Customer.SessionTest do
       Client.close(client)
     end
 
+    test "a receipt waits for the submits in flight, so their submit_sm_resp goes first (S-5.5)",
+         %{port: port} do
+      test = self()
+
+      Intake.own(fn _, pdu ->
+        send(test, {:waiting, self()})
+
+        receive do
+          :go -> {:ok, %{message_id: "m#{pdu.sequence}"}, []}
+        end
+      end)
+
+      client = bound(port)
+      pid = session_pid()
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, %{destination_addr: "4479", short_message: "x"}, sequence: 5)
+      )
+
+      assert_receive {:waiting, intake}
+      task = Task.async(fn -> Session.deliver(pid, %{esm_class: 4}) end)
+      assert {:error, :timeout} = Client.recv(client, 200)
+
+      send(intake, :go)
+      assert {client, %Pdu{command: :submit_sm_resp, sequence: 5}} = Client.recv(client)
+      assert {client, %Pdu{command: :deliver_sm, sequence: seq}} = Client.recv(client)
+      Client.send_pdu(client, Pdu.new(:deliver_sm_resp, %{message_id: ""}, sequence: seq))
+      assert {:ok, %{status: 0}} = Task.await(task)
+    end
+
+    test "a receipt waits at most a second for a slow submit", %{port: port} do
+      Intake.own(fn _, _ -> Process.sleep(3_000) && {:error, :esme_rsyserr} end)
+      client = bound(port)
+      pid = session_pid()
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, %{destination_addr: "4479", short_message: "x"}, sequence: 5)
+      )
+
+      assert_receive {:intake, _, _, _}
+      task = Task.async(fn -> Session.deliver(pid, %{esm_class: 4}) end)
+      assert {client, %Pdu{command: :deliver_sm, sequence: seq}} = Client.recv(client, 2_000)
+      Client.send_pdu(client, Pdu.new(:deliver_sm_resp, %{message_id: ""}, sequence: seq))
+      assert {:ok, %{status: 0}} = Task.await(task)
+    end
+
     test "a TX bind cannot receive", %{port: port} do
       _client = bound(port, :bind_transmitter)
       assert Session.deliver(session_pid(), %{}) == {:error, :not_receiver}

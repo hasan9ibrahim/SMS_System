@@ -64,10 +64,25 @@ defmodule Sms.Core.Bus.Nats do
   def consumer_child_spec(module, opts) do
     stream = Keyword.fetch!(Bus.config(), :stream)
 
-    children = [
-      {__MODULE__.EnsureConsumer, {stream, opts}},
-      {__MODULE__.Puller, {module, stream, opts}}
-    ]
+    # Several pullers share one durable consumer (`:concurrency`); a batch consumer's puller hands every message to its
+    # batcher, which acknowledges the batch once the handler has stored it.
+    workers =
+      if opts[:batch_size] do
+        [
+          {__MODULE__.Batcher, {module, opts}},
+          Supervisor.child_spec({__MODULE__.Puller, {module, stream, opts, 0}},
+            id: {__MODULE__.Puller, module, 0}
+          )
+        ]
+      else
+        for i <- 1..opts[:concurrency],
+            do:
+              Supervisor.child_spec({__MODULE__.Puller, {module, stream, opts, i}},
+                id: {:puller, i}
+              )
+      end
+
+    children = [{__MODULE__.EnsureConsumer, {stream, opts}} | workers]
 
     %{
       id: {__MODULE__, module},
@@ -198,8 +213,8 @@ defmodule Sms.Core.Bus.Nats do
         filter_subject: opts[:filter],
         ack_policy: :explicit,
         ack_wait: opts[:ack_wait_ms] * 1_000_000,
-        max_deliver: opts[:max_deliver],
-        max_ack_pending: 1_000,
+        max_deliver: if(opts[:max_deliver] == :infinity, do: -1, else: opts[:max_deliver]),
+        max_ack_pending: max(1_000, max((opts[:batch_size] || 0) * 4, opts[:concurrency] * 4)),
         deliver_policy: :all
       }
 
@@ -241,14 +256,25 @@ defmodule Sms.Core.Bus.Nats do
     def start_link(arg), do: PullConsumer.start_link(__MODULE__, arg)
 
     @impl true
-    def init({module, stream, opts}) do
-      state = %{module: module, name: opts[:name], max_deliver: opts[:max_deliver]}
+    def init({module, stream, opts, _i}) do
+      state = %{
+        module: module,
+        name: opts[:name],
+        max_deliver: opts[:max_deliver],
+        batcher: if(opts[:batch_size], do: Nats.Batcher.name(module))
+      }
 
       {:ok, state,
        connection_name: Nats.connection(), stream_name: stream, consumer_name: opts[:name]}
     end
 
     @impl true
+    def handle_message(message, %{batcher: batcher} = state) when batcher != nil do
+      # Acknowledged by the batcher once the batch is stored.
+      send(batcher, {:message, message})
+      {:noreply, state}
+    end
+
     def handle_message(message, state) do
       case Event.decode(message.body) do
         {:ok, event} ->
@@ -273,7 +299,7 @@ defmodule Sms.Core.Bus.Nats do
     end
 
     defp outcome({:error, reason}, id, n, state) do
-      if n >= state.max_deliver,
+      if Consumer.given_up?(state.max_deliver, n),
         do:
           Logger.error("event failed on every delivery, given up",
             event_id: id,
@@ -290,14 +316,91 @@ defmodule Sms.Core.Bus.Nats do
       :noreply
     end
 
-    # $JS.ACK.<stream>.<consumer>.<delivered>.<stream seq>.<consumer seq>.<time>.<pending>
-    defp deliveries(%{reply_to: "$JS.ACK." <> rest}) do
-      case String.split(rest, ".") do
-        [_stream, _consumer, n | _] -> String.to_integer(n)
-        _ -> 1
+    defp deliveries(message), do: Nats.deliveries(message)
+  end
+
+  @doc false
+  # How many times a message has been delivered, from its reply subject:
+  # $JS.ACK.<stream>.<consumer>.<delivered>.<stream seq>.<consumer seq>.<time>.<pending>
+  def deliveries(%{reply_to: "$JS.ACK." <> rest}) do
+    case String.split(rest, ".") do
+      [_stream, _consumer, n | _] -> String.to_integer(n)
+      _ -> 1
+    end
+  end
+
+  def deliveries(_), do: 1
+
+  defmodule Batcher do
+    @moduledoc false
+    # Collects a batch consumer's messages and hands them to `handle_batch/1` when `batch_size` are waiting or
+    # `batch_wait_ms` after the first one. Stored → every message acknowledged; failed → none is, so JetStream delivers
+    # them all again after ack_wait. Unreadable messages are terminated (never delivered again).
+    use GenServer
+    require Logger
+    alias Gnat.Jetstream
+    alias Sms.Core.Bus.{Consumer, Event}
+
+    def name(module), do: Module.concat(module, Batcher)
+
+    def start_link({module, opts}),
+      do: GenServer.start_link(__MODULE__, {module, opts}, name: name(module))
+
+    @impl true
+    def init({module, opts}) do
+      {:ok, %{module: module, opts: opts, batch: [], count: 0, timer: nil}}
+    end
+
+    @impl true
+    def handle_info({:message, message}, state) do
+      case Event.decode(message.body) do
+        {:ok, event} ->
+          state = %{state | batch: [{event, message} | state.batch], count: state.count + 1}
+
+          state =
+            if state.timer,
+              do: state,
+              else: %{
+                state
+                | timer: Process.send_after(self(), :flush, state.opts[:batch_wait_ms])
+              }
+
+          if state.count >= state.opts[:batch_size],
+            do: {:noreply, flush(state)},
+            else: {:noreply, state}
+
+        {:error, reason} ->
+          Logger.error("unreadable event discarded",
+            consumer: state.opts[:name],
+            reason: inspect(reason)
+          )
+
+          Jetstream.ack_term(message)
+          {:noreply, state}
       end
     end
 
-    defp deliveries(_), do: 1
+    def handle_info(:flush, state), do: {:noreply, flush(%{state | timer: nil})}
+
+    defp flush(%{batch: []} = state), do: state
+
+    defp flush(state) do
+      _ = if state.timer, do: Process.cancel_timer(state.timer)
+      entries = Enum.reverse(state.batch)
+
+      case Consumer.run_batch(state.module, Enum.map(entries, &elem(&1, 0))) do
+        :ok ->
+          Enum.each(entries, fn {_event, message} -> Jetstream.ack(message) end)
+
+        {:error, reason} ->
+          Logger.warning("batch failed, will be delivered again",
+            consumer: state.opts[:name],
+            reason: inspect(reason),
+            events: length(entries)
+          )
+      end
+
+      %{state | batch: [], count: 0, timer: nil}
+    end
   end
 end

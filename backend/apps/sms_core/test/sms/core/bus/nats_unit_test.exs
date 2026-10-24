@@ -39,4 +39,24 @@ defmodule Sms.Core.Bus.NatsUnitTest do
     assert Nats.retry(fn -> exit(:boom) end, 1) == {:error, {:exit, :boom}}
     assert Nats.retry(fn -> {:ok, 1} end, 1) == {:ok, 1}
   end
+
+  test "retry waits and tries again while the connection is coming up" do
+    {:ok, calls} = Agent.start_link(fn -> 0 end)
+
+    fun = fn ->
+      case Agent.get_and_update(calls, &{&1 + 1, &1 + 1}) do
+        1 -> {:error, :not_yet}
+        n -> {:ok, n}
+      end
+    end
+
+    assert Nats.retry(fun, 2) == {:ok, 2}
+  end
+
+  test "the delivery count comes from the JetStream reply subject" do
+    assert Nats.deliveries(%{reply_to: "$JS.ACK.SMS.test-msg.3.10.4.1700000000.0"}) == 3
+    assert Nats.deliveries(%{reply_to: "$JS.ACK.short"}) == 1
+    assert Nats.deliveries(%{reply_to: nil}) == 1
+    assert Nats.deliveries(%{}) == 1
+  end
 end

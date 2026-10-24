@@ -50,6 +50,7 @@ defmodule Sms.Switch.Customer.Session do
   @unsupported [:replace_sm, :submit_multi]
   # Requests only an SMSC sends; a client sending them gets 0x03.
   @not_from_client [:deliver_sm, :outbind, :alert_notification]
+  @park_ms 1_000
   @our_responses [:enquire_link_resp, :deliver_sm_resp, :unbind_resp, :generic_nack]
 
   @defaults [
@@ -92,6 +93,7 @@ defmodule Sms.Switch.Customer.Session do
     buffer: <<>>,
     armed: false,
     inflight: %{},
+    parked: [],
     out: %{},
     next_seq: 1,
     last_rx: 0
@@ -232,7 +234,7 @@ defmodule Sms.Switch.Customer.Session do
     {entry, inflight} = Map.pop!(state.inflight, ref)
     _ = Process.cancel_timer(entry.timer)
     state = answer(%{state | inflight: inflight}, entry.pdu, reply)
-    state |> after_inflight() |> continue()
+    state |> unpark(ref) |> after_inflight() |> continue()
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, state)
@@ -245,7 +247,7 @@ defmodule Sms.Switch.Customer.Session do
     )
 
     state = send_pdu(%{state | inflight: inflight}, Pdu.response(entry.pdu, :esme_rsyserr))
-    state |> after_inflight() |> continue()
+    state |> unpark(ref) |> after_inflight() |> continue()
   end
 
   def handle_info({:intake_timeout, ref}, state) when is_map_key(state.inflight, ref) do
@@ -257,7 +259,12 @@ defmodule Sms.Switch.Customer.Session do
     )
 
     state = send_pdu(%{state | inflight: inflight}, Pdu.response(entry.pdu, :esme_rsyserr))
-    state |> after_inflight() |> continue()
+    state |> unpark(ref) |> after_inflight() |> continue()
+  end
+
+  def handle_info(:release_parked, state) do
+    oldest = System.monotonic_time(:millisecond) - @park_ms
+    {:noreply, release(state, &(&1.at <= oldest))}
   end
 
   # A late answer to a request already answered 0x08 after the intake timeout.
@@ -333,32 +340,27 @@ defmodule Sms.Switch.Customer.Session do
   end
 
   @impl true
-  def handle_call({:deliver, fields, tlvs}, from, state) do
-    cond do
-      state.phase != :bound ->
-        {:reply, {:error, :closed}, state}
+  # A receipt waits for the requests in flight when it came (one of them may be its own submit): the client always
+  # gets the submit_sm_resp before the receipt of that message (SMPP 3.4 §4.4, S-5.5).
+  # It never waits longer than @park_ms (a slow intake does not hold receipts back).
+  def handle_call({:deliver, fields, tlvs}, from, state)
+      when state.phase == :bound and state.bind != :tx and map_size(state.inflight) > 0 do
+    waits = MapSet.new(Map.keys(state.inflight))
 
-      state.bind == :tx ->
-        {:reply, {:error, :not_receiver}, state}
+    entry = %{
+      waits: waits,
+      fields: fields,
+      tlvs: tlvs,
+      from: from,
+      at: System.monotonic_time(:millisecond)
+    }
 
-      Enum.count(state.out, fn {_, e} -> e.command == :deliver_sm end) >=
-          state.settings.outbound_window ->
-        {:reply, {:error, :window_full}, state}
-
-      true ->
-        {seq, state} = next_sequence(state)
-        pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
-
-        case Pdu.encode(pdu) do
-          {:ok, bytes} ->
-            write(state, bytes)
-            {:noreply, track(state, seq, :deliver_sm, from, state.settings.deliver_timeout_ms)}
-
-          {:error, reason} ->
-            {:reply, {:error, {:invalid_pdu, reason}}, state}
-        end
-    end
+    Process.send_after(self(), :release_parked, @park_ms)
+    {:noreply, %{state | parked: state.parked ++ [entry]}}
   end
+
+  def handle_call({:deliver, fields, tlvs}, from, state),
+    do: deliver_now(state, fields, tlvs, from)
 
   def handle_call(:info, _from, state) do
     info = %{
@@ -383,6 +385,8 @@ defmodule Sms.Switch.Customer.Session do
     for {_seq, %{from: from}} <- state.out,
         from != nil,
         do: GenServer.reply(from, {:error, :closed})
+
+    for %{from: from} <- state.parked, do: GenServer.reply(from, {:error, :closed})
 
     if state.phase == :bound and node_stopping?(reason), do: unbind_on_shutdown(state)
 
@@ -735,7 +739,8 @@ defmodule Sms.Switch.Customer.Session do
 
   defp handle_request(state, pdu) do
     case refusal(state, pdu) do
-      nil -> start_intake(state, pdu)
+      nil -> start_intake(state, pdu, false)
+      :buffered -> start_intake(state, pdu, true)
       status -> send_pdu(state, Pdu.response(pdu, status))
     end
   end
@@ -749,15 +754,25 @@ defmodule Sms.Switch.Customer.Session do
   defp refusal(state, %Pdu{command: command}) when command in @counted, do: throttled(state)
   defp refusal(_state, _pdu), do: nil
 
+  # Over the TPS limit, a trunk with an overflow buffer has the message accepted and queued while the buffer has room
+  # (S-2.4); the pipeline sends it when the trunk's TPS allows.
   defp throttled(state) do
     cond do
-      Customer.draining?() -> :esme_rthrottled
-      Throttle.acquire(Trunk.tps_counters(state.trunk)) != :ok -> :esme_rthrottled
-      true -> nil
+      Customer.draining?() ->
+        :esme_rthrottled
+
+      Throttle.acquire(Trunk.tps_counters(state.trunk)) == :ok ->
+        nil
+
+      Throttle.buffer_take(Trunk.buffer_key(state.trunk), state.trunk.overflow_buffer) ->
+        :buffered
+
+      true ->
+        :esme_rthrottled
     end
   end
 
-  defp start_intake(state, pdu) do
+  defp start_intake(state, pdu, buffered) do
     # S-1.13: a sequence number the client reuses while the first is open is still answered on its own.
     if Enum.any?(state.inflight, fn {_, e} -> e.pdu.sequence == pdu.sequence end) do
       Logger.warning("client reused sequence #{pdu.sequence} while it was still open")
@@ -768,7 +783,8 @@ defmodule Sms.Switch.Customer.Session do
       trunk: state.trunk,
       port: state.port,
       node: node(),
-      received_at: DateTime.utc_now()
+      received_at: DateTime.utc_now(),
+      buffered: buffered
     }
 
     session = self()
@@ -834,6 +850,54 @@ defmodule Sms.Switch.Customer.Session do
   defp answer(state, req, other) do
     Logger.error("intake answered #{req.command} #{req.sequence} with #{inspect(other)}")
     send_pdu(state, Pdu.response(req, :esme_rsyserr))
+  end
+
+  defp deliver_now(state, fields, tlvs, from) do
+    cond do
+      state.phase != :bound ->
+        {:reply, {:error, :closed}, state}
+
+      state.bind == :tx ->
+        {:reply, {:error, :not_receiver}, state}
+
+      Enum.count(state.out, fn {_, e} -> e.command == :deliver_sm end) >=
+          state.settings.outbound_window ->
+        {:reply, {:error, :window_full}, state}
+
+      true ->
+        {seq, state} = next_sequence(state)
+        pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
+
+        case Pdu.encode(pdu) do
+          {:ok, bytes} ->
+            write(state, bytes)
+            {:noreply, track(state, seq, :deliver_sm, from, state.settings.deliver_timeout_ms)}
+
+          {:error, reason} ->
+            {:reply, {:error, {:invalid_pdu, reason}}, state}
+        end
+    end
+  end
+
+  # Receipts parked behind request `ref` (answered, crashed or timed out) go out once nothing they wait for is open.
+  defp unpark(state, ref) do
+    parked = Enum.map(state.parked, &%{&1 | waits: MapSet.delete(&1.waits, ref)})
+    release(%{state | parked: parked}, &(MapSet.size(&1.waits) == 0))
+  end
+
+  defp release(state, ready?) do
+    {go, stay} = Enum.split_with(state.parked, ready?)
+
+    Enum.reduce(go, %{state | parked: stay}, fn entry, state ->
+      case deliver_now(state, entry.fields, entry.tlvs, entry.from) do
+        {:reply, reply, state} ->
+          GenServer.reply(entry.from, reply)
+          state
+
+        {:noreply, state} ->
+          state
+      end
+    end)
   end
 
   # ---------------------------------------------------------------- our requests and their responses

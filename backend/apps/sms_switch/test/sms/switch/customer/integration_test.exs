@@ -337,6 +337,22 @@ defmodule Sms.Switch.Customer.IntegrationTest do
       Process.sleep(1_000 - rem(ms, 1_000) + 5)
     end
 
+    test "the overflow buffer is one shared count: places taken up to its size, given back (S-2.4)",
+         %{id: id} do
+      key = "ct:#{id}"
+      assert Enum.map(1..4, fn _ -> Throttle.buffer_take(key, 3) end) == [true, true, true, false]
+      :ok = Throttle.buffer_release(key)
+      assert Throttle.buffer_take(key, 3)
+      refute Throttle.buffer_take(key, 3)
+      assert {:ok, ttl} = Redis.command(["PTTL", "buf:#{key}"])
+      assert ttl > 0
+      for _ <- 1..3, do: Throttle.buffer_release(key)
+      assert {:ok, "0"} = Redis.command(["GET", "buf:#{key}"])
+      # Never below zero, whatever is given back.
+      :ok = Throttle.buffer_release(key)
+      assert {:ok, "0"} = Redis.command(["GET", "buf:#{key}"])
+    end
+
     test "one shared count per trunk: never more than the limit in a second, whatever the caller",
          %{id: id} do
       trunk = %Trunk{id: id, username: "u", password: "p", tps: 5, max_connections: 2}

@@ -20,13 +20,27 @@ config :sms_core, Sms.Core.Bus,
   # At start, how many times (1 s apart) to try reaching NATS before the node gives up.
   setup_attempts: 30
 
+# The message pipeline (build step 4, Sms.Switch.Pipeline): routing configuration in memory, the vendor leg,
+# receipts and EDRs. `node_id` (SWITCH_NODE_ID) makes each server's message ids unique; `vendor_wait_ms` is how long
+# a message waits for a vendor's TPS slot or window before trying the next vendor; `credit` checks the customer's
+# credit before the message is accepted (balances come with build step 6).
+config :sms_switch, Sms.Switch.Pipeline,
+  enabled: true,
+  node_id: 0,
+  platform_currency: "EUR",
+  vendor_wait_ms: 10_000,
+  credit: Sms.Switch.Pipeline.Credit.Open
+
+# What the pipeline keeps about messages in flight is shared by both servers through Redis (§13.1).
+config :sms_switch, Sms.Switch.Pipeline.Store, backend: :redis
+
 # The customer side of the switch (build step 2, Sms.Switch.Customer): listeners and ports come from the environment
-# in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session.
-config :sms_switch, Sms.Switch.Customer, enabled: true
+# in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session. Submits go to the pipeline.
+config :sms_switch, Sms.Switch.Customer, enabled: true, intake: Sms.Switch.Pipeline.Intake
 
 # The vendor side (build step 3, Sms.Switch.Vendor): connections come from the vendor trunks; timeouts and TLS
-# certificate checks are in Sms.Switch.Vendor.Session.
-config :sms_switch, Sms.Switch.Vendor, enabled: true
+# certificate checks are in Sms.Switch.Vendor.Session. Receipts go to the pipeline.
+config :sms_switch, Sms.Switch.Vendor, enabled: true, receipts: Sms.Switch.Pipeline.Receipts
 
 # Failed binds counted by the Firewall filters (spec §8) are shared by both servers through Redis.
 config :sms_switch, Sms.Switch.Customer.Firewall, backend: :redis
@@ -50,7 +64,8 @@ config :logger, :default_formatter,
     :trunk_id,
     :peer,
     :vendor_trunk_id,
-    :connection
+    :connection,
+    :events
   ]
 
 import_config "#{config_env()}.exs"

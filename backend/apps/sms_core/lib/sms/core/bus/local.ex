@@ -27,7 +27,7 @@ defmodule Sms.Core.Bus.Local do
 
         for {module, opts} <- consumers,
             Subject.matches?(opts[:filter], subject),
-            do: deliver(module, opts, event, 1)
+            do: deliver_first(module, opts, event)
 
         :ok
     end
@@ -60,8 +60,41 @@ defmodule Sms.Core.Bus.Local do
 
   # ---------------------------------------------------------------- delivery
 
+  defp deliver_first(module, opts, event) do
+    if opts[:batch_size],
+      do: deliver_batch(module, opts, event, 1),
+      else: deliver(module, opts, event, 1)
+  end
+
+  # A batch consumer gets each event as a batch of one; a failed batch is retried like a failed event.
+  defp deliver_batch(module, opts, event, attempt) do
+    case Consumer.run_batch(module, [event]) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        if Consumer.given_up?(local_max(opts), attempt) do
+          Logger.error("batch failed on every delivery, given up",
+            event_id: event.id,
+            consumer: opts[:name],
+            reason: inspect(reason)
+          )
+        else
+          deliver_batch(module, opts, event, attempt + 1)
+        end
+    end
+  end
+
+  # In memory a consumer that never gives up is tried a bounded number of times, so a test cannot loop forever.
+  defp local_max(opts) do
+    case Keyword.fetch!(opts, :max_deliver) do
+      :infinity -> 25
+      max -> max
+    end
+  end
+
   defp deliver(module, opts, event, attempt) do
-    max = Keyword.fetch!(opts, :max_deliver)
+    max = local_max(opts)
 
     case Consumer.run(module, event) do
       :ok ->
