@@ -128,8 +128,11 @@ defmodule Sms.Switch.Rules.Route do
     end
 
     # A live TPS condition keeps its hysteresis per rule (§13.8).
-    defp tag_tps(%{tps: nil} = c, _id), do: c
-    defp tag_tps(%{tps: t} = c, id), do: %{c | tps: Map.put(t, :rule_id, id)}
+    defp tag_tps(c, id) do
+      c = if c.tps, do: %{c | tps: Map.put(c.tps, :rule_id, id)}, else: c
+      # Accumulated revenue may be measured on the rule's own traffic (§13.9).
+      if c.revenue, do: %{c | revenue: Map.put(c.revenue, :rule_id, id)}, else: c
+    end
 
     defp ms(nil, default), do: default
     defp ms(%DateTime{} = at, _), do: DateTime.to_unix(at, :millisecond)
@@ -319,11 +322,21 @@ defmodule Sms.Switch.Rules.Route do
   defp condition_ok?(:tps, %{tps: t}, m), do: t |> tps_check(m) |> elem(0)
 
   defp condition_ok?(:revenue, %{revenue: rev}, m) do
-    actual = if rev.type == :per_message, do: m[:sell_rate], else: m[:accumulated_revenue]
+    actual = revenue_of(rev, m)
     actual != nil and compare(rev.op, actual, rev.value, rev[:value2])
   end
 
   defp condition_ok?(:hlr, c, m), do: m[:hlr_ported] == c.hlr_ported
+
+  # The switch passes a function for accumulated revenue (its live counters, §13.9); the Route Simulator a number.
+  defp revenue_of(%{type: :per_message}, m), do: m[:sell_rate]
+
+  defp revenue_of(rev, m) do
+    case m[:accumulated_revenue] do
+      f when is_function(f, 2) -> f.(rev[:rule_id], rev)
+      value -> value
+    end
+  end
 
   # {matches?, measured TPS or nil}
   defp tps_check(t, m) do
@@ -486,7 +499,7 @@ defmodule Sms.Switch.Rules.Route do
   end
 
   defp detailed(:revenue, %{revenue: rev} = c, m) do
-    actual = if rev.type == :per_message, do: m[:sell_rate], else: m[:accumulated_revenue]
+    actual = revenue_of(rev, m)
 
     detail =
       cond do

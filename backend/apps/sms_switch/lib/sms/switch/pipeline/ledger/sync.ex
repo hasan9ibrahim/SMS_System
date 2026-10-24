@@ -14,7 +14,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
   """
   use GenServer
   require Logger
-  alias Sms.Switch.Pipeline.{Ledger, Store}
+  alias Sms.Switch.Pipeline.{Ledger, Revenue, Store}
   alias Sms.Switch.Pipeline.Ledger.Alerts
 
   @interval_ms 5_000
@@ -33,6 +33,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
         :ets.whereis(t) == :undefined,
         do: :ets.new(t, [:named_table, :public, :set, read_concurrency: true])
 
+    Revenue.start_cache()
     source = Keyword.get(opts, :source, Ledger.Source.Postgres)
     {:ok, _} = :timer.send_interval(Keyword.get(opts, :interval_ms, @interval_ms), :tick)
     send(self(), :tick)

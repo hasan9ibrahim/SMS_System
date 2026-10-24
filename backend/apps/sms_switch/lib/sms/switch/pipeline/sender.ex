@@ -45,6 +45,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     Ledger,
     LiveTps,
     Receipts,
+    Revenue,
     Router,
     Store
   }
@@ -544,8 +545,14 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   # §7: the balances are charged when the attempt row makes the message billable (`Sms.Switch.Pipeline.Ledger`).
   defp charge(msg, row) do
-    if row.customer_billable,
-      do: Ledger.charge(:customer, msg.trunk.enterprise_id, msg.id, msg.sell, msg.parts)
+    if row.customer_billable do
+      # §13.9: the revenue earned counts for accumulated revenue conditions with the charge.
+      revenue =
+        {Revenue.keys(msg, (row[:vendor] || %{})[:rule_id]),
+         Revenue.platform_micro(msg.sell, msg.parts)}
+
+      Ledger.charge(:customer, msg.trunk.enterprise_id, msg.id, msg.sell, msg.parts, revenue)
+    end
 
     if row.vendor_billable do
       vt = Config.vendor_trunk(row.vendor.vendor_trunk_id) || %{}

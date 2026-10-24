@@ -1644,4 +1644,35 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
     end
   end
+
+  describe "accumulated revenue conditions (§13.9)" do
+    test "the customer's revenue today above a value sends its traffic to the rule's vendor" do
+      start_supervised!(Pipeline.Ledger.Charges)
+
+      condition = %{
+        "type" => "accumulated",
+        "op" => ">",
+        "value" => 0.04,
+        "scope" => "customer_enterprise",
+        "period" => "today"
+      }
+
+      config =
+        Keyword.merge(vendors_v1([]),
+          route_rules: [
+            %{id: 1, priority: 10, continue_routing: "stop", revenue_condition: condition},
+            %{id: 2, priority: 20}
+          ],
+          route_vendors: [PipelineConfig.route_vendor(1, 2), PipelineConfig.route_vendor(2, 1)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {client, _} = submit(client, %{short_message: "no revenue yet"})
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+
+      # Billed on submit: 0.05 earned today.
+      {_client, _} = submit(client, %{short_message: "a good customer now"}, 3)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+    end
+  end
 end

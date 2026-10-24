@@ -504,6 +504,25 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
+  @sum_from """
+  local sum = 0
+  local flat = redis.call('HGETALL', KEYS[1])
+  for i = 1, #flat, 2 do
+    if tonumber(flat[i]) >= tonumber(ARGV[1]) then sum = sum + tonumber(flat[i + 1]) end
+  end
+  return sum
+  """
+
+  @doc false
+  # The sum of a bucket hash's fields from bucket `from` on (`Sms.Switch.Pipeline.Revenue`).
+  @spec sum_from(String.t(), integer()) :: {:ok, integer()} | {:error, term()}
+  def sum_from(hash, from) do
+    case backend() do
+      :redis -> Redis.command(["EVAL", @sum_from, 1, hash, from], @timeout)
+      :local -> local_one(["SUMFROM", hash, from])
+    end
+  end
+
   defp ok({:ok, _}), do: :ok
   defp ok(:ok), do: :ok
   defp ok({:error, _} = error), do: error
@@ -664,6 +683,12 @@ defmodule Sms.Switch.Pipeline.Store do
     n = String.to_integer(lookup(key) || "0") + by
     put(key, Integer.to_string(n), expiry(key))
     n
+  end
+
+  defp exec(["SUMFROM", hash, from]) do
+    for {bucket, v} <- get_hash(hash), int(bucket) >= from, reduce: 0 do
+      acc -> acc + int(v)
+    end
   end
 
   defp exec(["REBASE", hash, total, cutoff]) do

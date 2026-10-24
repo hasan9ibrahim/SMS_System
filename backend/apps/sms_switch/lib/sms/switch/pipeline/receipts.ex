@@ -30,6 +30,7 @@ defmodule Sms.Switch.Pipeline.Receipts do
     LateReceipts,
     Ledger,
     Receipt,
+    Revenue,
     Sender,
     Store
   }
@@ -282,7 +283,11 @@ defmodule Sms.Switch.Pipeline.Receipts do
       })
 
     if row["is_customer_billable"] == 1,
-      do: Ledger.charge(:customer, data.trunk.enterprise_id, data.id, bill.sell, bill.c_parts)
+      do:
+        Ledger.charge(:customer, data.trunk.enterprise_id, data.id, bill.sell, bill.c_parts, {
+          bill.rev_keys,
+          Revenue.platform_micro(bill.sell, bill.c_parts)
+        })
 
     if row["is_vendor_billable"] == 1,
       do:

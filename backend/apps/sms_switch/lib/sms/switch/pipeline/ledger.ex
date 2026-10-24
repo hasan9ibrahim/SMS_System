@@ -23,7 +23,7 @@ defmodule Sms.Switch.Pipeline.Ledger do
   @behaviour Sms.Switch.Pipeline.Credit
   require Logger
   alias Sms.Core.Bus
-  alias Sms.Switch.Pipeline.{Config, Store}
+  alias Sms.Switch.Pipeline.{Config, Revenue, Store}
 
   @accounts :sms_ledger_accounts
   @seen :sms_ledger_seen
@@ -152,60 +152,78 @@ defmodule Sms.Switch.Pipeline.Ledger do
   @doc """
   Charges an account for a billable message: `id` makes the charge unique (the message id for the customer, the
   attempt's EDR id for a vendor), `rate` × `parts` its amount in the rate's currency. Accounts without billing are not
-  charged.
+  charged. `revenue` (`{scope keys, platform currency micro-units}`) counts the customer's revenue for accumulated
+  revenue conditions in the same step (`Sms.Switch.Pipeline.Revenue`, §13.9).
   """
-  @spec charge(:customer | :vendor, integer() | nil, String.t(), map() | nil, non_neg_integer()) ::
-          :ok | {:error, term()}
-  def charge(_side, nil, _id, _rate, _parts), do: :ok
-  def charge(_side, _enterprise_id, _id, nil, _parts), do: :ok
+  @spec charge(
+          :customer | :vendor,
+          integer() | nil,
+          String.t(),
+          map() | nil,
+          non_neg_integer(),
+          {[String.t()], integer()} | nil
+        ) :: :ok | {:error, term()}
+  def charge(side, enterprise_id, id, rate, parts, revenue \\ nil)
+  def charge(_side, nil, _id, _rate, _parts, _revenue), do: :ok
+  def charge(_side, _enterprise_id, _id, nil, _parts, _revenue), do: :ok
 
-  def charge(side, enterprise_id, id, rate, parts) do
+  def charge(side, enterprise_id, id, rate, parts, revenue) do
     key = key(side, enterprise_id)
+    account = account(key)
 
-    case account(key) do
-      nil ->
+    if account == nil and revenue == nil,
+      do: :ok,
+      else: publish_charge(side, key, account, id, rate, parts, revenue || {[], 0})
+  end
+
+  defp publish_charge(side, key, account, id, rate, parts, {rev_keys, rev_micro}) do
+    data = %{
+      "k" => account && key,
+      "id" => "#{id}:#{side}",
+      "b" => bucket(System.os_time(:second)),
+      "m" => if(account, do: micro(rate, parts, account.currency), else: 0),
+      "n" => parts,
+      "rv" => rev_keys,
+      "rm" => rev_micro
+    }
+
+    case Bus.publish("sms.billing.charge", "billing.charge", data, id: "charge:#{data["id"]}") do
+      {:ok, _} ->
         :ok
 
-      account ->
-        data = %{
-          "k" => key,
-          "id" => "#{id}:#{side}",
-          "b" => bucket(System.os_time(:second)),
-          "m" => micro(rate, parts, account.currency),
-          "n" => parts
-        }
-
-        case Bus.publish("sms.billing.charge", "billing.charge", data, id: "charge:#{data["id"]}") do
-          {:ok, _} ->
-            :ok
-
-          {:error, reason} = error ->
-            Logger.error("charge #{data["id"]} on #{key} not queued: #{inspect(reason)}")
-            error
-        end
+      {:error, reason} = error ->
+        Logger.error("charge #{data["id"]} on #{key} not queued: #{inspect(reason)}")
+        error
     end
   end
 
   @doc "Applies a queued charge once (`Sms.Switch.Pipeline.Ledger.Charges`)."
   @spec apply_charge(map()) :: :ok | {:error, term()}
-  def apply_charge(%{"k" => key, "id" => id, "b" => bucket, "m" => micro, "n" => n}) do
+  def apply_charge(%{"id" => id} = charge) do
     case Store.command(["SET", "cd:#{id}", "1", "NX", "EX", @charge_keep_s]) do
-      {:ok, "OK"} -> add(key, id, bucket, micro, n)
+      {:ok, "OK"} -> add(charge)
       # Applied already (a redelivery).
       {:ok, nil} -> :ok
       {:error, _} = error -> error
     end
   end
 
-  defp add(key, id, bucket, micro, n) do
-    commands = [
-      ["HINCRBY", "chg:#{key}", Integer.to_string(bucket), micro],
-      ["HINCRBY", "chm:#{key}", Integer.to_string(bucket), n],
-      ["INCRBY", "cht:#{key}", micro],
-      ["SADD", "chd", key]
-    ]
+  defp add(%{"id" => id, "b" => bucket} = charge) do
+    key = charge["k"]
 
-    case Store.transaction(commands) do
+    ledger =
+      if key,
+        do: [
+          ["HINCRBY", "chg:#{key}", Integer.to_string(bucket), charge["m"]],
+          ["HINCRBY", "chm:#{key}", Integer.to_string(bucket), charge["n"]],
+          ["INCRBY", "cht:#{key}", charge["m"]],
+          ["SADD", "chd", key]
+        ],
+        else: []
+
+    case Store.transaction(
+           ledger ++ Revenue.commands(charge["rv"] || [], bucket, charge["rm"] || 0)
+         ) do
       {:ok, _} ->
         :ok
 

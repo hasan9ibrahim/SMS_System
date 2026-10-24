@@ -17,7 +17,7 @@ defmodule Sms.Switch.Pipeline.Billing do
   (after the DLR maps), a vendor's on the vendor's own status. A message refused before it reached a vendor is never
   billed. Amounts: the customer's rate × its message parts, a vendor's rate × the parts sent to it.
   """
-  alias Sms.Switch.Pipeline.Config
+  alias Sms.Switch.Pipeline.{Config, Revenue}
 
   @at_send ["attempt", "submit"]
 
@@ -92,6 +92,8 @@ defmodule Sms.Switch.Pipeline.Billing do
       cost: route[:cost],
       base_currency: trunk[:base_currency],
       attempt_no: 0,
+      # §13.9: where its revenue counts once billed.
+      rev_keys: Revenue.keys(msg, route[:rule_id]),
       dims: %{
         "business_company_id" => trunk[:business_company_id] || 0,
         "product_category_id" => trunk[:product_category_id] || 0,

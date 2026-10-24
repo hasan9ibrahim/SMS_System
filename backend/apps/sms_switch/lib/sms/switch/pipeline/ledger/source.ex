@@ -23,8 +23,14 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
     @accounts """
     SELECT l.enterprise_id, l.side, l.currency, l.billing_type, l.credit_limit, l.base,
            CASE WHEN l.cutoff = '-infinity' THEN NULL ELSE extract(epoch FROM l.cutoff)::bigint END,
-           e.credit_alert, e.credit_alert_notice, e.credit_alert_warning, e.credit_alert_critical
-      FROM balance_ledger l JOIN enterprises e ON e.id = l.enterprise_id
+           e.credit_alert, e.credit_alert_notice, e.credit_alert_warning, e.credit_alert_critical,
+           -- Period starts in the partner's time zone, for accumulated revenue conditions (§13.9).
+           extract(epoch FROM date_trunc('day', now() AT TIME ZONE b.timezone) AT TIME ZONE b.timezone)::bigint,
+           extract(epoch FROM date_trunc('week', now() AT TIME ZONE b.timezone) AT TIME ZONE b.timezone)::bigint,
+           extract(epoch FROM date_trunc('month', now() AT TIME ZONE b.timezone) AT TIME ZONE b.timezone)::bigint
+      FROM balance_ledger l
+      JOIN enterprises e ON e.id = l.enterprise_id
+      JOIN enterprise_billing b ON b.enterprise_id = l.enterprise_id AND b.side = l.side
      WHERE e.deleted_at IS NULL
     """
 
@@ -47,7 +53,10 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
            alert,
            notice,
            warning,
-           critical
+           critical,
+           today,
+           week,
+           month
          ]) do
       side = if side == "vendor", do: :vendor, else: :customer
       prepaid = billing_type == "prepaid"
@@ -63,7 +72,13 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
         credit_limit: Ledger.to_micro(limit),
         cutoff: if(cutoff, do: Ledger.bucket(cutoff), else: 0),
         prepaid: prepaid,
-        alerts: if(alert, do: [notice, warning, critical], else: [])
+        alerts: if(alert, do: [notice, warning, critical], else: []),
+        periods: %{
+          "today" => today,
+          "week" => week,
+          "month" => month,
+          "billing_cycle" => cutoff || month
+        }
       }
     end
 
