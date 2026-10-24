@@ -122,6 +122,18 @@ jobs:
           docker run -d --name nats -p 4222:4222 -p 8222:8222 \
             -v "$PWD/deploy/nats/nats.conf:/etc/nats/nats.conf:ro" nats:2.14.8-alpine -c /etc/nats/nats.conf
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8222/healthz && exit 0; sleep 1; done; exit 1
+      # The configuration schema the switch reads (customer trunks), from the same migrations the mock uses.
+      - name: Apply the PostgreSQL schema
+        working-directory: .
+        env:
+          PGHOST: localhost
+          PGUSER: sms_dev
+          PGPASSWORD: sms_dev_password
+          PGDATABASE: sms_config
+        run: |
+          for f in db/postgres/init/*.sql db/postgres/migrations/*.sql; do
+            psql -q -v ON_ERROR_STOP=1 -f "$f" > /dev/null
+          done
       - uses: erlef/setup-beam@v1
         with:
           version-file: backend/.tool-versions
