@@ -14,6 +14,15 @@ defmodule Sms.Core.Bus.Consumer do
   Return `:ok` when done, `{:error, reason}` to have the event delivered again (up to `max_deliver` times, with
   growing delays), or `{:discard, reason}` for an event that can never be handled (logged, not retried). A handler
   that raises counts as `{:error, _}`.
+
+  Options:
+
+    * `:max_deliver` (default 10; `:infinity` never gives up, for events that must never be lost);
+    * `:ack_wait_ms` (default 30 s): how long a delivery may take before it is delivered again;
+    * `:concurrency` (default 1): events handled at once on each node (several workers share the durable consumer);
+    * `:batch_size`: hand events over in batches of up to this many to `handle_batch/1` instead of one by one to
+      `handle_event/1`, after at most `:batch_wait_ms` (default 200 ms). The batch is acknowledged only when
+      `handle_batch/1` returns `:ok`; on an error every event of the batch is delivered again after `:ack_wait_ms`.
   """
   alias Sms.Core.Bus
   alias Sms.Core.Bus.{Event, Subject}
@@ -22,11 +31,16 @@ defmodule Sms.Core.Bus.Consumer do
   @type options :: [
           name: String.t(),
           filter: String.t(),
-          max_deliver: pos_integer(),
-          ack_wait_ms: pos_integer()
+          max_deliver: pos_integer() | :infinity,
+          ack_wait_ms: pos_integer(),
+          concurrency: pos_integer(),
+          batch_size: pos_integer() | nil,
+          batch_wait_ms: pos_integer()
         ]
 
   @callback handle_event(Event.t()) :: result()
+  @callback handle_batch([Event.t()]) :: :ok | {:error, term()}
+  @optional_callbacks handle_event: 1, handle_batch: 1
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts, consumer: __MODULE__] do
@@ -54,27 +68,69 @@ defmodule Sms.Core.Bus.Consumer do
     name = Keyword.fetch!(opts, :name)
     filter = Keyword.fetch!(opts, :filter)
 
-    unless is_binary(name) and Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,63}\z/, name),
-      do:
-        raise(
-          ArgumentError,
-          "consumer name must be lower-case letters, digits, - or _: #{inspect(name)}"
-        )
+    check!(
+      is_binary(name) and Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,63}\z/, name),
+      "consumer name must be lower-case letters, digits, - or _: #{inspect(name)}"
+    )
 
-    unless Subject.valid_filter?(filter) and String.starts_with?(filter, "sms."),
-      do:
-        raise(
-          ArgumentError,
-          "consumer filter must be a valid subject filter under sms.: #{inspect(filter)}"
-        )
+    check!(
+      Subject.valid_filter?(filter) and String.starts_with?(filter, "sms."),
+      "consumer filter must be a valid subject filter under sms.: #{inspect(filter)}"
+    )
+
+    max_deliver = Keyword.get(opts, :max_deliver, 10)
+    concurrency = Keyword.get(opts, :concurrency, 1)
+    batch_size = Keyword.get(opts, :batch_size)
+
+    check!(
+      max_deliver == :infinity or pos_integer?(max_deliver),
+      "max_deliver must be a positive integer or :infinity: #{inspect(max_deliver)}"
+    )
+
+    check!(
+      pos_integer?(concurrency),
+      "concurrency must be a positive integer: #{inspect(concurrency)}"
+    )
+
+    check!(
+      is_nil(batch_size) or pos_integer?(batch_size),
+      "batch_size must be a positive integer: #{inspect(batch_size)}"
+    )
 
     [
       name: name,
       filter: filter,
-      max_deliver: Keyword.get(opts, :max_deliver, 10),
-      ack_wait_ms: Keyword.get(opts, :ack_wait_ms, 30_000)
+      max_deliver: max_deliver,
+      ack_wait_ms: Keyword.get(opts, :ack_wait_ms, 30_000),
+      concurrency: concurrency,
+      batch_size: batch_size,
+      batch_wait_ms: Keyword.get(opts, :batch_wait_ms, 200)
     ]
   end
+
+  defp check!(true, _message), do: :ok
+  defp check!(false, message), do: raise(ArgumentError, message)
+
+  defp pos_integer?(value), do: is_integer(value) and value > 0
+
+  @doc false
+  # Runs a batch handler; a raise or a bad return is an error, so the whole batch comes back.
+  @spec run_batch(module(), [Event.t()]) :: :ok | {:error, term()}
+  def run_batch(consumer, events) do
+    case consumer.handle_batch(events) do
+      :ok -> :ok
+      {:error, _} = error -> error
+      other -> {:error, {:bad_return, other}}
+    end
+  rescue
+    e -> {:error, {:raised, Exception.message(e)}}
+  end
+
+  @doc false
+  # Whether `max_deliver` deliveries have been made (never for :infinity).
+  @spec given_up?(pos_integer() | :infinity, pos_integer()) :: boolean()
+  def given_up?(:infinity, _n), do: false
+  def given_up?(max, n), do: n >= max
 
   @doc false
   # Runs the handler for one delivery; a raise or a bad return is an error, so the event comes back.

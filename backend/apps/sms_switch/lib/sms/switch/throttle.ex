@@ -33,6 +33,19 @@ defmodule Sms.Switch.Throttle do
   """
   @sha :crypto.hash(:sha, @script) |> Base.encode16(case: :lower)
 
+  # Takes a place in an overflow buffer (S-2.4): KEYS[1] the buffer, ARGV[1] its size. 1 taken, 0 full. The count
+  # expires an hour after the last change, so a place never given back (a server lost mid-message) does not stay.
+  @buffer_script """
+  local n = redis.call('INCR', KEYS[1])
+  redis.call('PEXPIRE', KEYS[1], 3600000)
+  if n > tonumber(ARGV[1]) then
+    redis.call('DECR', KEYS[1])
+    return 0
+  end
+  return 1
+  """
+  @buffer_sha :crypto.hash(:sha, @buffer_script) |> Base.encode16(case: :lower)
+
   @typedoc "A counter: the name returned when it is the one over its limit, its key (e.g. `\"vt:7\"`) and its limit."
   @type counter :: {name :: atom(), key :: String.t(), limit :: pos_integer()}
 
@@ -55,11 +68,61 @@ defmodule Sms.Switch.Throttle do
     end
   end
 
+  @doc """
+  Takes a place in a trunk's overflow buffer (S-2.4: over its TPS, a customer trunk with a buffer has its messages
+  accepted and queued up to the buffer size): true when there was room. The count is shared like the TPS counters;
+  while Redis is unavailable each server keeps its share of the buffer.
+  """
+  @spec buffer_take(String.t(), non_neg_integer()) :: boolean()
+  def buffer_take(_key, size) when size <= 0, do: false
+
+  def buffer_take(key, size) do
+    if config(:backend) == :redis and not redis_paused?() do
+      case run_script(
+             @buffer_sha,
+             @buffer_script,
+             ["buf:#{key}"],
+             [size],
+             config(:redis_timeout_ms)
+           ) do
+        {:ok, 1} -> true
+        {:ok, 0} -> false
+        _error -> local_buffer_take(key, share(size, config(:cluster_size)))
+      end
+    else
+      local_buffer_take(key, share(size, divisor()))
+    end
+  end
+
+  @doc "Gives a buffered message's place back (it left the buffer: sent on, or refused)."
+  @spec buffer_release(String.t()) :: :ok
+  def buffer_release(key) do
+    if config(:backend) == :redis and not redis_paused?() do
+      case Redis.command(["DECR", "buf:#{key}"], config(:redis_timeout_ms)) do
+        {:ok, n} when n < 0 -> Redis.command(["SET", "buf:#{key}", "0", "KEEPTTL"])
+        _ -> :ok
+      end
+    end
+
+    # The local count (used while Redis was unavailable) is given back too, never below zero.
+    :ets.update_counter(@table, {:buffer, key}, {2, -1, 0, 0}, {{:buffer, key}, 0})
+    :ok
+  end
+
+  defp local_buffer_take(key, size) do
+    if :ets.update_counter(@table, {:buffer, key}, 1, {{:buffer, key}, 0}) > size do
+      :ets.update_counter(@table, {:buffer, key}, -1)
+      false
+    else
+      true
+    end
+  end
+
   defp redis_acquire(counters, second) do
     keys = for {_name, key, _limit} <- counters, do: "tps:#{key}:#{second}"
     limits = for {_name, _key, limit} <- counters, do: limit
 
-    case run_script(keys, limits, config(:redis_timeout_ms)) do
+    case run_script(@sha, @script, keys, limits, config(:redis_timeout_ms)) do
       {:ok, 0} ->
         {:ok, :ok}
 
@@ -75,10 +138,10 @@ defmodule Sms.Switch.Throttle do
   end
 
   # EVALSHA runs the cached script; after a Redis restart or SCRIPT FLUSH it is sent in full once.
-  defp run_script(keys, args, timeout) do
-    case Redis.command(["EVALSHA", @sha, length(keys)] ++ keys ++ args, timeout) do
+  defp run_script(sha, script, keys, args, timeout) do
+    case Redis.command(["EVALSHA", sha, length(keys)] ++ keys ++ args, timeout) do
       {:error, %{message: "NOSCRIPT" <> _}} ->
-        Redis.command(["EVAL", @script, length(keys)] ++ keys ++ args, timeout)
+        Redis.command(["EVAL", script, length(keys)] ++ keys ++ args, timeout)
 
       other ->
         other

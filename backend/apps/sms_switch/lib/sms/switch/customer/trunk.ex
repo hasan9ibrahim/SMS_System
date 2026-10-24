@@ -74,6 +74,11 @@ defmodule Sms.Switch.Customer.Trunk do
     [{:trunk_tps, "ct:#{trunk.id}", trunk_tps(trunk)} | company]
   end
 
+  @doc "The key of the trunk's overflow buffer count (`Sms.Switch.Throttle.buffer_take/2`, S-2.4)."
+  @spec buffer_key(t() | pos_integer()) :: String.t()
+  def buffer_key(%__MODULE__{id: id}), do: buffer_key(id)
+  def buffer_key(id) when is_integer(id), do: "ct:#{id}"
+
   @doc "Whether a client at `ip` may bind (spec §5.4 Host Name)."
   @spec ip_allowed?(t(), :inet.ip_address()) :: boolean()
   def ip_allowed?(%__MODULE__{host_ips: ranges}, ip), do: IpRange.member?(ranges, ip)

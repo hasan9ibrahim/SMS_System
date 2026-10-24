@@ -136,6 +136,13 @@ jobs:
           for f in db/postgres/init/*.sql db/postgres/migrations/*.sql; do
             psql -q -v ON_ERROR_STOP=1 -f "$f" > /dev/null
           done
+      # The EDR store the pipeline writes to, from the same files the mock applies.
+      - name: Apply the ClickHouse schema
+        working-directory: .
+        env:
+          CH_URL: http://localhost:8123/?database=sms_edr
+          CH_AUTH: sms_dev:sms_dev_password
+        run: python3 tools/apply_clickhouse.py
       - uses: erlef/setup-beam@v1
         with:
           version-file: backend/.tool-versions

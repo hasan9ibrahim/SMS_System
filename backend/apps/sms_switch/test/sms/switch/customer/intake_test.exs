@@ -3,8 +3,8 @@ defmodule Sms.Switch.Customer.IntakeTest do
   alias Sms.Switch.Customer.{Events, Intake}
   alias Sms.Switch.Smpp.Pdu
 
-  test "until the pipeline exists (step 4), every message request is refused at once with the right status" do
-    assert Intake.impl() == Intake.NotReady
+  test "submits go to the pipeline (step 4); the not-ready intake refuses each request with the right status" do
+    assert Intake.impl() == Sms.Switch.Pipeline.Intake
     assert Intake.NotReady.handle(%{}, Pdu.new(:submit_sm)) == {:error, :esme_rsubmitfail}
     assert Intake.NotReady.handle(%{}, Pdu.new(:data_sm)) == {:error, :esme_rsubmitfail}
     assert Intake.NotReady.handle(%{}, Pdu.new(:query_sm)) == {:error, :esme_rqueryfail}

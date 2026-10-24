@@ -86,7 +86,12 @@ side) done: each vendor trunk's connections split between the servers and taken 
 bind type with the trunk's credentials and bind address, TLS 1.0–1.3 with certificate checks, reconnect schedule and
 Auth Fail Retry, Bind Down Alert events, keep-alive, Window Size, Submit Interval and Submit Timeout with late answers
 published for the possible-duplicate flag (D4), one shared TPS limit per vendor trunk, MsgID Type normalisation (S-5.6)
-and receipts handed to the pipeline (OK and logged until step 4, Q7).
+and receipts handed to the pipeline (Q7). Step 4 (message pipeline) done: routing configuration in memory from
+PostgreSQL, ports of the mock's translation engine, route evaluator and LCR, message checks and encodings, the
+submit_sm_resp only once the message is stored on the bus, egress translation and re-routing across vendors (D2–D4),
+receipts matched, aggregated per message and forwarded by DLR Session Affinity with store-and-forward, the customer
+overflow buffer (S-2.4) and EDRs appended to ClickHouse (`edr`, `edr_receipt`) through the bus. Balances and billing
+come with step 6; query_sm / cancel_sm, reassembly and DLR timeouts with step 5.
 
 ## 1. Where we stand
 

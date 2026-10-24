@@ -108,6 +108,21 @@ config :sms_switch, Sms.Switch.Customer,
 
 config :sms_switch, Sms.Switch.Throttle, cluster_size: int.("SWITCH_CLUSTER_SIZE", "2")
 
+# Each server's own number (0–255) in the message ids it gives customers; the platform currency for margins.
+node_id =
+  case Integer.parse(env.("SWITCH_NODE_ID", "0")) do
+    {n, ""} when n in 0..255 ->
+      n
+
+    _ ->
+      raise ArgumentError,
+            "SWITCH_NODE_ID must be 0 to 255, got #{inspect(env.("SWITCH_NODE_ID", ""))}"
+  end
+
+config :sms_switch, Sms.Switch.Pipeline,
+  node_id: node_id,
+  platform_currency: env.("PLATFORM_CURRENCY", "EUR")
+
 # Vendor TLS connections check the vendor's certificate against the system CAs and its host name ("peer"); "none"
 # accepts any certificate (a vendor with a self-signed one).
 tls_verify =

@@ -17,14 +17,16 @@ defmodule Sms.Switch.Customer.Intake do
 
   @typedoc """
   The session a request arrived on: stored with the message so its receipt can follow it (§13.1 rule 2, EDR
-  columns Customer Session ID and Customer Bind Type).
+  columns Customer Session ID and Customer Bind Type). `buffered`: accepted over the trunk's TPS into its overflow
+  buffer (S-2.4); the pipeline sends it when the TPS allows and gives the buffer place back.
   """
   @type context :: %{
           origin: Affinity.origin(),
           trunk: Trunk.t(),
           port: :inet.port_number(),
           node: node(),
-          received_at: DateTime.t()
+          received_at: DateTime.t(),
+          buffered: boolean()
         }
 
   @typedoc "The answer: fields and TLVs of the response, or an error status (the response then has no body)."
