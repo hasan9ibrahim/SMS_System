@@ -209,7 +209,7 @@ export const topics: HelpTopic[] = [
                 what: "Days until the password expires. Amber at 7 or fewer, red when negative (already expired).",
               },
               { name: "2FA", what: "**On** when the authenticator app is set up. **Off** is shown in amber." },
-              { name: "Account Manager", what: "Yes when the user is an account manager (AM)." },
+              { name: "Account Manager", what: "Yes when the user is an account manager." },
               { name: "Last Login", what: 'When the user last signed in, or "never". Hidden by default.' },
             ],
           },
@@ -223,7 +223,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Profile",
-                what: "Email, phone, user type and roles, business company, who they report to, address, whether several logins are allowed, how many live enterprises they manage as AM, and who updated the record last. Buttons: **Edit**, **Delete**.",
+                what: "Email, phone, user type and roles, business company, who they report to, address, whether several logins are allowed, how many live enterprises they manage as Account Manager, and who updated the record last. Buttons: **Edit**, **Delete**.",
               },
               {
                 name: "Password & 2FA",
@@ -231,7 +231,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Visibility",
-                what: "The user's effective visibility policy: what they see of other AMs' enterprises. Admins get a **Preview as** button. See [[visibility]].",
+                what: "The user's effective visibility policy: what they see of other Account Managers' enterprises. Admins get a **Preview as** button. See [[visibility]].",
               },
               { name: "History", what: "Every saved change to this user, their password and 2FA, with Undo." },
             ],
@@ -420,7 +420,7 @@ export const topics: HelpTopic[] = [
             items: [
               "Click the user, open **Profile** and click **Delete**.",
               "The dialog lists what depends on the user: live enterprises they manage, users who report to them, and open sessions (which are signed out).",
-              "If they are account manager of live enterprises, delete is blocked: hand those enterprises to another AM first.",
+              "If they are account manager of live enterprises, delete is blocked: hand those enterprises to another Account Manager first.",
               "Otherwise confirm. The user is archived, not erased. An administrator can **Restore** them with **Show deleted** ticked.",
             ],
           },
@@ -639,9 +639,9 @@ export const topics: HelpTopic[] = [
     title: "Visibility policies",
     group: "Admin",
     summary:
-      "Account manager visibility mode: show other AMs' enterprises as IDs, hide money and contact data, and give someone temporary sight of an enterprise.",
+      "Account manager visibility mode: show other Account Managers' enterprises as IDs, hide money and contact data, and give someone temporary sight of an enterprise.",
     keywords: [
-      "AM visibility",
+      "Account Manager visibility",
       "masking",
       "hide margin",
       "hide revenue",
@@ -659,7 +659,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'A visibility policy limits what an account manager sees of clients and vendors that are not theirs. Other AMs\' enterprises and trunks can appear only as IDs ("Customer #2481"), and items such as margin, revenue, costs, balances and contact details can be hidden. Admins set this up; it applies everywhere: lists, records, search and exports.',
+            text: 'A visibility policy limits what an account manager sees of clients and vendors that are not theirs. Other Account Managers\' enterprises and trunks can appear only as IDs ("Customer #2481"), and items such as margin, revenue, costs, balances and contact details can be hidden. Admins set this up; it applies everywhere: lists, records, search and exports.',
           },
           {
             kind: "text",
@@ -705,14 +705,14 @@ export const topics: HelpTopic[] = [
                 name: "Start from a preset",
                 what: "Only on a new policy. Fills the whole form from a ready policy, which you can then change.",
                 values:
-                  "Strict AM (others masked, all money hidden), Standard AM (others masked, own money shown), Team lead (team shown, others masked)",
+                  "Strict Account Manager (others masked, all money hidden), Standard Account Manager (others masked, own money shown), Team lead (team shown, others masked)",
               },
               { name: "Name", what: "Required, up to 120 characters." },
               { name: "Status", what: "Active or Inactive." },
               { name: "Description", what: "Optional, up to 500 characters." },
               {
                 name: "Mask others' enterprises and trunks as IDs",
-                what: 'When ticked, enterprises and trunks of other AMs show as neutral IDs such as "Customer #2481" everywhere: lists, search, records and exports. The ID stays the same, so traffic can still be followed. On by default.',
+                what: 'When ticked, enterprises and trunks of other Account Managers show as neutral IDs such as "Customer #2481" everywhere: lists, search, records and exports. The ID stays the same, so traffic can still be followed. On by default.',
               },
               {
                 name: "For team leads: their team members' enterprises count as own",
@@ -815,7 +815,10 @@ export const topics: HelpTopic[] = [
             title: "Grant sight of an enterprise dialog",
             fields: [
               { name: "User", what: "Required. The person who needs to see the enterprise." },
-              { name: "Enterprise", what: "Required. Shows the enterprise's current AM under each choice." },
+              {
+                name: "Enterprise",
+                what: "Required. Shows the enterprise's current Account Manager under each choice.",
+              },
               {
                 name: "Temporary / Lasting share",
                 what: "Temporary ends at a set time; Lasting share stays until revoked.",
@@ -841,7 +844,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "steps",
             items: [
-              "In **Policies**, click **New policy**, pick a preset (for example **Standard AM**), adjust it and **Save**.",
+              "In **Policies**, click **New policy**, pick a preset (for example **Standard Account Manager**), adjust it and **Save**.",
               "Switch to **Assignments** and click **Assign policy**. Choose **All account managers**, a department or one user, pick the policy and click **Assign**.",
               "Check the result: pick a user under **Check a user's effective policy**, then click **Preview as** to browse the system the way they see it.",
               "A strip under the tabs says whose view you are previewing. Click **End preview** to go back to your own view.",

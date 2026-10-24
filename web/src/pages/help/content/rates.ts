@@ -242,7 +242,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The Rate manager is where account managers (AMs), the rates team and billing look after prices. It opens with the list of rate tables filling the page. When you open a table, the list shrinks into a narrow panel on the left and the table's rates open on the right, in the same tab.",
+            text: "The Rate manager is where account managers (Account Managers), the rates team and billing look after prices. It opens with the list of rate tables filling the page. When you open a table, the list shrinks into a narrow panel on the left and the table's rates open on the right, in the same tab.",
           },
           {
             kind: "text",
@@ -260,7 +260,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The header has **New rate table** (the main button). Above the grid, the **Customer / Vendor** switch picks which kind of table you see (Customer is the default), and **Account manager** keeps only tables of that AM's clients (**All** = every AM). Both work as filters, so they also show as filter chips and stay in the tab's address.",
+            text: "The header has **New rate table** (the main button). Above the grid, the **Customer / Vendor** switch picks which kind of table you see (Customer is the default), and **Account manager** keeps only tables of that Account Manager's clients (**All** = every Account Manager). Both work as filters, so they also show as filter chips and stay in the tab's address.",
           },
           {
             kind: "fields",
@@ -1097,7 +1097,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "The **Account manager** filter keeps moves for that AM's clients. Account managers only see moves for their own clients.",
+            text: "The **Account manager** filter keeps moves for that Account Manager's clients. Account managers only see moves for their own clients.",
           },
         ],
       },
@@ -1164,7 +1164,10 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Affected clients tab",
             fields: [
-              { name: "Table / Clients / AM", what: "The client's rate table, its clients and account manager." },
+              {
+                name: "Table / Clients / Account Manager",
+                what: "The client's rate table, its clients and account manager.",
+              },
               { name: "Sell", what: "Today's sell rate in the table's currency." },
               {
                 name: "Margin now / At new cost",
@@ -1234,7 +1237,7 @@ export const topics: HelpTopic[] = [
               { name: "Target margin for suggestions (%)", what: "Minimum margin used for suggested rates." },
               {
                 name: "Daily digest at (UTC hour)",
-                what: "When each AM gets the e-mail digest of new moves for their clients.",
+                what: "When each Account Manager gets the e-mail digest of new moves for their clients.",
               },
             ],
           },

@@ -36,7 +36,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Account managers (AMs) use this page to find their partners. NOC staff use it to jump to a partner's trunks. Billing uses it to reach a partner's billing details. Admins use it to add, delete and restore partners.",
+            text: "Account managers (Account Managers) use this page to find their partners. NOC staff use it to jump to a partner's trunks. Billing uses it to reach a partner's billing details. Admins use it to add, delete and restore partners.",
           },
           {
             kind: "text",
@@ -93,7 +93,10 @@ export const topics: HelpTopic[] = [
                 name: "Business Company",
                 what: "Our own company that contracts with this partner and invoices it (sets the base currency).",
               },
-              { name: "Account Manager", what: "The AM who owns the partner today. Shows a dash when none is set." },
+              {
+                name: "Account Manager",
+                what: "The Account Manager who owns the partner today. Shows a dash when none is set.",
+              },
               {
                 name: "Customer trunks / Vendor trunks",
                 what: "How many live trunks the enterprise has on each side, in bold. Point at a number to see the trunks by name. Sort or filter on them like any number (for example `>2`).",
@@ -256,7 +259,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "AMs keep contacts and details up to date and hand partners over. Billing sets currency, cycle, credit limit and bank details. NOC opens the partner's trunks from here.",
+            text: "Account Managers keep contacts and details up to date and hand partners over. Billing sets currency, cycle, credit limit and bank details. NOC opens the partner's trunks from here.",
           },
         ],
       },
@@ -276,7 +279,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Under the header a grey line sums up the partner: type, tier, business company, AM and status. If the enterprise is deleted, a banner says when and by whom, and editing is off until it is restored.",
+            text: "Under the header a grey line sums up the partner: type, tier, business company, Account Manager and status. If the enterprise is deleted, a banner says when and by whom, and editing is off until it is restored.",
           },
           {
             kind: "list",
@@ -287,7 +290,7 @@ export const topics: HelpTopic[] = [
               "**Billing**: customer and/or vendor billing sides and bank details.",
               "**Customer trunks**: only for Customer and Bilateral partners. Shows a count.",
               "**Vendor trunks**: only for Vendor and Bilateral partners. Shows a count.",
-              "**Account managers**: AM history and **Hand over**.",
+              "**Account managers**: Account Manager history and **Hand over**.",
               "**History**: every saved change to this enterprise, with undo.",
             ],
           },
@@ -343,7 +346,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Account manager",
-                what: "The AM who owns the partner. Shown and required only when adding an enterprise. Afterwards the General tab no longer shows it: changes go through the **Account managers** tab (**Hand over**), so that past results stay with the AM who earned them.",
+                what: "The Account Manager who owns the partner. Shown and required only when adding an enterprise. Afterwards the General tab no longer shows it: changes go through the **Account managers** tab (**Hand over**), so that past results stay with the Account Manager who earned them.",
                 values: "Pick a user who is an active account manager.",
               },
             ],
@@ -677,11 +680,11 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Lists every AM the partner has had: **Account manager**, **From**, **Until** (UTC), **Note**, and a tag **Current** or **Scheduled**.",
+            text: "Lists every Account Manager the partner has had: **Account manager**, **From**, **Until** (UTC), **Note**, and a tag **Current** or **Scheduled**.",
           },
           {
             kind: "text",
-            text: "Under it, **Partner AM** shows the partner's own account manager on their side: the **Commercial** contact from the General tab, with name, phone and e-mails (click to write, copy icon to copy). Change it on the General tab.",
+            text: "Under it, **Partner Account Manager** shows the partner's own account manager on their side: the **Commercial** contact from the General tab, with name, phone and e-mails (click to write, copy icon to copy). Change it on the General tab.",
           },
           {
             kind: "fields",
@@ -689,7 +692,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "New account manager",
-                what: "The AM who takes over. Required. The current AM is not in the list.",
+                what: "The Account Manager who takes over. Required. The current Account Manager is not in the list.",
               },
               {
                 name: "Effective",
@@ -698,12 +701,12 @@ export const topics: HelpTopic[] = [
               { name: "Note", what: "Why the partner is handed over.", values: "Optional, up to 500 characters." },
               {
                 name: "E-mail the client",
-                what: "Sends the client an introduction from the new AM: to the commercial contact (or the rates contact), both AMs in copy. The note can be used in the template as {note}.",
+                what: "Sends the client an introduction from the new Account Manager: to the commercial contact (or the rates contact), both Account Managers in copy. The note can be used in the template as {note}.",
                 values: "Ticked by default.",
               },
               {
                 name: "Template",
-                what: "Which **AM Handover** e-mail template to use. Company default uses the business company's template. Write your own on [[email-templates|E-mail templates]] with {enterprise}, {old_am}, {new_am}, {new_am_email}, {effective_date} and {note}.",
+                what: "Which **Account Manager Handover** e-mail template to use. Company default uses the business company's template. Write your own on [[email-templates|E-mail templates]] with {enterprise}, {old_am}, {new_am}, {new_am_email}, {effective_date} and {note}.",
               },
             ],
           },
@@ -719,7 +722,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Revenue, cost and margin from before the handover stay credited to the previous AM. Reports split results by the AM at the time each message was sent. A new scheduled handover replaces one that has not started yet. You can undo a handover from History until it takes effect.",
+            text: "Revenue, cost and margin from before the handover stay credited to the previous Account Manager. Reports split results by the Account Manager at the time each message was sent. A new scheduled handover replaces one that has not started yet. You can undo a handover from History until it takes effect.",
           },
         ],
       },
@@ -820,7 +823,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "NOC uses this page to find a trunk by username or name, AMs to check a customer's set-up, and admins to clone or delete trunks in bulk. The same list for one partner is on the [[enterprise-record#trunk-tabs|enterprise record]].",
+            text: "NOC uses this page to find a trunk by username or name, Account Managers to check a customer's set-up, and admins to clone or delete trunks in bulk. The same list for one partner is on the [[enterprise-record#trunk-tabs|enterprise record]].",
           },
         ],
       },

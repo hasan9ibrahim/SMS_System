@@ -119,14 +119,15 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
             ))}
           </select>
           <span className="muted small">
-            Sent from the new AM to the commercial contact, both AMs in copy. Edit templates in Admin › E-mail
-            templates.
+            Sent from the new Account Manager to the commercial contact, both Account Managers in copy. Edit templates
+            in Admin › E-mail templates.
           </span>
         </label>
       )}
       <p className="muted small">
         Revenue, cost and margin before the handover stay credited to{" "}
-        {enterprise.accountManagerName ?? "the current AM"}. A scheduled handover replaces one that hasn't started yet.
+        {enterprise.accountManagerName ?? "the current Account Manager"}. A scheduled handover replaces one that hasn't
+        started yet.
       </p>
       {error && <p className="error-text">{error}</p>}
     </Modal>
@@ -153,9 +154,9 @@ function PartnerAm({ enterprise }: { enterprise: EnterpriseDetail }) {
     <section className="fsection am-partner">
       <header>
         <div className="fsection-title">
-          <h2>Partner AM</h2>
+          <h2>Partner Account Manager</h2>
           <p className="muted small">
-            {enterprise.name}&apos;s account manager on their side: the Commercial contact (edit it on the General tab).
+            {enterprise.name}&apos;s Account Manager on their side: the Commercial contact (edit it on the General tab).
           </p>
         </div>
       </header>

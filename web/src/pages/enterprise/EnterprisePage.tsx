@@ -224,7 +224,7 @@ export function EnterprisePage() {
               <StatusPill active={e.status === "active"} />
               <span className="meta">
                 {e.alias} · ID {e.id} · {e.businessCompanyName}
-                {e.accountManagerName ? ` · AM ${e.accountManagerName}` : ""}
+                {e.accountManagerName ? ` · Account Manager ${e.accountManagerName}` : ""}
               </span>
             </>
           )

@@ -587,7 +587,7 @@ function ResultView({ row }: { row: VendorInvoiceRow }) {
       <dl className="kv">
         <dt>Partner</dt>
         <dd>
-          {d.enterprise} {d.accountManager && <span className="muted small">· AM {d.accountManager}</span>}
+          {d.enterprise} {d.accountManager && <span className="muted small">· Account Manager {d.accountManager}</span>}
         </dd>
         <dt>Period</dt>
         <dd>

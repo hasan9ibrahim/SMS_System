@@ -949,7 +949,7 @@ const TYPE_LABELS: Record<string, string> = {
   trouble_ticket: "EDR – Trouble Ticket",
   send_soa: "Send SOA",
   monitoring_alert: "Monitoring Alert",
-  am_handover: "AM Handover",
+  am_handover: "Account Manager Handover",
 };
 const placeholdersOf = (type: string) =>
   [...COMMON, ...(PLACEHOLDERS[type] ?? [])].map(([key, description, sample]) => ({ key, description, sample }));

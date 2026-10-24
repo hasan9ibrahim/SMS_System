@@ -1371,7 +1371,7 @@ export const listFields: Record<ListId, ListFields> = {
           ["trouble_ticket", "EDR – Trouble Ticket"],
           ["send_soa", "Send SOA"],
           ["monitoring_alert", "Monitoring Alert"],
-          ["am_handover", "AM Handover"],
+          ["am_handover", "Account Manager Handover"],
         ].map(([value, label]) => ({ value: value!, label: label! })),
       }),
       field({ field: "subject", label: "Subject", type: "text", defaultOperator: "like" }),
@@ -1433,7 +1433,7 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "invoice_rejection", label: "Invoice Rejection" },
           { value: "monitoring_alert", label: "Monitoring Alert" },
           { value: "currency_alert", label: "Currency Alert" },
-          { value: "am_handover", label: "AM Handover" },
+          { value: "am_handover", label: "Account Manager Handover" },
         ],
       }),
       field({

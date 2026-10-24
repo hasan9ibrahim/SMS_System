@@ -1044,7 +1044,8 @@ export const topics: HelpTopic[] = [
               {
                 name: "Role",
                 what: "Only members with this role.",
-                values: "**All roles**, **AM** (account manager), **Director / Head**, **Dept manager**, **Admin**.",
+                values:
+                  "**All roles**, **Account Manager** (account manager), **Director / Head**, **Dept manager**, **Admin**.",
               },
               { name: "Member", what: "Find people by name or username." },
               {
