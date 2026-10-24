@@ -63,6 +63,20 @@ reuse the D numbers.
 - R6 a code is always needed to change a password: the authenticator code with 2FA on, otherwise an e-mailed code.
 - Hosting provider and city: still open (does not block the start; machines needed by mid-November).
 
+**Decided 2026-10-24, fifth round** (before the backend build):
+
+- SMPP **3.4** with the common optional parameters (TLVs); no SMPP 5.0.
+- Servers run **Ubuntu 24.04 LTS**.
+- Database failover with **Patroni**: PostgreSQL primary on one server, streaming standby on the other, etcd on all
+  three machines (the 2 servers + the witness VM) holding the leader lease; if the primary stops renewing it, the
+  standby is promoted in 10–30 s, and only the side that reaches 2 of 3 machines may be primary (no split brain).
+- Every build step is one pull request the product owner reviews before it is merged.
+- The 2 servers + the witness VM are needed by about **15 November** (build step 8); steps 0–7 run on dev machines.
+
+**Build progress:** step 0 (foundations) done: `backend/` umbrella (`sms_core`, `sms_switch`), data store modules,
+event bus on NATS JetStream with an in-memory test adapter, health check, `mix check` quality gates and the CI job
+`backend` (see `backend/README.md`).
+
 ## 1. Where we stand
 
 - **GUI:** every screen in spec §3–13 works on fake data.

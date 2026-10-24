@@ -62,3 +62,77 @@ jobs:
         run: npm run bundle -w mock
       - name: docker-compose file is valid
         run: docker compose config -q
+
+  # The Elixir backend (backend/, docs/BACKEND_PLAN.md): format, unused deps, advisories, warnings as errors, Credo
+  # strict, Dialyzer, and every test including the integration ones against real stores and NATS (90 % coverage).
+  backend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      MIX_ENV: test
+      INTEGRATION: "1"
+      POSTGRES_HOST: localhost
+      POSTGRES_DB: sms_config
+      POSTGRES_USER: sms_dev
+      POSTGRES_PASSWORD: sms_dev_password
+      CLICKHOUSE_DB: sms_edr
+      CLICKHOUSE_USER: sms_dev
+      CLICKHOUSE_PASSWORD: sms_dev_password
+      NATS_HOSTS: localhost:4222
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_DB: sms_config
+          POSTGRES_USER: sms_dev
+          POSTGRES_PASSWORD: sms_dev_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sms_dev -d sms_config"
+          --health-interval 5s
+          --health-retries 20
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_DB: sms_edr
+          CLICKHOUSE_USER: sms_dev
+          CLICKHOUSE_PASSWORD: sms_dev_password
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+        ports: ["8123:8123"]
+        options: >-
+          --ulimit nofile=262144:262144
+          --health-cmd "wget -qO- http://127.0.0.1:8123/ping"
+          --health-interval 5s
+          --health-retries 30
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      # NATS with JetStream and the repo's config (a service container cannot take a config file).
+      - name: Start NATS JetStream
+        working-directory: .
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 \
+            -v "$PWD/deploy/nats/nats.conf:/etc/nats/nats.conf:ro" nats:2.14.8-alpine -c /etc/nats/nats.conf
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8222/healthz && exit 0; sleep 1; done; exit 1
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: backend/.tool-versions
+          version-type: strict
+      - uses: actions/cache@v4
+        with:
+          path: |
+            backend/deps
+            backend/_build
+            backend/priv/plts
+          key: backend-${{ runner.os }}-${{ hashFiles('backend/.tool-versions', 'backend/mix.lock') }}
+          restore-keys: backend-${{ runner.os }}-
+      - run: mix deps.get
+      - run: mix check
