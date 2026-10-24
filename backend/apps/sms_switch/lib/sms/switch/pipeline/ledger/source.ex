@@ -21,9 +21,11 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
     alias Sms.Switch.Pipeline.Ledger
 
     @accounts """
-    SELECT enterprise_id, side, currency, billing_type, credit_limit, base,
-           CASE WHEN cutoff = '-infinity' THEN NULL ELSE extract(epoch FROM cutoff)::bigint END
-      FROM balance_ledger
+    SELECT l.enterprise_id, l.side, l.currency, l.billing_type, l.credit_limit, l.base,
+           CASE WHEN l.cutoff = '-infinity' THEN NULL ELSE extract(epoch FROM l.cutoff)::bigint END,
+           e.credit_alert, e.credit_alert_notice, e.credit_alert_warning, e.credit_alert_critical
+      FROM balance_ledger l JOIN enterprises e ON e.id = l.enterprise_id
+     WHERE e.deleted_at IS NULL
     """
 
     @impl true
@@ -34,7 +36,19 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
       end
     end
 
-    defp account([ent, side, currency, billing_type, limit, base, cutoff]) do
+    defp account([
+           ent,
+           side,
+           currency,
+           billing_type,
+           limit,
+           base,
+           cutoff,
+           alert,
+           notice,
+           warning,
+           critical
+         ]) do
       side = if side == "vendor", do: :vendor, else: :customer
       prepaid = billing_type == "prepaid"
 
@@ -48,7 +62,8 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
         limit: if(prepaid or side == :vendor, do: 0, else: Ledger.to_micro(limit)),
         credit_limit: Ledger.to_micro(limit),
         cutoff: if(cutoff, do: Ledger.bucket(cutoff), else: 0),
-        prepaid: prepaid
+        prepaid: prepaid,
+        alerts: if(alert, do: [notice, warning, critical], else: [])
       }
     end
 

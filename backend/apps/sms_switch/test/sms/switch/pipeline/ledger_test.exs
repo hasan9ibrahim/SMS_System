@@ -150,4 +150,61 @@ defmodule Sms.Switch.Pipeline.LedgerTest do
     assert Ledger.units(1_250_000) == Decimal.new("1.25")
     assert Ledger.key(:vendor, 3) == "v3"
   end
+
+  describe "credit alerts" do
+    defp alerts,
+      do: for(e <- Sms.Core.Bus.Local.published(), e.type == "billing.credit_alert", do: e.data)
+
+    test "Notice, Warning and Critical as the credit limit is used, once each; the limit reached; re-armed by a payment" do
+      start([[enterprise_id: 21, base: "0", limit: "1", alerts: [50, 70, 90]]])
+      assert alerts() == []
+
+      Ledger.apply_charge(%{"k" => "c21", "id" => "a", "b" => 1, "m" => 600_000, "n" => 1})
+      Sync.sync()
+
+      assert [
+               %{
+                 "level" => "notice",
+                 "balance" => "-0.6",
+                 "credit_limit" => "1",
+                 "enterprise_id" => 21
+               }
+             ] = alerts()
+
+      # Nothing new: no new alert.
+      Sync.sync()
+      assert length(alerts()) == 1
+
+      Ledger.apply_charge(%{"k" => "c21", "id" => "b", "b" => 1, "m" => 350_000, "n" => 1})
+      Sync.sync()
+      assert List.last(alerts())["level"] == "critical"
+
+      Ledger.apply_charge(%{"k" => "c21", "id" => "c", "b" => 1, "m" => 100_000, "n" => 1})
+      Sync.sync()
+      assert List.last(alerts())["level"] == "limit_reached"
+
+      # A payment of 1: back under Notice, so Notice alerts again later.
+      LedgerSource.put([[enterprise_id: 21, base: "1", limit: "1", alerts: [50, 70, 90]]])
+      Sync.sync()
+      count = length(alerts())
+      Ledger.apply_charge(%{"k" => "c21", "id" => "d", "b" => 1, "m" => 600_000, "n" => 1})
+      Sync.sync()
+      assert length(alerts()) == count + 1
+      assert List.last(alerts())["level"] == "notice"
+    end
+
+    test "a prepaid customer or vendor: an alert when the balance is used up; Credit Alert off: none" do
+      start([
+        [enterprise_id: 22, prepaid: true, base: "0.01"],
+        [enterprise_id: 23, side: :vendor, prepaid: true, base: "0"],
+        [enterprise_id: 24, base: "-5", limit: "1", alerts: []]
+      ])
+
+      assert [%{"enterprise_id" => 23, "side" => "vendor", "level" => "used_up"}] = alerts()
+      Ledger.apply_charge(%{"k" => "c22", "id" => "a", "b" => 1, "m" => 10_000, "n" => 1})
+      Sync.sync()
+      assert List.last(alerts())["enterprise_id"] == 22
+      assert length(alerts()) == 2
+    end
+  end
 end

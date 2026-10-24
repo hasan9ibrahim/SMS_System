@@ -34,7 +34,8 @@ defmodule Sms.Switch.Test.LedgerSource do
       limit: if(prepaid, do: 0, else: money(Map.get(f, :limit, 0))),
       credit_limit: money(Map.get(f, :limit, 0)),
       cutoff: Map.get(f, :cutoff, 0),
-      prepaid: prepaid
+      prepaid: prepaid,
+      alerts: Map.get(f, :alerts, [])
     }
   end
 

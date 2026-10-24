@@ -630,6 +630,13 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
+  defp exec(["SET", key, value]), do: put_then(key, value, @far, "OK")
+
+  defp exec(["SET", key, value, "GET"]) do
+    old = lookup(key)
+    put_then(key, value, @far, old)
+  end
+
   defp exec(["SET", key, value, "NX"]) do
     case lookup(key) do
       nil -> put_then(key, value, @far, "OK")

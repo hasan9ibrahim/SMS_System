@@ -4,9 +4,10 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
 
     1. reads every account from `balance_ledger` (migration 072): currency, prepaid or postpaid, credit limit, the base
        (opening balance + payments − invoices) and the cut-off (end of the last invoiced period);
-    2. when the cut-off moved (a new invoice), recounts the uninvoiced total from the buckets after it; when Redis has no
+    2. checks the credit alerts (`Sms.Switch.Pipeline.Ledger.Alerts`);
+    3. when the cut-off moved (a new invoice), recounts the uninvoiced total from the buckets after it; when Redis has no
        buckets for an account yet (first start, or Redis was lost), loads them from PostgreSQL first;
-    3. writes the buckets changed since the last run to `traffic_charges` (absolute amounts, so both servers writing
+    4. writes the buckets changed since the last run to `traffic_charges` (absolute amounts, so both servers writing
        the same bucket agree), and drops buckets older than two days before the cut-off from Redis.
 
   A failed run is logged and tried on the next tick; the check keeps using the accounts already loaded.
@@ -14,6 +15,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
   use GenServer
   require Logger
   alias Sms.Switch.Pipeline.{Ledger, Store}
+  alias Sms.Switch.Pipeline.Ledger.Alerts
 
   @interval_ms 5_000
   # Buckets kept in Redis before the cut-off (two days), for receipts charged just after an invoice.
@@ -49,6 +51,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
   defp run(source) do
     with {:ok, accounts} <- source.accounts(),
          :ok <- Enum.reduce_while(accounts, :ok, &load(source, &1, &2)) do
+      Alerts.check(accounts)
       flush(source)
     else
       {:error, reason} = error ->
