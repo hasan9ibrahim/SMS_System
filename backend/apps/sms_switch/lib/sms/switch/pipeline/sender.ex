@@ -366,7 +366,11 @@ defmodule Sms.Switch.Pipeline.Sender do
     vt = route.vendor_trunk_id
     trunk = Config.vendor_trunk(vt) || %{}
     ids = Enum.map(results, & &1.message_id)
-    ttl = (trunk[:dlr_timeout_s] || 172_800) + 3_600
+    timeout_s = trunk[:dlr_timeout_s] || 172_800
+    ttl = timeout_s + 3_600
+
+    # S-5.10: with no final receipt by then, the switch answers with the trunk's DLR Timeout Status.
+    timeout_at = attempt.resp_time + timeout_s * 1_000
 
     record =
       Map.merge(Forwarder.core(msg), %{
@@ -379,7 +383,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     # A vendor that answered without a message id cannot send a receipt we could match (S-5.12).
     parts = for {id, n} <- Enum.with_index(ids, 1), id not in [nil, ""], do: {n, vt, id}
 
-    case record_sent(msg.id, record, parts, ttl, 3) do
+    case record_sent(msg.id, record, parts, {ttl, timeout_at}, 3) do
       :ok ->
         :ok
 
@@ -394,7 +398,9 @@ defmodule Sms.Switch.Pipeline.Sender do
         success: true,
         final: true,
         command_status: 0,
-        vendor_message_id: Enum.map_join(results, ",", & &1.raw_message_id)
+        vendor_message_id: Enum.map_join(results, ",", & &1.raw_message_id),
+        # The normalised ids, so a receipt that comes after the message left Redis is found in the EDRs (D5).
+        vendor_message_keys: Enum.reject(ids, &(&1 in [nil, ""]))
       })
 
     publish_rows(msg, rows, false)
@@ -413,14 +419,14 @@ defmodule Sms.Switch.Pipeline.Sender do
     :ok
   end
 
-  defp record_sent(id, record, parts, ttl, tries) do
-    case Store.record_sent(id, record, parts, ttl) do
+  defp record_sent(id, record, parts, {ttl, timeout_at} = times, tries) do
+    case Store.record_sent(id, record, parts, ttl, timeout_at) do
       :ok ->
         :ok
 
       {:error, _} when tries > 1 ->
         Process.sleep(200)
-        record_sent(id, record, parts, ttl, tries - 1)
+        record_sent(id, record, parts, times, tries - 1)
 
       error ->
         error

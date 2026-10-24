@@ -9,6 +9,8 @@ defmodule Sms.Switch.Pipeline.Store do
     * `o:<vendor trunk>:<vendor message id>`: a receipt that arrived before its submit_sm_resp was handled (S-5.5),
       kept a minute for the sender to pick up;
     * `g:<group key>`: the decision shared by the parts of one multipart message (S-3.3, S-3.8);
+    * `t`: the DLR timeouts of messages waiting for receipts, a sorted set by deadline (S-5.10); every server sweeps
+      it and the one that removes an entry handles it;
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
       by arrival; `hs` the trunks that have any, `hl:<customer trunk>` the lock of the node sending them.
 
@@ -32,9 +34,14 @@ defmodule Sms.Switch.Pipeline.Store do
   Records a message as sent: its data and each part's vendor message id, with the index from vendor ids back to it.
   `parts` are `{part, vendor_trunk_id, normalised_vendor_id}`.
   """
-  @spec record_sent(String.t(), term(), [{part(), integer(), String.t()}], pos_integer()) ::
-          :ok | {:error, term()}
-  def record_sent(message_id, data, parts, ttl_s) do
+  @spec record_sent(
+          String.t(),
+          term(),
+          [{part(), integer(), String.t()}],
+          pos_integer(),
+          non_neg_integer() | nil
+        ) :: :ok | {:error, term()}
+  def record_sent(message_id, data, parts, ttl_s, timeout_at_ms \\ nil) do
     hash = "m:#{message_id}"
     blob = :erlang.term_to_binary(data, [:compressed])
 
@@ -45,7 +52,8 @@ defmodule Sms.Switch.Pipeline.Store do
       ] ++
         Enum.map(parts, fn {n, vt, vid} ->
           ["SET", "v:#{vt}:#{vid}", "#{message_id}:#{n}", "EX", ttl_s]
-        end)
+        end) ++
+        if(timeout_at_ms, do: [["ZADD", "t", timeout_at_ms, message_id]], else: [])
 
     case backend() do
       :redis -> ok(Redis.transaction(commands, @timeout))
@@ -144,15 +152,28 @@ defmodule Sms.Switch.Pipeline.Store do
   """
   @spec forget(String.t(), integer(), [String.t()]) :: :ok | {:error, term()}
   def forget(message_id, vendor_trunk_id, vendor_ids) do
-    commands = [
-      ["DEL", "m:#{message_id}"] | Enum.map(vendor_ids, &["DEL", "v:#{vendor_trunk_id}:#{&1}"])
-    ]
+    commands =
+      [["DEL", "m:#{message_id}"], ["ZREM", "t", message_id]] ++
+        Enum.map(vendor_ids, &["DEL", "v:#{vendor_trunk_id}:#{&1}"])
 
     case backend() do
       :redis -> ok(Redis.transaction(commands, @timeout))
       :local -> ok(local(commands))
     end
   end
+
+  @doc "Up to `limit` messages whose DLR timeout has passed by `now_ms`, earliest first (S-5.10)."
+  @spec due_timeouts(non_neg_integer(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
+  def due_timeouts(now_ms, limit),
+    do: run(["ZRANGEBYSCORE", "t", "-inf", now_ms, "LIMIT", 0, limit])
+
+  @doc "Puts a message's DLR timeout (back) on the list, due at `at_ms`."
+  @spec schedule_timeout(String.t(), non_neg_integer()) :: :ok | {:error, term()}
+  def schedule_timeout(message_id, at_ms), do: ok(run(["ZADD", "t", at_ms, message_id]))
+
+  @doc "Takes a due DLR timeout: true for the one server that gets to handle it."
+  @spec claim_timeout(String.t()) :: boolean()
+  def claim_timeout(message_id), do: match?({:ok, 1}, run(["ZREM", "t", message_id]))
 
   @doc "Keeps a receipt whose vendor id is not known yet (S-5.5)."
   @spec put_orphan(integer(), String.t(), term()) :: :ok | {:error, term()}
@@ -403,6 +424,15 @@ defmodule Sms.Switch.Pipeline.Store do
     zset = lookup(key) || %{}
     put(key, Map.delete(zset, member), System.monotonic_time(:second) + @far)
     if Map.has_key?(zset, member), do: 1, else: 0
+  end
+
+  defp exec(["ZRANGEBYSCORE", key, "-inf", max, "LIMIT", offset, count]) do
+    (lookup(key) || %{})
+    |> Enum.filter(fn {_m, score} -> score <= max end)
+    |> Enum.sort_by(fn {m, score} -> {score, m} end)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.drop(offset)
+    |> Enum.take(count)
   end
 
   defp exec(["ZCARD", key]), do: map_size(lookup(key) || %{})

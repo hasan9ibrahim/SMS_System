@@ -820,6 +820,105 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "DLR timeout (S-5.10, D5)" do
+    test "no receipt within the vendor trunk's DLR Timeout: the customer gets its DLR Timeout Status" do
+      config = [
+        vendor_trunks: [
+          PipelineConfig.vendor_trunk(dlr_timeout_s: 1, dlr_timeout_stat: "EXPIRED")
+        ]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      start_supervised!({Pipeline.Timeouts, sweep_ms: 100})
+
+      {client, resp} = submit(client, %{short_message: "no receipt", registered_delivery: 1})
+      id = resp.fields.message_id
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert {:ok, _} = Pipeline.Store.message(id)
+
+      {_, dlr} = customer_receipt(client, 4_000)
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:EXPIRED"
+      assert {:message_state, 3} in dlr.tlvs
+
+      # The message has left Redis; the EDR shows the answer was the switch's.
+      assert_eventually(fn -> Pipeline.Store.message(id) == :none end)
+      assert {:ok, []} = Pipeline.Store.due_timeouts(System.os_time(:millisecond) + 10_000, 10)
+
+      assert_eventually(fn ->
+        Enum.any?(
+          edr("edr.receipt"),
+          &(&1["kind"] == "vendor" and &1["source"] == "switch" and &1["msg_status"] == "EXPIRED")
+        )
+      end)
+
+      row = Enum.find(edr("edr.receipt"), &(&1["kind"] == "customer"))
+      assert %{"c_msg_status" => "EXPIRED", "source" => "switch"} = row
+    end
+
+    test "a final receipt in time cancels the timeout" do
+      config = [
+        vendor_trunks: [
+          PipelineConfig.vendor_trunk(dlr_timeout_s: 1, dlr_timeout_stat: "EXPIRED")
+        ]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      start_supervised!({Pipeline.Timeouts, sweep_ms: 100})
+
+      {client, _} = submit(client, %{short_message: "in time", registered_delivery: 1})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      receipt(conn, "1", "DELIVRD")
+      {client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:DELIVRD"
+
+      assert_eventually(fn ->
+        Pipeline.Store.due_timeouts(System.os_time(:millisecond) + 10_000, 10) == {:ok, []}
+      end)
+
+      assert {:error, :timeout} = Client.recv(client, 1_500)
+    end
+
+    test "a part already answered keeps its status; the parts still waiting get the timeout status" do
+      config = [
+        vendor_trunks: [
+          PipelineConfig.vendor_trunk(dlr_timeout_s: 1, dlr_timeout_stat: "UNDELIV")
+        ]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      start_supervised!({Pipeline.Timeouts, sweep_ms: 100})
+
+      fields = %{
+        source_addr: "FakeBank",
+        destination_addr: @dest,
+        registered_delivery: 1,
+        short_message: ""
+      }
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, fields,
+          tlvs: [message_payload: String.duplicate("t", 200)],
+          sequence: 2
+        )
+      )
+
+      assert {client, %Pdu{command: :submit_sm_resp, status: 0}} = Client.recv(client, 5_000)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      receipt(conn, "1", "DELIVRD")
+      {_, dlr} = customer_receipt(client, 4_000)
+      assert dlr.fields.short_message =~ "stat:UNDELIV"
+
+      assert Enum.count(
+               edr("edr.receipt"),
+               &(&1["source"] == "switch" and &1["kind"] == "vendor")
+             ) == 1
+    end
+  end
+
   describe "held receipts (§13.1)" do
     test "a held receipt whose hold hours ran out is given up on the next sweep and recorded unsent" do
       %{conns: [conn], client: tx} = start_all(bind: :bind_transmitter)

@@ -233,6 +233,81 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
       assert count("edr", bad) == 0
     end
 
+    test "a receipt after the message left Redis is matched from the EDRs: late after a DLR timeout, else a duplicate (D5)" do
+      start_supervised!(Sms.Core.Bus)
+      start_supervised!(Sms.Switch.Pipeline.Store)
+      vt = 800_000 + System.unique_integer([:positive])
+      edr_id = Edr.new_id()
+
+      attempt =
+        msg()
+        |> Edr.attempt_row(%{
+          edr_id: edr_id,
+          no: 1,
+          final: true,
+          success: true,
+          command_status: 0,
+          vendor: %{vendor_trunk_id: vt, egress: %{}},
+          vendor_message_id: "a1,a2",
+          vendor_message_keys: ["a1", "a2"]
+        })
+        |> Map.put("v_trunk_id", vt)
+
+      assert :ok = EdrWriter.write("edr", [Map.delete(attempt, "row_key")])
+
+      # Part 2 was answered by the switch's DLR timeout; part 1 by the vendor.
+      timeout = receipt_row(edr_id, 2, "switch")
+      vendor = receipt_row(edr_id, 1, "vendor")
+
+      assert :ok =
+               EdrWriter.write("edr_receipt", [
+                 Map.delete(timeout, "row_key"),
+                 Map.delete(vendor, "row_key")
+               ])
+
+      late = fn id ->
+        %{
+          vendor_message_id: id,
+          status: "DELIVRD",
+          error: "000",
+          network_error: 0,
+          received_at: System.os_time(:millisecond),
+          vendor_trunk_id: vt
+        }
+      end
+
+      assert :ok = Sms.Switch.Pipeline.LateReceipts.settle(vt, ["a2"], late.("a2"))
+      assert :ok = Sms.Switch.Pipeline.LateReceipts.settle(vt, ["a1"], late.("a1"))
+      assert :ok = Sms.Switch.Pipeline.LateReceipts.settle(vt, ["zz"], late.("zz"))
+
+      rows = for e <- Sms.Core.Bus.Local.published(), e.type == "edr.receipt", do: e.data
+
+      assert [
+               %{
+                 "part_no" => 2,
+                 "is_late" => 1,
+                 "is_duplicate" => 0,
+                 "msg_status" => "DELIVRD",
+                 "c_message_id" => c_id
+               },
+               %{"part_no" => 1, "is_late" => 0, "is_duplicate" => 1}
+             ] = rows
+
+      assert c_id == msg().id
+    end
+
+    defp receipt_row(edr_id, part, source) do
+      Edr.receipt_row(%{
+        edr_id: edr_id,
+        kind: "vendor",
+        at: System.os_time(:millisecond),
+        msg: msg(),
+        part: part,
+        status: "UNDELIV",
+        source: source
+      })
+    end
+
     test "a schema problem is retried, never dropped" do
       row =
         Edr.attempt_row(msg(), %{
