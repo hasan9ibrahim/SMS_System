@@ -83,7 +83,10 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("username", "System ID", "SMPP username; unique.", { credential: true }),
       f("password", "Password", "SMPP password.", { credential: true }),
       f("hostIps", "Allowed IPs", "Separated by , or ;", { credential: true }),
-      f("port", "Port", "", { credential: true }),
+      // No port: customers bind on 2775 (no TLS) or 2776 (TLS), set by the SSL type (product owner, 2026-10-24).
+      f("sslType", "SSL", "Connection type; the port follows: none → 2775, TLS → 2776. Default none.", {
+        allowed: ["none", "tls1.0", "tls1.2", "tls1.3"],
+      }),
       f("protocol", "Protocol", "", { allowed: ["smpp", "http"] }),
       f("tps", "TPS", "Messages per second.", { required: true }),
       f("category", "Product category", "Name of an existing category."),
@@ -230,7 +233,6 @@ export const BUILT_IN_MAPPINGS: { entity: MigrationImportEntity; columns: Record
       username: "System ID",
       password: "Password",
       hostIps: "Host IP",
-      port: "Port",
       protocol: "Protocol",
       tps: "TPS",
       category: "Product Category",

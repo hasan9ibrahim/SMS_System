@@ -82,7 +82,6 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
     name: t.name!,
     username: t.username ?? "",
     password: t.password ?? "",
-    port: t.port ?? "",
     protocol: t.protocol ?? "",
     tps: t.tps ?? "",
     category: name(categories, t.product_category_id),
@@ -92,7 +91,11 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
     entity: "customer_trunks",
     rows: customerTrunks.map((t) => ({ ...trunk(t), hostIps: pgArray(t.host_ips ?? "").join(";") })),
   });
-  out.push({ entity: "vendor_trunks", rows: vendorTrunks.map((t) => ({ ...trunk(t), host: t.host ?? "" })) });
+  // Customer trunks carry no port (it follows the SSL type, migration 070); vendor trunks keep theirs.
+  out.push({
+    entity: "vendor_trunks",
+    rows: vendorTrunks.map((t) => ({ ...trunk(t), host: t.host ?? "", port: t.port ?? "" })),
+  });
   const sellers = new Map<string, string[]>();
   for (const l of ctrt) sellers.set(l.rate_table_id!, [...(sellers.get(l.rate_table_id!) ?? []), l.customer_trunk_id!]);
   out.push({

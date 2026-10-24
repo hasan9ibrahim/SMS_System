@@ -59,7 +59,6 @@ const COMMON: FieldSpec[] = [
   { api: "username", col: "username" },
   { api: "maxConnections", col: "max_connections" },
   { api: "systemType", col: "system_type" },
-  { api: "port", col: "port" },
   { api: "sslType", col: "ssl_type" },
   { api: "tps", col: "tps" },
   { api: "overflowBuffer", col: "overflow_buffer" },
@@ -68,6 +67,8 @@ const COMMON: FieldSpec[] = [
 
 const CUSTOMER_SPECS: FieldSpec[] = [
   ...COMMON,
+  // 2775 without TLS / 2776 with TLS, from ssl_type by the database (migration 070, product owner 2026-10-24).
+  { api: "port", col: "port", readOnly: true },
   { api: "considerHlrRate", col: "consider_hlr_rate" },
   { api: "serviceTypeRouting", col: "service_type_routing" },
   { api: "partWiseRouting", col: "part_wise_routing" },
@@ -105,6 +106,7 @@ const HTTP_FIELDS: [string, string][] = [
 
 const VENDOR_SPECS: FieldSpec[] = [
   ...COMMON,
+  { api: "port", col: "port" },
   { api: "host", col: "host" },
   { api: "sourceHost", col: "source_host", read: "host(t.source_host)", cast: "::inet" },
   { api: "serviceType", col: "service_type" },
@@ -444,6 +446,8 @@ export async function applyTrunkField(
 ): Promise<void> {
   const k = KINDS[kind];
   const spec = k.specs.find((s) => s.api === field);
+  // A read-only field (the customer port) coming back from an old change: nothing to write.
+  if (spec?.readOnly) return;
   if (spec) return updateColumns(c, k.table, id, [spec], { [field]: value }, userId);
   if (field === "rateTableIds" && kind === "customer") return writeRateTables(c, id, (value as number[]) ?? []);
   if (field === "archived") {

@@ -392,7 +392,6 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     username: `t${run}${suffix}`.slice(0, 16),
     password: "secret1",
     maxConnections: 2,
-    port: 2775,
     tps: 50,
   });
 
@@ -403,6 +402,10 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(saved.record.passwordSet, true);
     assert.ok(!("password" in saved.record));
     assert.deepEqual(saved.record.hostIps, ["192.0.2.10", "2001:db8::1"]);
+    // The port follows the connection type and cannot be sent (product owner, 2026-10-24, migration 070).
+    assert.equal(saved.record.port, 2775);
+    const withPort = await call("POST", "/customer-trunks", { ...customerTrunk(ent.id, "p"), port: 2775 });
+    assert.equal(withPort.statusCode, 400);
 
     const clash = await call("POST", "/customer-trunks", {
       ...customerTrunk(ent.id, "b"),
@@ -436,6 +439,11 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     );
     const entry = pw.change.diff.find((d: { field: string }) => d.field === "password");
     assert.equal(entry.after, "(changed)", "credentials stay out of the change log (§13.22)");
+
+    const tls = await ok("updateCustomerTrunk", call("PUT", `/customer-trunks/${id}`, { ...input, sslType: "tls1.2" }));
+    assert.equal(tls.record.port, 2776, "a TLS trunk binds on 2776");
+    await ok("undoChange", call("POST", `/changes/${tls.change.id}/undo`, {}));
+    assert.equal((await ok("getCustomerTrunk", call("GET", `/customer-trunks/${id}`))).port, 2775);
   });
 
   test("vendor trunk owns a buy rate table; HTTP needs a URL", async () => {

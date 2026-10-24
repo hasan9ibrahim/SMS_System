@@ -10947,7 +10947,6 @@ export type components = {
       password?: string;
       maxConnections?: number;
       systemType?: string | null;
-      port?: number;
       sslType?: components["schemas"]["SslType"];
       dlrPushUrl?: string | null;
       moPushUrl?: string | null;
@@ -10975,7 +10974,7 @@ export type components = {
       /** @description Billing time zone of the trunk (§13.31); null = the enterprise's. */
       billingTimezone?: string | null;
     };
-    /** @description Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26). */
+    /** @description Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26). No port: it follows sslType (v0.93.0). */
     CustomerTrunkInput: WithRequired<
       components["schemas"]["CustomerTrunkFields"],
       | "enterpriseId"
@@ -10987,7 +10986,6 @@ export type components = {
       | "hostIps"
       | "username"
       | "maxConnections"
-      | "port"
       | "tps"
     >;
     TrunkDetailCommon: {
@@ -11011,10 +11009,15 @@ export type components = {
         | "hostIps"
         | "username"
         | "maxConnections"
-        | "port"
         | "tps"
       > &
-      components["schemas"]["Audit"];
+      components["schemas"]["Audit"] & {
+        /**
+         * @description The SMPP port the customer binds on, set by the connection type (product owner, 2026-10-24): 2775 when sslType is none, 2776 for TLS. Not editable; Send Tech Info sends it.
+         * @enum {integer}
+         */
+        readonly port: 2775 | 2776;
+      };
     /** @description Shared fields of the vendor trunk form and record. */
     VendorTrunkFields: {
       enterpriseId?: components["schemas"]["Id"];

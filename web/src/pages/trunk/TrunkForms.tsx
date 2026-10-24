@@ -11,6 +11,7 @@ import {
   ListField,
   MultiCheck,
   NumberField,
+  ReadOnly,
   Section,
   SelectField,
   StatusField,
@@ -74,9 +75,17 @@ const NOT_INPUT = new Set([
   "updatedAt",
 ]);
 
+/**
+ * The port a customer binds on, set by the connection type (product owner, 2026-10-24): 2775 without TLS, 2776 with.
+ * The server works it out the same way; the form only shows it.
+ */
+export const customerPort = (sslType: string | null | undefined) => (!sslType || sslType === "none" ? 2775 : 2776);
+
 export function toTrunkForm(d: TrunkDetail): TrunkForm {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(d)) if (!NOT_INPUT.has(k)) out[k] = Array.isArray(v) ? [...v] : v;
+  // A customer trunk's port is not part of its form: it follows the SSL type.
+  if ("hostIps" in d) delete out.port;
   if (out.http && typeof out.http === "object") out.http = { ...(out.http as object) };
   return out as TrunkForm;
 }
@@ -92,7 +101,6 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     password: "",
     // Defaults agreed in the team trial (2026-10-18): 2 sessions, 50 TPS each, 10K overflow buffer.
     maxConnections: 2,
-    port: 2775,
     systemType: null,
     sslType: "none" as const,
     tps: 50,
@@ -127,6 +135,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     categoryId: categoryId ?? 0,
     bindType: "TR",
     host: "",
+    port: 2775,
     sourceHost: null,
     serviceType: null,
     submitIntervalMs: 0,
@@ -418,8 +427,10 @@ export function CustomerTrunkFields({
             placeholder="192.0.2.10, 2001:db8::1"
             hint="Binds from other addresses are refused"
           />
-          <NumberField form={form} path="port" label="Port" required min={1} max={65535} step={1} />
           <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
+          <ReadOnly label="Port" hint="Set by SSL: 2775 without TLS, 2776 with TLS">
+            {customerPort(v.sslType)}
+          </ReadOnly>
           <SubHead>Credentials</SubHead>
           <TextField
             form={form}

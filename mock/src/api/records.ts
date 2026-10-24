@@ -66,6 +66,8 @@ export interface FieldSpec {
   col: string;
   read?: string;
   cast?: string;
+  /** Read only: shown on the record, never written (e.g. a generated column). */
+  readOnly?: boolean;
 }
 
 export const selectSpecs = (alias: string, specs: FieldSpec[]) =>
@@ -89,7 +91,7 @@ export async function updateColumns(
   const sets: string[] = [];
   const params: unknown[] = [id, userId];
   for (const s of specs) {
-    if (!(s.api in values) || values[s.api] === undefined) continue;
+    if (s.readOnly || !(s.api in values) || values[s.api] === undefined) continue;
     params.push(values[s.api]);
     sets.push(`${s.col} = $${params.length}${s.cast ?? ""}`);
   }
@@ -108,7 +110,7 @@ export async function insertRow(
   const ph: string[] = [];
   const params: unknown[] = [];
   for (const s of specs) {
-    if (values[s.api] === undefined) continue;
+    if (s.readOnly || values[s.api] === undefined) continue;
     params.push(values[s.api]);
     cols.push(s.col);
     ph.push(`$${params.length}${s.cast ?? ""}`);

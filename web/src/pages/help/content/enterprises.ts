@@ -1247,8 +1247,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Port",
-                what: "The port the customer connects to. Required.",
-                values: "1–65535. Default `2775`.",
+                what: "The port the customer connects to. Not typed in: it follows SSL, and Send Tech Info sends it.",
+                values: "`2775` when SSL is None, `2776` for any TLS.",
               },
               {
                 name: "Max connections",

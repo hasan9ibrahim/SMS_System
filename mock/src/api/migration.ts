@@ -118,7 +118,7 @@ const EXAMPLES: Record<MigrationImportEntity, Record<string, string>> = {
     username: "example_otp",
     password: "change-me",
     hostIps: "192.0.2.10,192.0.2.11",
-    port: "2775",
+    sslType: "none",
     protocol: "smpp",
     tps: "50",
     category: "OTP",

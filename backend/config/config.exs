@@ -20,8 +20,23 @@ config :sms_core, Sms.Core.Bus,
   # At start, how many times (1 s apart) to try reaching NATS before the node gives up.
   setup_attempts: 30
 
+# The customer side of the switch (build step 2, Sms.Switch.Customer): listeners and ports come from the environment
+# in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session.
+config :sms_switch, Sms.Switch.Customer, enabled: true
+
+# TPS limits shared by both servers through Redis (decision Q13); per server, divided by the cluster size, while Redis
+# is unavailable (S-7.4).
+# Failed binds counted by the Firewall filters (spec §8) are shared by both servers through Redis.
+config :sms_switch, Sms.Switch.Customer.Firewall, backend: :redis
+
+config :sms_switch, Sms.Switch.Customer.Throttle,
+  backend: :redis,
+  cluster_size: 2,
+  redis_timeout_ms: 50,
+  retry_redis_after_ms: 1_000
+
 config :logger, :default_formatter,
   format: "$date $time [$level] $metadata$message\n",
-  metadata: [:event_id, :subject, :consumer, :reason]
+  metadata: [:event_id, :subject, :consumer, :reason, :session_id, :trunk_id, :peer]
 
 import_config "#{config_env()}.exs"

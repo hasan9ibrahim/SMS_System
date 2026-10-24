@@ -22,6 +22,42 @@ request's own response with that status, or `generic_nack`). A bad `command_leng
 `encode/1` checks every field against SMPP 3.4 before anything is sent. Every 3.4 command and TLV is covered; unknown
 and vendor TLVs are kept as `{tag, binary}`.
 
+## Customer side (step 2)
+
+`Sms.Switch.Customer` is where the switch is the SMSC (spec §2, §5.4, §13.1). Each client connection is a
+`Sms.Switch.Customer.Session`:
+
+- **Binds** are checked against the customer trunks, which are loaded from PostgreSQL every 5 s
+  (`Sms.Switch.Customer.TrunkStore`). The checks run in this order:
+  1. the client IP is not banned on the Firewall screen (§8): the SMPP / All filters there count failed binds
+     and ban an IP past their threshold, for their ban time;
+  2. `system_id` exists (0x0F);
+  3. the client IP is allowed (0x0D);
+  4. the password is right (0x0E);
+  5. the trunk is active;
+  6. a TLS trunk came in over TLS at its version or newer (0x0D);
+  7. `system_type` matches, when the trunk sets one (0x53);
+  8. the trunk allows this bind type;
+  9. the trunk has fewer binds than Max Connections, counted on both servers.
+
+  A refused bind is answered, published on the bus and the connection is closed.
+- **Message requests** (`submit_sm`, `data_sm`, `query_sm`, `cancel_sm`) are counted against the trunk's TPS
+  (`tps × max_connections`) and the business company's limit. The count is shared in Redis; over a limit the answer
+  is 0x58. Accepted requests go to the `Sms.Switch.Customer.Intake` behaviour, each in its own process, and the
+  answer goes back on the same connection with the same sequence number (§13.1 rule 1). The message pipeline
+  implements the intake in step 4; until then every request gets 0x45.
+- **Flow control:** at most `inbound_window` requests are in flight per session; past that the socket is not read, so
+  TCP pushes back on the client. `deliver_sm` has its own window.
+- **Keep-alive:** `enquire_link` after 30 s of silence, with TCP keepalive underneath.
+- **Unbind:** the answers already being decided go out before `unbind_resp`. When a trunk changes, or the node
+  stops or drains (`Sms.Switch.Customer.drain/0`), the switch unbinds the trunk's sessions itself.
+- **Receipts:** `Sms.Switch.Customer.deliver/4` picks the session by DLR Session Affinity (strict, same IP, same
+  trunk) on either server, or answers `:hold`.
+
+Every server listens on **2775 (plain) and 2776 (TLS)** for all customers (`SMPP_PORTS`, `SMPP_TLS_PORTS`; the TLS port
+needs `SMPP_TLS_CERTFILE` / `SMPP_TLS_KEYFILE`). `SMPP_PROXY_PORTS` lists ports behind a load balancer that sends a
+PROXY header.
+
 ## Run it
 
 Versions are pinned in `.tool-versions` (Erlang/OTP 28.5, Elixir 1.19.6). From the repo root:
@@ -31,7 +67,7 @@ docker compose up -d                     # PostgreSQL, ClickHouse, Redis, NATS (
 cd backend
 mix deps.get
 mix test                                 # unit and property tests, no stores needed
-INTEGRATION=1 mix test                   # plus the tests against the real stores and NATS
+INTEGRATION=1 mix test                   # plus the tests against the real stores, NATS and a second node
 INTEGRATION=1 mix check                  # everything CI runs (below); must pass before any push
 ```
 

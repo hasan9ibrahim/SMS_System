@@ -432,7 +432,6 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         password: fakeSecret(rng, 8),
         max_connections: rng.int(1, 6),
         system_type: rng.chance(0.2) ? "SMPP" : null,
-        port: t.port,
         ssl_type: rng.weighted(["none", "tls1.2", "tls1.3"], [70, 25, 5]),
         dlr_push_url: t.protocol === "http" ? `https://api.${e.domain}/dlr` : null,
         mo_push_url: t.protocol === "http" && rng.chance(0.3) ? `https://api.${e.domain}/mo` : null,

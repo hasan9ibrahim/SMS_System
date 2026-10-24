@@ -259,7 +259,7 @@ const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
   },
   customer_trunks: {
     table: "customer_trunks",
-    columns: ["host_ips", "port", "protocol", "tps", "product_category_id", "billing_type", "username", "password"],
+    columns: ["host_ips", "ssl_type", "protocol", "tps", "product_category_id", "billing_type", "username", "password"],
   },
   vendor_trunks: {
     table: "vendor_trunks",
@@ -463,7 +463,7 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       return void (pr.action = "error");
     }
     const port = num(r.port);
-    if (r.port?.trim() && (port == null || !Number.isInteger(port) || port < 1 || port > 65535)) {
+    if (kind === "vendor" && r.port?.trim() && (port == null || !Number.isInteger(port) || port < 1 || port > 65535)) {
       p.issue(entity, line, "port", `Port "${r.port}" is not a valid port`);
       return void (pr.action = "error");
     }
@@ -491,7 +491,6 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       tps,
       bind_type: "TR",
       max_connections: 2,
-      port: port ?? 2775,
     };
     if (kind === "customer") {
       let username = r.username?.trim();
@@ -522,7 +521,10 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       if (!r.password?.trim() && m.action === "create")
         p.issue(entity, line, "password", "No password in the file: a random one is set", "warning");
       v.host_ips = r.hostIps?.trim() ? list(r.hostIps) : m.action === "create" ? [] : undefined;
+      // The port is not imported: it follows the SSL type (2775 / 2776, migration 070).
+      v.ssl_type = r.sslType?.trim().toLowerCase() || (m.action === "create" ? "none" : undefined);
     } else {
+      v.port = port ?? 2775;
       v.host = r.host?.trim() || (m.action === "create" ? "not-set.invalid" : undefined);
       if (!r.host?.trim() && m.action === "create")
         p.issue(entity, line, "host", "No host in the file: the trunk cannot bind until one is set", "warning");
