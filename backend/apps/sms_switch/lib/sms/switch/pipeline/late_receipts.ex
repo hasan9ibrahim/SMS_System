@@ -19,7 +19,7 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
 
   require Logger
   alias Sms.Core.{Bus, ClickHouse}
-  alias Sms.Switch.Pipeline.{Edr, Store}
+  alias Sms.Switch.Pipeline.{Billing, Edr, Store}
 
   # How far back an attempt is looked for: the longest DLR timeout plus the hold of a late receipt.
   @days 7
@@ -88,7 +88,9 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
 
   @attempt """
   SELECT toString(edr_id), start_time, c_enterprise_id, c_trunk_id, c_message_id,
-         arrayFirstIndex(k -> has({keys:Array(String)}, k), v_message_keys) AS part
+         arrayFirstIndex(k -> has({keys:Array(String)}, k), v_message_keys) AS part,
+         v_billing_type, toString(v_rate), toString(v_sys_rate), msg_count, attempt_no, business_company_id,
+         product_category_id, c_am_user_id, v_enterprise_id, v_am_user_id, c_mccmnc, c_country_iso, route_rule_id
     FROM edr
    WHERE v_trunk_id = {vt:UInt32} AND is_submit_success = 1 AND hasAny(v_message_keys, {keys:Array(String)})
      AND start_time >= now() - INTERVAL #{@days} DAY
@@ -101,8 +103,9 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
       {:ok, %{rows: []}} ->
         {:ok, nil}
 
-      {:ok, %{rows: [[edr_id, start, ent, trunk, message_id, part]]}} ->
-        {:ok, attempt_map(edr_id, start, ent, trunk, message_id, part)}
+      {:ok, %{rows: [[edr_id, start, ent, trunk, message_id, part | billing]]}} ->
+        {:ok,
+         Map.put(attempt_map(edr_id, start, ent, trunk, message_id, part), :billing, billing)}
 
       {:error, _} = error ->
         error
@@ -144,12 +147,62 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
             source: "vendor"
           })
 
-        Edr.publish_receipt(row)
+        with :ok <- Edr.publish_receipt(row),
+             do: if(duplicate, do: :ok, else: vendor_cost(attempt, receipt))
 
       {:error, _} = error ->
         error
     end
   end
+
+  # §7, D5: a vendor billing on its receipt bills on the real status, even after the DLR timeout answered the customer;
+  # the outcome row carries that cost only (no status, so delivered counts are not taken twice).
+  defp vendor_cost(%{billing: [type, rate, sys, parts, no | dims]} = attempt, receipt) do
+    if Billing.on_receipt?(type, receipt.status) do
+      keys =
+        ~w(business_company_id product_category_id c_am_user_id v_enterprise_id v_am_user_id c_mccmnc
+                c_country_iso route_rule_id)
+
+      data =
+        Map.merge(attempt.msg, %{
+          edr_id: attempt.edr_id,
+          vendor_trunk_id: receipt.vendor_trunk_id,
+          bill: %{
+            base_currency: nil,
+            sell: nil,
+            cost: nil,
+            c_parts: 0,
+            v_parts: 0,
+            attempt_no: no,
+            dims: Map.new(Enum.zip(keys, dims))
+          }
+        })
+
+      data
+      |> Edr.outcome_row(%{
+        at: receipt.received_at,
+        status: "",
+        customer_billable: false,
+        vendor_billable: false
+      })
+      |> Map.merge(%{
+        "is_vendor_billable" => 1,
+        "cost" => times(rate, parts),
+        "cost_sys" => times(sys, parts)
+      })
+      |> Edr.publish_receipt()
+    else
+      :ok
+    end
+  end
+
+  defp times(rate, parts),
+    do:
+      rate
+      |> Decimal.new()
+      |> Decimal.mult(parts)
+      |> Decimal.round(6)
+      |> Decimal.to_string(:normal)
 
   defp ms(%DateTime{} = at), do: DateTime.to_unix(at, :millisecond)
   defp ms(%NaiveDateTime{} = at), do: at |> DateTime.from_naive!("Etc/UTC") |> ms()

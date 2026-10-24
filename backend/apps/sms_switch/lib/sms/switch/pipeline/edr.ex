@@ -9,14 +9,15 @@ defmodule Sms.Switch.Pipeline.Edr do
 
   Rates, currencies and exchange rates are the ones in force when the message was submitted (S-6.1, S-6.7): the
   customer's and vendor's rates per message, `*_ex_rate` the currency's units per business company base unit and
-  `*_sys_rate` the rate in that base. Revenue, cost and the billable flags come with billing at send time (build
-  step 6) and stay 0 here.
+  `*_sys_rate` the rate in that base. Revenue, cost and the billable flags follow `Sms.Switch.Pipeline.Billing`: on the
+  attempt row for the billing types decided at send time, on an `edr_receipt` outcome row (`outcome_row/2`) for those
+  decided by the receipt.
 
   Rows travel on the bus (`sms.edr.attempt`, `sms.edr.receipt`) to `Sms.Switch.Pipeline.EdrWriter`, so an EDR is never
   lost while ClickHouse is down (S-7.3).
   """
   alias Sms.Core.Bus
-  alias Sms.Switch.Pipeline.Config
+  alias Sms.Switch.Pipeline.{Billing, Config}
 
   @doc "Publishes an attempt row; a failure is logged by the bus and returned."
   @spec publish_attempt(map()) :: :ok | {:error, term()}
@@ -68,6 +69,31 @@ defmodule Sms.Switch.Pipeline.Edr do
     |> Map.merge(destination(msg.destination))
     |> Map.merge(customer_rate(msg))
     |> Map.merge(vendor_leg(msg, vendor, egress, attempt))
+    |> Map.merge(money(msg, vendor, attempt))
+  end
+
+  # §7: revenue and cost of the attempt when billable at send time (`Billing.flags/2`).
+  defp money(msg, vendor, attempt) do
+    base = msg.trunk[:base_currency]
+
+    {revenue, revenue_sys} =
+      if attempt[:customer_billable],
+        do: Billing.amount(msg[:sell], msg.parts, base),
+        else: {"0", "0"}
+
+    {cost, cost_sys} =
+      if attempt[:vendor_billable] && vendor,
+        do: Billing.amount(vendor[:cost], attempt[:msg_count] || msg.parts, base),
+        else: {"0", "0"}
+
+    %{
+      "is_customer_billable" => flag(attempt[:customer_billable]),
+      "is_vendor_billable" => flag(attempt[:vendor_billable]),
+      "revenue" => revenue,
+      "cost" => cost,
+      "revenue_sys" => revenue_sys,
+      "cost_sys" => cost_sys
+    }
   end
 
   defp msg_status(%{success: success}) when success not in [nil, false], do: "ACCEPTD"
@@ -209,19 +235,8 @@ defmodule Sms.Switch.Pipeline.Edr do
 
   # Units of the rate's currency per unit of the business company's base currency, and the rate in that base.
   defp exchange(rate, base) do
-    with from when is_number(from) <- Config.per_eur(rate.currency),
-         to when is_number(to) and to > 0 <- Config.per_eur(base || rate.currency) do
-      ex = Decimal.from_float(from / to) |> Decimal.round(8)
-
-      sys =
-        if Decimal.eq?(ex, 0),
-          do: Decimal.new(0),
-          else: Decimal.div(rate.rate, ex) |> Decimal.round(6)
-
-      {Decimal.to_string(ex, :normal), Decimal.to_string(sys, :normal)}
-    else
-      _ -> {"1", Decimal.to_string(rate.rate, :normal)}
-    end
+    {ex, sys} = Billing.exchange(rate, base)
+    {Decimal.to_string(ex, :normal), Decimal.to_string(sys, :normal)}
   end
 
   @doc """
@@ -263,6 +278,47 @@ defmodule Sms.Switch.Pipeline.Edr do
       "c_msg_status" => r[:customer_status] || "",
       "c_delivery_error" => r[:customer_error] || ""
     }
+  end
+
+  @doc """
+  The outcome row of an attempt (`edr_receipt` kind outcome, ClickHouse migration 005): written once its final status
+  is known, with the vendor's status (empty for a correction carrying money only), the report dimensions and the
+  money of the billing types decided by the receipt. `data` is the message as kept for its receipts (with `bill`,
+  `Billing.of_attempt/3`); `o`: `at`, `status`, `customer_status`, `customer_billable`, `vendor_billable`, `source`.
+  """
+  @spec outcome_row(map(), map()) :: map()
+  def outcome_row(data, o) do
+    bill = data.bill
+    base = bill.base_currency
+
+    {revenue, revenue_sys} =
+      if o.customer_billable, do: Billing.amount(bill.sell, bill.c_parts, base), else: {"0", "0"}
+
+    {cost, cost_sys} =
+      if o.vendor_billable, do: Billing.amount(bill.cost, bill.v_parts, base), else: {"0", "0"}
+
+    %{
+      edr_id: data.edr_id,
+      kind: "outcome",
+      at: o.at,
+      msg: data,
+      part: 0,
+      vendor_trunk_id: data.vendor_trunk_id,
+      status: o.status,
+      customer_status: o[:customer_status],
+      source: o[:source] || "vendor"
+    }
+    |> receipt_row()
+    |> Map.merge(bill.dims)
+    |> Map.merge(%{
+      "attempt_no" => bill.attempt_no,
+      "is_customer_billable" => flag(o.customer_billable),
+      "is_vendor_billable" => flag(o.vendor_billable),
+      "revenue" => revenue,
+      "cost" => cost,
+      "revenue_sys" => revenue_sys,
+      "cost_sys" => cost_sys
+    })
   end
 
   @doc "A new EDR id."

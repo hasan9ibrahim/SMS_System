@@ -194,6 +194,42 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
       assert MapSet.subset?(keys(receipt), columns("edr_receipt"))
       assert :ok = EdrWriter.write("edr", [Map.delete(attempt, "row_key")])
       assert count("edr", attempt["edr_id"]) == 1
+
+      # The outcome row (ClickHouse 005) lands in edr_receipt and, through its view, in edr_hourly.
+      bill =
+        full
+        |> Map.put(:route, nil)
+        |> Sms.Switch.Pipeline.Billing.of_attempt(vendor, 1)
+        |> Map.merge(%{c_type: "delivery", v_type: "delivery", attempt_no: 1})
+
+      data =
+        Map.merge(full, %{edr_id: attempt["edr_id"], vendor_trunk_id: 1, bill: bill})
+
+      outcome =
+        Edr.outcome_row(data, %{
+          at: now,
+          status: "DELIVRD",
+          customer_status: "DELIVRD",
+          customer_billable: true,
+          vendor_billable: true
+        })
+
+      assert MapSet.subset?(keys(outcome), columns("edr_receipt")),
+             inspect(MapSet.difference(keys(outcome), columns("edr_receipt")))
+
+      assert :ok = EdrWriter.write("edr_receipt", [Map.delete(outcome, "row_key")])
+
+      {:ok, %{rows: [[delivered, billable, revenue]]}} =
+        ClickHouse.query(
+          """
+          SELECT sum(delivered), sum(billable_c), toString(sum(revenue_sys)) FROM edr_hourly
+           WHERE c_enterprise_id = {ent:UInt32} AND hour = toStartOfHour(fromUnixTimestamp64Milli({at:Int64}))
+          """,
+          %{"ent" => full.trunk.enterprise_id, "at" => full.received_at}
+        )
+
+      assert delivered >= 1 and billable >= 1
+      assert Decimal.compare(Decimal.new(revenue), Decimal.new("0.05")) != :lt
     end
 
     defp keys(row), do: row |> Map.delete("row_key") |> Map.keys() |> MapSet.new()

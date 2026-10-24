@@ -147,6 +147,12 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert attempt["v_message_id"] == "1"
       assert attempt["route_rule_id"] == 1
       assert attempt["c_msg_status"] == "ACCEPTD"
+      # §7: both sides bill on submit here, so the money is on the attempt row.
+      assert attempt["is_customer_billable"] == 1
+      assert attempt["is_vendor_billable"] == 1
+      assert attempt["revenue"] == "0.05"
+      assert attempt["cost"] == "0.02"
+      assert attempt["revenue_sys"] == "0.05"
 
       # (The in-memory bus forwards inside the vendor's receipt handling, so the customer answers first here.)
       receipt(conn, "1", "DELIVRD")
@@ -161,8 +167,15 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert {:receipted_message_id, id} in dlr.tlvs
       assert {:message_state, 2} in dlr.tlvs
 
-      assert_eventually(fn -> length(edr("edr.receipt")) == 2 end)
-      [vendor_row, customer_row] = edr("edr.receipt")
+      assert_eventually(fn -> length(edr("edr.receipt")) == 3 end)
+      rows = Map.new(edr("edr.receipt"), &{&1["kind"], &1})
+      %{"vendor" => vendor_row, "customer" => customer_row, "outcome" => outcome} = rows
+
+      # The attempt's outcome: its final status for the reports, no money (billed at submit).
+      assert %{"msg_status" => "DELIVRD", "c_msg_status" => "DELIVRD", "route_rule_id" => 1} =
+               outcome
+
+      assert %{"is_customer_billable" => 0, "is_vendor_billable" => 0, "revenue" => "0"} = outcome
 
       assert %{
                "kind" => "vendor",
@@ -1492,6 +1505,119 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       {_client, _} = submit(client, %{short_message: "busy vendor"})
       assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
       refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+    end
+  end
+
+  describe "billing at send time (§7)" do
+    defp billed(customer_type, vendor_fields) do
+      [
+        customer_trunks: [PipelineConfig.customer_trunk(billing_type: customer_type)],
+        vendor_trunks: [PipelineConfig.vendor_trunk(vendor_fields)]
+      ]
+    end
+
+    defp outcome_rows, do: for(r <- edr("edr.receipt"), r["kind"] == "outcome", do: r)
+
+    test "delivery billing on both sides: nothing at submit, billed on DELIVRD by the outcome row" do
+      %{client: client, conns: [conn]} =
+        start_all(config: billed("delivery", billing_type: "delivery"))
+
+      {client, _} = submit(client, %{short_message: "bill on delivery", registered_delivery: 1})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+      [attempt] = edr("edr.attempt")
+
+      assert %{
+               "is_customer_billable" => 0,
+               "is_vendor_billable" => 0,
+               "revenue" => "0",
+               "cost" => "0"
+             } = attempt
+
+      receipt(conn, "1", "DELIVRD")
+      {_client, _} = customer_receipt(client)
+      assert_eventually(fn -> match?([_], outcome_rows()) end)
+      [outcome] = outcome_rows()
+
+      assert %{
+               "is_customer_billable" => 1,
+               "is_vendor_billable" => 1,
+               "revenue" => "0.05",
+               "cost" => "0.02"
+             } =
+               outcome
+
+      assert outcome["edr_id"] == attempt["edr_id"]
+      assert outcome["attempt_no"] == 1
+      assert outcome["c_mccmnc"] == "26201"
+    end
+
+    test "delivery billing: an undelivered message is not billed" do
+      %{client: client, conns: [conn]} =
+        start_all(config: billed("delivery", billing_type: "delivery"))
+
+      {client, _} = submit(client, %{short_message: "not delivered", registered_delivery: 1})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      receipt(conn, "1", "UNDELIV", "005")
+      {_client, _} = customer_receipt(client)
+      assert_eventually(fn -> match?([_], outcome_rows()) end)
+
+      assert [
+               %{
+                 "is_customer_billable" => 0,
+                 "is_vendor_billable" => 0,
+                 "msg_status" => "UNDELIV"
+               }
+             ] = outcome_rows()
+    end
+
+    test "reported billing bills any final status; the DLR timeout's own status never bills the vendor" do
+      %{client: client, conns: [conn]} =
+        start_all(config: billed("reported", billing_type: "reported", dlr_timeout_s: 1))
+
+      {client, _} = submit(client, %{short_message: "reported", registered_delivery: 1})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      start_supervised!({Pipeline.Timeouts, sweep_ms: 100})
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:UNKNOWN"
+
+      assert_eventually(fn -> match?([_], outcome_rows()) end)
+
+      # The customer is told UNKNOWN (a final status): billed; the vendor never answered: not billed.
+      assert [%{"is_customer_billable" => 1, "is_vendor_billable" => 0, "source" => "switch"}] =
+               outcome_rows()
+    end
+
+    test "attempt billing bills the customer on a message no vendor took; a refusal is not a vendor's billable submit" do
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all(config: billed("attempt", []))
+      FakeSmsc.set(smsc, :submit, {:status, 0x45})
+      {_client, _} = submit(client, %{short_message: "tried"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+
+      assert [%{"is_customer_billable" => 1, "is_vendor_billable" => 0, "revenue" => "0.05"}] =
+               edr("edr.attempt")
+    end
+
+    test "a re-route after a failed receipt does not bill the customer twice" do
+      config = vendors_v1(billing_type: "delivery", reroute_on: ["UNDELIV"])
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {client, _} = submit(client, %{short_message: "once", registered_delivery: 1})
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      receipt(c1, "1", "UNDELIV", "005")
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      receipt(c2, "1", "DELIVRD")
+      {_client, _} = customer_receipt(client)
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      rows = Enum.sort_by(edr("edr.attempt"), & &1["attempt_no"])
+      assert Enum.map(rows, & &1["is_customer_billable"]) == [1, 0]
+      # The first vendor bills on delivery and did not deliver; the second bills on submit.
+      assert Enum.map(rows, & &1["is_vendor_billable"]) == [0, 1]
+
+      assert_eventually(fn -> length(outcome_rows()) == 2 end)
+      assert Enum.all?(outcome_rows(), &(&1["is_customer_billable"] == 0))
     end
   end
 end
