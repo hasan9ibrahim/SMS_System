@@ -16323,6 +16323,20 @@ export type components = {
       snoozedUntil: components["schemas"]["Timestamp"] | null;
       notesCount: number;
       emailedAt: components["schemas"]["Timestamp"] | null;
+      /** @description The rule's condition when the incident opened (v0.90.0), for the pop-up and the detail; null when the rule is gone. */
+      condition: components["schemas"]["AlertCondition"] | null;
+      /** @description The rule's measuring window in minutes (v0.90.0). */
+      windowMinutes: number | null;
+      /** @description Margin, ASR and DLR rules: the worst destinations over the window, worst first, at most 3 (v0.90.0). Empty for other metrics or when no destination is below the bar. */
+      breakdown: components["schemas"]["IncidentBreakdownItem"][];
+    };
+    IncidentBreakdownItem: {
+      /** @description Country name. */
+      name: string;
+      /** @description Country ISO code. */
+      code: string | null;
+      /** @description The incident's metric for this destination (money in the platform currency, or %). */
+      value: number;
     };
     IncidentNote: {
       id: components["schemas"]["Id"];

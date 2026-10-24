@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.89.0
+  version: 0.90.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -28253,6 +28253,9 @@ components:
       - snoozedUntil
       - notesCount
       - emailedAt
+      - condition
+      - windowMinutes
+      - breakdown
       properties:
         id: *id002
         ruleId: *id002
@@ -28302,6 +28305,42 @@ components:
         snoozedUntil: *id004
         notesCount: *id003
         emailedAt: *id004
+        condition:
+          description: The rule's condition when the incident opened (v0.90.0), for the pop-up and the detail; null when the rule is gone.
+          oneOf:
+          - $ref: '#/components/schemas/AlertCondition'
+          - type: 'null'
+        windowMinutes:
+          type:
+          - integer
+          - 'null'
+          description: The rule's measuring window in minutes (v0.90.0).
+        breakdown:
+          type: array
+          description: >-
+            Margin, ASR and DLR rules: the worst destinations over the window, worst first, at most 3 (v0.90.0). Empty
+            for other metrics or when no destination is below the bar.
+          items:
+            $ref: '#/components/schemas/IncidentBreakdownItem'
+    IncidentBreakdownItem:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - code
+      - value
+      properties:
+        name:
+          type: string
+          description: Country name.
+        code:
+          type:
+          - string
+          - 'null'
+          description: Country ISO code.
+        value:
+          type: number
+          description: The incident's metric for this destination (money in the platform currency, or %).
     IncidentNote:
       type: object
       required:

@@ -47,6 +47,9 @@ export function eventFromRow(i: IncidentRow): IncidentEvent {
     acknowledgedBy: i.acknowledgedBy,
     acknowledgedAt: i.acknowledgedAt,
     snoozedUntil: i.snoozedUntil,
+    condition: i.condition,
+    windowMinutes: i.windowMinutes,
+    breakdown: i.breakdown,
     channels: [],
     repeat: false,
   };

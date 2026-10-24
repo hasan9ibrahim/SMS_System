@@ -80,6 +80,26 @@ export interface IncidentEvent {
    */
   snoozedUntil?: EventTimestamp | null;
   acknowledgedAt?: EventTimestamp | null;
+  /**
+   * The rule's condition (v0.90.0): type, fixed value or % change, baseline.
+   */
+  condition?: {
+    type: "above" | "below" | "increase_pct" | "decrease_pct" | "started" | "stopped" | "bind_down";
+    value: number | null;
+    baseline: "previous_window" | "yesterday" | "last_week" | null;
+  } | null;
+  /**
+   * The rule's measuring window in minutes (v0.90.0).
+   */
+  windowMinutes?: number | null;
+  /**
+   * Margin, ASR and DLR rules: the worst destinations over the window, worst first, at most 3 (v0.90.0).
+   */
+  breakdown?: {
+    name: string;
+    code: string | null;
+    value: number;
+  }[];
 }
 /**
  * An enterprise or trunk as shown in live panels.

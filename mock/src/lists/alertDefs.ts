@@ -1,6 +1,6 @@
 // Server-side lists for monitoring alerts (§13.6): alert rules and incidents. The SELECT / FROM /
 // mapRow parts are shared with the record endpoints (api/alerts.ts) and the engine.
-import type { AlertRuleRow, IncidentRow } from "@sms/contract";
+import type { AlertRuleRow, IncidentBreakdownItem, IncidentRow } from "@sms/contract";
 import { conditionLabel } from "../alerts/evaluate.js";
 import type { ListDef } from "./engine.js";
 import { listFields } from "./fields.js";
@@ -114,7 +114,19 @@ export const alertRuleList: ListDef<AlertRuleRow> = {
 const DURATION_SQL = "extract(epoch FROM (coalesce(i.ended_at, now()) - i.started_at))::int";
 export const INCIDENT_FROM = `incidents i JOIN alert_rules r ON r.id = i.rule_id LEFT JOIN users ak ON ak.id = i.acknowledged_by_id`;
 export const INCIDENT_SELECT = `i.*, r.name AS rule_name, ak.username AS acknowledged_by, ${DURATION_SQL} AS duration_s,
-  (SELECT count(*)::int FROM incident_notes n WHERE n.incident_id = i.id) AS notes_count`;
+  (SELECT count(*)::int FROM incident_notes n WHERE n.incident_id = i.id) AS notes_count,
+  r.condition_type AS rule_condition_type, r.condition_value AS rule_condition_value,
+  r.condition_baseline AS rule_condition_baseline, r.window_minutes AS rule_window_minutes`;
+
+/** The worst destinations stored as JSON (v0.90.0); older rows held a sentence and read as none. */
+export function parseBreakdown(v: unknown): IncidentBreakdownItem[] {
+  if (typeof v !== "string" || !v.startsWith("[")) return [];
+  try {
+    return JSON.parse(v) as IncidentBreakdownItem[];
+  } catch {
+    return [];
+  }
+}
 
 export function mapIncident(r: Record<string, unknown>): IncidentRow {
   return {
@@ -139,6 +151,15 @@ export function mapIncident(r: Record<string, unknown>): IncidentRow {
     snoozedUntil: iso(r.snoozed_until),
     notesCount: Number(r.notes_count ?? 0),
     emailedAt: iso(r.emailed_at),
+    condition: r.rule_condition_type
+      ? {
+          type: r.rule_condition_type as NonNullable<IncidentRow["condition"]>["type"],
+          value: num(r.rule_condition_value),
+          baseline: (r.rule_condition_baseline as NonNullable<IncidentRow["condition"]>["baseline"]) ?? null,
+        }
+      : null,
+    windowMinutes: num(r.rule_window_minutes),
+    breakdown: parseBreakdown(r.breakdown),
   };
 }
 

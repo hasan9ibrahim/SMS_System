@@ -718,6 +718,7 @@ export type AlertRuleTest = Schemas["AlertRuleTest"];
 export type AlertRuleStatusInput = Schemas["AlertRuleStatusInput"];
 export type IncidentRow = Schemas["IncidentRow"];
 export type IncidentNote = Schemas["IncidentNote"];
+export type IncidentBreakdownItem = Schemas["IncidentBreakdownItem"];
 export type IncidentDetail = Schemas["IncidentDetail"];
 export type IncidentAckInput = Schemas["IncidentAckInput"];
 export type IncidentSnoozeInput = Schemas["IncidentSnoozeInput"];

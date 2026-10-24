@@ -1283,7 +1283,7 @@ a.btn {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 360px;
+  width: 380px;
 }
 .incident-card {
   padding: 10px 12px;
@@ -1299,28 +1299,104 @@ a.btn {
 .incident-card.sev-info {
   border-left-color: var(--color-accent);
 }
-.incident-card p {
-  margin: 6px 0;
-}
 .incident-head {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.incident-card.sev-critical .incident-head svg {
+.incident-sev {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.incident-card.sev-critical .incident-head svg,
+.incident-card.sev-critical .incident-sev {
   color: var(--color-error);
 }
-.incident-card.sev-warning .incident-head svg {
+.incident-card.sev-warning .incident-head svg,
+.incident-card.sev-warning .incident-sev {
   color: var(--color-warning);
 }
-.incident-head .toast-close {
+.incident-card.sev-info .incident-sev {
+  color: var(--color-accent);
+}
+.incident-time {
   margin-left: auto;
+}
+.incident-head .toast-close {
   color: var(--color-text-secondary);
+}
+.incident-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 8px 0 10px;
+}
+.incident-title strong {
+  font-size: 15px;
+}
+.incident-facts {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.8fr;
+  gap: 1px;
+  margin: 0 0 10px;
+  background: var(--color-border);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.incident-facts > div {
+  padding: 6px 8px;
+  background: var(--color-panel);
+}
+.incident-facts dt {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.incident-facts dd {
+  margin: 2px 0 0;
+  text-align: left;
+}
+.incident-value {
+  font-weight: 600;
+}
+.incident-facts .incident-value {
+  font-size: 16px;
+}
+.incident-value.sev-critical {
+  color: var(--color-error);
+}
+.incident-value.sev-warning {
+  color: var(--color-warning);
+}
+.incident-event {
+  margin: 0 0 10px;
+}
+.incident-worst {
+  margin: 0 0 10px;
+}
+.incident-worst ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  border-top: var(--border-width) solid var(--color-border);
+}
+.incident-worst li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 .incident-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+}
+.incident-actions .snooze-select {
+  margin-left: auto;
+  width: auto;
 }
 .bell-pop {
   width: 380px;

@@ -7,6 +7,17 @@ decided. The decisions and change log stay in `docs/BACKEND_TODO.md`.
 Each question below has a recommendation. Answer "as recommended" or give your choice. Q numbers are new and do not
 reuse the D numbers.
 
+**Decided 2026-10-24** (product owner):
+
+- §3.1 API in TypeScript, Elixir only for the switch and message path (Q2); spec §14 updated.
+- §3.2 receipts as appended rows; §3.3 checks before the resp, HLR after; §3.4 PCAP at OS level; §3.5 witness VM.
+- §3.6 vendor submit timeout **stays 30 s** for now (Q11).
+- §3.7 message text kept **1 year**, then blanked (Q30).
+- Q1 phase A by 30 November (switch on test traffic, servers ready); Q3 design target **1,000 TPS peak and 50 million
+  a day**; Q6 **99 % of customers use SMPP** (HTTP API: see Q6 below); Q7 **no MO traffic today** (MO not in v1);
+  Q10 two IPs, under **one host name** (see Q10); Q25 migration by exported files; Q26 same SMPP usernames and
+  passwords.
+
 ## 1. Where we stand
 
 - **GUI:** every screen in spec §3–13 works on fake data.
@@ -105,12 +116,12 @@ NATS JetStream, PostgreSQL automatic failover (Patroni with etcd), ClickHouse re
 Redis (Sentinel) all need 3 voters. The witness VM runs one voter for each, and carries no traffic and no data apart
 from the third NATS copy.
 
-### 3.6 The vendor submit timeout default goes from 30 s to 10 s *(Q11)*
+### 3.6 Vendor submit timeout default *(Q11, decided: stays 30 s for now)*
 
 With D4 (re-route on a vendor timeout), a 30-second timeout delays every re-routed message by 30 s, and it is longer
 than many clients wait when a Delayed Submit trunk (D11) is used. A healthy vendor answers in well under 1 s.
 
-### 3.7 Message text is not kept for 7 years *(Q30)*
+### 3.7 Message text is not kept for 7 years *(Q30, decided: 1 year)*
 
 EDRs hold the full message text: OTP codes, personal messages. Keeping it for 7 years (the billing retention) is a
 privacy and data-protection risk, and is likely a problem under GDPR for EU traffic.
@@ -153,9 +164,9 @@ These come on top of the switch scenarios in `docs/SMPP_SCENARIOS.md`. Each gets
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| Q1 | What must be true on **30 November**? (a) the switch working on test traffic and the servers ready; (b) some real partners live; (c) full cutover | **(a)**, with real partners in December (pilot) and migration in January–February. (c) isn't achievable safely |
-| Q2 | Second opinion §3.1: keep the API in TypeScript, Elixir only for the switch and message path? | **Yes** |
-| Q3 | Volume target: you said **10 million a day**; the decision of 19 Oct (§14.3) says **50 million a day** at 1,000 TPS peak. Which is right? | Design and load-test for **1,000 TPS peak and 50 million a day** (headroom for growth); size disks for today's 10 million plus growth |
+| Q1 | **Decided: (a).** What must be true on **30 November**? (a) the switch working on test traffic and the servers ready; (b) some real partners live; (c) full cutover | **(a)**, with real partners in December (pilot) and migration in January–February. (c) isn't achievable safely |
+| Q2 | Second opinion §3.1: keep the API in TypeScript, Elixir only for the switch and message path? **Decided: yes** | — |
+| Q3 | **Decided: 50 million a day.** Volume target: you said **10 million a day**; the decision of 19 Oct (§14.3) says **50 million a day** at 1,000 TPS peak. Which is right? | Design and load-test for **1,000 TPS peak and 50 million a day** (headroom for growth); size disks for today's 10 million plus growth |
 | Q4 | Customer portal (spec §1, "optional"): in v1? | **Later**, after migration |
 | Q5 | How long can the current platform keep running in parallel during migration? | Until the last group has been stable for 2 weeks (about February) |
 
@@ -163,12 +174,12 @@ These come on top of the switch scenarios in `docs/SMPP_SCENARIOS.md`. Each gets
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| Q6 | HTTP API for customers in v1? If yes, which format? | **Yes, in the same format as the current platform**, so customers don't change code. I need its documentation (format only, no credentials or real data) |
-| Q7 | Two-way traffic (MO): do vendors send you inbound messages to forward to customers? How is the customer chosen: by the number in the MO book (§6.1)? | Route MO by the MO book number to the customer trunk that owns it; MO billed per the MO book rates |
+| Q6 | HTTP API for customers in v1? **Answered:** 99 % of customers use SMPP. Still open: do the remaining HTTP customers need it on day one? | Build it in **phase B (December)** in the current platform's format, so the few HTTP customers move in a later migration group. I need its documentation then (format only) |
+| Q7 | Two-way traffic (MO)? **Decided:** no MO traffic today, so MO is **not in v1**. The switch answers an unexpected MO deliver_sm with OK and logs it, so a vendor never retries forever | — |
 | Q8 | Do any vendors send receipts or messages using **data_sm** instead of deliver_sm? | Accept data_sm on both sides; send only submit_sm to vendors |
 | Q9 | Does any partner still need old encryption (SSLv3, TLS 1.0)? | **No**: plain or TLS 1.2/1.3 only (spec §16) |
-| Q10 | Two servers mean **two IPs**. Can customers bind to both, and can vendors whitelist both of our source IPs? | Yes to both, announced to partners 2–4 weeks before their migration group |
-| Q11 | Vendor submit timeout default 10 s instead of 30 s (§3.6)? | **10 s** |
+| Q10 | Two servers mean **two IPs**. **Decided:** yes, under one host name | One name (e.g. `smpp.<your-domain>`) with **both IPs** in DNS, plus `smpp1` / `smpp2` for clients that need two fixed binds. Short DNS lifetime (60 s) so a dead server can be taken out quickly. TLS certificate for those names. Vendors still need **both source IPs** whitelisted, because a host name doesn't help on outgoing connections |
+| Q11 | Vendor submit timeout default (§3.6)? **Decided:** stays 30 s for now | — |
 | Q12 | A vendor trunk's Max Connections and TPS across 2 servers: split the connections between the servers, with the TPS limit shared? | **Split the connections**, with **one shared TPS limit** per trunk (Redis counter) |
 | Q13 | A customer's TPS limit when they bind to both servers: one shared limit? | **One shared limit per trunk**, with a tolerance of at most 1 second of traffic |
 | Q14 | Receipts for a customer with no receive bind up (TX only, or their RX is down): keep them how long? | Keep and deliver when an RX/TRX bind comes up, for up to **72 hours**, then drop and log |
@@ -192,8 +203,8 @@ These come on top of the switch scenarios in `docs/SMPP_SCENARIOS.md`. Each gets
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| Q25 | Data from the current platform: the rule so far is never to connect to it. For cutover we need trunks, rates, rules and balances. How? | **You export files** (Excel or CSV) from the current platform at migration time. We import them through the Migration Center with a dry run first (§13.22). We never connect to it |
-| Q26 | Keep partners' SMPP usernames and passwords the same? | **Yes**, so customers change only the IP. Imported encrypted, admin-only (§13.22) |
+| Q25 | **Decided: exported files.** Data from the current platform: the rule so far is never to connect to it. For cutover we need trunks, rates, rules and balances. How? | **You export files** (Excel or CSV) from the current platform at migration time. We import them through the Migration Center with a dry run first (§13.22). We never connect to it |
+| Q26 | **Decided: yes.** Keep partners' SMPP usernames and passwords the same? | **Yes**, so customers change only the IP. Imported encrypted, admin-only (§13.22) |
 | Q27 | Historical EDRs from the current platform: import them? | **No.** Keep the current platform read-only for disputes for a few months; import monthly totals if reports need them |
 | Q28 | Balances at cutover? | One opening balance per partner on its cutover date, taken from the current platform's SOA |
 
@@ -202,7 +213,7 @@ These come on top of the switch scenarios in `docs/SMPP_SCENARIOS.md`. Each gets
 | # | Question | Recommendation |
 | --- | --- | --- |
 | Q29 | With one engineer, who receives alerts at night? | Alerts go to your phone (Telegram or SMS) and the NOC team. Each alert comes with a written runbook (what to check, what to do) |
-| Q30 | Message text retention (§3.7)? | Keep the text **30 days**, then blank it; all other fields for the full retention. Mask OTP-like codes for roles without permission |
+| Q30 | Message text retention (§3.7)? **Decided:** text kept **1 year**, then blanked; all other fields for the full retention | Mask OTP-like codes for roles without permission (open) |
 | Q31 | Where do off-site backups go? | S3-compatible object storage at another provider: nightly full backup, continuous database log shipping, restore tested monthly |
 | Q32 | The 2 servers: same data centre, or 2 data centres in the same city? | **2 data centres of the same provider in the same city**, with under 2 ms between them, so the 50 ms resp target holds. Witness VM at another provider |
 | Q33 | Staff access to the portal | Over **VPN or an office IP allow-list**, plus 2FA. SMPP ports open only to whitelisted partner IPs |

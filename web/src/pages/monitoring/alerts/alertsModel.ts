@@ -137,3 +137,53 @@ export function analyticsFor(entityKind: string, entityName: string): string {
   const named = ["customer_trunk", "vendor_trunk", "vendor", "customer"].includes(entityKind);
   return `/live/analytics?by=${by}${named ? `&q=${encodeURIComponent(entityName)}` : ""}`;
 }
+
+type Metric = AlertRuleInput["metric"];
+type Condition = AlertRuleInput["condition"];
+const PCT_METRICS = new Set<Metric>(["asr", "dlr", "margin_pct"]);
+const MONEY_METRICS = new Set<Metric>(["margin", "revenue"]);
+
+/** An alert value in words, as the pop-up and the incident show it: "61.0 %", "-0.02 EUR", "4.2 s", "1,250". */
+export function fmtAlertValue(metric: Metric, v: number | null, currency: string): string {
+  if (v === null) return "—";
+  if (PCT_METRICS.has(metric)) return `${v.toFixed(1)} %`;
+  if (MONEY_METRICS.has(metric))
+    return `${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  if (metric === "avg_delivery_delay") return `${v.toFixed(1)} s`;
+  if (metric === "tps") return `${v.toFixed(1)} TPS`;
+  return Math.round(v).toLocaleString("en-US");
+}
+
+const BASELINE_WORDS = { previous_window: "the previous window", yesterday: "yesterday", last_week: "last week" };
+
+/** The rule's condition in words: "below 0.00 EUR", "down 20 % vs the previous window", "bind down". */
+export function conditionText(metric: Metric, c: Condition | null, currency: string): string | null {
+  if (!c) return null;
+  const vs = BASELINE_WORDS[c.baseline ?? "previous_window"];
+  switch (c.type) {
+    case "above":
+      return `above ${fmtAlertValue(metric, c.value, currency)}`;
+    case "below":
+      return `below ${fmtAlertValue(metric, c.value, currency)}`;
+    case "increase_pct":
+      return `up ${c.value ?? 0} % vs ${vs}`;
+    case "decrease_pct":
+      return `down ${c.value ?? 0} % vs ${vs}`;
+    case "started":
+      return "started sending";
+    case "stopped":
+      return "stopped sending";
+    default:
+      return "bind down";
+  }
+}
+
+/** What the baseline value is, for the "was …" line: the previous window, yesterday or last week. */
+export const baselineWords = (c: Condition | null) =>
+  c && (c.type === "increase_pct" || c.type === "decrease_pct") && c.baseline
+    ? BASELINE_WORDS[c.baseline]
+    : "the previous window";
+
+/** Conditions measured as a number over a window (the others are events: started, stopped, bind down). */
+export const isMeasured = (c: Condition | null) =>
+  !c || c.type === "above" || c.type === "below" || c.type === "increase_pct" || c.type === "decrease_pct";
