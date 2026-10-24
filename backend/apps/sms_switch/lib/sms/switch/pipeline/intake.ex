@@ -186,9 +186,10 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
-  defp decoded(msg, _raw, _udh, <<>>, _concat, _alphabet, _payload),
-    # D10: an empty message is refused (0x01).
-    do: {:reject, :esme_rinvmsglen, :empty_message, msg}
+  # D10: an empty message is refused (0x01) unless the customer trunk allows empty messages.
+  defp decoded(%{trunk: trunk} = msg, _raw, _udh, <<>>, _concat, _alphabet, _payload)
+       when trunk.allow_empty_messages != true,
+       do: {:reject, :esme_rinvmsglen, :empty_message, msg}
 
   defp decoded(msg, _raw, udh, data, concat, alphabet, payload) do
     text =

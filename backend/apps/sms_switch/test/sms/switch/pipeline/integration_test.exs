@@ -236,6 +236,9 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
     test "a receipt after the message left Redis is matched from the EDRs: late after a DLR timeout, else a duplicate (D5)" do
       start_supervised!(Sms.Core.Bus)
       start_supervised!(Sms.Switch.Pipeline.Store)
+      PipelineConfig.put()
+      start_supervised!({Config.Server, loader: PipelineConfig})
+      CustomerCase.assert_eventually(&Config.ready?/0)
       vt = 800_000 + System.unique_integer([:positive])
       edr_id = Edr.new_id()
 

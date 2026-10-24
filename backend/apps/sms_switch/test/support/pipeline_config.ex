@@ -38,8 +38,8 @@ defmodule Sms.Switch.Test.PipelineConfig do
 
     rows = %{
       destinations: {[], d.destinations},
-      customer_trunks: {[], Enum.map(d.customer_trunks, &customer_trunk_row/1)},
-      vendor_trunks: {[], Enum.map(d.vendor_trunks, &vendor_trunk_row/1)},
+      customer_trunks: maps(d.customer_trunks),
+      vendor_trunks: maps(d.vendor_trunks),
       route_rules: maps(Enum.map(d.route_rules, &route_rule/1)),
       route_vendors: maps(d.route_vendors),
       route_whitelists: maps([]),
@@ -105,24 +105,13 @@ defmodule Sms.Switch.Test.PipelineConfig do
         dlr_hold_hours: 72,
         delayed_submit: false,
         loop_detection: false,
+        reassembly_timeout_s: 120,
+        duplicate_window_s: 0,
+        allow_empty_messages: false,
         rate_table_ids: [100]
       },
       Map.new(fields)
     )
-  end
-
-  defp customer_trunk_row(t) do
-    [
-      t.id,
-      t.name,
-      t.enterprise_id,
-      t.business_company_id,
-      t.base_currency,
-      t.product_category_id,
-      t.billing_type
-    ] ++
-      [t.active, t.account_manager_id, t.default_coding, t.dlr_session_affinity, t.dlr_hold_hours] ++
-      [t.delayed_submit, t.loop_detection, t.rate_table_ids]
   end
 
   @doc "A vendor trunk's fields."
@@ -140,24 +129,15 @@ defmodule Sms.Switch.Test.PipelineConfig do
         dlr_timeout_s: 3_600,
         dlr_timeout_stat: "UNKNOWN",
         reroute_on: [],
+        tps: 1_000,
+        max_connections: 1,
+        support_multipart: true,
+        max_msg_len: nil,
+        multipart_format: "udh8",
         rate_table_ids: [200]
       },
       Map.new(fields)
     )
-  end
-
-  defp vendor_trunk_row(t) do
-    [
-      t.id,
-      t.name,
-      t.enterprise_id,
-      t.product_category_id,
-      t.billing_type,
-      t.active,
-      t.account_manager_id,
-      t.tier
-    ] ++
-      [t.dlr_timeout_s, t.dlr_timeout_stat, t.reroute_on, t.rate_table_ids]
   end
 
   @doc "A rate line row: table, line id, MCCMNC, rate (EUR unless given), current since an hour ago."

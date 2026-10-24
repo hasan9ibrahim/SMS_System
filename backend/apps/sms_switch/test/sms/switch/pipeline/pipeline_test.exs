@@ -820,6 +820,21 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "empty messages (D10)" do
+    test "sent when the customer trunk allows empty messages (refused 0x01 otherwise, above)" do
+      %{client: client, conns: [conn]} =
+        start_all(
+          config: [customer_trunks: [PipelineConfig.customer_trunk(allow_empty_messages: true)]]
+        )
+
+      {_, resp} = submit(client, %{short_message: ""})
+      assert resp.status == 0
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm, fields: %{short_message: ""}}},
+                     2_000
+    end
+  end
+
   describe "DLR timeout (S-5.10, D5)" do
     test "no receipt within the vendor trunk's DLR Timeout: the customer gets its DLR Timeout Status" do
       config = [

@@ -87,7 +87,7 @@ defmodule Sms.Switch.Pipeline.LateReceipts do
   end
 
   @attempt """
-  SELECT edr_id, start_time, c_enterprise_id, c_trunk_id, c_message_id,
+  SELECT toString(edr_id), start_time, c_enterprise_id, c_trunk_id, c_message_id,
          arrayFirstIndex(k -> has({keys:Array(String)}, k), v_message_keys) AS part
     FROM edr
    WHERE v_trunk_id = {vt:UInt32} AND is_submit_success = 1 AND hasAny(v_message_keys, {keys:Array(String)})
