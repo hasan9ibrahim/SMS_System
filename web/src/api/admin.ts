@@ -29,6 +29,7 @@ import type {
   ListId,
   PasswordChangeInput,
   PasswordChanged,
+  PasswordCodeSent,
   PasswordCheck,
   PasswordCheckInput,
   PortalUserInput,
@@ -86,6 +87,8 @@ export const useDisableTotp = () =>
   useWrite((id: number): Promise<UserSaved> => unwrap(api.POST("/users/{id}/totp/disable", path(id))));
 export const useChangeMyPassword = () =>
   useWrite((input: PasswordChangeInput): Promise<PasswordChanged> => unwrap(api.POST("/me/password", { body: input })));
+/** E-mails a code for my password change when I have no authenticator app (R6, §13.28). */
+export const sendMyPasswordCode = (): Promise<PasswordCodeSent> => unwrap(api.POST("/me/password/code"));
 
 /** The §13.28 rules for a password being typed (debounced by the caller). */
 export function usePasswordCheck(input: PasswordCheckInput | null) {

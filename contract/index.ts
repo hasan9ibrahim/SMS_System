@@ -643,6 +643,7 @@ export type TotpSetup = Schemas["TotpSetup"];
 export type TotpConfirmInput = Schemas["TotpConfirmInput"];
 export type PasswordChangeInput = Schemas["PasswordChangeInput"];
 export type PasswordChanged = Schemas["PasswordChanged"];
+export type PasswordCodeSent = Schemas["PasswordCodeSent"];
 export type PasswordCheckInput = Schemas["PasswordCheckInput"];
 export type PasswordCheck = Schemas["PasswordCheck"];
 export type DepartmentFields = Schemas["DepartmentFields"];

@@ -15,18 +15,18 @@ CREATE OR REPLACE FUNCTION pg_temp.fx_copy(src bigint, new_name text, new_priori
 RETURNS bigint LANGUAGE plpgsql AS $$
 DECLARE nid bigint;
 BEGIN
-  INSERT INTO route_rules (name, priority, status, starts_at, stops_at, route_rule_group_id, next_route_rule_group_id,
+  INSERT INTO route_rules (name, priority, status, starts_at, stops_at,
       continue_routing, match_mode, category_mode, category_ids, customer_trunk_mode, customer_trunk_ids, mccmnc_mode,
       mccmncs, mccmnc_pattern, sender_pattern, sender_pattern_negate, receiver_pattern, receiver_pattern_negate,
-      content_pattern, content_pattern_negate, sender_list_id, receiver_list_id, tps_condition, revenue_condition,
+      content_pattern, content_pattern_negate, sender_list_id, sender_list_negate, receiver_list_id, receiver_list_negate, tps_condition, revenue_condition,
       route_type, hunt_policy, enable_backup_routes, vendor_category_mode, vendor_category_ids, vendor_trunk_mode,
       vendor_trunk_ids, max_route_level, margin, qbr_formula, skip_vendor_at_tps_pct, hlr_action, hlr_ported,
       deny_multipart, threshold, threshold_interval, comment, created_by_id, updated_by_id, inserted_at, updated_at,
       dlr_target_pct, lcr_profile_id)
-  SELECT new_name, coalesce(new_priority, priority), status, starts_at, stops_at, route_rule_group_id, next_route_rule_group_id,
+  SELECT new_name, coalesce(new_priority, priority), status, starts_at, stops_at,
       continue_routing, match_mode, category_mode, category_ids, customer_trunk_mode, coalesce(trunks, customer_trunk_ids), mccmnc_mode,
       mccmncs, mccmnc_pattern, sender_pattern, sender_pattern_negate, receiver_pattern, receiver_pattern_negate,
-      content_pattern, content_pattern_negate, sender_list_id, receiver_list_id, tps_condition, revenue_condition,
+      content_pattern, content_pattern_negate, sender_list_id, sender_list_negate, receiver_list_id, receiver_list_negate, tps_condition, revenue_condition,
       route_type, hunt_policy, enable_backup_routes, vendor_category_mode, vendor_category_ids, vendor_trunk_mode,
       vendor_trunk_ids, max_route_level, margin, qbr_formula, skip_vendor_at_tps_pct, hlr_action, hlr_ported,
       deny_multipart, threshold, threshold_interval, 'Copy for the Cleanup Center (fake)', created_by_id, updated_by_id,

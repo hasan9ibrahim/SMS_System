@@ -102,11 +102,11 @@ const COND_SQL = (withTrunks: boolean) => `concat_ws('|', r.status, r.match_mode
   ${withTrunks ? "(SELECT array_agg(x ORDER BY x) FROM unnest(r.customer_trunk_ids) x)::text" : "''"},
   r.mccmnc_mode, (SELECT array_agg(x ORDER BY x) FROM unnest(r.mccmncs) x)::text, r.mccmnc_pattern,
   r.sender_pattern, r.sender_pattern_negate, r.sender_match_case, r.receiver_pattern, r.receiver_pattern_negate, r.content_pattern,
-  r.content_pattern_negate, r.sender_list_id, r.receiver_list_id, r.tps_condition::text, r.revenue_condition::text,
-  r.starts_at, r.stops_at, r.route_rule_group_id, r.hlr_action, r.hlr_ported, r.deny_multipart)`;
+  r.content_pattern_negate, r.sender_list_id, r.sender_list_negate, r.receiver_list_id, r.receiver_list_negate, r.tps_condition::text, r.revenue_condition::text,
+  r.starts_at, r.stops_at, r.hlr_action, r.hlr_ported, r.deny_multipart)`;
 const ROUTE_SQL = `concat_ws('|', r.route_type, r.hunt_policy, r.enable_backup_routes, r.vendor_category_mode,
   r.vendor_category_ids::text, r.vendor_trunk_mode, (SELECT array_agg(x ORDER BY x) FROM unnest(r.vendor_trunk_ids) x)::text,
-  r.max_route_level, r.margin, r.qbr_formula, r.lcr_profile_id, r.continue_routing, r.next_route_rule_group_id,
+  r.max_route_level, r.margin, r.qbr_formula, r.lcr_profile_id, r.continue_routing,
   (SELECT string_agg(concat_ws(':', v.level, v.vendor_trunk_id, v.share_pct, v.is_backup), ',' ORDER BY v.level, v.vendor_trunk_id)
      FROM route_rule_vendors v WHERE v.route_rule_id = r.id))`;
 
@@ -144,7 +144,7 @@ async function ruleRows(c: Db): Promise<RuleRow[]> {
     route: r.route,
     trunkMode: r.customer_trunk_mode,
     trunks: ((r.customer_trunk_ids as string[]) ?? []).map(Number),
-    // "stop" ends routing at the rule; "yes" / "next" continue when it finds no vendor.
+    // "stop" ends routing at the rule; "yes" continues when it finds no vendor (R3).
     cont: r.continue_routing !== "stop",
     m30: int(r.m30),
     m7: int(r.m7),

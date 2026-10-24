@@ -1393,3 +1393,12 @@
 .am-partner a:hover {
   text-decoration: underline;
 }
+/* Password change code with Send code beside it (2026-10-24, R6). */
+.pw-code {
+  display: flex;
+  gap: 8px;
+}
+.pw-code input {
+  flex: 1;
+  min-width: 0;
+}

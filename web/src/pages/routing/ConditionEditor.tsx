@@ -221,7 +221,15 @@ function Mode({
   );
 }
 
-function Negate({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+function Negate({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="segmented" role="radiogroup">
       {[false, true].map((v) => (
@@ -230,6 +238,7 @@ function Negate({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
           type="button"
           role="radio"
           aria-checked={value === v}
+          disabled={disabled}
           className={value === v ? "on" : ""}
           onClick={() => onChange(v)}
         >
@@ -331,6 +340,10 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   const [listId, setListId] = useState<number | null>(
     key === "sender" ? rule.senderListId : key === "receiver" ? rule.receiverListId : null,
   );
+  // Number lists have their own Match / Not match (decided 2026-10-24, R2, §6.3).
+  const [listNegate, setListNegate] = useState(
+    key === "sender" ? !!rule.senderListNegate : key === "receiver" ? !!rule.receiverListNegate : false,
+  );
   const [tps, setTps] = useState<TpsCondition>(
     rule.tps ?? { op: ">", value: 50, scope: "customer_trunk", windowS: 5, releasePct: 10, holdS: 30 },
   );
@@ -403,6 +416,10 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
             ) : (
               <DestinationPick value={codes} onChange={setCodes} />
             )}
+            {/* R1 (2026-10-24): whichever is set is checked; with both, only the destination list counts. */}
+            {mode !== "all" && codes.length > 0 && mccPattern.trim() && (
+              <p className="muted small">Destinations are picked, so the pattern is not checked: the list wins.</p>
+            )}
             <label className="field">
               <span>MCCMNC pattern (regular expression)</span>
               <input
@@ -457,20 +474,23 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
               matchCase={key === "sender" && matchCase}
             />
             {key !== "content" && (
-              <label className="field">
-                <span>{key === "sender" ? "Sender ID list" : "Receiver ID list"}</span>
-                <select
-                  value={listId ?? ""}
-                  onChange={(e) => setListId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">—</option>
-                  {lists.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="cond-list">
+                <label className="field">
+                  <span>{key === "sender" ? "Sender ID list" : "Receiver ID list"}</span>
+                  <select
+                    value={listId ?? ""}
+                    onChange={(e) => setListId(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">—</option>
+                    {lists.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Negate value={listNegate} onChange={setListNegate} disabled={!listId} />
+              </div>
             )}
           </>
         ),
@@ -482,8 +502,10 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
               ? "Enter a pattern or choose a list."
               : "Add at least one value or choose a list.";
           const p = { [`${key}Pattern`]: built, [`${key}PatternNegate`]: negate };
-          if (key === "sender") return { ...p, senderListId: listId, senderMatchCase: matchCase };
-          return key === "content" ? p : { ...p, [`${key}ListId`]: listId };
+          const neg = !!listId && listNegate;
+          if (key === "sender")
+            return { ...p, senderListId: listId, senderListNegate: neg, senderMatchCase: matchCase };
+          return key === "content" ? p : { ...p, receiverListId: listId, receiverListNegate: neg };
         },
       };
     }

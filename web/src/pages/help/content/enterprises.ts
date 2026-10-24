@@ -1350,8 +1350,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Express margin",
-                what: "Shown only when an express vendor trunk is set. The fixed margin kept on express traffic.",
-                values: "A number with up to 4 decimals, e.g. `0.0020`.",
+                what: "Shown only when an express vendor trunk is set. The % added on the express vendor's cost for every message.",
+                values: "A percentage, 0–1000, e.g. `10` for 10 %.",
               },
             ],
           },

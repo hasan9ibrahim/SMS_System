@@ -4,7 +4,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PasswordCheckInput } from "@sms/contract";
-import { useChangeMyPassword, usePasswordCheck } from "../../api/admin";
+import { sendMyPasswordCode, useChangeMyPassword, usePasswordCheck } from "../../api/admin";
+import { useMyPasswordStatus } from "../../api/security";
 import { ApiError } from "../../api/client";
 import { ask, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
@@ -173,10 +174,10 @@ export const openTempPassword = (
   save: (input: { password: string; confirmPassword: string }) => Promise<unknown>,
 ) => ask<void>((d) => <TempPasswordDialog who={who} checkInput={checkInput} save={save} done={() => d()} />);
 
-/** §13.28: my own change - current password, the 2FA code, the rules; other sessions sign out. */
 /**
- * The Change Password form (§13.28): current password, new password with each rule as it is met, and
- * the 2FA code. `wrap` places it in a dialog or on the blocking Change Password screen.
+ * The Change Password form (§13.28): current password, new password with each rule as it is met, and a code -
+ * always (decided 2026-10-24, R6): the authenticator code when 2FA is on, otherwise a code e-mailed on request.
+ * `wrap` places it in a dialog or on the blocking Change Password screen.
  */
 export function PasswordChangeForm({
   userId,
@@ -194,9 +195,29 @@ export function PasswordChangeForm({
   const [confirm, setConfirm] = useState("");
   const [code, setCode] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const status = useMyPasswordStatus();
+  const totp = status.data?.totpEnabled ?? false;
+  const [sent, setSent] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const sendCode = () => {
+    setSending(true);
+    sendMyPasswordCode()
+      .then((r) => {
+        setSent(r.sentTo);
+        setErrors((e) => ({ ...e, "/emailCode": "" }));
+      })
+      .catch((e: unknown) => toast({ tone: "error", message: problemText(e) }))
+      .finally(() => setSending(false));
+  };
+  const codeKey = totp ? "/totpCode" : "/emailCode";
   const submit = () =>
     change.mutate(
-      { currentPassword: current, newPassword: next, totpCode: code.trim() || null },
+      {
+        currentPassword: current,
+        newPassword: next,
+        totpCode: totp ? code.trim() || null : null,
+        emailCode: totp ? null : code.trim() || null,
+      },
       {
         onSuccess: (r) => {
           toast({
@@ -231,23 +252,33 @@ export function PasswordChangeForm({
         error={confirm && confirm !== next ? "the passwords do not match" : undefined}
       />
       <PasswordRules input={{ password: next, userId }} />
-      <label className={`field${errors["/totpCode"] ? " invalid" : ""}`}>
-        <span>2FA code (from your authenticator app)</span>
-        <input
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-        />
-        {errors["/totpCode"] && <span className="ff-error">{errors["/totpCode"]}</span>}
+      <label className={`field${errors[codeKey] ? " invalid" : ""}`}>
+        <span>{totp ? "2FA code (from your authenticator app) *" : "Code sent to your e-mail *"}</span>
+        <span className="pw-code">
+          <input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          />
+          {!totp && (
+            <Button icon="mail" onClick={sendCode} disabled={sending || status.isLoading}>
+              {sent ? "Send again" : "Send code"}
+            </Button>
+          )}
+        </span>
+        {errors[codeKey] && <span className="ff-error">{errors[codeKey]}</span>}
+        {!totp && sent && !errors[codeKey] && (
+          <span className="muted small">Sent to {sent}. It works for 10 minutes.</span>
+        )}
       </label>
       <p className="muted small">Changing the password signs you out of every other session and device.</p>
     </div>,
     <Button
       variant="primary"
       icon="lock"
-      disabled={change.isPending || !current || !next || next !== confirm}
+      disabled={change.isPending || !current || !next || next !== confirm || code.length !== 6}
       onClick={submit}
     >
       Change password

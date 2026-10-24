@@ -159,7 +159,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Change password",
-                what: "Change your password. It asks for your current password and a 2FA code, and shows the rules for the new password.",
+                what: "Change your password. It asks for your current password and a code (your authenticator code, or one sent to your e-mail), and shows the rules for the new password.",
               },
               {
                 name: "Alert sounds",
