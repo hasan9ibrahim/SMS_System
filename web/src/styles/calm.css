@@ -1,5 +1,6 @@
 /* Calm look (team trial round 5, §15.3 "colour only carries meaning"): loaded last, so these rules win.
-   - ASR / DLR green from 80 %, amber and red below; positive margin green, negative red; text colour, never boxes.
+   - ASR / DLR green from 80 %, amber and red below; positive margin green, negative red. Amber and red are filled
+     chips in Live analytics.
    - Numbers keep normal weight; only totals and names are a little heavier.
    - Live analytics headers are tinted like the date-range chip; band labels keep their colour with a thin rule. */
 
@@ -24,19 +25,30 @@
   font-weight: 600;
   background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
 }
+/* Amber and red figures sit in a filled, softly rounded chip like the reference platform (team trial round 5, third
+   pass): amber with dark text, red with white text. Good figures stay green text. */
+.la-grid td.num.la-warn,
+.la-grid td.num.la-bad {
+  padding: 3px 3px 3px 2px;
+}
 .la-warn .la-pill,
 .la-bad .la-pill {
-  display: inline;
-  padding: 0;
-  background: none;
-  border-radius: 0;
-  font-weight: 500;
+  display: block;
+  padding: 2px 4px;
+  border-radius: 5px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .la-warn .la-pill {
-  color: var(--color-warning);
+  background: #f8b13d;
+  color: #3b2500;
 }
 .la-bad .la-pill {
-  color: var(--color-error);
+  background: #e5484d;
+  color: #fff;
 }
 /* Header rows tinted like the date-range chip (team trial round 5, second pass); titles on one line. */
 .la-grid thead th,

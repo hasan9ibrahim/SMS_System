@@ -94,7 +94,7 @@ const BY: Record<string, ReportDimension> = {
 
 const metricsOf = (cols: Column[]) => cols.map((c) => c.metric);
 /** Money and rates (6 decimals) get wider columns than counts (team trial round 3). */
-const WEIGHT: Record<Fmt, number> = { money: 1.9, rate: 1.3, int: 1.1, pct: 1, sec: 0.85, tps: 0.85 };
+const WEIGHT: Record<Fmt, number> = { money: 1.9, rate: 1.3, int: 1.1, pct: 1.15, sec: 0.85, tps: 0.85 };
 const weightOf = (cols: Column[]) => cols.reduce((n, c) => n + WEIGHT[c.fmt], 0);
 /** The figures share what the name (11 %) and EDRs (4.5 %) columns leave, so the table always fits (no sideways scroll). */
 const colWidth = (cols: Column[], c: Column) => `${((WEIGHT[c.fmt] / weightOf(cols)) * 84.5).toFixed(2)}%`;
@@ -455,7 +455,7 @@ function Cells({ metrics }: { metrics: Record<string, number | null> }) {
         const t = cellTone(c.metric, v);
         return (
           <td key={c.metric} className={`num${TONED.has(c.metric) ? " la-strong" : ""}${t ? ` la-${t}` : ""}`}>
-            {/* Amber and red as coloured text (calm look, team trial round 5; boxes in round 1). */}
+            {/* Amber and red in a filled chip (team trial round 5, third pass). */}
             {t === "warn" || t === "bad" ? <span className="la-pill">{fmt(v, c.fmt)}</span> : fmt(v, c.fmt)}
           </td>
         );
