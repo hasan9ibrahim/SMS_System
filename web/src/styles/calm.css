@@ -217,3 +217,9 @@
 .la-grid td.num.la-bad .la-pill {
   text-align: center;
 }
+/* ASR and DLR figures centred in their columns, plain or in a chip (team trial round 5). */
+.la-grid td.num.la-center {
+  text-align: center;
+  padding-left: 3px;
+  padding-right: 3px;
+}

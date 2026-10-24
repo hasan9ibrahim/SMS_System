@@ -5,6 +5,7 @@ backend team knows exactly what to build. Newest first.
 
 | Date | Screen | Contract change | Spec § | Requested by | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | Live analytics ASR / DLR | No contract change. ASR and DLR figures centred in their columns, plain green or in a chip. | §13.7 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics figures | No contract change. Every figure the same size and font (Roboto 11.5 px); ASR, DLRs and margin only a little bolder; figures centred in the amber and red chips. | §13.7, §15.1 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics colours | No contract change. Amber ASR/DLR figures sit in a filled amber chip with dark text, red ones (and negative margin) in a filled red chip with white text, softly rounded; green stays as text. ASR/DLR columns a little wider so chips never cut the figure. | §13.7, §15.3 | Product owner | Done (GUI only) |
 | 2026-10-24 | Live analytics figures | No contract change. Figures smaller (11.5 px, 11 px on phones) so none are cut; names in the first column (customer, trunk, vendor, destination…) are plain, not bold; column titles 11.5 px. | §13.7, §15.1 | Product owner | Done (GUI only) |

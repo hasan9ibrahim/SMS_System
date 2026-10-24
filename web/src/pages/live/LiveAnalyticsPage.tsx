@@ -454,7 +454,10 @@ function Cells({ metrics }: { metrics: Record<string, number | null> }) {
         const v = metrics[c.metric];
         const t = cellTone(c.metric, v);
         return (
-          <td key={c.metric} className={`num${TONED.has(c.metric) ? " la-strong" : ""}${t ? ` la-${t}` : ""}`}>
+          <td
+            key={c.metric}
+            className={`num${TONED.has(c.metric) ? " la-strong" : ""}${c.fmt === "pct" && TONED.has(c.metric) ? " la-center" : ""}${t ? ` la-${t}` : ""}`}
+          >
             {/* Amber and red in a filled chip (team trial round 5, third pass). */}
             {t === "warn" || t === "bad" ? <span className="la-pill">{fmt(v, c.fmt)}</span> : fmt(v, c.fmt)}
           </td>
