@@ -133,6 +133,34 @@ defmodule Sms.Core.BusTest do
     assert_received {:delivered, :all, _, 1}
   end
 
+  test "queues: in order, one at a time; taken and not acknowledged stays counted; unreadable dropped (step 7b)" do
+    assert Bus.take("vt.1") == :empty
+    {:ok, %Event{id: a}} = Bus.put("vt.1", "msg.held", %{"n" => 1})
+    {:ok, _} = Bus.put("vt.1", "msg.held", %{"n" => 2})
+    {:ok, _} = Bus.put("ct.2", "msg.held", %{"n" => 3})
+    assert {:ok, %{"vt.1" => 2, "ct.2" => 1}} = Bus.queues()
+
+    assert {:ok, %Event{id: ^a}, h} = Bus.take("vt.1")
+    assert {:ok, %{"vt.1" => 2}} = Bus.queues()
+    assert :ok = Bus.ack(h)
+    assert {:ok, %Event{data: %{"n" => 2}}, h2} = Bus.take("vt.1")
+    Bus.ack(h2)
+    assert Bus.take("vt.1") == :empty
+    assert {:ok, queues} = Bus.queues()
+    refute Map.has_key?(queues, "vt.1")
+
+    # A message on a queue subject before the queue exists is not queued (as JetStream would replay it later).
+    {:ok, _} = Bus.publish(Bus.queue_subject("ct.3"), "t", %{})
+    assert Bus.take("ct.3") == :empty
+
+    :ok = Bus.ensure_queue("ct.3")
+
+    {:new, _} = GenServer.call(Local, {:store, "raw-1", Bus.queue_subject("ct.3"), "not json"})
+
+    assert capture_log(fn -> assert Bus.take("ct.3") == :empty end) =~ "unreadable event dropped"
+    assert {:error, {:invalid_queue, "a b"}} = Bus.put("a b", "t", %{})
+  end
+
   test "a consumer with max_deliver :infinity keeps retrying past the default limit" do
     start_supervised!(ForeverConsumer)
 

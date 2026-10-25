@@ -3,7 +3,8 @@ defmodule Sms.Core.Bus.Local do
   An in-memory event bus for tests. It behaves like the NATS one where it matters: an event id is stored once
   (de-duplication), every consumer whose filter matches gets the event, a failed delivery is retried up to
   `max_deliver` times and a discarded one is not. Delivery happens in the publishing process before `publish`
-  returns, so tests need no waiting.
+  returns, so tests need no waiting. Queues (`sms.q.<queue>`) keep their events in order until taken and
+  acknowledged; an event taken and not acknowledged stays counted.
   """
   @behaviour Sms.Core.Bus.Adapter
   use GenServer
@@ -18,7 +19,7 @@ defmodule Sms.Core.Bus.Local do
 
   @impl Sms.Core.Bus.Adapter
   def publish(subject, payload, msg_id, _timeout) do
-    case GenServer.call(__MODULE__, {:store, msg_id, payload}) do
+    case GenServer.call(__MODULE__, {:store, msg_id, subject, payload}) do
       :duplicate ->
         :ok
 
@@ -49,6 +50,18 @@ defmodule Sms.Core.Bus.Local do
   @impl Sms.Core.Bus.Adapter
   # Events are handed to subscribers as they are published: nothing waits in memory.
   def backlog(_consumer), do: {:ok, 0}
+
+  @impl Sms.Core.Bus.Adapter
+  def ensure_queue(queue), do: GenServer.call(__MODULE__, {:ensure_queue, queue})
+
+  @impl Sms.Core.Bus.Adapter
+  def take(queue), do: GenServer.call(__MODULE__, {:take, queue})
+
+  @impl Sms.Core.Bus.Adapter
+  def ack(handle), do: GenServer.call(__MODULE__, {:ack, handle})
+
+  @impl Sms.Core.Bus.Adapter
+  def queues, do: GenServer.call(__MODULE__, :queues)
 
   # ---------------------------------------------------------------- test helpers
 
@@ -132,20 +145,54 @@ defmodule Sms.Core.Bus.Local do
   # ---------------------------------------------------------------- server
 
   @impl GenServer
-  def init(:ok), do: {:ok, %{seen: MapSet.new(), log: [], consumers: %{}}}
+  def init(:ok),
+    do: {:ok, %{seen: MapSet.new(), log: [], consumers: %{}, queues: %{}, taken: %{}}}
 
   @impl GenServer
-  def handle_call({:store, id, payload}, _from, state) do
+  def handle_call({:store, id, subject, payload}, _from, state) do
     if MapSet.member?(state.seen, id) do
       {:reply, :duplicate, state}
     else
       state = %{state | seen: MapSet.put(state.seen, id), log: [payload | state.log]}
-      {:reply, {:new, Map.values(state.consumers)}, state}
+      {:reply, {:new, Map.values(state.consumers)}, enqueue(state, subject, payload)}
     end
   end
 
   def handle_call(:published, _from, state), do: {:reply, Enum.reverse(state.log), state}
-  def handle_call(:reset, _from, state), do: {:reply, :ok, %{state | seen: MapSet.new(), log: []}}
+
+  def handle_call(:reset, _from, state),
+    do: {:reply, :ok, %{state | seen: MapSet.new(), log: [], queues: %{}, taken: %{}}}
+
+  def handle_call({:ensure_queue, queue}, _from, state),
+    do: {:reply, :ok, %{state | queues: Map.put_new(state.queues, queue, :queue.new())}}
+
+  def handle_call({:take, queue}, _from, state) do
+    case :queue.out(Map.get(state.queues, queue, :queue.new())) do
+      {{:value, payload}, rest} ->
+        handle = make_ref()
+        state = %{state | queues: Map.put(state.queues, queue, rest)}
+        {:reply, {:ok, payload, handle}, put_in(state.taken[handle], queue)}
+
+      {:empty, _} ->
+        {:reply, :empty, state}
+    end
+  end
+
+  def handle_call({:ack, handle}, _from, state),
+    do: {:reply, :ok, %{state | taken: Map.delete(state.taken, handle)}}
+
+  def handle_call(:queues, _from, state) do
+    taken = Enum.frequencies(Map.values(state.taken))
+
+    counts =
+      for {queue, q} <- state.queues,
+          n = :queue.len(q) + Map.get(taken, queue, 0),
+          n > 0,
+          into: %{},
+          do: {queue, n}
+
+    {:reply, {:ok, counts}, state}
+  end
 
   def handle_call({:subscribe, pid, module, opts}, _from, state) do
     Process.monitor(pid)
@@ -156,6 +203,17 @@ defmodule Sms.Core.Bus.Local do
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
     {:noreply, %{state | consumers: Map.delete(state.consumers, pid)}}
   end
+
+  # An event published to an existing queue's subject joins that queue (a queue that was never created drops it, as
+  # a JetStream consumer created later would replay it: the NATS adapter creates the queue before publishing).
+  defp enqueue(state, "sms.q." <> queue, payload) do
+    case state.queues do
+      %{^queue => q} -> put_in(state.queues[queue], :queue.in(payload, q))
+      _ -> state
+    end
+  end
+
+  defp enqueue(state, _subject, _payload), do: state
 
   defmodule Subscription do
     @moduledoc false

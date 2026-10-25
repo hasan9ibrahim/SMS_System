@@ -190,6 +190,32 @@ defmodule Sms.Core.IntegrationTest do
     assert log =~ "unreadable event discarded"
   end
 
+  test "a queue hands out its events one at a time, oldest first; unacknowledged ones stay counted (step 7b)" do
+    assert Bus.take("ct.900") == :empty or match?({:error, _}, Bus.take("ct.900"))
+
+    ids =
+      for n <- 1..3 do
+        {:ok, %Event{id: id}} = Bus.put("ct.900", "msg.held", %{"n" => n})
+        id
+      end
+
+    assert {:ok, %{"ct.900" => 3}} = Bus.queues()
+    assert {:ok, %Event{id: first, data: %{"n" => 1}}, h1} = Bus.take("ct.900")
+    assert first == hd(ids)
+    assert :ok = Bus.ack(h1)
+    assert {:ok, %Event{data: %{"n" => 2}}, _not_acked} = Bus.take("ct.900")
+    assert {:ok, %Event{data: %{"n" => 3}}, h3} = Bus.take("ct.900")
+    assert :ok = Bus.ack(h3)
+    assert Bus.take("ct.900") == :empty
+
+    # The taken, unacknowledged event is still the queue's; another queue is separate.
+    Process.sleep(200)
+    assert {:ok, queues} = Bus.queues()
+    assert queues["ct.900"] == 1
+    refute Map.has_key?(queues, "vt.900")
+    assert {:error, {:invalid_queue, "bad queue"}} = Bus.put("bad queue", "t", %{})
+  end
+
   test "a concurrent consumer handles several events at once, each once" do
     start_supervised!({Recorder, self()})
     start_supervised!(ConcurrentConsumer)
