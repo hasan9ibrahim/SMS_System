@@ -16,7 +16,7 @@ defmodule Sms.Core.Metrics do
   @callback metrics() :: [metric()]
 
   @doc "The text served at /metrics."
-  @spec render([module()]) :: iodata()
+  @spec render([module()]) :: iolist()
   def render(providers) do
     for {name, type, help, samples} <- core() ++ Enum.flat_map(providers, &safe/1) do
       [

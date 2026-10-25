@@ -18,7 +18,10 @@ defmodule Sms.Switch.Pipeline.Backlog do
   stopped taking messages at all. Receipts, EDRs and charges do not count: they may wait on the bus while ClickHouse or
   Redis is down without holding traffic back (S-7.3).
 
-  If the backlog cannot be read, or no message was taken in a second, the last state of that measure is kept.
+  If the backlog cannot be read, the last state of that measure is kept. A second in which the sender took no message
+  keeps the wait measure too, unless nothing is waiting for the sender (`Sms.Core.Bus.waiting/1`): then a new message
+  would be taken at once, so the refusal ends (the lab drill, backend step 8: after a NATS outage the only messages
+  left were in flight on a dead connection, nothing was taken, and the guard kept refusing every submit).
   """
   use GenServer
   require Logger
@@ -68,6 +71,7 @@ defmodule Sms.Switch.Pipeline.Backlog do
       max_wait: Keyword.get(config, :max_wait_ms, 10_000),
       interval: Keyword.get(config, :interval_ms, 1_000),
       reader: Keyword.get(config, :reader, fn -> Bus.backlog(@consumer) end),
+      waiting: Keyword.get(config, :waiting, fn -> Bus.waiting(@consumer) end),
       ref: ref,
       slow: false,
       full: false
@@ -113,11 +117,13 @@ defmodule Sms.Switch.Pipeline.Backlog do
 
   defp slow?(state) do
     case :atomics.exchange(state.ref, 1, @none) do
-      @none -> state.slow
+      @none -> state.slow and not idle?(state)
       wait when state.slow -> wait >= state.max_wait * @resume
       wait -> wait > state.max_wait
     end
   end
+
+  defp idle?(state), do: state.waiting.() == {:ok, 0}
 
   defp full?(%{max: max}) when max <= 0, do: false
 

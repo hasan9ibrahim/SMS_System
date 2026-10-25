@@ -116,3 +116,23 @@ defmodule Sms.Core.Test.ForeverConsumer do
   @impl true
   def handle_event(event), do: Recorder.handle(:forever, event)
 end
+
+defmodule Sms.Core.Test.SlowConsumer do
+  @moduledoc false
+  # Takes longer than its ack wait, reporting progress meanwhile (backend step 8): it must not be delivered again.
+  use Sms.Core.Bus.Consumer,
+    name: "test-slow",
+    filter: "sms.slow.*",
+    max_deliver: 3,
+    ack_wait_ms: 1_000,
+    progress_ms: 300
+
+  alias Sms.Core.Test.Recorder
+
+  @impl true
+  def handle_event(event) do
+    result = Recorder.handle(:slow, event)
+    Process.sleep(2_500)
+    result
+  end
+end

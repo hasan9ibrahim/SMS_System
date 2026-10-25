@@ -1,0 +1,20 @@
+#!/bin/sh
+# {{ ansible_managed }} (deploy/ansible/roles/nats). On the witness: steps down from every stream and consumer
+# leadership it holds, so a server leads (the servers' clients then reach the leader without crossing providers).
+set -u
+nats() { /usr/local/bin/nats --server nats://127.0.0.1:{{ ports.nats }} --user sms --password '{{ vault_nats_password }}' "$@"; }
+me="{{ inventory_hostname }}"
+for stream in $(nats stream ls --names 2>/dev/null); do
+  leader="$(nats stream info "$stream" --json 2>/dev/null | python3 -c 'import json,sys; print((json.load(sys.stdin).get("cluster") or {}).get("leader",""))')"
+  if [ "$leader" = "$me" ]; then
+    logger -t sms-nats-leaders "stream $stream: stepping down"
+    nats stream cluster step-down "$stream" >/dev/null 2>&1 || true
+  fi
+  for consumer in $(nats consumer ls "$stream" --names 2>/dev/null); do
+    leader="$(nats consumer info "$stream" "$consumer" --json 2>/dev/null | python3 -c 'import json,sys; print((json.load(sys.stdin).get("cluster") or {}).get("leader",""))')"
+    if [ "$leader" = "$me" ]; then
+      logger -t sms-nats-leaders "consumer $stream/$consumer: stepping down"
+      nats consumer cluster step-down "$stream" "$consumer" >/dev/null 2>&1 || true
+    fi
+  done
+done

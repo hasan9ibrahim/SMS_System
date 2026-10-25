@@ -5,7 +5,15 @@ defmodule Sms.Core.IntegrationTest do
   alias Gnat.Jetstream.API.{Consumer, Stream}
   alias Sms.Core.{Bus, ClickHouse, Health}
   alias Sms.Core.Bus.{Event, Nats}
-  alias Sms.Core.Test.{AllConsumer, BatchConsumer, ConcurrentConsumer, MsgConsumer, Recorder}
+
+  alias Sms.Core.Test.{
+    AllConsumer,
+    BatchConsumer,
+    ConcurrentConsumer,
+    MsgConsumer,
+    Recorder,
+    SlowConsumer
+  }
 
   @moduletag :integration
   @stream "SMS_TEST"
@@ -51,6 +59,14 @@ defmodule Sms.Core.IntegrationTest do
     assert_receive {:delivered, :msg, %Event{id: ^id}, 1}, 5_000
     {:ok, %{state: state}} = Stream.info(Nats.connection(), @stream)
     assert state.messages == 1
+  end
+
+  test "an event handled for longer than ack_wait, reported in progress meanwhile, is delivered once" do
+    start_supervised!({Recorder, self()})
+    start_supervised!(SlowConsumer)
+    {:ok, %Event{id: id}} = Bus.publish("sms.slow.one", "slow.one", %{})
+    assert_receive {:delivered, :slow, %Event{id: ^id}, 1}, 5_000
+    refute_receive {:delivered, :slow, %Event{id: ^id}, 2}, 4_000
   end
 
   test "a failed event comes back after ack_wait; a discarded or unreadable one never does" do

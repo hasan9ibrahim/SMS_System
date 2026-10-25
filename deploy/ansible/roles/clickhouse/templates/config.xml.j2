@@ -47,6 +47,11 @@
 {% endfor %}
   </zookeeper>
 
+  <!-- ClickHouse's own logs kept {{ ch_log_days | default(30 if not lab else 1) }} days, so they never fill the disk. -->
+{% for log in ['query_log', 'trace_log', 'part_log', 'metric_log', 'asynchronous_metric_log', 'text_log', 'processors_profile_log', 'query_views_log', 'error_log'] %}
+  <{{ log }}><ttl>event_date + INTERVAL {{ ch_log_days | default(30 if not lab else 1) }} DAY DELETE</ttl></{{ log }}>
+{% endfor %}
+
   <prometheus>
     <endpoint>/metrics</endpoint>
     <port>{{ ports.ch_metrics }}</port>

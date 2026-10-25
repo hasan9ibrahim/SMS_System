@@ -8,7 +8,7 @@ defmodule Sms.Switch.Vendor.QuorumTest do
   @cluster [peers: ["sms@server-b", "sms@witness"], witness: "sms@witness"]
 
   defp nodes(seen, connected, view \\ fn _ -> [] end),
-    do: Quorum.nodes(seen, @cluster ++ [connected: connected, witness_view: view])
+    do: Quorum.nodes(seen, @cluster ++ [connected: connected, witness_view: view, fenced: false])
 
   test "without a witness the nodes seen share the connections" do
     assert Quorum.nodes([node()], peers: ["sms@server-b"]) == [node()]
@@ -39,8 +39,17 @@ defmodule Sms.Switch.Vendor.QuorumTest do
     assert nodes([node()], []) == []
   end
 
+  test "a server that stepped back opens none, whatever it sees" do
+    seen = Enum.sort([node(), @b])
+
+    assert Quorum.nodes(
+             seen,
+             @cluster ++ [connected: [@b, @w], witness_view: fn @w -> seen end, fenced: true]
+           ) == []
+  end
+
   test "a witness that does not answer counts as seeing nothing" do
     # Not a reachable node: the real lookup gives up and returns none.
-    assert Quorum.nodes([node()], @cluster ++ [connected: [@w]]) == [node()]
+    assert Quorum.nodes([node()], @cluster ++ [connected: [@w], fenced: false]) == [node()]
   end
 end

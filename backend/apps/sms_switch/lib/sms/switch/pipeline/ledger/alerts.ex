@@ -30,7 +30,9 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
     watched = Enum.filter(accounts, &watched?/1)
     keys = Enum.map(watched, & &1.key)
 
-    with {:ok, used} <- Ledger.used_many(keys),
+    # Nothing watched: no MGET (Redis refuses one without keys; seen in the lab, backend step 8).
+    with [_ | _] <- keys,
+         {:ok, used} <- Ledger.used_many(keys),
          {:ok, levels} <- Store.command(["MGET" | Enum.map(keys, &"cal:#{&1}")]) do
       watched
       |> Enum.zip(levels)
@@ -38,6 +40,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
         compare(account, Map.fetch!(used, account.key), stored)
       end)
     else
+      [] -> :ok
       :error -> Logger.warning("credit alerts not checked: ledger totals unavailable")
       {:error, reason} -> Logger.warning("credit alerts not checked: #{inspect(reason)}")
     end

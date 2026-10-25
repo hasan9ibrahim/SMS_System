@@ -25,6 +25,7 @@ defmodule Sms.Switch.Vendor.Manager do
   """
   use GenServer
   require Logger
+  alias Sms.Switch.Fence
   alias Sms.Switch.Vendor.{Quorum, Receipts, Session, TrunkStore}
 
   @scope :sms_vendor_sessions
@@ -76,7 +77,7 @@ defmodule Sms.Switch.Vendor.Manager do
       timer: nil
     }
 
-    if Quorum.enabled?(), do: Process.send_after(self(), :quorum, @quorum_ms)
+    _ = if Quorum.enabled?(), do: Process.send_after(self(), :quorum, @quorum_ms)
     {:ok, state, {:continue, :reconcile}}
   end
 
@@ -137,6 +138,7 @@ defmodule Sms.Switch.Vendor.Manager do
   end
 
   defp apply_trunks(state, trunks) do
+    membership(Fence.fenced?())
     nodes = Quorum.nodes(nodes())
     by_id = Map.new(trunks, &{&1.id, &1})
     log_quorum(state.shared, nodes)
@@ -182,6 +184,18 @@ defmodule Sms.Switch.Vendor.Manager do
     if MapSet.size(wanted) > map_size(sessions),
       do: schedule(state, @restart_after_ms),
       else: state
+  end
+
+  # A server that stepped back (Sms.Switch.Fence) leaves the group, so the witness stops counting it and the other
+  # server takes its connections over; it joins again when it resumes.
+  defp membership(fenced) do
+    here? = self() in :pg.get_local_members(@scope, @group)
+
+    cond do
+      fenced and here? -> :pg.leave(@scope, @group, self())
+      not fenced and not here? -> :pg.join(@scope, @group, self())
+      true -> :ok
+    end
   end
 
   defp log_quorum(before, []) when before != [],

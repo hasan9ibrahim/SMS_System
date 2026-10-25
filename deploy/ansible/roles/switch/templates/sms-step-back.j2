@@ -1,0 +1,23 @@
+#!/bin/sh
+# {{ ansible_managed }} (deploy/ansible/roles/switch). Called by the switch (Sms.Switch.Fence, through
+# /usr/local/bin/sms-fence-hook and sudo) when this server steps back because it lost the other server, which the
+# witness still sees, and is not the PostgreSQL primary; and again when it resumes.
+#
+# fenced:  stop this server's NATS, Redis and ClickHouse. The other server and the witness are 2 of 3, so they elect
+#          new NATS leaders and Keeper leader, and the sentinels promote the other server's Redis: every primary ends
+#          up where the traffic is. Nothing is lost: each event is on three machines, EDRs on both servers.
+# resumed: start them again; Redis rejoins as a replica (Sentinel), NATS and ClickHouse catch up.
+set -eu
+case "${1:-}" in
+  fenced)
+    logger -t sms-step-back "stepping back: stopping nats, redis-server, clickhouse-server"
+    systemctl stop nats redis-server clickhouse-server
+    ;;
+  resumed)
+    logger -t sms-step-back "resuming: starting redis-server, nats, clickhouse-server"
+    systemctl start redis-server nats clickhouse-server
+    ;;
+  *)
+    echo "usage: $0 fenced|resumed" >&2; exit 2
+    ;;
+esac

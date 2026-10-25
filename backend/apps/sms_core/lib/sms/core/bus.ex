@@ -73,6 +73,10 @@ defmodule Sms.Core.Bus do
   @spec backlog(String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
   def backlog(name), do: adapter().backlog(name)
 
+  @doc "How many events wait for the consumer, not yet handed out to it (in flight ones not counted)."
+  @spec waiting(String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def waiting(name), do: adapter().waiting(name)
+
   # ---------------------------------------------------------------- queues
 
   @doc """

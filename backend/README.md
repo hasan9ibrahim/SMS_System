@@ -198,6 +198,31 @@ not yet finished (backend step 7).
 
 Load tests: `tools/smpp-sim` and `docs/LOAD_TEST_RESULTS.md`.
 
+## On the servers (step 8)
+
+`deploy/ansible` installs and updates everything (`deploy/ansible/README.md`); the drills are in
+`docs/FAILOVER_DRILLS.md`, the alert runbooks in `docs/RUNBOOKS.md`.
+
+- **Release:** `MIX_ENV=prod mix release` (ERTS included, the schema files in `db/`, VM flags in `rel/vm.args.eex`:
+  `net_ticktime` 10, overlapping partitions allowed so the witness stays connected to both servers, one distribution
+  port 9150). `bin/sms eval "Sms.Core.Release.migrate()"` applies the PostgreSQL migrations not yet recorded in
+  `schema_migrations` (each once; a changed file is refused) and the ClickHouse ones (idempotent; on the servers'
+  Replicated database the MergeTree family becomes `Replicated*MergeTree`).
+- **Witness:** `SWITCH_ROLE=witness` runs the release with no store and no SMPP; it keeps the vendor side's process
+  group so the servers can ask who still runs vendor connections.
+- **Vendor connections and the witness** (`Vendor.Quorum`): a server takes over the other's connections only once the
+  witness has lost it too; a server reaching neither opens none.
+- **Stepping back** (`Fence`): when the servers lose each other but both reach the witness, the one without the
+  PostgreSQL primary (`SWITCH_PRIMARY_URL`) drains and unbinds its customers, closes its vendor connections, leaves the
+  vendor group and runs `SWITCH_FENCE_HOOK` (stops its NATS, Redis, ClickHouse); it resumes when the link is back.
+- **Health and metrics** (`Sms.Core.Http`, `SWITCH_HTTP_PORT`): `/health` (200 when every store and the bus answer,
+  else 503 naming them) and `/metrics` (Prometheus: stores, cluster peers, VM, submits by result, overload, fenced,
+  sessions, vendor sharing, sender backlog, buffers).
+- **Redis through Sentinel** (`REDIS_SENTINELS`): connections follow the primary; one that times out 10 times in a
+  row reconnects.
+- **Sender:** ack wait 30 s with "in progress" every 10 s (`progress_ms`), so a message held by a dead connection is
+  handed out again within 30 s; the overload guard ends when nothing waits for the sender.
+
 ## Quality gates (`mix check`, CI job `backend`)
 
 1. `mix format --check-formatted`

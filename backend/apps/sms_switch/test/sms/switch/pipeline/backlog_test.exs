@@ -19,7 +19,13 @@ defmodule Sms.Switch.Pipeline.BacklogTest do
     start_supervised!(
       {Backlog,
        Keyword.merge(
-         [max: 100, max_wait_ms: 10_000, interval_ms: 3_600_000, reader: reader],
+         [
+           max: 100,
+           max_wait_ms: 10_000,
+           interval_ms: 3_600_000,
+           reader: reader,
+           waiting: fn -> {:ok, 5} end
+         ],
          opts
        )}
     )
@@ -53,6 +59,25 @@ defmodule Sms.Switch.Pipeline.BacklogTest do
     assert Backlog.over?()
 
     waited(1_000)
+
+    assert capture_log([level: :warning], fn -> Backlog.check() end) =~
+             "taking new messages again"
+
+    refute Backlog.over?()
+  end
+
+  test "nothing taken and nothing waiting for the sender: the refusal ends (only in-flight messages were left)" do
+    {:ok, waiting} = Agent.start_link(fn -> {:ok, 5} end)
+    start([{:ok, 0}], waiting: fn -> Agent.get(waiting, & &1) end)
+    waited(11_000)
+    capture_log(fn -> Backlog.check() end)
+    assert Backlog.over?()
+
+    # Messages still waiting: kept.
+    Backlog.check()
+    assert Backlog.over?()
+
+    Agent.update(waiting, fn _ -> {:ok, 0} end)
 
     assert capture_log([level: :warning], fn -> Backlog.check() end) =~
              "taking new messages again"

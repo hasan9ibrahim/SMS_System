@@ -18,8 +18,7 @@ KillMode=mixed
 Restart=always
 RestartSec=5
 LimitNOFILE=1048576
-# SMPP ports below 1024 are not used; nothing here needs root.
-NoNewPrivileges=true
+# Nothing here runs as root, except the step-back script through sudo (Sms.Switch.Fence), which needs privileges.
 
 [Install]
 WantedBy=multi-user.target

@@ -31,7 +31,7 @@ bootstrap:
         wal_log_hints: "on"
         max_wal_senders: 10
         max_replication_slots: 10
-        wal_keep_size: 2GB
+        wal_keep_size: {{ '2GB' if not lab else '256MB' }}
         max_connections: 300
         shared_buffers: {{ pg_shared_buffers | default('2GB' if not lab else '128MB') }}
         effective_cache_size: {{ pg_effective_cache_size | default('6GB' if not lab else '256MB') }}

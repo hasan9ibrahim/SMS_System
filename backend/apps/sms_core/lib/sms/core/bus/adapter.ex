@@ -21,6 +21,7 @@ defmodule Sms.Core.Bus.Adapter do
 
   @doc "How many events a consumer has not finished yet: waiting for it, and handed out but not acknowledged."
   @callback backlog(consumer :: String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
+  @callback waiting(consumer :: String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
 
   @doc """
   Creates the durable queue `queue` (events published to `sms.q.<queue>`) if it does not exist yet. A queue keeps its

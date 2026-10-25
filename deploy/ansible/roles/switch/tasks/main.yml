@@ -19,6 +19,25 @@
   ansible.builtin.template: {src: sms-switch.service.j2, dest: /etc/systemd/system/sms-switch.service, mode: "0644"}
   notify: switch restart
 
+- name: Step-back script (servers; Sms.Switch.Fence)
+  ansible.builtin.template: {src: sms-step-back.j2, dest: /usr/local/sbin/sms-step-back, owner: root, group: root, mode: "0755"}
+  when: inventory_hostname in groups['servers']
+
+- name: The switch may run exactly that script as root
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/sms-step-back
+    content: "{{ switch_user }} ALL=(root) NOPASSWD: /usr/local/sbin/sms-step-back fenced, /usr/local/sbin/sms-step-back resumed\n"
+    mode: "0440"
+    validate: visudo -cf %s
+  when: inventory_hostname in groups['servers']
+
+- name: The hook the switch calls
+  ansible.builtin.copy:
+    dest: /usr/local/bin/sms-fence-hook
+    content: "#!/bin/sh\nexec sudo -n /usr/local/sbin/sms-step-back \"$1\"\n"
+    mode: "0755"
+  when: inventory_hostname in groups['servers']
+
 - name: Whether a release is installed yet
   ansible.builtin.stat: {path: "{{ switch_root }}/current/bin/sms"}
   register: current

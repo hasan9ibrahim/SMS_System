@@ -13,6 +13,7 @@ int = fn name, default ->
 end
 
 prod? = config_env() == :prod
+
 # The witness VM's node keeps no data store (SWITCH_ROLE below), so it needs none of their credentials.
 witness? = System.get_env("SWITCH_ROLE") == "witness"
 
@@ -67,6 +68,12 @@ config :sms_core, Sms.Core.ClickHouse,
 config :sms_core, Sms.Core.Cluster,
   peers: env.("SWITCH_PEERS", "") |> String.split(",", trim: true) |> Enum.map(&String.trim/1),
   witness: System.get_env("SWITCH_WITNESS")
+
+# Which server steps back when the two lose each other (backend step 8, Sms.Switch.Fence): Patroni's /primary on this
+# server, and the hook that moves the Redis primary and NATS leadership to the other one.
+config :sms_switch, Sms.Switch.Fence,
+  primary_url: System.get_env("SWITCH_PRIMARY_URL"),
+  hook: System.get_env("SWITCH_FENCE_HOOK")
 
 # The health and metrics endpoint for monitoring (backend step 8): GET /health and /metrics; 0 = off.
 config :sms_core, Sms.Core.Http, port: String.to_integer(env.("SWITCH_HTTP_PORT", "0"))

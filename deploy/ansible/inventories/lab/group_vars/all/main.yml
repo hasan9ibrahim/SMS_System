@@ -9,3 +9,5 @@ s3_bucket: sms-backups
 s3_verify_tls: false
 # No real Telegram in the lab: alerts are kept in Alertmanager only.
 telegram_chat_ids: []
+# Lab disk is small: one hour of recorded traffic.
+pcap_files: 4

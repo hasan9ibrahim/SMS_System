@@ -4,7 +4,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 cd "$here/../../backend"
-id="$(git rev-parse --short=10 HEAD)$(git diff --quiet HEAD -- . ../db || echo -dirty)"
+id="$(git rev-parse --short=10 HEAD)$(git diff --quiet HEAD -- . ../db || echo "-dirty-$(date -u +%Y%m%d%H%M%S)")"
 MIX_ENV=prod mix deps.get --only prod >/dev/null
 MIX_ENV=prod mix release --overwrite --quiet
 mkdir -p "$here/releases"

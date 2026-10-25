@@ -125,6 +125,16 @@ defmodule Sms.Core.Bus.Nats do
     :exit, _ -> {:error, :not_connected}
   end
 
+  @impl Sms.Core.Bus.Adapter
+  def waiting(consumer) do
+    case Gnat.Jetstream.API.Consumer.info(@conn, Keyword.fetch!(Bus.config(), :stream), consumer) do
+      {:ok, info} -> {:ok, info.num_pending}
+      {:error, _} = error -> error
+    end
+  catch
+    :exit, _ -> {:error, :not_connected}
+  end
+
   # How long a taken queue event may stay unacknowledged before it is handed out again: a vendor buffer's message may
   # wait 30 s for its vendor, then a Submit Timeout and re-routes (backend step 7b).
   @queue_ack_wait_ms 300_000
@@ -403,9 +413,17 @@ defmodule Sms.Core.Bus.Nats do
       conn = Nats.connection()
 
       case Consumer.info(conn, consumer.stream_name, consumer.durable_name) do
-        {:ok, %{config: %{filter_subject: filter}} = info}
-        when filter == consumer.filter_subject ->
+        {:ok, %{config: %{filter_subject: filter, ack_wait: ack_wait}} = info}
+        when filter == consumer.filter_subject and ack_wait == consumer.ack_wait ->
           {:ok, info}
+
+        # Same consumer, another ack wait (a release changed it, backend step 8): updated in place, position kept.
+        {:ok, %{config: %{filter_subject: filter}}} when filter == consumer.filter_subject ->
+          Logger.info(
+            "consumer #{consumer.durable_name}: ack wait now #{div(consumer.ack_wait, 1_000_000)} ms"
+          )
+
+          Consumer.create(conn, consumer)
 
         {:ok, _other} ->
           {:error, {:consumer_exists_with_another_filter, consumer.durable_name}}
@@ -423,6 +441,10 @@ defmodule Sms.Core.Bus.Nats do
     @moduledoc false
     # Feeds one durable consumer its events. Done → ack; discard → term (never again); error → no reply, so
     # JetStream delivers it again after ack_wait, up to max_deliver times.
+    #
+    # With `:progress_ms`, a message still being handled is reported in progress (`+WPI`) that often, so ack_wait can
+    # be short: a message whose handler died with its connection is handed out again within ack_wait instead of after
+    # the longest a handler may take (the lab drill, backend step 8: 898 messages waited out 5 minutes).
     use Gnat.Jetstream.PullConsumer
     require Logger
     alias Gnat.Jetstream.PullConsumer
@@ -438,6 +460,8 @@ defmodule Sms.Core.Bus.Nats do
         module: module,
         name: opts[:name],
         max_deliver: opts[:max_deliver],
+        progress_ms: opts[:progress_ms],
+        connection: Nats.connection(i),
         batcher: if(opts[:batch_size], do: Nats.Batcher.name(module))
       }
 
@@ -468,8 +492,10 @@ defmodule Sms.Core.Bus.Nats do
     def handle_message(message, state) do
       case Event.decode(message.body) do
         {:ok, event} ->
-          {outcome(Consumer.run(state.module, event), event.id, deliveries(message), state),
-           state}
+          ticker = progress(message, state)
+          result = Consumer.run(state.module, event)
+          if ticker, do: send(ticker, :done)
+          {outcome(result, event.id, deliveries(message), state), state}
 
         {:error, reason} ->
           Logger.error("unreadable event discarded",
@@ -479,6 +505,30 @@ defmodule Sms.Core.Bus.Nats do
 
           {:term, state}
       end
+    end
+
+    defp progress(%{reply_to: reply_to}, %{progress_ms: ms, connection: conn})
+         when is_integer(ms) and is_binary(reply_to) do
+      spawn_link(fn -> report_progress(conn, reply_to, ms) end)
+    end
+
+    defp progress(_message, _state), do: nil
+
+    defp report_progress(conn, reply_to, ms) do
+      receive do
+        :done -> :ok
+      after
+        ms ->
+          _ = publish_progress(conn, reply_to)
+          report_progress(conn, reply_to, ms)
+      end
+    end
+
+    defp publish_progress(conn, reply_to) do
+      Gnat.pub(conn, reply_to, "+WPI")
+    catch
+      # The connection is gone: JetStream will hand the message out again; nothing to report on.
+      :exit, _ -> :ok
     end
 
     defp outcome(:ok, _id, _n, _state), do: :ack

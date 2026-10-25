@@ -55,6 +55,13 @@ groups:
         annotations:
           summary: "{{ $labels.machine }} reaches neither the other server nor the witness: it opens no vendor connection"
           runbook: "RUNBOOKS.md#clustersplit"
+      - alert: ServerSteppedBack
+        expr: sms_fenced == 1
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }} stepped back: the servers lost each other; all traffic is on the other server"
+          runbook: "RUNBOOKS.md#clustersplit"
       - alert: ClusterPeerLost
         expr: sms_cluster_peers_connected < 2
         for: 1m

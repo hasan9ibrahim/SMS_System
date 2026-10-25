@@ -49,3 +49,36 @@
   retries: 30
   delay: 2
   until: healthz.status == 200
+
+- name: natscli (operations, and the leader check on the witness)
+  ansible.builtin.unarchive:
+    src: "https://github.com/nats-io/natscli/releases/download/v{{ natscli_version }}/nats-{{ natscli_version }}-linux-amd64.zip"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/nats-{{ natscli_version }}-linux-amd64/nats"
+
+- name: natscli installed
+  ansible.builtin.copy:
+    src: "/tmp/nats-{{ natscli_version }}-linux-amd64/nats"
+    dest: /usr/local/bin/nats
+    mode: "0755"
+    remote_src: true
+
+# After a failure the raft groups may elect the witness as leader; every message would then cross to the witness's
+# provider and back. Once a minute the witness hands any leadership it holds to one of the servers.
+- name: Leader check (witness)
+  when: inventory_hostname in groups['witness']
+  block:
+    - name: Script
+      ansible.builtin.template: {src: nats-leaders.sh.j2, dest: /usr/local/bin/sms-nats-leaders, mode: "0750"}
+    - name: Units
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.name }}"
+        content: "{{ item.content }}"
+      loop:
+        - name: sms-nats-leaders.service
+          content: "[Unit]\nDescription=Hand NATS leaderships held by the witness to a server\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/sms-nats-leaders\n"
+        - name: sms-nats-leaders.timer
+          content: "[Unit]\nDescription=NATS leader check every minute\n[Timer]\nOnBootSec=2min\nOnUnitActiveSec=60\n[Install]\nWantedBy=timers.target\n"
+    - name: Timer on
+      ansible.builtin.systemd_service: {name: sms-nats-leaders.timer, enabled: true, state: started, daemon_reload: true}

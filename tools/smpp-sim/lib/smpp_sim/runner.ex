@@ -89,7 +89,8 @@ defmodule SmppSim.Runner do
       |> Enum.map(&%{system_id: &1["system_id"], password: &1["password"]})
 
     prefixes = List.to_tuple(config["prefixes"])
-    hosts = Enum.map(opts.ports, &{opts.host, &1})
+    # Several switch servers: --host a,b with the same --ports on each (backend step 8, the lab).
+    hosts = for host <- String.split(opts.host, ",", trim: true), port <- opts.ports, do: {host, port}
     info("binding #{length(trunks) * opts.sessions} customer sessions to #{inspect(hosts)}")
 
     case Load.start(

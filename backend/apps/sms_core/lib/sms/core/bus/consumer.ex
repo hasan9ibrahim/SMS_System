@@ -33,6 +33,7 @@ defmodule Sms.Core.Bus.Consumer do
           filter: String.t(),
           max_deliver: pos_integer() | :infinity,
           ack_wait_ms: pos_integer(),
+          progress_ms: pos_integer() | nil,
           concurrency: pos_integer(),
           batch_size: pos_integer() | nil,
           batch_wait_ms: pos_integer()
@@ -92,6 +93,13 @@ defmodule Sms.Core.Bus.Consumer do
       "concurrency must be a positive integer: #{inspect(concurrency)}"
     )
 
+    progress_ms = Keyword.get(opts, :progress_ms)
+
+    check!(
+      is_nil(progress_ms) or pos_integer?(progress_ms),
+      "progress_ms must be a positive integer: #{inspect(progress_ms)}"
+    )
+
     check!(
       is_nil(batch_size) or pos_integer?(batch_size),
       "batch_size must be a positive integer: #{inspect(batch_size)}"
@@ -102,6 +110,7 @@ defmodule Sms.Core.Bus.Consumer do
       filter: filter,
       max_deliver: max_deliver,
       ack_wait_ms: Keyword.get(opts, :ack_wait_ms, 30_000),
+      progress_ms: progress_ms,
       concurrency: concurrency,
       batch_size: batch_size,
       batch_wait_ms: Keyword.get(opts, :batch_wait_ms, 200)

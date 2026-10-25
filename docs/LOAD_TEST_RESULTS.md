@@ -130,4 +130,5 @@ normally.
 2. **Bus retention:** 2 days instead of 7 (about 1 TB per server at 50 M/day). Done (`max_age_days`).
 3. **Max Msg Len:** the whole message; empty (any length) is the usual setting. The fake data now seeds it empty.
 4. **Overload answer:** 0x58, when accepted messages wait over 10 s for the sender (`SWITCH_MAX_WAIT_MS`); messages in a customer trunk's overflow buffer do not count.
-5. **Vendor connections during a cut link:** fixed in step 8 with the witness VM.
+5. **Vendor connections during a cut link:** fixed in step 8 with the witness VM (`docs/FAILOVER_DRILLS.md`: never more
+   than Max Connections; the server without the PostgreSQL primary steps back).

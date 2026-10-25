@@ -62,7 +62,7 @@ defmodule Sms.Core.Release do
     {:ok, conn} = Sql.start_link(Keyword.put(config, :sync_connect, true))
 
     try do
-      Sql.query!(conn, "SELECT pg_advisory_lock(#{@lock})")
+      _ = Sql.query!(conn, "SELECT pg_advisory_lock(#{@lock})")
       files = files(dir, ["postgres/init", "postgres/migrations"])
       applied = applied(conn, schema, mode)
       check_changed!(files, applied)
@@ -70,13 +70,14 @@ defmodule Sms.Core.Release do
       for {name, path, sha} <- files, not Map.has_key?(applied, name) do
         if mode == :migrate do
           Logger.info("migration #{name}")
-          Sql.query!(conn, File.read!(path))
+          _ = Sql.query!(conn, File.read!(path))
         end
 
-        Sql.query!(
-          conn,
-          "INSERT INTO #{schema}.schema_migrations (file, sha256) VALUES (#{quote_literal(name)}, '#{sha}')"
-        )
+        _ =
+          Sql.query!(
+            conn,
+            "INSERT INTO #{schema}.schema_migrations (file, sha256) VALUES (#{quote_literal(name)}, '#{sha}')"
+          )
 
         name
       end
@@ -118,8 +119,14 @@ defmodule Sms.Core.Release do
   end
 
   defp check_changed!(files, applied) do
-    for {name, _path, sha} <- files, Map.has_key?(applied, name), applied[name] != sha do
-      raise "migration #{name} changed after it was applied: add a new migration instead"
+    case Enum.find(files, fn {name, _path, sha} ->
+           Map.has_key?(applied, name) and applied[name] != sha
+         end) do
+      nil ->
+        :ok
+
+      {name, _, _} ->
+        raise "migration #{name} changed after it was applied: add a new migration instead"
     end
   end
 
@@ -144,8 +151,9 @@ defmodule Sms.Core.Release do
           [["Replicated"]]
 
       for {name, path, _sha} <- files(dir, ["clickhouse/migrations"]) do
-        for statement <- statements(File.read!(path)),
-            do: Ch.query!(conn, if(replicated?, do: replicated(statement), else: statement))
+        Enum.each(statements(File.read!(path)), fn statement ->
+          Ch.query!(conn, if(replicated?, do: replicated(statement), else: statement))
+        end)
 
         name
       end

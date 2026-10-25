@@ -35,9 +35,15 @@ defmodule Sms.Switch.Application do
           []
 
         true ->
-          [Sms.Switch.Throttle | sides]
+          [Sms.Switch.Throttle | fence()] ++ sides
       end
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Sms.Switch.Supervisor)
+  end
+
+  # On the servers, with a witness (backend step 8): which server steps back when they lose each other.
+  defp fence do
+    witness = :sms_core |> Application.get_env(Sms.Core.Cluster, []) |> Keyword.get(:witness)
+    if witness in [nil, ""], do: [], else: [Sms.Switch.Fence]
   end
 end

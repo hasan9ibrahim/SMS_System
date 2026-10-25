@@ -9,6 +9,7 @@ defmodule Sms.Switch.Metrics do
   @behaviour Sms.Core.Metrics
   alias Sms.Core.Bus
   alias Sms.Switch.Customer.Sessions
+  alias Sms.Switch.Fence
   alias Sms.Switch.Pipeline.{Backlog, Config}
   alias Sms.Switch.Vendor
   alias Sms.Switch.Vendor.{Manager, Quorum}
@@ -43,7 +44,10 @@ defmodule Sms.Switch.Metrics do
        "1 while new messages are refused because the sender is behind (0x58)",
        [{%{}, Backlog.over?()}]},
       {"sms_config_loaded", :gauge, "1 once the routing configuration is in memory",
-       [{%{}, ready?()}]}
+       [{%{}, ready?()}]},
+      {"sms_fenced", :gauge,
+       "1 while this server has stepped back (the other one carries the traffic)",
+       [{%{}, Fence.fenced?()}]}
     ] ++ customer() ++ vendor() ++ bus()
   end
 
@@ -78,15 +82,8 @@ defmodule Sms.Switch.Metrics do
     if Process.whereis(Sms.Switch.Pipeline.Supervisor) do
       buffers =
         case Bus.queues() do
-          {:ok, queues} ->
-            for {queue, n} <- queues,
-                kind = buffer_kind(queue),
-                reduce: %{customer: 0, vendor: 0} do
-              acc -> Map.update!(acc, kind, &(&1 + n))
-            end
-
-          {:error, _} ->
-            %{}
+          {:ok, queues} -> buffered(queues)
+          {:error, _} -> %{}
         end
 
       backlog =
@@ -102,6 +99,12 @@ defmodule Sms.Switch.Metrics do
       ]
     else
       []
+    end
+  end
+
+  defp buffered(queues) do
+    for {queue, n} <- queues, kind = buffer_kind(queue), reduce: %{customer: 0, vendor: 0} do
+      acc -> Map.update!(acc, kind, &(&1 + n))
     end
   end
 

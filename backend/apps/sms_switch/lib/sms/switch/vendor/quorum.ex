@@ -16,9 +16,14 @@ defmodule Sms.Switch.Vendor.Quorum do
 
   Without a witness configured (development, one server) the vendor nodes are the ones this node sees, as before.
 
+  A server that stepped back (`Sms.Switch.Fence`: it lost the other server, which the witness still sees, and does not
+  hold the PostgreSQL primary) opens none either, so the other server takes them all.
+
   `cluster` is `config :sms_core, Sms.Core.Cluster` (`:peers`, `:witness`); tests also pass `:connected` (the nodes
-  reached) and `:witness_view` (what the witness answers).
+  reached), `:witness_view` (what the witness answers) and `:fenced`.
   """
+
+  alias Sms.Switch.Fence
 
   @scope :sms_vendor_sessions
   @group :vendor_nodes
@@ -41,6 +46,8 @@ defmodule Sms.Switch.Vendor.Quorum do
         view = Keyword.get(cluster, :witness_view, &seen_by/1)
 
         cond do
+          # This server stepped back (Sms.Switch.Fence): the other one carries the traffic.
+          Keyword.get_lazy(cluster, :fenced, &Fence.fenced?/0) -> []
           reached * 2 <= length(machines) -> []
           witness in connected -> Enum.sort(Enum.uniq(seen ++ view.(witness)))
           true -> seen

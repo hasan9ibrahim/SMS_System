@@ -14,6 +14,7 @@ smpp_cidrs: [0.0.0.0/0]
 pg_version: 16
 clickhouse_version: 24.8.14.39
 nats_version: 2.14.8
+natscli_version: 0.2.4
 nats_exporter_version: 0.17.3
 
 # --- ports
