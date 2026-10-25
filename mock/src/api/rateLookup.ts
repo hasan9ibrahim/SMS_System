@@ -587,10 +587,10 @@ async function trafficByTrunk(dests: Dest[], side: "c" | "v", hours: number): Pr
     asr: number | null;
     dlr: number | null;
   }>(
-    `SELECT c_mccmnc AS code, substring(c_mccmnc, 1, 3) AS mcc, ${side}_trunk_id AS id, count() AS n,
-            round(countIf(is_submit_success = 1) / count() * 100, 1) AS asr,
+    `SELECT c_mccmnc AS code, substring(c_mccmnc, 1, 3) AS mcc, ${side}_trunk_id AS id, countIf(kind = 'attempt') AS n,
+            round(countIf(is_submit_success = 1) / greatest(countIf(kind = 'attempt'), 1) * 100, 1) AS asr,
             round(countIf(msg_status = 'DELIVRD') / greatest(countIf(is_submit_success = 1), 1) * 100, 1) AS dlr
-       FROM edr
+       FROM edr_all
       WHERE submit_time > toDateTime64('${end}', 3) - INTERVAL ${hours} HOUR AND submit_time <= toDateTime64('${end}', 3)
         AND (c_mccmnc IN (${list(nets)}) OR substring(c_mccmnc, 1, 3) IN (${list(ccs)}))
       GROUP BY code, mcc, id`,

@@ -19,8 +19,9 @@ export const WINDOWS: Record<TrafficWindow, { sql: string; bucket: string; ms: n
 /** Margin in the platform currency: each EDR's *_sys amounts are in its company's base currency. */
 const marginSql = (factor: string) => `round(sum((revenue_sys - cost_sys) * ${factor}), 2)`;
 
-const figuresSql = (factor: string) => `count() AS n,
-  round(countIf(is_submit_success = 1) / count() * 100, 1) AS asr,
+// Over edr_all (backend step 11b): attempts on attempt rows, deliveries and money on both.
+const figuresSql = (factor: string) => `countIf(kind = 'attempt') AS n,
+  round(countIf(is_submit_success = 1) / greatest(countIf(kind = 'attempt'), 1) * 100, 1) AS asr,
   round(countIf(msg_status = 'DELIVRD') / greatest(countIf(is_submit_success = 1), 1) * 100, 1) AS dlr,
   ${marginSql(factor)} AS margin`;
 
@@ -46,7 +47,7 @@ export async function refreshRouteTraffic(): Promise<void> {
       (Object.keys(WINDOWS) as TrafficWindow[]).map(async (w) => ({
         w,
         rows: await chRows<{ id: number; n: string; asr: number | null; dlr: number | null; margin: number }>(
-          `SELECT route_rule_id AS id, ${FIGURES} FROM edr
+          `SELECT route_rule_id AS id, ${FIGURES} FROM edr_all
             WHERE submit_time > toDateTime64('${end}', 3) - ${WINDOWS[w].sql} AND submit_time <= toDateTime64('${end}', 3)
               AND route_rule_id > 0
             GROUP BY id`,
@@ -117,17 +118,17 @@ export async function ruleTraffic(ruleId: number, window: TrafficWindow): Promis
     AND submit_time <= toDateTime64('${end}', 3)`;
   const [total, byC, byV, series] = await Promise.all([
     chRows<{ n: string; asr: number | null; dlr: number | null; margin: number }>(
-      `SELECT ${FIGURES} FROM edr WHERE ${where}`,
+      `SELECT ${FIGURES} FROM edr_all WHERE ${where}`,
     ),
     chRows<{ id: number; n: string; asr: number | null; dlr: number | null; margin: number }>(
-      `SELECT c_trunk_id AS id, ${FIGURES} FROM edr WHERE ${where} GROUP BY id ORDER BY n DESC LIMIT 50`,
+      `SELECT c_trunk_id AS id, ${FIGURES} FROM edr_all WHERE ${where} GROUP BY id ORDER BY n DESC LIMIT 50`,
     ),
     chRows<{ id: number; n: string; asr: number | null; dlr: number | null; margin: number }>(
-      `SELECT v_trunk_id AS id, ${FIGURES} FROM edr WHERE ${where} GROUP BY id ORDER BY n DESC LIMIT 50`,
+      `SELECT v_trunk_id AS id, ${FIGURES} FROM edr_all WHERE ${where} GROUP BY id ORDER BY n DESC LIMIT 50`,
     ),
     chRows<{ at: string; n: string; margin: number }>(
-      `SELECT toString(${w.bucket}(submit_time)) AS at, count() AS n, ${marginSql(factor)} AS margin
-         FROM edr WHERE ${where} GROUP BY at ORDER BY at`,
+      `SELECT toString(${w.bucket}(submit_time)) AS at, countIf(kind = 'attempt') AS n, ${marginSql(factor)} AS margin
+         FROM edr_all WHERE ${where} GROUP BY at ORDER BY at`,
     ),
   ]);
   if (!total || !byC || !byV || !series) return empty;

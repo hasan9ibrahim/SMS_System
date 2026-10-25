@@ -396,7 +396,7 @@ async function trafficLast7Days(tables: TableInfo[], mccmncs: string[]) {
   const rows = await chRows<{ t: number; m: string; n: string; rev: string; cost: string }>(
     `SELECT c_rate_table_id AS t, c_mccmnc AS m, sum(is_customer_billable * msg_count) AS n,
             sum(revenue_sys * ${factor}) AS rev, sum(cost_sys * ${factor}) AS cost
-       FROM edr
+       FROM edr_all
       WHERE start_time >= now() - INTERVAL 7 DAY
         AND c_trunk_id IN (${list([...new Set(sell.flatMap((t) => t.trunkIds))]).join(",")})
         AND c_rate_table_id IN (${list(sell.map((t) => t.id)).join(",")})

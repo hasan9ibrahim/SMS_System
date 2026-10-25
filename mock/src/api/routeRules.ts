@@ -921,7 +921,7 @@ export async function vendorQuality(): Promise<Map<number, number>> {
   if (qualityCache && Date.now() - qualityCache.at < 60_000) return qualityCache.dlr;
   const rows = await chRows<{ id: number; dlr: number }>(
     `SELECT v_trunk_id AS id, round(countIf(msg_status = 'DELIVRD') / greatest(countIf(is_submit_success = 1), 1) * 100, 1) AS dlr
-       FROM edr WHERE submit_time > now() - INTERVAL 7 DAY GROUP BY id`,
+       FROM edr_all WHERE submit_time > now() - INTERVAL 7 DAY GROUP BY id`,
   );
   qualityCache = { at: Date.now(), dlr: new Map((rows ?? []).map((r) => [Number(r.id), Number(r.dlr)])) };
   return qualityCache.dlr;

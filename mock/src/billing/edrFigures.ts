@@ -83,7 +83,7 @@ export async function usageLines(
   const rows = await chRows<{ mccmnc: string; rate: number; cur: string; msgs: string; amount: number }>(
     `SELECT ${mccmnc} AS mccmnc, ${byRate ? `toFloat64(${s}_rate)` : "0"} AS rate, ${s}_currency AS cur,
             sum(msg_count * ${billable}) AS msgs, toFloat64(sum(${money})) AS amount
-       FROM edr
+       FROM edr_all
       WHERE ${s}_enterprise_id = ${Number(enterpriseId)}
         AND submit_time >= toDateTime64(${lit(`${from} 00:00:00`)}, 3, ${lit(tz)})
         AND submit_time < toDateTime64(${lit(`${nextDay(to)} 00:00:00`)}, 3, ${lit(tz)})

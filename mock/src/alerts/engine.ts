@@ -71,11 +71,11 @@ export async function storedMinutes(): Promise<Stored | null> {
   const f = await sysToPlatformFactor();
   const q = (col: string) =>
     chRows<{ id: number; m: number; n: string; ok: string; dl: string; rev: number; cost: number; delay: number }>(
-      `SELECT ${col} AS id, toUnixTimestamp(toStartOfMinute(start_time)) AS m, count() AS n,
+      `SELECT ${col} AS id, toUnixTimestamp(toStartOfMinute(start_time)) AS m, countIf(kind = 'attempt') AS n,
               countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
               toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
               toFloat64(sumIf(delivery_delay_ms, msg_status = 'DELIVRD')) / 1000 AS delay
-         FROM edr WHERE start_time >= now() - INTERVAL ${MINUTES} MINUTE AND ${col} > 0 GROUP BY id, m`,
+         FROM edr_all WHERE start_time >= now() - INTERVAL ${MINUTES} MINUTE AND ${col} > 0 GROUP BY id, m`,
       10_000,
     );
   const [c, v] = await Promise.all([q("c_trunk_id"), q("v_trunk_id")]);
@@ -407,9 +407,9 @@ export async function destinationBreakdown(
     .filter(Boolean)
     .join(" OR ");
   const rows = await chRows<{ iso: string; n: string; ok: string; dl: string; rev: number; m: number }>(
-    `SELECT c_country_iso AS iso, count() AS n, countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
+    `SELECT c_country_iso AS iso, countIf(kind = 'attempt') AS n, countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
             toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(revenue_sys * ${f}) - sum(cost_sys * ${f})) AS m
-       FROM edr WHERE start_time >= toStartOfMinute(now()) - INTERVAL ${rule.windowMinutes - 1} MINUTE AND (${who})
+       FROM edr_all WHERE start_time >= toStartOfMinute(now()) - INTERVAL ${rule.windowMinutes - 1} MINUTE AND (${who})
       GROUP BY iso`,
     5_000,
   );

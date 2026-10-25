@@ -888,7 +888,7 @@ export function calculateCharges(request: FastifyRequest, reply: FastifyReply) {
              sum(msg_count * is_${s === "c" ? "customer" : "vendor"}_billable) AS msgs,
              toFloat64(sum(${s === "c" ? "revenue" : "cost"})) AS amount,
              toFloat64(sum(${s === "c" ? "revenue_sys" : "cost_sys"} * ${factor})) AS platform
-        FROM edr
+        FROM edr_all
        WHERE ${s}_enterprise_id IN (${ids.join(",")})
          AND submit_time >= toDateTime64(${lit(`${body.from} 00:00:00`)}, 3, ${lit(tz)})
          AND submit_time < toDateTime64(${lit(`${to} 00:00:00`)}, 3, ${lit(tz)})

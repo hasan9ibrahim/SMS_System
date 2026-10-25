@@ -162,16 +162,19 @@ export const DIMS: Record<ReportDimension, Dim> = {
     label: (id) => `${id} ${causeName(Number(id))}`,
     filter: () => EDR_COLUMNS.causeCode!,
   },
-  deliveryStatus: { id: () => "msg_status", label: (id) => id || "no receipt", filter: () => EDR_COLUMNS.msgStatus! },
+  // The grouped query reads edr_all, where outcome rows carry the status themselves: no outcome overlay here.
+  deliveryStatus: { id: () => "msg_status", label: (id) => id || "no receipt", filter: () => ({ sql: "msg_status" }) },
 };
 
-/** Base sums per group; money "_b" in the platform currency, "_base" in the base currency. */
+/** Base sums per group over `edr_all` (backend step 11b: attempts and the switch's receipt outcomes); counts of
+ * attempts only on attempt rows, statuses, delays, billable counts and money on both. Money "_b" in the platform
+ * currency, "_base" in the base currency. */
 const baseSums = (factor: string) =>
   [
-    "count() AS attempts",
-    "countIf(is_submit_success = 1) AS successful",
-    "countIf(v_trunk_id > 0) AS submitted",
-    "countIf(v_trunk_id > 0 AND is_submit_success = 0) AS failed_submits",
+    "countIf(kind = 'attempt') AS attempts",
+    "countIf(kind = 'attempt' AND is_submit_success = 1) AS successful",
+    "countIf(kind = 'attempt' AND v_trunk_id > 0) AS submitted",
+    "countIf(kind = 'attempt' AND v_trunk_id > 0 AND is_submit_success = 0) AS failed_submits",
     "countIf(msg_status = 'DELIVRD') AS delivered_v",
     "countIf(c_msg_status = 'DELIVRD') AS delivered_c",
     "countIf(is_customer_billable = 1) AS billable_c",
@@ -189,7 +192,7 @@ const baseSums = (factor: string) =>
     "countIf(hlr_is_accomplished = 1) AS hlr_acc",
     "countIf(hlr_is_ported = 1) AS hlr_ported",
     `toFloat64(sum(hlr_cost_sys * ${factor})) AS hlr_cost_b`,
-    "countIf(dlr_reroute = 1 OR attempt_no > 1) AS reroutes",
+    "countIf(kind = 'attempt' AND (dlr_reroute = 1 OR attempt_no > 1)) AS reroutes",
     "countIf(msg_type = 'MO') AS mo",
   ].join(", ");
 export const BASE_COLUMNS = [
@@ -512,9 +515,9 @@ export async function runMasterReport(
     nowMs !== null && window.from.getTime() <= nowMs && nowMs <= window.to.getTime()
       ? { from: new Date(nowMs - 60_000), to: new Date(nowMs + 1) }
       : null;
-  const nowCol = nowWindow ? `countIf(${timeWhere(nowWindow)}) AS now_n` : "0 AS now_n";
+  const nowCol = nowWindow ? `countIf(kind = 'attempt' AND ${timeWhere(nowWindow)}) AS now_n` : "0 AS now_n";
   const grouped = (w: Window, extra = "1") =>
-    `SELECT ${dimIds.join(", ")}, ${baseSums(factor)}, ${nowCol} FROM edr WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
+    `SELECT ${dimIds.join(", ")}, ${baseSums(factor)}, ${nowCol} FROM edr_all WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
       GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}`;
   const withMetrics = (w: Window, extra = "1") =>
     `SELECT *, ${Object.entries(msql)

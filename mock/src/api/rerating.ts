@@ -124,9 +124,9 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
     amt: number;
   }>(
     `SELECT ${p}_enterprise_id AS ent, ${codeCol} AS code, ${input.senderId ? "src_addr" : "''"} AS sender,
-            toString(toStartOfHour(submit_time)) AS h, count() AS n,
+            toString(toStartOfHour(submit_time)) AS h, countIf(kind = 'attempt') AS n,
             sum(msg_count * ${billable}) AS units, toFloat64(sum(${amountCol})) AS amt
-       FROM edr WHERE ${where.join(" AND ")}
+       FROM edr_all WHERE ${where.join(" AND ")}
       GROUP BY ent, code, sender, h`,
     60_000,
   );

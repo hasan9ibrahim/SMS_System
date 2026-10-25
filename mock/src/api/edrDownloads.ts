@@ -12,7 +12,7 @@ import type pg from "pg";
 import type { EdrDownloadInput, FieldDescriptor, FilterCondition, FilterGroup, ListFields } from "@sms/contract";
 import { db, withDb } from "../db.js";
 import { chQuery, chStream } from "../edr.js";
-import { chOrder, chWhere, lit, namesOf, type ChListDef } from "../lists/chEngine.js";
+import { chOrder, chWhere, lit, namesOf, outcomeJoin, type ChListDef } from "../lists/chEngine.js";
 import { EDR_DOWNLOAD_FROM, EDR_DOWNLOAD_SELECT, mapEdrDownload } from "../lists/defs.js";
 import { edrList, failedEdrList } from "../lists/edrDefs.js";
 import { listFields } from "../lists/fields.js";
@@ -168,21 +168,22 @@ export function downloadEdrFile(request: FastifyRequest, reply: FastifyReply) {
 // ---------------------------------------------------------------- export
 
 /** SELECT list with column labels as the header: names as text, booleans as Yes / No. */
-async function exportSelect(pool: pg.Pool, kind: string, columns: string[]) {
+async function exportSelect(pool: pg.Pool, kind: string, columns: string[], expr: (field: string) => string) {
   const def = defOf(kind);
   const byName = new Map(fieldsOf(kind).fields.map((f) => [f.field, f]));
   const parts: string[] = [];
   for (const c of columns) {
     const col = def.columns[c]!;
     const f = byName.get(c)!;
-    let expr = col.sql;
+    const sql = expr(c);
+    let out = sql;
     if (col.names) {
       const names = [...(await namesOf(pool, col.names)).entries()];
-      expr = `transform(${col.names.idSql}, [${names.map(([id]) => id).join(",") || 0}], [${names.map(([, n]) => lit(n)).join(",") || "''"}], '')`;
-    } else if (f.type === "boolean") expr = `if(${col.sql} = 1, 'Yes', 'No')`;
-    else if (c.endsWith("RuleIds")) expr = `arrayStringConcat(arrayMap(x -> toString(x), ${col.sql}), ' ')`;
-    else if (f.type === "datetime") expr = `toString(${col.sql})`;
-    parts.push(`${expr} AS \`${f.label.replace(/`/g, "")}\``);
+      out = `transform(${col.names.idSql}, [${names.map(([id]) => id).join(",") || 0}], [${names.map(([, n]) => lit(n)).join(",") || "''"}], '')`;
+    } else if (f.type === "boolean") out = `if(${sql} = 1, 'Yes', 'No')`;
+    else if (c.endsWith("RuleIds")) out = `arrayStringConcat(arrayMap(x -> toString(x), ${sql}), ' ')`;
+    else if (f.type === "datetime") out = `toString(${sql})`;
+    parts.push(`${out} AS \`${f.label.replace(/`/g, "")}\``);
   }
   return { select: parts.join(", "), fields: columns.map((c) => byName.get(c)!) };
 }
@@ -202,14 +203,13 @@ async function runExport(
   const xlsx = raw.file_type === "xlsx";
   const query = raw.query as { filter?: FilterGroup; search?: string; sort?: { field: string; dir: "asc" | "desc" }[] };
   const def = defOf(kind);
-  const [where, order, sel] = await Promise.all([
-    chWhere(pool, def, query),
-    chOrder(pool, def, query),
-    exportSelect(pool, kind, raw.columns as string[]),
-  ]);
+  const [where, order] = await Promise.all([chWhere(pool, def, query), chOrder(pool, def, query)]);
+  // The switch's outcome rows merged in (final status, delay, receipt-billed money; backend step 11b).
+  const joined = outcomeJoin(def, raw.columns as string[], where);
+  const sel = await exportSelect(pool, kind, raw.columns as string[], joined.expr);
   mkdirSync(DIR, { recursive: true });
   const path = join(DIR, `${kind}_${raw.id}.${xlsx ? "xls" : "csv"}`);
-  const sql = `SELECT ${sel.select} FROM ${def.table} WHERE ${where} ORDER BY ${order} LIMIT ${xlsx ? MAX_XLSX_ROWS : MAX_ROWS}
+  const sql = `SELECT ${sel.select} FROM ${joined.from} WHERE ${where} ORDER BY ${order} LIMIT ${xlsx ? MAX_XLSX_ROWS : MAX_ROWS}
     FORMAT ${xlsx ? "JSONCompactEachRow" : "CSVWithNames"}`;
   const body = Readable.fromWeb((await chStream(sql)) as unknown as WebStream<Uint8Array>, { signal });
   let rows = 0;

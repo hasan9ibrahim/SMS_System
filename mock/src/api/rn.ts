@@ -374,12 +374,12 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
         tables: number[];
       }>(
         `SELECT v_mccmnc AS m,
-                countIf(start_time >= now() - INTERVAL 1 HOUR) AS h1,
-                countIf(start_time >= now() - INTERVAL 1 DAY) AS h24,
-                count() AS d7,
+                countIf(kind = 'attempt' AND start_time >= now() - INTERVAL 1 HOUR) AS h1,
+                countIf(kind = 'attempt' AND start_time >= now() - INTERVAL 1 DAY) AS h24,
+                countIf(kind = 'attempt') AS d7,
                 sum(revenue_sys) AS rev, sum(cost_sys) AS cost,
                 groupUniqArray(50)(c_enterprise_id) AS ents, groupUniqArray(50)(c_rate_table_id) AS tables
-           FROM edr
+           FROM edr_all
           WHERE v_trunk_id = ${trunk} AND start_time >= now() - INTERVAL 7 DAY
             AND v_mccmnc IN (${codes.map((x) => `'${x}'`).join(",")})
           GROUP BY m`,
@@ -399,7 +399,7 @@ export async function checkRn(c: Db, rnId: number): Promise<void> {
   if (back.length) {
     const from = new Date(Math.min(...back.map((l) => (l.stated_from as Date).getTime())));
     const rowsB = await chRows<{ m: string; n: string; cost: string; s: string }>(
-      `SELECT v_mccmnc AS m, toString(toStartOfDay(start_time)) AS s, count() AS n, sum(cost) AS cost FROM edr
+      `SELECT v_mccmnc AS m, toString(toStartOfDay(start_time)) AS s, countIf(kind = 'attempt') AS n, sum(cost) AS cost FROM edr_all
         WHERE v_trunk_id = ${trunk} AND start_time >= toDateTime64('${from.toISOString().slice(0, 19)}', 3, 'UTC')
           AND start_time < toDateTime64('${(rn.received_at as Date).toISOString().slice(0, 19)}', 3, 'UTC')
           AND v_mccmnc IN (${[...new Set(back.map((l) => `'${String(l.mccmnc).replace(/\D/g, "")}'`))].join(",")})

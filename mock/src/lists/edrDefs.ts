@@ -55,13 +55,16 @@ const numberOrMsgIdWhere = (c: { op: string; value?: unknown; values?: unknown[]
   });
   return `(${parts.map((p) => `(${p})`).join(" OR ")})`;
 };
+// The switch writes the final status, delay and receipt-billed money on an outcome row (backend step 11b): the vendor
+// side's values count once the vendor's final status is known.
+const VENDOR_FINAL = "msg_status != ''";
 const CAUSE_TEXT = `transform(command_status, [${CAUSE_CODES.map((c) => c.code).join(",")}], [${CAUSE_CODES.map((c) => lit(c.name)).join(",")}], '')`;
 
 export const EDR_COLUMNS: Record<string, ChColumn> = {
   startTime: { sql: "start_time" },
   submitTime: { sql: "submit_time" },
   submitRespTime: { sql: "submit_resp_time", nullable: true },
-  deliveryTime: { sql: "delivery_time", nullable: true },
+  deliveryTime: { sql: "delivery_time", nullable: true, outcome: { sql: "receipt_time", merge: "status", when: VENDOR_FINAL } },
   id: { sql: "toString(edr_id)" },
   type: { sql: "toString(msg_type)" },
   businessCompanyId: { sql: "business_company_id" },
@@ -104,7 +107,7 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   customerCurrency: { sql: "c_currency" },
   customerSysRate: { sql: "toFloat64(c_sys_rate)" },
   translationRuleIds: { sql: "c_translation_rule_ids", where: has("c_translation_rule_ids") },
-  customerMsgStatus: { sql: "c_msg_status" },
+  customerMsgStatus: { sql: "c_msg_status", outcome: { sql: "c_msg_status", merge: "status" } },
   vendorEnterpriseId: { sql: "v_enterprise_id" },
   vendorEnterprise: named(ENTERPRISES, "v_enterprise_id"),
   vendorTrunkId: { sql: "v_trunk_id" },
@@ -131,22 +134,28 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   isSubmitSuccess: { sql: "is_submit_success" },
   causeCode: { sql: "command_status", numeric: true },
   causeText: { sql: CAUSE_TEXT },
-  msgStatus: { sql: "msg_status" },
-  deliveryError: { sql: "delivery_error" },
-  customerDeliveryError: { sql: "c_delivery_error" },
+  msgStatus: { sql: "msg_status", outcome: { sql: "msg_status", merge: "status" } },
+  deliveryError: { sql: "delivery_error", outcome: { sql: "delivery_error", merge: "status", when: VENDOR_FINAL } },
+  customerDeliveryError: {
+    sql: "c_delivery_error",
+    outcome: { sql: "c_delivery_error", merge: "status", when: "c_msg_status != ''" },
+  },
   networkError: { sql: "network_error" },
   registeredDelivery: { sql: "registered_delivery" },
   vendorRegisteredDelivery: { sql: "v_registered_delivery" },
   msgCount: { sql: "msg_count" },
   udh: { sql: "udh" },
-  deliveryDelaySeconds: { sql: "delivery_delay_ms / 1000" },
+  deliveryDelaySeconds: {
+    sql: "delivery_delay_ms / 1000",
+    outcome: { sql: "delivery_delay_ms / 1000", merge: "status", when: VENDOR_FINAL },
+  },
   isBuffered: { sql: "is_buffered" },
-  isCustomerBillable: { sql: "is_customer_billable" },
-  isVendorBillable: { sql: "is_vendor_billable" },
-  revenue: { sql: "toFloat64(revenue)" },
-  cost: { sql: "toFloat64(cost)" },
-  revenueSys: { sql: "toFloat64(revenue_sys)" },
-  costSys: { sql: "toFloat64(cost_sys)" },
+  isCustomerBillable: { sql: "is_customer_billable", outcome: { sql: "is_customer_billable", merge: "or" } },
+  isVendorBillable: { sql: "is_vendor_billable", outcome: { sql: "is_vendor_billable", merge: "or" } },
+  revenue: { sql: "toFloat64(revenue)", outcome: { sql: "revenue", merge: "add" } },
+  cost: { sql: "toFloat64(cost)", outcome: { sql: "cost", merge: "add" } },
+  revenueSys: { sql: "toFloat64(revenue_sys)", outcome: { sql: "revenue_sys", merge: "add" } },
+  costSys: { sql: "toFloat64(cost_sys)", outcome: { sql: "cost_sys", merge: "add" } },
   hlrProviderId: { sql: "hlr_provider_id" },
   hlrProvider: named(HLR_PROVIDERS, "hlr_provider_id"),
   hlrFetchType: { sql: "hlr_fetch_type" },
@@ -195,8 +204,9 @@ export const edrList: ChListDef<EdrRow> = {
 };
 
 const failedFields = listFields.failed_edrs;
+// Customer-side failures never reached a vendor: no outcome rows to merge.
 export const FAILED_COLUMNS: Record<string, ChColumn> = Object.fromEntries(
-  failedFields.fields.map((f) => [f.field, EDR_COLUMNS[f.field]!]),
+  failedFields.fields.map((f) => [f.field, { ...EDR_COLUMNS[f.field]!, outcome: undefined }]),
 );
 export const failedEdrList: ChListDef<FailedEdrRow> = {
   fields: failedFields,

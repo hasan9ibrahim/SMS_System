@@ -19,15 +19,16 @@ const REFRESH_MS = 5 * 60_000;
 /** Pulls the last 24 hours of figures from the EDR store and upserts them. Returns rows written, or null. */
 export async function refreshQbrStats(pool: Db = db()): Promise<number | null> {
   const side = (s: "customer" | "vendor", col: string) => `
-    SELECT '${s}' AS side, ${col} AS trunk, c_mccmnc AS code, count() AS n,
-           round(countIf(is_submit_success = 1) / count() * 100, 1) AS asr,
+    SELECT '${s}' AS side, ${col} AS trunk, c_mccmnc AS code, countIf(kind = 'attempt') AS n,
+           round(countIf(is_submit_success = 1) / greatest(countIf(kind = 'attempt'), 1) * 100, 1) AS asr,
            if(countIf(is_submit_success = 1) = 0, NULL,
               round(countIf(msg_status = 'DELIVRD') / countIf(is_submit_success = 1) * 100, 1)) AS dlr,
            if(countIf(msg_status = 'DELIVRD') = 0, NULL,
               round(avgIf(delivery_delay_ms, msg_status = 'DELIVRD') / 1000, 1)) AS add_s
-      FROM edr
+      FROM edr_all
      WHERE submit_time > ${edrNowSql()} - INTERVAL 24 HOUR AND ${col} > 0
-     GROUP BY trunk, code`;
+     GROUP BY trunk, code
+    HAVING n > 0`;
   const rows = await chRows<{
     side: string;
     trunk: number;

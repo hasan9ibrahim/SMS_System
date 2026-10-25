@@ -820,10 +820,10 @@ export async function runAlertCheck(c: Db, id: number): Promise<TrafficAlertChec
     a.mccmnc ? `c_mccmnc = ${lit(a.mccmnc)}` : null,
   ].filter(Boolean);
   const rows = await chRows<{ n: string; ok: string; dlv: string; rev: number; cost: number; delay: number | null }>(
-    `SELECT count() AS n, countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dlv,
+    `SELECT countIf(kind = 'attempt') AS n, countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dlv,
             toFloat64(sum(revenue_sys)) AS rev, toFloat64(sum(cost_sys)) AS cost,
             avgIf(delivery_delay_ms, msg_status = 'DELIVRD') / 1000 AS delay
-       FROM edr WHERE ${where.join(" AND ")}`,
+       FROM edr_all WHERE ${where.join(" AND ")}`,
     15_000,
   );
   const r = rows?.[0];
