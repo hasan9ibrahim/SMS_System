@@ -15451,10 +15451,11 @@ export type components = {
       marginPct: number | null;
       /** @description Why the message would be rejected, if it would. */
       blocked: string | null;
+      /** @description Test SMS. In production the switch answers whether it took the message (ACCEPTD, with its message id; the receipt then shows in EDR Search) or refused it (REJECTD with the reason, messageId empty); a Test SMS is never billed to the customer and the customer gets no receipt for it (backend step 11c). */
       testSms: {
         messageId: string;
         /** @enum {string} */
-        status: "DELIVRD" | "UNDELIV" | "REJECTD" | "EXPIRED";
+        status: "ACCEPTD" | "DELIVRD" | "UNDELIV" | "REJECTD" | "EXPIRED";
         detail: string;
       } | null;
     };
@@ -19246,19 +19247,6 @@ export type components = {
     };
   };
   responses: {
-    /**
-     * @description Production only (backend step 11): this action needs a command to the SMPP switch (send a test SMS, resubmit,
-     *     stop or start a bind, capture packets, run a diagnosis on the switch servers), which is not available yet. The
-     *     screen says so instead of showing simulated results. Elsewhere (the trial on fake data) it is simulated.
-     */
-    SwitchCommandPending: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/problem+json": components["schemas"]["Problem"];
-      };
-    };
     /** @description The request does not match the contract (e.g. unknown filter field or operator) */
     BadRequest: {
       headers: {
@@ -28209,7 +28197,6 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28645,7 +28632,6 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28672,7 +28658,6 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28728,7 +28713,6 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       409: components["responses"]["Conflict"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28770,7 +28754,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description The pcap file (gzip-compressed once its quarter is over) */
+      /** @description The quarter's traffic (gzip-compressed once its quarter is over). In production each switch server's recording file of the quarter, one after the other (pcapng sections; Wireshark opens them as one file). */
       200: {
         headers: {
           [name: string]: unknown;
@@ -28782,7 +28766,7 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
-      501: components["responses"]["SwitchCommandPending"];
+      503: components["responses"]["Unavailable"];
     };
   };
   extractRecording: {
@@ -28809,7 +28793,6 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28914,7 +28897,6 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28943,7 +28925,6 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28971,7 +28952,6 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
-      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };

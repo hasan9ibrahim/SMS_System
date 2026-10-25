@@ -35,6 +35,9 @@ import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { archiver, badInput, contactEmails } from "./switchTools.js";
 import { inTransaction } from "./views.js";
+import { production } from "../mode.js";
+import { switchProblem } from "../switch/commands.js";
+import { switchRepush } from "../switch/operations.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -379,6 +382,17 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
            AND edr_id NOT IN (SELECT edr_id FROM edr_receipt WHERE kind = 'outcome' AND edr_id IN (${inList}) AND msg_status = 'DELIVRD')`,
       );
       const me = await getCurrentUser();
+      // Production (backend step 11c): a switch server sends each message again as a new attempt with the request id;
+      // the outcome is counted from its EDRs (jobs/switchJobs.ts).
+      if (production) {
+        try {
+          const id = await switchRepush(pool, b.vendorTrunkId, eligible.map((r) => r.id), ids.length - eligible.length, me.id);
+          const { rows: out } = await pool.query(`SELECT ${REPUSH_SELECT} FROM ${REPUSH_FROM} WHERE r.id = $1`, [id]);
+          return reply.code(201).send(mapRepush(out[0]));
+        } catch (err) {
+          return switchProblem(reply, err);
+        }
+      }
       const { rows } = await pool.query(
         `INSERT INTO repush_requests (vendor_trunk_id, edr_count, skipped, created_by_id) VALUES ($1, $2, $3, $4) RETURNING id`,
         [b.vendorTrunkId, eligible.length, ids.length - eligible.length, me.id],

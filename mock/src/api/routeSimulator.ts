@@ -2,7 +2,8 @@
 // trunk's translation rules and HLR rule (§13.2), the destination, the customer rate, the route rules
 // in order (§6.3) and the chosen vendor with its cost and the margin. A vendor trunk can be tested
 // directly (team trial round 1): the route rules are shown but the message goes to that vendor at its
-// own buy rate. Test SMS answers with a simulated outcome; no EDR is written and nothing is sent.
+// own buy rate. Test SMS answers with a simulated outcome; no EDR is written and nothing is sent, except in production,
+// where the switch sends it (backend step 11c).
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { RouteSimulatorInput, RouteSimulatorResult } from "@sms/contract";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
@@ -12,6 +13,8 @@ import { listIdsOf, loadRulesInOrder, messageContext, routeThrough, vendorOption
 import { skipEgressBlocked } from "./egress.js";
 import { badInput } from "./switchTools.js";
 import { runTrunkRules } from "./translationRules.js";
+import { production } from "../mode.js";
+import { switchTestSms } from "../switch/operations.js";
 
 export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as RouteSimulatorInput;
@@ -166,7 +169,21 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
                     ? `Blocked by a translation rule on vendor trunk ${egressName}`
                     : null;
     let testSms: RouteSimulatorResult["testSms"] = null;
-    if (b.testSms) {
+    // Production (backend step 11c): the switch sends it, through its own rules (or straight to the chosen vendor).
+    if (b.testSms && production)
+      testSms = blocked
+        ? { messageId: "", status: "REJECTD", detail: blocked }
+        : await switchTestSms({
+            customerTrunkId: b.customerTrunkId,
+            receiver: receiverIn,
+            sender: b.senderId,
+            text: b.text,
+            dataCoding: b.dataCoding,
+            sourceTon: b.sourceTon,
+            sourceNpi: b.sourceNpi,
+            vendorTrunkId: b.vendorTrunkId,
+          });
+    else if (b.testSms) {
       const messageId = Math.floor(Math.random() * 2 ** 48)
         .toString(16)
         .padStart(12, "0");
