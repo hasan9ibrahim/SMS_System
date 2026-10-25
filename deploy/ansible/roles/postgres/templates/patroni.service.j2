@@ -1,0 +1,20 @@
+# {{ ansible_managed }} (deploy/ansible/roles/postgres)
+[Unit]
+Description=Patroni (PostgreSQL {{ pg_version }}, cluster sms)
+After=network-online.target etcd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ExecStart=/usr/bin/patroni /etc/patroni/config.yml
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+TimeoutSec=60
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

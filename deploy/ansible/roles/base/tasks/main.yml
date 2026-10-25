@@ -1,0 +1,82 @@
+# Every machine: packages, names, clock, kernel settings, logs, firewall (backend step 8).
+- name: Packages
+  ansible.builtin.apt:
+    name: [chrony, nftables, curl, jq, htop, iotop, sysstat, unzip, gnupg, ca-certificates, python3-psycopg2,
+           unattended-upgrades]
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: The three machines by name
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} sms cluster"
+    block: |
+      {% for h in cluster_hosts %}
+      {{ hostvars[h].private_ip }} {{ h }}
+      {% endfor %}
+  # Docker manages /etc/hosts in the lab containers (a bind mount that cannot be replaced, only written in place).
+  when: not lab
+
+- name: The three machines by name (lab)
+  ansible.builtin.shell: |
+    grep -q "sms cluster" /etc/hosts || cat >> /etc/hosts <<'HOSTS'
+    # sms cluster
+    {% for h in cluster_hosts %}
+    {{ hostvars[h].private_ip }} {{ h }}
+    {% endfor %}
+    HOSTS
+  changed_when: false
+  when: lab
+
+- name: Clock in UTC, kept by chrony (receipt times and billing cut-offs must not depend on the node, plan §4)
+  ansible.builtin.command: timedatectl set-timezone UTC
+  changed_when: false
+  when: not lab
+
+- name: chrony running
+  ansible.builtin.systemd_service: {name: chrony, enabled: true, state: started}
+  when: not lab
+
+- name: Kernel settings for many connections and the databases
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/60-sms.conf
+    content: |
+      net.core.somaxconn = 4096
+      net.ipv4.tcp_max_syn_backlog = 4096
+      net.ipv4.ip_local_port_range = 10240 65000
+      net.ipv4.tcp_keepalive_time = 60
+      net.ipv4.tcp_keepalive_intvl = 10
+      net.ipv4.tcp_keepalive_probes = 6
+      vm.swappiness = 1
+      vm.overcommit_memory = 1
+      fs.file-max = 2097152
+  notify: sysctl
+  when: not lab
+
+- name: Journal settings folder
+  ansible.builtin.file: {path: /etc/systemd/journald.conf.d, state: directory, mode: "0755"}
+
+- name: Journal kept to 2 GB
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/sms.conf
+    content: "[Journal]\nSystemMaxUse=2G\n"
+  notify: journald
+
+- name: Security updates installed automatically (no automatic reboot)
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52sms-unattended
+    content: |
+      Unattended-Upgrade::Allowed-Origins { "${distro_id}:${distro_codename}-security"; };
+      Unattended-Upgrade::Automatic-Reboot "false";
+  when: not lab
+
+- name: Firewall rules
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    mode: "0644"
+    validate: nft -c -f %s
+  notify: nftables
+
+- name: Firewall on
+  ansible.builtin.systemd_service: {name: nftables, enabled: true, state: started}

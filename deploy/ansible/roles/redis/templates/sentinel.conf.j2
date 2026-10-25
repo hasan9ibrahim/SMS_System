@@ -1,0 +1,16 @@
+# {{ ansible_managed }} (deploy/ansible/roles/redis). Written once: Sentinel records the current primary and the other
+# sentinels here.
+bind 127.0.0.1 {{ private_ip }}
+port {{ ports.sentinel }}
+daemonize no
+supervised systemd
+pidfile /run/sentinel/redis-sentinel.pid
+logfile /var/log/redis/redis-sentinel.log
+dir /var/lib/redis
+requirepass {{ vault_redis_password }}
+sentinel announce-ip {{ private_ip }}
+sentinel monitor {{ redis_sentinel_group }} {{ hostvars[groups['servers'][0]].private_ip }} {{ ports.redis }} 2
+sentinel auth-pass {{ redis_sentinel_group }} {{ vault_redis_password }}
+sentinel down-after-milliseconds {{ redis_sentinel_group }} 5000
+sentinel failover-timeout {{ redis_sentinel_group }} 30000
+sentinel parallel-syncs {{ redis_sentinel_group }} 1

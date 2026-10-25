@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }} (deploy/ansible/roles/backup). Nightly off-site backup, on the PostgreSQL primary only.
+#   sms-backup            full on Sunday, else differential / incremental
+#   sms-backup full       a full backup now
+set -euo pipefail
+prom=/var/lib/prometheus/node-exporter/backup.prom
+# The name of the last full ClickHouse backup, in etcd so whichever server is primary next finds it.
+last_full() { ETCDCTL_API=3 etcdctl --endpoints=http://127.0.0.1:{{ ports.etcd_client }} get --print-value-only /sms/backup/ch-last-full; }
+
+curl -sf -m 5 http://127.0.0.1:{{ ports.patroni }}/primary >/dev/null || { echo "not the primary: nothing to do"; exit 0; }
+
+kind="${1:-}"
+[[ -z "$kind" ]] && { [[ "$(date -u +%u)" == 7 ]] && kind=full || kind=diff; }
+
+record() { # metric kind value: replaces that one line in the file node_exporter reads
+  touch "$prom"
+  grep -v "^$1{kind=\"$2\"}" "$prom" > "$prom.tmp" || true
+  echo "$1{kind=\"$2\"} $3" >> "$prom.tmp"
+  mv "$prom.tmp" "$prom"
+}
+
+# PostgreSQL
+start=$(date +%s)
+sudo -u postgres pgbackrest --stanza=sms --type="$kind" backup
+record sms_backup_last_success_timestamp_seconds postgres "$(date +%s)"
+record sms_backup_duration_seconds postgres "$(( $(date +%s) - start ))"
+
+# ClickHouse: full on Sunday (or when no full is known here), else incremental on the last full.
+start=$(date +%s)
+stamp=$(date -u +%Y%m%d-%H%M)
+base=""
+full="$(last_full || true)"
+if [[ "$kind" == full || -z "$full" ]]; then
+  target="clickhouse/full-$stamp"
+else
+  target="clickhouse/incr-$stamp"
+  base=", base_backup = S3('https://{{ s3_endpoint }}:{{ s3_port }}/{{ s3_bucket }}/$full', '{{ vault_s3_access_key }}', '{{ vault_s3_secret_key }}')"
+fi
+clickhouse-client --user {{ ch_app_user }} --password '{{ vault_clickhouse_password }}' --query "
+  BACKUP DATABASE {{ ch_database }}
+  TO S3('https://{{ s3_endpoint }}:{{ s3_port }}/{{ s3_bucket }}/$target', '{{ vault_s3_access_key }}', '{{ vault_s3_secret_key }}')
+  SETTINGS compression_method = 'zstd'$base" >/dev/null
+if [[ "$target" == clickhouse/full-* ]]; then
+  ETCDCTL_API=3 etcdctl --endpoints=http://127.0.0.1:{{ ports.etcd_client }} put /sms/backup/ch-last-full "$target" >/dev/null
+fi
+record sms_backup_last_success_timestamp_seconds clickhouse "$(date +%s)"
+record sms_backup_duration_seconds clickhouse "$(( $(date +%s) - start ))"
+echo "backup done: postgres $kind, $target"

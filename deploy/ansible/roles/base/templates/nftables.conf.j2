@@ -1,0 +1,49 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }} (deploy/ansible/roles/base). Everything not listed is dropped. Only this table is replaced;
+# rules other software keeps in other tables stay.
+table inet sms
+delete table inet sms
+
+define cluster = { {{ cluster_ips | join(', ') }} }
+define admin = { {{ admin_cidrs | join(', ') }} }
+define monitoring = { {{ witness_ip }} }
+
+table inet sms {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    ct state established,related accept
+    iif lo accept
+    ip protocol icmp accept
+    ip6 nexthdr icmpv6 accept
+
+    tcp dport 22 ip saddr $admin accept
+
+    # Between the three machines: etcd, PostgreSQL (Patroni), Redis and Sentinel, NATS, ClickHouse and Keeper, the
+    # switch's cluster (epmd + one distribution port).
+    ip saddr $cluster tcp dport { {{ [ports.etcd_client, ports.etcd_peer, ports.pg, ports.pg_primary, ports.patroni,
+      ports.redis, ports.sentinel, ports.nats, ports.nats_cluster, ports.ch_native, ports.ch_http, ports.ch_interserver,
+      ports.keeper, ports.keeper_raft, ports.epmd, ports.erlang_dist] | join(', ') }} } accept
+
+    # Prometheus on the witness scrapes every machine.
+    ip saddr $monitoring tcp dport { {{ [ports.node_exporter, ports.pg_exporter, ports.redis_exporter,
+      ports.nats_exporter, ports.nats_monitor, ports.ch_metrics, ports.switch_http, ports.patroni,
+      ports.etcd_client] | join(', ') }} } accept
+
+{% if inventory_hostname in groups['servers'] %}
+    # SMPP from the partners (Q33).
+    ip saddr { {{ smpp_cidrs | join(', ') }} } tcp dport { {{ (ports.smpp + ports.smpp_tls) | join(', ') }} } accept
+{% endif %}
+{% if inventory_hostname in groups['witness'] %}
+    # Grafana, Prometheus and Alertmanager for the team.
+    ip saddr $admin tcp dport { {{ [ports.grafana, ports.prometheus, ports.alertmanager] | join(', ') }} } accept
+{% endif %}
+  }
+
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority 0; policy accept;
+  }
+}

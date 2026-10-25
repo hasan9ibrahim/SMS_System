@@ -1,0 +1,18 @@
+# {{ ansible_managed }} (deploy/ansible/roles/redis)
+bind 127.0.0.1 {{ private_ip }}
+port {{ ports.redis }}
+protected-mode yes
+requirepass {{ vault_redis_password }}
+masterauth {{ vault_redis_password }}
+replica-announce-ip {{ private_ip }}
+dir /var/lib/redis
+pidfile /run/redis/redis-server.pid
+logfile /var/log/redis/redis-server.log
+supervised systemd
+# Counters survive a restart: every write in the append-only file, flushed each second.
+appendonly yes
+appendfsync everysec
+save 900 1
+maxmemory {{ redis_maxmemory | default('4gb' if not lab else '256mb') }}
+maxmemory-policy noeviction
+tcp-keepalive 60

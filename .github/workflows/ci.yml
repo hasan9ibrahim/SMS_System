@@ -185,3 +185,21 @@ jobs:
       - run: mix compile --warnings-as-errors
       - run: mix credo --strict
       - run: mix test --cover
+
+  # The servers' setup and deploys (deploy/ansible, backend step 8): the playbooks parse, the lab inventory resolves
+  # every variable they use, and the alert rules are valid PromQL.
+  deploy:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: deploy/ansible
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install --quiet ansible-core==2.17.*
+      - run: ansible-playbook site.yml deploy.yml --syntax-check
+      - run: ansible-inventory --list > /dev/null
+      - name: Alert rules
+        run: |
+          curl -sSfL https://github.com/prometheus/prometheus/releases/download/v2.53.4/prometheus-2.53.4.linux-amd64.tar.gz \
+            | tar -xz --strip-components=1 -C /tmp prometheus-2.53.4.linux-amd64/promtool
+          /tmp/promtool check rules roles/monitoring/files/alerts.yml

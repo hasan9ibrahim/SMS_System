@@ -26,7 +26,10 @@ defmodule Sms.Switch.Pipeline.Sender do
     name: "pipeline-sender",
     filter: "sms.msg.accepted",
     max_deliver: 5,
-    ack_wait_ms: 300_000,
+    # A message may take minutes (30 s per vendor, re-routes); it is reported in progress every 10 s, so one whose
+    # sender died with its connection is handed out again within 30 s (backend step 8).
+    ack_wait_ms: 30_000,
+    progress_ms: 10_000,
     concurrency: 50
 
   require Logger

@@ -52,6 +52,9 @@ defmodule Sms.Core.Bus.Local do
   def backlog(_consumer), do: {:ok, 0}
 
   @impl Sms.Core.Bus.Adapter
+  def waiting(_consumer), do: {:ok, 0}
+
+  @impl Sms.Core.Bus.Adapter
   def ensure_queue(queue), do: GenServer.call(__MODULE__, {:ensure_queue, queue})
 
   @impl Sms.Core.Bus.Adapter

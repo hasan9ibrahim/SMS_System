@@ -18,15 +18,21 @@ defmodule Sms.Switch.Vendor.Manager do
     * a changed trunk is passed to its sessions, which apply it in place or reconnect (`Trunk.reconnect_needed?/2`).
 
   A session that ends on its own (a crash) is started again on the next reconcile, a second later.
+
+  On the servers, the witness VM decides when the two servers lose each other (`Sms.Switch.Vendor.Quorum`, backend
+  step 8): the nodes the connections are split among are checked every `@quorum_ms`, and a node in the minority opens
+  none.
   """
   use GenServer
   require Logger
-  alias Sms.Switch.Vendor.{Receipts, Session, TrunkStore}
+  alias Sms.Switch.Fence
+  alias Sms.Switch.Vendor.{Quorum, Receipts, Session, TrunkStore}
 
   @scope :sms_vendor_sessions
   @group :vendor_nodes
   @sessions Sms.Switch.Vendor.Sessions
   @restart_after_ms 1_000
+  @quorum_ms 2_000
 
   @doc "Options: `:session` (session settings) and `:receipts` (the `Sms.Switch.Vendor.Receipts` module)."
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -67,9 +73,11 @@ defmodule Sms.Switch.Vendor.Manager do
       monitor: ref,
       sessions: %{},
       trunks: %{},
+      shared: nil,
       timer: nil
     }
 
+    _ = if Quorum.enabled?(), do: Process.send_after(self(), :quorum, @quorum_ms)
     {:ok, state, {:continue, :reconcile}}
   end
 
@@ -82,6 +90,15 @@ defmodule Sms.Switch.Vendor.Manager do
 
   @impl true
   def handle_info(:reconcile, state), do: {:noreply, do_reconcile(%{state | timer: nil})}
+
+  # The nodes sharing the connections, as the witness sees them: worked out again when they changed.
+  def handle_info(:quorum, state) do
+    Process.send_after(self(), :quorum, @quorum_ms)
+
+    if state.shared != nil and Quorum.nodes(nodes()) != state.shared,
+      do: {:noreply, do_reconcile(state)},
+      else: {:noreply, state}
+  end
 
   # A node joined or left the vendor side.
   def handle_info({ref, change, @group, _pids}, %{monitor: ref} = state)
@@ -121,11 +138,14 @@ defmodule Sms.Switch.Vendor.Manager do
   end
 
   defp apply_trunks(state, trunks) do
-    nodes = nodes()
+    membership(Fence.fenced?())
+    nodes = Quorum.nodes(nodes())
     by_id = Map.new(trunks, &{&1.id, &1})
+    log_quorum(state.shared, nodes)
 
     wanted =
       for trunk <- trunks,
+          node() in nodes,
           trunk.status == :active,
           index <- 0..(trunk.max_connections - 1)//1,
           owner(trunk.id, index, nodes) == node(),
@@ -159,15 +179,39 @@ defmodule Sms.Switch.Vendor.Manager do
         end
       end)
 
-    state = %{state | sessions: sessions, trunks: by_id}
+    state = %{state | sessions: sessions, trunks: by_id, shared: nodes}
 
     if MapSet.size(wanted) > map_size(sessions),
       do: schedule(state, @restart_after_ms),
       else: state
   end
 
+  # A server that stepped back (Sms.Switch.Fence) leaves the group, so the witness stops counting it and the other
+  # server takes its connections over; it joins again when it resumes.
+  defp membership(fenced) do
+    here? = self() in :pg.get_local_members(@scope, @group)
+
+    cond do
+      fenced and here? -> :pg.leave(@scope, @group, self())
+      not fenced and not here? -> :pg.join(@scope, @group, self())
+      true -> :ok
+    end
+  end
+
+  defp log_quorum(before, []) when before != [],
+    do:
+      Logger.error(
+        "vendor side: neither the other server nor the witness reached; no vendor connection here"
+      )
+
+  defp log_quorum([], nodes) when nodes != [],
+    do: Logger.warning("vendor side: majority reached again; sharing with #{inspect(nodes)}")
+
+  defp log_quorum(_before, _nodes), do: :ok
+
   defp stop_reason(nil, _nodes), do: :trunk_removed
   defp stop_reason(%{status: :inactive}, _nodes), do: :trunk_inactive
+  defp stop_reason(_trunk, []), do: :no_quorum
   defp stop_reason(_trunk, _nodes), do: :moved_to_other_node
 
   defp start_session(state, trunk, index) do

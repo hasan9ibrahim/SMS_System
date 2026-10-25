@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Sim.Run do
   Options:
 
     * `--ports` (2775): the switch nodes' customer ports, comma-separated; sessions are spread over them;
-    * `--host` (127.0.0.1);
+    * `--host` (127.0.0.1), or several servers comma-separated (each gets sessions on every `--ports` port);
     * `--trunks` (10) customer trunks and `--sessions` (4) connections per trunk; `--window` (100) answers
       waiting per connection; `--multipart` (5) percent of messages sent as 2 parts;
     * `--resp-ms` (0-0) the fake vendors' answer time, `--dlr-ms` (200-1000) their receipt delay, `--vendor-errors`

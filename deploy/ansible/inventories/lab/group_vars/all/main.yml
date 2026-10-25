@@ -1,0 +1,13 @@
+# Lab only: containers cannot set the clock or kernel settings, and the hosts' docker network is the admin network.
+lab: true
+admin_cidrs: [10.88.0.0/24]
+# Off-site backups go to the lab's S3 stand-in (self-signed certificate).
+s3_endpoint: 10.88.0.20
+s3_port: 9000
+s3_region: us-east-1
+s3_bucket: sms-backups
+s3_verify_tls: false
+# No real Telegram in the lab: alerts are kept in Alertmanager only.
+telegram_chat_ids: []
+# Lab disk is small: one hour of recorded traffic.
+pcap_files: 4

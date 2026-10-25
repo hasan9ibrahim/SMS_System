@@ -1,0 +1,46 @@
+# The switch's service and settings on every machine (backend step 8): the two servers run it with traffic, the
+# witness runs the same release as SWITCH_ROLE=witness (no data store, no SMPP) to break ties between the servers
+# (Sms.Switch.Vendor.Quorum). The release itself is installed by deploy.yml.
+- name: sms user
+  ansible.builtin.user: {name: "{{ switch_user }}", system: true, shell: /usr/sbin/nologin, home: "{{ switch_root }}", create_home: false}
+
+- name: Folders
+  ansible.builtin.file: {path: "{{ item }}", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0750"}
+  loop: ["{{ switch_root }}", "{{ switch_root }}/releases", /var/log/sms]
+
+- name: Settings folder
+  ansible.builtin.file: {path: /etc/sms, state: directory, owner: root, group: "{{ switch_user }}", mode: "0750"}
+
+- name: Settings (secrets included; read by the service only)
+  ansible.builtin.template: {src: switch.env.j2, dest: /etc/sms/switch.env, owner: root, group: "{{ switch_user }}", mode: "0640"}
+  notify: switch restart
+
+- name: Service
+  ansible.builtin.template: {src: sms-switch.service.j2, dest: /etc/systemd/system/sms-switch.service, mode: "0644"}
+  notify: switch restart
+
+- name: Step-back script (servers; Sms.Switch.Fence)
+  ansible.builtin.template: {src: sms-step-back.j2, dest: /usr/local/sbin/sms-step-back, owner: root, group: root, mode: "0755"}
+  when: inventory_hostname in groups['servers']
+
+- name: The switch may run exactly that script as root
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/sms-step-back
+    content: "{{ switch_user }} ALL=(root) NOPASSWD: /usr/local/sbin/sms-step-back fenced, /usr/local/sbin/sms-step-back resumed\n"
+    mode: "0440"
+    validate: visudo -cf %s
+  when: inventory_hostname in groups['servers']
+
+- name: The hook the switch calls
+  ansible.builtin.copy:
+    dest: /usr/local/bin/sms-fence-hook
+    content: "#!/bin/sh\nexec sudo -n /usr/local/sbin/sms-step-back \"$1\"\n"
+    mode: "0755"
+  when: inventory_hostname in groups['servers']
+
+- name: Whether a release is installed yet
+  ansible.builtin.stat: {path: "{{ switch_root }}/current/bin/sms"}
+  register: current
+
+- name: Enabled (started by deploy.yml once a release is installed)
+  ansible.builtin.systemd_service: {name: sms-switch, enabled: true, daemon_reload: true}

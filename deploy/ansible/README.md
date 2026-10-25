@@ -1,0 +1,125 @@
+# Servers: setup, deploys, failover (backend step 8)
+
+The two servers and the witness VM are set up and updated from this folder with Ansible, run from the engineer's
+machine over SSH. Everything here was rehearsed on three local machines (`deploy/lab`, results in
+`docs/FAILOVER_DRILLS.md`); on the real servers it is the same playbooks with the production inventory.
+
+Fake data only until the go-live (CLAUDE.md rule 1).
+
+## What runs where
+
+| | srv-a | srv-b | witness VM |
+| --- | --- | --- | --- |
+| Switch (`sms-switch`) | traffic | traffic | `SWITCH_ROLE=witness`: no traffic, breaks ties |
+| PostgreSQL 16 (Patroni) | primary or standby | primary or standby | – |
+| HAProxy → current primary | 127.0.0.1:5432 | 127.0.0.1:5432 | – |
+| etcd (Patroni's lease) | ✓ | ✓ | ✓ |
+| Redis | primary or replica | primary or replica | – |
+| Redis Sentinel | ✓ | ✓ | ✓ |
+| NATS JetStream (every event on all three) | ✓ | ✓ | ✓ (third copy) |
+| ClickHouse (EDRs, replicated) | ✓ (+ Keeper) | ✓ (+ Keeper) | Keeper only |
+| Prometheus, Alertmanager, Grafana | – | – | ✓ |
+| Exporters, backups, traffic recording | ✓ | ✓ | exporters |
+
+Every vote (etcd, Sentinel, NATS, Keeper, the switch's own) needs 2 of the 3 machines (BACKEND_PLAN §3.5).
+
+**When the two servers lose each other** but both still reach the witness, the one holding the PostgreSQL primary
+keeps all traffic; the other steps back (`Sms.Switch.Fence`): it unbinds its customers (they reconnect to the other
+server's address), closes its vendor connections (the other server opens them all) and stops its NATS, Redis and
+ClickHouse so every primary moves to the active side. When the link is back it resumes on its own. A server that is
+really down (the witness lost it too) is simply taken over.
+
+## Sizing (production)
+
+| Machine | CPU / RAM | Disk |
+| --- | --- | --- |
+| Each server | 16+ cores, 64 GB | NVMe: ~1.2 TB NATS (2 days at 50 M/day), ClickHouse EDRs (~30 GB/day compressed), PostgreSQL, ~3.6 TB traffic recording (60 days; or lower `pcap_files`) |
+| Witness VM | 2–4 cores, 8 GB | ~1.2 TB for the third NATS copy, plus Prometheus (30 days) |
+
+The witness holds a full copy of the event bus. A smaller witness disk means shorter bus retention (`max_age_days`).
+
+## First setup
+
+1. **Machines:** Ubuntu 24.04, root SSH key access from the engineer's machine, a private network (or VPN) between
+   the three. Two servers in two data centres of the same provider, the witness at another provider (Q32).
+2. **Bucket:** create the S3 bucket for backups at the storage provider, and an access key limited to it.
+3. **Inventory:** copy `inventories/production.example` to `inventories/production`, fill in `hosts.yml` (public and
+   private addresses) and `group_vars/all/main.yml` (admin ranges, partner ranges, S3, Telegram chats). Then:
+
+   ```sh
+   cp inventories/production/group_vars/all/secrets.example.yml inventories/production/group_vars/all/secrets.yml
+   # fill in every CHANGE_ME (openssl rand -hex 24), then
+   ansible-vault encrypt inventories/production/group_vars/all/secrets.yml
+   ```
+
+   Keep the vault password and a copy of `vault_pgbackrest_cipher_pass` outside the servers: without it the backups
+   cannot be read.
+4. **Install:** `pip install ansible-core`, then
+
+   ```sh
+   ansible-playbook -i inventories/production site.yml --ask-vault-pass
+   ```
+
+   `site.yml` is safe to run again; run it after any change to the inventory or the roles.
+5. **Telegram:** create a bot with @BotFather, add it to the engineer's and the NOC's chats, put the token and the
+   chat ids in the inventory, run `site.yml` again. Test: stop the switch on one server for two minutes.
+
+## Deploying a new version
+
+```sh
+./build-release.sh                       # on Ubuntu 24.04; prints the release id, e.g. 1a2b3c4d5e
+ansible-playbook -i inventories/production deploy.yml -e release=1a2b3c4d5e --ask-vault-pass
+```
+
+`deploy.yml` uploads the release to the three machines, runs the database migrations once (from srv-a), then
+restarts srv-a, srv-b and the witness one at a time: each stops cleanly (customers unbound, vendors unbound, queued
+work left to the other server), starts the new version, and must be healthy, back in the cluster and have its routing
+configuration before the next one goes. In the lab, a deploy under 100 msg/s took about a minute with no message lost
+(2 submits refused, 49 resent by the customers after their session closed).
+
+**Migrations** must work with the version still running on the other server: add columns and tables, never rename or
+drop in the same release (spec §14.1). `bin/sms eval "Sms.Core.Release.migrate()"` refuses a file whose content
+changed after it was applied.
+
+**Rollback:** the same command with the previous release id. The last five releases stay on the machines. A
+migration is not rolled back; that is why migrations must suit both versions.
+
+## Planned maintenance
+
+| Task | How |
+| --- | --- |
+| Move the PostgreSQL primary (before working on its server) | `patronictl -c /etc/patroni/config.yml switchover --candidate srv-b` (no message lost in the lab, no error) |
+| Take a server out | `systemctl stop sms-switch` on it (the other takes customers and vendors), then the services |
+| Reboot a server | switchover first if it is the primary, then reboot; it rejoins by itself |
+| Check the cluster | `patronictl -c /etc/patroni/config.yml list`, `redis-cli -p 26379 -a … sentinel masters`, `nats server ls` (with `--user sms --password …`), Grafana |
+| Restore test by hand | `sms-restore-test` on the standby (monthly by timer) |
+| Backup by hand | `sms-backup full` on the primary |
+
+## Backups (Q31)
+
+- PostgreSQL: pgBackRest to the bucket, encrypted. WAL archived continuously, full backup on Sunday, differential the
+  other nights, four full backups kept. Point-in-time restore: `pgbackrest --stanza=sms --type=time
+  --target="2026-11-20 10:00:00+00" restore` on a stopped standby (see `docs/RUNBOOKS.md#restore`).
+- ClickHouse: the EDR database to the same bucket nightly (full on Sunday, incremental otherwise). Old ClickHouse
+  backups are removed by a lifecycle rule on the bucket (set it at the provider: 35 days).
+- NATS is not backed up: it holds 2 days of events in flight on three machines.
+- Every run is recorded for monitoring; an alert fires after 26 hours without a backup, and after 35 days without a
+  passing restore test. The restore test measures how long a restore takes (plan §4).
+
+## Monitoring (Q29)
+
+Grafana at `http://<witness>:3000` (admin password in the vault), dashboard "SMS platform". Prometheus keeps 30
+days. Alerts (`roles/monitoring/files/alerts.yml`) go to Telegram: critical ones at any hour (traffic stopped or at
+risk), warnings in working hours. Each alert names its runbook in `docs/RUNBOOKS.md`.
+
+## Traffic recording (spec §9.2)
+
+`dumpcap` on each server writes the SMPP traffic (customers and vendors, not the traffic between the three machines)
+in 15-minute files, 60 days in a ring, outside the switch (`roles/pcap`). The PCAP screens' extract job reads them
+(phase B).
+
+## Firewall
+
+Only listed traffic is accepted (`roles/base/templates/nftables.conf.j2`): SSH and the monitoring pages from
+`admin_cidrs`, SMPP from `smpp_cidrs`, the cluster's ports between the three machines only. The Firewall screen's
+banned and trusted lists (§8) apply on top, in the switch.

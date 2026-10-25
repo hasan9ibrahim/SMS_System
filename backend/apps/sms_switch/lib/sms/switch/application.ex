@@ -24,7 +24,26 @@ defmodule Sms.Switch.Application do
           :sms_switch |> Application.get_env(side, []) |> Keyword.get(:enabled, false),
           do: sup
 
-    children = if sides == [], do: [], else: [Sms.Switch.Throttle | sides]
+    children =
+      cond do
+        # The witness VM (backend step 8): only the vendor side's cluster scope, so the servers can ask it which of
+        # them still run their vendor connections (Sms.Switch.Vendor.Quorum).
+        Application.get_env(:sms_switch, :role) == :witness ->
+          [%{id: :sms_vendor_sessions, start: {:pg, :start_link, [:sms_vendor_sessions]}}]
+
+        sides == [] ->
+          []
+
+        true ->
+          [Sms.Switch.Throttle | fence()] ++ sides
+      end
+
     Supervisor.start_link(children, strategy: :one_for_one, name: Sms.Switch.Supervisor)
+  end
+
+  # On the servers, with a witness (backend step 8): which server steps back when they lose each other.
+  defp fence do
+    witness = :sms_core |> Application.get_env(Sms.Core.Cluster, []) |> Keyword.get(:witness)
+    if witness in [nil, ""], do: [], else: [Sms.Switch.Fence]
   end
 end

@@ -1,0 +1,21 @@
+<!-- {{ ansible_managed }} (deploy/ansible/roles/clickhouse) -->
+<clickhouse>
+  <users>
+    <!-- The built-in user only from the server itself. -->
+    <default>
+      <networks replace="replace"><ip>127.0.0.1</ip><ip>::1</ip></networks>
+    </default>
+    <{{ ch_app_user }}>
+      <password_sha256_hex>{{ vault_clickhouse_password | hash('sha256') }}</password_sha256_hex>
+      <networks>
+        <ip>127.0.0.1</ip>
+{% for ip in cluster_ips %}
+        <ip>{{ ip }}</ip>
+{% endfor %}
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <access_management>1</access_management>
+    </{{ ch_app_user }}>
+  </users>
+</clickhouse>

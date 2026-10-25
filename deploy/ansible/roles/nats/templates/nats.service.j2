@@ -1,0 +1,21 @@
+# {{ ansible_managed }} (deploy/ansible/roles/nats)
+[Unit]
+Description=NATS JetStream (event bus)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=nats
+Group=nats
+ExecStart=/usr/local/bin/nats-server -c /etc/nats/nats.conf
+ExecReload=/bin/kill -HUP $MAINPID
+# Lame duck: clients move to the other machines before it stops.
+ExecStop=/bin/kill -USR2 $MAINPID
+KillSignal=SIGINT
+TimeoutStopSec=60
+Restart=always
+RestartSec=2
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+# {{ ansible_managed }} (deploy/ansible/roles/nats)
+server_name: {{ inventory_hostname }}
+listen: 0.0.0.0:{{ ports.nats }}
+http: 0.0.0.0:{{ ports.nats_monitor }}
+max_payload: 4MB
+
+authorization {
+  users: [
+    {user: sms, password: "{{ vault_nats_password }}"}
+  ]
+}
+
+jetstream {
+  store_dir: /var/lib/nats/jetstream
+  max_file_store: {{ nats_max_file_store | default('1200G' if not lab else '2G') }}
+  max_memory_store: {{ nats_max_memory_store | default('1G' if not lab else '128M') }}
+  # The NATS default (written to disk every 2 minutes): each event is on three machines, so one crashing loses
+  # nothing (product owner 2026-10-25, backend step 7).
+}
+
+cluster {
+  name: sms
+  listen: 0.0.0.0:{{ ports.nats_cluster }}
+  routes: [
+{% for h in cluster_hosts if h != inventory_hostname %}
+    nats-route://{{ hostvars[h].private_ip }}:{{ ports.nats_cluster }}
+{% endfor %}
+  ]
+}

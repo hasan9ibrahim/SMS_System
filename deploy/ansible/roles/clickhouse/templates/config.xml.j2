@@ -1,0 +1,70 @@
+<!-- {{ ansible_managed }} (deploy/ansible/roles/clickhouse) -->
+<clickhouse>
+  <listen_host>0.0.0.0</listen_host>
+  <interserver_http_host>{{ private_ip }}</interserver_http_host>
+  <interserver_http_port>{{ ports.ch_interserver }}</interserver_http_port>
+  <max_server_memory_usage_to_ram_ratio>{{ ch_memory_ratio | default('0.4' if not lab else '0.15') }}</max_server_memory_usage_to_ram_ratio>
+  <logger><level>information</level></logger>
+
+  <macros>
+    <shard>01</shard>
+    <replica>{{ inventory_hostname }}</replica>
+  </macros>
+
+  <remote_servers>
+    <sms>
+      <shard>
+        <internal_replication>true</internal_replication>
+{% for h in groups['servers'] %}
+        <replica><host>{{ hostvars[h].private_ip }}</host><port>{{ ports.ch_native }}</port></replica>
+{% endfor %}
+      </shard>
+    </sms>
+  </remote_servers>
+
+  <!-- Keeper inside this server: one of three voters (the witness runs the third). -->
+  <keeper_server>
+    <tcp_port>{{ ports.keeper }}</tcp_port>
+    <!-- The three machines talk over IPv4 (the raft port binds IPv6 by default). -->
+    <enable_ipv6>false</enable_ipv6>
+    <server_id>{{ groups['servers'].index(inventory_hostname) + 1 }}</server_id>
+    <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+    <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+    <coordination_settings>
+      <operation_timeout_ms>10000</operation_timeout_ms>
+      <session_timeout_ms>30000</session_timeout_ms>
+    </coordination_settings>
+    <raft_configuration>
+{% for h in cluster_hosts %}
+      <server><id>{{ loop.index }}</id><hostname>{{ hostvars[h].private_ip }}</hostname><port>{{ ports.keeper_raft }}</port></server>
+{% endfor %}
+    </raft_configuration>
+  </keeper_server>
+
+  <zookeeper>
+{% for h in cluster_hosts %}
+    <node><host>{{ hostvars[h].private_ip }}</host><port>{{ ports.keeper }}</port></node>
+{% endfor %}
+  </zookeeper>
+
+  <!-- ClickHouse's own logs kept {{ ch_log_days | default(30 if not lab else 1) }} days, so they never fill the disk. -->
+{% for log in ['query_log', 'trace_log', 'part_log', 'metric_log', 'asynchronous_metric_log', 'text_log', 'processors_profile_log', 'query_views_log', 'error_log'] %}
+  <{{ log }}><ttl>event_date + INTERVAL {{ ch_log_days | default(30 if not lab else 1) }} DAY DELETE</ttl></{{ log }}>
+{% endfor %}
+
+  <prometheus>
+    <endpoint>/metrics</endpoint>
+    <port>{{ ports.ch_metrics }}</port>
+    <metrics>true</metrics>
+    <events>true</events>
+    <asynchronous_metrics>true</asynchronous_metrics>
+  </prometheus>
+
+  <!-- Backups to the off-site bucket (roles/backup): BACKUP ... TO S3(...). -->
+  <backups>
+    <allowed_path>/var/lib/clickhouse/backups/</allowed_path>
+  </backups>
+{% if not s3_verify_tls %}
+  <openSSL><client><verificationMode>none</verificationMode></client></openSSL>
+{% endif %}
+</clickhouse>

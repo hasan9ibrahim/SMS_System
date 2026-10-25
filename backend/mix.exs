@@ -17,10 +17,28 @@ defmodule Sms.Umbrella.MixProject do
         plt_add_apps: [:mix, :ex_unit],
         flags: [:error_handling, :extra_return, :missing_return, :underspecs, :unmatched_returns]
       ],
+      # The release the servers run (backend step 8, deploy/ansible): ERTS included, the schema files in db/ for
+      # Sms.Core.Release.migrate/0, VM flags in rel/vm.args.eex.
       releases: [
-        sms: [applications: [sms_core: :permanent, sms_switch: :permanent]]
+        sms: [
+          applications: [sms_core: :permanent, sms_switch: :permanent],
+          include_erts: true,
+          steps: [:assemble, &copy_schema/1, :tar]
+        ]
       ]
     ]
+  end
+
+  defp copy_schema(release) do
+    target = Path.join(release.path, "db")
+
+    for dir <- ["postgres/init", "postgres/migrations", "clickhouse/migrations"] do
+      File.mkdir_p!(Path.join(target, dir))
+      File.cp_r!(Path.join(["..", "db", dir]), Path.join(target, dir))
+    end
+
+    # Listed as an overlay, so the tarball the deploy copies holds it too.
+    %{release | overlays: Enum.uniq(release.overlays ++ ["db"])}
   end
 
   # `mix check` compiles, analyses and tests in the test environment, like CI.

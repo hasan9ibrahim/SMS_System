@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+apiVersion: 1
+providers:
+  - name: sms
+    folder: SMS
+    type: file
+    disableDeletion: true
+    options: {path: /var/lib/grafana/dashboards}

@@ -1,0 +1,38 @@
+# {{ ansible_managed }} (deploy/ansible/roles/monitoring). Alerts go to the engineer's and the NOC's Telegram (Q29).
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: team
+  group_by: [alertname, machine]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # A page at night only for what stops or risks traffic; warnings wait for the morning digest.
+    - matchers: [severity="critical"]
+      receiver: team
+      repeat_interval: 1h
+
+receivers:
+  - name: team
+{% if telegram_chat_ids | length > 0 and vault_telegram_bot_token | length > 0 %}
+    telegram_configs:
+{% for chat in telegram_chat_ids %}
+      - bot_token: "{{ vault_telegram_bot_token }}"
+        chat_id: {{ chat }}
+        parse_mode: HTML
+        send_resolved: true
+        message: |-
+          {{ '{{' }} if eq .Status "firing" {{ '}}' }}🔴{{ '{{' }} else {{ '}}' }}✅{{ '{{' }} end {{ '}}' }} <b>{{ '{{' }} .CommonLabels.alertname {{ '}}' }}</b> ({{ '{{' }} .CommonLabels.severity {{ '}}' }})
+          {{ '{{' }} range .Alerts {{ '}}' }}{{ '{{' }} .Annotations.summary {{ '}}' }}
+          What to do: {{ '{{' }} .Annotations.runbook {{ '}}' }}
+          {{ '{{' }} end {{ '}}' }}
+{% endfor %}
+{% endif %}
+
+inhibit_rules:
+  # A machine that is down explains everything else on it.
+  - source_matchers: [alertname="MachineDown"]
+    target_matchers: [severity=~"warning|critical"]
+    equal: [machine]

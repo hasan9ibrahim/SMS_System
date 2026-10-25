@@ -1,0 +1,90 @@
+# {{ ansible_managed }} (deploy/ansible/roles/postgres)
+scope: sms
+namespace: /service/
+name: {{ inventory_hostname }}
+
+restapi:
+  listen: 0.0.0.0:{{ ports.patroni }}
+  connect_address: {{ private_ip }}:{{ ports.patroni }}
+
+etcd3:
+  hosts: {% for h in cluster_hosts %}{{ hostvars[h].private_ip }}:{{ ports.etcd_client }}{{ ',' if not loop.last }}{% endfor %}
+
+
+bootstrap:
+  dcs:
+    # The primary renews its lease every 10 s; a primary that stops renewing for 30 s is replaced (10-30 s failover).
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    # A committed transaction is on both servers before the switch is told: a failover loses nothing. If the standby
+    # is gone, the primary carries on alone (not strict) rather than stopping every write.
+    synchronous_mode: true
+    synchronous_mode_strict: false
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_log_hints: "on"
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_keep_size: {{ '2GB' if not lab else '256MB' }}
+        max_connections: 300
+        shared_buffers: {{ pg_shared_buffers | default('2GB' if not lab else '128MB') }}
+        effective_cache_size: {{ pg_effective_cache_size | default('6GB' if not lab else '256MB') }}
+        work_mem: 16MB
+        maintenance_work_mem: 256MB
+        checkpoint_timeout: 15min
+        max_wal_size: 8GB
+        archive_mode: "on"
+        archive_timeout: 60
+        archive_command: pgbackrest --stanza=sms archive-push %p
+        log_min_duration_statement: 500
+        log_checkpoints: "on"
+        log_lock_waits: "on"
+        password_encryption: scram-sha-256
+
+  initdb:
+    - encoding: UTF8
+    - locale: C.UTF-8
+    - data-checksums
+
+postgresql:
+  listen: 0.0.0.0:{{ ports.pg }}
+  connect_address: {{ private_ip }}:{{ ports.pg }}
+  data_dir: /var/lib/postgresql/{{ pg_version }}/main
+  bin_dir: /usr/lib/postgresql/{{ pg_version }}/bin
+  pgpass: /var/lib/postgresql/.pgpass_patroni
+  authentication:
+    superuser:
+      username: postgres
+      password: "{{ vault_pg_superuser_password }}"
+    replication:
+      username: replicator
+      password: "{{ vault_pg_replication_password }}"
+    rewind:
+      username: postgres
+      password: "{{ vault_pg_superuser_password }}"
+  parameters:
+    unix_socket_directories: /var/run/postgresql
+  # A standby that fell too far behind is rebuilt from the archive.
+  recovery_conf:
+    restore_command: pgbackrest --stanza=sms archive-get %f "%p"
+  pg_hba:
+    - local all postgres peer
+    - local all all scram-sha-256
+    - host all all 127.0.0.1/32 scram-sha-256
+    - host replication replicator 127.0.0.1/32 scram-sha-256
+{% for ip in cluster_ips %}
+    - host replication replicator {{ ip }}/32 scram-sha-256
+    - host all all {{ ip }}/32 scram-sha-256
+{% endfor %}
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false

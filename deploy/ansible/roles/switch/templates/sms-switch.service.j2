@@ -1,0 +1,24 @@
+# {{ ansible_managed }} (deploy/ansible/roles/switch)
+[Unit]
+Description=SMS switch ({{ 'witness' if inventory_hostname in groups['witness'] else 'traffic' }})
+After=network-online.target {{ 'haproxy.service nats.service redis-server.service clickhouse-server.service' if inventory_hostname in groups['servers'] else '' }}
+Wants=network-online.target
+
+[Service]
+User={{ switch_user }}
+Group={{ switch_user }}
+EnvironmentFile=/etc/sms/switch.env
+Environment=HOME={{ switch_root }}
+WorkingDirectory={{ switch_root }}
+ExecStart={{ switch_root }}/current/bin/sms start
+# A stop unbinds customers and vendors cleanly and hands queued work to the other server (step 2, drain).
+ExecStop={{ switch_root }}/current/bin/sms stop
+TimeoutStopSec=90
+KillMode=mixed
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+# Nothing here runs as root, except the step-back script through sudo (Sms.Switch.Fence), which needs privileges.
+
+[Install]
+WantedBy=multi-user.target

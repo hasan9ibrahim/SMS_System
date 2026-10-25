@@ -186,6 +186,7 @@ defmodule Sms.Core.BusTest do
              filter: "sms.>",
              max_deliver: 10,
              ack_wait_ms: 30_000,
+             progress_ms: nil,
              concurrency: 1,
              batch_size: nil,
              batch_wait_ms: 200
@@ -193,7 +194,13 @@ defmodule Sms.Core.BusTest do
 
     assert BatchConsumer.consumer_options()[:batch_size] == 3
 
-    for {key, value} <- [max_deliver: 0, max_deliver: :forever, concurrency: 0, batch_size: -1] do
+    for {key, value} <- [
+          max_deliver: 0,
+          max_deliver: :forever,
+          concurrency: 0,
+          batch_size: -1,
+          progress_ms: 0
+        ] do
       assert_raise ArgumentError, ~r/#{key}/, fn ->
         Consumer.validate!([{key, value}, name: "ok", filter: "sms.>"])
       end
