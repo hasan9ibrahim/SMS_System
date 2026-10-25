@@ -10,11 +10,14 @@ import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { DEMO_TOTP_SECRET, SEED_PASSWORD } from "../src/generator/admin.js";
 import { totpCode } from "../src/admin/passwords.js";
+import { API_URL, injector } from "./remote.js";
 
 process.env.MOCK_REQUIRE_SIGN_IN = "1";
 process.env.MOCK_PROXY_SECRET = "test-proxy-secret";
 
 const app = await buildServer({ socket: false });
+// With API_URL the same calls go to that server (the Elixir API, backend step 9).
+const inject = injector(app);
 const ready = await dbReady();
 const skip = ready ? false : "seeded database not available";
 const started = new Date();
@@ -65,7 +68,7 @@ function check(operationId: string, res: LightMyRequestResponse) {
 }
 
 const call = (method: "GET" | "POST" | "DELETE", url: string, payload?: unknown, headers: Record<string, string> = {}) =>
-  app.inject({
+  inject({
     method,
     url: `${API_PREFIX}${url}`,
     headers,
@@ -158,7 +161,7 @@ describe("staff sign-in (§13.28)", { skip: skip || (!other && "no plain users")
     assert.equal(unknown.title, "Wrong username or password");
   });
 
-  test("the Elixir API forwards the signed-in user with the shared secret", async () => {
+  test("the Elixir API forwards the signed-in user with the shared secret", { skip: !!API_URL }, async () => {
     const headers = { "x-sms-proxy-secret": "test-proxy-secret", "x-sms-user": String(plain.id) };
     const user = await expect<CurrentUser>("getCurrentUser", call("GET", "/me", undefined, headers));
     assert.equal(user.id, Number(plain.id));

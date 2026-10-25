@@ -83,3 +83,17 @@ config :logger, :default_formatter,
   ]
 
 import_config "#{config_env()}.exs"
+
+# The API (backend step 9, apps/sms_api): Phoenix with Bandit; listening only when API_PORT is set (runtime.exs). Calls
+# it has not ported go to the mock server (Sms.Api.Forward).
+config :phoenix, :json_library, Jason
+
+config :sms_api, Sms.Api.Endpoint,
+  adapter: Bandit.PhoenixAdapter,
+  render_errors: [formats: [json: Sms.Api.ErrorJSON], layout: false]
+
+# Decided 2026-10-25: staff sessions end after 8 hours without activity and 24 hours after sign-in.
+config :sms_api, Sms.Api.Sessions, idle_hours: 8, max_hours: 24
+
+# Sign-in calls per client address and minute (Sms.Api.RateLimit).
+config :sms_api, Sms.Api.RateLimit, limit: 30, window_s: 60
