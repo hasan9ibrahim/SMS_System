@@ -68,6 +68,22 @@ export function upgradeScripts(dir = UPGRADES_DIR): { name: string; sql: string;
     });
 }
 
+/**
+ * Records every upgrade script and its one-time steps as applied, after a fresh seed: the seed already builds the
+ * current schema (backend step 11). Without it the first start (or a test) ran the whole script against a live
+ * database, taking table locks under running requests.
+ */
+export async function markUpgradesApplied(pool: pg.Pool = db(), dir = UPGRADES_DIR): Promise<void> {
+  const marks = [...upgradeScripts(dir).map((s) => s.mark), ...ONE_TIME_STEPS];
+  await pool.query(
+    "CREATE TABLE IF NOT EXISTS upgrade_marks (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
+  );
+  await pool.query("INSERT INTO upgrade_marks (name) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING", [marks]);
+}
+
+/** The scripts' one-time data steps (guarded by these marks inside the scripts); a fresh seed needs none of them. */
+const ONE_TIME_STEPS = ["priority_high_first", "market_unlisted_tier1"];
+
 /** Applies the upgrade scripts that changed since they last ran. Throws when the database is down or a script fails. */
 export async function applyUpgrades(pool: pg.Pool = db(), dir = UPGRADES_DIR): Promise<UpgradeResult> {
   const result: UpgradeResult = { applied: [], upToDate: [] };

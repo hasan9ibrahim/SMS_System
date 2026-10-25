@@ -2,7 +2,7 @@
 // previous AM. A handover is immediate or scheduled; a new one replaces a pending one.
 import { useState } from "react";
 import type { EmailTemplateRow, EnterpriseDetail } from "@sms/contract";
-import { useAllRows } from "../../api/admin";
+import { usePickRows } from "../../api/admin";
 import { ApiError } from "../../api/client";
 import { useAmHistory, useHandover, useReference } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
@@ -24,7 +24,7 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
   // Team trial round 2: the client is told by e-mail, from the new AM, with an am_handover template.
   const [notify, setNotify] = useState(true);
   const [templateId, setTemplateId] = useState<number | null>(null);
-  const templates = useAllRows<EmailTemplateRow>("email_templates", {
+  const templates = usePickRows<EmailTemplateRow>("email_templates", {
     logic: "and",
     conditions: [{ field: "emailType", op: "eq", value: "am_handover" }],
   });

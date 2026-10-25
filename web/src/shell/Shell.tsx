@@ -1,4 +1,5 @@
 // Main window layout (§15.1): top menu bar, page tab strip, the open pages, status bar.
+import { can } from "../api/accessCore";
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useMe } from "../api/hooks";
 import { startLive } from "../live/store";
@@ -24,6 +25,8 @@ function useBootstrap(): boolean {
   const me = useMe();
   const [ready, setReady] = useState(false);
   const userId = me.data?.id ?? (me.isError ? 0 : null);
+  // The bell's open incidents come from the Incidents page (backend step 10).
+  const incidents = can(me.data?.permissions, "incidents");
   useEffect(() => {
     if (userId === null) return;
     let cancelled = false;
@@ -41,7 +44,7 @@ function useBootstrap(): boolean {
   }, [userId]);
   useEffect(() => {
     if (!ready) return;
-    const stops = [startWorkspaceSync(), listenForDocking(), startLive(userId ?? 0)];
+    const stops = [startWorkspaceSync(), listenForDocking(), startLive(userId ?? 0, incidents)];
     // Pages opened from pop-out windows open here.
     stops.push(
       channel.on(
@@ -51,7 +54,7 @@ function useBootstrap(): boolean {
       ),
     );
     return () => stops.forEach((s) => s());
-  }, [ready, userId]);
+  }, [ready, userId, incidents]);
   return ready;
 }
 

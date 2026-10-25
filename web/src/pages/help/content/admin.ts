@@ -480,6 +480,14 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: 'A GUI access group is a role, such as "NOC", "Billing" or "Account manager". It decides which menus and pages its users see, and which buttons work on each page. Every user gets one group on the [[users]] page. Admins set groups up once and change them when a role\'s duties change.',
           },
+          {
+            kind: "text",
+            text: "The server checks every action against the group, reading included. A page the group does not give cannot be reached from another page either: its tabs, sections and buttons on other pages are hidden, and forms on other pages only show the names of its records in their pickers (for example a vendor trunk's name, enterprise and category, never its connection details). Global search and History only show records of pages the group gives.",
+          },
+          {
+            kind: "text",
+            text: "Admin pages (everything under Admin) are for administrators only. **Every page** never includes them; a group gets an Admin page only when that page is ticked on its own.",
+          },
         ],
       },
       {
@@ -494,7 +502,7 @@ export const topics: HelpTopic[] = [
               { name: "Access Group Name", what: "The role's name." },
               { name: "Description", what: "What the role is for." },
               { name: "Pages", what: "How many pages the group may open, or **All** when it has the Every page row." },
-              { name: "Every Page", what: "Yes when actions are granted on all pages at once." },
+              { name: "Every Page", what: "Yes when actions are granted on all pages at once (never the Admin pages)." },
               { name: "Users", what: "How many users have this group." },
               { name: "Status", what: "Green **Active** or grey **Inactive**." },
             ],

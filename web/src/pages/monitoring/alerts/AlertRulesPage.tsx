@@ -4,10 +4,11 @@
 // started / stopped sending, bind down), window and minimum sample, active hours, severity, who is
 // notified and how (pop-up, sound, e-mail with extra addresses and the partner's contact), repeat,
 // cooldown and recovery notice. Test evaluates the form on live traffic without raising anything.
+import { useCan } from "../../../api/access";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { AlertRuleInput, AlertRuleRow, AlertRuleTest, DepartmentRow, UserRow } from "@sms/contract";
-import { useAllRows } from "../../../api/admin";
+import { usePickRows } from "../../../api/admin";
 import { fetchListPage, useMe } from "../../../api/hooks";
 import { useRestore } from "../../../api/records";
 import { testAlertRule, useCloneAlertRule, useSaveAlertRule, useSetAlertRuleStatus } from "../../../api/alerts";
@@ -138,7 +139,7 @@ function RuleDialog({ row, done }: { row: AlertRuleRow | null; done: () => void 
   const form = useForm<AlertRuleInput>(row ? ruleInput(row) : blankRule());
   const save = useSaveAlertRule();
   const notifySaved = useNotifySaved();
-  const departments = useAllRows<DepartmentRow>("departments");
+  const departments = usePickRows<DepartmentRow>("departments");
   const [error, setError] = useState<string | null>(null);
   const [test, setTest] = useState<AlertRuleTest | null>(null);
   const [testing, setTesting] = useState(false);
@@ -580,6 +581,7 @@ function AlertKpis() {
 
 export function AlertRulesPage() {
   const h = useRuleHandlers();
+  const canIncidents = useCan("incidents");
   const { data: me } = useMe();
   const deleteOne = useDeleteRecord();
   const restore = useRestore("alert_rule");
@@ -592,7 +594,7 @@ export function AlertRulesPage() {
       noSelection
       historyScope={{ entityTypes: ["alert_rule"] }}
       primary={{ label: "Add rule", icon: "plus", onClick: () => void openDialog(null) }}
-      actions={<OpenIncidentsButton />}
+      actions={canIncidents ? <OpenIncidentsButton /> : undefined}
       // Rules as cards (team trial round 4): a severity edge, the name with its severity and metric, the condition
       // and what it applies to; channels as tags; when it last fired with its open incidents; an Active box.
       rowHeight={78}

@@ -88,7 +88,18 @@ async function operationsJson() {
       // An action the page does not offer: its Edit, else its View.
       const offered = module ? access.pages[module] : [];
       if (module && !offered) throw new Error(`access.json: page ${module} is not in pages`);
-      const action = !wanted || offered.includes(wanted) ? wanted : offered.includes("edit") ? "edit" : "view";
+      const actionOn = (actions) => (!wanted || actions.includes(wanted) ? wanted : actions.includes("edit") ? "edit" : "view");
+      const action = actionOn(offered);
+      // Pages that make this call as part of their own job (access.json shared): allowed there too (backend step 10).
+      // "page" takes the call's own action there (or that page's Edit, else View); "page:action" names it.
+      const alsoOn = (access.shared[op.operationId] ?? []).map((entry) => {
+        const [page, named] = entry.split(":");
+        const actions = access.pages[page];
+        if (!actions) throw new Error(`access.json shared: ${op.operationId}: unknown page ${page}`);
+        if (named && !actions.includes(named))
+          throw new Error(`access.json shared: ${op.operationId}: ${page} has no ${named}`);
+        return { module: page, action: named ?? actionOn(actions) };
+      });
       out.push({
         method: method.toUpperCase(),
         path: p,
@@ -96,11 +107,25 @@ async function operationsJson() {
         tag: op.tags?.[0] ?? null,
         module: module ?? null,
         action: open ? null : action,
-        // Admin pages need View even to read, except the ones other pages use as pickers.
-        readChecked: !!module && access.admin.includes(module) && !access.pickerReads.includes(segment),
+        // Every read needs the page's View (product owner 2026-10-25: a page the user may not open is not reached
+        // from another page either; other pages pick records through /lookups).
+        readChecked: !!module,
+        // Admin pages: administrators only, unless the user's access group names that page itself (the group's
+        // Every page grant never covers them).
+        admin: !!module && access.admin.includes(module),
+        alsoOn,
       });
     }
   }
+  const ids = new Set(out.map((o) => o.operationId));
+  for (const id of [...Object.keys(access.shared), ...Object.keys(access.operations)])
+    if (!ids.has(id)) throw new Error(`access.json: no operation ${id}`);
+  const lookupIds = doc.components.schemas.LookupListId.enum;
+  for (const [list, { pages }] of Object.entries(access.lookups))
+    for (const page of pages)
+      if (page !== "*" && !access.pages[page]) throw new Error(`access.json lookups: ${list}: unknown page ${page}`);
+  if (JSON.stringify([...lookupIds].sort()) !== JSON.stringify(Object.keys(access.lookups).sort()))
+    throw new Error("access.json lookups and openapi.yaml LookupListId differ");
   out.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
   return JSON.stringify(out, null, 1) + "\n";
 }

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ListId, SavedView, UserSummary, ViewState } from "@sms/contract";
-import { fetchListPage, useDeleteView, useMe, useSaveView, useViews } from "../api/hooks";
+import { fetchPickPage, useDeleteView, useMe, useSaveView, useViews } from "../api/hooks";
 import { ApiError } from "../api/client";
 import { confirmDialog, toast } from "../ui/feedback";
 import { Icon } from "../ui/Icon";
@@ -54,7 +54,7 @@ function UserPicker({ value, onChange }: { value: number[]; onChange: (ids: numb
   const users = useQuery({
     queryKey: ["user-picker", q],
     queryFn: () =>
-      fetchListPage<UserSummary>("users", { search: q || undefined, limit: 30, withTotal: false } as never),
+      fetchPickPage<UserSummary>("users", { search: q || undefined, limit: 30, withTotal: false } as never),
     retry: false,
   });
   const [names, setNames] = useState<Record<number, string>>({});

@@ -10,6 +10,7 @@ import { sendProblem } from "./problem.js";
 import { getCurrentUser, getWorkspace, saveWorkspace, updatePreferences } from "./api/session.js";
 import { resendSignInCode, signIn, signInCode, signOut } from "./api/signIn.js";
 import { queryList } from "./api/lists.js";
+import { queryLookup } from "./api/lookups.js";
 import {
   portalChangePassword,
   portalExportRates,
@@ -1102,6 +1103,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   calculateCharges,
 
   queryUsers: queryList("users"),
+  // Names-only picks of another page's records (backend step 10).
+  queryLookup,
 
   // Monitoring alerts (§13.6, §13.7)
   queryAlertRules: queryList("alert_rules"),

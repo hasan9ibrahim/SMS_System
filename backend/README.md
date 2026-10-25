@@ -233,8 +233,12 @@ Load tests: `tools/smpp-sim` and `docs/LOAD_TEST_RESULTS.md`.
   format, a 2FA code at every login (authenticator, else e-mailed; an administrator can turn it off for one user),
   lockout after 5 wrong passwords, sessions in `user_sessions` (8 h idle, 24 h at most), sign-in calls limited per
   address.
-- **Every call** then passes the password gate and the user's GUI Access Group: changes are checked, reads open,
-  Admin pages need View even to read (`contract/access.json` → `contract/generated/operations.json`, `Sms.Api.Access`).
+- **Every call** then passes the password gate and the user's GUI Access Group (`contract/access.json` →
+  `contract/generated/operations.json`, `Sms.Api.Access`; backend step 10): a read needs the page's View, a change its
+  action. Admin pages are for administrators, or a group that names the page (never the Every page grant). A call a
+  page makes as part of its own job is allowed there too (`shared`, e.g. the Dashboard's master report), and other
+  pages pick a page's records by name through `POST /lookups/{list}/query` (`lookups`: which pages may, and the
+  fields it answers).
 - **Forwarded** to the mock (`MOCK_URL`) with `X-Sms-User` and the shared `MOCK_PROXY_SECRET`; answers stream back.
 - **Ported:** the list engine (`Sms.Api.Lists.Engine`, §13.25, field catalogues from `contract/generated/lists.json`)
   with the Audit Trail and Logged In Users lists. A ported operation must give the mock's answers: run the mock's

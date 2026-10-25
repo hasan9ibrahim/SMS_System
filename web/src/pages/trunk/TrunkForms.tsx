@@ -1,7 +1,7 @@
 // Customer trunk form (§5.4, §13.1, §13.26) and vendor trunk form (§5.5, §13.26). Field
 // names follow the reference platform; passwords are write-only (never shown, §13.22).
 import { useEffect, useState } from "react";
-import { useTabShown } from "../../api/access";
+import { useCan, useTabShown } from "../../api/access";
 import type { CustomerTrunkInput, RateTableRow, TrunkListRow, VendorTrunkInput } from "@sms/contract";
 import { useReference, type TrunkDetail, type TrunkKind } from "../../api/records";
 import {
@@ -141,6 +141,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     port: 2775,
     sourceHost: null,
     serviceType: null,
+    tlsSkipVerify: false,
     submitIntervalMs: 0,
     submitTimeoutS: 30,
     enquireLinkTimeoutS: 30,
@@ -287,6 +288,7 @@ function BindLine({ from, to, up }: { from: string; to: string; up: boolean | nu
 }
 
 function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
+  const canAddTable = useCan("rate-manager", "add");
   const ids = ((form.values as CustomerTrunkInput).rateTableIds ?? []) as number[];
   const setIds = (next: number[]) => form.set("rateTableIds", next);
   // Drag a row by its handle to reorder (team trial round 5); ↑ / ↓ and Alt+↑ / Alt+↓ still work.
@@ -362,9 +364,12 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
             labelOf={(r) => `${r.name} (${r.currency})`}
             detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`}
           />
-          <Button small variant="ghost" icon="plus" onClick={() => void createTable()}>
-            Create new rate table
-          </Button>
+          {/* Creating a table is a Rate manager change (backend step 10). */}
+          {canAddTable && (
+            <Button small variant="ghost" icon="plus" onClick={() => void createTable()}>
+              Create new rate table
+            </Button>
+          )}
         </li>
       </ol>
     </FormField>
@@ -615,6 +620,14 @@ export function VendorTrunkFields({
             hint="Our address the bind comes from"
           />
           <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
+          {v.sslType && v.sslType !== "none" && (
+            <CheckField
+              form={form}
+              path="tlsSkipVerify"
+              label="Skip certificate check"
+              hint="Only for a vendor with a self-signed certificate (Q3)"
+            />
+          )}
           <SubHead>Credentials</SubHead>
           <TextField
             form={form}

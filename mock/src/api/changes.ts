@@ -15,6 +15,7 @@ import { withDescriptions } from "../history/describe.js";
 import { sendProblem } from "../problem.js";
 import { currentUserId, canUndoOthers, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { allows, ENTITY_PAGES, visibleEntityTypes } from "../auth/access.js";
 import { applyEnterpriseField } from "./enterprises.js";
 import { applyTrunkField } from "./trunks.js";
 import { applyRateTableEntries } from "./rates.js";
@@ -483,6 +484,13 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
     if (target.undone_by_id)
       return sendProblem(reply, 400, `Change #${id} was already undone by #${target.undone_by_id}`);
     const me = await getCurrentUser();
+    // Undo is a change on the record's page: the user must be able to edit there (backend step 10).
+    const page = ENTITY_PAGES[target.entity_type as string];
+    if (!me.permissions.includes("*") && !(page && allows(me.permissions, page, "edit")))
+      return sendProblem(reply, 403, "Your access group does not allow this", {
+        detail: `Undoing needs edit on ${page ?? "this page"}. Ask an administrator.`,
+        code: "not_allowed",
+      });
     if (target.user_id !== me.id && !canUndoOthers(me)) {
       return sendProblem(
         reply,
@@ -586,8 +594,15 @@ export function queryChanges(request: FastifyRequest, reply: FastifyReply) {
   const errors = checkListQuery(query, listFields.changes);
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
+    // Only changes of records on pages the user may open (backend step 10); administrators see every change.
+    const types = visibleEntityTypes(await getCurrentUser());
+    const def = listDefs.changes as ListDef<Change>;
+    const scoped: ListDef<Change> =
+      types === null
+        ? def
+        : { ...def, baseWhere: `c.entity_type = ANY(ARRAY[${types.map((t) => `'${t}'`).join(",") || "''"}]::text[])` };
     try {
-      const page = await runList(pool, listDefs.changes as ListDef<Change>, query);
+      const page = await runList(pool, scoped, query);
       return { ...page, rows: await withDescriptions(pool, page.rows) };
     } catch (err) {
       if (isBadRegex(err))

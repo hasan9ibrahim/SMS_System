@@ -581,12 +581,12 @@ function GrantDialog({ done }: { done: (v: boolean | null) => void }) {
       </div>
       <div className="field">
         <span>Enterprise</span>
-        <ListLookup<{ id: number; name: string; accountManagerName: string | null }>
+        <ListLookup<{ id: number; name: string; accountManager: string | null }>
           list="enterprises"
           value={enterpriseId}
           onChange={(r) => setEnterpriseId(r?.id ?? null)}
           labelOf={(r) => `${r.name} (#${r.id})`}
-          detailOf={(r) => (r.accountManagerName ? `Account Manager ${r.accountManagerName}` : "")}
+          detailOf={(r) => (r.accountManager ? `Account Manager ${r.accountManager}` : "")}
           placeholder="Choose an enterprise…"
         />
       </div>

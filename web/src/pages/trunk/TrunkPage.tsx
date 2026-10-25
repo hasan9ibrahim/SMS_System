@@ -1,14 +1,14 @@
 // Customer or vendor trunk record (§5.4, §5.5) in its own tab: General form, Rules (§13.2)
 // and History (§13.10). New trunks open from an enterprise (?enterprise=ID) or as a clone
 // of another trunk (?clone=ID: everything copied except name, username and password).
-import { useTabShown } from "../../api/access";
+import { useCan, useTabShown } from "../../api/access";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import type { Enterprise, TrunkListRow } from "@sms/contract";
 import { fetchListPage } from "../../api/hooks";
 import {
-  useEnterprise,
+  useEnterpriseName,
   useReference,
   useSaveTrunk,
   useTrunk,
@@ -82,7 +82,7 @@ function GeneralSection({
   const notifySaved = useNotifySaved();
   const navigate = useTabNavigate();
   const [banner, setBanner] = useState<string | null>(null);
-  const enterprise = useEnterprise(form.values.enterpriseId || null);
+  const enterprise = useEnterpriseName(form.values.enterpriseId || null);
   const readOnly = !!record?.archived;
 
   const version = record ? `${record.id}:${record.updatedAt}:${record.archived?.at ?? ""}` : "new";
@@ -217,6 +217,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
   const connection = useTrunkConnection(kind, t?.id ?? null);
   const [section, setSection] = useSectionTab(SECTIONS);
   const shownTab = useTabShown();
+  const canRates = useCan("rate-manager");
   // A hidden tab opened from a link falls back to General (§11, trial round 2).
   const hiddenSection = section !== "general" && !shownTab(`${kind}-trunks.${section}`);
   useEffect(() => {
@@ -336,7 +337,8 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
       <SectionTabs
         tabs={[
           { key: "general", label: "General" },
-          ...(kind === "vendor" ? [{ key: "rates", label: "Rates", disabled: !t?.ownRateTableId }] : []),
+          // The vendor trunk's own rate table is a Rate manager table: only with Rate manager (backend step 10).
+          ...(kind === "vendor" && canRates ? [{ key: "rates", label: "Rates", disabled: !t?.ownRateTableId }] : []),
           { key: "rules", label: "Rules", disabled: !t },
           { key: "history", label: "History", disabled: !t },
         ].filter((x) => shownTab(`${kind}-trunks.${x.key}`))}
@@ -358,7 +360,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
           </div>
         )}
         {/* The vendor trunk's own buy rates, edited here as in Rate manager (team trial round 1). */}
-        {t && kind === "vendor" && t.ownRateTableId && visited.has("rates") && (
+        {t && kind === "vendor" && canRates && t.ownRateTableId && visited.has("rates") && (
           <div hidden={section !== "rates"} className="trunk-rates">
             <RateTableView id={t.ownRateTableId} embedded />
           </div>

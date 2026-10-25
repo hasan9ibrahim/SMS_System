@@ -137,7 +137,8 @@ defmodule Sms.Switch.Vendor.PartsTest do
         window: 10,
         addr_ton: 1,
         addr_npi: 1,
-        addr_range: " "
+        addr_range: " ",
+        skip_verify: false
       }
 
       keys =
@@ -172,7 +173,7 @@ defmodule Sms.Switch.Vendor.PartsTest do
             :tps,
             :overflow
           ] ++
-          [:window, :addr_ton, :addr_npi, :addr_range]
+          [:window, :addr_ton, :addr_npi, :addr_range, :skip_verify]
 
       merged = Map.merge(base, overrides)
       Enum.map(keys, &Map.fetch!(merged, &1))
@@ -185,6 +186,8 @@ defmodule Sms.Switch.Vendor.PartsTest do
       assert t.system_type == nil and t.bind_addr_range == nil
       assert t.reconnect_schedule_s == [5, 10]
       assert t.status == :active
+      refute t.tls_skip_verify
+      assert [%Trunk{tls_skip_verify: true}] = Loader.trunk(row(%{skip_verify: true}))
     end
 
     test "a trunk of an inactive enterprise is inactive; a bad schedule falls back to the default" do

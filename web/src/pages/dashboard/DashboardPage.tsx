@@ -5,6 +5,7 @@
 // (dashboard.join.json), so changing them re-joins. Window, threshold, chart length and hidden
 // panels are saved per user (preferences.dashboard). Rows and chart points open the Analytics
 // view in a new tab (§13.5).
+import { useCan } from "../../api/access";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   DashboardMoversEvent,
@@ -650,6 +651,7 @@ function SummaryBar({
   animate: boolean;
   onOpen: Open;
 }) {
+  const canMarketMoves = useCan("market-moves");
   const cur = s?.currency ?? "EUR";
   return (
     <Section title="Today" className="dash-summary">
@@ -693,7 +695,8 @@ function SummaryBar({
             { label: "Vendors", value: s?.onlineVendors, format: int },
           ]}
         />
-        <MarketMovesCard />
+        {/* Only for users who may open Market moves (backend step 10). */}
+        {canMarketMoves && <MarketMovesCard />}
       </div>
       {s && s.topDestinations.length > 0 && (
         <div className="dash-topdest">

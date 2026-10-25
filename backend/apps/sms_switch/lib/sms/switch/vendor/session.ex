@@ -8,7 +8,8 @@ defmodule Sms.Switch.Vendor.Session do
 
     * **connect** to the trunk's host and port, from its Source Host when set, over TCP or TLS at the trunk's
       version or newer (TLS 1.0 only when the trunk asks for it, decision Q9). The vendor's certificate is checked
-      against the system's CAs and the host name unless `tls_verify: :none` is configured.
+      against the system's CAs and the host name unless `tls_verify: :none` is configured, or the trunk says "Skip
+      certificate check" (`tls_skip_verify`, for a vendor with a self-signed certificate).
     * **bind** as the trunk's bind type (TX, RX or TR) with its username, password, System Type and bind address
       (TON, NPI, range), interface version 3.4, within `:bind_timeout_ms`.
     * **bound**: submits go out (TX and TR); receipts and MO come in (RX and TR) and go to
@@ -423,7 +424,10 @@ defmodule Sms.Switch.Vendor.Session do
     ciphers = versions |> Enum.flat_map(&:ssl.cipher_suites(:default, &1)) |> Enum.uniq()
     base = [versions: versions, ciphers: ciphers, active: false]
 
-    case settings.tls_verify do
+    # A vendor with a self-signed certificate: "Skip certificate check" on its trunk (Q3, product owner 2026-10-25).
+    verify = if Map.get(trunk, :tls_skip_verify, false), do: :none, else: settings.tls_verify
+
+    case verify do
       :none ->
         [verify: :verify_none] ++ base
 

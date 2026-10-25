@@ -16,7 +16,7 @@ import type {
 import {
   checkSmtp,
   downloadCompanyFile,
-  useAllRows,
+  usePickRows,
   useBusinessCompany,
   useCloneBusinessCompany,
   useFormatVariables,
@@ -269,7 +269,7 @@ function FilesPart({ record }: { record: BusinessCompanyRecord }) {
 
 function CompanyDialog({ record, done }: { record: BusinessCompanyRecord | null; done: () => void }) {
   const ref = useReference();
-  const templates = useAllRows<EmailTemplateRow>("email_templates");
+  const templates = usePickRows<EmailTemplateRow>("email_templates");
   const form = useForm<BusinessCompanyInput>(record ? companyInput(record) : blankCompany());
   const save = useSaveBusinessCompany();
   const notifySaved = useNotifySaved();

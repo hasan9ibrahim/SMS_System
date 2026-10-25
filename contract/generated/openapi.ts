@@ -230,6 +230,31 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/lookups/{list}/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Pick records of another page by name (names only)
+     * @description Backend step 10 (product owner 2026-10-25): a page the user may not open is not reached from another page
+     *     either. Forms and filters on other pages pick its records here instead: the same filter grammar as the
+     *     list (§13.25), but only the list's lookup fields (contract/access.json `lookups`, e.g. a vendor trunk's
+     *     name, enterprise and category), and only for users who may open the list's own page or a page that picks
+     *     from it. Filters, sort and search may use the lookup fields only. AM visibility (§13.17) applies as in the
+     *     list. Answers 403 `not_allowed` when no page of the user picks from this list.
+     */
+    post: operations["queryLookup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/views": {
     parameters: {
       query?: never;
@@ -11139,6 +11164,11 @@ export type components = {
       systemType?: string | null;
       serviceType?: string | null;
       sslType?: components["schemas"]["SslType"];
+      /**
+       * @description Skip certificate check (backend step 10, decision Q3): with TLS, the switch normally checks the vendor's certificate (trusted CA, matching host name) before binding; on, a vendor with a self-signed certificate can bind. Ignored without TLS.
+       * @default false
+       */
+      tlsSkipVerify: boolean;
       submitIntervalMs?: number;
       submitTimeoutS?: number;
       /** @description Response time for enquire_link; no answer within it drops the session, which is then retried. */
@@ -18327,6 +18357,36 @@ export type components = {
       decision: components["schemas"]["RouteDecision"] | null;
     };
     /**
+     * @description A list other pages pick records from (contract/access.json lookups; backend step 10).
+     * @enum {string}
+     */
+    LookupListId:
+      | "users"
+      | "access_groups"
+      | "alert_rules"
+      | "countries"
+      | "customer_trunks"
+      | "departments"
+      | "destinations"
+      | "edr_templates"
+      | "email_templates"
+      | "enterprises"
+      | "hlr_policies"
+      | "invoices"
+      | "lcr_profiles"
+      | "number_lists"
+      | "product_categories"
+      | "rate_tables"
+      | "vendor_trunks";
+    /** @description A page of lookup rows (backend step 10); each row has `id` and the list's lookup fields only. */
+    LookupPage: components["schemas"]["ListPageMeta"] & {
+      rows: ({
+        id: number;
+      } & {
+        [key: string]: unknown;
+      })[];
+    };
+    /**
      * @description A list page whose fields are described by `/meta/lists/{list}/fields`.
      * @enum {string}
      */
@@ -19593,6 +19653,36 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryLookup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        list: components["schemas"]["LookupListId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of matching records, lookup fields only */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LookupPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       503: components["responses"]["Unavailable"];
     };
   };

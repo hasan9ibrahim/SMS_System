@@ -42,7 +42,7 @@ import type {
   UserSaved,
 } from "@sms/contract";
 import { api, unwrap } from "./client";
-import { fetchListPage } from "./hooks";
+import { fetchListPage, fetchPickPage } from "./hooks";
 import { downloadFrom } from "./observation";
 import { useRefreshRecords } from "./records";
 
@@ -53,6 +53,16 @@ function useWrite<In, Out>(fn: (input: In) => Promise<Out>) {
 const path = (id: number) => ({ params: { path: { id } } });
 
 /** Every live row of a short list (departments, access groups, templates), for form pickers. */
+/** Every row of a picker list (up to 1,000), names only for lists other pages pick from (backend step 10). */
+export function usePickRows<Row>(list: ListId, filter?: FilterGroup) {
+  return useQuery({
+    queryKey: ["pick", "all", list, filter ?? null],
+    queryFn: () => fetchPickPage<Row>(list, { limit: 1000, withTotal: false, ...(filter ? { filter } : {}) }),
+    select: (p) => p.rows,
+    staleTime: 30_000,
+  });
+}
+
 export function useAllRows<Row>(list: ListId, filter?: FilterGroup) {
   return useQuery({
     queryKey: ["list", "all", list, filter ?? null],

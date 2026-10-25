@@ -1,7 +1,7 @@
 // Enterprise record (§5.1–5.5) in its own tab: "Name – Alias (ID)" picker, sections General,
 // Docs, Billing, Customer trunks, Vendor trunks, Account managers and History. Each section's
 // main action is the page's one filled button (§15.3); unsaved edits mark the tab (§13.5).
-import { useTabShown } from "../../api/access";
+import { useCan, useTabShown } from "../../api/access";
 import { connectionColumn } from "../trunk/connection";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
@@ -119,6 +119,8 @@ export function EnterprisePage() {
   const q = useEnterprise(id !== null && Number.isInteger(id) && id > 0 ? id : null);
   const e = q.data;
   const [section, setSection] = useSectionTab(SECTIONS);
+  const canCustomerTrunks = useCan("customer-trunks");
+  const canVendorTrunks = useCan("vendor-trunks");
   const shownTab = useTabShown();
   // A hidden tab opened from a link falls back to General (§11, trial round 2).
   const hiddenSection = section !== "general" && !shownTab(`enterprises.${section}`);
@@ -162,8 +164,9 @@ export function EnterprisePage() {
     navigate(path);
   };
 
-  const hasCustomer = e ? e.type !== "vendor" : false;
-  const hasVendor = e ? e.type !== "customer" : false;
+  // A trunk tab shows only to users who may open that trunk page (backend step 10).
+  const hasCustomer = e ? e.type !== "vendor" && canCustomerTrunks : false;
+  const hasVendor = e ? e.type !== "customer" && canVendorTrunks : false;
   const tabs = [
     { key: "general", label: "General" },
     { key: "docs", label: "Docs", disabled: id === null },
@@ -250,7 +253,7 @@ export function EnterprisePage() {
                 Delete
               </Button>
             )}
-            {e && !e.archived && <NotificationsMenu enterpriseId={e.id} trunks={e.trunkCounts.customer} />}
+            {e && !e.archived && canCustomerTrunks && <NotificationsMenu enterpriseId={e.id} trunks={e.trunkCounts.customer} />}
             <span ref={setSlot} className="action-slot" />
           </>
         }

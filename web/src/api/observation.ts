@@ -26,7 +26,7 @@ import type {
   TroubleTicketResult,
 } from "@sms/contract";
 import { api, ApiError, apiFetch, unwrap } from "./client";
-import { fetchListPage } from "./hooks";
+import { fetchPickPage } from "./hooks";
 import { downloadBlob } from "./lookup";
 import { useRefreshRecords } from "./records";
 
@@ -55,7 +55,7 @@ export async function downloadFrom(path: string, init?: { body: unknown }, fallb
 export function useEdrTemplates() {
   return useQuery({
     queryKey: ["list", "edr-templates", "all"],
-    queryFn: () => fetchListPage<EdrTemplateRow>("edr_templates", { limit: 500, withTotal: false }),
+    queryFn: () => fetchPickPage<EdrTemplateRow>("edr_templates", { limit: 500, withTotal: false }),
     select: (p) => p.rows,
     staleTime: 30_000,
   });

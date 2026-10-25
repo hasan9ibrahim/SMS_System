@@ -596,3 +596,6 @@ CREATE INDEX IF NOT EXISTS sign_in_challenges_user_idx ON sign_in_challenges (us
 ALTER TABLE user_sessions DROP CONSTRAINT IF EXISTS user_sessions_end_reason_check;
 ALTER TABLE user_sessions ADD CONSTRAINT user_sessions_end_reason_check
   CHECK (end_reason IN ('logout', 'forced', 'expired', 'password_change', 'replaced'));
+
+-- 075_trunk_tls_skip_verify.sql (backend step 10, Q3): "Skip certificate check" on vendor trunks.
+ALTER TABLE vendor_trunks ADD COLUMN IF NOT EXISTS tls_skip_verify boolean NOT NULL DEFAULT false;

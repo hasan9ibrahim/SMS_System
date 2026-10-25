@@ -154,7 +154,7 @@ async function loadOpen() {
 let socket: LiveSocket | null = null;
 
 /** Main window: open the socket and relay every frame to pop-out windows. */
-export function startLive(userId: number): () => void {
+export function startLive(userId: number, incidents = true): () => void {
   socket = new LiveSocket(socketUrl());
   socket.onStatus = (connected) => useLive.setState({ connected });
   socket.onFrame = (frame) => channel.post({ type: "live", frame });
@@ -168,7 +168,7 @@ export function startLive(userId: number): () => void {
   );
   const offHello = channel.on((m) => m.type === "live-hello" && channel.post({ type: "live-owner" }));
   socket.connect();
-  void loadOpen();
+  if (incidents) void loadOpen();
   const ring = setInterval(criticalRepeat, 15_000);
   return () => {
     offTps();

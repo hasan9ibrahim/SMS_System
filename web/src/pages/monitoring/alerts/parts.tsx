@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { AlertSoundPrefs, ListId } from "@sms/contract";
-import { fetchListPage, useMe, useUpdatePreferences } from "../../../api/hooks";
+import { fetchPickPage, useMe, useUpdatePreferences } from "../../../api/hooks";
 import { DEFAULT_SOUNDS } from "../../../live/store";
 import { playSound, SOUNDS, type SoundKey } from "../../../live/sounds";
 import { ListLookup } from "../../../records/parts";
@@ -94,7 +94,7 @@ export function IdChips({
   const names = useQuery({
     queryKey: ["list", "names", list, ids],
     queryFn: () =>
-      fetchListPage<{ id: number; name?: string; displayName?: string }>(list, {
+      fetchPickPage<{ id: number; name?: string; displayName?: string }>(list, {
         limit: 500,
         withTotal: false,
         filter: { logic: "and", conditions: [{ field: "id", op: "in", values: ids }] },

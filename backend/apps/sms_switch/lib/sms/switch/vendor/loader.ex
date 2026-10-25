@@ -13,7 +13,7 @@ defmodule Sms.Switch.Vendor.Loader do
          host(t.source_host), t.max_connections, t.system_type, t.service_type, t.ssl_type, t.submit_interval_ms,
          t.submit_timeout_s, t.enquire_link_timeout_s, t.enquire_link_interval_s, t.reconnect_schedule_s,
          t.bind_alert_after_min, t.auth_fail_retry_min, t.msg_id_type, t.tps, t.overflow_buffer, t.window_size,
-         t.bind_addr_ton, t.bind_addr_npi, t.bind_addr_range
+         t.bind_addr_ton, t.bind_addr_npi, t.bind_addr_range, t.tls_skip_verify
     FROM vendor_trunks t
     JOIN enterprises e ON e.id = t.enterprise_id
    WHERE t.deleted_at IS NULL AND e.deleted_at IS NULL AND t.protocol = 'smpp'
@@ -63,7 +63,8 @@ defmodule Sms.Switch.Vendor.Loader do
         window,
         addr_ton,
         addr_npi,
-        addr_range
+        addr_range,
+        skip_verify
       ]) do
     [
       %Trunk{
@@ -81,6 +82,7 @@ defmodule Sms.Switch.Vendor.Loader do
         system_type: blank_to_nil(system_type),
         service_type: blank_to_nil(service_type),
         tls: tls(ssl_type),
+        tls_skip_verify: skip_verify == true,
         submit_interval_ms: max(interval, 0),
         submit_timeout_s: max(submit_timeout, 1),
         enquire_link_timeout_s: max(el_timeout, 1),

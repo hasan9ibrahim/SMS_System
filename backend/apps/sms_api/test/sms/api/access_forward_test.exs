@@ -1,5 +1,5 @@
 defmodule Sms.Api.AccessTest do
-  # The access check and the password gate before a call is forwarded (backend step 9, §1, §11, §13.28), against
+  # The access check and the password gate before a call is forwarded (backend steps 9 and 10, §1, §11, §13.28), against
   # PostgreSQL and a fake mock; test users and groups are removed afterwards.
   use ExUnit.Case, async: false
   import Phoenix.ConnTest
@@ -68,7 +68,7 @@ defmodule Sms.Api.AccessTest do
     |> Forward.call([])
   end
 
-  test "a change the group does not give is refused before it reaches the mock; reads go through" do
+  test "a change the group does not give is refused before it reaches the mock" do
     id = user(%{"enterprises" => ["view", "edit"]})
 
     refused = as(id, :post, "/api/v1/enterprises", "{}")
@@ -77,16 +77,61 @@ defmodule Sms.Api.AccessTest do
     refute_received {:mock_request, "POST", "/api/v1/enterprises", _, _, _}
 
     assert as(id, :put, "/api/v1/enterprises/5", "{}").status == 200
-    assert as(id, :post, "/api/v1/route-rules/query", "{}").status == 200
   end
 
-  test "Admin pages need View even to read; the ones used as pickers stay readable" do
+  test "reads need the page's View too: a page not given is not reached from another (step 10)" do
+    id = user(%{"enterprises" => ["view"]})
+    assert as(id, :post, "/api/v1/enterprises/query", "{}").status == 200
+    assert as(id, :post, "/api/v1/route-rules/query", "{}").status == 403
+    assert as(id, :post, "/api/v1/vendor-trunks/query", "{}").status == 403
+    refute_received {:mock_request, "POST", "/api/v1/route-rules/query", _, _, _}
+  end
+
+  test "Admin pages: administrators only, or a group that names the page; never the every-page grant" do
     id = user(%{"enterprises" => ["view"]})
     assert as(id, :post, "/api/v1/audit-log/query", "{}").status == 403
-    assert as(id, :post, "/api/v1/users/query", "{}").status == 200
+    assert as(id, :post, "/api/v1/users/query", "{}").status == 403
+
+    every = user(%{"*" => ["view", "add", "edit", "delete", "export"]})
+    assert as(every, :post, "/api/v1/route-rules/query", "{}").status == 200
+    assert as(every, :post, "/api/v1/audit-log/query", "{}").status == 403
+    assert as(every, :post, "/api/v1/users/query", "{}").status == 403
 
     auditor = user(%{"audit" => ["view"]})
     assert as(auditor, :post, "/api/v1/audit-log/query", "{}").status == 200
+    assert as(auditor, :post, "/api/v1/users/query", "{}").status == 403
+  end
+
+  test "a page that makes a call as part of its job allows it (contract/access.json shared)" do
+    # The Dashboard runs the master report for its charts; Sales report exports it.
+    dash = user(%{"dashboard" => ["view"]})
+    assert as(dash, :post, "/api/v1/reports/master", "{}").status == 200
+    assert as(dash, :post, "/api/v1/reports/master/export", "{}").status == 403
+    sales = user(%{"sales-report" => ["view", "export"]})
+    assert as(sales, :post, "/api/v1/reports/master/export", "{}").status == 200
+    # A report of its own page: Billing report no longer needs Master report.
+    billing = user(%{"billing-report" => ["view"]})
+    assert as(billing, :post, "/api/v1/reports/billing/query", "{}").status == 200
+    assert as(dash, :post, "/api/v1/reports/billing/query", "{}").status == 403
+  end
+
+  test "the cache outlives the request that filled it (a table owned by the request went with it)" do
+    id = user(%{"enterprises" => ["view"]})
+    Task.await(Task.async(fn -> as(id, :post, "/api/v1/enterprises/query", "{}") end))
+    assert [{^id, _, _}] = :ets.lookup(Sms.Api.Access, id)
+    assert [{^id, false, _}] = :ets.lookup(Sms.Api.PasswordGate, id)
+  end
+
+  test "names-only lookups: the list's own page or a page that picks from it" do
+    rules = user(%{"route-rules" => ["view"]})
+    assert as(rules, :post, "/api/v1/lookups/vendor_trunks/query", "{}").status == 200
+    assert as(rules, :post, "/api/v1/lookups/lcr_profiles/query", "{}").status == 200
+    assert as(rules, :post, "/api/v1/lookups/invoices/query", "{}").status == 403
+    # Users' names are for everyone signed in (saved views are shared with users on every list).
+    assert as(rules, :post, "/api/v1/lookups/users/query", "{}").status == 200
+    invoices = user(%{"invoices" => ["view"]})
+    assert as(invoices, :post, "/api/v1/lookups/invoices/query", "{}").status == 200
+    assert as(invoices, :post, "/api/v1/lookups/nothing/query", "{}").status == 404
   end
 
   test "the user's own override taking a page away beats the group's every-page grant" do

@@ -12,10 +12,52 @@ import type {
   SavedViewInput,
   SearchResults,
 } from "@sms/contract";
+import type { components } from "@sms/contract";
 import { api, unwrap } from "./client";
+
+type Schemas = components["schemas"];
 
 export interface ListPage<Row> extends ListPageMeta {
   rows: Row[];
+}
+
+/**
+ * Lists other pages pick records from by name (contract/access.json lookups, backend step 10). A page the user may
+ * not open is not reached from another page either: forms and filters pick its records through
+ * POST /lookups/{list}/query, which answers the list's lookup fields only.
+ */
+export const LOOKUP_LISTS: ReadonlySet<ListId> = new Set<ListId>([
+  "users",
+  "access_groups",
+  "alert_rules",
+  "countries",
+  "customer_trunks",
+  "departments",
+  "destinations",
+  "edr_templates",
+  "email_templates",
+  "enterprises",
+  "hlr_policies",
+  "invoices",
+  "lcr_profiles",
+  "number_lists",
+  "product_categories",
+  "rate_tables",
+  "vendor_trunks",
+]);
+
+/**
+ * Rows for a picker (a record chosen by name in a form or filter): the lookup for the lists other pages pick from,
+ * else the list itself. Rows carry the lookup fields only (contract/access.json lookups).
+ */
+export function fetchPickPage<Row>(list: ListId, body: ListQuery): Promise<ListPage<Row>> {
+  if (!LOOKUP_LISTS.has(list)) return fetchListPage<Row>(list, body);
+  return unwrap(
+    api.POST("/lookups/{list}/query", {
+      params: { path: { list: list as Schemas["LookupListId"] } },
+      body,
+    }),
+  ) as Promise<ListPage<Row>>;
 }
 
 /** POST /{list}/query for any list in the contract (§13.25). */

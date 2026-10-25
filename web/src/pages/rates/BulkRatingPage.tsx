@@ -16,7 +16,7 @@ import type {
 } from "@sms/contract";
 import { actOnMove, fetchMarketMove } from "../../api/market";
 import { moveLabel } from "./market/marketModel";
-import { fetchListPage } from "../../api/hooks";
+import { fetchPickPage } from "../../api/hooks";
 import { ApiError } from "../../api/client";
 import { previewRateBulk, useApplyRateBulk } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
@@ -95,7 +95,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
   const results = useQuery({
     queryKey: ["list", "bulk-tables", q],
     queryFn: () =>
-      fetchListPage<RateTableRow>("rate_tables", {
+      fetchPickPage<RateTableRow>("rate_tables", {
         limit: 60,
         withTotal: true,
         ...(q.trim() ? { search: q.trim() } : {}),
@@ -108,7 +108,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
   const all = useQuery({
     queryKey: ["list", "bulk-tables", "all"],
     queryFn: () =>
-      fetchListPage<RateTableRow>("rate_tables", {
+      fetchPickPage<RateTableRow>("rate_tables", {
         limit: 4000,
         withTotal: false,
         filter: { logic: "and", conditions: [{ field: "kind", op: "in", values: ["customer"] }] },
@@ -123,7 +123,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
   const names = useQuery({
     queryKey: ["list", "names", "rate_tables", ticked],
     queryFn: () =>
-      fetchListPage<RateTableRow>("rate_tables", {
+      fetchPickPage<RateTableRow>("rate_tables", {
         limit: 500,
         withTotal: false,
         filter: { logic: "and", conditions: [{ field: "id", op: "in", values: ticked }] },

@@ -5,7 +5,7 @@ defmodule Sms.Api.PasswordGate do
   `password_change_required` (the GUI then shows only Change Password). The same operations stay open as in the
   mock (mock/src/admin/gate.ts); the state is kept a few seconds per user.
   """
-  alias Sms.Api.Problem
+  alias Sms.Api.{Caches, Problem}
   alias Sms.Core.Repo
 
   @open ~w(getHealth getCurrentUser getMyPasswordStatus changeMyPassword sendMyPasswordCode checkPassword
@@ -31,21 +31,20 @@ defmodule Sms.Api.PasswordGate do
   end
 
   defp blocked?(user_id) do
-    _ = if :ets.whereis(@table) == :undefined, do: :ets.new(@table, [:named_table, :public, :set])
-
     now = System.monotonic_time(:millisecond)
 
-    case :ets.lookup(@table, user_id) do
+    case Caches.ready?(@table) and :ets.lookup(@table, user_id) do
       [{_, blocked, at}] when now - at < @ttl_ms ->
         blocked
+
+      false ->
+        state(user_id) in ["temporary", "must_change", "expired"]
 
       _ ->
         blocked = state(user_id) in ["temporary", "must_change", "expired"]
         :ets.insert(@table, {user_id, blocked, now})
         blocked
     end
-  rescue
-    ArgumentError -> state(user_id) in ["temporary", "must_change", "expired"]
   end
 
   @doc "Drops the cached states (after a password change)."

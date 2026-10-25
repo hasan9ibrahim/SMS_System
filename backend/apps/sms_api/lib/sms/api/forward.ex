@@ -44,7 +44,8 @@ defmodule Sms.Api.Forward do
 
     with true <- op != nil,
          :ok <- PasswordGate.check(session.user_id, op.operation_id),
-         :ok <- Access.check(session.user_id, op) do
+         :ok <- Access.check(session.user_id, op),
+         :ok <- lookup_check(conn, session, op) do
       conn = forward(conn, session)
       forget_cached(conn, op)
       :ok = ConfigPush.after_call(conn.method, conn.request_path, conn.status || 0)
@@ -55,6 +56,16 @@ defmodule Sms.Api.Forward do
       {:error, problem} -> Problem.send(conn, problem)
     end
   end
+
+  # Names-only picks of another page's records (backend step 10): the user needs a page that picks from the list.
+  defp lookup_check(conn, session, %{operation_id: "queryLookup"}) do
+    case String.split(conn.request_path, "/", trim: true) do
+      ["api", "v1", "lookups", list, "query"] -> Access.check_lookup(session.user_id, list)
+      _ -> :ok
+    end
+  end
+
+  defp lookup_check(_conn, _session, _op), do: :ok
 
   # A change to users, access groups, security settings or a password takes effect at once.
   defp forget_cached(conn, op) do

@@ -1,6 +1,7 @@
 // Failed EDR Search and Failed EDR Download (§9.2): messages rejected before routing (no vendor
 // leg). From / To Date in the filter row, every column filters; Generate Request queues a CSV / XLSX
 // export, listed on the Downloads tab.
+import { useCan } from "../../api/access";
 import type { FailedEdrRow, ListQuery } from "@sms/contract";
 import { fetchListPage, type ListPage } from "../../api/hooks";
 import type { GridState } from "../../grid/filterModel";
@@ -48,6 +49,7 @@ function TimeBoxes({ state, setState }: { state: GridState; setState: (s: GridSt
 }
 
 export function FailedEdrPage() {
+  const canRepush = useCan("repush", "add");
   const [view] = useView<View>(
     "/monitoring/failed-edr",
     VIEWS.map((v) => v.key),
@@ -65,12 +67,17 @@ export function FailedEdrPage() {
       page={page}
       title="Failed EDR Search"
       rowActions={(r) => [
-        {
-          label: "Repush…",
-          icon: "send",
-          main: true,
-          onSelect: () => void ask<void>((d) => <RepushDialog ids={[r.uuid]} eligible={1} done={() => d()} />),
-        },
+        // Repush is a Repush page action (backend step 10).
+        ...(canRepush
+          ? [
+              {
+                label: "Repush…",
+                icon: "send" as const,
+                main: true,
+                onSelect: () => void ask<void>((d) => <RepushDialog ids={[r.uuid]} eligible={1} done={() => d()} />),
+              },
+            ]
+          : []),
         {
           label: "Copy Msg ID",
           icon: "copy",
@@ -80,7 +87,8 @@ export function FailedEdrPage() {
       // Rejected messages can be re-sent on a vendor trunk (team trial round 1).
       selection={{
         summary: (_rows, ids) => `${ids.size} selected`,
-        bulk: (_ids, clear, rows) => [
+        bulk: (_ids, clear, rows) =>
+          canRepush ? [
           {
             label: `Repush ${rows.length} to a vendor…`,
             icon: "send",
@@ -90,7 +98,7 @@ export function FailedEdrPage() {
                 <RepushDialog ids={rows.map((r) => r.uuid)} eligible={rows.length} done={() => d()} />
               )).then(clear),
           },
-        ],
+        ] : [],
       }}
       historyScope={null}
       fetchPage={fetchFailed}

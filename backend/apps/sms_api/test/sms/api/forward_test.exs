@@ -6,17 +6,43 @@ defmodule Sms.Api.ForwardTest do
   import Plug.Conn
   alias Sms.Api.{Auth, Forward}
   alias Sms.Api.Test.FakeMock
+  alias Sms.Core.Repo
 
   @endpoint Sms.Api.Endpoint
   @moduletag :integration
 
   setup_all do
     # The password gate and the access check read the user.
-    start_supervised!(Sms.Core.Repo)
+    start_supervised!(Repo)
     :ok
   end
 
   setup do
+    # A user whose group may open Enterprises: every read is checked since backend step 10.
+    n = "#{System.unique_integer([:positive])}.#{:rand.uniform(1_000_000_000)}"
+
+    %{rows: [[group]]} =
+      Repo.query!("INSERT INTO access_groups (name, permissions) VALUES ($1, $2) RETURNING id", [
+        "test forward #{n}",
+        %{"enterprises" => ["view"]}
+      ])
+
+    %{rows: [[user]]} =
+      Repo.query!(
+        """
+        INSERT INTO users (username, first_name, last_name, email, password_hash, password_changed_at,
+                           access_group_id)
+        VALUES ($1, 'Test', 'Forward', $2, 'x', now(), $3) RETURNING id
+        """,
+        ["test.forward.#{n}", "test.forward.#{n}@example.test", group]
+      )
+
+    on_exit(fn ->
+      Repo.query!("DELETE FROM users WHERE id = $1", [user])
+      Repo.query!("DELETE FROM access_groups WHERE id = $1", [group])
+    end)
+
+    Process.put(:test_user, user)
     {mock, url} = FakeMock.start(self())
     previous = Application.get_env(:sms_api, Forward)
     Application.put_env(:sms_api, Forward, url: url, secret: "test-secret", timeout_ms: 5_000)
@@ -31,7 +57,7 @@ defmodule Sms.Api.ForwardTest do
 
   # A request that already carries a session (the Auth plug would find it in the database).
   defp signed(path, method \\ :get, body \\ "") do
-    session = %{user_id: 7, session_id: 70}
+    session = %{user_id: Process.get(:test_user), session_id: 70}
 
     Phoenix.ConnTest.build_conn(method, path, body)
     |> put_req_header("content-type", "application/json")
@@ -55,7 +81,7 @@ defmodule Sms.Api.ForwardTest do
     assert_received {:mock_request, "POST", "/api/v1/enterprises/query", "", headers,
                      ~s({"limit": 5})}
 
-    assert {"x-sms-user", "7"} in headers
+    assert {"x-sms-user", Integer.to_string(Process.get(:test_user))} in headers
     assert {"x-sms-session", "70"} in headers
 
     big = signed("/api/v1/big")

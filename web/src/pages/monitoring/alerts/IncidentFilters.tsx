@@ -2,7 +2,7 @@
 // "Rule: All" chips that open a checklist. Each one is a column filter, so the list stays filtered on the server.
 import { useQuery } from "@tanstack/react-query";
 import type { AlertRuleRow, FilterCondition } from "@sms/contract";
-import { fetchListPage } from "../../../api/hooks";
+import { fetchPickPage } from "../../../api/hooks";
 import type { GridState } from "../../../grid/filterModel";
 import { PeriodTabs, RangeChip } from "../../../ui/DateRange";
 import { ChecklistChip } from "../../../ui/ChecklistChip";
@@ -36,7 +36,7 @@ export const todayCondition = (): FilterCondition => timeCondition("startedAt", 
 export function IncidentFilters({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
   const rules = useQuery({
     queryKey: ["list", "alert_rules", "names"],
-    queryFn: () => fetchListPage<AlertRuleRow>("alert_rules", { limit: 200, withTotal: false }),
+    queryFn: () => fetchPickPage<AlertRuleRow>("alert_rules", { limit: 200, withTotal: false }),
     staleTime: 60_000,
   });
   const set = (field: string, c: FilterCondition | null) => {
