@@ -5,7 +5,7 @@
 import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import type { MasterReportQuery } from "@sms/contract";
+import type { FilterCondition, ListQuery, MasterReportQuery } from "@sms/contract";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { chQuery, chRows } from "../src/edr.js";
 import { runMasterReport } from "../src/reports/engine.js";
@@ -158,13 +158,14 @@ describe("switch-shaped EDRs: attempt rows plus outcome rows (backend step 11b)"
     assert.equal(Math.round(amount * 1e6) / 1e6, 0.03);
   });
 
-  const mine = (more: object[] = []) => ({
-    filter: { logic: "and" as const, conditions: [{ field: "customerEnterpriseId", op: "eq" as const, value: ent }, ...more] },
+  const mine = (more: FilterCondition[] = []): ListQuery => ({
+    filter: { logic: "and", conditions: [{ field: "customerEnterpriseId", op: "eq", value: ent }, ...more] },
     limit: 50,
+    withTotal: true,
   });
 
   test("EDR search shows the outcome's status, delay and money, and filters on the final status", async () => {
-    const page = await runChList(db(), edrList, mine() as never);
+    const page = await runChList(db(), edrList, mine());
     const byId = new Map(page.rows.map((r) => [r.id, r]));
     assert.equal(page.rows.length, 3);
     assert.equal(byId.get(a)!.msgStatus, "DELIVRD");
@@ -177,12 +178,12 @@ describe("switch-shaped EDRs: attempt rows plus outcome rows (backend step 11b)"
     assert.equal(byId.get(b)!.deliveryError, "001");
     assert.equal(byId.get(c)!.customerMsgStatus, "REJECTD");
 
-    const delivered = await runChList(db(), edrList, mine([{ field: "msgStatus", op: "eq", value: "DELIVRD" }]) as never);
+    const delivered = await runChList(db(), edrList, mine([{ field: "msgStatus", op: "eq", value: "DELIVRD" }]));
     assert.deepEqual(delivered.rows.map((r) => r.id), [a]);
-    const failed = await runChList(db(), edrList, mine([{ field: "customerMsgStatus", op: "in", values: ["UNDELIV", "REJECTD"] }]) as never);
+    const failed = await runChList(db(), edrList, mine([{ field: "customerMsgStatus", op: "in", values: ["UNDELIV", "REJECTD"] }]));
     assert.deepEqual(new Set(failed.rows.map((r) => r.id)), new Set([b, c]));
     // The attempt row's own ACCEPTD no longer matches once an outcome has a final status.
-    const accepted = await runChList(db(), edrList, mine([{ field: "customerMsgStatus", op: "eq", value: "ACCEPTD" }]) as never);
+    const accepted = await runChList(db(), edrList, mine([{ field: "customerMsgStatus", op: "eq", value: "ACCEPTD" }]));
     assert.equal(accepted.rows.length, 0);
   });
 
