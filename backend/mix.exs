@@ -2,8 +2,9 @@ defmodule Sms.Umbrella.MixProject do
   @moduledoc false
   use Mix.Project
 
-  # The Elixir backend (spec §14, docs/BACKEND_PLAN.md): `core` (data stores, event bus, domain) and `switch`
-  # (SMPP engine). The API and jobs apps join in phase B.
+  # The Elixir backend (spec §14, docs/BACKEND_PLAN.md): `core` (data stores, event bus, domain), `switch` (SMPP
+  # engine) and `api` (Phoenix, backend step 9: sign-in, and every call not ported yet forwarded to the mock). The jobs
+  # app joins in phase B.
   def project do
     [
       apps_path: "apps",
@@ -21,7 +22,7 @@ defmodule Sms.Umbrella.MixProject do
       # Sms.Core.Release.migrate/0, VM flags in rel/vm.args.eex.
       releases: [
         sms: [
-          applications: [sms_core: :permanent, sms_switch: :permanent],
+          applications: [sms_core: :permanent, sms_switch: :permanent, sms_api: :permanent],
           include_erts: true,
           steps: [:assemble, &copy_schema/1, :tar]
         ]

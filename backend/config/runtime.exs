@@ -195,3 +195,28 @@ tls_verify =
   end
 
 config :sms_switch, Sms.Switch.Vendor, session: [tls_verify: tls_verify]
+
+# The API (backend step 9): API_PORT (0 = off, e.g. on the witness), the mock server it forwards unported calls to
+# (MOCK_URL, with the shared MOCK_PROXY_SECRET the mock checks), the client address from nginx (TRUST_PROXY=1) and
+# Secure cookies behind HTTPS (COOKIE_SECURE=1).
+api_port = String.to_integer(env.("API_PORT", "0"))
+
+config :sms_api, Sms.Api.Endpoint,
+  http: [ip: {0, 0, 0, 0}, port: api_port],
+  server: api_port > 0,
+  secret_key_base:
+    if(api_port > 0,
+      do: required.("SECRET_KEY_BASE", String.duplicate("dev-only-not-a-secret-", 3)),
+      else: String.duplicate("unused-", 10)
+    )
+
+config :sms_api, Sms.Api.Forward,
+  url: env.("MOCK_URL", "http://127.0.0.1:4010"),
+  secret:
+    if(api_port > 0,
+      do: required.("MOCK_PROXY_SECRET", "dev-only-proxy-secret"),
+      else: System.get_env("MOCK_PROXY_SECRET")
+    )
+
+config :sms_api, Sms.Api.Auth, trust_proxy: System.get_env("TRUST_PROXY") == "1"
+config :sms_api, Sms.Api.Sessions, secure_cookie: System.get_env("COOKIE_SECURE") == "1"

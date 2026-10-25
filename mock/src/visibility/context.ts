@@ -4,7 +4,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { FastifyRequest } from "fastify";
 import { db } from "../db.js";
-import { CURRENT_USER_ID } from "../api/session.js";
+import { currentUserId } from "../api/session.js";
 import { cachedViewer, restricts, type Viewer } from "./policy.js";
 
 export interface VisibilityContext {
@@ -36,11 +36,11 @@ function viewerOf(userId: number, viewAs: boolean): Promise<Viewer | null> {
 }
 
 async function resolve(ctx: VisibilityContext): Promise<Viewer | null> {
-  if (ctx.viewAs !== null && ctx.viewAs !== CURRENT_USER_ID) {
-    const me = await viewerOf(CURRENT_USER_ID, false);
+  if (ctx.viewAs !== null && ctx.viewAs !== currentUserId()) {
+    const me = await viewerOf(currentUserId(), false);
     if (me?.exemptReason === "Administrator") return viewerOf(ctx.viewAs, true);
   }
-  return viewerOf(CURRENT_USER_ID, false);
+  return viewerOf(currentUserId(), false);
 }
 
 /** The current viewer; null outside a request (background jobs see everything). */

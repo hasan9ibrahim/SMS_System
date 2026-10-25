@@ -58,7 +58,7 @@ const setCookie = (reply: FastifyReply, token: string, maxAge: number) =>
   reply.header("set-cookie", `${PORTAL_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`);
 
 /** Desktop / mobile, OS and browser in words, for Logged In Users (§11). */
-function device(ua: string) {
+export function device(ua: string) {
   const mobile = /Mobile|Android|iPhone/i.test(ua);
   const os = /Windows/.test(ua)
     ? "Windows"

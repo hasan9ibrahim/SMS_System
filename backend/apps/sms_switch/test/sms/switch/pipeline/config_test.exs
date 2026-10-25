@@ -194,6 +194,26 @@ defmodule Sms.Switch.Pipeline.ConfigTest do
       assert Config.customer_trunk(1).name == "NOT_SEEN"
     end
 
+    @tag capture_log: true
+    test "a nudge reads what changed at once, without waiting; a failure keeps the old" do
+      PipelineConfig.put()
+      start_server()
+      assert Server.refresh() == :ok
+
+      PipelineConfig.put(customer_trunks: [PipelineConfig.customer_trunk(name: "NUDGED")])
+      assert Server.nudge() == :ok
+      # The next call is answered after the nudge was handled.
+      assert Server.refresh() == :ok
+      assert Config.customer_trunk(1).name == "NUDGED"
+
+      FlakyLoader.fail([:snapshot])
+      PipelineConfig.put(customer_trunks: [PipelineConfig.customer_trunk(name: "NOT_SEEN")])
+      assert Server.nudge() == :ok
+      _ = :sys.get_state(Server)
+      assert Config.customer_trunk(1).name == "NUDGED"
+      FlakyLoader.fail([])
+    end
+
     test "rate tables that failed to load are read again; a table or code that is gone is removed" do
       PipelineConfig.put(rates: rates_with([PipelineConfig.rate(100, 5, "262", "0.04")]))
       start_server()

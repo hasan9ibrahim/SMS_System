@@ -706,6 +706,10 @@ export type PortalUserPage = Schemas["PortalUserPage"];
 // Customer portal (§1, team trial round 5)
 export type PortalListId = Schemas["PortalListId"];
 export type PortalSignInInput = Schemas["PortalSignInInput"];
+export type SignInInput = Schemas["SignInInput"];
+export type SignInCodeInput = Schemas["SignInCodeInput"];
+export type SignInChallengeRef = Schemas["SignInChallengeRef"];
+export type SignInResult = Schemas["SignInResult"];
 export type PortalPasswordInput = Schemas["PortalPasswordInput"];
 export type PortalSession = Schemas["PortalSession"];
 export type PortalTotals = Schemas["PortalTotals"];

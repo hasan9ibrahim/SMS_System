@@ -30,7 +30,7 @@ import { sendProblem } from "../problem.js";
 import { rulesForDestination, type VendorOption } from "../routing/evaluate.js";
 import { loadRulesInOrder, routeThrough, vendorQuality, type RuleCore } from "./routeRules.js";
 import { windowEnd } from "./routeTraffic.js";
-import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
+import { currentUserId, getCurrentUser } from "./session.js";
 import { inputProblem, inTransaction, writeShares } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -1089,7 +1089,7 @@ const toLookup = (r: Record<string, unknown>): SavedLookup => ({
   name: r.name as string,
   owner: { id: r.owner_id as number, displayName: r.owner_name as string },
   sharedWithUserIds: (r.shared as number[]).map(Number),
-  readOnly: r.owner_id !== CURRENT_USER_ID,
+  readOnly: r.owner_id !== currentUserId(),
   query: r.state as RateLookupQuery,
   updatedAt: (r.updated_at as Date).toISOString(),
 });
@@ -1100,7 +1100,7 @@ export function listSavedLookups(_request: FastifyRequest, reply: FastifyReply) 
       `${SELECT} WHERE v.list = $1 AND (v.owner_id = $2
          OR EXISTS (SELECT 1 FROM saved_view_shares s WHERE s.saved_view_id = v.id AND s.user_id = $2))
        ORDER BY (v.owner_id = $2) DESC, v.name`,
-      [LIST, CURRENT_USER_ID],
+      [LIST, currentUserId()],
     );
     return rows.map(toLookup);
   });
@@ -1113,7 +1113,7 @@ export function createSavedLookup(request: FastifyRequest, reply: FastifyReply) 
       const id = await inTransaction(pool, async (c) => {
         const { rows } = await c.query(
           "INSERT INTO saved_views (list, name, owner_id, state) VALUES ($1, $2, $3, $4) RETURNING id",
-          [LIST, input.name.trim(), CURRENT_USER_ID, JSON.stringify(input.query)],
+          [LIST, input.name.trim(), currentUserId(), JSON.stringify(input.query)],
         );
         await writeShares(c, rows[0].id, input.sharedWithUserIds ?? []);
         return rows[0].id as number;
@@ -1129,7 +1129,7 @@ export function createSavedLookup(request: FastifyRequest, reply: FastifyReply) 
 async function ownLookup(pool: pg.Pool, reply: FastifyReply, id: number) {
   const { rows } = await pool.query("SELECT owner_id FROM saved_views WHERE id = $1 AND list = $2", [id, LIST]);
   if (!rows[0]) return sendProblem(reply, 404, `Saved lookup ${id} not found`);
-  if (rows[0].owner_id !== CURRENT_USER_ID)
+  if (rows[0].owner_id !== currentUserId())
     return sendProblem(reply, 403, "Only the owner can change a saved lookup; it was shared with you read-only");
   return null;
 }

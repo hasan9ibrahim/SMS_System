@@ -10,6 +10,11 @@ import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } f
 import { restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
 import { isPortalOperation } from "./api/portal.js";
+import { db } from "./db.js";
+import { DEFAULT_USER_ID, requestUser, runAsRequestUser } from "./auth/user.js";
+
+/** Calls that need no signed-in user (backend step 9, §13.28). */
+const PUBLIC_OPS = new Set(["getHealth", "signIn", "signInCode", "resendSignInCode", "signOut"]);
 
 export const API_PREFIX = "/api/v1";
 
@@ -91,16 +96,25 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
             }
             // The customer portal has its own sign-in and sees only its own data: no staff gate or visibility.
             if (isPortalOperation(op.operationId)) return handler(request, reply);
-            // An expired, temporary or must-change password opens only the Change Password screen (§13.28).
-            if (!GATE_OPEN.has(op.operationId) && (await isBlocked()))
-              return sendProblem(reply, 403, "Change your password to continue", {
-                detail: "Your password expired or must be changed. Only the Change Password screen works until then.",
-                code: "password_change_required",
-              });
-            // The viewer and their visibility policy follow the request (§13.17).
-            const ctx = contextOf(request);
-            (request as unknown as { vis?: VisibilityContext }).vis = ctx;
-            return runWithVisibility(ctx, () => handler(request, reply));
+            // The signed-in user: forwarded by the Elixir API, from the session cookie, or the default user
+            // (src/auth/user.ts).
+            const user = await requestUser(request, db);
+            if (!user && !PUBLIC_OPS.has(op.operationId))
+              return sendProblem(reply, 401, "Sign in to continue", { code: "sign_in_required" });
+            const who = user ?? { userId: DEFAULT_USER_ID, sessionId: null };
+            if (user) (request as unknown as { smsUserId?: number }).smsUserId = user.userId;
+            return runAsRequestUser(who, async () => {
+              // An expired, temporary or must-change password opens only the Change Password screen (§13.28).
+              if (!GATE_OPEN.has(op.operationId) && (await isBlocked()))
+                return sendProblem(reply, 403, "Change your password to continue", {
+                  detail: "Your password expired or must be changed. Only the Change Password screen works until then.",
+                  code: "password_change_required",
+                });
+              // The viewer and their visibility policy follow the request (§13.17).
+              const ctx = contextOf(request);
+              (request as unknown as { vis?: VisibilityContext }).vis = ctx;
+              return runWithVisibility(ctx, () => handler(request, reply));
+            });
           },
         });
       }

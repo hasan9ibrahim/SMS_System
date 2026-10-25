@@ -3,7 +3,7 @@
 // password_change_required until it is changed. The state is cached for a few seconds and dropped on
 // every password change, forced reset or settings save.
 import { db } from "../db.js";
-import { CURRENT_USER_ID } from "../api/session.js";
+import { currentUserId } from "../api/session.js";
 import { LIFETIME_SQL, loadPolicy } from "./passwords.js";
 
 /** Calls that keep working while blocked: the session, the change itself and the shell around it. */
@@ -19,11 +19,16 @@ export const GATE_OPEN = new Set([
   "updatePreferences",
   "recordPageView",
   "getMyPages",
+  "signIn",
+  "signInCode",
+  "resendSignInCode",
+  "signOut",
 ]);
 
-let cache: { blocked: boolean; at: number } | null = null;
+// Per user: requests of several signed-in users run side by side (backend step 9).
+const cache = new Map<number, { blocked: boolean; at: number }>();
 export const invalidateGate = () => {
-  cache = null;
+  cache.clear();
 };
 
 /** The password state of a staff user, as SQL over `u` (users). */
@@ -33,13 +38,15 @@ export const STATE_SQL = `(CASE WHEN u.temp_password_expires_at IS NOT NULL THEN
   WHEN u.password_changed_at + ${LIFETIME_SQL} <= now() + interval '7 days' THEN 'expiring' ELSE 'ok' END)`;
 
 export async function isBlocked(): Promise<boolean> {
-  if (cache && Date.now() - cache.at < 3000) return cache.blocked;
+  const userId = currentUserId();
+  const hit = cache.get(userId);
+  if (hit && Date.now() - hit.at < 3000) return hit.blocked;
   try {
     const pool = db();
     await loadPolicy(pool);
-    const { rows } = await pool.query(`SELECT ${STATE_SQL} AS state FROM users u WHERE u.id = $1`, [CURRENT_USER_ID]);
+    const { rows } = await pool.query(`SELECT ${STATE_SQL} AS state FROM users u WHERE u.id = $1`, [userId]);
     const blocked = ["expired", "temporary", "must_change"].includes(rows[0]?.state);
-    cache = { blocked, at: Date.now() };
+    cache.set(userId, { blocked, at: Date.now() });
     return blocked;
   } catch {
     // No database: the mock answers 503 elsewhere; the gate stays open.

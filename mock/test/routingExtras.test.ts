@@ -10,7 +10,7 @@ import { closeDb, db, dbReady } from "../src/db.js";
 import { chRows } from "../src/edr.js";
 import { processRerating } from "../src/api/rerating.js";
 import { refreshQbrStats } from "../src/api/qbr.js";
-import { CURRENT_USER_ID } from "../src/api/session.js";
+import { currentUserId } from "../src/api/session.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -157,7 +157,7 @@ describe("re-rating", { skip: skipEdr }, () => {
     assert.equal(undo.statusCode, 400, "re-rating requests are not undone");
 
     // A request made by someone else, approved by the signed-in user.
-    const other = (await db().query("SELECT id FROM users WHERE id <> $1 ORDER BY id LIMIT 1", [CURRENT_USER_ID]))
+    const other = (await db().query("SELECT id FROM users WHERE id <> $1 ORDER BY id LIMIT 1", [currentUserId()]))
       .rows[0].id;
     const { rows } = await db().query(
       `INSERT INTO rerating_requests (side, start_date, end_date, enterprise_ids, rate_table_id, mccmncs, priority,
@@ -179,7 +179,7 @@ describe("re-rating", { skip: skipEdr }, () => {
     const approved = await ok("approveReratingRequest", call("POST", `/rerating-requests/${theirs}/approve`));
     assert.equal(approved.record.requestStatus, "approved");
     assert.equal(approved.record.reprocessStatus, "in_queue");
-    await processRerating(db(), theirs, CURRENT_USER_ID);
+    await processRerating(db(), theirs, currentUserId());
     const done: ReratingDetail = await ok("getReratingRequest", call("GET", `/rerating-requests/${theirs}`));
     assert.equal(done.reprocessStatus, "completed", done.error ?? "");
     assert.equal(done.totalEdrs, s.n);

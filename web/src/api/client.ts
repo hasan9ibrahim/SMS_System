@@ -25,11 +25,14 @@ export function setViewAs(id: number | null) {
 }
 /** Fired when the server answers 403 password_change_required (§13.28): the shell then shows only Change Password. */
 export const PASSWORD_REQUIRED_EVENT = "password-change-required";
+/** Fired when the server answers 401 sign_in_required (backend step 9, §13.28): the shell then shows Sign in. */
+export const SIGN_IN_REQUIRED_EVENT = "sign-in-required";
 async function watchPasswordGate(response: Response) {
-  if (response.status !== 403) return;
+  if (response.status !== 403 && response.status !== 401) return;
   try {
     const body = (await response.clone().json()) as { code?: string };
     if (body.code === "password_change_required") window.dispatchEvent(new Event(PASSWORD_REQUIRED_EVENT));
+    if (body.code === "sign_in_required") window.dispatchEvent(new Event(SIGN_IN_REQUIRED_EVENT));
   } catch {
     // Not a problem document.
   }

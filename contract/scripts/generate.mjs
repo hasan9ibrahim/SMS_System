@@ -1,6 +1,8 @@
 // Generates TypeScript types from the contract (CLAUDE.md "Stack": openapi-typescript).
 //   contract/openapi.yaml       -> contract/generated/openapi.ts
 //   contract/events/*.json      -> contract/generated/events.ts
+//   contract/openapi.yaml + access.json -> contract/generated/operations.json (what each operation needs from the
+//                                         user's GUI Access Group; read by the Elixir API, backend step 9)
 // With --check, fails if the committed files are out of date (used in CI).
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -8,6 +10,7 @@ import path from "node:path";
 import openapiTS, { astToString } from "openapi-typescript";
 import { compile } from "json-schema-to-typescript";
 import { format } from "prettier";
+import { parse } from "yaml";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const outDir = path.join(root, "generated");
@@ -54,16 +57,65 @@ async function eventTypes() {
   return banner("contract/events/*.json") + ts + frame;
 }
 
+// Reads: no change (lists, previews, tests, lookups, reports). Writes: the action from the operationId's verb.
+const READ = /^(preview|test|check|simulate|run|get|search|lookup|summarise|calculate|convert|lcrTable|lcrClientView|rateLookup|routeVendorCosts|salesInsights|nocInsights|recordPageView)/;
+const VERBS = [
+  [/^(export|download)/, "export"],
+  [/^(import|upload)/, "import"],
+  [/^(send|resend)/, "send"],
+  [/^(approve|reject|decline)/, "approve"],
+  [/^(start|stop)[A-Z]/, "start_stop"],
+  [/^(archive|delete|remove|revoke|discard)/, "delete"],
+  [/^(create|clone|add|request|duplicate)/, "add"],
+];
+
+async function operationsJson() {
+  const doc = parse(await readFile(path.join(root, "openapi.yaml"), "utf8"));
+  const access = JSON.parse(await readFile(path.join(root, "access.json"), "utf8"));
+  const out = [];
+  for (const [p, item] of Object.entries(doc.paths)) {
+    for (const [method, op] of Object.entries(item)) {
+      if (!["get", "post", "put", "patch", "delete"].includes(method)) continue;
+      const segment = p.split("/")[1];
+      const override = access.operations[op.operationId] ?? {};
+      const open = access.open.includes(segment);
+      const module = open ? null : (override.module ?? access.segments[segment]);
+      if (!open && !module) throw new Error(`access.json: no page for ${op.operationId} (${p})`);
+      const read = method === "get" || p.endsWith("/query") || READ.test(op.operationId);
+      const wanted =
+        override.action ??
+        (read ? null : (VERBS.find(([re]) => re.test(op.operationId))?.[1] ?? (method === "delete" ? "delete" : "edit")));
+      // An action the page does not offer: its Edit, else its View.
+      const offered = module ? access.pages[module] : [];
+      if (module && !offered) throw new Error(`access.json: page ${module} is not in pages`);
+      const action = !wanted || offered.includes(wanted) ? wanted : offered.includes("edit") ? "edit" : "view";
+      out.push({
+        method: method.toUpperCase(),
+        path: p,
+        operationId: op.operationId,
+        tag: op.tags?.[0] ?? null,
+        module: module ?? null,
+        action: open ? null : action,
+        // Admin pages need View even to read, except the ones other pages use as pickers.
+        readChecked: !!module && access.admin.includes(module) && !access.pickerReads.includes(segment),
+      });
+    }
+  }
+  out.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
+  return JSON.stringify(out, null, 1) + "\n";
+}
+
 const outputs = {
   "openapi.ts": await openapiTypes(),
   "events.ts": await eventTypes(),
+  "operations.json": await operationsJson(),
 };
 
 await mkdir(outDir, { recursive: true });
 let stale = [];
 for (const [name, raw] of Object.entries(outputs)) {
   const file = path.join(outDir, name);
-  const content = await format(raw, { parser: "typescript", printWidth: 100 });
+  const content = name.endsWith(".json") ? raw : await format(raw, { parser: "typescript", printWidth: 100 });
   if (check) {
     const current = await readFile(file, "utf8").catch(() => "");
     if (current !== content) stale.push(`contract/generated/${name}`);

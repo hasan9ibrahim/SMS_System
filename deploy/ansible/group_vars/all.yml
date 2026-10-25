@@ -38,6 +38,7 @@ ports:
   epmd: 4369
   erlang_dist: 9150
   switch_http: 9568
+  api: 4100
   smpp: [2775]
   smpp_tls: [2776]
   node_exporter: 9100
@@ -57,3 +58,9 @@ redis_sentinel_group: sms
 switch_user: sms
 switch_root: /opt/sms
 platform_currency: EUR
+
+# The API (backend step 9, apps/sms_api): sign-in and the ported operations; every other call goes to the mock server
+# at mock_url. Off until the screens are served from the servers (phase B); then nginx sends /api to api on port
+# ports.api of both servers.
+api_enabled: false
+mock_url: ""

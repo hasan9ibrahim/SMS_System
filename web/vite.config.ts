@@ -6,6 +6,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, "..", "");
   const target = env.VITE_API_TARGET || "http://127.0.0.1:4010";
+  // The live WebSocket stays on the mock until Phoenix Channels carry it (backend step 9: the Elixir API in front).
+  const socketTarget = env.VITE_SOCKET_TARGET || target;
   return {
     plugins: [react()],
     envDir: "..",
@@ -13,7 +15,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         "/api": { target, changeOrigin: true },
-        "/socket": { target: target.replace(/^http/, "ws"), ws: true },
+        "/socket": { target: socketTarget.replace(/^http/, "ws"), ws: true },
       },
     },
   };

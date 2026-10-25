@@ -22,7 +22,7 @@ import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
 import { chRows } from "../edr.js";
 import { companyMailbox, logEmail } from "../api/emailLog.js";
 import { contactEmails } from "../api/switchTools.js";
-import { CURRENT_USER_ID } from "../api/session.js";
+import { currentUserId } from "../api/session.js";
 import {
   conditionLabel,
   entitiesFor,
@@ -194,7 +194,7 @@ async function activeRules(c: Db): Promise<AlertRuleRow[]> {
 
 async function myDepartment(c: Db) {
   if (!me) {
-    const { rows } = await c.query("SELECT department_id FROM users WHERE id = $1", [CURRENT_USER_ID]);
+    const { rows } = await c.query("SELECT department_id FROM users WHERE id = $1", [currentUserId()]);
     me = { departmentId: rows[0]?.department_id == null ? null : Number(rows[0].department_id) };
   }
   return me.departmentId;
@@ -265,8 +265,8 @@ export async function pushIncident(c: Db, id: number, repeat = false) {
   const { rows } = await c.query(`SELECT ${ALERT_RULE_SELECT} FROM ${ALERT_RULE_FROM} WHERE r.id = $1`, [inc.ruleId]);
   if (!rows[0]) return;
   const rule = mapAlertRule(rows[0]);
-  if (notifies(rule, CURRENT_USER_ID, await myDepartment(c)))
-    push(`alerts:${CURRENT_USER_ID}`, "incident", toEvent(inc, rule, repeat));
+  if (notifies(rule, currentUserId(), await myDepartment(c)))
+    push(`alerts:${currentUserId()}`, "incident", toEvent(inc, rule, repeat));
 }
 
 // ---------------------------------------------------------------- e-mail (§13.7)

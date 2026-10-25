@@ -39,7 +39,7 @@ import { checkListQuery } from "../lists/validate.js";
 import { currentViewer } from "../visibility/context.js";
 import { restricts, type Viewer } from "../visibility/policy.js";
 import { PAGES_BY_DEPARTMENT } from "../generator/teamExtras.js";
-import { CURRENT_USER_ID } from "./session.js";
+import { currentUserId } from "./session.js";
 
 const DAY = 86_400_000;
 const ACTIVE_MS = 5 * 60_000;
@@ -803,7 +803,7 @@ export function updateTeamTargets(request: FastifyRequest, reply: FastifyReply) 
         b.items.map((i) => i.userId),
         b.items.map((i) => i.revenueTarget),
         b.items.map((i) => i.marginTarget),
-        CURRENT_USER_ID,
+        currentUserId(),
       ],
     );
     return loadTargets(pool, b.month, scope);
@@ -907,7 +907,7 @@ export function getMyPages(_request: FastifyRequest, reply: FastifyReply) {
       `SELECT path, count(*)::int AS views, max(at) AS last_at FROM page_views
         WHERE user_id = $1 AND at > now() - interval '30 days'
         GROUP BY path ORDER BY last_at DESC LIMIT 50`,
-      [CURRENT_USER_ID],
+      [currentUserId()],
     );
     // Record names through their lists, so a masked enterprise stays masked (§13.17).
     const titles = new Map<string, string>();
@@ -942,11 +942,11 @@ export function getMyPages(_request: FastifyRequest, reply: FastifyReply) {
 export function recordPageView(request: FastifyRequest, reply: FastifyReply) {
   const { path } = request.body as PageViewInput;
   return withDb(reply, async (pool) => {
-    await pool.query("INSERT INTO page_views (user_id, path) VALUES ($1, $2)", [CURRENT_USER_ID, path.slice(0, 300)]);
+    await pool.query("INSERT INTO page_views (user_id, path) VALUES ($1, $2)", [currentUserId(), path.slice(0, 300)]);
     await pool.query(
       `UPDATE user_sessions SET last_seen_at = now()
         WHERE id = (SELECT id FROM user_sessions WHERE user_id = $1 AND ended_at IS NULL ORDER BY logged_in_at DESC LIMIT 1)`,
-      [CURRENT_USER_ID],
+      [currentUserId()],
     );
     return reply.code(204).send();
   });
@@ -962,7 +962,7 @@ export function startTeamPresence(pool: pg.Pool = db()): () => void {
       `SELECT s.id, s.user_id, d.name AS department FROM user_sessions s JOIN users u ON u.id = s.user_id
         LEFT JOIN departments d ON d.id = u.department_id
         WHERE s.user_kind = 'staff' AND s.ended_at IS NULL AND s.user_id <> $1`,
-      [CURRENT_USER_ID],
+      [currentUserId()],
     );
     const busy = rows.filter(() => Math.random() < 0.5);
     for (const r of busy) {

@@ -12,6 +12,7 @@ import { TabStrip } from "./TabStrip";
 import { TopMenu } from "./TopMenu";
 import { ViewAsBanner } from "./ViewAsBanner";
 import { ChangePasswordScreen, PasswordBanner, usePasswordBlocked } from "./PasswordGate";
+import { SignInScreen, useSignInRequired } from "./SignIn";
 import { listenForDocking, loadWorkspace, startWorkspaceSync, useTabs } from "./tabs";
 import { useThemeSync } from "./theme";
 import { recordPageView } from "../api/team";
@@ -176,6 +177,14 @@ export function Shell() {
             : "right"
           : null;
   const blocked = usePasswordBlocked();
+  const signInRequired = useSignInRequired();
+  // Backend step 9: no session (or it ended) shows only Sign in.
+  if (signInRequired)
+    return (
+      <div className="shell">
+        <SignInScreen />
+      </div>
+    );
   // §13.28: an expired, temporary or must-change password leaves only the Change Password screen.
   if (blocked)
     return (

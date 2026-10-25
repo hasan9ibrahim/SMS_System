@@ -11,8 +11,9 @@ change. It reuses the PostgreSQL schema in `db/postgres/migrations/` and the Cli
 | --- | --- |
 | `apps/sms_core` | The data stores (`Sms.Core.Repo` PostgreSQL, `Sms.Core.ClickHouse` EDRs, `Sms.Core.Redis` live counters), the event bus (`Sms.Core.Bus`, NATS JetStream) and the health check. Billing joins in step 6. |
 | `apps/sms_switch` | The SMPP 3.4 switch: PDUs (step 1), customer side (step 2), vendor side (step 3), message pipeline (step 4). |
+| `apps/sms_api` | The API (Phoenix, the contract, step 9): staff sign-in, the access-group check, the list engine and the ported operations; every other call is forwarded to the mock server. |
 
-The API (Phoenix, the contract) and the jobs app join in phase B.
+The jobs app joins in phase B.
 
 ## SMPP PDUs (step 1)
 
@@ -222,6 +223,35 @@ Load tests: `tools/smpp-sim` and `docs/LOAD_TEST_RESULTS.md`.
   row reconnects.
 - **Sender:** ack wait 30 s with "in progress" every 10 s (`progress_ms`), so a message held by a dead connection is
   handed out again within 30 s; the overload guard ends when nothing waits for the sender.
+
+## The API (step 9)
+
+`apps/sms_api` answers the contract (`contract/openapi.yaml`) at `/api/v1` on `API_PORT`, in front of the mock
+(product owner 2026-10-25): the screens keep one address while operations move to Elixir one by one.
+
+- **Sign-in** (`signIn`, `signInCode`, `resendSignInCode`, `signOut`, §13.28): scrypt passwords in the mock's
+  format, a 2FA code at every login (authenticator, else e-mailed; an administrator can turn it off for one user),
+  lockout after 5 wrong passwords, sessions in `user_sessions` (8 h idle, 24 h at most), sign-in calls limited per
+  address.
+- **Every call** then passes the password gate and the user's GUI Access Group: changes are checked, reads open,
+  Admin pages need View even to read (`contract/access.json` → `contract/generated/operations.json`, `Sms.Api.Access`).
+- **Forwarded** to the mock (`MOCK_URL`) with `X-Sms-User` and the shared `MOCK_PROXY_SECRET`; answers stream back.
+- **Ported:** the list engine (`Sms.Api.Lists.Engine`, §13.25, field catalogues from `contract/generated/lists.json`)
+  with the Audit Trail and Logged In Users lists. A ported operation must give the mock's answers: run the mock's
+  tests against the API with `API_URL=http://127.0.0.1:4100 npm test -w mock -- test/ported-lists.test.ts`.
+- **Config push:** after a saved change every server's switch re-reads its configuration at once
+  (`Sms.Api.ConfigPush` → `Sms.Switch.Pipeline.Config.Server.nudge/0`).
+
+Run it beside the mock (the WebSocket stays on the mock for now):
+
+```sh
+(cd mock && MOCK_PROXY_SECRET=dev-only-proxy-secret TRUST_PROXY=1 npm run dev)
+(cd backend && API_PORT=4100 mix run --no-halt)
+(cd web && VITE_API_TARGET=http://127.0.0.1:4100 VITE_SOCKET_TARGET=http://127.0.0.1:4010 npm run dev)
+```
+
+Sign in with a seeded user and `demo-password-2026`; the seeded administrator (user 1) uses the authenticator secret
+`JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP`, other users get their code in Switch › Email Logs (fake data, no SMTP yet).
 
 ## Quality gates (`mix check`, CI job `backend`)
 

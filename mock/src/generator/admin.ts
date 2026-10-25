@@ -282,7 +282,7 @@ async function adminColumns(
       password_hash: hashPassword(SEED_PASSWORD, salt()),
       must_change_password: (u.must_change_password as boolean) || temp,
       totp_enabled: id === 1 ? true : u.totp_enabled,
-      otp_method: rng.chance(0.15) ? "email" : "off",
+      otp_method: u.totp_enabled || id === 1 ? "authenticator" : rng.chance(0.05) ? "off" : "email",
       language: "en",
       address1: street(rng),
       address2: rng.chance(0.3) ? `Office ${rng.int(100, 999)}` : null,

@@ -4,7 +4,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { ContractOperation } from "../contract.js";
 import { db } from "../db.js";
-import { CURRENT_USER_ID } from "./session.js";
 
 const READS =
   /^(query|preview|check|lookup|evaluate|simulate|test|diagnose|salesInsights|nocInsights|runMasterReport|runTeamReport|getTeamMember|exportTeamReport|recordPageView)/;
@@ -36,7 +35,8 @@ export function auditCall(op: ContractOperation, request: FastifyRequest, reply:
       `INSERT INTO audit_log (user_id, ip, module, controller, method, action, table_name, master_id, status, duration_ms)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
-        CURRENT_USER_ID,
+        // Set by the request's sign-in (or the sign-in call itself); none for an unknown username.
+        (request as unknown as { smsUserId?: number }).smsUserId ?? null,
         request.ip || null,
         op.tag,
         op.path,

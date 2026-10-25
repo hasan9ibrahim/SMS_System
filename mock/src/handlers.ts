@@ -8,6 +8,7 @@ import { contractVersion } from "./contract.js";
 import { listFields } from "./lists/fields.js";
 import { sendProblem } from "./problem.js";
 import { getCurrentUser, getWorkspace, saveWorkspace, updatePreferences } from "./api/session.js";
+import { resendSignInCode, signIn, signInCode, signOut } from "./api/signIn.js";
 import { queryList } from "./api/lists.js";
 import {
   portalChangePassword,
@@ -594,6 +595,10 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   }),
 
   getCurrentUser: () => getCurrentUser(),
+  signIn,
+  signInCode,
+  resendSignInCode,
+  signOut,
   updatePreferences,
   getWorkspace,
   saveWorkspace,

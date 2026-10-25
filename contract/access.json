@@ -1,0 +1,606 @@
+{
+  "$comment": "What each contract operation needs from the user's GUI Access Group (\u00a71, \u00a711; backend step 9, product owner 2026-10-25: every change is checked on the server, reads stay open, the Admin section is closed to non-admins). Admin pages (admin) need the group's View even to read, except the ones other pages read as pickers (pickerReads: account managers, departments, a company's mailboxes, e-mail templates). An operation's page comes from its path's first segment (segments) unless operations names it; its action comes from its method and operationId (scripts/generate.mjs) unless operations names it. open: no check beyond being signed in (the user's own session, preferences, saved views, own undo; the portal has its own sign-in). An action the page does not offer (pages: each page's actions, kept equal to the Admin \u203a Access Groups catalogue by mock/test/access.test.ts) falls back to edit, else view. contract/generated/operations.json is the result.",
+  "open": [
+    "health",
+    "session",
+    "me",
+    "meta",
+    "search",
+    "views",
+    "password-check",
+    "online-users",
+    "changes",
+    "portal"
+  ],
+  "admin": [
+    "change-history",
+    "users",
+    "access-groups",
+    "visibility",
+    "departments",
+    "business-companies",
+    "logged-in",
+    "audit",
+    "email-templates",
+    "security",
+    "cleanup",
+    "migration",
+    "customer-portal"
+  ],
+  "pickerReads": [
+    "users",
+    "departments",
+    "business-companies",
+    "email-templates"
+  ],
+  "pages": {
+    "dashboard": [
+      "view"
+    ],
+    "live-analytics": [
+      "view"
+    ],
+    "enterprises": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "import"
+    ],
+    "customer-trunks": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "send"
+    ],
+    "vendor-trunks": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "start_stop"
+    ],
+    "transactions": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "invoices": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "send",
+      "approve"
+    ],
+    "vendor-invoices": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "send"
+    ],
+    "soa": [
+      "view",
+      "add",
+      "edit",
+      "export",
+      "send"
+    ],
+    "soa-report": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "send"
+    ],
+    "balances": [
+      "view",
+      "export"
+    ],
+    "charges": [
+      "view"
+    ],
+    "currencies": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "billing-cycles": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "rate-manager": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "import",
+      "send"
+    ],
+    "incoming-rns": [
+      "view",
+      "edit",
+      "import",
+      "approve"
+    ],
+    "market-moves": [
+      "view",
+      "export"
+    ],
+    "bulk": [
+      "view",
+      "edit",
+      "import"
+    ],
+    "categories": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "route-rules": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "import"
+    ],
+    "route-map": [
+      "view",
+      "export"
+    ],
+    "lcr": [
+      "view",
+      "add",
+      "export"
+    ],
+    "re-rating": [
+      "view",
+      "add",
+      "approve",
+      "export"
+    ],
+    "rate-lookup": [
+      "view",
+      "export"
+    ],
+    "margin-calculator": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "simulator": [
+      "view"
+    ],
+    "countries": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "mccmnc": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "import"
+    ],
+    "master-table": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "import"
+    ],
+    "mo-book": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "import"
+    ],
+    "translation-rules": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "hlr": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "number-lists": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "import"
+    ],
+    "qbr-stats": [
+      "view",
+      "edit",
+      "export"
+    ],
+    "notifications": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "email-logs": [
+      "view",
+      "export",
+      "send"
+    ],
+    "firewall": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "sms-to-voice": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "traffic-alerts": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "broadcast": [
+      "view",
+      "send"
+    ],
+    "alert-rules": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "incidents": [
+      "view",
+      "edit",
+      "export"
+    ],
+    "edr-search": [
+      "view",
+      "export",
+      "send"
+    ],
+    "edr-download": [
+      "view",
+      "add",
+      "export"
+    ],
+    "edr-templates": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "network-status": [
+      "view",
+      "start_stop"
+    ],
+    "signaling": [
+      "view",
+      "add",
+      "export"
+    ],
+    "pcap-trace": [
+      "view",
+      "add",
+      "export"
+    ],
+    "failed-edr": [
+      "view",
+      "export"
+    ],
+    "diagnosis": [
+      "view"
+    ],
+    "repush": [
+      "view",
+      "add",
+      "approve"
+    ],
+    "master-report": [
+      "view",
+      "export"
+    ],
+    "enterprise-report": [
+      "view",
+      "export"
+    ],
+    "sales-report": [
+      "view",
+      "export"
+    ],
+    "billing-report": [
+      "view",
+      "export"
+    ],
+    "noc-report": [
+      "view",
+      "export"
+    ],
+    "team-report": [
+      "view",
+      "export"
+    ],
+    "scheduled": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "daily-traffic": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "send"
+    ],
+    "change-history": [
+      "view",
+      "undo_others"
+    ],
+    "users": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "change_password"
+    ],
+    "access-groups": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "visibility": [
+      "view",
+      "edit"
+    ],
+    "departments": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "business-companies": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "logged-in": [
+      "view",
+      "edit"
+    ],
+    "audit": [
+      "view",
+      "export"
+    ],
+    "email-templates": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export"
+    ],
+    "security": [
+      "view",
+      "edit"
+    ],
+    "cleanup": [
+      "view",
+      "edit"
+    ],
+    "migration": [
+      "view",
+      "import",
+      "export",
+      "export_credentials"
+    ],
+    "customer-portal": [
+      "view",
+      "add",
+      "edit",
+      "delete",
+      "export",
+      "change_password"
+    ]
+  },
+  "segments": {
+    "access-groups": "access-groups",
+    "alert-rules": "alert-rules",
+    "audit-log": "audit",
+    "billing-cycles": "billing-cycles",
+    "broadcasts": "broadcast",
+    "business-companies": "business-companies",
+    "charges": "charges",
+    "cleanup": "cleanup",
+    "cleanup-findings": "cleanup",
+    "countries": "countries",
+    "currencies": "currencies",
+    "currency-rate-history": "currencies",
+    "currency-rates": "currencies",
+    "customer-portal-users": "customer-portal",
+    "customer-trunks": "customer-trunks",
+    "daily-traffic-alerts": "daily-traffic",
+    "departments": "departments",
+    "destinations": "mccmnc",
+    "dial-code-profiles": "master-table",
+    "dial-codes": "master-table",
+    "edr-downloads": "edr-download",
+    "edr-templates": "edr-templates",
+    "edrs": "edr-search",
+    "email-assets": "email-templates",
+    "email-logs": "email-logs",
+    "email-templates": "email-templates",
+    "enterprise-balances": "balances",
+    "enterprises": "enterprises",
+    "exchange-rates": "currencies",
+    "failed-edrs": "failed-edr",
+    "firewall": "firewall",
+    "firewall-filters": "firewall",
+    "firewall-rules": "firewall",
+    "hlr-policies": "hlr",
+    "hlr-provider-rates": "hlr",
+    "hlr-providers": "hlr",
+    "hlr-rules": "hlr",
+    "incidents": "incidents",
+    "invoice-requests": "invoices",
+    "invoices": "invoices",
+    "lcr": "lcr",
+    "lcr-changes": "lcr",
+    "lcr-profiles": "lcr",
+    "margin-deals": "margin-calculator",
+    "market-moves": "market-moves",
+    "migration": "migration",
+    "mo-numbers": "mo-book",
+    "network-binds": "network-status",
+    "network-diagnosis": "diagnosis",
+    "notifications": "notifications",
+    "number-list-entries": "number-lists",
+    "number-lists": "number-lists",
+    "pcap-traces": "pcap-trace",
+    "product-categories": "categories",
+    "qbr-stats": "qbr-stats",
+    "rate-bulk": "bulk",
+    "rate-lines": "rate-manager",
+    "rate-lookup": "rate-lookup",
+    "rate-lookups": "rate-lookup",
+    "rate-notification-lines": "incoming-rns",
+    "rate-notifications": "incoming-rns",
+    "rate-tables": "rate-manager",
+    "recon-rules": "vendor-invoices",
+    "reports": "master-report",
+    "repush-requests": "repush",
+    "rerating-requests": "re-rating",
+    "route-map": "route-map",
+    "route-rules": "route-rules",
+    "route-simulator": "simulator",
+    "scheduled-reports": "scheduled",
+    "security": "security",
+    "signaling-captures": "signaling",
+    "signaling-recording": "signaling",
+    "sms-voice-rules": "sms-to-voice",
+    "soa": "soa",
+    "soa-reports": "soa-report",
+    "team-targets": "team-report",
+    "team-timeline": "team-report",
+    "traffic-alerts": "traffic-alerts",
+    "transactions": "transactions",
+    "translation-rules": "translation-rules",
+    "user-sessions": "logged-in",
+    "users": "users",
+    "vendor-invoices": "vendor-invoices",
+    "vendor-trunks": "vendor-trunks",
+    "visibility-assignments": "visibility",
+    "visibility-grants": "visibility",
+    "visibility-policies": "visibility"
+  },
+  "operations": {
+    "handOverEnterprise": {
+      "action": "edit"
+    },
+    "uploadEnterpriseDoc": {
+      "action": "edit"
+    },
+    "uploadEmailAsset": {
+      "action": "edit"
+    },
+    "uploadCompanyFile": {
+      "action": "edit"
+    },
+    "intakeRateNotification": {
+      "action": "import"
+    },
+    "acceptRateNotification": {
+      "action": "approve"
+    },
+    "decideVendorInvoice": {
+      "action": "edit"
+    },
+    "setUserPassword": {
+      "action": "change_password"
+    },
+    "setPortalUserPassword": {
+      "action": "change_password"
+    },
+    "forcePasswordChange": {
+      "action": "change_password"
+    },
+    "repushEdrs": {
+      "module": "repush",
+      "action": "add"
+    },
+    "extractRecording": {
+      "action": "add"
+    },
+    "startSignalingCapture": {
+      "action": "add"
+    },
+    "stopSignalingCapture": {
+      "action": "add"
+    },
+    "keepSignalingCapture": {
+      "action": "add"
+    },
+    "runScheduledReport": {
+      "action": "edit"
+    },
+    "scanCleanup": {
+      "action": "edit"
+    },
+    "runPasswordReminders": {
+      "action": "edit"
+    }
+  }
+}

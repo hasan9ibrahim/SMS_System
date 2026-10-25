@@ -17,6 +17,7 @@ import { TabPane } from "./TabPane";
 import { popoutPath } from "./tabContext";
 import { defaultTitle, type Tab } from "./tabs";
 import { useThemeSync } from "./theme";
+import { SignInScreen, useSignInRequired } from "./SignIn";
 
 const params = new URLSearchParams(location.search);
 const tabId = params.get("id") ?? `w${Date.now()}`;
@@ -25,6 +26,7 @@ popoutPath.setState({ path: params.get("path") ?? "/" });
 export function Popout() {
   useThemeSync();
   const { data: me } = useMe();
+  const signInRequired = useSignInRequired();
   const path = popoutPath((s) => s.path);
   const title =
     params.get("title") && pageForPath(path) === pageForPath(params.get("path") ?? "/")
@@ -51,6 +53,12 @@ export function Popout() {
     e.dataTransfer.effectAllowed = "move";
   };
 
+  if (signInRequired)
+    return (
+      <div className="shell popout">
+        <SignInScreen />
+      </div>
+    );
   return (
     <div className="shell popout">
       <header className="popout-bar">

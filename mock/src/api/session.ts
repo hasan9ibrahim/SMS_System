@@ -30,12 +30,13 @@ export function dashboardSettings(saved: Record<string, unknown> | null): Dashbo
   return out as unknown as DashboardSettings;
 }
 
-/** The fake user the mock signs in as (user 1 is a seeded administrator). */
-export const CURRENT_USER_ID = Number(process.env.MOCK_USER_ID ?? 1);
+/** The user of the current request (src/auth/user.ts). */
+export { currentUserId } from "../auth/user.js";
+import { currentUserId, DEFAULT_USER_ID } from "../auth/user.js";
 
 // Used when the database is not running, so the shell still renders (CLAUDE.md rule 1: fake).
 export const demoUser: CurrentUser = {
-  id: CURRENT_USER_ID,
+  id: DEFAULT_USER_ID,
   username: "demo.admin",
   displayName: "Demo Admin",
   initials: "DA",
@@ -108,7 +109,7 @@ export function canUndoOthers(user: CurrentUser): boolean {
 
 export async function getCurrentUser(): Promise<CurrentUser> {
   try {
-    return (await loadUser(db(), CURRENT_USER_ID)) ?? demoUser;
+    return (await loadUser(db(), currentUserId())) ?? demoUser;
   } catch {
     return demoUser;
   }
@@ -123,7 +124,7 @@ export function updatePreferences(request: FastifyRequest, reply: FastifyReply) 
               alert_sounds = COALESCE($6, alert_sounds), analytics_settings = COALESCE($7, analytics_settings),
               updated_at = now() WHERE id = $1`,
       [
-        CURRENT_USER_ID,
+        currentUserId(),
         body.theme ?? null,
         body.openInNewTab ?? null,
         body.animations ?? null,
@@ -132,14 +133,14 @@ export function updatePreferences(request: FastifyRequest, reply: FastifyReply) 
         body.liveAnalytics ? JSON.stringify(body.liveAnalytics) : null,
       ],
     );
-    return (await loadUser(pool, CURRENT_USER_ID)) ?? demoUser;
+    return (await loadUser(pool, currentUserId())) ?? demoUser;
   });
 }
 
 export function getWorkspace(_request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool): Promise<Workspace> => {
     const { rows } = await pool.query("SELECT tabs, active_tab_id FROM user_workspaces WHERE user_id = $1", [
-      CURRENT_USER_ID,
+      currentUserId(),
     ]);
     return rows[0] ? { tabs: rows[0].tabs, activeTabId: rows[0].active_tab_id } : { tabs: [], activeTabId: null };
   });
@@ -151,7 +152,7 @@ export function saveWorkspace(request: FastifyRequest, reply: FastifyReply) {
     await pool.query(
       `INSERT INTO user_workspaces (user_id, tabs, active_tab_id, updated_at) VALUES ($1, $2, $3, now())
        ON CONFLICT (user_id) DO UPDATE SET tabs = EXCLUDED.tabs, active_tab_id = EXCLUDED.active_tab_id, updated_at = now()`,
-      [CURRENT_USER_ID, JSON.stringify(ws.tabs), ws.activeTabId],
+      [currentUserId(), JSON.stringify(ws.tabs), ws.activeTabId],
     );
     return ws;
   });
