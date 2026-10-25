@@ -53,6 +53,57 @@ defmodule Sms.Switch.CommandsTest do
              ask("bind", %{"side" => "vendor", "trunk_id" => 1})
   end
 
+  describe "over NATS" do
+    @describetag :integration
+
+    test "every server answers smscmd.all.*, one answers smscmd.any.*; the reply is the JSON answer" do
+      settings =
+        Sms.Core.Bus.Nats.connection_settings(
+          Application.fetch_env!(:sms_core, Sms.Core.Bus.Nats)
+        )
+
+      start_supervised!(
+        {Gnat.ConnectionSupervisor,
+         %{
+           name: Sms.Core.Bus.Nats.connection(),
+           backoff_period: 500,
+           connection_settings: settings
+         }}
+      )
+
+      assert_eventually(fn -> is_pid(Process.whereis(Sms.Core.Bus.Nats.connection())) end)
+      start_supervised!(Commands)
+      conn = Sms.Core.Bus.Nats.connection()
+
+      ask = fn subject ->
+        case Gnat.request(conn, subject, ~s({"side": "customer"}), receive_timeout: 2_000) do
+          {:ok, %{body: body}} -> Jason.decode!(body)
+          other -> other
+        end
+      end
+
+      assert_eventually(fn -> match?(%{"ok" => true}, ask.("smscmd.all.ping")) end)
+
+      assert %{"ok" => true, "node" => node, "data" => %{"version" => _}} =
+               ask.("smscmd.any.ping")
+
+      assert node == Commands.node_id()
+
+      assert %{"ok" => true, "data" => %{"reloaded" => "customer"}} =
+               ask.("smscmd.node.#{node}.bind")
+
+      assert %{"ok" => false, "error" => "unknown command \"nope\""} = ask.("smscmd.any.nope")
+    end
+
+    defp assert_eventually(fun, tries \\ 50) do
+      cond do
+        fun.() -> :ok
+        tries == 0 -> flunk("condition never became true")
+        true -> Process.sleep(100) && assert_eventually(fun, tries - 1)
+      end
+    end
+  end
+
   describe "Network Diagnosis" do
     test "checks its input" do
       assert {:error, {:bad_input, "tool must be" <> _}} =

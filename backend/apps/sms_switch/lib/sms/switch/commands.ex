@@ -16,7 +16,10 @@ defmodule Sms.Switch.Commands do
   """
   use Gnat.Server
   require Logger
-  alias Sms.Switch.Commands.{Diagnose, Inject}
+  alias Sms.Core.Bus.Nats
+  alias Sms.Switch.Commands.{Diagnose, Inject, Pcap}
+  alias Sms.Switch.{Customer, Vendor}
+  alias Sms.Switch.Pipeline.Config.Server, as: ConfigServer
 
   @prefix "smscmd"
   @queue_group "sms-switch"
@@ -30,7 +33,7 @@ defmodule Sms.Switch.Commands do
         {Gnat.ConsumerSupervisor, :start_link,
          [
            %{
-             connection_name: Sms.Core.Bus.Nats.connection(),
+             connection_name: Nats.connection(),
              module: __MODULE__,
              subscription_topics: [
                %{topic: "#{@prefix}.all.>"},
@@ -89,7 +92,7 @@ defmodule Sms.Switch.Commands do
   # Network Status Stop / Start (§9.2): the service has already marked the trunk in `trunk_binds`; the trunk stores and
   # the routing snapshot re-read it now instead of within their 5 s refresh.
   def handle("bind", %{"side" => side}) when side in ["customer", "vendor"] do
-    reload(side)
+    _ = reload(side)
     {:ok, %{reloaded: side}}
   end
 
@@ -97,15 +100,16 @@ defmodule Sms.Switch.Commands do
   def handle("diagnose", data), do: Diagnose.run(data)
   def handle("test_sms", data), do: Inject.test_sms(data)
   def handle("repush", data), do: Inject.repush(data)
+  def handle("pcap_" <> _ = name, data), do: Pcap.handle(name, data)
   def handle(name, _), do: {:error, {:unknown_command, name}}
 
   defp reload("customer") do
-    if enabled?(Sms.Switch.Customer), do: Sms.Switch.Customer.reload_trunks()
+    if enabled?(Customer), do: Customer.reload_trunks()
   end
 
   defp reload("vendor") do
-    if enabled?(Sms.Switch.Vendor), do: Sms.Switch.Vendor.reload_trunks()
-    if enabled?(Sms.Switch.Pipeline), do: Sms.Switch.Pipeline.Config.Server.nudge()
+    _ = if enabled?(Vendor), do: Vendor.reload_trunks()
+    if enabled?(Sms.Switch.Pipeline), do: ConfigServer.nudge()
   end
 
   defp enabled?(side),
@@ -114,6 +118,7 @@ defmodule Sms.Switch.Commands do
   defp version, do: :sms_switch |> Application.spec(:vsn) |> to_string()
 
   defp message({:bad_input, text}), do: text
+  defp message({:not_found, text}), do: text
   defp message({:unknown_command, name}), do: "unknown command #{inspect(name)}"
   defp message(:bad_json), do: "the request is not JSON"
   defp message(text) when is_binary(text), do: text

@@ -55,16 +55,7 @@ defmodule Sms.Switch.Commands.Inject do
          {:ok, vendor} <- id(data["vendor_trunk_id"], "vendor_trunk_id"),
          {:ok, ids} <- edr_ids(data["edr_ids"]),
          {:ok, rows} <- final_attempts(ids) do
-      results =
-        for row <- rows do
-          with {:ok, pdu} <- pdu(row) do
-            Intake.inject(context(row.trunk_id), pdu, %{
-              kind: "repush",
-              vendor_trunk_id: vendor,
-              repush_request_id: request_id
-            })
-          end
-        end
+      results = Enum.map(rows, &send_again(&1, vendor, request_id))
 
       refused = for {:error, reason} <- results, do: reason_text(reason)
 
@@ -76,6 +67,13 @@ defmodule Sms.Switch.Commands.Inject do
          reasons:
            refused |> Enum.frequencies() |> Enum.map(fn {r, n} -> %{reason: r, count: n} end)
        }}
+    end
+  end
+
+  defp send_again(row, vendor, request_id) do
+    with {:ok, pdu} <- pdu(row) do
+      internal = %{kind: "repush", vendor_trunk_id: vendor, repush_request_id: request_id}
+      Intake.inject(context(row.trunk_id), pdu, internal)
     end
   end
 

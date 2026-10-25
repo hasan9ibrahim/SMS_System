@@ -140,7 +140,14 @@ defmodule Sms.Switch.Pipeline.Router do
   stopped), `:blocked` (its egress translation blocks the message).
   """
   @spec forced(integer(), input()) ::
-          {:ok, routed()} | {:error, :unknown_vendor | :vendor_inactive | :blocked, nil}
+          {:ok,
+           %{
+             decision: map(),
+             vendor_trunk_id: integer(),
+             cost: Config.rate() | nil,
+             egress: Translation.result()
+           }}
+          | {:error, :unknown_vendor | :vendor_inactive | :blocked, nil}
   def forced(vendor_trunk_id, input) do
     case Config.vendor_trunk(vendor_trunk_id) do
       nil ->

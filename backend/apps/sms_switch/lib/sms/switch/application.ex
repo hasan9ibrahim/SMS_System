@@ -1,6 +1,8 @@
 defmodule Sms.Switch.Application do
   @moduledoc false
   use Application
+  alias Sms.Core.Bus
+  alias Sms.Switch.Commands
   alias Sms.Switch.Pipeline.MessageId
 
   # The TPS counters are shared by both sides; each side starts when enabled (step 2 customer, step 3 vendor), after
@@ -43,7 +45,7 @@ defmodule Sms.Switch.Application do
 
   # Commands from the screens over NATS request/reply (backend step 11c); none on the in-memory test bus.
   defp commands do
-    if Sms.Core.Bus.adapter() == Sms.Core.Bus.Nats, do: [Sms.Switch.Commands], else: []
+    if Bus.adapter() == Bus.Nats, do: [Commands.Pcap, Commands], else: []
   end
 
   # On the servers, with a witness (backend step 8): which server steps back when they lose each other.
