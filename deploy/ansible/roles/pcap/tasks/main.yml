@@ -1,11 +1,31 @@
 # Recorded SMPP traffic for 60 days (spec §9.2; plan §3.4): dumpcap writes 15-minute files in a ring outside the
-# switch, so recording never slows the message path. The PCAP screens' extract job reads these files (phase B).
-- name: dumpcap
-  ansible.builtin.apt: {name: wireshark-common, update_cache: true, cache_valid_time: 3600}
-  environment: {DEBIAN_FRONTEND: noninteractive}
+# switch, so recording never slows the message path. The switch reads these files for the PCAP screens and runs its own
+# live captures, extracts and Network Diagnosis probes (backend step 11c, Sms.Switch.Commands.Pcap and .Diagnose).
+- name: Live captures run dumpcap as the switch user (capture rights through the wireshark group)
+  ansible.builtin.debconf: {name: wireshark-common, question: wireshark-common/install-setuid, value: "true", vtype: boolean}
 
-- name: Folder
-  ansible.builtin.file: {path: "{{ pcap_dir }}", state: directory, owner: root, group: root, mode: "0750"}
+- name: dumpcap, tshark, mergecap, capinfos and the diagnosis tools
+  ansible.builtin.apt:
+    name: [wireshark-common, tshark, iputils-ping, traceroute, mtr-tiny]
+    update_cache: true
+    cache_valid_time: 3600
+  environment: {DEBIAN_FRONTEND: noninteractive}
+  register: packages
+
+- name: Capture rights applied when the package was already installed
+  ansible.builtin.command: dpkg-reconfigure -f noninteractive wireshark-common
+  when: packages.changed
+  changed_when: true
+
+# Takes effect when the switch next starts (deploy.yml restarts it one server at a time).
+- name: The switch user may capture
+  ansible.builtin.user: {name: "{{ switch_user }}", groups: wireshark, append: true}
+
+- name: Recording folder (written by root, read by the switch)
+  ansible.builtin.file: {path: "{{ pcap_dir }}", state: directory, owner: root, group: "{{ switch_user }}", mode: "0750"}
+
+- name: Captures and extracts folder (written by the switch)
+  ansible.builtin.file: {path: "{{ pcap_dir }}/captures", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0750"}
 
 - name: Service
   ansible.builtin.template: {src: sms-pcap.service.j2, dest: /etc/systemd/system/sms-pcap.service, mode: "0644"}

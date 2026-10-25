@@ -27,6 +27,7 @@ import { startMailer } from "./jobs/mailer.js";
 import { startAutoInvoicing } from "./jobs/autoInvoices.js";
 import { startImapIntake } from "./jobs/imap.js";
 import { startRnReminders } from "./jobs/rnReminders.js";
+import { startSwitchJobs } from "./jobs/switchJobs.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -79,6 +80,8 @@ whenLeader(() => {
     // Incoming RNs from the Rates mailboxes (§13.13 A).
     startImapIntake();
     startRnReminders();
+    // Capture status, the recording's files, Repush progress and the capture purge from the switch (step 11c).
+    startSwitchJobs();
     return;
   }
   // Demo only: the fake vendor-invoice mailbox, the bind simulator, and the fake team's targets and presence (§13.18).

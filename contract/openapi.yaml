@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.98.0
+  version: 0.99.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -9006,8 +9006,6 @@ paths:
             schema:
               $ref: "#/components/schemas/RepushInput"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "201":
           description: The repush request
           content:
@@ -9464,8 +9462,6 @@ paths:
             enum: [customer, vendor]
         - $ref: "#/components/parameters/RecordId"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "200":
           description: The new status
           content:
@@ -9495,8 +9491,6 @@ paths:
             enum: [customer, vendor]
         - $ref: "#/components/parameters/RecordId"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "200":
           description: The new status
           content:
@@ -9553,8 +9547,6 @@ paths:
             schema:
               $ref: "#/components/schemas/SignalingCaptureInput"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "201":
           description: Started
           content:
@@ -9607,10 +9599,10 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RecordId"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "200":
-          description: The pcap file (gzip-compressed once its quarter is over)
+          description: >-
+            The quarter's traffic (gzip-compressed once its quarter is over). In production each switch server's
+            recording file of the quarter, one after the other (pcapng sections; Wireshark opens them as one file).
           content:
             application/vnd.tcpdump.pcap:
               schema:
@@ -9624,6 +9616,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
   /signaling-captures/extract:
     post:
@@ -9640,8 +9634,6 @@ paths:
             schema:
               $ref: "#/components/schemas/RecordingExtractInput"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "201":
           description: Being prepared
           content:
@@ -9740,8 +9732,6 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RecordId"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "200":
           description: The pcap file
           content:
@@ -9774,8 +9764,6 @@ paths:
             schema:
               $ref: "#/components/schemas/RouteSimulatorInput"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "200":
           description: What would happen
           content:
@@ -9806,8 +9794,6 @@ paths:
             schema:
               $ref: "#/components/schemas/NetworkDiagnosisInput"
       responses:
-        "501":
-          $ref: "#/components/responses/SwitchCommandPending"
         "200":
           description: The tool's output
           content:
@@ -15460,15 +15446,6 @@ components:
         $ref: "#/components/schemas/ListId"
 
   responses:
-    SwitchCommandPending:
-      description: |
-        Production only (backend step 11): this action needs a command to the SMPP switch (send a test SMS, resubmit,
-        stop or start a bind, capture packets, run a diagnosis on the switch servers), which is not available yet. The
-        screen says so instead of showing simulated results. Elsewhere (the trial on fake data) it is simulated.
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/Problem"
     BadRequest:
       description: The request does not match the contract (e.g. unknown filter field or operator)
       content:
@@ -25953,6 +25930,10 @@ components:
           type: [string, "null"]
           description: Why the message would be rejected, if it would.
         testSms:
+          description: >-
+            Test SMS. In production the switch answers whether it took the message (ACCEPTD, with its message id; the
+            receipt then shows in EDR Search) or refused it (REJECTD with the reason, messageId empty); a Test SMS is
+            never billed to the customer and the customer gets no receipt for it (backend step 11c).
           oneOf:
             - type: object
               required: [messageId, status, detail]
@@ -25961,7 +25942,7 @@ components:
                   type: string
                 status:
                   type: string
-                  enum: [DELIVRD, UNDELIV, REJECTD, EXPIRED]
+                  enum: [ACCEPTD, DELIVRD, UNDELIV, REJECTD, EXPIRED]
                 detail:
                   type: string
             - type: "null"

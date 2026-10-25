@@ -76,7 +76,10 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     }
   end
 
-  # An ingress translation's registered delivery wins over the customer's own (§6.4).
+  # An ingress translation's registered delivery wins over the customer's own (§6.4). The customer never sent a Test
+  # SMS or Repush (backend step 11c), so it gets no receipt for one.
+  defp registered_delivery(%{internal: %{}}), do: 0
+
   defp registered_delivery(msg),
     do: msg.ingress[:registered_delivery] || msg.fields[:registered_delivery] || 0
 

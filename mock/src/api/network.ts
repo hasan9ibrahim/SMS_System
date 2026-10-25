@@ -2,7 +2,7 @@
 // In this phase the mock plays the switch: it keeps every trunk's bind status and SMPP sessions
 // (trunk_binds, bind_sessions) moving, builds pcap files from fake SMPP traffic, and answers
 // diagnosis tools with simulated output. Nothing here sends a packet.
-import { gzipSync } from "node:zlib";
+import { createGzip, gzipSync } from "node:zlib";
 import { isIP } from "node:net";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
@@ -33,6 +33,18 @@ import { csvCell, notFound } from "./masterData.js";
 import { getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
 import { production } from "../mode.js";
+import { switchProblem } from "../switch/commands.js";
+import {
+  captureSources,
+  switchBind,
+  switchDiagnose,
+  switchExtract,
+  switchFiles,
+  switchStartCapture,
+  switchStopCapture,
+  traceSources,
+  trunkAddresses,
+} from "../switch/operations.js";
 
 type Side = "customer" | "vendor";
 type TrunkParams = { side: Side; id: number };
@@ -297,6 +309,11 @@ export function startTrunkBind(request: FastifyRequest, reply: FastifyReply) {
     const before = await loadBind(pool, side, id);
     if (!before) return notFound(reply, `${side === "customer" ? "Customer" : "Vendor"} trunk`, id);
     const me = await getCurrentUser();
+    // Production (backend step 11c): the switch lets the trunk bind again; its status follows the session events.
+    if (production) {
+      await switchBind(pool, side, id, "start", me.id);
+      return loadBind(pool, side, id);
+    }
     if (side === "vendor") await bringOnline(pool, side, id, before.maxConnections, me.id);
     else {
       // Binds are accepted again; the customer reconnects a few seconds later.
@@ -322,6 +339,11 @@ export function stopTrunkBind(request: FastifyRequest, reply: FastifyReply) {
     if (!(await loadBind(pool, side, id)))
       return notFound(reply, `${side === "customer" ? "Customer" : "Vendor"} trunk`, id);
     const me = await getCurrentUser();
+    // Production (backend step 11c): the switch closes the trunk's sessions and refuses binds until Start.
+    if (production) {
+      await switchBind(pool, side, id, "stop", me.id);
+      return loadBind(pool, side, id);
+    }
     await pool.query("DELETE FROM bind_sessions WHERE side = $1 AND trunk_id = $2", [side, id]);
     await pool.query(
       `UPDATE trunk_binds SET status = 'stopped', connections = 0, tps = 0, queue = CASE WHEN side = 'vendor' THEN 0 END,
@@ -446,7 +468,7 @@ export function extractRecording(request: FastifyRequest, reply: FastifyReply) {
     // The packets of a trunk come from its host; the file keeps that address for the client side.
     const hostIp = ip ?? ((ct ?? vt)?.host_ips?.[0] as string | undefined) ?? null;
     const stamp = (t: number) => new Date(t).toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "_");
-    const name = `recording_${stamp(from)}-${stamp(to)}${ct || vt ? `_${(ct ?? vt).name}` : ""}.pcap`;
+    const name = `recording_${stamp(from)}-${stamp(to)}${ct || vt ? `_${(ct ?? vt).name}` : ""}.${production ? "pcapng" : "pcap"}`;
     const { rows } = await pool.query(
       `INSERT INTO signaling_captures (file_name, ip_filter, max_duration_seconds, max_file_size_bytes, started_by_id,
                                        source, recorded_from, recorded_to, criteria)
@@ -462,7 +484,26 @@ export function extractRecording(request: FastifyRequest, reply: FastifyReply) {
         parts.length ? parts.join(" · ") : null,
       ],
     );
-    return reply.code(201).send(await loadCapture(pool, Number(rows[0].id)));
+    const id = Number(rows[0].id);
+    if (production) {
+      // Each switch server cuts its own recording: the trunk's addresses, the IP, number and message id (AND).
+      const trunkIps = [
+        ...(b.customerTrunkId ? await trunkAddresses(pool, "customer", b.customerTrunkId) : []),
+        ...(b.vendorTrunkId ? await trunkAddresses(pool, "vendor", b.vendorTrunkId) : []),
+      ];
+      try {
+        await switchExtract(pool, id, {
+          from: new Date(from).toISOString(),
+          to: new Date(to).toISOString(),
+          ipFilters: ip ? [ip] : trunkIps,
+          number: b.number?.trim() || null,
+          messageId: b.messageId?.trim() || null,
+        });
+      } catch (err) {
+        return switchProblem(reply, err);
+      }
+    }
+    return reply.code(201).send(await loadCapture(pool, id));
   });
 }
 
@@ -498,13 +539,22 @@ export function startSignalingCapture(request: FastifyRequest, reply: FastifyRep
     if (busy[0].n >= 3) return sendProblem(reply, 409, "Three captures are already running; stop one first");
     const me = await getCurrentUser();
     const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "_");
-    const name = `smpp_${stamp}${ip ? `_${ip.replace(/[/:]/g, "-")}` : ""}.pcap`;
+    // The switch servers write pcapng (backend step 11c).
+    const name = `smpp_${stamp}${ip ? `_${ip.replace(/[/:]/g, "-")}` : ""}.${production ? "pcapng" : "pcap"}`;
     const { rows } = await pool.query(
       `INSERT INTO signaling_captures (file_name, ip_filter, max_duration_seconds, max_file_size_bytes, started_by_id, size_bytes)
-       VALUES ($1, $2, $3, $4, $5, 24) RETURNING id`,
-      [name, ip, b.maxDurationSeconds, b.maxFileSizeBytes, me.id],
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [name, ip, b.maxDurationSeconds, b.maxFileSizeBytes, me.id, production ? 0 : 24],
     );
-    return reply.code(201).send(await loadCapture(pool, Number(rows[0].id)));
+    const id = Number(rows[0].id);
+    if (production) {
+      try {
+        await switchStartCapture(pool, id, ip, b.maxDurationSeconds, b.maxFileSizeBytes);
+      } catch (err) {
+        return switchProblem(reply, err);
+      }
+    }
+    return reply.code(201).send(await loadCapture(pool, id));
   });
 }
 
@@ -514,6 +564,7 @@ export function stopSignalingCapture(request: FastifyRequest, reply: FastifyRepl
     const c = await loadCapture(pool, id);
     if (!c) return notFound(reply, "Capture", id);
     if (c.status !== "running") return sendProblem(reply, 409, `This capture is already ${c.status}`);
+    if (production) await switchStopCapture(id);
     await pool.query("UPDATE signaling_captures SET status = 'stopped', updated_at = now() WHERE id = $1", [id]);
     return loadCapture(pool, id);
   });
@@ -541,6 +592,7 @@ export function downloadPcapTrace(request: FastifyRequest, reply: FastifyReply) 
   const now = Date.now();
   if (!Number.isFinite(start) || start > now || start < now - (RECORDING_DAYS + 1) * 86_400_000)
     return notFound(reply, "Trace file", id);
+  if (production) return downloadSwitchTrace(reply, id, start, now);
   const inProgress = start + 900_000 > now;
   const stamp = new Date(start).toISOString().slice(2, 19).replace(/[T:]/g, "-");
   // A sample of the quarter (at most 4 MB of packets), so downloads stay quick on fake data.
@@ -562,12 +614,48 @@ export function downloadSignalingCapture(request: FastifyRequest, reply: Fastify
     const c = await loadCapture(pool, id);
     if (!c) return notFound(reply, "Capture", id);
     if (c.status === "failed") return sendProblem(reply, 409, "This capture failed and has no file");
+    if (production) {
+      // Each switch server's file of the capture, one after the other (pcapng sections, backend step 11c).
+      try {
+        const sources = await captureSources(id);
+        if (!sources.length) return sendProblem(reply, 409, "No switch server has a file for this capture");
+        return reply
+          .type("application/vnd.tcpdump.pcap")
+          .header("content-disposition", `attachment; filename="${c.fileName}"`)
+          .send(switchFiles(sources));
+      } catch (err) {
+        return switchProblem(reply, err);
+      }
+    }
     return reply
       .type("application/vnd.tcpdump.pcap")
       .header("content-disposition", `attachment; filename="${c.fileName}"`)
       .send(
         buildPcap(c.id, c.ipFilter, Date.parse(c.recordedFrom ?? c.startedAt), Math.min(c.sizeBytes, 4 * 1024 * 1024)),
       );
+  });
+}
+
+/** A quarter of the recording from the switch servers (backend step 11c): each server's file, gzipped once it is over. */
+function downloadSwitchTrace(reply: FastifyReply, id: number, start: number, now: number) {
+  return withDb(reply, async (pool) => {
+    try {
+      const sources = await traceSources(pool, new Date(start));
+      if (!sources.length) return notFound(reply, "Trace file", id);
+      const stamp = new Date(start).toISOString().slice(2, 19).replace(/[T:]/g, "-");
+      const file = switchFiles(sources);
+      return start + 900_000 > now
+        ? reply
+            .type("application/vnd.tcpdump.pcap")
+            .header("content-disposition", `attachment; filename="trace-${stamp}.pcapng"`)
+            .send(file)
+        : reply
+            .type("application/gzip")
+            .header("content-disposition", `attachment; filename="trace-${stamp}.pcapng.gz"`)
+            .send(file.pipe(createGzip()));
+    } catch (err) {
+      return switchProblem(reply, err);
+    }
   });
 }
 
@@ -888,5 +976,7 @@ export function runNetworkDiagnosis(request: FastifyRequest, reply: FastifyReply
   if (b.source && !isIP(b.source.trim())) errors.push({ path: "/source", message: "an IP address of the switch host" });
   if (b.tool === "telnet" && !b.port) errors.push({ path: "/port", message: "telnet needs a port" });
   if (errors.length) return badInput(reply, errors);
+  // Production (backend step 11c): run on the switch server that has the source address.
+  if (production) return switchDiagnose(b).catch((err: unknown) => switchProblem(reply, err));
   return diagnose(b);
 }

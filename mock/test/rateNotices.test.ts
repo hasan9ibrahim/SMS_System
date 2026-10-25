@@ -83,11 +83,12 @@ test(
     // The readable change log shows the save as a decrease of that destination (team trial round 2).
     const log = await app.inject({
       method: "GET",
-      url: `${API_PREFIX}/rate-tables/${line.table_id}/change-log?limit=1`,
+      url: `${API_PREFIX}/rate-tables/${line.table_id}/change-log?limit=20`,
     });
     assert.equal(log.statusCode, 200, log.body);
-    const entry = log.json().rows[0];
-    assert.equal(entry.changeId, body.change.id);
+    // Other test files may save the same table meanwhile: find this save's entry rather than taking the newest.
+    const entry = log.json().rows.find((r: { changeId: number }) => r.changeId === body.change.id);
+    assert.ok(entry, "the save is in the table's change log");
     assert.equal(entry.items[0].kind, "decrease");
     assert.ok(Math.abs(entry.items[0].changePct + 10) < 0.01);
     const undo = await app.inject({ method: "POST", url: `${API_PREFIX}/changes/${body.change.id}/undo`, payload: {} });

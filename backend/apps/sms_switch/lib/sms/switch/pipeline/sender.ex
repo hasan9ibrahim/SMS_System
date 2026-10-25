@@ -320,7 +320,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     tried = MapSet.new(resend.tried)
 
     _ =
-      case Router.route(Intake.router_input(msg), tried) do
+      case reroute(msg, tried) do
         {:ok, routed} ->
           attempt(msg, Intake.route_of(routed), resend.no + 1, tried, [])
 
@@ -359,11 +359,17 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
+  # The next vendor in the rules' order. A Test SMS or Repush to a chosen vendor goes nowhere else (backend step 11c).
+  defp reroute(%{internal: %{vendor_trunk_id: vt}}, _tried) when is_integer(vt),
+    do: {:error, :chosen_vendor, nil}
+
+  defp reroute(msg, tried), do: Router.route(Intake.router_input(msg), tried)
+
   # The next vendor in the rules' order; none left → the message has failed.
   defp next(msg, no, tried, rows, failed) do
     rows = if failed, do: [elem(failed, 0) | rows], else: rows
 
-    case Router.route(Intake.router_input(msg), tried) do
+    case reroute(msg, tried) do
       {:ok, routed} ->
         publish_rows(msg, rows, false)
         attempt(msg, Intake.route_of(routed), no, tried, [])

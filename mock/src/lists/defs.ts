@@ -11,6 +11,7 @@ import {
   userList,
 } from "./adminDefs.js";
 import { currentUserId } from "../api/session.js";
+import { production } from "../mode.js";
 import { alertRuleList, incidentList } from "./alertDefs.js";
 import { rnLineList, rnList } from "./rnDefs.js";
 import { marketMoveList } from "../api/marketMoves.js";
@@ -3087,9 +3088,18 @@ const PCAP_TRACE_FROM = `(SELECT q.*, CASE WHEN q.in_progress
                    least(g + interval '15 minutes', now()) AS updated_at, g + interval '15 minutes' > now() AS in_progress
               FROM generate_series(to_timestamp(floor(extract(epoch FROM now() - interval '${RECORDING_KEEP_DAYS} days') / 900) * 900),
                                    now(), interval '15 minutes') g) q) t`;
+// Production (backend step 11c): the switch servers' real recording files (pcap_files, refreshed every minute), one row
+// per quarter with both servers' files summed.
+const PCAP_FILES_FROM = `(SELECT q.*, 'trace-' || to_char(q.started_at AT TIME ZONE 'UTC', 'YY-MM-DD-HH24-MI-SS')
+          || CASE WHEN q.in_progress THEN '.pcapng' ELSE '.pcapng.gz' END AS file_name
+      FROM (SELECT f.id, to_timestamp(f.id * 900) AS started_at, f.updated_at, f.size_bytes,
+                   to_timestamp(f.id * 900) + interval '15 minutes' > now() AS in_progress
+              FROM (SELECT floor(extract(epoch FROM started_at) / 900)::bigint AS id, max(modified_at) AS updated_at,
+                           sum(size_bytes)::bigint AS size_bytes
+                      FROM pcap_files GROUP BY 1) f) q) t`;
 export const pcapTraceList: ListDef<PcapTraceRow> = {
   fields: listFields.pcap_traces,
-  from: PCAP_TRACE_FROM,
+  from: production ? PCAP_FILES_FROM : PCAP_TRACE_FROM,
   columns: {
     fileName: { sql: "t.file_name" },
     sizeBytes: { sql: "t.size_bytes" },

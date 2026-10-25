@@ -8,7 +8,11 @@ After=network-online.target
 [Service]
 ExecStart=/usr/bin/dumpcap -q -i any -s 0 \
   -f "tcp and not port 22 and not port 443 and not port 80 and not ({% for ip in cluster_ips %}host {{ ip }}{{ ' or ' if not loop.last }}{% endfor %})" \
-  -b duration:{{ pcap_minutes | int * 60 }} -b files:{{ pcap_files }} -w {{ pcap_dir }}/smpp.pcapng
+  -b interval:{{ pcap_minutes | int * 60 }} -b files:{{ pcap_files }} -w {{ pcap_dir }}/smpp.pcapng
+# Files of whole quarters (interval: switches on the clock), named smpp_NNNNN_YYYYMMDDHHMMSS.pcapng in UTC (base role),
+# readable by the switch (group) for the PCAP Trace downloads and extracts.
+Group={{ switch_user }}
+UMask=0027
 Restart=always
 RestartSec=5
 Nice=10

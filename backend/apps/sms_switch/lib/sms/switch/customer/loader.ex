@@ -2,7 +2,9 @@ defmodule Sms.Switch.Customer.Loader do
   @moduledoc """
   Reads the SMPP customer trunks from PostgreSQL (`customer_trunks`, spec §5.4), the same rows the screens edit.
   Deleted trunks (safe delete, §13.29) and trunks of deleted enterprises are left out; inactive ones are kept so a
-  bind can be refused with the right reason. A trunk of an inactive enterprise counts as inactive.
+  bind can be refused with the right reason. A trunk of an inactive enterprise counts as inactive, and so does one a user
+  stopped on Network Status (`trunk_binds` status `stopped`, §9.2, backend step 11c): its sessions are closed and binds
+  refused until Start.
   """
   require Logger
   alias Sms.Core.Repo
@@ -10,7 +12,9 @@ defmodule Sms.Switch.Customer.Loader do
 
   @query """
   SELECT t.id, t.enterprise_id, e.business_company_id, bc.tps_limit, t.name, t.username, t.password,
-         t.status, e.status, t.bind_type, t.host_ips::text[], t.max_connections, t.system_type, t.port,
+         CASE WHEN EXISTS (SELECT 1 FROM trunk_binds b WHERE b.side = 'customer' AND b.trunk_id = t.id
+                             AND b.status = 'stopped') THEN 'stopped' ELSE t.status END,
+         e.status, t.bind_type, t.host_ips::text[], t.max_connections, t.system_type, t.port,
          t.ssl_type, t.tps, t.overflow_buffer, t.dlr_session_affinity, t.dlr_hold_hours, t.delayed_submit
     FROM customer_trunks t
     JOIN enterprises e ON e.id = t.enterprise_id

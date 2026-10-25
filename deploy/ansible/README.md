@@ -115,8 +115,12 @@ risk), warnings in working hours. Each alert names its runbook in `docs/RUNBOOKS
 ## Traffic recording (spec §9.2)
 
 `dumpcap` on each server writes the SMPP traffic (customers and vendors, not the traffic between the three machines)
-in 15-minute files, 60 days in a ring, outside the switch (`roles/pcap`). The PCAP screens' extract job reads them
-(phase B).
+in files of whole 15-minute quarters (UTC), 60 days in a ring, outside the switch (`roles/pcap`). The switch reads
+them for the PCAP screens (backend step 11c): the PCAP Trace list and downloads (both servers' files of a quarter joined
+into one pcapng), and Extract Recording (`tshark` cuts the window's files with the criteria). Live captures run
+`dumpcap` as the switch user (capture rights through the `wireshark` group, effective after the switch's next restart)
+and write to `/var/lib/sms-pcap/captures`, kept 30 days unless kept on the screen. Network Diagnosis uses `ping`,
+`traceroute`, `mtr` and a TCP connect on the server that has the chosen source address.
 
 ## Firewall
 

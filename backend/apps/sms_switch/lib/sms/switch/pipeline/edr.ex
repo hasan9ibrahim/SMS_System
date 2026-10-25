@@ -55,6 +55,8 @@ defmodule Sms.Switch.Pipeline.Edr do
       "c_msg_status" => msg_status(attempt),
       "v_registered_delivery" => flag(vendor),
       "attempt_no" => attempt.no,
+      # EDR Repush (§9.1, backend step 11c): the request the attempt belongs to.
+      "repush_request_id" => get_in(msg, [:internal, :repush_request_id]) || 0,
       "is_final_attempt" => flag(attempt.final),
       "is_submit_success" => flag(attempt.success),
       "command_status" => attempt.command_status,
