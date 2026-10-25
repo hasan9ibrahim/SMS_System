@@ -9,6 +9,7 @@ import {
   setupTotp,
   useAccessCatalog,
   useAllRows,
+  usePickRows,
   useConfirmTotp,
   useDisableTotp,
   useForcePasswordChange,
@@ -91,7 +92,7 @@ const inputOf = (r: UserRow): UserInput => ({
 
 function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
   const ref = useReference();
-  const departments = useAllRows<DepartmentRow>("departments");
+  const departments = usePickRows<DepartmentRow>("departments");
   const groups = useAllRows<AccessGroupRow>("access_groups");
   const catalog = useAccessCatalog();
   const form = useForm<UserInput>(row ? inputOf(row) : blank());

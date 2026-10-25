@@ -1,6 +1,7 @@
 // Notification (§8): customer trunks (Enterprise Name, Customer Trunk Name, Category, Protocol,
 // Capacity, Status) with Send Rate (modal Customer Send Rate Information: File Type Excel / CSV,
 // Send Email), Send Tech Info and View Rate. Every e-mail sent shows in Email Logs.
+import { useCan } from "../../../api/access";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { EmailLogRow, NotificationResult, TrunkListRow } from "@sms/contract";
@@ -218,6 +219,7 @@ function RecentEmails({ trunk }: { trunk: TrunkListRow }) {
 }
 
 export function NotificationsPage() {
+  const canEmailLogs = useCan("email-logs");
   return (
     <ListScreen<TrunkListRow>
       list="customer_trunks"
@@ -286,7 +288,8 @@ export function NotificationsPage() {
                 </Button>
               </>
             ),
-            content: <RecentEmails trunk={r} />,
+            // Recent e-mails come from the E-mail logs page: only with access to it (backend step 10).
+            content: canEmailLogs ? <RecentEmails trunk={r} /> : null,
           },
         ],
       })}

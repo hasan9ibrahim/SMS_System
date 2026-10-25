@@ -2,6 +2,7 @@
 // ["record", ...] so a save, an archive or an undo can refresh them all (§13.10).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  Enterprise,
   AmPeriod,
   ArchiveRequest,
   Change,
@@ -35,6 +36,7 @@ import type {
   VendorTrunkInput,
 } from "@sms/contract";
 import { api, unwrap } from "./client";
+import { fetchPickPage } from "./hooks";
 
 export type TrunkKind = "customer" | "vendor";
 export type TrunkDetail = CustomerTrunkDetail | VendorTrunkDetail;
@@ -109,6 +111,22 @@ export function useEnterprise(id: number | null) {
     queryFn: () => unwrap(api.GET("/enterprises/{id}", { params: { path: { id: id! } } })),
     enabled: id !== null,
     retry: false,
+  });
+}
+
+/** An enterprise's name, alias and type by id, names only (backend step 10: no Enterprises page needed). */
+export function useEnterpriseName(id: number | null) {
+  return useQuery({
+    queryKey: ["lookup", "enterprises", "id", id],
+    queryFn: () =>
+      fetchPickPage<Pick<Enterprise, "id" | "name" | "alias" | "type">>("enterprises", {
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: id! }] },
+        limit: 1,
+        withTotal: false,
+      }),
+    select: (p) => p.rows[0] ?? null,
+    enabled: id !== null,
+    staleTime: 60_000,
   });
 }
 

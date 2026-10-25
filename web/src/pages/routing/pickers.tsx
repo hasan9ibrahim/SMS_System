@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { FilterCondition, ListId, TrunkListRow } from "@sms/contract";
-import { fetchListPage } from "../../api/hooks";
+import { fetchPickPage } from "../../api/hooks";
 import { Icon } from "../../ui/Icon";
 import { codeChips, DestinationTree, useDestinationTree } from "../rates/DestinationTree";
 
@@ -35,7 +35,7 @@ export function MultiPick<Row extends { id: number }, K extends string | number>
   const results = useQuery({
     queryKey: ["picker", list, q, fixed],
     queryFn: () =>
-      fetchListPage<Row>(list, {
+      fetchPickPage<Row>(list, {
         ...(q.trim() ? { search: q.trim() } : {}),
         ...(fixed?.length ? { filter: { logic: "and", conditions: fixed } } : {}),
         limit: 30,

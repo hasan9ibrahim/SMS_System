@@ -6,7 +6,9 @@
   "tag": "admin",
   "module": "access-groups",
   "action": "add",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -15,7 +17,9 @@
   "tag": "admin",
   "module": "access-groups",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -24,7 +28,9 @@
   "tag": "admin",
   "module": "access-groups",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -33,7 +39,9 @@
   "tag": "admin",
   "module": "access-groups",
   "action": "delete",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -42,7 +50,9 @@
   "tag": "admin",
   "module": "access-groups",
   "action": "add",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -51,7 +61,9 @@
   "tag": "admin",
   "module": "access-groups",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -60,7 +72,9 @@
   "tag": "admin",
   "module": "access-groups",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -69,7 +83,14 @@
   "tag": "admin",
   "module": "access-groups",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "users",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -78,7 +99,14 @@
   "tag": "admin",
   "module": "access-groups",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "users",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -87,7 +115,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -96,7 +126,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -105,7 +137,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -114,7 +148,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -123,7 +159,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -132,7 +170,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -141,7 +181,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -150,7 +192,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -159,7 +203,9 @@
   "tag": "monitoring",
   "module": "alert-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -168,7 +214,9 @@
   "tag": "admin",
   "module": "audit",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -177,7 +225,9 @@
   "tag": "finance",
   "module": "billing-cycles",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -186,7 +236,9 @@
   "tag": "finance",
   "module": "billing-cycles",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -195,7 +247,9 @@
   "tag": "finance",
   "module": "billing-cycles",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -204,7 +258,9 @@
   "tag": "finance",
   "module": "billing-cycles",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -213,7 +269,9 @@
   "tag": "finance",
   "module": "billing-cycles",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -222,7 +280,9 @@
   "tag": "finance",
   "module": "billing-cycles",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -231,7 +291,9 @@
   "tag": "switch",
   "module": "broadcast",
   "action": "send",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -240,7 +302,9 @@
   "tag": "switch",
   "module": "broadcast",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -249,7 +313,9 @@
   "tag": "switch",
   "module": "broadcast",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -258,7 +324,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -267,7 +335,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -276,7 +346,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -285,7 +357,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -294,7 +368,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -303,7 +379,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -312,7 +390,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -321,7 +401,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -330,7 +412,14 @@
   "tag": "switch",
   "module": "business-companies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "broadcast",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -339,7 +428,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -348,7 +439,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -357,7 +450,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -366,7 +461,9 @@
   "tag": "admin",
   "module": "business-companies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -375,7 +472,9 @@
   "tag": "history",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -384,7 +483,9 @@
   "tag": "history",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -393,7 +494,9 @@
   "tag": "finance",
   "module": "charges",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -402,7 +505,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -411,7 +516,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -420,7 +527,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -429,7 +538,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -438,7 +549,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -447,7 +560,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -456,7 +571,18 @@
   "tag": "admin",
   "module": "cleanup",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "enterprises",
+    "action": null
+   },
+   {
+    "module": "route-rules",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -465,7 +591,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -474,7 +602,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -483,7 +613,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -492,7 +624,9 @@
   "tag": "admin",
   "module": "cleanup",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -501,7 +635,22 @@
   "tag": "admin",
   "module": "cleanup",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "hlr",
+    "action": null
+   },
+   {
+    "module": "route-rules",
+    "action": null
+   },
+   {
+    "module": "translation-rules",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -510,7 +659,9 @@
   "tag": "reference",
   "module": "countries",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -519,7 +670,9 @@
   "tag": "reference",
   "module": "countries",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -528,7 +681,9 @@
   "tag": "reference",
   "module": "countries",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -537,7 +692,9 @@
   "tag": "reference",
   "module": "countries",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -546,7 +703,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -555,7 +714,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -564,7 +725,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -573,7 +736,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -582,7 +747,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -591,7 +758,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -600,7 +769,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -609,7 +780,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -618,7 +791,9 @@
   "tag": "admin",
   "module": "customer-portal",
   "action": "add",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -627,7 +802,9 @@
   "tag": "admin",
   "module": "customer-portal",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -636,7 +813,9 @@
   "tag": "admin",
   "module": "customer-portal",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -645,7 +824,9 @@
   "tag": "admin",
   "module": "customer-portal",
   "action": "delete",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -654,7 +835,9 @@
   "tag": "admin",
   "module": "customer-portal",
   "action": "change_password",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -663,7 +846,9 @@
   "tag": "admin",
   "module": "customer-portal",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -672,7 +857,9 @@
   "tag": "admin",
   "module": "customer-portal",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -681,7 +868,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -690,7 +879,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -699,7 +890,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -708,7 +901,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -717,7 +912,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -726,7 +923,14 @@
   "tag": "switch",
   "module": "customer-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "notifications",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -735,7 +939,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -744,7 +950,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -753,7 +961,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -762,7 +972,9 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -771,7 +983,14 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "notifications",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -780,7 +999,9 @@
   "tag": "reports",
   "module": "daily-traffic",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -789,7 +1010,9 @@
   "tag": "reports",
   "module": "daily-traffic",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -798,7 +1021,9 @@
   "tag": "reports",
   "module": "daily-traffic",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -807,7 +1032,9 @@
   "tag": "reports",
   "module": "daily-traffic",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -816,7 +1043,9 @@
   "tag": "reports",
   "module": "daily-traffic",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -825,7 +1054,9 @@
   "tag": "reports",
   "module": "daily-traffic",
   "action": "send",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -834,7 +1065,9 @@
   "tag": "reports",
   "module": "daily-traffic",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -843,7 +1076,9 @@
   "tag": "admin",
   "module": "departments",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -852,7 +1087,9 @@
   "tag": "admin",
   "module": "departments",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -861,7 +1098,9 @@
   "tag": "admin",
   "module": "departments",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -870,7 +1109,9 @@
   "tag": "admin",
   "module": "departments",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -879,7 +1120,9 @@
   "tag": "admin",
   "module": "departments",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -888,7 +1131,9 @@
   "tag": "admin",
   "module": "departments",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -897,7 +1142,9 @@
   "tag": "admin",
   "module": "departments",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -906,7 +1153,9 @@
   "tag": "reference",
   "module": "mccmnc",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -915,7 +1164,9 @@
   "tag": "reference",
   "module": "mccmnc",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -924,7 +1175,9 @@
   "tag": "reference",
   "module": "mccmnc",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -933,7 +1186,9 @@
   "tag": "reference",
   "module": "mccmnc",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -942,7 +1197,9 @@
   "tag": "rates",
   "module": "mccmnc",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -951,7 +1208,9 @@
   "tag": "reference",
   "module": "mccmnc",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -960,7 +1219,9 @@
   "tag": "reference",
   "module": "mccmnc",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -969,7 +1230,9 @@
   "tag": "reference",
   "module": "mccmnc",
   "action": "import",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -978,7 +1241,9 @@
   "tag": "rates",
   "module": "mccmnc",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -987,7 +1252,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -996,7 +1263,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1005,7 +1274,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1014,7 +1285,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1023,7 +1296,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "import",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1032,7 +1307,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1041,7 +1318,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1050,7 +1329,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1059,7 +1340,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1068,7 +1351,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1077,7 +1362,9 @@
   "tag": "reference",
   "module": "master-table",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1086,7 +1373,18 @@
   "tag": "observation",
   "module": "edr-download",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "edr-search",
+    "action": "export"
+   },
+   {
+    "module": "failed-edr",
+    "action": "export"
+   }
+  ]
  },
  {
   "method": "POST",
@@ -1095,7 +1393,18 @@
   "tag": "observation",
   "module": "edr-download",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "failed-edr",
+    "action": "export"
+   },
+   {
+    "module": "edr-search",
+    "action": "export"
+   }
+  ]
  },
  {
   "method": "GET",
@@ -1104,7 +1413,18 @@
   "tag": "observation",
   "module": "edr-download",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "failed-edr",
+    "action": null
+   },
+   {
+    "module": "edr-search",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -1113,7 +1433,18 @@
   "tag": "observation",
   "module": "edr-download",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "failed-edr",
+    "action": null
+   },
+   {
+    "module": "edr-search",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -1122,7 +1453,9 @@
   "tag": "observation",
   "module": "edr-templates",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1131,7 +1464,9 @@
   "tag": "observation",
   "module": "edr-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1140,7 +1475,9 @@
   "tag": "observation",
   "module": "edr-templates",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1149,7 +1486,9 @@
   "tag": "observation",
   "module": "edr-templates",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1158,7 +1497,9 @@
   "tag": "observation",
   "module": "edr-templates",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1167,7 +1508,9 @@
   "tag": "observation",
   "module": "edr-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1176,7 +1519,9 @@
   "tag": "observation",
   "module": "edr-search",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1185,7 +1530,9 @@
   "tag": "observation",
   "module": "repush",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1194,7 +1541,9 @@
   "tag": "observation",
   "module": "edr-search",
   "action": "send",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1203,7 +1552,9 @@
   "tag": "observation",
   "module": "edr-search",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1212,7 +1563,14 @@
   "tag": "admin",
   "module": "email-templates",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "broadcast",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -1221,7 +1579,14 @@
   "tag": "admin",
   "module": "email-templates",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "broadcast",
+    "action": "send"
+   }
+  ]
  },
  {
   "method": "GET",
@@ -1230,7 +1595,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1239,7 +1606,9 @@
   "tag": "switch",
   "module": "email-logs",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1248,7 +1617,9 @@
   "tag": "switch",
   "module": "email-logs",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1257,7 +1628,9 @@
   "tag": "switch",
   "module": "email-logs",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1266,7 +1639,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1275,7 +1650,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1284,7 +1661,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1293,7 +1672,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1302,7 +1683,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1311,7 +1694,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1320,7 +1705,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1329,7 +1716,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1338,7 +1727,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1347,7 +1738,9 @@
   "tag": "reference",
   "module": "email-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1356,7 +1749,9 @@
   "tag": "admin",
   "module": "email-templates",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1365,7 +1760,9 @@
   "tag": "finance",
   "module": "balances",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1374,7 +1771,9 @@
   "tag": "finance",
   "module": "balances",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1383,7 +1782,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1392,7 +1793,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1401,7 +1804,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1410,7 +1815,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1419,7 +1826,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1428,7 +1837,14 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "transactions",
+    "action": null
+   }
+  ]
  },
  {
   "method": "PUT",
@@ -1437,7 +1853,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1446,7 +1864,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1455,7 +1875,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1464,7 +1886,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -1473,7 +1897,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1482,7 +1908,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1491,7 +1919,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1500,25 +1930,31 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
   "path": "/enterprises/{id}/rn-settings",
   "operationId": "getVendorRnSettings",
   "tag": "rates",
-  "module": "enterprises",
+  "module": "incoming-rns",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
   "path": "/enterprises/{id}/rn-settings",
   "operationId": "updateVendorRnSettings",
   "tag": "rates",
-  "module": "enterprises",
+  "module": "incoming-rns",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1527,7 +1963,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1536,7 +1974,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1545,7 +1985,9 @@
   "tag": "enterprises",
   "module": "enterprises",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1554,7 +1996,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1563,7 +2007,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -1572,7 +2018,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1581,7 +2029,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1590,7 +2040,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1599,7 +2051,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1608,7 +2062,9 @@
   "tag": "finance",
   "module": "currencies",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1617,7 +2073,9 @@
   "tag": "observation",
   "module": "failed-edr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1626,7 +2084,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1635,7 +2095,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1644,7 +2106,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1653,7 +2117,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1662,7 +2128,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1671,7 +2139,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1680,7 +2150,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1689,7 +2161,9 @@
   "tag": "switch",
   "module": "firewall",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1698,7 +2172,9 @@
   "tag": "system",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1707,7 +2183,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1716,7 +2194,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1725,7 +2205,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1734,7 +2216,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1743,7 +2227,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1752,7 +2238,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1761,7 +2249,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1770,7 +2260,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1779,7 +2271,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1788,7 +2282,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1797,7 +2293,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1806,7 +2304,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1815,7 +2315,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1824,7 +2326,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1833,7 +2337,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1842,7 +2348,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1851,7 +2359,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1860,7 +2370,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1869,7 +2381,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1878,7 +2392,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1887,7 +2403,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1896,7 +2414,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -1905,7 +2425,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1914,7 +2436,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1923,7 +2447,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1932,7 +2458,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1941,7 +2469,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1950,7 +2480,9 @@
   "tag": "switch",
   "module": "hlr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -1959,7 +2491,9 @@
   "tag": "monitoring",
   "module": "incidents",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1968,7 +2502,9 @@
   "tag": "monitoring",
   "module": "incidents",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1977,7 +2513,9 @@
   "tag": "monitoring",
   "module": "incidents",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1986,7 +2524,9 @@
   "tag": "monitoring",
   "module": "incidents",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -1995,7 +2535,9 @@
   "tag": "monitoring",
   "module": "incidents",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2004,7 +2546,9 @@
   "tag": "monitoring",
   "module": "incidents",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2013,7 +2557,9 @@
   "tag": "monitoring",
   "module": "incidents",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2022,7 +2568,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2031,7 +2579,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2040,7 +2590,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2049,7 +2601,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2058,7 +2612,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2067,7 +2623,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2076,7 +2634,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2085,7 +2645,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2094,7 +2656,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2103,7 +2667,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2112,7 +2678,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2121,7 +2689,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2130,7 +2700,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2139,7 +2711,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2148,7 +2722,9 @@
   "tag": "finance",
   "module": "invoices",
   "action": "send",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2157,7 +2733,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2166,7 +2744,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2175,7 +2755,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2184,7 +2766,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2193,7 +2777,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2202,7 +2788,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2211,7 +2799,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2220,7 +2810,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2229,7 +2821,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2238,7 +2832,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2247,7 +2843,9 @@
   "tag": "routing",
   "module": "lcr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2256,7 +2854,20 @@
   "tag": "routing",
   "module": "lcr",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/lookups/{list}/query",
+  "operationId": "queryLookup",
+  "tag": "meta",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2265,7 +2876,9 @@
   "tag": "rates",
   "module": "margin-calculator",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2274,7 +2887,9 @@
   "tag": "rates",
   "module": "margin-calculator",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -2283,7 +2898,9 @@
   "tag": "rates",
   "module": "margin-calculator",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2292,7 +2909,9 @@
   "tag": "rates",
   "module": "margin-calculator",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2301,7 +2920,9 @@
   "tag": "rates",
   "module": "margin-calculator",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2310,7 +2931,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2319,7 +2942,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2328,7 +2953,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2337,7 +2964,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2346,7 +2975,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2355,7 +2986,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2364,7 +2997,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2373,7 +3008,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2382,7 +3019,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2391,7 +3030,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2400,7 +3041,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2409,7 +3052,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2418,7 +3063,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2427,7 +3074,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2436,7 +3085,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2445,7 +3096,9 @@
   "tag": "rates",
   "module": "market-moves",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2454,7 +3107,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2463,7 +3118,9 @@
   "tag": "system",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2472,7 +3129,9 @@
   "tag": "system",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2481,7 +3140,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2490,7 +3151,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2499,7 +3162,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PATCH",
@@ -2508,7 +3173,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2517,7 +3184,9 @@
   "tag": "system",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2526,7 +3195,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2535,7 +3206,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2544,7 +3217,9 @@
   "tag": "meta",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2553,7 +3228,9 @@
   "tag": "meta",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2562,7 +3239,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2571,7 +3250,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2580,7 +3261,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2589,7 +3272,9 @@
   "tag": "admin",
   "module": "migration",
   "action": "view",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2598,7 +3283,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2607,7 +3294,9 @@
   "tag": "admin",
   "module": "migration",
   "action": "view",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2616,7 +3305,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2625,7 +3316,9 @@
   "tag": "admin",
   "module": "migration",
   "action": "view",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2634,7 +3327,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2643,7 +3338,9 @@
   "tag": "admin",
   "module": "migration",
   "action": "view",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2652,7 +3349,9 @@
   "tag": "admin",
   "module": "migration",
   "action": "view",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2661,7 +3360,9 @@
   "tag": "admin",
   "module": "migration",
   "action": "view",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2670,7 +3371,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2679,7 +3382,9 @@
   "tag": "admin",
   "module": "migration",
   "action": "view",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2688,7 +3393,9 @@
   "tag": "admin",
   "module": "migration",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2697,7 +3404,9 @@
   "tag": "reference",
   "module": "mo-book",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2706,7 +3415,9 @@
   "tag": "reference",
   "module": "mo-book",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2715,7 +3426,9 @@
   "tag": "reference",
   "module": "mo-book",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2724,7 +3437,9 @@
   "tag": "reference",
   "module": "mo-book",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2733,7 +3448,9 @@
   "tag": "reference",
   "module": "mo-book",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2742,7 +3459,9 @@
   "tag": "reference",
   "module": "mo-book",
   "action": "import",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2751,7 +3470,9 @@
   "tag": "reference",
   "module": "mo-book",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2760,7 +3481,9 @@
   "tag": "observation",
   "module": "network-status",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2769,7 +3492,9 @@
   "tag": "observation",
   "module": "network-status",
   "action": "start_stop",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2778,7 +3503,9 @@
   "tag": "observation",
   "module": "network-status",
   "action": "start_stop",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2787,7 +3514,9 @@
   "tag": "observation",
   "module": "network-status",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2796,7 +3525,9 @@
   "tag": "observation",
   "module": "network-status",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2805,7 +3536,9 @@
   "tag": "observation",
   "module": "diagnosis",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2814,7 +3547,22 @@
   "tag": "switch",
   "module": "notifications",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "customer-trunks",
+    "action": null
+   },
+   {
+    "module": "rate-manager",
+    "action": null
+   },
+   {
+    "module": "enterprises",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -2823,7 +3571,22 @@
   "tag": "switch",
   "module": "notifications",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "customer-trunks",
+    "action": "send"
+   },
+   {
+    "module": "rate-manager",
+    "action": "send"
+   },
+   {
+    "module": "enterprises",
+    "action": "edit"
+   }
+  ]
  },
  {
   "method": "POST",
@@ -2832,7 +3595,18 @@
   "tag": "switch",
   "module": "notifications",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "customer-trunks",
+    "action": "send"
+   },
+   {
+    "module": "enterprises",
+    "action": "edit"
+   }
+  ]
  },
  {
   "method": "POST",
@@ -2841,7 +3615,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2850,7 +3626,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -2859,7 +3637,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2868,7 +3648,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2877,7 +3659,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2886,7 +3670,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2895,7 +3681,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2904,7 +3692,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2913,7 +3703,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": "import",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2922,7 +3714,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2931,7 +3725,9 @@
   "tag": "switch",
   "module": "number-lists",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2940,7 +3736,9 @@
   "tag": "admin",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2949,7 +3747,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2958,7 +3758,9 @@
   "tag": "observation",
   "module": "pcap-trace",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2967,7 +3769,9 @@
   "tag": "observation",
   "module": "pcap-trace",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -2976,7 +3780,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2985,7 +3791,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -2994,7 +3802,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3003,7 +3813,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3012,7 +3824,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3021,7 +3835,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -3030,7 +3846,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3039,7 +3857,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3048,7 +3868,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3057,7 +3879,9 @@
   "tag": "portal",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3066,7 +3890,9 @@
   "tag": "reference",
   "module": "categories",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3075,7 +3901,9 @@
   "tag": "reference",
   "module": "categories",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3084,7 +3912,9 @@
   "tag": "reference",
   "module": "categories",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3093,7 +3923,9 @@
   "tag": "reference",
   "module": "categories",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3102,7 +3934,9 @@
   "tag": "reference",
   "module": "categories",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3111,7 +3945,9 @@
   "tag": "reference",
   "module": "categories",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3120,7 +3956,9 @@
   "tag": "routing",
   "module": "qbr-stats",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3129,7 +3967,9 @@
   "tag": "routing",
   "module": "qbr-stats",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3138,7 +3978,9 @@
   "tag": "routing",
   "module": "qbr-stats",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3147,7 +3989,9 @@
   "tag": "rates",
   "module": "bulk",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3156,7 +4000,9 @@
   "tag": "rates",
   "module": "bulk",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3165,7 +4011,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3174,7 +4022,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3183,7 +4033,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3192,7 +4044,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3201,7 +4055,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3210,7 +4066,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3219,7 +4077,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3228,7 +4088,54 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "bulk",
+    "action": null
+   },
+   {
+    "module": "edr-search",
+    "action": null
+   },
+   {
+    "module": "enterprise-report",
+    "action": null
+   },
+   {
+    "module": "market-moves",
+    "action": null
+   },
+   {
+    "module": "rate-manager",
+    "action": null
+   },
+   {
+    "module": "re-rating",
+    "action": null
+   },
+   {
+    "module": "route-rules",
+    "action": null
+   },
+   {
+    "module": "sales-report",
+    "action": null
+   },
+   {
+    "module": "simulator",
+    "action": null
+   },
+   {
+    "module": "translation-rules",
+    "action": null
+   },
+   {
+    "module": "vendor-trunks",
+    "action": null
+   }
+  ]
  },
  {
   "method": "GET",
@@ -3237,7 +4144,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3246,7 +4155,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -3255,7 +4166,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3264,7 +4177,9 @@
   "tag": "rates",
   "module": "rate-lookup",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3273,7 +4188,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3282,7 +4199,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3291,7 +4210,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": "approve",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3300,7 +4221,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3309,7 +4232,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3318,7 +4243,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3327,7 +4254,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": "approve",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3336,7 +4265,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3345,7 +4276,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": "import",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3354,7 +4287,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3363,7 +4298,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3372,7 +4309,9 @@
   "tag": "rates",
   "module": "incoming-rns",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3381,7 +4320,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3390,7 +4331,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3399,7 +4342,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3408,7 +4353,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3417,7 +4364,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3426,7 +4375,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3435,7 +4386,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3444,7 +4397,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3453,7 +4408,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3462,7 +4419,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3471,7 +4430,9 @@
   "tag": "rates",
   "module": "rate-manager",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3480,7 +4441,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3489,7 +4452,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3498,7 +4463,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3507,7 +4474,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3516,34 +4485,42 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
   "path": "/reports/billing/query",
   "operationId": "queryBillingReport",
   "tag": "reports",
-  "module": "master-report",
+  "module": "billing-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
   "path": "/reports/enterprise/export",
   "operationId": "exportEnterpriseReport",
   "tag": "reports",
-  "module": "master-report",
+  "module": "enterprise-report",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
   "path": "/reports/enterprise/query",
   "operationId": "queryEnterpriseReport",
   "tag": "reports",
-  "module": "master-report",
+  "module": "enterprise-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3552,7 +4529,26 @@
   "tag": "reports",
   "module": "master-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "sales-report",
+    "action": null
+   },
+   {
+    "module": "noc-report",
+    "action": null
+   },
+   {
+    "module": "dashboard",
+    "action": null
+   },
+   {
+    "module": "live-analytics",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -3561,16 +4557,29 @@
   "tag": "reports",
   "module": "master-report",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "sales-report",
+    "action": "export"
+   },
+   {
+    "module": "noc-report",
+    "action": "export"
+   }
+  ]
  },
  {
   "method": "POST",
   "path": "/reports/noc/insights",
   "operationId": "nocInsights",
   "tag": "reports",
-  "module": "master-report",
+  "module": "noc-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3579,43 +4588,66 @@
   "tag": "reports",
   "module": "master-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "sales-report",
+    "action": null
+   },
+   {
+    "module": "noc-report",
+    "action": null
+   },
+   {
+    "module": "scheduled",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
   "path": "/reports/sales/insights",
   "operationId": "salesInsights",
   "tag": "reports",
-  "module": "master-report",
+  "module": "sales-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
   "path": "/reports/team",
   "operationId": "runTeamReport",
   "tag": "reports",
-  "module": "master-report",
+  "module": "team-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
   "path": "/reports/team/export",
   "operationId": "exportTeamReport",
   "tag": "reports",
-  "module": "master-report",
+  "module": "team-report",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
   "path": "/reports/team/users/{id}",
   "operationId": "getTeamMember",
   "tag": "reports",
-  "module": "master-report",
+  "module": "team-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3624,7 +4656,9 @@
   "tag": "observation",
   "module": "repush",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3633,7 +4667,9 @@
   "tag": "routing",
   "module": "re-rating",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3642,7 +4678,9 @@
   "tag": "routing",
   "module": "re-rating",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3651,7 +4689,9 @@
   "tag": "routing",
   "module": "re-rating",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3660,7 +4700,9 @@
   "tag": "routing",
   "module": "re-rating",
   "action": "approve",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3669,7 +4711,9 @@
   "tag": "routing",
   "module": "re-rating",
   "action": "approve",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3678,7 +4722,9 @@
   "tag": "routing",
   "module": "re-rating",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3687,7 +4733,9 @@
   "tag": "routing",
   "module": "re-rating",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3696,7 +4744,9 @@
   "tag": "routing",
   "module": "route-map",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3705,7 +4755,9 @@
   "tag": "routing",
   "module": "route-map",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3714,7 +4766,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3723,7 +4777,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3732,7 +4788,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3741,7 +4799,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3750,7 +4810,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3759,7 +4821,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3768,7 +4832,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3777,7 +4843,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3786,7 +4854,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3795,7 +4865,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3804,7 +4876,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3813,7 +4887,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3822,7 +4898,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3831,7 +4909,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3840,7 +4920,9 @@
   "tag": "routing",
   "module": "route-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3849,7 +4931,9 @@
   "tag": "observation",
   "module": "simulator",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3858,7 +4942,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3867,7 +4953,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3876,7 +4964,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3885,7 +4975,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3894,7 +4986,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3903,7 +4997,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3912,7 +5008,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3921,7 +5019,9 @@
   "tag": "reports",
   "module": "scheduled",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3930,7 +5030,9 @@
   "tag": "search",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3939,7 +5041,9 @@
   "tag": "admin",
   "module": "security",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3948,7 +5052,9 @@
   "tag": "admin",
   "module": "security",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -3957,7 +5063,9 @@
   "tag": "admin",
   "module": "security",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -3966,7 +5074,9 @@
   "tag": "admin",
   "module": "security",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -3975,7 +5085,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3984,7 +5096,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -3993,7 +5107,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4002,7 +5118,9 @@
   "tag": "session",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4011,7 +5129,9 @@
   "tag": "observation",
   "module": "signaling",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4020,7 +5140,14 @@
   "tag": "observation",
   "module": "signaling",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "pcap-trace",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -4029,7 +5156,14 @@
   "tag": "observation",
   "module": "signaling",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "pcap-trace",
+    "action": "add"
+   }
+  ]
  },
  {
   "method": "POST",
@@ -4038,7 +5172,14 @@
   "tag": "observation",
   "module": "signaling",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "pcap-trace",
+    "action": "add"
+   }
+  ]
  },
  {
   "method": "POST",
@@ -4047,7 +5188,14 @@
   "tag": "observation",
   "module": "signaling",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "pcap-trace",
+    "action": "add"
+   }
+  ]
  },
  {
   "method": "POST",
@@ -4056,7 +5204,14 @@
   "tag": "observation",
   "module": "signaling",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "pcap-trace",
+    "action": null
+   }
+  ]
  },
  {
   "method": "GET",
@@ -4065,7 +5220,14 @@
   "tag": "observation",
   "module": "signaling",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "pcap-trace",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -4074,7 +5236,9 @@
   "tag": "switch",
   "module": "sms-to-voice",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4083,7 +5247,9 @@
   "tag": "switch",
   "module": "sms-to-voice",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4092,7 +5258,9 @@
   "tag": "switch",
   "module": "sms-to-voice",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4101,7 +5269,9 @@
   "tag": "switch",
   "module": "sms-to-voice",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4110,7 +5280,9 @@
   "tag": "switch",
   "module": "sms-to-voice",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4119,7 +5291,9 @@
   "tag": "switch",
   "module": "sms-to-voice",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4128,7 +5302,9 @@
   "tag": "switch",
   "module": "sms-to-voice",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4137,7 +5313,14 @@
   "tag": "finance",
   "module": "soa-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "soa",
+    "action": null
+   }
+  ]
  },
  {
   "method": "GET",
@@ -4146,7 +5329,9 @@
   "tag": "finance",
   "module": "soa-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4155,7 +5340,9 @@
   "tag": "finance",
   "module": "soa-report",
   "action": "send",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4164,7 +5351,9 @@
   "tag": "finance",
   "module": "soa-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4173,7 +5362,9 @@
   "tag": "finance",
   "module": "soa",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4182,7 +5373,9 @@
   "tag": "finance",
   "module": "soa",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4191,7 +5384,9 @@
   "tag": "finance",
   "module": "soa",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4200,7 +5395,9 @@
   "tag": "finance",
   "module": "soa",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4209,7 +5406,9 @@
   "tag": "finance",
   "module": "soa",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4218,7 +5417,9 @@
   "tag": "finance",
   "module": "soa",
   "action": "send",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4227,7 +5428,9 @@
   "tag": "finance",
   "module": "soa",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4236,7 +5439,9 @@
   "tag": "reports",
   "module": "team-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4245,7 +5450,9 @@
   "tag": "reports",
   "module": "team-report",
   "action": "view",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4254,7 +5461,9 @@
   "tag": "reports",
   "module": "team-report",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4263,7 +5472,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4272,7 +5483,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4281,7 +5494,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4290,7 +5505,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4299,7 +5516,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4308,7 +5527,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4317,7 +5538,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4326,7 +5549,9 @@
   "tag": "switch",
   "module": "traffic-alerts",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4335,7 +5560,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4344,7 +5571,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4353,7 +5582,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4362,7 +5593,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4371,7 +5604,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4380,7 +5615,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4389,7 +5626,14 @@
   "tag": "finance",
   "module": "transactions",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": [
+   {
+    "module": "soa",
+    "action": "edit"
+   }
+  ]
  },
  {
   "method": "POST",
@@ -4398,7 +5642,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4407,7 +5653,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4416,7 +5664,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4425,7 +5675,9 @@
   "tag": "finance",
   "module": "transactions",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4434,7 +5686,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4443,7 +5697,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4452,7 +5708,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4461,7 +5719,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4470,7 +5730,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4479,7 +5741,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4488,7 +5752,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4497,7 +5763,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4506,7 +5774,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4515,7 +5785,9 @@
   "tag": "switch",
   "module": "translation-rules",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4524,7 +5796,9 @@
   "tag": "admin",
   "module": "logged-in",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4533,7 +5807,9 @@
   "tag": "admin",
   "module": "logged-in",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4542,7 +5818,9 @@
   "tag": "admin",
   "module": "users",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4551,7 +5829,9 @@
   "tag": "admin",
   "module": "users",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4560,7 +5840,9 @@
   "tag": "admin",
   "module": "users",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4569,7 +5851,9 @@
   "tag": "admin",
   "module": "users",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4578,7 +5862,9 @@
   "tag": "admin",
   "module": "users",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4587,7 +5873,9 @@
   "tag": "admin",
   "module": "users",
   "action": "change_password",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4596,7 +5884,9 @@
   "tag": "admin",
   "module": "users",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4605,7 +5895,9 @@
   "tag": "admin",
   "module": "users",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4614,7 +5906,9 @@
   "tag": "admin",
   "module": "users",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4623,7 +5917,9 @@
   "tag": "admin",
   "module": "users",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4632,7 +5928,14 @@
   "tag": "admin",
   "module": "users",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": [
+   {
+    "module": "visibility",
+    "action": null
+   }
+  ]
  },
  {
   "method": "POST",
@@ -4641,7 +5944,9 @@
   "tag": "admin",
   "module": "users",
   "action": "change_password",
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4650,7 +5955,9 @@
   "tag": "users",
   "module": "users",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4659,7 +5966,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4668,7 +5977,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4677,7 +5988,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4686,7 +5999,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4695,7 +6010,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4704,7 +6021,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4713,7 +6032,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4722,7 +6043,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4731,7 +6054,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4740,7 +6065,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4749,7 +6076,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4758,7 +6087,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "export",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4767,7 +6098,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4776,7 +6109,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4785,7 +6120,9 @@
   "tag": "finance",
   "module": "vendor-invoices",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4794,7 +6131,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": "add",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4803,7 +6142,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4812,7 +6153,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4821,7 +6164,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": "delete",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4830,7 +6175,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4839,7 +6186,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4848,7 +6197,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4857,7 +6208,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": "edit",
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4866,7 +6219,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4875,7 +6230,9 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": null,
-  "readChecked": false
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4884,7 +6241,9 @@
   "tag": "views",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4893,7 +6252,9 @@
   "tag": "views",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -4902,7 +6263,9 @@
   "tag": "views",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4911,7 +6274,9 @@
   "tag": "views",
   "module": null,
   "action": null,
-  "readChecked": false
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4920,7 +6285,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "DELETE",
@@ -4929,7 +6296,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4938,7 +6307,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4947,7 +6318,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4956,7 +6329,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4965,7 +6340,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -4974,7 +6351,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -4983,7 +6362,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "PUT",
@@ -4992,7 +6373,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -5001,7 +6384,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -5010,7 +6395,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": "edit",
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "GET",
@@ -5019,7 +6406,9 @@
   "tag": "admin",
   "module": "visibility",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  },
  {
   "method": "POST",
@@ -5028,6 +6417,8 @@
   "tag": "admin",
   "module": "visibility",
   "action": null,
-  "readChecked": true
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
  }
 ]

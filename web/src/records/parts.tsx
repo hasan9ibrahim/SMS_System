@@ -7,7 +7,7 @@ import { useLocation } from "react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type { Dependencies, Enterprise, FilterCondition, ListId } from "@sms/contract";
 import { ApiError } from "../api/client";
-import { fetchListPage, useListFields, useMe } from "../api/hooks";
+import { fetchPickPage, useListFields, useMe } from "../api/hooks";
 import { fetchDependencies, useArchive, useRestore, type RecordKind, type Saved } from "../api/records";
 import { DataGrid, type ColumnOverride } from "../grid/DataGrid";
 import { emptyState, type GridState } from "../grid/filterModel";
@@ -400,7 +400,7 @@ export function EnterprisePicker({ label, onPick }: { label: string; onPick: (e:
   const results = useQuery({
     queryKey: ["picker", "enterprises", q],
     queryFn: () =>
-      fetchListPage<Enterprise>("enterprises", {
+      fetchPickPage<Enterprise>("enterprises", {
         ...(q.trim() ? { search: q.trim() } : {}),
         ...(/^\d+$/.test(q.trim())
           ? {
@@ -559,7 +559,7 @@ export function ListLookup<Row extends { id: number }>({
   const current = useQuery({
     queryKey: ["lookup", list, "id", value],
     queryFn: () =>
-      fetchListPage<Row>(list, {
+      fetchPickPage<Row>(list, {
         filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: value! }] },
         limit: 1,
         withTotal: false,
@@ -570,7 +570,7 @@ export function ListLookup<Row extends { id: number }>({
   const results = useQuery({
     queryKey: ["lookup", list, q, fixed, limit],
     queryFn: () =>
-      fetchListPage<Row>(list, {
+      fetchPickPage<Row>(list, {
         ...(q.trim() ? { search: q.trim() } : {}),
         ...(fixed?.length ? { filter: { logic: "and", conditions: fixed } } : {}),
         limit,

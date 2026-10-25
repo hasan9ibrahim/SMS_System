@@ -2,10 +2,12 @@
 // message IDs, the period, destinations and status sit in the filter card; every column filters with the §13.25 grammar; an EDR
 // Template sets the columns. Selected EDRs go to a Trouble Ticket or an EDR Repush; Export queues an
 // EDR Request (background download, §12.4) with the current filters.
+import type { MenuItem } from "../../ui/primitives";
+import { useCan } from "../../api/access";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { EdrRow, EmailPreview, EmailTemplateRow, FieldDescriptor, ListQuery, TrunkListRow } from "@sms/contract";
-import { fetchListPage, useListFields, type ListPage } from "../../api/hooks";
+import { fetchPickPage, fetchListPage, useListFields, type ListPage } from "../../api/hooks";
 import { previewTroubleTicket, useEdrTemplates, useRepush, useSendTroubleTicket } from "../../api/observation";
 import type { GridState } from "../../grid/filterModel";
 import { pageForPath } from "../../nav/registry";
@@ -290,7 +292,7 @@ function TroubleTicketDialog({ rows, done }: { rows: EdrGridRow[]; done: () => v
   const templates = useQuery({
     queryKey: ["list", "email-templates", "trouble_ticket"],
     queryFn: () =>
-      fetchListPage<EmailTemplateRow>("email_templates", {
+      fetchPickPage<EmailTemplateRow>("email_templates", {
         filter: { logic: "and", conditions: [{ field: "emailType", op: "in", values: ["trouble_ticket"] }] },
         limit: 50,
         withTotal: false,
@@ -578,6 +580,7 @@ function FieldList({ row, fields, names }: { row: EdrGridRow; fields: string[]; 
 
 export function EdrSearchPage() {
   const fields = useListFields("edrs");
+  const canRepush = useCan("repush", "add");
   const navigate = useTabNavigate();
   const names = new Map((fields.data?.fields ?? []).map((f) => [f.field, f.label]));
   return (
@@ -608,14 +611,16 @@ export function EdrSearchPage() {
             Trouble ticket
           </Button>
           {/* Repush sits with the other header actions now that Bulk edit is gone (team trial round 4). */}
-          <Button
-            icon="send"
-            disabled={targets.length === 0}
-            title={targets.length ? "Send the selected EDRs again" : "Select EDRs first"}
-            onClick={() => void openRepush(targets)}
-          >
-            Repush
-          </Button>
+          {canRepush && (
+            <Button
+              icon="send"
+              disabled={targets.length === 0}
+              title={targets.length ? "Send the selected EDRs again" : "Select EDRs first"}
+              onClick={() => void openRepush(targets)}
+            >
+              Repush
+            </Button>
+          )}
         </>
       )}
       columns={{
@@ -671,25 +676,31 @@ export function EdrSearchPage() {
           ),
         },
       }}
-      rowActions={(r) => [
+      rowActions={(r): MenuItem[] => [
         { label: "Trouble Ticket…", icon: "mail", main: true, onSelect: () => void openTicket([r]) },
-        {
-          label: "Repush…",
-          icon: "send",
-          main: true,
-          disabled: !r.isFinalAttempt || r.msgStatus === "DELIVRD",
-          hint:
-            !r.isFinalAttempt || r.msgStatus === "DELIVRD"
-              ? "Only final attempts that were not delivered can be re-sent"
-              : "Re-send this EDR on a vendor trunk",
-          onSelect: () => void openRepush([r]),
-        },
+        ...(canRepush
+          ? [
+              {
+                label: "Repush…",
+                icon: "send" as const,
+                main: true,
+                disabled: !r.isFinalAttempt || r.msgStatus === "DELIVRD",
+                hint:
+                  !r.isFinalAttempt || r.msgStatus === "DELIVRD"
+                    ? "Only final attempts that were not delivered can be re-sent"
+                    : "Re-send this EDR on a vendor trunk",
+                onSelect: () => void openRepush([r]),
+              },
+            ]
+          : []),
       ]}
       selection={{
         summary: (_rows, ids) => `${ids.size} EDR${ids.size === 1 ? "" : "s"} selected`,
         bulk: (ids, clear) => [
           { label: "Trouble Ticket…", icon: "mail", onSelect: () => void openTicket(uuidsOf(ids)).then(clear) },
-          { label: "EDR Repush…", icon: "send", onSelect: () => void openRepush(uuidsOf(ids)).then(clear) },
+          ...(canRepush
+            ? [{ label: "EDR Repush…", icon: "send" as const, onSelect: () => void openRepush(uuidsOf(ids)).then(clear) }]
+            : []),
         ],
       }}
       detail={(r) => ({
@@ -716,9 +727,11 @@ export function EdrSearchPage() {
                       <Button small icon="mail" onClick={() => void openTicket([r])}>
                         Trouble Ticket
                       </Button>
-                      <Button small icon="send" onClick={() => void openRepush([r])}>
-                        Repush
-                      </Button>
+                      {canRepush && (
+                        <Button small icon="send" onClick={() => void openRepush([r])}>
+                          Repush
+                        </Button>
+                      )}
                     </>
                   ),
                 }

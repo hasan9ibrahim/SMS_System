@@ -24,3 +24,16 @@ export function useTabShown(): (key: string) => boolean {
   const hidden = new Set(me?.hiddenTabs ?? []);
   return (key) => !hidden.has(key);
 }
+
+/**
+ * Whether the user may request an EDR export: EDR downloads Add, or Export on EDR search or Failed EDRs
+ * (contract/access.json shared requestEdrDownload; backend step 10).
+ */
+export function useCanExportEdrs(): boolean {
+  const { data: me } = useMe();
+  return (
+    can(me?.permissions, "edr-download", "add") ||
+    can(me?.permissions, "edr-search", "export") ||
+    can(me?.permissions, "failed-edr", "export")
+  );
+}

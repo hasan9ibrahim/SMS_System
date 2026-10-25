@@ -53,7 +53,7 @@ import {
 } from "./lcrModel";
 import { DateTimeInput } from "../../../ui/DateTimeInput";
 import { CheckList, type CheckItem } from "../../../ui/CheckList";
-import { fetchListPage } from "../../../api/hooks";
+import { fetchPickPage } from "../../../api/hooks";
 
 const page = pageForPath("/routing/lcr")!;
 const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
@@ -1057,7 +1057,7 @@ function VendorTrunkChecks({ ids, onChange }: { ids: number[]; onChange: (ids: n
   const trunks = useQuery({
     queryKey: ["list", "vendor_trunks", "checklist"],
     queryFn: () =>
-      fetchListPage<{ id: number; name: string; enterpriseName?: string; status?: string }>("vendor_trunks", {
+      fetchPickPage<{ id: number; name: string; enterpriseName?: string; status?: string }>("vendor_trunks", {
         limit: 4000,
         withTotal: false,
         sort: [{ field: "name", dir: "asc" }],

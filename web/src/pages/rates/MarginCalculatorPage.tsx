@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Destination, Enterprise, MarginDealInput, MarginDealLine } from "@sms/contract";
 import { ApiError } from "../../api/client";
-import { fetchListPage } from "../../api/hooks";
+import { fetchPickPage } from "../../api/hooks";
 import { downloadBlob } from "../../api/lookup";
 import { fetchMarginDeal, useDeleteMarginDeal, useMarginDeals, useSaveMarginDeal } from "../../api/marginDeals";
 import { pageForPath } from "../../nav/registry";
@@ -70,7 +70,7 @@ function DestinationCell({ line, onChange }: { line: MarginDealLine; onChange: (
   const q = line.destination.trim();
   const found = useQuery({
     queryKey: ["lookup", "destinations", "margin", q],
-    queryFn: () => fetchListPage<Destination>("destinations", { search: q, limit: 12, withTotal: false }),
+    queryFn: () => fetchPickPage<Destination>("destinations", { search: q, limit: 12, withTotal: false }),
     enabled: open && q.length >= 2,
     staleTime: 60_000,
   });

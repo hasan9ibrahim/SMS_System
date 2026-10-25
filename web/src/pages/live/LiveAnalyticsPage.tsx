@@ -8,6 +8,7 @@
 // includes today, a live:analytics push (WebSocket) refreshes the open levels at the chosen interval.
 // Each row opens its EDRs in a window, exports them, or opens EDR Search. Every breakdown has its own
 // search box; changes apply at once (no Search button) and Pause stops the live refresh (team trial round 1).
+import { useCan, useCanExportEdrs } from "../../api/access";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -379,6 +380,7 @@ function useLiveTick(seconds: number, enabled: boolean): number {
 }
 
 function EdrWindow({ title, state, done }: { title: string; state: GridState; done: () => void }) {
+  const canExport = useCanExportEdrs();
   const fields = useListFields("edrs");
   const navigate = useTabNavigate();
   const [grid, setGrid] = useState<GridState>(state);
@@ -414,13 +416,15 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
           >
             Open in EDR search
           </Button>
-          <Button
-            variant="primary"
-            icon="download"
-            onClick={() => void ask<void>((d) => <RequestDialog kind="edr" state={grid} done={() => d()} />)}
-          >
-            Export…
-          </Button>
+          {canExport && (
+            <Button
+              variant="primary"
+              icon="download"
+              onClick={() => void ask<void>((d) => <RequestDialog kind="edr" state={grid} done={() => d()} />)}
+            >
+              Export…
+            </Button>
+          )}
         </>
       }
     >
@@ -547,6 +551,9 @@ function Level({
   selected: string | null;
   sort: ColumnSort | null;
 }) {
+  // EDR windows and exports need the EDR search / download pages (backend step 10).
+  const canEdrs = useCan("edr-search");
+  const canExport = useCanExportEdrs();
   const cols = useCols();
   // Row key → the level it is broken down by.
   const [open, setOpen] = useState<Map<string, ReportDimension>>(new Map());
@@ -643,6 +650,7 @@ function Level({
               </td>
               <Cells metrics={r.metrics} />
               <td className="la-actions">
+                {canEdrs && (
                 <button
                   type="button"
                   className="la-act"
@@ -659,6 +667,8 @@ function Level({
                 >
                   EDRs
                 </button>
+                )}
+                {canExport && (
                 <button
                   type="button"
                   className="la-act"
@@ -676,6 +686,7 @@ function Level({
                 >
                   <Icon name="download" size={12} />
                 </button>
+                )}
               </td>
             </tr>
             {next && (
@@ -724,6 +735,7 @@ function Level({
 
 export function LiveAnalyticsPage() {
   const location = useLocation();
+  const canEdrs = useCan("edr-search");
   const me = useMe();
   const cols = columnsFor(me.data?.preferences.liveAnalytics?.columns);
   const url = new URLSearchParams(location.search);
@@ -952,6 +964,7 @@ export function LiveAnalyticsPage() {
                     </td>
                   )}
                   <td className="la-actions">
+                    {canEdrs && (
                     <button
                       type="button"
                       className="la-act"
@@ -967,6 +980,7 @@ export function LiveAnalyticsPage() {
                     >
                       EDRs
                     </button>
+                    )}
                   </td>
                 </tr>
                 {top && (

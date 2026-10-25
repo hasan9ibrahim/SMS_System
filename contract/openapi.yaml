@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.96.0
+  version: 0.97.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -393,6 +393,46 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /lookups/{list}/query:
+    post:
+      tags: [meta]
+      operationId: queryLookup
+      summary: Pick records of another page by name (names only)
+      description: |
+        Backend step 10 (product owner 2026-10-25): a page the user may not open is not reached from another page
+        either. Forms and filters on other pages pick its records here instead: the same filter grammar as the
+        list (§13.25), but only the list's lookup fields (contract/access.json `lookups`, e.g. a vendor trunk's
+        name, enterprise and category), and only for users who may open the list's own page or a page that picks
+        from it. Filters, sort and search may use the lookup fields only. AM visibility (§13.17) applies as in the
+        list. Answers 403 `not_allowed` when no page of the user picks from this list.
+      parameters:
+        - name: list
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/LookupListId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of matching records, lookup fields only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/Unavailable"
 
@@ -16968,6 +17008,13 @@ components:
           maxLength: 6
         sslType:
           $ref: "#/components/schemas/SslType"
+        tlsSkipVerify:
+          type: boolean
+          default: false
+          description: >-
+            Skip certificate check (backend step 10, decision Q3): with TLS, the switch normally checks the vendor's
+            certificate (trusted CA, matching host name) before binding; on, a vendor with a self-signed certificate
+            can bind. Ignored without TLS.
         submitIntervalMs:
           type: integer
           minimum: 0
@@ -32890,6 +32937,27 @@ components:
             - type: "null"
 
     # ------------------------------------------------------------- list query (§13.25)
+    LookupListId:
+      type: string
+      description: A list other pages pick records from (contract/access.json lookups; backend step 10).
+      enum: [users, access_groups, alert_rules, countries, customer_trunks, departments, destinations, edr_templates, email_templates, enterprises, hlr_policies, invoices, lcr_profiles, number_lists, product_categories, rate_tables, vendor_trunks]
+    LookupPage:
+      description: A page of lookup rows (backend step 10); each row has `id` and the list's lookup fields only.
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+                additionalProperties: true
+
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.

@@ -1,6 +1,7 @@
 // Billing of an enterprise (§5.3): a customer side and/or a vendor side by type, each with
 // currency, billing cycle, time zone and opening balance, the live balance, and the
 // beneficiary (bank) details. Credit use is coloured only past the alert levels (§15.3).
+import { useCan } from "../../api/access";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -275,6 +276,7 @@ function LastInvoiceCard({ enterpriseId }: { enterpriseId: number }) {
 
 /** The billing summary (record redesign, team trial round 4): balance, how it is worked out, billing cycle. */
 function BillingSummary({ billing, enterprise }: { billing: EnterpriseBilling; enterprise: EnterpriseDetail }) {
+  const canInvoices = useCan("invoices");
   const ref = useReference();
   const sides = (["customer", "vendor"] as const).filter((k) => billing[k]);
   const first = billing[sides[0] ?? "customer"];
@@ -299,7 +301,8 @@ function BillingSummary({ billing, enterprise }: { billing: EnterpriseBilling; e
           </div>
         );
       })}
-      <LastInvoiceCard enterpriseId={enterprise.id} />
+      {/* Only for users who may open Invoices (backend step 10). */}
+      {canInvoices && <LastInvoiceCard enterpriseId={enterprise.id} />}
       {first && (
         <div className="bill-card">
           <span className="bill-card-label">Billing cycle</span>

@@ -113,6 +113,8 @@ const VENDOR_SPECS: FieldSpec[] = [
   { api: "host", col: "host" },
   { api: "sourceHost", col: "source_host", read: "host(t.source_host)", cast: "::inet" },
   { api: "serviceType", col: "service_type" },
+  // Skip certificate check for a vendor with a self-signed certificate (backend step 10, Q3).
+  { api: "tlsSkipVerify", col: "tls_skip_verify" },
   { api: "submitIntervalMs", col: "submit_interval_ms" },
   { api: "submitTimeoutS", col: "submit_timeout_s" },
   { api: "enquireLinkTimeoutS", col: "enquire_link_timeout_s" },

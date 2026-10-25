@@ -13,7 +13,7 @@ import type {
   MarketMoveRow,
   MarketMoveSettings,
 } from "@sms/contract";
-import { fetchListPage } from "../../../api/hooks";
+import { fetchPickPage } from "../../../api/hooks";
 import {
   useActOnMove,
   useArchiveAutoRule,
@@ -364,7 +364,7 @@ function ClientChecklist({
   const results = useQuery({
     queryKey: ["list", "market-rule-clients", q],
     queryFn: () =>
-      fetchListPage<Enterprise>("enterprises", {
+      fetchPickPage<Enterprise>("enterprises", {
         limit: 500,
         withTotal: true,
         ...(q.trim() ? { search: q.trim() } : {}),

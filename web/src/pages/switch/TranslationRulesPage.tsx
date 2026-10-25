@@ -3,6 +3,7 @@
 // field of the old /digitrule/add page and the Applies To block, so a rule runs on its trunks as
 // soon as it is saved: no group, no second trip to the trunk. Editing a shared rule confirms with
 // the number of trunks it touches; "Duplicate to trunk" makes a variant for one partner.
+import { useCan } from "../../api/access";
 import { useEffect, useState, type ReactNode } from "react";
 import type {
   ContentWordRule,
@@ -90,6 +91,8 @@ function ListPick({
   hint?: string;
 }) {
   const value = form.get(path) as number | null;
+  // A new list is a Number lists change (backend step 10).
+  const canNewList = useCan("number-lists", "add");
   const newList = async () => {
     const saved = await ask<NumberList>((done) => <NumberListDialog row={null} fixedType={listType} done={done} />);
     if (saved) form.set(path, saved.id);
@@ -106,9 +109,11 @@ function ListPick({
           fixed={listType ? [{ field: "listType", op: "eq", value: listType }] : undefined}
           placeholder="Any number list…"
         />
-        <Button small variant="ghost" icon="plus" onClick={() => void newList()}>
-          New list
-        </Button>
+        {canNewList && (
+          <Button small variant="ghost" icon="plus" onClick={() => void newList()}>
+            New list
+          </Button>
+        )}
       </div>
     </FormField>
   );
@@ -198,6 +203,7 @@ function BareList({
   path: "senderListId" | "receiverListId";
   label: string;
 }) {
+  const canNewList = useCan("number-lists", "add");
   const newList = async () => {
     const saved = await ask<NumberList>((done) => <NumberListDialog row={null} done={done} />);
     if (saved) form.set(path, saved.id);
@@ -212,7 +218,9 @@ function BareList({
         detailOf={(l) => `${listTypeLabel(l.listType)} · ${l.entries} entries`}
         placeholder="Any number list…"
       />
-      <Button small variant="ghost" icon="plus" title="New list" aria-label="New list" onClick={() => void newList()} />
+      {canNewList && (
+        <Button small variant="ghost" icon="plus" title="New list" aria-label="New list" onClick={() => void newList()} />
+      )}
       {form.error(path) && <small className="error-text">{form.error(path)}</small>}
     </span>
   );

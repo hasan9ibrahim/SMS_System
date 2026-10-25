@@ -1,5 +1,5 @@
 {
-  "$comment": "What each contract operation needs from the user's GUI Access Group (\u00a71, \u00a711; backend step 9, product owner 2026-10-25: every change is checked on the server, reads stay open, the Admin section is closed to non-admins). Admin pages (admin) need the group's View even to read, except the ones other pages read as pickers (pickerReads: account managers, departments, a company's mailboxes, e-mail templates). An operation's page comes from its path's first segment (segments) unless operations names it; its action comes from its method and operationId (scripts/generate.mjs) unless operations names it. open: no check beyond being signed in (the user's own session, preferences, saved views, own undo; the portal has its own sign-in). An action the page does not offer (pages: each page's actions, kept equal to the Admin \u203a Access Groups catalogue by mock/test/access.test.ts) falls back to edit, else view. contract/generated/operations.json is the result.",
+  "$comment": "What each contract operation needs from the user's GUI Access Group (§1, §11). Product owner 2026-10-25 (backend step 10): every call is checked on the server, reads too: a read needs the page's View, a change the action. A page the user may not open is not reached from another page either; other pages pick its records by name through /lookups (lookups: which pages may use each kind). Admin pages (admin) are for administrators only, unless the user's access group (or the user's own override) names that page itself; the group's Every page grant never covers them. An operation's page comes from its path's first segment (segments) unless operations names it; its action comes from its method and operationId (scripts/generate.mjs) unless operations names it. open: no check beyond being signed in (the user's own session, preferences, saved views, own undo; the portal has its own sign-in). An action the page does not offer (pages: each page's actions, kept equal to the Admin › Access Groups catalogue by mock/test/access.test.ts) falls back to edit, else view. contract/generated/operations.json is the result.",
   "open": [
     "health",
     "session",
@@ -10,7 +10,8 @@
     "password-check",
     "online-users",
     "changes",
-    "portal"
+    "portal",
+    "lookups"
   ],
   "admin": [
     "change-history",
@@ -26,12 +27,6 @@
     "cleanup",
     "migration",
     "customer-portal"
-  ],
-  "pickerReads": [
-    "users",
-    "departments",
-    "business-companies",
-    "email-templates"
   ],
   "pages": {
     "dashboard": [
@@ -601,6 +596,444 @@
     },
     "runPasswordReminders": {
       "action": "edit"
+    },
+    "queryBillingReport": {
+      "module": "billing-report"
+    },
+    "queryEnterpriseReport": {
+      "module": "enterprise-report"
+    },
+    "exportEnterpriseReport": {
+      "module": "enterprise-report"
+    },
+    "nocInsights": {
+      "module": "noc-report"
+    },
+    "salesInsights": {
+      "module": "sales-report"
+    },
+    "runTeamReport": {
+      "module": "team-report"
+    },
+    "exportTeamReport": {
+      "module": "team-report"
+    },
+    "getTeamMember": {
+      "module": "team-report"
+    },
+    "getVendorRnSettings": {
+      "module": "incoming-rns"
+    },
+    "updateVendorRnSettings": {
+      "module": "incoming-rns"
     }
+  },
+  "lookups": {
+    "users": {
+      "pages": [
+        "*"
+      ],
+      "fields": [
+        "id",
+        "displayName",
+        "username",
+        "department",
+        "isAccountManager",
+        "status"
+      ]
+    },
+    "access_groups": {
+      "pages": [
+        "users"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "status"
+      ]
+    },
+    "alert_rules": {
+      "pages": [
+        "incidents"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "status"
+      ]
+    },
+    "countries": {
+      "pages": [
+        "mccmnc"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "iso",
+        "dialCode",
+        "region"
+      ]
+    },
+    "customer_trunks": {
+      "pages": [
+        "alert-rules",
+        "enterprise-report",
+        "hlr",
+        "mo-book",
+        "notifications",
+        "pcap-trace",
+        "rate-lookup",
+        "route-map",
+        "route-rules",
+        "signaling",
+        "simulator",
+        "traffic-alerts",
+        "translation-rules"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "enterpriseId",
+        "enterpriseName",
+        "category",
+        "categoryId",
+        "currency",
+        "status"
+      ]
+    },
+    "departments": {
+      "pages": [
+        "alert-rules",
+        "scheduled",
+        "team-report",
+        "users",
+        "visibility"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "status"
+      ]
+    },
+    "destinations": {
+      "pages": [
+        "hlr",
+        "lcr",
+        "margin-calculator",
+        "master-table",
+        "mo-book",
+        "qbr-stats",
+        "sms-to-voice"
+      ],
+      "fields": [
+        "id",
+        "mccmnc",
+        "mcc",
+        "mnc",
+        "country",
+        "countryIso",
+        "countryId",
+        "network",
+        "allNetworks",
+        "dialCode"
+      ]
+    },
+    "edr_templates": {
+      "pages": [
+        "edr-search",
+        "failed-edr",
+        "live-analytics"
+      ],
+      "fields": [
+        "id",
+        "name"
+      ]
+    },
+    "email_templates": {
+      "pages": [
+        "business-companies",
+        "edr-search",
+        "enterprises",
+        "soa",
+        "soa-report",
+        "traffic-alerts",
+        "broadcast"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "emailType",
+        "businessCompanyId",
+        "subject",
+        "businessCompany"
+      ]
+    },
+    "enterprises": {
+      "pages": [
+        "alert-rules",
+        "charges",
+        "customer-portal",
+        "customer-trunks",
+        "daily-traffic",
+        "enterprise-report",
+        "hlr",
+        "incoming-rns",
+        "invoices",
+        "lcr",
+        "margin-calculator",
+        "market-moves",
+        "migration",
+        "rate-lookup",
+        "re-rating",
+        "soa",
+        "transactions",
+        "translation-rules",
+        "vendor-invoices",
+        "vendor-trunks",
+        "visibility"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "alias",
+        "type",
+        "status",
+        "accountManager",
+        "accountManagerId"
+      ]
+    },
+    "hlr_policies": {
+      "pages": [
+        "route-rules"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "status",
+        "destinations",
+        "hasCatchAll"
+      ]
+    },
+    "invoices": {
+      "pages": [
+        "transactions"
+      ],
+      "fields": [
+        "id",
+        "invoiceNumber",
+        "enterprise",
+        "enterpriseId",
+        "currency",
+        "status",
+        "invoiceDate",
+        "dueAmount",
+        "paymentStatus"
+      ]
+    },
+    "lcr_profiles": {
+      "pages": [
+        "route-rules"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "status",
+        "vendorCount",
+        "split"
+      ]
+    },
+    "number_lists": {
+      "pages": [
+        "translation-rules"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "listType",
+        "entries"
+      ]
+    },
+    "product_categories": {
+      "pages": [
+        "alert-rules",
+        "hlr",
+        "translation-rules"
+      ],
+      "fields": [
+        "id",
+        "name"
+      ]
+    },
+    "rate_tables": {
+      "pages": [
+        "bulk",
+        "customer-trunks",
+        "rate-lookup",
+        "re-rating",
+        "vendor-trunks"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "kind",
+        "currency",
+        "category",
+        "categoryId",
+        "customerTrunkId",
+        "vendorTrunkId",
+        "activeLines"
+      ]
+    },
+    "vendor_trunks": {
+      "pages": [
+        "alert-rules",
+        "bulk",
+        "customer-trunks",
+        "edr-search",
+        "enterprise-report",
+        "failed-edr",
+        "incoming-rns",
+        "lcr",
+        "pcap-trace",
+        "qbr-stats",
+        "rate-lookup",
+        "rate-manager",
+        "route-rules",
+        "signaling",
+        "simulator",
+        "traffic-alerts",
+        "translation-rules"
+      ],
+      "fields": [
+        "id",
+        "name",
+        "enterpriseId",
+        "enterpriseName",
+        "category",
+        "categoryId",
+        "currency",
+        "status"
+      ]
+    }
+  },
+  "shared": {
+    "runMasterReport": [
+      "sales-report",
+      "noc-report",
+      "dashboard",
+      "live-analytics"
+    ],
+    "exportMasterReport": [
+      "sales-report",
+      "noc-report"
+    ],
+    "listReportPresets": [
+      "sales-report",
+      "noc-report",
+      "scheduled"
+    ],
+    "rateLookupSideOptions": [
+      "bulk",
+      "edr-search",
+      "enterprise-report",
+      "market-moves",
+      "rate-manager",
+      "re-rating",
+      "route-rules",
+      "sales-report",
+      "simulator",
+      "translation-rules",
+      "vendor-trunks"
+    ],
+    "getRecordingStatus": [
+      "pcap-trace"
+    ],
+    "querySignalingCaptures": [
+      "pcap-trace"
+    ],
+    "stopSignalingCapture": [
+      "pcap-trace"
+    ],
+    "keepSignalingCapture": [
+      "pcap-trace"
+    ],
+    "extractRecording": [
+      "pcap-trace"
+    ],
+    "downloadSignalingCapture": [
+      "pcap-trace"
+    ],
+    "sendRateNotifications": [
+      "customer-trunks",
+      "rate-manager",
+      "enterprises"
+    ],
+    "sendTechInfoNotifications": [
+      "customer-trunks",
+      "enterprises"
+    ],
+    "previewNotification": [
+      "customer-trunks",
+      "rate-manager",
+      "enterprises"
+    ],
+    "queryCustomerTrunks": [
+      "notifications"
+    ],
+    "checkDuplicate": [
+      "enterprises",
+      "route-rules"
+    ],
+    "getCleanupSummary": [
+      "hlr",
+      "route-rules",
+      "translation-rules"
+    ],
+    "getEnterpriseBilling": [
+      "transactions"
+    ],
+    "getUserVisibility": [
+      "visibility"
+    ],
+    "getAccessCatalog": [
+      "users"
+    ],
+    "requestEdrDownload": [
+      "edr-search:export",
+      "failed-edr:export"
+    ],
+    "bulkUpdateTransactions": [
+      "soa"
+    ],
+    "uploadEmailAsset": [
+      "broadcast:send"
+    ],
+    "listEmailAssets": [
+      "broadcast"
+    ],
+    "listCompanyMailboxes": [
+      "broadcast"
+    ],
+    "queryAccessGroups": [
+      "users"
+    ],
+    "downloadRateSheet": [
+      "notifications"
+    ],
+    "getSoaReport": [
+      "soa"
+    ],
+    "queryEdrDownloads": [
+      "failed-edr",
+      "edr-search"
+    ],
+    "downloadEdrFile": [
+      "failed-edr",
+      "edr-search"
+    ],
+    "cancelEdrDownload": [
+      "failed-edr:export",
+      "edr-search:export"
+    ]
   }
 }
