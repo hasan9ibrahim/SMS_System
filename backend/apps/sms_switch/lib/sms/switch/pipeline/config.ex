@@ -80,6 +80,24 @@ defmodule Sms.Switch.Pipeline.Config do
     end)
   end
 
+  @doc "The destination of an MCCMNC code (an HLR/MNP result, §13.24): the network, else its country's entry, or nil."
+  @spec destination_of_mccmnc(String.t() | nil) :: map() | nil
+  def destination_of_mccmnc(nil), do: nil
+  def destination_of_mccmnc(code), do: Map.get(snapshot().destinations[:by_code] || %{}, code)
+
+  @doc "The HLR configuration (§6.5, §13.24): providers, prices, rules per customer trunk, policies, route rule actions."
+  @spec hlr() :: map()
+  def hlr,
+    do:
+      Map.get(snapshot(), :hlr, %{
+        providers: %{},
+        rates: %{},
+        rules: %{},
+        trunk_rules: %{},
+        policies: %{},
+        actions: %{}
+      })
+
   @doc "The MCCMNC code of a number (for translation conditions), or nil."
   @spec mccmnc_of(String.t()) :: String.t() | nil
   def mccmnc_of(number) do

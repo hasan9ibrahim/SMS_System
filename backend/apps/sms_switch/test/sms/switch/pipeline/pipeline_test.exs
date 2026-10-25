@@ -8,7 +8,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   alias Sms.Switch.Pipeline
   alias Sms.Switch.Pipeline.Held.OnBind
   alias Sms.Switch.Pipeline.Ledger.Sync
-  alias Sms.Switch.Test.{Client, CustomerCase, LedgerSource, PipelineConfig}
+  alias Sms.Switch.Test.{Client, CustomerCase, FakeHlr, LedgerSource, PipelineConfig}
 
   @dest "4915112345678"
 
@@ -29,6 +29,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     start_supervised!(Pipeline.Forwarder)
     start_supervised!({Pipeline.Held, sweep_ms: 60_000})
     start_supervised!(Pipeline.Held.OnBind)
+    start_supervised!({Pipeline.Buffers, discover_ms: 3_600_000})
 
     smscs = for _ <- 1..Keyword.get(opts, :smscs, 1), do: start_smsc()
 
@@ -370,7 +371,181 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "HLR / MNP before the resp (§13.24, S-6.5)" do
+    # Germany has a second network, 26202, with its own rates; the HLR rule looks up every 4915 number.
+    defp hlr_config(extra) do
+      {rule, target} = PipelineConfig.hlr_rule(1, 1, "^4915")
+
+      Keyword.merge(
+        [
+          destinations: [
+            ["4915", 1, "26201", "262", "01", "Fake Mobile", false, "DE", "Germany"],
+            ["4917", 3, "26202", "262", "02", "Other Mobile", false, "DE", "Germany"],
+            ["49", 2, "262", "262", "", nil, true, "DE", "Germany"]
+          ],
+          rates: [
+            PipelineConfig.rate(100, 1, "26201", "0.05"),
+            PipelineConfig.rate(100, 3, "26202", "0.07"),
+            PipelineConfig.rate(200, 2, "26201", "0.02"),
+            PipelineConfig.rate(200, 4, "26202", "0.03")
+          ],
+          hlr_providers: [
+            PipelineConfig.hlr_provider(id: 1),
+            PipelineConfig.hlr_provider(id: 2, name: "Second")
+          ],
+          hlr_rules: [rule],
+          hlr_targets: [target]
+        ],
+        extra
+      )
+    end
+
+    defp policy_rule(cache_hours) do
+      [
+        hlr_rules: [],
+        hlr_targets: [],
+        route_rules: [%{id: 1, hlr_action: %{"policy_id" => 1, "customer_trunk_ids" => []}}],
+        hlr_policies: [
+          %{
+            id: 1,
+            entries: [
+              %{
+                "code" => nil,
+                "mode" => "ordered",
+                "providerIds" => [1, 2],
+                "cacheHoursPorted" => nil,
+                "cacheHoursNotPorted" => cache_hours
+              }
+            ]
+          }
+        ]
+      ]
+    end
+
+    test "a ported number is rated and routed by the network the lookup names; the EDR records the lookup" do
+      FakeHlr.script(%{1 => FakeHlr.found("26202", true)})
+      # Only ported numbers match the rule (HLR Ported condition).
+      %{client: client, conns: [conn]} =
+        start_all(config: hlr_config(route_rules: [%{id: 1, hlr_ported: true}]))
+
+      {_, resp} = submit(client, %{short_message: "ported"})
+      assert resp.status == 0
+      assert_receive {:hlr_request, 1, @dest}
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+      [row] = edr("edr.attempt")
+      assert %{"c_mccmnc" => "26202", "c_rate" => "0.07", "v_rate" => "0.03"} = row
+
+      assert %{
+               "hlr_provider_id" => 1,
+               "hlr_fetch_type" => "live",
+               "hlr_is_ported" => 1,
+               "hlr_is_accomplished" => 1,
+               "hlr_cost_sys" => "0.001"
+             } = row
+    end
+
+    test "no answer within the provider's timeout: the master table at once, no other provider asked" do
+      FakeHlr.script(%{1 => {:error, :timeout}, 2 => FakeHlr.found("26202")})
+      %{client: client, conns: [conn]} = start_all(config: hlr_config(policy_rule(1)))
+
+      {_, %{status: 0}} = submit(client, %{short_message: "slow hlr"})
+      assert_receive {:hlr_request, 1, _}
+      refute_received {:hlr_request, 2, _}
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+
+      assert [%{"c_mccmnc" => "26201", "hlr_is_accomplished" => 0, "hlr_error_code" => 408}] =
+               edr("edr.attempt")
+    end
+
+    test "a provider error falls back to the policy's next provider; the answer is cached and free after" do
+      FakeHlr.script(%{1 => {:error, :boom}, 2 => FakeHlr.found("26202")})
+      %{client: client} = start_all(config: hlr_config(policy_rule(1)))
+
+      {client, %{status: 0}} = submit(client, %{short_message: "first"}, 2)
+      assert_receive {:hlr_request, 1, _}
+      assert_receive {:hlr_request, 2, _}
+      {_, %{status: 0}} = submit(client, %{short_message: "second"}, 3)
+      refute_receive {:hlr_request, _, _}, 200
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, second] = edr("edr.attempt")
+      assert %{"c_mccmnc" => "26202", "hlr_provider_id" => 2, "hlr_fetch_type" => "live"} = first
+
+      assert %{"c_mccmnc" => "26202", "hlr_fetch_type" => "cached", "hlr_cost_sys" => "0"} =
+               second
+    end
+
+    test "traffic without HLR is not looked up; a number no rule pattern matches neither" do
+      FakeHlr.script(%{1 => FakeHlr.found("26202")})
+      %{client: client} = start_all(config: hlr_config(hlr_rules: [], hlr_targets: []))
+      {client, %{status: 0}} = submit(client, %{short_message: "no hlr"}, 2)
+      {_, %{status: 0}} = submit(client, %{destination_addr: "4917123456", short_message: "x"}, 3)
+      refute_receive {:hlr_request, _, _}, 200
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.all?(edr("edr.attempt"), &(&1["hlr_fetch_type"] == "none"))
+    end
+  end
+
   describe "overflow buffer (S-2.4)" do
+    test "a trunk's buffer drains at its own TPS and never holds another trunk's messages back (step 7b)" do
+      trunks = [
+        PipelineConfig.customer_trunk(),
+        PipelineConfig.customer_trunk(id: 2)
+      ]
+
+      %{client: client, port: port, conns: [conn]} =
+        start_all(
+          config: [customer_trunks: trunks],
+          customer: CustomerCase.trunk(tps: 1, max_connections: 1, overflow_buffer: 20),
+          more_customers: [CustomerCase.trunk(id: 2, username: "other", name: "OTHER")]
+        )
+
+      fields = %{source_addr: "FakeBank", destination_addr: @dest}
+      Process.sleep(1_000 - rem(System.os_time(:millisecond), 1_000) + 5)
+
+      for seq <- 2..7,
+          do:
+            Client.send_pdu(
+              client,
+              Pdu.new(:submit_sm, Map.put(fields, :short_message, "burst #{seq}"), sequence: seq)
+            )
+
+      {_, resps} =
+        Enum.reduce(1..6, {client, []}, fn _, {client, acc} ->
+          assert {client, %Pdu{command: :submit_sm_resp} = resp} = Client.recv(client, 5_000)
+          {client, [resp.status | acc]}
+        end)
+
+      assert resps == [0, 0, 0, 0, 0, 0]
+
+      # The other trunk's message goes at once, ahead of the five still in trunk 1's buffer.
+      {other, _} = Client.bind(port, :bind_transceiver, %{system_id: "other", password: "secret"})
+      {_, %{status: 0}} = submit(other, %{short_message: "not held back"})
+
+      texts =
+        for _ <- 1..3 do
+          assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+          sent.fields.short_message
+        end
+
+      assert "not held back" in texts
+
+      # Trunk 1's buffered ones follow, one a second (the session takes a burst's submits concurrently, so they enter
+      # the buffer in any order).
+      rest =
+        for _ <- 1..4 do
+          assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_500
+          sent.fields.short_message
+        end
+
+      burst = Enum.filter(texts ++ rest, &String.starts_with?(&1, "burst"))
+      assert Enum.sort(burst) == Enum.map(2..7, &"burst #{&1}")
+    end
+
     test "over the trunk's TPS, messages are accepted into the buffer and sent as the TPS allows; past it, 0x58" do
       customer = CustomerCase.trunk(tps: 1, max_connections: 1, overflow_buffer: 2)
       %{client: client, conns: [conn]} = start_all(customer: customer)
@@ -539,7 +714,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
                edr("edr.attempt")
     end
 
-    test "a vendor at its TPS limit is waited for up to vendor_wait_ms, then the next vendor takes it (S-5.1)" do
+    test "a vendor at its TPS limit without an overflow buffer is skipped at once for the next (S-5.1)" do
       %{client: client, conns: [c1, c2]} =
         start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [tps: 1]})
 
@@ -554,6 +729,68 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       # Waiting is not an attempt: both messages have one row, each sent at its first attempt.
       assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
       assert Enum.map(attempts(), &{&1["attempt_no"], &1["v_trunk_id"]}) == [{1, 1}, {1, 2}]
+    end
+
+    test "a vendor at its TPS limit with a buffer keeps the message and sends it when it has room (S-5.1)" do
+      config =
+        two_vendors(
+          vendor_trunks: [
+            PipelineConfig.vendor_trunk(id: 1, overflow_buffer: 10),
+            PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201])
+          ]
+        )
+
+      %{client: client, conns: [c1, c2]} =
+        start_all(smscs: 2, config: config, vendor_fields: %{1 => [tps: 1]})
+
+      align_second()
+      {client, %{status: 0}} = submit(client, %{short_message: "first"}, 2)
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      {_, %{status: 0}} = submit(client, %{short_message: "second"}, 3)
+      # The next second, on the same vendor; nothing goes to the next one.
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "second"
+      refute_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 200
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.map(attempts(), &{&1["attempt_no"], &1["v_trunk_id"]}) == [{1, 1}, {1, 1}]
+    end
+
+    test "a full vendor buffer, or one waited in past its time, sends the message to the next vendor (S-5.1)" do
+      previous = Application.get_env(:sms_switch, Pipeline)
+
+      Application.put_env(
+        :sms_switch,
+        Pipeline,
+        Keyword.put(previous, :vendor_buffer_wait_ms, 300)
+      )
+
+      on_exit(fn -> Application.put_env(:sms_switch, Pipeline, previous) end)
+
+      config =
+        two_vendors(
+          vendor_trunks: [
+            PipelineConfig.vendor_trunk(id: 1, overflow_buffer: 1),
+            PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201])
+          ]
+        )
+
+      %{client: client, conns: [c1, c2]} =
+        start_all(smscs: 2, config: config, vendor_fields: %{1 => [tps: 1]})
+
+      align_second()
+      {client, %{status: 0}} = submit(client, %{short_message: "first"}, 2)
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      {client, %{status: 0}} = submit(client, %{short_message: "buffered"}, 3)
+      # The buffer holds one: the third goes to the next vendor at once.
+      {_, %{status: 0}} = submit(client, %{short_message: "buffer full"}, 4)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = full}, 1_000
+      assert full.fields.short_message == "buffer full"
+
+      # The buffered one waited 300 ms for vendor 1 (its next place is a second away): the next vendor.
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = waited}, 2_000
+      assert waited.fields.short_message == "buffered"
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
     end
 
     test "a part held back after others went counts as possibly sent: the whole message moves on (D2)" do

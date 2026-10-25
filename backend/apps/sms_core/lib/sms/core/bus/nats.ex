@@ -11,6 +11,10 @@ defmodule Sms.Core.Bus.Nats do
   The node keeps `:connections` connections (default 4): one connection process carried every publish and every
   consumer's pulls, and became the limit under load (backend step 7). A process always publishes on the same
   connection, so its own events keep their order; consumers' pullers are spread over the connections.
+
+  A queue (`Sms.Core.Bus.put/4`) is a durable consumer named `q-<queue>` on `sms.q.<queue>`, created before its first
+  event is published (a consumer created later would replay older events) and never deleted. `take/1` asks it for one
+  message at a time without waiting; an event not acknowledged within `@queue_ack_wait_ms` is handed out again.
   """
   @behaviour Sms.Core.Bus.Adapter
   alias Gnat.Jetstream.API.Stream
@@ -46,7 +50,7 @@ defmodule Sms.Core.Bus.Nats do
         )
       end
 
-    children = connections ++ [{__MODULE__.Setup, config}]
+    children = connections ++ [{__MODULE__.Setup, config}, __MODULE__.Queues]
 
     %{
       id: __MODULE__,
@@ -120,6 +124,117 @@ defmodule Sms.Core.Bus.Nats do
   catch
     :exit, _ -> {:error, :not_connected}
   end
+
+  # How long a taken queue event may stay unacknowledged before it is handed out again: a vendor buffer's message may
+  # wait 30 s for its vendor, then a Submit Timeout and re-routes (backend step 7b).
+  @queue_ack_wait_ms 300_000
+
+  @impl Sms.Core.Bus.Adapter
+  def ensure_queue(queue) do
+    name = queue_consumer(queue)
+
+    if __MODULE__.Queues.known?(name) do
+      :ok
+    else
+      consumer = %Gnat.Jetstream.API.Consumer{
+        stream_name: Keyword.fetch!(Bus.config(), :stream),
+        durable_name: name,
+        filter_subject: Bus.queue_subject(queue),
+        ack_policy: :explicit,
+        ack_wait: @queue_ack_wait_ms * 1_000_000,
+        max_deliver: -1,
+        max_ack_pending: 1_000,
+        deliver_policy: :all
+      }
+
+      case Gnat.Jetstream.API.Consumer.create(@conn, consumer) do
+        {:ok, _} -> __MODULE__.Queues.known(name)
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  catch
+    :exit, _ -> {:error, :not_connected}
+  end
+
+  @impl Sms.Core.Bus.Adapter
+  def take(queue) do
+    stream = Keyword.fetch!(Bus.config(), :stream)
+    conn = connection(:erlang.phash2(queue))
+
+    # A pulled message comes under its own subject to the reply inbox, which Gnat.request cannot match: own inbox.
+    inbox = "_INBOX.q." <> Base.encode32(:crypto.strong_rand_bytes(10), padding: false)
+    {:ok, sid} = Gnat.sub(conn, self(), inbox)
+
+    try do
+      :ok =
+        Gnat.pub(
+          conn,
+          "$JS.API.CONSUMER.MSG.NEXT.#{stream}.#{queue_consumer(queue)}",
+          ~s({"batch":1,"no_wait":true}),
+          reply_to: inbox
+        )
+
+      receive do
+        {:msg, %{sid: ^sid, status: status}} when status in ["404", "408"] ->
+          :empty
+
+        {:msg, %{sid: ^sid, status: status} = m} when is_binary(status) and status != "" ->
+          {:error, {:jetstream, status, m[:description]}}
+
+        {:msg, %{sid: ^sid, body: body, reply_to: reply_to}} ->
+          {:ok, body, {conn, reply_to}}
+      after
+        2_000 -> {:error, :timeout}
+      end
+    after
+      _ = Gnat.unsub(conn, sid)
+    end
+  catch
+    :exit, _ -> {:error, :not_connected}
+  end
+
+  @impl Sms.Core.Bus.Adapter
+  def ack({gnat, reply_to}) do
+    Gnat.pub(gnat, reply_to, "")
+  catch
+    :exit, _ -> {:error, :not_connected}
+  end
+
+  @impl Sms.Core.Bus.Adapter
+  def queues do
+    stream = Keyword.fetch!(Bus.config(), :stream)
+    list_queues(stream, 0, %{})
+  catch
+    :exit, _ -> {:error, :not_connected}
+  end
+
+  # JetStream lists consumers 256 at a time.
+  defp list_queues(stream, offset, acc) do
+    body = Jason.encode!(%{offset: offset})
+
+    with {:ok, %{body: raw}} <- Gnat.request(@conn, "$JS.API.CONSUMER.LIST.#{stream}", body),
+         {:ok, %{"consumers" => consumers, "total" => total}} <- Jason.decode(raw) do
+      acc =
+        for %{"name" => "q-" <> _ = name} = c <- consumers || [],
+            n = (c["num_pending"] || 0) + (c["num_ack_pending"] || 0),
+            n > 0,
+            into: acc,
+            do: {queue_name(name), n}
+
+      next = offset + length(consumers || [])
+      if consumers != [] and next < total, do: list_queues(stream, next, acc), else: {:ok, acc}
+    else
+      {:ok, %{"error" => error}} -> {:error, {:jetstream, error}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc false
+  # A queue's consumer name: NATS names cannot hold dots.
+  @spec queue_consumer(String.t()) :: String.t()
+  def queue_consumer(queue), do: "q-" <> String.replace(queue, ".", "-")
+
+  defp queue_name("q-" <> rest), do: String.replace(rest, "-", ".")
 
   @impl Sms.Core.Bus.Adapter
   def health do
@@ -228,6 +343,29 @@ defmodule Sms.Core.Bus.Nats do
         {:error, %{"err_code" => 10_059}} -> Stream.create(conn, stream)
         {:error, reason} -> {:error, reason}
       end
+    end
+  end
+
+  defmodule Queues do
+    @moduledoc false
+    # The queues this node has created or found, so a put checks JetStream only the first time.
+    use GenServer
+
+    @table __MODULE__
+
+    def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
+
+    def known?(name), do: :ets.whereis(@table) != :undefined and :ets.member(@table, name)
+
+    def known(name) do
+      _ = :ets.whereis(@table) != :undefined and :ets.insert(@table, {name})
+      :ok
+    end
+
+    @impl true
+    def init(:ok) do
+      _ = :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+      {:ok, nil}
     end
   end
 

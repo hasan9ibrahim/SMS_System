@@ -73,6 +73,61 @@ defmodule Sms.Core.Bus do
   @spec backlog(String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
   def backlog(name), do: adapter().backlog(name)
 
+  # ---------------------------------------------------------------- queues
+
+  @doc """
+  Puts an event on the durable queue `queue` (e.g. `"ct.12"`, a customer trunk's overflow buffer) and waits until it is
+  stored, like `publish/4`. Queues are taken one event at a time, oldest first (`take/1`), by whoever drains them at
+  their own pace; each queue is separate, so a full one never holds the others back (backend step 7b).
+  """
+  @spec put(String.t(), String.t(), map(), keyword()) :: {:ok, Event.t()} | {:error, term()}
+  def put(queue, type, data, opts \\ []) do
+    with :ok <- ensure_queue(queue), do: publish(queue_subject(queue), type, data, opts)
+  end
+
+  @doc "The subject a queue's events are published under."
+  @spec queue_subject(String.t()) :: String.t()
+  def queue_subject(queue), do: "sms.q." <> queue
+
+  @doc false
+  @spec ensure_queue(String.t()) :: :ok | {:error, term()}
+  def ensure_queue(queue) do
+    if Subject.valid_publish?(queue_subject(queue)),
+      do: adapter().ensure_queue(queue),
+      else: {:error, {:invalid_queue, queue}}
+  end
+
+  @doc """
+  The oldest event of a queue not handed out yet, and the handle to `ack/1` it once handled. An event taken and not
+  acknowledged is handed out again later (after a crash). `:empty` when nothing waits.
+  """
+  @spec take(String.t()) :: {:ok, Event.t(), term()} | :empty | {:error, term()}
+  def take(queue) do
+    case adapter().take(queue) do
+      {:ok, payload, handle} ->
+        case Event.decode(payload) do
+          {:ok, event} ->
+            {:ok, event, handle}
+
+          {:error, reason} ->
+            Logger.error("unreadable event dropped from queue #{queue}: #{inspect(reason)}")
+            _ = adapter().ack(handle)
+            take(queue)
+        end
+
+      other ->
+        other
+    end
+  end
+
+  @doc "Acknowledges an event taken from a queue."
+  @spec ack(term()) :: :ok | {:error, term()}
+  def ack(handle), do: adapter().ack(handle)
+
+  @doc "Every queue with events waiting or taken and not acknowledged, with that count."
+  @spec queues() :: {:ok, %{String.t() => non_neg_integer()}} | {:error, term()}
+  def queues, do: adapter().queues()
+
   @doc false
   @spec adapter() :: module()
   def adapter, do: Keyword.fetch!(config(), :adapter)

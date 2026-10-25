@@ -48,6 +48,12 @@ defmodule Sms.Switch.Test.PipelineConfig do
       translation_targets: maps(d.translation_targets),
       translation_settings: maps([]),
       list_entries: {[], d.list_entries},
+      hlr_providers: maps(Enum.map(d.hlr_providers, &hlr_provider/1)),
+      hlr_rates: maps(d.hlr_rates),
+      hlr_rules: maps(d.hlr_rules),
+      hlr_targets: maps(d.hlr_targets),
+      hlr_settings: maps([]),
+      hlr_policies: maps(d.hlr_policies),
       quality: {[], []},
       fx: {[], [["EUR", Decimal.new(1)], ["USD", Decimal.new("1.1")]]}
     }
@@ -83,7 +89,12 @@ defmodule Sms.Switch.Test.PipelineConfig do
       translation_rules: [],
       translation_targets: [],
       # [list_id, value, content | nil]
-      list_entries: []
+      list_entries: [],
+      hlr_providers: [],
+      hlr_rates: [],
+      hlr_rules: [],
+      hlr_targets: [],
+      hlr_policies: []
     }
   end
 
@@ -114,6 +125,41 @@ defmodule Sms.Switch.Test.PipelineConfig do
     )
   end
 
+  @doc "An HLR provider's fields (§6.5; see the loader's query)."
+  def hlr_provider(fields \\ []) do
+    Map.merge(
+      %{
+        id: 1,
+        name: "Fake HLR",
+        url: "http://127.0.0.1:1/lookup?msisdn={DNID}",
+        username: nil,
+        password: nil,
+        extra_headers: nil,
+        post_data: nil,
+        currency: "EUR",
+        default_rate: Decimal.new("0.001"),
+        cache_days: 0,
+        timeout_ms: 500,
+        daily_budget: nil,
+        response_mapping: %{
+          "mccmnc" => "mccmnc",
+          "ported" => "ported",
+          "errorCode" => "error.code",
+          "successCodes" => "0"
+        },
+        success_pct: nil,
+        live_status: "up"
+      },
+      Map.new(fields)
+    )
+  end
+
+  @doc "An HLR rule on every customer trunk: provider and DNID pattern (`hlr_rules` + `hlr_targets` rows)."
+  def hlr_rule(id, provider_id, pattern) do
+    {%{id: id, hlr_provider_id: provider_id, dnid_pattern: pattern, status: "active"},
+     %{hlr_rule_id: id, target_type: "all", target_id: nil, insert_at: "bottom"}}
+  end
+
   @doc "A vendor trunk's fields."
   def vendor_trunk(fields \\ []) do
     Map.merge(
@@ -134,6 +180,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
         support_multipart: true,
         max_msg_len: nil,
         multipart_format: "udh8",
+        overflow_buffer: 0,
         rate_table_ids: [200]
       },
       Map.new(fields)
@@ -191,6 +238,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
         tps_condition: nil,
         revenue_condition: nil,
         hlr_ported: nil,
+        hlr_action: nil,
         route_type: "static",
         hunt_policy: "top_down",
         margin: nil,

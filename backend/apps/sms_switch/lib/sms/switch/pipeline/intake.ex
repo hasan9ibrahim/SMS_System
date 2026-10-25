@@ -33,10 +33,12 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   alias Sms.Switch.Pipeline.{
     Backlog,
+    Buffers,
     Config,
     Credit,
     Delayed,
     Edr,
+    Hlr,
     LiveTps,
     MessageId,
     Queries,
@@ -137,6 +139,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   @spec process(map()) :: :ok | {:reject, atom(), term(), map()} | {:error, term()}
   def process(msg) do
     with {:ok, msg} <- run_ingress(msg),
+         msg = hlr(msg),
          {:ok, msg} <- rate(msg),
          {:ok, msg} <- route_now(msg),
          :ok <- credit(msg) do
@@ -381,9 +384,43 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
+  # §6.5, §13.24, S-6.5 (product owner 2026-10-25): traffic with HLR is looked up before the resp, and is rated and
+  # routed by the network the lookup names; without an answer, by the master table. A route rule's HLR action needs
+  # the route first: it is decided on the master table's destination (without counting it) when a rule could ask.
+  defp hlr(msg) do
+    receiver = msg.ingress.route_receiver
+    table = Config.destination(receiver)
+    rule_id = if Hlr.actions_for?(msg.trunk.id), do: table_rule(msg, table)
+
+    case Hlr.plan(msg.trunk.id, receiver, table, rule_id) do
+      nil ->
+        msg
+
+      plan ->
+        result = Hlr.lookup(plan, receiver, table)
+        found = result && result.accomplished && Config.destination_of_mccmnc(result.mccmnc)
+        msg |> Map.put(:hlr, result) |> Map.put(:hlr_destination, found || nil)
+    end
+  end
+
+  defp table_rule(_msg, nil), do: nil
+
+  defp table_rule(msg, table) do
+    case Config.sell_rate(msg.trunk.id, table.mccmnc, msg.received_at) do
+      nil ->
+        nil
+
+      sell ->
+        case Router.route(router_input(%{msg | destination: table, sell: sell})) do
+          {:ok, routed} -> routed.decision.rule_id
+          {:error, _reason, decision} -> decision && decision.rule_id
+        end
+    end
+  end
+
   # §6.1, §5.4, S-6.2: no destination or no rate for it → 0x0B.
   defp rate(msg) do
-    case Config.destination(msg.ingress.route_receiver) do
+    case msg[:hlr_destination] || Config.destination(msg.ingress.route_receiver) do
       nil ->
         {:reject, :esme_rinvdstadr, :unknown_destination, msg}
 
@@ -427,6 +464,7 @@ defmodule Sms.Switch.Pipeline.Intake do
       sender_npi: msg.ingress.sender_npi,
       destination: msg.destination,
       sell: msg.sell,
+      hlr_ported: msg[:hlr][:ported],
       now_ms: System.os_time(:millisecond)
     }
   end
@@ -467,13 +505,11 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   # ---------------------------------------------------------------- stored, or refused
 
-  # S-2.2: answered only once the bus has stored the message; if it cannot, 0x14 at once (S-2.3).
+  # S-2.2: answered only once the bus has stored the message; if it cannot, 0x14 at once (S-2.3). A message accepted
+  # over the trunk's TPS goes to the trunk's own overflow buffer, which releases it at the trunk's TPS (S-2.4,
+  # `Sms.Switch.Pipeline.Buffers`); every other one straight to the sender.
   defp store(msg) do
-    data = %{
-      "id" => msg.id,
-      "trunk_id" => msg.trunk.id,
-      "m" => Base.encode64(:erlang.term_to_binary(msg, compressed: 1))
-    }
+    data = event_data(msg)
 
     # Queued until the sender takes it: what cancel_sm and query_sm see (S-2.15, D8). Without Redis the message still
     # goes; it just cannot be cancelled.
@@ -486,7 +522,7 @@ defmodule Sms.Switch.Pipeline.Intake do
              "message #{msg.id} not marked queued, cannot be cancelled: #{inspect(reason)}"
            )
 
-    case Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}") do
+    case publish(msg, data) do
       {:ok, _} ->
         :ok
 
@@ -494,6 +530,29 @@ defmodule Sms.Switch.Pipeline.Intake do
         Store.drop_queued(ent, ids)
         error
     end
+  end
+
+  defp publish(%{buffered: true} = msg, data) do
+    queue = Buffers.customer_queue(msg.trunk.id)
+
+    with {:ok, _} = ok <- Bus.put(queue, "msg.buffered", data, id: "buffered:#{msg.id}") do
+      Buffers.kick(queue)
+      ok
+    end
+  end
+
+  defp publish(msg, data),
+    do: Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}")
+
+  @doc false
+  # A message as the bus carries it (to the sender, or to an overflow buffer).
+  @spec event_data(map()) :: map()
+  def event_data(msg) do
+    %{
+      "id" => msg.id,
+      "trunk_id" => msg.trunk.id,
+      "m" => Base.encode64(:erlang.term_to_binary(msg, compressed: 1))
+    }
   end
 
   defp refuse(msg, status, reason) do

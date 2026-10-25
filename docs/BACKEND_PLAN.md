@@ -96,7 +96,7 @@ multipart formats, re-route on a failed receipt (D2), possible duplicates (D4), 
 (D6), query_sm / cancel_sm (D8), Delayed Submit (D11) and live TPS in routing (§13.8, §13.23). Step 6 (billing at
 send time) done: revenue, cost and billable flags per Billing Type (outcome rows for receipt-based billing, ClickHouse
 005), live balances with the per-message credit check (balance + credit limit, prepaid stops at 0, 0x45; migration
-072), credit alerts and prepaid vendor alerts (Q22), and accumulated revenue conditions (§13.9). Step 7 (load tests) done on a 4-vCPU dev VM: SMPP simulator `tools/smpp-sim`, steady, ramp-to-break, spike, soak and failover (server killed, link cut) scenarios, 11 problems found and fixed (overload guard, start-up order after a restart, receipts across a crash, faster Redis/NATS I/O); results and the projection to the real servers in `docs/LOAD_TEST_RESULTS.md`. 1,000 TPS is to be confirmed on the real servers in step 8.
+072), credit alerts and prepaid vendor alerts (Q22), and accumulated revenue conditions (§13.9). Step 7 (load tests) done on a 4-vCPU dev VM: SMPP simulator `tools/smpp-sim`, steady, ramp-to-break, spike, soak and failover (server killed, link cut) scenarios, 11 problems found and fixed (overload guard, start-up order after a restart, receipts across a crash, faster Redis/NATS I/O); results and the projection to the real servers in `docs/LOAD_TEST_RESULTS.md`. 1,000 TPS is to be confirmed on the real servers in step 8. Step 7b done: HLR/MNP lookups before the resp (routed by their network, master table on a timeout) and per-trunk overflow buffers for customer and vendor trunks.
 
 ## 1. Where we stand
 
@@ -183,8 +183,8 @@ Together they take under 1 ms. Then the message is stored durably, then the resp
 2026-10-25:** on traffic with HLR/MNP on, the lookup runs before the resp with the checks above, and the destination
 and network come from its result instead of the master table; when the provider does not answer within its timeout
 (or fails), the master table is used (S-6.5). The resp of such traffic waits for the lookup, up to the provider's
-timeout, so the timeout should stay well under the customers' own (a few hundred ms is typical). To be built in the
-switch (not built yet: only the route rules' HLR-ported condition exists).
+timeout, so the timeout should stay well under the customers' own (a few hundred ms is typical). Built in backend
+step 7b; a timeout goes straight to the master table, a provider error to the policy's next provider.
 
 ### 3.4 Traffic recording (PCAP) at the operating-system level
 

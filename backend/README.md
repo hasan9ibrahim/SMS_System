@@ -168,7 +168,10 @@ loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
 Message ids given to customers are 20 hex characters: milliseconds, the server's `SWITCH_NODE_ID` (0–255, different
 on each server) and a counter. Rates and margins compare in `PLATFORM_CURRENCY` (default EUR).
 
-Not yet built (planned): HLR lookups; e-mails for credit alerts (the API sends them from the events).
+HLR / MNP (step 7b, `Pipeline.Hlr`): lookups before the resp for traffic with HLR (a route rule's HLR action, else the
+trunk's HLR rules); rated and routed by the network found; a provider timeout uses the master table at once.
+Overflow buffers (step 7b, `Pipeline.Buffers`): one durable bus queue per customer and per vendor trunk, drained at the
+trunk's TPS. Not yet built (planned): e-mails for credit alerts (the API sends them from the events).
 
 ## Run it
 

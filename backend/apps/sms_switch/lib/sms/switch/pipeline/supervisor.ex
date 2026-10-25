@@ -2,7 +2,7 @@ defmodule Sms.Switch.Pipeline.Supervisor do
   @moduledoc """
   The message pipeline (build step 4, spec §2, §6, docs/SMPP_SCENARIOS.md): the shared message store, the routing
   configuration in memory, and the bus consumers that send accepted messages to vendors (`Sender`), forward receipts
-  to customers (`Forwarder`, `Held`), answer DLR timeouts, late receipts and late vendor answers (`Timeouts`, `LateReceipts`, `LateResponses`) and write the EDRs (`EdrWriter`); `Backlog` refuses new messages while the
+  to customers (`Forwarder`, `Held`), drain the customer and vendor trunks' overflow buffers (`Buffers`), answer DLR timeouts, late receipts and late vendor answers (`Timeouts`, `LateReceipts`, `LateResponses`) and write the EDRs (`EdrWriter`); `Backlog` refuses new messages while the
   sender is too far behind. The customer side hands submits to
   `Sms.Switch.Pipeline.Intake`, the vendor side receipts to `Sms.Switch.Pipeline.Receipts`.
   """
@@ -22,7 +22,8 @@ defmodule Sms.Switch.Pipeline.Supervisor do
       Pipeline.Held.OnBind,
       Pipeline.LateReceipts,
       Pipeline.Ledger.Charges,
-      Pipeline.LateResponses
+      Pipeline.LateResponses,
+      Pipeline.Buffers
     ]
 
     children = [

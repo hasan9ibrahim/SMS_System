@@ -21,4 +21,19 @@ defmodule Sms.Core.Bus.Adapter do
 
   @doc "How many events a consumer has not finished yet: waiting for it, and handed out but not acknowledged."
   @callback backlog(consumer :: String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
+
+  @doc """
+  Creates the durable queue `queue` (events published to `sms.q.<queue>`) if it does not exist yet. A queue keeps its
+  position for ever: it is never deleted, so its events are never handed out twice.
+  """
+  @callback ensure_queue(queue :: String.t()) :: :ok | {:error, term()}
+
+  @doc "The oldest event of a queue not handed out yet, with the handle to acknowledge it; `:empty` when none waits."
+  @callback take(queue :: String.t()) :: {:ok, binary(), term()} | :empty | {:error, term()}
+
+  @doc "Acknowledges an event taken from a queue: it is never handed out again."
+  @callback ack(handle :: term()) :: :ok | {:error, term()}
+
+  @doc "Every queue with events waiting or taken and not acknowledged, with that count."
+  @callback queues() :: {:ok, %{String.t() => non_neg_integer()}} | {:error, term()}
 end

@@ -20,6 +20,7 @@ defmodule Sms.Switch.Pipeline.Router do
   @egress_tries 10
 
   @type input :: %{
+          optional(:hlr_ported) => boolean() | nil,
           customer_trunk: map(),
           sender: String.t(),
           receiver: String.t(),
@@ -72,7 +73,8 @@ defmodule Sms.Switch.Pipeline.Router do
           input.customer_trunk.enterprise_id
         )
       end,
-      hlr_ported: nil,
+      # §13.24: the HLR result's ported flag, for rules with an HLR Ported condition.
+      hlr_ported: input[:hlr_ported],
       warmup_sent: 0,
       list_has?: &Config.list_has?/3
     }

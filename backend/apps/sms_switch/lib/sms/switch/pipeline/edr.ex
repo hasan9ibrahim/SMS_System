@@ -70,7 +70,30 @@ defmodule Sms.Switch.Pipeline.Edr do
     |> Map.merge(customer_rate(msg))
     |> Map.merge(vendor_leg(msg, vendor, egress, attempt))
     |> Map.merge(money(msg, vendor, attempt))
+    |> Map.merge(hlr(msg[:hlr], attempt.no))
   end
+
+  # §13.24: the message's HLR lookup on each of its rows; its cost on the first attempt only, so sums count it once.
+  defp hlr(nil, _no), do: %{"hlr_fetch_type" => "none"}
+
+  defp hlr(h, no) do
+    %{
+      "hlr_provider_id" => h.provider_id,
+      "hlr_fetch_type" => h.fetch_type,
+      "hlr_is_ported" => flag(h.ported),
+      "hlr_is_accomplished" => flag(h.accomplished),
+      "hlr_error_code" => h.error_code,
+      "hlr_cost_sys" => if(no <= 1, do: amount(h.cost_sys), else: "0")
+    }
+  end
+
+  defp amount(f) when is_float(f),
+    do:
+      f
+      |> Decimal.from_float()
+      |> Decimal.round(6)
+      |> Decimal.normalize()
+      |> Decimal.to_string(:normal)
 
   # §7: revenue and cost of the attempt when billable at send time (`Billing.flags/2`).
   defp money(msg, vendor, attempt) do
