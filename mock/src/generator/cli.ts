@@ -18,6 +18,8 @@ import { generateWorld, Rng } from "./index.js";
 import { generateEdrs } from "./edr.js";
 import { clickHouseWriter, fileWriter, loadPostgres, resetClickHouse } from "./loaders.js";
 import { MINUTE } from "./world.js";
+import { markUpgradesApplied } from "../upgrades.js";
+import { closeDb } from "../db.js";
 
 const { values: args } = parseArgs({
   options: {
@@ -62,6 +64,9 @@ log(
 
 if (args.target === "db" && !args["edrs-only"]) {
   await loadPostgres(stagingDir, { reset: !args["no-reset"], log });
+  // The seed is the current schema: the upgrade scripts are already applied (backend step 11).
+  await markUpgradesApplied();
+  await closeDb();
 }
 
 if (!args["skip-edrs"]) {
