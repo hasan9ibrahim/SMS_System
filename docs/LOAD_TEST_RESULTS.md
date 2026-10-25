@@ -98,6 +98,21 @@ in 5-minute chunks:
   shared the VM with test builds). Submit to receipt p99 1.3 s.
 - The 100 ms answer target failed only because two nodes, the databases and the simulator share 4 vCPUs at 85 % CPU.
 
+## 5b. Overflow buffer next to normal traffic (backend step 7b)
+
+Two nodes, 300 msg/s spread over 10 customer trunks (30/s each) for 5 minutes. Trunk 1 was limited to **10 TPS with
+an overflow buffer of 100,000**, so about 20 msg/s of its traffic went to its buffer while the other nine trunks sent
+normally.
+
+- **Every submit accepted:** 94,894 parts, 0 throttled, 0 refused; trunk 1's excess went to its buffer, none refused.
+- **The buffer drains at exactly the trunk's TPS:** about 7,050 messages buffered; the queue released 301 messages
+  every 30 s (10/s) during and after the run, until empty.
+- **Other trunks not held back:** the shared sending queue stayed empty (nothing waiting) the whole run; submit to
+  receipt p50 1.0 s (the buffered messages make the p99 minutes, as intended: they wait for their trunk's TPS).
+- **Consistent:** the ~2,900 parts without an EDR or receipt at the end of the drain were exactly those still in trunk
+  1's buffer; every message sent had its EDR, no duplicates at the vendors.
+- The answer time (p99 365 ms) reflects the VM at 96 % CPU with two nodes, the databases and the simulator on 4 vCPUs.
+
 ## 6. Follow-ups (not in this step)
 
 - **CPU per message:** fewer Redis round trips (one script for TPS + credit + store), fewer bus events per message
