@@ -50,6 +50,8 @@ const sideInput = (s: BillingSide): BillingSideInput => ({
   autoInvoicing: s.autoInvoicing ?? false,
   sendPaymentConfirmation: s.sendPaymentConfirmation ?? false,
   description: s.description ?? null,
+  balanceAlert: s.balanceAlert ?? true,
+  balanceAlertPercent: { ...(s.balanceAlertPercent ?? { notice: 50, warning: 70, critical: 90 }) },
 });
 
 const toForm = (b: EnterpriseBilling): Form => ({
@@ -103,12 +105,14 @@ function SideSection({
                 currency: bc?.baseCurrency ?? "EUR",
                 billingCycleId: ref.data?.billingCycles[0]?.id ?? 1,
                 timezone: enterprise.billingTimezone,
-                billingType: side === "customer" ? "postpaid" : null,
+                billingType: "postpaid",
                 creditLimit: null,
                 openingBalance: 0,
                 autoInvoicing: side === "customer",
                 sendPaymentConfirmation: false,
                 description: null,
+                balanceAlert: true,
+                balanceAlertPercent: { notice: 50, warning: 70, critical: 90 },
               } satisfies BillingSideInput)
             }
           >
@@ -147,18 +151,17 @@ function SideSection({
         required
         options={tzOptions(ref.data?.timezones ?? ["UTC"])}
       />
-      {side === "customer" && (
-        <SelectField
-          form={form}
-          path={p("billingType")}
-          label="Billing type"
-          required
-          options={[
-            { value: "postpaid", label: "Postpaid" },
-            { value: "prepaid", label: "Prepaid" },
-          ]}
-        />
-      )}
+      <SelectField
+        form={form}
+        path={p("billingType")}
+        label="Billing type"
+        required
+        hint={side === "vendor" ? "Prepaid: we pay this vendor in advance" : undefined}
+        options={[
+          { value: "postpaid", label: "Postpaid" },
+          { value: "prepaid", label: "Prepaid" },
+        ]}
+      />
       {side === "customer" && v.billingType === "postpaid" && (
         <NumberField form={form} path={p("creditLimit")} label="Credit limit" min={0} step={100} suffix={v.currency} />
       )}
@@ -178,6 +181,32 @@ function SideSection({
         label="Send payment confirmation"
         hint="Default for new payments (§13.33)"
       />
+      {side === "vendor" && v.billingType === "prepaid" && (
+        <>
+          {/* Q22, product owner 2026-10-25: alerts as the prepaid funds are used; traffic never stops. */}
+          <CheckField
+            form={form}
+            path={p("balanceAlert")}
+            label="Balance alert"
+            hint="Alert as the prepaid funds are used up"
+          />
+          {v.balanceAlert &&
+            (["notice", "warning", "critical"] as const).map((k) => (
+              <NumberField
+                key={k}
+                form={form}
+                path={p(`balanceAlertPercent.${k}`)}
+                label={`${k[0]!.toUpperCase()}${k.slice(1)} at`}
+                hint={k === "notice" ? "% of the prepaid funds used" : undefined}
+                min={1}
+                max={100}
+                step={1}
+                suffix="%"
+                required
+              />
+            ))}
+        </>
+      )}
       <TextArea
         form={form}
         path={p("description")}

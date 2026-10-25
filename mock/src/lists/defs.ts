@@ -2910,24 +2910,19 @@ export const billingCycleList: ListDef<BillingCycleRow> = {
  * Balances (§7, sign decided 2026-10-17): opening + payments and credits − usage charges, so a
  * positive balance is the partner's credit with us and a negative one is what the client owes us
  * (customer) or what we owe the vendor (vendor: opening + our payments − accepted vendor
- * invoices). Payments left off the SOA still count (§13.33).
+ * invoices). Payments left off the SOA still count (§13.33). Traffic charged by the switch since the
+ * last invoice counts too (`balance_ledger`, migration 072).
  */
 export const BALANCE_FROM = `enterprises e
     LEFT JOIN enterprise_billing cb ON cb.enterprise_id = e.id AND cb.side = 'customer'
     LEFT JOIN enterprise_billing vb ON vb.enterprise_id = e.id AND vb.side = 'vendor'
     LEFT JOIN billing_cycles bcy ON bcy.id = COALESCE(cb.billing_cycle_id, vb.billing_cycle_id)
     LEFT JOIN users am ON am.id = e.account_manager_id
+    -- Live balance (migration 072, backend step 6): opening + payments - invoices - traffic charged since the last
+    -- invoice, the figure the switch checks credit against.
     LEFT JOIN LATERAL (SELECT
-        CASE WHEN cb.id IS NULL THEN NULL ELSE cb.opening_balance
-          + COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
-                       WHERE enterprise_id = e.id AND side = 'customer' AND deleted_at IS NULL), 0)
-          - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = e.id AND deleted_at IS NULL
-                       AND status <> 'failed' AND kind = 'traffic'), 0) END AS customer,
-        CASE WHEN vb.id IS NULL THEN NULL ELSE vb.opening_balance
-          + COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
-                       WHERE enterprise_id = e.id AND side = 'vendor' AND deleted_at IS NULL), 0)
-          - COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
-                       WHERE enterprise_id = e.id AND deleted_at IS NULL AND recon_status = 'accepted'), 0) END AS vendor) bal ON true
+        (SELECT balance FROM balance_ledger WHERE enterprise_id = e.id AND side = 'customer') AS customer,
+        (SELECT balance FROM balance_ledger WHERE enterprise_id = e.id AND side = 'vendor') AS vendor) bal ON true
     LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
     LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
 const netSql = `round(COALESCE(bal.customer, 0)

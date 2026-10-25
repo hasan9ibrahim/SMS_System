@@ -21,7 +21,20 @@ defmodule Sms.Switch.Pipeline.Receipts do
   """
   @behaviour Sms.Switch.Vendor.Receipts
   require Logger
-  alias Sms.Switch.Pipeline.{Config, Edr, Forwarder, LateReceipts, Receipt, Sender, Store}
+
+  alias Sms.Switch.Pipeline.{
+    Billing,
+    Config,
+    Edr,
+    Forwarder,
+    LateReceipts,
+    Ledger,
+    Receipt,
+    Revenue,
+    Sender,
+    Store
+  }
+
   alias Sms.Switch.Vendor.MessageId
 
   @impl true
@@ -160,6 +173,8 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
     with {:ok, true} <- Store.claim_forward(message_id),
          :ok <- Store.forget(message_id, vt, Map.values(rec.vendor_ids)) do
+      # This attempt's outcome: not the message's, so the customer is not billed for it.
+      outcome(rec.data, final, false)
       queue_resend(message_id, rec, final, vt)
     else
       {:ok, false} -> :ok
@@ -231,7 +246,10 @@ defmodule Sms.Switch.Pipeline.Receipts do
   end
 
   defp forward(message_id, rec) do
-    case Forwarder.publish(rec.data, aggregate(rec.finals)) do
+    final = aggregate(rec.finals)
+    outcome(rec.data, final, true)
+
+    case Forwarder.publish(rec.data, final) do
       :ok ->
         # Not forgotten now is only memory: the message still expires with its DLR timeout.
         _ = Store.forget(message_id, rec.data.vendor_trunk_id, Map.values(rec.vendor_ids))
@@ -241,6 +259,59 @@ defmodule Sms.Switch.Pipeline.Receipts do
         _ = Store.unclaim_forward(message_id)
         error
     end
+  end
+
+  # §7: the attempt's outcome row, once its final status is known: the money of the billing types decided by the
+  # receipt; the customer on the status it is told (after the DLR maps), only for the message's final outcome; the
+  # vendor on its own status, never on one the switch made after the DLR timeout. Written again on a retry, the row
+  # has the same bus id and is stored once.
+  defp outcome(%{bill: bill} = data, final, message_final) do
+    {customer_status, _error} = Forwarder.mapped(data, final)
+
+    row =
+      Edr.outcome_row(data, %{
+        at: final.received_at,
+        status: final.status,
+        customer_status: customer_status,
+        customer_billable:
+          message_final and bill.sell != nil and not bill.charged and
+            Billing.on_receipt?(bill.c_type, customer_status),
+        vendor_billable:
+          final[:source] != "switch" and bill.cost != nil and
+            Billing.on_receipt?(bill.v_type, final.status),
+        source: final[:source]
+      })
+
+    _ = charge(data, row)
+
+    case Edr.publish_receipt(row) do
+      :ok -> :ok
+      {:error, reason} -> Logger.error("outcome EDR of #{data.id} not stored: #{inspect(reason)}")
+    end
+  end
+
+  # A message sent before billing was kept with it.
+  defp outcome(_data, _final, _message_final), do: :ok
+
+  # The balances, and the customer's revenue (§13.9), charged as the outcome row bills them.
+  defp charge(%{bill: bill} = data, row) do
+    _ =
+      if row["is_customer_billable"] == 1 do
+        revenue = {bill.rev_keys, Revenue.platform_micro(bill.sell, bill.c_parts)}
+
+        Ledger.charge(
+          :customer,
+          data.trunk.enterprise_id,
+          data.id,
+          bill.sell,
+          bill.c_parts,
+          revenue
+        )
+      end
+
+    if row["is_vendor_billable"] == 1,
+      do:
+        Ledger.charge(:vendor, bill.dims["v_enterprise_id"], data.edr_id, bill.cost, bill.v_parts)
   end
 
   @doc false

@@ -36,13 +36,16 @@ defmodule Sms.Switch.Pipeline.Sender do
   alias Sms.Switch.Message.{Concat, Text}
 
   alias Sms.Switch.Pipeline.{
+    Billing,
     Config,
     Delayed,
     Edr,
     Forwarder,
     Intake,
+    Ledger,
     LiveTps,
     Receipts,
+    Revenue,
     Router,
     Store
   }
@@ -508,17 +511,6 @@ defmodule Sms.Switch.Pipeline.Sender do
 
     _ = mark_in_flight(msg, route)
 
-    # A vendor that answered without a message id cannot send a receipt we could match (S-5.12).
-    parts = for {id, n} <- Enum.with_index(ids, 1), id not in [nil, ""], do: {n, vt, id}
-    record = record_of(msg, trunk, attempt, vt, length(results))
-
-    with {:error, reason} <-
-           record_sent(msg.id, record, parts, {timeout_s + 3_600, timeout_at}, 3),
-         do:
-           Logger.error(
-             "message #{msg.id} sent but not recorded, its receipts will be orphans: #{inspect(reason)}"
-           )
-
     row =
       Map.merge(attempt, %{
         success: true,
@@ -529,6 +521,21 @@ defmodule Sms.Switch.Pipeline.Sender do
         vendor_message_keys: Enum.reject(ids, &(&1 in [nil, ""]))
       })
 
+    row = Map.merge(row, Billing.flags(msg, row))
+    # §7: billed once; a re-route after a failed receipt does not bill the customer again.
+    charged = Map.update(msg, :charged, row.customer_billable, &(&1 or row.customer_billable))
+
+    # A vendor that answered without a message id cannot send a receipt we could match (S-5.12).
+    parts = for {id, n} <- Enum.with_index(ids, 1), id not in [nil, ""], do: {n, vt, id}
+    record = record_of(charged, route, trunk, attempt, length(results))
+
+    with {:error, reason} <-
+           record_sent(msg.id, record, parts, {timeout_s + 3_600, timeout_at}, 3),
+         do:
+           Logger.error(
+             "message #{msg.id} sent but not recorded, its receipts will be orphans: #{inspect(reason)}"
+           )
+
     publish_rows(msg, rows, false)
     publish_rows(msg, [row], true)
 
@@ -536,12 +543,39 @@ defmodule Sms.Switch.Pipeline.Sender do
     :ok
   end
 
-  defp record_of(msg, trunk, attempt, vt, parts) do
+  # §7: the balances are charged when the attempt row makes the message billable (`Sms.Switch.Pipeline.Ledger`).
+  defp charge(msg, row) do
+    _ =
+      if row.customer_billable do
+        # §13.9: the revenue earned counts for accumulated revenue conditions with the charge.
+        revenue =
+          {Revenue.keys(msg, (row[:vendor] || %{})[:rule_id]),
+           Revenue.platform_micro(msg.sell, msg.parts)}
+
+        Ledger.charge(:customer, msg.trunk.enterprise_id, msg.id, msg.sell, msg.parts, revenue)
+      end
+
+    if row.vendor_billable do
+      vt = Config.vendor_trunk(row.vendor.vendor_trunk_id) || %{}
+
+      Ledger.charge(
+        :vendor,
+        vt[:enterprise_id],
+        row.edr_id,
+        row.vendor[:cost],
+        row[:msg_count] || msg.parts
+      )
+    end
+  end
+
+  defp record_of(msg, route, trunk, attempt, parts) do
     Map.merge(Forwarder.core(msg), %{
       edr_id: attempt.edr_id,
-      vendor_trunk_id: vt,
+      vendor_trunk_id: route.vendor_trunk_id,
       parts: parts,
       sent_at: attempt.resp_time,
+      # What the outcome row needs once the final status is known (§7, `Billing`).
+      bill: msg |> Billing.of_attempt(route, parts) |> Map.put(:attempt_no, attempt.no),
       # What a re-route after a failed receipt needs (S-5.11, D2), kept only where one can happen.
       resend:
         if(reroutable?(trunk),
@@ -622,6 +656,8 @@ defmodule Sms.Switch.Pipeline.Sender do
     |> Enum.reverse()
     |> Enum.each(fn row ->
       row = row |> Map.put_new(:final, final) |> Map.put_new(:success, false)
+      row = Map.merge(Billing.flags(msg, row), row)
+      _ = charge(msg, row)
 
       case Edr.publish_attempt(Edr.attempt_row(msg, row)) do
         :ok ->

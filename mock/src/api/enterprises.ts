@@ -98,6 +98,11 @@ const BILLING_SPECS: FieldSpec[] = [
   { api: "autoInvoicing", col: "auto_invoicing" },
   { api: "sendPaymentConfirmation", col: "send_payment_confirmation" },
   { api: "description", col: "description" },
+  // Prepaid vendor balance alerts (Q22, product owner 2026-10-25, migration 073).
+  { api: "balanceAlert", col: "balance_alert" },
+  { api: "balanceAlertPercent.notice", col: "balance_alert_notice" },
+  { api: "balanceAlertPercent.warning", col: "balance_alert_warning" },
+  { api: "balanceAlertPercent.critical", col: "balance_alert_critical" },
 ];
 
 const BENEFICIARY_SPECS: FieldSpec[] = [
@@ -345,7 +350,8 @@ export async function applyEnterpriseField(
   const spec = SPECS.find((s) => s.api === field);
   if (spec) return updateColumns(c, "enterprises", id, [spec], { [field]: value }, userId);
 
-  const [head, a, b] = field.split(".");
+  const [head, a, ...rest] = field.split(".");
+  const b = rest.join(".");
   if (head === "contacts" && a && b && b in CONTACT_COLS) {
     await c.query(
       `UPDATE enterprise_contacts SET ${CONTACT_COLS[b as keyof typeof CONTACT_COLS]} = $3, updated_at = now()
@@ -413,24 +419,12 @@ export async function applyEnterpriseField(
 
 // ---------------------------------------------------------------- billing (§5.3)
 
+/** Live balances (§7, `balance_ledger`, migrations 072–073): opening + payments − invoices − traffic since the
+ * last invoice, in each side's currency (positive = the partner's credit, negative = owed). */
 async function sideBalances(db: Db, id: number): Promise<Record<Side, number>> {
-  // Balance sign (decided 2026-10-17, §7): opening + payments and credits − usage charges, so a
-  // positive balance is the partner's credit and a negative one is what the client owes us (or
-  // what we owe the vendor). Returns the movements; the caller adds the opening balance.
-  // §13.33: payments left off the SOA still count.
-  const { rows } = await db.query(
-    `SELECT
-       COALESCE((SELECT sum(CASE payment_type WHEN 'credit' THEN amount ELSE -amount END) FROM transactions
-                  WHERE enterprise_id = $1 AND side = 'customer' AND deleted_at IS NULL), 0)
-       - COALESCE((SELECT sum(usage_charges) FROM invoices WHERE enterprise_id = $1 AND deleted_at IS NULL
-                    AND status <> 'failed' AND kind = 'traffic'), 0) AS customer,
-       COALESCE((SELECT sum(CASE payment_type WHEN 'debit' THEN amount ELSE -amount END) FROM transactions
-                  WHERE enterprise_id = $1 AND side = 'vendor' AND deleted_at IS NULL), 0)
-       - COALESCE((SELECT sum(charge_amount) FROM vendor_invoices
-                    WHERE enterprise_id = $1 AND deleted_at IS NULL AND recon_status = 'accepted'), 0) AS vendor`,
-    [id],
-  );
-  return { customer: Number(rows[0].customer), vendor: Number(rows[0].vendor) };
+  const { rows } = await db.query("SELECT side, balance FROM balance_ledger WHERE enterprise_id = $1", [id]);
+  const of = (side: Side) => Number(rows.find((r) => r.side === side)?.balance ?? 0);
+  return { customer: of("customer"), vendor: of("vendor") };
 }
 
 async function loadBilling(db: Db, id: number): Promise<EnterpriseBilling> {
@@ -447,7 +441,7 @@ async function loadBilling(db: Db, id: number): Promise<EnterpriseBilling> {
     if (!r) return null;
     return {
       ...(rowToObject(r, BILLING_SPECS) as unknown as BillingSideInput),
-      balance: Math.round(((r.openingBalance as number) + balances[s]) * 100) / 100,
+      balance: Math.round(balances[s] * 100) / 100,
       billingCycleName: r.cycle_name,
       updatedBy: r.updated_by ?? null,
       updatedAt: iso(r.updated_at)!,
@@ -477,11 +471,17 @@ async function upsertBillingSide(c: pg.PoolClient, id: number, side: Side, input
   );
 }
 
-/** Customer-only fields are cleared on the vendor side; credit limit is postpaid only. */
+/** Customer-only fields are cleared on the vendor side; credit limit is postpaid only. A vendor may be prepaid
+ * (we pay it in advance), with balance alerts (Q22, product owner 2026-10-25). */
 function sideValues(side: Side, input: BillingSideInput): Record<string, unknown> {
   const customer = side === "customer";
-  const billingType = customer ? (input.billingType ?? "postpaid") : null;
+  const billingType = input.billingType ?? "postpaid";
+  const levels = input.balanceAlertPercent ?? { notice: 50, warning: 70, critical: 90 };
   return {
+    balanceAlert: input.balanceAlert ?? true,
+    "balanceAlertPercent.notice": levels.notice,
+    "balanceAlertPercent.warning": levels.warning,
+    "balanceAlertPercent.critical": levels.critical,
     currency: input.currency.toUpperCase(),
     billingCycleId: input.billingCycleId,
     timezone: input.timezone,
@@ -528,6 +528,9 @@ export function updateEnterpriseBilling(request: FastifyRequest, reply: FastifyR
       ]);
       if (!cyc[0]) errors.push({ path: `/${side}/billingCycleId`, message: "unknown billing cycle" });
       if (!isTimezone(s.timezone)) errors.push({ path: `/${side}/timezone`, message: "unknown time zone" });
+      const lv = s.balanceAlertPercent;
+      if (lv && !(lv.notice < lv.warning && lv.warning < lv.critical))
+        errors.push({ path: `/${side}/balanceAlertPercent`, message: "levels must rise: notice < warning < critical" });
       // Invoices are issued in the side's currency; changing it would break balances.
       const old = before[side];
       if (old && old.currency !== s.currency.toUpperCase()) {
@@ -551,7 +554,7 @@ export function updateEnterpriseBilling(request: FastifyRequest, reply: FastifyR
       if (!old) diff.push({ entity_id: id, field: `billing.${side}`, before: null, after: next });
       else
         for (const spec of BILLING_SPECS) {
-          const b = (old as unknown as Record<string, unknown>)[spec.api] ?? null;
+          const b = getPath(old, spec.api) ?? null;
           if (!same(b, next[spec.api]))
             diff.push({ entity_id: id, field: `billing.${side}.${spec.api}`, before: b, after: next[spec.api] });
         }

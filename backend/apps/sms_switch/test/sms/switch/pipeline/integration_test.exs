@@ -4,8 +4,20 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
   use ExUnit.Case, async: false
   alias Sms.Core.Bus.Local
   alias Sms.Core.{ClickHouse, Repo}
-  alias Sms.Switch.Pipeline.{Config, Edr, EdrWriter, LateReceipts, MessageId, Queries}
+
+  alias Sms.Switch.Pipeline.{
+    Billing,
+    Config,
+    Edr,
+    EdrWriter,
+    LateReceipts,
+    Ledger,
+    MessageId,
+    Queries
+  }
+
   alias Sms.Switch.Pipeline.Config.Loader
+  alias Sms.Switch.Pipeline.Ledger.Source.Postgres
   alias Sms.Switch.Test.{CustomerCase, PipelineConfig}
 
   @moduletag :integration
@@ -37,6 +49,129 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
             :fx
           ],
           do: assert(Map.has_key?(snapshot, key))
+    end
+  end
+
+  describe "Ledger on the real schema (migration 072)" do
+    setup do
+      start_supervised!(Repo)
+      :ok
+    end
+
+    test "accounts come from balance_ledger; buckets are written to traffic_charges and read back" do
+      # Its own enterprise, rolled back at the end, so it runs on an empty database too.
+      Repo.transaction(fn ->
+        q = fn sql, params -> Repo.query!(sql, params).rows end
+
+        q.(
+          "INSERT INTO currencies (iso, name, symbol) VALUES ('EUR', 'Euro', '€') ON CONFLICT (iso) DO NOTHING",
+          []
+        )
+
+        [[company]] =
+          q.(
+            "INSERT INTO business_companies (name, base_currency) VALUES ('Test Co', 'EUR') RETURNING id",
+            []
+          )
+
+        [[cycle]] =
+          q.(
+            "INSERT INTO billing_cycles (name, billing_type, usage_days, due_days) VALUES ('Test cycle', 'monthly', 30, 7) RETURNING id",
+            []
+          )
+
+        [[ent]] =
+          q.(
+            """
+            INSERT INTO enterprises (name, alias, type, tier, address_line1, business_company_id)
+            VALUES ('Ledger Test', 'LT', 'customer', 'tier1', 'Street 1', $1) RETURNING id
+            """,
+            [company]
+          )
+
+        q.(
+          """
+          INSERT INTO enterprise_billing (enterprise_id, side, currency, billing_cycle_id, billing_type, credit_limit,
+                                          opening_balance, timezone)
+          VALUES ($1, 'customer', 'EUR', $2, 'postpaid', 50, 10, 'Asia/Kolkata')
+          """,
+          [ent, cycle]
+        )
+
+        # A prepaid vendor side with its own balance alert levels (migration 073).
+        q.(
+          """
+          INSERT INTO enterprise_billing (enterprise_id, side, currency, billing_cycle_id, billing_type, opening_balance,
+                                          balance_alert_notice)
+          VALUES ($1, 'vendor', 'EUR', $2, 'prepaid', 100, 40)
+          """,
+          [ent, cycle]
+        )
+
+        # A payment of 11 USD counts at the USD rate of its date (product owner 2026-10-25).
+        q.(
+          "INSERT INTO currencies (iso, name, symbol) VALUES ('USD', 'US dollar', '$') ON CONFLICT (iso) DO NOTHING",
+          []
+        )
+
+        q.(
+          "INSERT INTO currency_rates (iso, rate_per_eur, valid_from) VALUES ('USD', 1.1, '2020-01-01') ON CONFLICT DO NOTHING",
+          []
+        )
+
+        q.(
+          """
+          INSERT INTO transactions (enterprise_id, side, payment_mode, payment_type, transaction_type, amount, currency,
+                                    amount_base, payment_date)
+          VALUES ($1, 'customer', 'bank_transfer', 'credit', 'receipt', 11, 'USD', 10, '2026-01-15')
+          """,
+          [ent]
+        )
+
+        [[usd]] = q.("SELECT rate_per_eur_at('USD', '2026-01-15'::timestamptz)", [])
+        paid = Decimal.div(Decimal.new(11), usd)
+        base = paid |> Decimal.add(10) |> Ledger.to_micro()
+
+        assert {:ok, accounts} = Postgres.accounts()
+        account = Enum.find(accounts, &(&1.enterprise_id == ent and &1.side == :customer))
+        vendor = Enum.find(accounts, &(&1.enterprise_id == ent and &1.side == :vendor))
+        assert %{prepaid: true, alerts: [40, 70, 90], limit: 0, base: 100_000_000} = vendor
+
+        assert %{
+                 key: key,
+                 side: :customer,
+                 base: ^base,
+                 limit: 50_000_000,
+                 prepaid: false,
+                 cutoff: 0
+               } =
+                 account
+
+        assert key == Ledger.key(:customer, ent)
+        # Midnight in the partner's time zone (+05:30): a half-hour boundary.
+        assert rem(account.periods["today"], 1_800) == 0
+
+        bucket = Ledger.bucket(System.os_time(:second))
+        assert :ok = Postgres.persist([{account, bucket, 1_234_567, 3}])
+        assert :ok = Postgres.persist([{account, bucket, 2_000_000, 4}])
+        assert {:ok, [{^bucket, 2_000_000, 4}]} = Postgres.charges(account, bucket)
+        assert :ok = Postgres.persist([])
+
+        # The uninvoiced traffic is in the balance.
+        assert {:ok, again} = Postgres.accounts()
+        assert Enum.find(again, &(&1.enterprise_id == ent and &1.side == :customer)).base == base
+
+        assert [[balance]] =
+                 q.(
+                   "SELECT balance FROM balance_ledger WHERE enterprise_id = $1 AND side = 'customer'",
+                   [ent]
+                 )
+
+        # Opening 10 + the payment − 2 of traffic not invoiced yet.
+        assert Ledger.to_micro(balance) == base - 2_000_000
+
+        Repo.rollback(:done)
+      end)
     end
   end
 
@@ -194,6 +329,42 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
       assert MapSet.subset?(keys(receipt), columns("edr_receipt"))
       assert :ok = EdrWriter.write("edr", [Map.delete(attempt, "row_key")])
       assert count("edr", attempt["edr_id"]) == 1
+
+      # The outcome row (ClickHouse 005) lands in edr_receipt and, through its view, in edr_hourly.
+      bill =
+        full
+        |> Map.put(:route, nil)
+        |> Billing.of_attempt(vendor, 1)
+        |> Map.merge(%{c_type: "delivery", v_type: "delivery", attempt_no: 1})
+
+      data =
+        Map.merge(full, %{edr_id: attempt["edr_id"], vendor_trunk_id: 1, bill: bill})
+
+      outcome =
+        Edr.outcome_row(data, %{
+          at: now,
+          status: "DELIVRD",
+          customer_status: "DELIVRD",
+          customer_billable: true,
+          vendor_billable: true
+        })
+
+      assert MapSet.subset?(keys(outcome), columns("edr_receipt")),
+             inspect(MapSet.difference(keys(outcome), columns("edr_receipt")))
+
+      assert :ok = EdrWriter.write("edr_receipt", [Map.delete(outcome, "row_key")])
+
+      {:ok, %{rows: [[delivered, billable, revenue]]}} =
+        ClickHouse.query(
+          """
+          SELECT sum(delivered), sum(billable_c), toString(sum(revenue_sys)) FROM edr_hourly
+           WHERE c_enterprise_id = {ent:UInt32} AND hour = toStartOfHour(fromUnixTimestamp64Milli({at:Int64}))
+          """,
+          %{"ent" => full.trunk.enterprise_id, "at" => full.received_at}
+        )
+
+      assert delivered >= 1 and billable >= 1
+      assert Decimal.compare(Decimal.new(revenue), Decimal.new("0.05")) != :lt
     end
 
     defp keys(row), do: row |> Map.delete("row_key") |> Map.keys() |> MapSet.new()
@@ -240,7 +411,8 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
       PipelineConfig.put()
       start_supervised!({Config.Server, loader: PipelineConfig})
       CustomerCase.assert_eventually(&Config.ready?/0)
-      vt = 800_000 + System.unique_integer([:positive])
+      # Unique across runs too: ClickHouse keeps the rows of earlier runs.
+      vt = 800_000 + :rand.uniform(4_000_000_000)
       edr_id = Edr.new_id()
 
       attempt =
@@ -256,6 +428,13 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
           vendor_message_keys: ["a1", "a2"]
         })
         |> Map.put("v_trunk_id", vt)
+        # A vendor billing on delivery: the late DELIVRD adds its cost (§7, D5).
+        |> Map.merge(%{
+          "v_billing_type" => "delivery",
+          "v_rate" => "0.02",
+          "v_sys_rate" => "0.02",
+          "msg_count" => 2
+        })
 
       assert :ok = EdrWriter.write("edr", [Map.delete(attempt, "row_key")])
 
@@ -284,7 +463,8 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
       assert :ok = LateReceipts.settle(vt, ["a1"], late.("a1"))
       assert :ok = LateReceipts.settle(vt, ["zz"], late.("zz"))
 
-      rows = for e <- Local.published(), e.type == "edr.receipt", do: e.data
+      all = for e <- Local.published(), e.type == "edr.receipt", do: e.data
+      {outcomes, rows} = Enum.split_with(all, &(&1["kind"] == "outcome"))
 
       assert [
                %{
@@ -296,6 +476,16 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
                },
                %{"part_no" => 1, "is_late" => 0, "is_duplicate" => 1}
              ] = rows
+
+      # The vendor's cost of the late delivery, once (not for the duplicate), with no status of its own.
+      assert [
+               %{
+                 "is_vendor_billable" => 1,
+                 "cost" => "0.04",
+                 "msg_status" => "",
+                 "edr_id" => ^edr_id
+               }
+             ] = outcomes
 
       assert c_id == msg().id
     end

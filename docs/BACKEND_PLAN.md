@@ -93,8 +93,10 @@ receipts matched, aggregated per message and forwarded by DLR Session Affinity w
 overflow buffer (S-2.4) and EDRs appended to ClickHouse (`edr`, `edr_receipt`) through the bus. Step 5 (switch rules)
 done: DLR timeouts with late receipts matched from the EDRs (D5), customer multipart reassembly (D1) and vendor
 multipart formats, re-route on a failed receipt (D2), possible duplicates (D4), duplicate filter and loop detection
-(D6), query_sm / cancel_sm (D8), Delayed Submit (D11) and live TPS in routing (§13.8, §13.23). Balances, billing and
-accumulated revenue conditions come with step 6.
+(D6), query_sm / cancel_sm (D8), Delayed Submit (D11) and live TPS in routing (§13.8, §13.23). Step 6 (billing at
+send time) done: revenue, cost and billable flags per Billing Type (outcome rows for receipt-based billing, ClickHouse
+005), live balances with the per-message credit check (balance + credit limit, prepaid stops at 0, 0x45; migration
+072), credit alerts and prepaid vendor alerts (Q22), and accumulated revenue conditions (§13.9).
 
 ## 1. Where we stand
 
