@@ -28,3 +28,4 @@ backend/.elixir_ls/
 
 # Generator output (mock/out, CSV and EDR files)
 mock/out/
+dump.rdb
