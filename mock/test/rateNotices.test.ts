@@ -60,29 +60,26 @@ test(
       ORDER BY rt.id, l.id LIMIT 1`,
     );
     const line = rows[0];
-    const before = Number(
-      (await db().query("SELECT count(*) FROM email_logs WHERE email_type = 'send_rate'")).rows[0].count,
-    );
+    // Only this save's e-mails: other test files log rate e-mails at the same time.
+    const note = `Trial note: new prices from Monday (${Date.now()}).`;
+    const mark = Number((await db().query("SELECT coalesce(max(id), 0) AS m FROM email_logs")).rows[0].m);
     const res = await app.inject({
       method: "POST",
       url: `${API_PREFIX}/rate-tables/${line.table_id}/lines/changes`,
       payload: {
         items: [{ action: "set", lineId: Number(line.id), rate: Number(line.rate) * 0.9 }],
         sendNotification: true,
-        notificationNote: "Trial note: new prices from Monday.",
+        notificationNote: note,
       },
     });
     assert.equal(res.statusCode, 200, res.body);
     const body = res.json();
     assert.ok(body.notificationsSent >= 1, "at least one client notified");
-    const afterCount = Number(
-      (await db().query("SELECT count(*) FROM email_logs WHERE email_type = 'send_rate'")).rows[0].count,
-    );
-    assert.equal(afterCount - before, body.notificationsSent);
     const { rows: mail } = await db().query(
-      "SELECT body FROM email_logs WHERE email_type = 'send_rate' ORDER BY id DESC LIMIT 1",
+      "SELECT body FROM email_logs WHERE email_type = 'send_rate' AND id > $1 AND position($2 IN body) > 0",
+      [mark, note],
     );
-    assert.match(String(mail[0].body), /Trial note: new prices from Monday\./);
+    assert.equal(mail.length, body.notificationsSent);
     // The readable change log shows the save as a decrease of that destination (team trial round 2).
     const log = await app.inject({
       method: "GET",
