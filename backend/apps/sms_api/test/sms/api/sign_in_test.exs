@@ -38,7 +38,7 @@ defmodule Sms.Api.SignInTest do
   end
 
   defp user(hash, attrs \\ []) do
-    name = "test.signin.#{System.unique_integer([:positive])}"
+    name = "test.signin.#{System.unique_integer([:positive])}.#{:rand.uniform(1_000_000_000)}"
 
     %{rows: [[id]]} =
       Repo.query!(
@@ -61,6 +61,7 @@ defmodule Sms.Api.SignInTest do
 
     on_exit(fn ->
       for sql <- [
+            "DELETE FROM audit_log WHERE user_id = $1",
             "DELETE FROM email_logs WHERE user_id = $1",
             "DELETE FROM sign_in_challenges WHERE user_id = $1",
             "DELETE FROM user_sessions WHERE user_id = $1",

@@ -26,6 +26,20 @@ defmodule Sms.Api.SignIn do
           | {:code_required, map()}
           | {:error, Problem.t()}
 
+  @doc "The id of the user with this username (any case), for the audit trail; nil when there is none."
+  @spec user_id(String.t()) :: pos_integer() | nil
+  def user_id(username) do
+    case Repo.query!(
+           "SELECT id FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL",
+           [
+             String.trim(username)
+           ]
+         ) do
+      %{rows: [[id]]} -> id
+      _ -> nil
+    end
+  end
+
   @doc "Checks the password; signs in, asks for the code, or refuses."
   @spec password(String.t(), String.t(), Sessions.client()) :: result()
   def password(username, password, client) do

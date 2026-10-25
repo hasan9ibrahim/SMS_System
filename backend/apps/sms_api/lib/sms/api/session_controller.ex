@@ -6,11 +6,16 @@ defmodule Sms.Api.SessionController do
   `getCurrentUser` returns it, read from the mock as that user until /me is ported.
   """
   use Phoenix.Controller, formats: [:json]
-  alias Sms.Api.{Auth, Forward, Problem, RateLimit, Sessions, SignIn}
+  import Plug.Conn
+  alias Sms.Api.{Audit, Auth, Forward, Operations, Problem, RateLimit, Sessions, SignIn}
+
+  # The Audit Trail (§11) records each sign-in call with its user, when known (failed attempts too, §13.28).
+  plug :audit
 
   def create(conn, params) do
     with :ok <- check(params, username: :text, password: :text),
          :ok <- limit(conn) do
+      conn = assign(conn, :audit_user, SignIn.user_id(params["username"]))
       reply(conn, SignIn.password(params["username"], params["password"], Auth.client(conn)))
     else
       {:error, problem} -> Problem.send(conn, problem)
@@ -40,6 +45,7 @@ defmodule Sms.Api.SessionController do
   end
 
   defp reply(conn, {:signed_in, user_id}) do
+    conn = assign(conn, :audit_user, user_id)
     {token, session_id} = Sessions.open(user_id, Auth.client(conn))
 
     case Forward.get_json("/api/v1/me", %{user_id: user_id, session_id: session_id}) do
@@ -61,6 +67,17 @@ defmodule Sms.Api.SessionController do
 
   defp reply(conn, {:code_required, body}), do: json(conn, body)
   defp reply(conn, {:error, problem}), do: Problem.send(conn, problem)
+
+  defp audit(conn, _opts) do
+    started = System.monotonic_time()
+    op = Operations.find(conn.method, String.replace_prefix(conn.request_path, "/api/v1", ""))
+
+    register_before_send(conn, fn conn ->
+      user = conn.assigns[:audit_user] || (conn.assigns[:session] && conn.assigns.session.user_id)
+      :ok = Audit.record(conn, op, user, started)
+      conn
+    end)
+  end
 
   defp put_session_cookie(conn, value, max_age) do
     secure? = Keyword.get(Application.get_env(:sms_api, Sessions, []), :secure_cookie, false)

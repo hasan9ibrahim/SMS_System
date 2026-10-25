@@ -4,7 +4,11 @@ defmodule Sms.Api.Forward do
   API in front, the screens keep one address). The signed-in user goes along as `X-Sms-User` / `X-Sms-Session` with
   the shared secret `X-Sms-Proxy-Secret` (MOCK_PROXY_SECRET), which the mock checks (mock/src/auth/user.ts); such
   headers from the browser are dropped. Without a session only the health check is forwarded; anything else is
-  answered 401 `sign_in_required`.
+  answered 401 `sign_in_required`. The customer portal (/portal) has its own sign-in: its calls go through with the
+  portal's cookie.
+
+  Before a call goes on, the password gate (`Sms.Api.PasswordGate`) and the user's access group
+  (`Sms.Api.Access`) are checked; a change to users, access groups or passwords drops their cached state.
 
   The answer is streamed back as it arrives, so exports and downloads are not held in memory. Settings
   (`config :sms_api, Sms.Api.Forward`): `:url` (MOCK_URL), `:secret`, `:timeout_ms`.
@@ -12,7 +16,7 @@ defmodule Sms.Api.Forward do
   @behaviour Plug
   import Plug.Conn
   require Logger
-  alias Sms.Api.{Auth, Problem}
+  alias Sms.Api.{Access, Auth, Operations, PasswordGate, Problem}
 
   # Hop-by-hop headers and the ones this API sets itself.
   @dropped ~w(connection keep-alive proxy-connection transfer-encoding te trailer upgrade host content-length cookie)
@@ -25,10 +29,40 @@ defmodule Sms.Api.Forward do
   def call(conn, _opts) do
     session = conn.assigns[:session]
 
-    if session || {conn.method, conn.request_path} in @public do
-      forward(conn, session)
+    cond do
+      portal?(conn) -> forward(conn, nil)
+      {conn.method, conn.request_path} in @public -> forward(conn, session)
+      session == nil -> Problem.send(conn, Problem.sign_in_required())
+      true -> checked(conn, session)
+    end
+  end
+
+  defp portal?(conn), do: String.starts_with?(conn.request_path, "/api/v1/portal/")
+
+  defp checked(conn, session) do
+    op = Operations.find(conn.method, String.replace_prefix(conn.request_path, "/api/v1", ""))
+
+    with true <- op != nil,
+         :ok <- PasswordGate.check(session.user_id, op.operation_id),
+         :ok <- Access.check(session.user_id, op) do
+      conn = forward(conn, session)
+      forget_cached(conn, op)
+      conn
     else
-      Problem.send(conn, Problem.sign_in_required())
+      # No such operation: the mock answers 404 as the contract does.
+      false -> forward(conn, session)
+      {:error, problem} -> Problem.send(conn, problem)
+    end
+  end
+
+  # A change to users, access groups, security settings or a password takes effect at once.
+  defp forget_cached(conn, op) do
+    first = op.path |> String.split("/", trim: true) |> List.first()
+
+    if conn.method != "GET" and conn.status in 200..299 and
+         first in ~w(users access-groups me security) do
+      :ok = Access.forget()
+      :ok = PasswordGate.forget()
     end
   end
 
@@ -103,9 +137,12 @@ defmodule Sms.Api.Forward do
   defp relay({:trailers, _}, conn), do: conn
 
   defp request_headers(conn, session) do
+    # The portal's own session cookie goes along to the portal calls only.
+    dropped = if portal?(conn), do: @dropped -- ["cookie"], else: @dropped
+
     kept =
       Enum.reject(conn.req_headers, fn {k, _} ->
-        k in @dropped or String.starts_with?(k, "x-sms-") or k == "x-forwarded-for"
+        k in dropped or String.starts_with?(k, "x-sms-") or k == "x-forwarded-for"
       end)
 
     kept ++

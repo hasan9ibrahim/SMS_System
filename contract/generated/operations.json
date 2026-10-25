@@ -1,0 +1,5033 @@
+[
+ {
+  "method": "POST",
+  "path": "/access-groups",
+  "operationId": "createAccessGroup",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": "add",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/access-groups/{id}",
+  "operationId": "getAccessGroup",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "PUT",
+  "path": "/access-groups/{id}",
+  "operationId": "updateAccessGroup",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/access-groups/{id}/archive",
+  "operationId": "archiveAccessGroup",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": "delete",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/access-groups/{id}/clone",
+  "operationId": "cloneAccessGroup",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": "add",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/access-groups/{id}/dependencies",
+  "operationId": "getAccessGroupDependencies",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/access-groups/{id}/restore",
+  "operationId": "restoreAccessGroup",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/access-groups/catalog",
+  "operationId": "getAccessCatalog",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/access-groups/query",
+  "operationId": "queryAccessGroups",
+  "tag": "admin",
+  "module": "access-groups",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/alert-rules",
+  "operationId": "createAlertRule",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/alert-rules/{id}",
+  "operationId": "getAlertRule",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/alert-rules/{id}",
+  "operationId": "updateAlertRule",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/alert-rules/{id}/archive",
+  "operationId": "archiveAlertRule",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/alert-rules/{id}/clone",
+  "operationId": "cloneAlertRule",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/alert-rules/{id}/restore",
+  "operationId": "restoreAlertRule",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/alert-rules/{id}/status",
+  "operationId": "setAlertRuleStatus",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/alert-rules/query",
+  "operationId": "queryAlertRules",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/alert-rules/test",
+  "operationId": "testAlertRule",
+  "tag": "monitoring",
+  "module": "alert-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/audit-log/query",
+  "operationId": "queryAuditLog",
+  "tag": "admin",
+  "module": "audit",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/billing-cycles",
+  "operationId": "createBillingCycle",
+  "tag": "finance",
+  "module": "billing-cycles",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/billing-cycles/{id}",
+  "operationId": "updateBillingCycle",
+  "tag": "finance",
+  "module": "billing-cycles",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/billing-cycles/{id}/archive",
+  "operationId": "archiveBillingCycle",
+  "tag": "finance",
+  "module": "billing-cycles",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/billing-cycles/{id}/dependencies",
+  "operationId": "getBillingCycleDependencies",
+  "tag": "finance",
+  "module": "billing-cycles",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/billing-cycles/{id}/restore",
+  "operationId": "restoreBillingCycle",
+  "tag": "finance",
+  "module": "billing-cycles",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/billing-cycles/query",
+  "operationId": "queryBillingCycles",
+  "tag": "finance",
+  "module": "billing-cycles",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/broadcasts",
+  "operationId": "sendBroadcast",
+  "tag": "switch",
+  "module": "broadcast",
+  "action": "send",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/broadcasts/preview",
+  "operationId": "previewBroadcast",
+  "tag": "switch",
+  "module": "broadcast",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/broadcasts/query",
+  "operationId": "queryBroadcasts",
+  "tag": "switch",
+  "module": "broadcast",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/business-companies",
+  "operationId": "createBusinessCompany",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/business-companies/{id}",
+  "operationId": "getBusinessCompany",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/business-companies/{id}",
+  "operationId": "updateBusinessCompany",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/business-companies/{id}/archive",
+  "operationId": "archiveBusinessCompany",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/business-companies/{id}/clone",
+  "operationId": "cloneBusinessCompany",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/business-companies/{id}/dependencies",
+  "operationId": "getBusinessCompanyDependencies",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/business-companies/{id}/files/{kind}",
+  "operationId": "downloadCompanyFile",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/business-companies/{id}/files/{kind}",
+  "operationId": "uploadCompanyFile",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/business-companies/{id}/mailboxes",
+  "operationId": "listCompanyMailboxes",
+  "tag": "switch",
+  "module": "business-companies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/business-companies/{id}/restore",
+  "operationId": "restoreBusinessCompany",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/business-companies/check-smtp",
+  "operationId": "checkSmtp",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/business-companies/format-variables",
+  "operationId": "listFormatVariables",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/business-companies/query",
+  "operationId": "queryBusinessCompanies",
+  "tag": "admin",
+  "module": "business-companies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/changes/{id}/undo",
+  "operationId": "undoChange",
+  "tag": "history",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/changes/query",
+  "operationId": "queryChanges",
+  "tag": "history",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/charges/calculate",
+  "operationId": "calculateCharges",
+  "tag": "finance",
+  "module": "charges",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/cleanup-findings/{id}",
+  "operationId": "getCleanupFinding",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup-findings/{id}/ignore",
+  "operationId": "ignoreCleanupFinding",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup-findings/{id}/reopen",
+  "operationId": "reopenCleanupFinding",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup-findings/query",
+  "operationId": "queryCleanupFindings",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup/apply",
+  "operationId": "applyCleanup",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup/approve",
+  "operationId": "approveCleanup",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup/check-duplicate",
+  "operationId": "checkDuplicate",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup/scan",
+  "operationId": "scanCleanup",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/cleanup/settings",
+  "operationId": "getCleanupSettings",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "PUT",
+  "path": "/cleanup/settings",
+  "operationId": "updateCleanupSettings",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/cleanup/simulate",
+  "operationId": "simulateCleanup",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/cleanup/summary",
+  "operationId": "getCleanupSummary",
+  "tag": "admin",
+  "module": "cleanup",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/countries",
+  "operationId": "createCountry",
+  "tag": "reference",
+  "module": "countries",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/countries/{id}",
+  "operationId": "updateCountry",
+  "tag": "reference",
+  "module": "countries",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/countries/export",
+  "operationId": "exportCountries",
+  "tag": "reference",
+  "module": "countries",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/countries/query",
+  "operationId": "queryCountries",
+  "tag": "reference",
+  "module": "countries",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/currencies",
+  "operationId": "createCurrency",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/currencies/{id}",
+  "operationId": "updateCurrency",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/currencies/export",
+  "operationId": "exportCurrencies",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/currencies/query",
+  "operationId": "queryCurrencies",
+  "tag": "finance",
+  "module": "currencies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/currency-rate-history/query",
+  "operationId": "queryCurrencyRateHistory",
+  "tag": "finance",
+  "module": "currencies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/currency-rates/{iso}",
+  "operationId": "setCurrencyRate",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/currency-rates/query",
+  "operationId": "queryCurrencyRates",
+  "tag": "finance",
+  "module": "currencies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/currency-rates/sync",
+  "operationId": "syncCurrencyRates",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/customer-portal-users",
+  "operationId": "createPortalUser",
+  "tag": "admin",
+  "module": "customer-portal",
+  "action": "add",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/customer-portal-users/{id}",
+  "operationId": "getPortalUser",
+  "tag": "admin",
+  "module": "customer-portal",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "PUT",
+  "path": "/customer-portal-users/{id}",
+  "operationId": "updatePortalUser",
+  "tag": "admin",
+  "module": "customer-portal",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/customer-portal-users/{id}/archive",
+  "operationId": "archivePortalUser",
+  "tag": "admin",
+  "module": "customer-portal",
+  "action": "delete",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/customer-portal-users/{id}/password",
+  "operationId": "setPortalUserPassword",
+  "tag": "admin",
+  "module": "customer-portal",
+  "action": "change_password",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/customer-portal-users/{id}/restore",
+  "operationId": "restorePortalUser",
+  "tag": "admin",
+  "module": "customer-portal",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/customer-portal-users/query",
+  "operationId": "queryPortalUsers",
+  "tag": "admin",
+  "module": "customer-portal",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/customer-trunks",
+  "operationId": "createCustomerTrunk",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/customer-trunks/{id}",
+  "operationId": "getCustomerTrunk",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/customer-trunks/{id}",
+  "operationId": "updateCustomerTrunk",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/customer-trunks/{id}/archive",
+  "operationId": "archiveCustomerTrunk",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/customer-trunks/{id}/dependencies",
+  "operationId": "getCustomerTrunkDependencies",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/customer-trunks/{id}/rate-sheet",
+  "operationId": "downloadRateSheet",
+  "tag": "switch",
+  "module": "customer-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/customer-trunks/{id}/restore",
+  "operationId": "restoreCustomerTrunk",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/customer-trunks/{id}/rules",
+  "operationId": "getCustomerTrunkRules",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/customer-trunks/{id}/rules",
+  "operationId": "updateCustomerTrunkRules",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/customer-trunks/{id}/rules/test",
+  "operationId": "testCustomerTrunkRules",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/customer-trunks/query",
+  "operationId": "queryCustomerTrunks",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/daily-traffic-alerts",
+  "operationId": "createDailyTrafficAlert",
+  "tag": "reports",
+  "module": "daily-traffic",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/daily-traffic-alerts/{id}",
+  "operationId": "getDailyTrafficAlert",
+  "tag": "reports",
+  "module": "daily-traffic",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/daily-traffic-alerts/{id}",
+  "operationId": "updateDailyTrafficAlert",
+  "tag": "reports",
+  "module": "daily-traffic",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/daily-traffic-alerts/{id}/archive",
+  "operationId": "archiveDailyTrafficAlert",
+  "tag": "reports",
+  "module": "daily-traffic",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/daily-traffic-alerts/{id}/restore",
+  "operationId": "restoreDailyTrafficAlert",
+  "tag": "reports",
+  "module": "daily-traffic",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/daily-traffic-alerts/{id}/send",
+  "operationId": "sendDailyTrafficAlert",
+  "tag": "reports",
+  "module": "daily-traffic",
+  "action": "send",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/daily-traffic-alerts/query",
+  "operationId": "queryDailyTrafficAlerts",
+  "tag": "reports",
+  "module": "daily-traffic",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/departments",
+  "operationId": "createDepartment",
+  "tag": "admin",
+  "module": "departments",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/departments/{id}",
+  "operationId": "getDepartment",
+  "tag": "admin",
+  "module": "departments",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/departments/{id}",
+  "operationId": "updateDepartment",
+  "tag": "admin",
+  "module": "departments",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/departments/{id}/archive",
+  "operationId": "archiveDepartment",
+  "tag": "admin",
+  "module": "departments",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/departments/{id}/dependencies",
+  "operationId": "getDepartmentDependencies",
+  "tag": "admin",
+  "module": "departments",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/departments/{id}/restore",
+  "operationId": "restoreDepartment",
+  "tag": "admin",
+  "module": "departments",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/departments/query",
+  "operationId": "queryDepartments",
+  "tag": "admin",
+  "module": "departments",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/destinations",
+  "operationId": "createDestination",
+  "tag": "reference",
+  "module": "mccmnc",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/destinations/{id}",
+  "operationId": "updateDestination",
+  "tag": "reference",
+  "module": "mccmnc",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/destinations/{id}/archive",
+  "operationId": "archiveDestination",
+  "tag": "reference",
+  "module": "mccmnc",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/destinations/{id}/dependencies",
+  "operationId": "getDestinationDependencies",
+  "tag": "reference",
+  "module": "mccmnc",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/destinations/{id}/dlr-target",
+  "operationId": "setDestinationDlrTarget",
+  "tag": "rates",
+  "module": "mccmnc",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/destinations/{id}/restore",
+  "operationId": "restoreDestination",
+  "tag": "reference",
+  "module": "mccmnc",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/destinations/export",
+  "operationId": "exportDestinations",
+  "tag": "reference",
+  "module": "mccmnc",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/destinations/import",
+  "operationId": "importDestinations",
+  "tag": "reference",
+  "module": "mccmnc",
+  "action": "import",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/destinations/query",
+  "operationId": "queryDestinations",
+  "tag": "rates",
+  "module": "mccmnc",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-code-profiles",
+  "operationId": "createDialCodeProfile",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/dial-code-profiles/{id}",
+  "operationId": "updateDialCodeProfile",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-code-profiles/{id}/archive",
+  "operationId": "archiveDialCodeProfile",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/dial-code-profiles/{id}/export",
+  "operationId": "exportDialCodes",
+  "tag": "reference",
+  "module": "master-table",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-code-profiles/{id}/import",
+  "operationId": "importDialCodes",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "import",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-code-profiles/{id}/restore",
+  "operationId": "restoreDialCodeProfile",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-code-profiles/query",
+  "operationId": "queryDialCodeProfiles",
+  "tag": "reference",
+  "module": "master-table",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-codes",
+  "operationId": "createDialCode",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/dial-codes/{id}",
+  "operationId": "updateDialCode",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-codes/delete",
+  "operationId": "deleteDialCodes",
+  "tag": "reference",
+  "module": "master-table",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/dial-codes/query",
+  "operationId": "queryDialCodes",
+  "tag": "reference",
+  "module": "master-table",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edr-downloads",
+  "operationId": "requestEdrDownload",
+  "tag": "observation",
+  "module": "edr-download",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edr-downloads/{id}/cancel",
+  "operationId": "cancelEdrDownload",
+  "tag": "observation",
+  "module": "edr-download",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/edr-downloads/{id}/file",
+  "operationId": "downloadEdrFile",
+  "tag": "observation",
+  "module": "edr-download",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edr-downloads/query",
+  "operationId": "queryEdrDownloads",
+  "tag": "observation",
+  "module": "edr-download",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edr-templates",
+  "operationId": "createEdrTemplate",
+  "tag": "observation",
+  "module": "edr-templates",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/edr-templates/{id}",
+  "operationId": "getEdrTemplate",
+  "tag": "observation",
+  "module": "edr-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/edr-templates/{id}",
+  "operationId": "updateEdrTemplate",
+  "tag": "observation",
+  "module": "edr-templates",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edr-templates/{id}/archive",
+  "operationId": "archiveEdrTemplate",
+  "tag": "observation",
+  "module": "edr-templates",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edr-templates/{id}/restore",
+  "operationId": "restoreEdrTemplate",
+  "tag": "observation",
+  "module": "edr-templates",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edr-templates/query",
+  "operationId": "queryEdrTemplates",
+  "tag": "observation",
+  "module": "edr-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edrs/query",
+  "operationId": "queryEdrs",
+  "tag": "observation",
+  "module": "edr-search",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edrs/repush",
+  "operationId": "repushEdrs",
+  "tag": "observation",
+  "module": "repush",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edrs/trouble-ticket",
+  "operationId": "sendTroubleTicket",
+  "tag": "observation",
+  "module": "edr-search",
+  "action": "send",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/edrs/trouble-ticket/preview",
+  "operationId": "previewTroubleTicket",
+  "tag": "observation",
+  "module": "edr-search",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/email-assets",
+  "operationId": "listEmailAssets",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/email-assets",
+  "operationId": "uploadEmailAsset",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/email-assets/{id}/file",
+  "operationId": "downloadEmailAsset",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/email-logs/{id}",
+  "operationId": "getEmailLog",
+  "tag": "switch",
+  "module": "email-logs",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-logs/export",
+  "operationId": "exportEmailLogs",
+  "tag": "switch",
+  "module": "email-logs",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-logs/query",
+  "operationId": "queryEmailLogs",
+  "tag": "switch",
+  "module": "email-logs",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-templates",
+  "operationId": "createEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/email-templates/{id}",
+  "operationId": "getEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/email-templates/{id}",
+  "operationId": "updateEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-templates/{id}/archive",
+  "operationId": "archiveEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-templates/{id}/clone",
+  "operationId": "cloneEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/email-templates/{id}/dependencies",
+  "operationId": "getEmailTemplateDependencies",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-templates/{id}/restore",
+  "operationId": "restoreEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/email-templates/placeholders",
+  "operationId": "listEmailPlaceholders",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-templates/preview",
+  "operationId": "previewEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-templates/query",
+  "operationId": "queryEmailTemplates",
+  "tag": "reference",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/email-templates/test",
+  "operationId": "testEmailTemplate",
+  "tag": "admin",
+  "module": "email-templates",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprise-balances/export",
+  "operationId": "exportEnterpriseBalances",
+  "tag": "finance",
+  "module": "balances",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprise-balances/query",
+  "operationId": "queryEnterpriseBalances",
+  "tag": "finance",
+  "module": "balances",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprises",
+  "operationId": "createEnterprise",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}",
+  "operationId": "getEnterprise",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/enterprises/{id}",
+  "operationId": "updateEnterprise",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}/account-managers",
+  "operationId": "getAccountManagerHistory",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprises/{id}/archive",
+  "operationId": "archiveEnterprise",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}/billing",
+  "operationId": "getEnterpriseBilling",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/enterprises/{id}/billing",
+  "operationId": "updateEnterpriseBilling",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}/dependencies",
+  "operationId": "getEnterpriseDependencies",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}/docs",
+  "operationId": "listEnterpriseDocs",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprises/{id}/docs",
+  "operationId": "uploadEnterpriseDoc",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "DELETE",
+  "path": "/enterprises/{id}/docs/{docId}",
+  "operationId": "deleteEnterpriseDoc",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}/docs/{docId}/file",
+  "operationId": "downloadEnterpriseDoc",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprises/{id}/handover",
+  "operationId": "handOverEnterprise",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprises/{id}/restore",
+  "operationId": "restoreEnterprise",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}/rn-settings",
+  "operationId": "getVendorRnSettings",
+  "tag": "rates",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/enterprises/{id}/rn-settings",
+  "operationId": "updateVendorRnSettings",
+  "tag": "rates",
+  "module": "enterprises",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/enterprises/{id}/rules",
+  "operationId": "getEnterpriseRules",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/enterprises/{id}/rules",
+  "operationId": "updateEnterpriseRules",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/enterprises/query",
+  "operationId": "queryEnterprises",
+  "tag": "enterprises",
+  "module": "enterprises",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/exchange-rates/alerts",
+  "operationId": "listFxAlertRules",
+  "tag": "finance",
+  "module": "currencies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/exchange-rates/alerts",
+  "operationId": "createFxAlertRule",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "DELETE",
+  "path": "/exchange-rates/alerts/{id}",
+  "operationId": "deleteFxAlertRule",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/exchange-rates/alerts/{id}",
+  "operationId": "updateFxAlertRule",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/exchange-rates/alerts/events",
+  "operationId": "listFxAlertEvents",
+  "tag": "finance",
+  "module": "currencies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/exchange-rates/provider",
+  "operationId": "getFxProvider",
+  "tag": "finance",
+  "module": "currencies",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/exchange-rates/provider",
+  "operationId": "updateFxProvider",
+  "tag": "finance",
+  "module": "currencies",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/failed-edrs/query",
+  "operationId": "queryFailedEdrs",
+  "tag": "observation",
+  "module": "failed-edr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/firewall-filters",
+  "operationId": "createFirewallFilter",
+  "tag": "switch",
+  "module": "firewall",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/firewall-filters/{id}",
+  "operationId": "updateFirewallFilter",
+  "tag": "switch",
+  "module": "firewall",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/firewall-filters/query",
+  "operationId": "queryFirewallFilters",
+  "tag": "switch",
+  "module": "firewall",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/firewall-rules",
+  "operationId": "createFirewallRule",
+  "tag": "switch",
+  "module": "firewall",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/firewall-rules/{id}/archive",
+  "operationId": "archiveFirewallRule",
+  "tag": "switch",
+  "module": "firewall",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/firewall-rules/{id}/restore",
+  "operationId": "restoreFirewallRule",
+  "tag": "switch",
+  "module": "firewall",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/firewall-rules/query",
+  "operationId": "queryFirewallRules",
+  "tag": "switch",
+  "module": "firewall",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/firewall/check",
+  "operationId": "checkFirewallIp",
+  "tag": "switch",
+  "module": "firewall",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/health",
+  "operationId": "getHealth",
+  "tag": "system",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-policies",
+  "operationId": "createHlrPolicy",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-policies/{id}",
+  "operationId": "getHlrPolicy",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/hlr-policies/{id}",
+  "operationId": "updateHlrPolicy",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-policies/{id}/archive",
+  "operationId": "archiveHlrPolicy",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-policies/{id}/dependencies",
+  "operationId": "getHlrPolicyDependencies",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-policies/{id}/restore",
+  "operationId": "restoreHlrPolicy",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-policies/{id}/test",
+  "operationId": "testHlrPolicy",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-policies/query",
+  "operationId": "queryHlrPolicies",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-provider-rates/query",
+  "operationId": "queryHlrProviderRates",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-providers",
+  "operationId": "createHlrProvider",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-providers/{id}",
+  "operationId": "getHlrProvider",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/hlr-providers/{id}",
+  "operationId": "updateHlrProvider",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-providers/{id}/archive",
+  "operationId": "archiveHlrProvider",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-providers/{id}/dependencies",
+  "operationId": "getHlrProviderDependencies",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/hlr-providers/{id}/rates",
+  "operationId": "setHlrProviderRate",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-providers/{id}/rates/delete",
+  "operationId": "deleteHlrProviderRates",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-providers/{id}/rates/export",
+  "operationId": "exportHlrProviderRates",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-providers/{id}/rates/import",
+  "operationId": "importHlrProviderRates",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-providers/{id}/restore",
+  "operationId": "restoreHlrProvider",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-providers/query",
+  "operationId": "queryHlrProviders",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-rules",
+  "operationId": "createHlrRule",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-rules/{id}",
+  "operationId": "getHlrRule",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/hlr-rules/{id}",
+  "operationId": "updateHlrRule",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-rules/{id}/archive",
+  "operationId": "archiveHlrRule",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-rules/{id}/dependencies",
+  "operationId": "getHlrRuleDependencies",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-rules/{id}/restore",
+  "operationId": "restoreHlrRule",
+  "tag": "switch",
+  "module": "hlr",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/hlr-rules/{id}/used-by",
+  "operationId": "getHlrRuleUsedBy",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/hlr-rules/query",
+  "operationId": "queryHlrRules",
+  "tag": "switch",
+  "module": "hlr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/incidents/{id}",
+  "operationId": "getIncident",
+  "tag": "monitoring",
+  "module": "incidents",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/incidents/{id}/acknowledge",
+  "operationId": "acknowledgeIncident",
+  "tag": "monitoring",
+  "module": "incidents",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/incidents/{id}/notes",
+  "operationId": "addIncidentNote",
+  "tag": "monitoring",
+  "module": "incidents",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/incidents/{id}/snooze",
+  "operationId": "snoozeIncident",
+  "tag": "monitoring",
+  "module": "incidents",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/incidents/export",
+  "operationId": "exportIncidents",
+  "tag": "monitoring",
+  "module": "incidents",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/incidents/open",
+  "operationId": "listOpenIncidents",
+  "tag": "monitoring",
+  "module": "incidents",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/incidents/query",
+  "operationId": "queryIncidents",
+  "tag": "monitoring",
+  "module": "incidents",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoice-requests",
+  "operationId": "createInvoiceRequest",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/invoice-requests/{id}",
+  "operationId": "getInvoiceRequest",
+  "tag": "finance",
+  "module": "invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoice-requests/query",
+  "operationId": "queryInvoiceRequests",
+  "tag": "finance",
+  "module": "invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/invoices/{id}",
+  "operationId": "getInvoice",
+  "tag": "finance",
+  "module": "invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/invoices/{id}",
+  "operationId": "updateInvoice",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoices/{id}/archive",
+  "operationId": "archiveInvoice",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/invoices/{id}/charges",
+  "operationId": "getInvoiceCharges",
+  "tag": "finance",
+  "module": "invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/invoices/{id}/dependencies",
+  "operationId": "getInvoiceDependencies",
+  "tag": "finance",
+  "module": "invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/invoices/{id}/pdf",
+  "operationId": "downloadInvoicePdf",
+  "tag": "finance",
+  "module": "invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoices/{id}/regenerate",
+  "operationId": "regenerateInvoice",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoices/{id}/restore",
+  "operationId": "restoreInvoice",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoices/export",
+  "operationId": "exportInvoices",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoices/mark",
+  "operationId": "markInvoices",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoices/query",
+  "operationId": "queryInvoices",
+  "tag": "finance",
+  "module": "invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/invoices/send",
+  "operationId": "sendInvoices",
+  "tag": "finance",
+  "module": "invoices",
+  "action": "send",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/lcr-changes/query",
+  "operationId": "queryLcrChanges",
+  "tag": "routing",
+  "module": "lcr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/lcr-profiles",
+  "operationId": "createLcrProfile",
+  "tag": "routing",
+  "module": "lcr",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/lcr-profiles/{id}",
+  "operationId": "getLcrProfile",
+  "tag": "routing",
+  "module": "lcr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/lcr-profiles/{id}",
+  "operationId": "updateLcrProfile",
+  "tag": "routing",
+  "module": "lcr",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/lcr-profiles/{id}/archive",
+  "operationId": "archiveLcrProfile",
+  "tag": "routing",
+  "module": "lcr",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/lcr-profiles/{id}/dependencies",
+  "operationId": "getLcrProfileDependencies",
+  "tag": "routing",
+  "module": "lcr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/lcr-profiles/{id}/restore",
+  "operationId": "restoreLcrProfile",
+  "tag": "routing",
+  "module": "lcr",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/lcr-profiles/query",
+  "operationId": "queryLcrProfiles",
+  "tag": "routing",
+  "module": "lcr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/lcr/alert-settings",
+  "operationId": "getLcrAlertSettings",
+  "tag": "routing",
+  "module": "lcr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/lcr/alert-settings",
+  "operationId": "updateLcrAlertSettings",
+  "tag": "routing",
+  "module": "lcr",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/lcr/client-view",
+  "operationId": "lcrClientView",
+  "tag": "routing",
+  "module": "lcr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/lcr/table",
+  "operationId": "lcrTable",
+  "tag": "routing",
+  "module": "lcr",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/margin-deals",
+  "operationId": "listMarginDeals",
+  "tag": "rates",
+  "module": "margin-calculator",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/margin-deals",
+  "operationId": "createMarginDeal",
+  "tag": "rates",
+  "module": "margin-calculator",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "DELETE",
+  "path": "/margin-deals/{id}",
+  "operationId": "deleteMarginDeal",
+  "tag": "rates",
+  "module": "margin-calculator",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/margin-deals/{id}",
+  "operationId": "getMarginDeal",
+  "tag": "rates",
+  "module": "margin-calculator",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/margin-deals/{id}",
+  "operationId": "updateMarginDeal",
+  "tag": "rates",
+  "module": "margin-calculator",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/market-moves/{id}",
+  "operationId": "getMarketMove",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/market-moves/{id}/action",
+  "operationId": "actOnMarketMove",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/market-moves/auto-rules",
+  "operationId": "listMarketAutoRules",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/market-moves/auto-rules",
+  "operationId": "createMarketAutoRule",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/market-moves/auto-rules/{id}",
+  "operationId": "updateMarketAutoRule",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/market-moves/auto-rules/{id}/archive",
+  "operationId": "archiveMarketAutoRule",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/market-moves/digest",
+  "operationId": "sendMarketMoveDigest",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/market-moves/query",
+  "operationId": "queryMarketMoves",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/market-moves/scan",
+  "operationId": "scanMarketMoves",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/market-moves/settings",
+  "operationId": "getMarketMoveSettings",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/market-moves/settings",
+  "operationId": "updateMarketMoveSettings",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/market-moves/summary",
+  "operationId": "getMarketMoveSummary",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/market-moves/top-vendors",
+  "operationId": "listMarketTopVendors",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/market-moves/top-vendors",
+  "operationId": "saveMarketTopVendors",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/market-moves/top-vendors/candidates",
+  "operationId": "marketTopVendorCandidates",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/market-moves/top-vendors/remove",
+  "operationId": "removeMarketTopVendors",
+  "tag": "rates",
+  "module": "market-moves",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/me",
+  "operationId": "getCurrentUser",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/me/page-views",
+  "operationId": "recordPageView",
+  "tag": "system",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/me/pages",
+  "operationId": "getMyPages",
+  "tag": "system",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/me/password",
+  "operationId": "changeMyPassword",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/me/password-status",
+  "operationId": "getMyPasswordStatus",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/me/password/code",
+  "operationId": "sendMyPasswordCode",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PATCH",
+  "path": "/me/preferences",
+  "operationId": "updatePreferences",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/me/visibility",
+  "operationId": "getMyVisibility",
+  "tag": "system",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/me/workspace",
+  "operationId": "getWorkspace",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/me/workspace",
+  "operationId": "saveWorkspace",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/meta/lists/{list}/fields",
+  "operationId": "getListFields",
+  "tag": "meta",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/meta/reference",
+  "operationId": "getReference",
+  "tag": "meta",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/migration/downloads/{token}",
+  "operationId": "downloadMigrationPackage",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/migration/entities",
+  "operationId": "getMigrationEntities",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/migration/exports",
+  "operationId": "getMigrationExports",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/migration/exports",
+  "operationId": "createMigrationExport",
+  "tag": "admin",
+  "module": "migration",
+  "action": "view",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/migration/exports/{id}",
+  "operationId": "getMigrationExport",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/migration/exports/{id}/link",
+  "operationId": "createMigrationLink",
+  "tag": "admin",
+  "module": "migration",
+  "action": "view",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/migration/imports",
+  "operationId": "getMigrationImports",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/migration/imports",
+  "operationId": "createMigrationImport",
+  "tag": "admin",
+  "module": "migration",
+  "action": "view",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/migration/imports/{id}",
+  "operationId": "getMigrationImport",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "PUT",
+  "path": "/migration/imports/{id}",
+  "operationId": "revalidateMigrationImport",
+  "tag": "admin",
+  "module": "migration",
+  "action": "view",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/migration/imports/{id}/activate",
+  "operationId": "activateMigrationTrunks",
+  "tag": "admin",
+  "module": "migration",
+  "action": "view",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/migration/imports/{id}/apply",
+  "operationId": "applyMigrationImport",
+  "tag": "admin",
+  "module": "migration",
+  "action": "view",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/migration/mappings",
+  "operationId": "getMigrationMappings",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/migration/mappings",
+  "operationId": "saveMigrationMapping",
+  "tag": "admin",
+  "module": "migration",
+  "action": "view",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/migration/templates/{entity}",
+  "operationId": "getMigrationTemplate",
+  "tag": "admin",
+  "module": "migration",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/mo-numbers",
+  "operationId": "createMoNumber",
+  "tag": "reference",
+  "module": "mo-book",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/mo-numbers/{id}",
+  "operationId": "updateMoNumber",
+  "tag": "reference",
+  "module": "mo-book",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/mo-numbers/{id}/archive",
+  "operationId": "archiveMoNumber",
+  "tag": "reference",
+  "module": "mo-book",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/mo-numbers/{id}/restore",
+  "operationId": "restoreMoNumber",
+  "tag": "reference",
+  "module": "mo-book",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/mo-numbers/export",
+  "operationId": "exportMoNumbers",
+  "tag": "reference",
+  "module": "mo-book",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/mo-numbers/import",
+  "operationId": "importMoNumbers",
+  "tag": "reference",
+  "module": "mo-book",
+  "action": "import",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/mo-numbers/query",
+  "operationId": "queryMoNumbers",
+  "tag": "reference",
+  "module": "mo-book",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/network-binds/{side}/{id}/sessions",
+  "operationId": "listBindSessions",
+  "tag": "observation",
+  "module": "network-status",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/network-binds/{side}/{id}/start",
+  "operationId": "startTrunkBind",
+  "tag": "observation",
+  "module": "network-status",
+  "action": "start_stop",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/network-binds/{side}/{id}/stop",
+  "operationId": "stopTrunkBind",
+  "tag": "observation",
+  "module": "network-status",
+  "action": "start_stop",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/network-binds/export",
+  "operationId": "exportNetworkBinds",
+  "tag": "observation",
+  "module": "network-status",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/network-binds/query",
+  "operationId": "queryNetworkBinds",
+  "tag": "observation",
+  "module": "network-status",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/network-diagnosis",
+  "operationId": "runNetworkDiagnosis",
+  "tag": "observation",
+  "module": "diagnosis",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/preview",
+  "operationId": "previewNotification",
+  "tag": "switch",
+  "module": "notifications",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/send-rate",
+  "operationId": "sendRateNotifications",
+  "tag": "switch",
+  "module": "notifications",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/send-tech-info",
+  "operationId": "sendTechInfoNotifications",
+  "tag": "switch",
+  "module": "notifications",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-list-entries/query",
+  "operationId": "queryNumberListEntries",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-lists",
+  "operationId": "createNumberList",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/number-lists/{id}",
+  "operationId": "updateNumberList",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-lists/{id}/archive",
+  "operationId": "archiveNumberList",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/number-lists/{id}/dependencies",
+  "operationId": "getNumberListDependencies",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-lists/{id}/entries",
+  "operationId": "addNumberListEntries",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-lists/{id}/entries/delete",
+  "operationId": "deleteNumberListEntries",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/number-lists/{id}/export",
+  "operationId": "exportNumberListEntries",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-lists/{id}/import",
+  "operationId": "importNumberListEntries",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": "import",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-lists/{id}/restore",
+  "operationId": "restoreNumberList",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/number-lists/query",
+  "operationId": "queryNumberLists",
+  "tag": "switch",
+  "module": "number-lists",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/online-users",
+  "operationId": "getOnlineUsers",
+  "tag": "admin",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/password-check",
+  "operationId": "checkPassword",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/pcap-traces/{id}/file",
+  "operationId": "downloadPcapTrace",
+  "tag": "observation",
+  "module": "pcap-trace",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/pcap-traces/query",
+  "operationId": "queryPcapTraces",
+  "tag": "observation",
+  "module": "pcap-trace",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/portal/messages/query",
+  "operationId": "portalQueryMessages",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/portal/meta/lists/{list}/fields",
+  "operationId": "portalListFields",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/portal/overview",
+  "operationId": "portalOverview",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/portal/password",
+  "operationId": "portalChangePassword",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/portal/rates/export",
+  "operationId": "portalExportRates",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/portal/rates/query",
+  "operationId": "portalQueryRates",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "DELETE",
+  "path": "/portal/session",
+  "operationId": "portalSignOut",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/portal/session",
+  "operationId": "portalGetSession",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/portal/session",
+  "operationId": "portalSignIn",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/portal/traffic",
+  "operationId": "portalTraffic",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/product-categories",
+  "operationId": "createProductCategory",
+  "tag": "reference",
+  "module": "categories",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/product-categories/{id}",
+  "operationId": "updateProductCategory",
+  "tag": "reference",
+  "module": "categories",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/product-categories/{id}/archive",
+  "operationId": "archiveProductCategory",
+  "tag": "reference",
+  "module": "categories",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/product-categories/{id}/dependencies",
+  "operationId": "getProductCategoryDependencies",
+  "tag": "reference",
+  "module": "categories",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/product-categories/{id}/restore",
+  "operationId": "restoreProductCategory",
+  "tag": "reference",
+  "module": "categories",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/product-categories/query",
+  "operationId": "queryProductCategories",
+  "tag": "reference",
+  "module": "categories",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/qbr-stats/{id}/clear-override",
+  "operationId": "clearQbrOverride",
+  "tag": "routing",
+  "module": "qbr-stats",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/qbr-stats/query",
+  "operationId": "queryQbrStats",
+  "tag": "routing",
+  "module": "qbr-stats",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/qbr-stats/vendor-override",
+  "operationId": "setQbrVendorOverride",
+  "tag": "routing",
+  "module": "qbr-stats",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-bulk/apply",
+  "operationId": "applyRateBulk",
+  "tag": "rates",
+  "module": "bulk",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-bulk/preview",
+  "operationId": "previewRateBulk",
+  "tag": "rates",
+  "module": "bulk",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-lines/query",
+  "operationId": "queryRateLines",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-lookup",
+  "operationId": "lookupRates",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-lookup/destinations",
+  "operationId": "resolveLookupDestinations",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-lookup/matrix",
+  "operationId": "rateLookupMatrix",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-lookup/matrix/export",
+  "operationId": "exportRateLookupMatrix",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-lookup/side",
+  "operationId": "rateLookupSide",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-lookup/side/lines",
+  "operationId": "rateLookupSideLines",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-lookup/side/options",
+  "operationId": "rateLookupSideOptions",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-lookups",
+  "operationId": "listSavedLookups",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-lookups",
+  "operationId": "createSavedLookup",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "DELETE",
+  "path": "/rate-lookups/{id}",
+  "operationId": "deleteSavedLookup",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/rate-lookups/{id}",
+  "operationId": "updateSavedLookup",
+  "tag": "rates",
+  "module": "rate-lookup",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notification-lines/query",
+  "operationId": "queryRateNotificationLines",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-notifications/{id}",
+  "operationId": "getRateNotification",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notifications/{id}/accept",
+  "operationId": "acceptRateNotification",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": "approve",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notifications/{id}/assign",
+  "operationId": "assignRateNotification",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-notifications/{id}/file",
+  "operationId": "downloadRateNotificationFile",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notifications/{id}/recheck",
+  "operationId": "recheckRateNotification",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notifications/{id}/reject",
+  "operationId": "rejectRateNotification",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": "approve",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notifications/{id}/replies/{replyId}/send",
+  "operationId": "sendRnReply",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notifications/intake",
+  "operationId": "intakeRateNotification",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": "import",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-notifications/query",
+  "operationId": "queryRateNotifications",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-notifications/settings",
+  "operationId": "getRnSettings",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/rate-notifications/settings",
+  "operationId": "updateRnSettings",
+  "tag": "rates",
+  "module": "incoming-rns",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-tables",
+  "operationId": "createRateTable",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-tables/{id}",
+  "operationId": "getRateTable",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/rate-tables/{id}",
+  "operationId": "updateRateTable",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-tables/{id}/archive",
+  "operationId": "archiveRateTable",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-tables/{id}/change-log",
+  "operationId": "getRateChangeLog",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-tables/{id}/dependencies",
+  "operationId": "getRateTableDependencies",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rate-tables/{id}/export",
+  "operationId": "exportRateLines",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-tables/{id}/export",
+  "operationId": "exportRateLinesFiltered",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-tables/{id}/lines/changes",
+  "operationId": "changeRateLines",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-tables/{id}/restore",
+  "operationId": "restoreRateTable",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rate-tables/query",
+  "operationId": "queryRateTables",
+  "tag": "rates",
+  "module": "rate-manager",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/recon-rules",
+  "operationId": "createReconRule",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/recon-rules/{id}",
+  "operationId": "updateReconRule",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/recon-rules/{id}/archive",
+  "operationId": "archiveReconRule",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/recon-rules/{id}/restore",
+  "operationId": "restoreReconRule",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/recon-rules/query",
+  "operationId": "queryReconRules",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/billing/query",
+  "operationId": "queryBillingReport",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/enterprise/export",
+  "operationId": "exportEnterpriseReport",
+  "tag": "reports",
+  "module": "master-report",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/enterprise/query",
+  "operationId": "queryEnterpriseReport",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/master",
+  "operationId": "runMasterReport",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/master/export",
+  "operationId": "exportMasterReport",
+  "tag": "reports",
+  "module": "master-report",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/noc/insights",
+  "operationId": "nocInsights",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/reports/presets",
+  "operationId": "listReportPresets",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/sales/insights",
+  "operationId": "salesInsights",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/team",
+  "operationId": "runTeamReport",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/team/export",
+  "operationId": "exportTeamReport",
+  "tag": "reports",
+  "module": "master-report",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/reports/team/users/{id}",
+  "operationId": "getTeamMember",
+  "tag": "reports",
+  "module": "master-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/repush-requests/query",
+  "operationId": "queryRepushRequests",
+  "tag": "observation",
+  "module": "repush",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rerating-requests",
+  "operationId": "createReratingRequest",
+  "tag": "routing",
+  "module": "re-rating",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/rerating-requests/{id}",
+  "operationId": "getReratingRequest",
+  "tag": "routing",
+  "module": "re-rating",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/rerating-requests/{id}",
+  "operationId": "updateReratingRequest",
+  "tag": "routing",
+  "module": "re-rating",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rerating-requests/{id}/approve",
+  "operationId": "approveReratingRequest",
+  "tag": "routing",
+  "module": "re-rating",
+  "action": "approve",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rerating-requests/{id}/decline",
+  "operationId": "declineReratingRequest",
+  "tag": "routing",
+  "module": "re-rating",
+  "action": "approve",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rerating-requests/preview",
+  "operationId": "previewRerating",
+  "tag": "routing",
+  "module": "re-rating",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/rerating-requests/query",
+  "operationId": "queryReratingRequests",
+  "tag": "routing",
+  "module": "re-rating",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-map/export",
+  "operationId": "exportRouteMap",
+  "tag": "routing",
+  "module": "route-map",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-map/query",
+  "operationId": "queryRouteMap",
+  "tag": "routing",
+  "module": "route-map",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules",
+  "operationId": "createRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/route-rules/{id}",
+  "operationId": "getRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/route-rules/{id}",
+  "operationId": "updateRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/{id}/archive",
+  "operationId": "archiveRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/{id}/clone",
+  "operationId": "cloneRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/route-rules/{id}/dependencies",
+  "operationId": "getRouteRuleDependencies",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/{id}/discard",
+  "operationId": "discardRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/{id}/restore",
+  "operationId": "restoreRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/{id}/test",
+  "operationId": "testRouteRule",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/route-rules/{id}/traffic",
+  "operationId": "getRouteRuleTraffic",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/bulk",
+  "operationId": "bulkRouteRules",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/export",
+  "operationId": "exportRouteRules",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/query",
+  "operationId": "queryRouteRules",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/simulate",
+  "operationId": "simulateRoute",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-rules/vendor-costs",
+  "operationId": "routeVendorCosts",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/route-simulator",
+  "operationId": "runRouteSimulator",
+  "tag": "observation",
+  "module": "simulator",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/scheduled-reports",
+  "operationId": "createScheduledReport",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/scheduled-reports/{id}",
+  "operationId": "getScheduledReport",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/scheduled-reports/{id}",
+  "operationId": "updateScheduledReport",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/scheduled-reports/{id}/archive",
+  "operationId": "archiveScheduledReport",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/scheduled-reports/{id}/restore",
+  "operationId": "restoreScheduledReport",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/scheduled-reports/{id}/run",
+  "operationId": "runScheduledReport",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/scheduled-reports/cron-preview",
+  "operationId": "previewCron",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/scheduled-reports/query",
+  "operationId": "queryScheduledReports",
+  "tag": "reports",
+  "module": "scheduled",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/search",
+  "operationId": "search",
+  "tag": "search",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/security/overview",
+  "operationId": "getSecurityOverview",
+  "tag": "admin",
+  "module": "security",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/security/reminders/run",
+  "operationId": "runPasswordReminders",
+  "tag": "admin",
+  "module": "security",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/security/settings",
+  "operationId": "getSecuritySettings",
+  "tag": "admin",
+  "module": "security",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "PUT",
+  "path": "/security/settings",
+  "operationId": "updateSecuritySettings",
+  "tag": "admin",
+  "module": "security",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "DELETE",
+  "path": "/session",
+  "operationId": "signOut",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/session",
+  "operationId": "signIn",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/session/code",
+  "operationId": "signInCode",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/session/code/resend",
+  "operationId": "resendSignInCode",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/signaling-captures",
+  "operationId": "startSignalingCapture",
+  "tag": "observation",
+  "module": "signaling",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/signaling-captures/{id}/file",
+  "operationId": "downloadSignalingCapture",
+  "tag": "observation",
+  "module": "signaling",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/signaling-captures/{id}/keep",
+  "operationId": "keepSignalingCapture",
+  "tag": "observation",
+  "module": "signaling",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/signaling-captures/{id}/stop",
+  "operationId": "stopSignalingCapture",
+  "tag": "observation",
+  "module": "signaling",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/signaling-captures/extract",
+  "operationId": "extractRecording",
+  "tag": "observation",
+  "module": "signaling",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/signaling-captures/query",
+  "operationId": "querySignalingCaptures",
+  "tag": "observation",
+  "module": "signaling",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/signaling-recording",
+  "operationId": "getRecordingStatus",
+  "tag": "observation",
+  "module": "signaling",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/sms-voice-rules",
+  "operationId": "createSmsVoiceRule",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/sms-voice-rules/{id}",
+  "operationId": "getSmsVoiceRule",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/sms-voice-rules/{id}",
+  "operationId": "updateSmsVoiceRule",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/sms-voice-rules/{id}/archive",
+  "operationId": "archiveSmsVoiceRule",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/sms-voice-rules/{id}/restore",
+  "operationId": "restoreSmsVoiceRule",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/sms-voice-rules/query",
+  "operationId": "querySmsVoiceRules",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/sms-voice-rules/test",
+  "operationId": "testSmsVoiceRules",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/soa-reports/{id}",
+  "operationId": "getSoaReport",
+  "tag": "finance",
+  "module": "soa-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/soa-reports/{id}/file",
+  "operationId": "downloadSoaReport",
+  "tag": "finance",
+  "module": "soa-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa-reports/{id}/send",
+  "operationId": "sendSoaReport",
+  "tag": "finance",
+  "module": "soa-report",
+  "action": "send",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa-reports/query",
+  "operationId": "querySoaReports",
+  "tag": "finance",
+  "module": "soa-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa/adjustments",
+  "operationId": "createSoaAdjustment",
+  "tag": "finance",
+  "module": "soa",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa/adjustments/{id}/archive",
+  "operationId": "archiveSoaAdjustment",
+  "tag": "finance",
+  "module": "soa",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa/email-preview",
+  "operationId": "previewSoaEmail",
+  "tag": "finance",
+  "module": "soa",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa/export",
+  "operationId": "exportSoa",
+  "tag": "finance",
+  "module": "soa",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa/search",
+  "operationId": "searchSoa",
+  "tag": "finance",
+  "module": "soa",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa/send",
+  "operationId": "sendSoa",
+  "tag": "finance",
+  "module": "soa",
+  "action": "send",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/soa/statement",
+  "operationId": "getSoaStatement",
+  "tag": "finance",
+  "module": "soa",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/team-targets",
+  "operationId": "getTeamTargets",
+  "tag": "reports",
+  "module": "team-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/team-targets",
+  "operationId": "updateTeamTargets",
+  "tag": "reports",
+  "module": "team-report",
+  "action": "view",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/team-timeline/query",
+  "operationId": "queryTeamTimeline",
+  "tag": "reports",
+  "module": "team-report",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/traffic-alerts",
+  "operationId": "createTrafficAlert",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/traffic-alerts/{id}",
+  "operationId": "getTrafficAlert",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/traffic-alerts/{id}",
+  "operationId": "updateTrafficAlert",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/traffic-alerts/{id}/archive",
+  "operationId": "archiveTrafficAlert",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/traffic-alerts/{id}/check",
+  "operationId": "checkTrafficAlert",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/traffic-alerts/{id}/clone",
+  "operationId": "cloneTrafficAlert",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/traffic-alerts/{id}/restore",
+  "operationId": "restoreTrafficAlert",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/traffic-alerts/query",
+  "operationId": "queryTrafficAlerts",
+  "tag": "switch",
+  "module": "traffic-alerts",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions",
+  "operationId": "createTransaction",
+  "tag": "finance",
+  "module": "transactions",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/{id}",
+  "operationId": "getTransaction",
+  "tag": "finance",
+  "module": "transactions",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/transactions/{id}",
+  "operationId": "updateTransaction",
+  "tag": "finance",
+  "module": "transactions",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/{id}/archive",
+  "operationId": "archiveTransaction",
+  "tag": "finance",
+  "module": "transactions",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/{id}/restore",
+  "operationId": "restoreTransaction",
+  "tag": "finance",
+  "module": "transactions",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/{id}/send-confirmation",
+  "operationId": "sendTransactionConfirmation",
+  "tag": "finance",
+  "module": "transactions",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/bulk",
+  "operationId": "bulkUpdateTransactions",
+  "tag": "finance",
+  "module": "transactions",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/confirmation-preview",
+  "operationId": "previewTransactionConfirmation",
+  "tag": "finance",
+  "module": "transactions",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/convert",
+  "operationId": "convertTransactionAmount",
+  "tag": "finance",
+  "module": "transactions",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/export",
+  "operationId": "exportTransactions",
+  "tag": "finance",
+  "module": "transactions",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/query",
+  "operationId": "queryTransactions",
+  "tag": "finance",
+  "module": "transactions",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/translation-rules",
+  "operationId": "createTranslationRule",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/translation-rules/{id}",
+  "operationId": "getTranslationRule",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/translation-rules/{id}",
+  "operationId": "updateTranslationRule",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/translation-rules/{id}/archive",
+  "operationId": "archiveTranslationRule",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/translation-rules/{id}/clone",
+  "operationId": "cloneTranslationRule",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/translation-rules/{id}/dependencies",
+  "operationId": "getTranslationRuleDependencies",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/translation-rules/{id}/restore",
+  "operationId": "restoreTranslationRule",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/translation-rules/{id}/test",
+  "operationId": "testTranslationRule",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/translation-rules/{id}/used-by",
+  "operationId": "getTranslationRuleUsedBy",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/translation-rules/query",
+  "operationId": "queryTranslationRules",
+  "tag": "switch",
+  "module": "translation-rules",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/user-sessions/{id}/end",
+  "operationId": "endUserSession",
+  "tag": "admin",
+  "module": "logged-in",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/user-sessions/query",
+  "operationId": "queryUserSessions",
+  "tag": "admin",
+  "module": "logged-in",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/users",
+  "operationId": "createUser",
+  "tag": "admin",
+  "module": "users",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/users/{id}",
+  "operationId": "getUser",
+  "tag": "admin",
+  "module": "users",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/users/{id}",
+  "operationId": "updateUser",
+  "tag": "admin",
+  "module": "users",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/{id}/archive",
+  "operationId": "archiveUser",
+  "tag": "admin",
+  "module": "users",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/users/{id}/dependencies",
+  "operationId": "getUserDependencies",
+  "tag": "admin",
+  "module": "users",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/{id}/password",
+  "operationId": "setUserPassword",
+  "tag": "admin",
+  "module": "users",
+  "action": "change_password",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/{id}/restore",
+  "operationId": "restoreUser",
+  "tag": "admin",
+  "module": "users",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/{id}/totp/confirm",
+  "operationId": "confirmUserTotp",
+  "tag": "admin",
+  "module": "users",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/{id}/totp/disable",
+  "operationId": "disableUserTotp",
+  "tag": "admin",
+  "module": "users",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/{id}/totp/setup",
+  "operationId": "setupUserTotp",
+  "tag": "admin",
+  "module": "users",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/users/{id}/visibility",
+  "operationId": "getUserVisibility",
+  "tag": "admin",
+  "module": "users",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/force-password-change",
+  "operationId": "forcePasswordChange",
+  "tag": "admin",
+  "module": "users",
+  "action": "change_password",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/users/query",
+  "operationId": "queryUsers",
+  "tag": "users",
+  "module": "users",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices",
+  "operationId": "createVendorInvoice",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/vendor-invoices/{id}",
+  "operationId": "getVendorInvoice",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/vendor-invoices/{id}",
+  "operationId": "updateVendorInvoice",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/{id}/archive",
+  "operationId": "archiveVendorInvoice",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/vendor-invoices/{id}/comparison",
+  "operationId": "getVendorInvoiceComparison",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/{id}/decide",
+  "operationId": "decideVendorInvoice",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/vendor-invoices/{id}/dependencies",
+  "operationId": "getVendorInvoiceDependencies",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/{id}/email-preview",
+  "operationId": "previewVendorInvoiceEmail",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/{id}/notes",
+  "operationId": "addVendorInvoiceNote",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/{id}/recheck",
+  "operationId": "recheckVendorInvoice",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/{id}/restore",
+  "operationId": "restoreVendorInvoice",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/export",
+  "operationId": "exportVendorInvoices",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "export",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/import",
+  "operationId": "importVendorInvoices",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/query",
+  "operationId": "queryVendorInvoices",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-invoices/summary",
+  "operationId": "summariseVendorInvoices",
+  "tag": "finance",
+  "module": "vendor-invoices",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-trunks",
+  "operationId": "createVendorTrunk",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": "add",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/vendor-trunks/{id}",
+  "operationId": "getVendorTrunk",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/vendor-trunks/{id}",
+  "operationId": "updateVendorTrunk",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-trunks/{id}/archive",
+  "operationId": "archiveVendorTrunk",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": "delete",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/vendor-trunks/{id}/dependencies",
+  "operationId": "getVendorTrunkDependencies",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-trunks/{id}/restore",
+  "operationId": "restoreVendorTrunk",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/vendor-trunks/{id}/rules",
+  "operationId": "getVendorTrunkRules",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/vendor-trunks/{id}/rules",
+  "operationId": "updateVendorTrunkRules",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": "edit",
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-trunks/{id}/rules/test",
+  "operationId": "testVendorTrunkRules",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/vendor-trunks/query",
+  "operationId": "queryVendorTrunks",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "GET",
+  "path": "/views",
+  "operationId": "listViews",
+  "tag": "views",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/views",
+  "operationId": "createView",
+  "tag": "views",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "DELETE",
+  "path": "/views/{id}",
+  "operationId": "deleteView",
+  "tag": "views",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "PUT",
+  "path": "/views/{id}",
+  "operationId": "updateView",
+  "tag": "views",
+  "module": null,
+  "action": null,
+  "readChecked": false
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-assignments",
+  "operationId": "assignVisibilityPolicy",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "DELETE",
+  "path": "/visibility-assignments/{id}",
+  "operationId": "removeVisibilityAssignment",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-assignments/query",
+  "operationId": "queryVisibilityAssignments",
+  "tag": "admin",
+  "module": "visibility",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-grants",
+  "operationId": "createVisibilityGrant",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-grants/{id}/revoke",
+  "operationId": "revokeVisibilityGrant",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-grants/query",
+  "operationId": "queryVisibilityGrants",
+  "tag": "admin",
+  "module": "visibility",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-policies",
+  "operationId": "createVisibilityPolicy",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/visibility-policies/{id}",
+  "operationId": "getVisibilityPolicy",
+  "tag": "admin",
+  "module": "visibility",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "PUT",
+  "path": "/visibility-policies/{id}",
+  "operationId": "updateVisibilityPolicy",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-policies/{id}/archive",
+  "operationId": "archiveVisibilityPolicy",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-policies/{id}/restore",
+  "operationId": "restoreVisibilityPolicy",
+  "tag": "admin",
+  "module": "visibility",
+  "action": "edit",
+  "readChecked": true
+ },
+ {
+  "method": "GET",
+  "path": "/visibility-policies/presets",
+  "operationId": "getVisibilityPresets",
+  "tag": "admin",
+  "module": "visibility",
+  "action": null,
+  "readChecked": true
+ },
+ {
+  "method": "POST",
+  "path": "/visibility-policies/query",
+  "operationId": "queryVisibilityPolicies",
+  "tag": "admin",
+  "module": "visibility",
+  "action": null,
+  "readChecked": true
+ }
+]

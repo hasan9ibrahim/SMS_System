@@ -8,6 +8,13 @@ defmodule Sms.Api.ForwardTest do
   alias Sms.Api.Test.FakeMock
 
   @endpoint Sms.Api.Endpoint
+  @moduletag :integration
+
+  setup_all do
+    # The password gate and the access check read the user.
+    start_supervised!(Sms.Core.Repo)
+    :ok
+  end
 
   setup do
     {mock, url} = FakeMock.start(self())
