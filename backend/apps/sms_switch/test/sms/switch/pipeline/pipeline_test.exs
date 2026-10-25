@@ -595,6 +595,29 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert %{"attempt_no" => 2, "v_trunk_id" => 2, "is_submit_success" => 1} = second
     end
 
+    test "no routed vendor connected on either server: refused at once with 0x45, nothing sent (Q15)" do
+      config =
+        two_vendors(
+          vendor_trunks: [
+            PipelineConfig.vendor_trunk(id: 1),
+            PipelineConfig.vendor_trunk(id: 3, rate_table_ids: [203])
+          ],
+          rates: [
+            PipelineConfig.rate(100, 1, "26201", "0.05"),
+            PipelineConfig.rate(203, 4, "26201", "0.01")
+          ],
+          route_vendors: [PipelineConfig.route_vendor(1, 3, 1)]
+        )
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{short_message: "nobody bound"})
+      assert resp.status == 0x45
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 0, "c_msg_status" => "REJECTD"}] = attempts()
+    end
+
     test "a routed vendor with no bound connection is skipped for the next (S-5.4)" do
       config =
         two_vendors(

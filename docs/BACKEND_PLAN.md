@@ -179,8 +179,12 @@ firewall block), these run in memory **before** the resp:
 
 Together they take under 1 ms. Then the message is stored durably, then the resp is sent.
 
-HLR lookups take 100 ms to seconds, so they always run **after** the resp. When an HLR-based route fails, the
-customer gets a failed receipt instead.
+~~HLR lookups take 100 ms to seconds, so they always run **after** the resp.~~ **Changed by the product owner
+2026-10-25:** on traffic with HLR/MNP on, the lookup runs before the resp with the checks above, and the destination
+and network come from its result instead of the master table; when the provider does not answer within its timeout
+(or fails), the master table is used (S-6.5). The resp of such traffic waits for the lookup, up to the provider's
+timeout, so the timeout should stay well under the customers' own (a few hundred ms is typical). To be built in the
+switch (not built yet: only the route rules' HLR-ported condition exists).
 
 ### 3.4 Traffic recording (PCAP) at the operating-system level
 

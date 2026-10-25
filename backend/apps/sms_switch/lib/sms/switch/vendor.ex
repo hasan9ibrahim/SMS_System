@@ -64,6 +64,18 @@ defmodule Sms.Switch.Vendor do
     end
   end
 
+  @doc """
+  Whether the vendor trunk has a bound connection that can send, on any server. The router checks it before the
+  customer's resp, so a message is refused at once (0x45) when no routed vendor is connected (decided Q15).
+  """
+  @spec bound?(integer()) :: boolean()
+  def bound?(trunk_id) do
+    :pg.get_members(@scope, {:tx, trunk_id}) != []
+  rescue
+    # The vendor side is not running on this node.
+    ArgumentError -> false
+  end
+
   # The trunk's bound connections that can send, this node's first, each group in random order to spread the load.
   defp connections(trunk_id, prefer) do
     local = :pg.get_local_members(@scope, {:tx, trunk_id})

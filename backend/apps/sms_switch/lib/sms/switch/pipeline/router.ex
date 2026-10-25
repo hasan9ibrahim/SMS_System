@@ -6,13 +6,16 @@ defmodule Sms.Switch.Pipeline.Router do
     1. the route rules that can match the destination, in order (`Sms.Switch.Rules.Route.route_through/4`), with the
        message after ingress translation and the customer's rate in the platform currency;
     2. the chosen vendor trunk's own (egress) translation rules on the message; when they block it, that vendor is
-       skipped and routing runs again without it, up to ten times (decided 2026-10-18).
+       skipped and routing runs again without it, up to ten times (decided 2026-10-18);
+    3. the same for a vendor with no bound connection on either server, so a message no connected vendor can take is
+       refused before the customer's resp (0x45, decided Q15; backend step 7).
 
   Vendors already tried for this message (a refusal, a timeout, no connection) are skipped the same way, so a re-route
   (S-5.2, D4) follows the rules' own order to the next vendor.
   """
   alias Sms.Switch.Pipeline.{Config, LiveTps, Revenue}
   alias Sms.Switch.Rules.{Route, Translation}
+  alias Sms.Switch.Vendor
 
   @egress_tries 10
 
@@ -77,6 +80,11 @@ defmodule Sms.Switch.Pipeline.Router do
     try_route(rules, context, options, input, skip, @egress_tries)
   end
 
+  defp bound?(vendor_trunk_id) do
+    check = Application.get_env(:sms_switch, __MODULE__, [])[:bound?] || (&Vendor.bound?/1)
+    check.(vendor_trunk_id)
+  end
+
   defp network(%{all_networks: true}), do: "All networks"
   defp network(d), do: d.network
 
@@ -98,7 +106,7 @@ defmodule Sms.Switch.Pipeline.Router do
         egress = egress(vt, input)
 
         cond do
-          not egress.blocked ->
+          not egress.blocked and bound?(vt) ->
             cost = Config.vendor_rate(vt, context.mccmnc, input.now_ms)
             {:ok, %{decision: decision, vendor_trunk_id: vt, cost: cost, egress: egress}}
 

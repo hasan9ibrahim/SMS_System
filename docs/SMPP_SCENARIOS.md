@@ -138,7 +138,7 @@ Formats seen from clients and vendors:
 | S-6.2 | No customer rate for the destination | Reject with a defined code (proposal 0x0B or 0x45, chosen per trunk); EDR reason "no customer rate" | — |
 | S-6.3 | Credit limit reached during a burst on several nodes | Atomic balance counters (Redis); at most a small, configured overshoot. Reject with the credit error code | 10 parallel sessions hitting the limit |
 | S-6.4 | Billing type submit vs delivered, multipart | Per part. Delivered billing counts only the delivered parts | — |
-| S-6.5 | HLR timeout or error | Fall back per policy (route without HLR, use cache, or reject); never hold the submit resp (S-2.2) | Slow HLR provider |
+| S-6.5 | HLR timeout or error | **Changed by the product owner 2026-10-25:** on traffic with HLR/MNP on, the lookup runs **before** the resp, with the other checks: the destination and network (and so the rate and the route) come from the HLR/MNP result instead of the master table. Only when the provider does not answer within its timeout (provider Timeout, 100 ms–30 s) or fails does the switch fall back to the master table and carry on. Cache per the provider and policy | Slow HLR provider: resp after the provider timeout, routed by the master table; fast HLR: routed on the ported network |
 | S-6.6 | Config change (route rule or rate saved) | Active on every node within N seconds, all at once per change (no half-applied rule). Messages already routed keep their decision | Save a rule under load |
 | S-6.7 | Exchange rate snapshot | The rate used for EUR is stored with the EDR at send time | — |
 | S-6.8 | Account Manager attribution | Taken at send time (§13.30) | — |
