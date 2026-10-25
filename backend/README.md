@@ -187,6 +187,11 @@ INTEGRATION=1 mix check                  # everything CI runs (below); must pass
 The connection settings come from the same environment variables as the mock server (`.env.example`):
 `POSTGRES_*`, `CLICKHOUSE_*`, `REDIS_*`, and `NATS_HOSTS` (comma-separated `host:port`). The switch adds
 `SWITCH_NODE_ID`, `SWITCH_CLUSTER_SIZE`, `PLATFORM_CURRENCY` and the `SMPP_*` listener settings.
+`SWITCH_PEERS` (the other servers' node names, comma-separated) connects the nodes, reconnects every 5 s and notices
+a lost link within 10 s. `SWITCH_MAX_BACKLOG` (default 20,000; 0 = off) is the overload guard: above that many
+accepted messages not yet sent, new submits get 0x58 until the backlog is under 80 % (backend step 7).
+
+Load tests: `tools/smpp-sim` and `docs/LOAD_TEST_RESULTS.md`.
 
 ## Quality gates (`mix check`, CI job `backend`)
 

@@ -69,6 +69,10 @@ defmodule Sms.Core.Bus do
   @spec health() :: :ok | {:error, term()}
   def health, do: adapter().health()
 
+  @doc "How many events the consumer named `name` has not finished yet (waiting, or handed out and not acknowledged)."
+  @spec backlog(String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def backlog(name), do: adapter().backlog(name)
+
   @doc false
   @spec adapter() :: module()
   def adapter, do: Keyword.fetch!(config(), :adapter)

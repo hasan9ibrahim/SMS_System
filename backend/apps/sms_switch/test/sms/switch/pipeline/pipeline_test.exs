@@ -210,6 +210,23 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert {:error, :timeout} = Client.recv(client, 500)
     end
 
+    test "a server stopped between claiming a receipt and queuing it: the vendor's repeat forwards it (step 7)" do
+      %{client: client, conns: [conn]} = start_all()
+      {client, resp} = submit(client, %{short_message: "claimed", registered_delivery: 1})
+      id = resp.fields.message_id
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      # The other server took the claim and died before queuing the receipt.
+      assert {:ok, true} = Pipeline.Store.claim_forward(id)
+      receipt(conn, "1", "DELIVRD")
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, status: 0}}, 2_000
+      assert {:error, :timeout} = Client.recv(client, 300)
+
+      receipt(conn, "1", "DELIVRD")
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "id:#{id} "
+    end
+
     test "a receipt that comes before the submit_sm_resp is handled is kept and applied (S-5.5)" do
       %{client: client, smscs: [smsc], conns: [conn]} = start_all()
       FakeSmsc.set(smsc, :submit, {:delay, 300})

@@ -390,8 +390,21 @@ defmodule Sms.Switch.Vendor.SessionTest do
                      1_000
     end
 
+    test "no connection is opened before the receipts' handler is ready (a server starting)", %{
+      port: port
+    } do
+      alias Sms.Switch.Test.GatedReceipts
+      GatedReceipts.close()
+      start_vendor([trunk(port)], receipts: GatedReceipts)
+      refute_receive {:smsc_connected, _}, 1_500
+
+      GatedReceipts.open()
+      assert_bind()
+      assert Sms.Switch.Vendor.Receipts.ready?(Sms.Switch.Vendor.Receipts.LogOnly)
+    end
+
     test "the default handler answers OK (Q7, S-5.12)", %{port: port} do
-      start_vendor([trunk(port)], receipts: nil)
+      start_vendor([trunk(port)], receipts: Sms.Switch.Vendor.Receipts.LogOnly)
       {conn, _} = assert_bind()
       await_bound(1, 1)
       FakeSmsc.send_pdu(conn, Pdu.new(:deliver_sm, %{}, sequence: 4))

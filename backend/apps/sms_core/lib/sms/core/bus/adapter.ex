@@ -18,4 +18,7 @@ defmodule Sms.Core.Bus.Adapter do
 
   @doc "`:ok` when the bus accepts events."
   @callback health() :: :ok | {:error, term()}
+
+  @doc "How many events a consumer has not finished yet: waiting for it, and handed out but not acknowledged."
+  @callback backlog(consumer :: String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
 end

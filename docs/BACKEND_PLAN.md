@@ -96,7 +96,7 @@ multipart formats, re-route on a failed receipt (D2), possible duplicates (D4), 
 (D6), query_sm / cancel_sm (D8), Delayed Submit (D11) and live TPS in routing (§13.8, §13.23). Step 6 (billing at
 send time) done: revenue, cost and billable flags per Billing Type (outcome rows for receipt-based billing, ClickHouse
 005), live balances with the per-message credit check (balance + credit limit, prepaid stops at 0, 0x45; migration
-072), credit alerts and prepaid vendor alerts (Q22), and accumulated revenue conditions (§13.9).
+072), credit alerts and prepaid vendor alerts (Q22), and accumulated revenue conditions (§13.9). Step 7 (load tests) done on a 4-vCPU dev VM: SMPP simulator `tools/smpp-sim`, steady, ramp-to-break, spike, soak and failover (server killed, link cut) scenarios, 11 problems found and fixed (overload guard, start-up order after a restart, receipts across a crash, faster Redis/NATS I/O); results and the projection to the real servers in `docs/LOAD_TEST_RESULTS.md`. 1,000 TPS is to be confirmed on the real servers in step 8.
 
 ## 1. Where we stand
 

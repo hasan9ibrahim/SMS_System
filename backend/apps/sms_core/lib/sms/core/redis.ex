@@ -19,7 +19,10 @@ defmodule Sms.Core.Redis do
           password: Keyword.get(config, :password),
           name: name(i),
           sync_connect: false,
-          backoff_max: 2_000
+          backoff_max: 2_000,
+          # Small request/response writes: without this, Nagle holds a write for the previous one's ACK (up to
+          # 40 ms with delayed ACKs), which was most of a submit_sm_resp's time (load test, backend step 7).
+          socket_opts: [nodelay: true]
         ]
 
         Supervisor.child_spec({Redix, options}, id: {Redix, i})

@@ -9,6 +9,12 @@ defmodule Sms.Switch.Application do
   def start(_type, _args) do
     :ok = MessageId.setup()
 
+    # Every module (and so every atom its events and stored terms use) loaded now, as a release does: a node started
+    # with `mix run` loads modules on first use, and decoding a term with `[:safe]` refuses atoms not created yet
+    # (found restarting a node under traffic, backend step 7).
+    for app <- [:sms_core, :sms_switch],
+        do: :ok = app |> Application.spec(:modules) |> Code.ensure_all_loaded()
+
     sides =
       for {side, sup} <- [
             {Sms.Switch.Pipeline, Sms.Switch.Pipeline.Supervisor},

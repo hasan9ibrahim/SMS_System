@@ -17,6 +17,8 @@ config :sms_core, Sms.Core.Bus,
   max_age_days: 7,
   replicas: 1,
   publish_timeout_ms: 5_000,
+  # NATS connections per node (publishes and consumers spread over them; backend step 7).
+  connections: 4,
   # At start, how many times (1 s apart) to try reaching NATS before the node gives up.
   setup_attempts: 30
 
@@ -33,6 +35,9 @@ config :sms_switch, Sms.Switch.Pipeline,
 
 # What the pipeline keeps about messages in flight is shared by both servers through Redis (§13.1).
 config :sms_switch, Sms.Switch.Pipeline.Store, backend: :redis
+
+# Overload protection (backend step 7): new messages refused (0x58) while the sender has more than `max` unfinished.
+config :sms_switch, Sms.Switch.Pipeline.Backlog, max: 20_000, interval_ms: 1_000
 
 # The customer side of the switch (build step 2, Sms.Switch.Customer): listeners and ports come from the environment
 # in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session. Submits go to the pipeline.

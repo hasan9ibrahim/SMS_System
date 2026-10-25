@@ -46,6 +46,10 @@ defmodule Sms.Core.Bus.Local do
   @impl Sms.Core.Bus.Adapter
   def health, do: if(Process.whereis(__MODULE__), do: :ok, else: {:error, :not_running})
 
+  @impl Sms.Core.Bus.Adapter
+  # Events are handed to subscribers as they are published: nothing waits in memory.
+  def backlog(_consumer), do: {:ok, 0}
+
   # ---------------------------------------------------------------- test helpers
 
   @doc "The events stored so far, oldest first."

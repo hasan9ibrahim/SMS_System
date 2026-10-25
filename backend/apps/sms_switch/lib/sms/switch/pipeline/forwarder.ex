@@ -115,7 +115,7 @@ defmodule Sms.Switch.Pipeline.Forwarder do
 
   defp publish_one(data, receipt) do
     key = if receipt[:intermediate], do: "#{receipt.status}:#{receipt.received_at}", else: "final"
-    blob = Base.encode64(:erlang.term_to_binary(%{data: data, receipt: receipt}, [:compressed]))
+    blob = Base.encode64(:erlang.term_to_binary(%{data: data, receipt: receipt}, compressed: 1))
 
     case Bus.publish("sms.receipt.forward", "receipt.forward", %{"id" => data.id, "r" => blob},
            id: "fwd:#{data.id}:#{key}"

@@ -67,8 +67,12 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   @impl true
   def handle_event(event) do
-    msg = Intake.decode(event.data)
+    if Config.ready?(),
+      do: handle_message(Intake.decode(event.data)),
+      else: {:error, :config_not_loaded}
+  end
 
+  defp handle_message(msg) do
     # A resend after a failed receipt (S-5.11): its message was forgotten; the claim stops a redelivery sending twice.
     if is_map(msg[:resend]) do
       if Store.claim_resend(msg.id, msg.resend.no), do: send_message(msg), else: :ok
@@ -276,7 +280,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     data = %{
       "id" => msg.id,
       "trunk_id" => msg.trunk.id,
-      "m" => Base.encode64(:erlang.term_to_binary(Map.put(msg, :resend, resend), [:compressed]))
+      "m" => Base.encode64(:erlang.term_to_binary(Map.put(msg, :resend, resend), compressed: 1))
     }
 
     case Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}:r#{resend.no}") do

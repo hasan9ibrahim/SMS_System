@@ -32,6 +32,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Message.{Concat, Text}
 
   alias Sms.Switch.Pipeline.{
+    Backlog,
     Config,
     Credit,
     Delayed,
@@ -53,7 +54,13 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   @impl true
   def handle(context, %Pdu{command: command} = pdu) when command in [:submit_sm, :data_sm] do
-    reply = if Config.ready?(), do: accept(context, pdu), else: {:error, :esme_rsyserr}
+    reply =
+      cond do
+        # Overload protection (backend step 7): the sender is too far behind to take more now.
+        Backlog.over?() -> {:error, :esme_rthrottled}
+        not Config.ready?() -> {:error, :esme_rsyserr}
+        true -> accept(context, pdu)
+      end
 
     # A refused message leaves the overflow buffer at once (S-2.4); an accepted one when it is sent on (Sender).
     if Map.get(context, :buffered, false) and match?({:error, _}, reply),
@@ -465,7 +472,7 @@ defmodule Sms.Switch.Pipeline.Intake do
     data = %{
       "id" => msg.id,
       "trunk_id" => msg.trunk.id,
-      "m" => Base.encode64(:erlang.term_to_binary(msg, [:compressed]))
+      "m" => Base.encode64(:erlang.term_to_binary(msg, compressed: 1))
     }
 
     # Queued until the sender takes it: what cancel_sm and query_sm see (S-2.15, D8). Without Redis the message still
