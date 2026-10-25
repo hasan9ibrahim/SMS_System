@@ -80,7 +80,8 @@ export function EmailLogsPage() {
           width: 100,
           render: (r) => (
             <span>
-              <StatusDot tone={r.status === "sent" ? "good" : "error"} /> {r.status === "sent" ? "Sent" : "Failed"}
+              <StatusDot tone={r.status === "sent" ? "good" : r.status === "queued" ? "warning" : "error"} />{" "}
+              {r.status === "sent" ? "Sent" : r.status === "queued" ? "Queued" : "Failed"}
             </span>
           ),
         },

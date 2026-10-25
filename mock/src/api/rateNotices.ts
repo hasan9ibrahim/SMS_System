@@ -1,7 +1,7 @@
 // Customer rate notifications on save (team trial round 1, "send RN" ticked by default): after a rating
 // change on customer tables, each customer using a changed table gets one e-mail to its rates contact
 // (commercial when it has none), from its business company's rates mailbox, listing the changed rates.
-// E-mails are logged in Email logs (type send_rate), never sent, in this phase (§8).
+// E-mails are logged in Email logs (type send_rate) and, in production, sent with every change line attached (§8).
 // Team trial round 2: dates and times in the platform time zone (24-hour), country rates written the
 // client's "all networks" way, and the note typed on the save at the top.
 import type pg from "pg";
@@ -9,6 +9,8 @@ import type { DiffEntry } from "./records.js";
 import { companyMailbox, logEmail } from "./emailLog.js";
 import { fromCountryCode, type AllNetworks } from "../rn/parse.js";
 import { PLATFORM_TIMEZONE, platformDateTime } from "../platform.js";
+
+const csvLine = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
 type Db = pg.Pool | pg.PoolClient;
 interface Snap {
@@ -81,6 +83,7 @@ export async function sendRateNotices(
     const lines = (byTable.get(Number(r.table_id)) ?? []).map((l) => noticeText(l, r.all_networks_code as AllNetworks));
     const extra = note?.trim();
     const sender = await companyMailbox(db, Number(r.enterprise_id), "rateSheet");
+    const file = `${String(r.table_name).replace(/[^\w.-]+/g, "_")}_rates.csv`;
     await logEmail(db, {
       type: "send_rate",
       enterpriseId: Number(r.enterprise_id),
@@ -98,7 +101,8 @@ export async function sendRateNotices(
         "",
         `Rates are per message submitted, in the table currency. Dates and times are ${PLATFORM_TIMEZONE} (24-hour).`,
       ].join("\n"),
-      file: `${String(r.table_name).replace(/[^\w.-]+/g, "_")}_rates.xlsx`,
+      file,
+      attachments: [{ fileName: file, contentType: "text/csv", content: `Change\n${lines.map(csvLine).join("\n")}\n` }],
       rateDate: new Date().toISOString().slice(0, 10),
       userId,
     });

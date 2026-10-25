@@ -14,6 +14,7 @@ import type {
   RnDecision,
   RnDetail,
   RnIntake,
+  RnIntakeResult,
   RnReplySend,
   RnRow,
   RnSettings,
@@ -1116,73 +1117,88 @@ export function intakeRn(request: FastifyRequest, reply: FastifyReply) {
   const mail = request.body as RnIntake;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
-    const trunks = await liveTrunks(pool);
-    let chosen: (typeof trunks)[number] | null = null;
-    if (mail.vendorTrunkId) {
-      chosen = trunks.find((t) => t.id === mail.vendorTrunkId) ?? null;
-      if (!chosen) return badInput(reply, [{ path: "/vendorTrunkId", message: "no live vendor trunk with this ID" }]);
-      if (!chosen.tableId)
-        return badInput(reply, [{ path: "/vendorTrunkId", message: "this trunk has no vendor rate table yet" }]);
-    }
-    const senders = await senderEnterprises(pool, mail.fromAddress);
-    const drafts: Draft[] = [];
-    for (const att of mail.attachments) {
-      const found = chosen
-        ? { trunk: chosen, reason: "chosen on upload" }
-        : matchTrunk(trunks, { subject: mail.subject, body: mail.body, fileName: att.fileName }, senders);
-      const ent = (found?.trunk as { enterpriseId?: number } | undefined)?.enterpriseId ?? senders[0] ?? null;
-      const ef = ent ? await effectiveSettings(pool, ent) : null;
-      const sheet = readAttachment(att, ef?.mapping ?? null, { allNetworks: ef?.allNetworks ?? null });
-      // Excel files are kept as "base64:<data>" so the original can be downloaded (team trial round 2).
-      const content = att.encoding === "base64" ? `base64:${att.content}` : att.content;
-      const base = {
-        fileName: att.fileName,
-        content,
-        columns: sheet.columns,
-        headerRow: sheet.headerRow,
-        fatal: sheet.fatal,
-      };
-      const withUser = sheet.rows.filter((r) => r.username);
-      if (!chosen && withUser.length && sheet.columns.some((x) => x.field === "username")) {
-        // One file, many trunks: split by the username column (§13.13 A step 2).
-        const groups = new Map<string, SheetRow[]>();
-        for (const r of sheet.rows) groups.set(r.username ?? "", [...(groups.get(r.username ?? "") ?? []), r]);
-        for (const [u, rows] of groups) {
-          const t = u ? trunkByUsername(trunks, u) : null;
-          drafts.push({
-            ...base,
-            trunk: t,
-            reason: t ? `username ${u} in the sheet` : null,
-            rows,
-            errors: groups.size === 1 ? sheet.errors : [],
-          });
-        }
-        if (groups.size > 1 && sheet.errors.length) drafts[0]!.errors = sheet.errors;
-      } else
+    const out = await intakeMail(pool, mail, me.id, request.ip);
+    if ("errors" in out) return badInput(reply, out.errors);
+    return reply.code(201).send(out);
+  });
+}
+
+/**
+ * One e-mail or upload in: an RN per sheet (or per trunk of a split sheet), checked and perhaps auto-accepted
+ * (§13.13 A). Used by the upload and by the Rates mailbox reader (jobs/imap.ts, backend step 11).
+ */
+export async function intakeMail(
+  pool: pg.Pool,
+  mail: RnIntake,
+  userId: number,
+  ip: string | null,
+): Promise<{ errors: FieldError[] } | RnIntakeResult> {
+  const trunks = await liveTrunks(pool);
+  let chosen: (typeof trunks)[number] | null = null;
+  if (mail.vendorTrunkId) {
+    chosen = trunks.find((t) => t.id === mail.vendorTrunkId) ?? null;
+    if (!chosen) return { errors: [{ path: "/vendorTrunkId", message: "no live vendor trunk with this ID" }] };
+    if (!chosen.tableId)
+      return { errors: [{ path: "/vendorTrunkId", message: "this trunk has no vendor rate table yet" }] };
+  }
+  const senders = await senderEnterprises(pool, mail.fromAddress);
+  const drafts: Draft[] = [];
+  for (const att of mail.attachments) {
+    const found = chosen
+      ? { trunk: chosen, reason: "chosen on upload" }
+      : matchTrunk(trunks, { subject: mail.subject, body: mail.body, fileName: att.fileName }, senders);
+    const ent = (found?.trunk as { enterpriseId?: number } | undefined)?.enterpriseId ?? senders[0] ?? null;
+    const ef = ent ? await effectiveSettings(pool, ent) : null;
+    const sheet = readAttachment(att, ef?.mapping ?? null, { allNetworks: ef?.allNetworks ?? null });
+    // Excel files are kept as "base64:<data>" so the original can be downloaded (team trial round 2).
+    const content = att.encoding === "base64" ? `base64:${att.content}` : att.content;
+    const base = {
+      fileName: att.fileName,
+      content,
+      columns: sheet.columns,
+      headerRow: sheet.headerRow,
+      fatal: sheet.fatal,
+    };
+    const withUser = sheet.rows.filter((r) => r.username);
+    if (!chosen && withUser.length && sheet.columns.some((x) => x.field === "username")) {
+      // One file, many trunks: split by the username column (§13.13 A step 2).
+      const groups = new Map<string, SheetRow[]>();
+      for (const r of sheet.rows) groups.set(r.username ?? "", [...(groups.get(r.username ?? "") ?? []), r]);
+      for (const [u, rows] of groups) {
+        const t = u ? trunkByUsername(trunks, u) : null;
         drafts.push({
           ...base,
-          trunk: (found?.trunk as Draft["trunk"]) ?? null,
-          reason: found?.reason ?? null,
-          rows: sheet.rows,
-          errors: sheet.errors,
+          trunk: t,
+          reason: t ? `username ${u} in the sheet` : null,
+          rows,
+          errors: groups.size === 1 ? sheet.errors : [],
         });
-    }
-    const created = await inTransaction(pool, async (c) => {
-      const out: { id: number; auto: boolean }[] = [];
-      for (const d of drafts) out.push(await createRn(c, d, mail, me.id, request.ip));
-      return out;
-    });
-    const { rows } = await pool.query(`SELECT ${RN_SELECT} FROM ${RN_FROM} WHERE n.id = ANY($1) ORDER BY n.id`, [
-      created.map((x) => x.id),
-    ]);
-    const list: RnRow[] = rows.map(mapRn);
-    return reply.code(201).send({
-      created: list,
-      autoAccepted: created.filter((x) => x.auto).length,
-      unmatched: list.filter((r) => r.status === "unmatched").length,
-      failed: list.filter((r) => r.status === "failed").length,
-    });
+      }
+      if (groups.size > 1 && sheet.errors.length) drafts[0]!.errors = sheet.errors;
+    } else
+      drafts.push({
+        ...base,
+        trunk: (found?.trunk as Draft["trunk"]) ?? null,
+        reason: found?.reason ?? null,
+        rows: sheet.rows,
+        errors: sheet.errors,
+      });
+  }
+  const created = await inTransaction(pool, async (c) => {
+    const out: { id: number; auto: boolean }[] = [];
+    for (const d of drafts) out.push(await createRn(c, d, mail, userId, ip));
+    return out;
   });
+  const { rows } = await pool.query(`SELECT ${RN_SELECT} FROM ${RN_FROM} WHERE n.id = ANY($1) ORDER BY n.id`, [
+    created.map((x) => x.id),
+  ]);
+  const list: RnRow[] = rows.map(mapRn);
+  return {
+    created: list,
+    autoAccepted: created.filter((x) => x.auto).length,
+    unmatched: list.filter((r) => r.status === "unmatched").length,
+    failed: list.filter((r) => r.status === "failed").length,
+  };
 }
 
 export function assignRn(request: FastifyRequest, reply: FastifyReply) {

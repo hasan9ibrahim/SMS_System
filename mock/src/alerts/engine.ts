@@ -22,7 +22,6 @@ import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
 import { chRows } from "../edr.js";
 import { companyMailbox, logEmail } from "../api/emailLog.js";
 import { contactEmails } from "../api/switchTools.js";
-import { currentUserId } from "../api/session.js";
 import {
   conditionLabel,
   entitiesFor,
@@ -39,15 +38,10 @@ type Db = pg.Pool | pg.PoolClient;
 export const EVALUATE_EVERY_MS = 15_000;
 const PUBLIC_URL = process.env.PUBLIC_URL ?? "http://localhost:5173";
 
-let push: (topic: string, event: string, payload: object) => void = () => {};
 let rulesCache: { at: number; rules: AlertRuleRow[] } | null = null;
-let me: { departmentId: number | null } | null = null;
 let lastDigestSlot = -1;
 let lastSummaryDay = "";
 
-export function setPusher(fn: typeof push) {
-  push = fn;
-}
 /** A rule was saved: the next round reads the rules again. */
 export function invalidateRules() {
   rulesCache = null;
@@ -192,13 +186,6 @@ async function activeRules(c: Db): Promise<AlertRuleRow[]> {
   return rulesCache.rules;
 }
 
-async function myDepartment(c: Db) {
-  if (!me) {
-    const { rows } = await c.query("SELECT department_id FROM users WHERE id = $1", [currentUserId()]);
-    me = { departmentId: rows[0]?.department_id == null ? null : Number(rows[0].department_id) };
-  }
-  return me.departmentId;
-}
 
 /** Whether a rule's GUI notifications reach a user (both lists empty = everyone). */
 export function notifies(
@@ -258,15 +245,27 @@ async function loadIncident(c: Db, id: number) {
   return rows[0] ? mapIncident(rows[0]) : null;
 }
 
-/** Pushes an incident change to the signed-in user when the rule notifies them (§13.6). */
+/**
+ * Announces an incident change (§13.6). Every server relays it to its connected users whose rule notifies them
+ * (live/socket.ts listens on `sms_incident`): incidents are raised on the server running the jobs, and users may be
+ * connected to either server (backend step 11). Sent at commit when `c` is in a transaction.
+ */
 export async function pushIncident(c: Db, id: number, repeat = false) {
+  await c.query("SELECT pg_notify('sms_incident', $1)", [JSON.stringify({ id, repeat })]);
+}
+
+/** The pop-up event of an incident and its rule, for the users the rule notifies. */
+export async function incidentEvent(
+  c: Db,
+  id: number,
+  repeat = false,
+): Promise<{ event: IncidentEvent; rule: AlertRuleRow } | null> {
   const inc = await loadIncident(c, id);
-  if (!inc) return;
+  if (!inc) return null;
   const { rows } = await c.query(`SELECT ${ALERT_RULE_SELECT} FROM ${ALERT_RULE_FROM} WHERE r.id = $1`, [inc.ruleId]);
-  if (!rows[0]) return;
+  if (!rows[0]) return null;
   const rule = mapAlertRule(rows[0]);
-  if (notifies(rule, currentUserId(), await myDepartment(c)))
-    push(`alerts:${currentUserId()}`, "incident", toEvent(inc, rule, repeat));
+  return { event: toEvent(inc, rule, repeat), rule };
 }
 
 // ---------------------------------------------------------------- e-mail (§13.7)

@@ -33,6 +33,7 @@ export function dashboardSettings(saved: Record<string, unknown> | null): Dashbo
 /** The user of the current request (src/auth/user.ts). */
 export { currentUserId } from "../auth/user.js";
 import { currentUserId, DEFAULT_USER_ID } from "../auth/user.js";
+import { production } from "../mode.js";
 
 // Used when the database is not running, so the shell still renders (CLAUDE.md rule 1: fake).
 export const demoUser: CurrentUser = {
@@ -108,12 +109,27 @@ export function canUndoOthers(user: CurrentUser): boolean {
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
+  // Production (backend step 11): never the demo administrator. A user that is not (or no longer) in the database
+  // may do nothing, and a database error fails the request.
+  if (production) return (await loadUser(db(), currentUserId())) ?? noAccessUser(currentUserId());
   try {
     return (await loadUser(db(), currentUserId())) ?? demoUser;
   } catch {
     return demoUser;
   }
 }
+
+const noAccessUser = (id: number): CurrentUser => ({
+  ...demoUser,
+  id,
+  username: "unknown",
+  displayName: "Unknown user",
+  initials: "?",
+  role: "User",
+  businessCompany: "",
+  permissions: [],
+  hiddenTabs: [],
+});
 
 export function updatePreferences(request: FastifyRequest, reply: FastifyReply) {
   const body = request.body as PreferencesUpdate;

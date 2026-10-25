@@ -32,6 +32,7 @@ import { loadRulesInOrder, routeThrough, vendorQuality, type RuleCore } from "./
 import { windowEnd } from "./routeTraffic.js";
 import { currentUserId, getCurrentUser } from "./session.js";
 import { inputProblem, inTransaction, writeShares } from "./views.js";
+import { production } from "../mode.js";
 
 type Db = pg.Pool | pg.PoolClient;
 /** Converted figures and margins are in the platform currency (decided 2026-10-16: EUR by default). */
@@ -86,7 +87,9 @@ export async function resolveDestinations(db: Db, q: string, live: boolean): Pro
       };
     let dest = hit;
     let ported: boolean | null = null;
-    if (live) {
+    // Production (backend step 11): no invented HLR answer. A live lookup from this screen needs the switch's HLR
+    // client (docs/BACKEND_TODO.md); until then the number resolves by its prefix.
+    if (live && !production) {
       ported = fakeHlrPorted(digits);
       if (ported) {
         const { rows: others } = await db.query(

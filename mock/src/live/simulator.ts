@@ -27,8 +27,8 @@ const SIM_TOTAL_TPS = (() => {
   return Number.isFinite(v) && v > 0 ? v : null;
 })();
 export const MINUTES = 120; // per-minute history kept for the movers (two 60-minute windows)
-const SLOT_S = 5; // chart history resolution
-const SLOTS = 3600 / SLOT_S; // 60 minutes of chart history
+export const SLOT_S = 5; // chart history resolution
+export const SLOTS = 3600 / SLOT_S; // 60 minutes of chart history
 
 type Kind = "steady" | "up" | "down" | "start" | "stop" | "idle";
 
@@ -133,13 +133,13 @@ export interface PartyDay {
   revenue: number;
   cost: number;
 }
-const emptyDay = (): PartyDay => ({ attempts: 0, submitted: 0, delivered: 0, revenue: 0, cost: 0 });
+export const emptyDay = (): PartyDay => ({ attempts: 0, submitted: 0, delivered: 0, revenue: 0, cost: 0 });
 /** Normal delivery delay in seconds when quality is fine. */
 export const BASE_DELAY = 3;
 /** Chance per second that a sending trunk starts a quality dip (about once a day per trunk). */
 const DIP_PER_SECOND = Number(process.env.SIM_DIP_PER_DAY ?? 1) / 86_400;
 
-interface DayTotals {
+export interface DayTotals {
   day: string;
   attempts: number;
   /** Messages accepted by a vendor (ASR, DLR). */
@@ -153,7 +153,7 @@ interface DayTotals {
   vendors: Map<number, PartyTotals>;
   destinations: Map<string, DestTotals>;
 }
-interface PartyTotals {
+export interface PartyTotals {
   name: string;
   attempts: number;
   money: number;
@@ -161,7 +161,7 @@ interface PartyTotals {
   successful: number;
   delivered: number;
 }
-interface DestTotals {
+export interface DestTotals {
   country: string;
   network: string;
   attempts: number;
@@ -258,7 +258,7 @@ export function levelAt(segs: Segment[], t: number): number {
 
 // ---------------------------------------------------------------- loading
 
-async function loadFromStores(): Promise<{
+export async function loadFromStores(): Promise<{
   trunks: SimTrunk[];
   vendors: SimVendor[];
   today: DayTotals;
@@ -558,7 +558,7 @@ function quality(
 }
 
 /** Per-minute averages of a trunk's or vendor's TPS and quality. */
-function rollMinute(
+export function rollMinute(
   x: {
     minutes: number[];
     minAsr: (number | null)[];
@@ -694,7 +694,7 @@ function retryLoad(sim: Simulator) {
 const TPS_WINDOW = 10;
 
 /** Records the whole messages a trunk sent this second; its TPS is their average over the window. */
-function windowTps(x: SimTrunk | SimVendor, n: number, now: number) {
+export function windowTps(x: SimTrunk | SimVendor, n: number, now: number) {
   const recent = (x.recent ??= []);
   recent.push(n);
   if (recent.length > TPS_WINDOW) recent.shift();

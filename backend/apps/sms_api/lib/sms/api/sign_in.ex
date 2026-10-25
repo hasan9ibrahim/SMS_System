@@ -10,7 +10,8 @@ defmodule Sms.Api.SignIn do
     * The code is checked against a challenge: an opaque token (only its hash is stored) that works for 10 minutes
       and 5 tries; a wrong code uses one try. An e-mailed code can be sent again once a minute.
 
-  E-mailed codes are written to the e-mail log, as the mock does; delivery over SMTP comes with the e-mail job.
+  E-mailed codes are written to the e-mail log, as the mock does. In production (`SMS_MODE=production`, backend step 11)
+  they are written as queued and the TypeScript service's e-mail job sends them over SMTP (mock/src/jobs/mailer.ts).
   """
   alias Sms.Api.{Password, Problem, Sessions, Totp}
   alias Sms.Core.Repo
@@ -263,13 +264,16 @@ defmodule Sms.Api.SignIn do
       Repo.query!(
         """
         INSERT INTO email_logs (email_type, status, to_addresses, subject, body, user_id)
-        VALUES ('otp', 'sent', $1, 'Your sign-in code', $2, $3)
+        VALUES ('otp', $4, $1, 'Your sign-in code', $2, $3)
         """,
-        [[email], body, user_id]
+        [[email], body, user_id, email_status()]
       )
 
     mask(email)
   end
+
+  # Queued for the e-mail job in production; written as sent where nothing is delivered (development, tests).
+  defp email_status, do: Application.get_env(:sms_api, __MODULE__, [])[:email_status] || "sent"
 
   defp code_hash(challenge_id, code),
     do: :sha256 |> :crypto.hash("signin:#{challenge_id}:#{code}") |> Base.encode16(case: :lower)

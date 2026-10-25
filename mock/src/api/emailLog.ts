@@ -1,8 +1,11 @@
-// Email Logs (§8): every e-mail the platform sends, or fails to send, writes one row. The mock
-// records the message instead of sending it; a send without recipients is logged as failed.
+// Email Logs (§8): every e-mail the platform sends, or fails to send, writes one row. A send without recipients is
+// logged as failed. In production (backend step 11) the row is the outbox: it is written as queued, with its
+// attachments, and the e-mail job (jobs/mailer.ts) sends it through the business company's mailbox and records the
+// outcome. Elsewhere (development, tests, the trial on fake data) nothing is sent and the row is written as sent.
 import type pg from "pg";
 import type { EmailLogRow, MailboxDepartment, SenderEmail } from "@sms/contract";
 import { embedImages, emailDocument, imageInfo, logoTag } from "../email/html.js";
+import { production } from "../mode.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -21,25 +24,37 @@ export interface EmailLogInput {
   /** Failed when set, or when there is no recipient. */
   error?: string | null;
   userId?: number | null;
+  /** Files sent with the e-mail (invoice PDF, rate sheet, SOA, report). */
+  attachments?: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  fileName: string;
+  contentType?: string;
+  content: Buffer | string;
 }
 
 /** Logs an e-mail and returns its status; `id` receives the log row's ID when given. */
 export async function logEmail(c: Db, m: EmailLogInput, id?: { value: number }): Promise<"sent" | "failed"> {
   const error = m.error ?? (m.to.length ? null : "No recipient: the partner has no contact for this e-mail");
   const status = error ? "failed" : "sent";
+  // In production "sent" means accepted for delivery: the e-mail job sends it within seconds.
+  const stored = status === "sent" && production ? "queued" : status;
   // The e-mail as sent (§11): the designed HTML with CSS inlined; uploaded images go inline (cid).
   const doc = emailDocument(m.body ?? "");
   const inline = embedImages(doc).images.map((i) => (i.assetId ? `image-${i.assetId}` : `logo-${i.companyId}`));
   const { rows } = await c.query(
     `INSERT INTO email_logs (enterprise_id, customer_trunk_id, vendor_trunk_id, email_type, status, rate_date, file_name,
-                             error, sender, to_addresses, cc_addresses, subject, body, user_id, body_html, inline_images)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
+                             error, sender, to_addresses, cc_addresses, subject, body, user_id, body_html, inline_images,
+                             next_try_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+             CASE WHEN $5 = 'queued' THEN now() END) RETURNING id`,
     [
       m.enterpriseId ?? null,
       m.customerTrunkId ?? null,
       m.vendorTrunkId ?? null,
       m.type,
-      status,
+      stored,
       m.rateDate ?? null,
       m.file ?? null,
       error,
@@ -53,9 +68,29 @@ export async function logEmail(c: Db, m: EmailLogInput, id?: { value: number }):
       inline,
     ],
   );
-  if (id) id.value = Number(rows[0].id);
+  const logId = Number(rows[0].id);
+  if (stored === "queued")
+    for (const a of m.attachments ?? [])
+      await c.query(
+        "INSERT INTO email_attachments (email_log_id, file_name, content_type, content) VALUES ($1, $2, $3, $4)",
+        [logId, a.fileName, a.contentType ?? contentTypeOf(a.fileName), Buffer.isBuffer(a.content) ? a.content : Buffer.from(a.content)],
+      );
+  if (id) id.value = logId;
   return status;
 }
+
+const CONTENT_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+  csv: "text/csv",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  html: "text/html",
+  txt: "text/plain",
+  zip: "application/zip",
+  png: "image/png",
+};
+export const contentTypeOf = (name: string) =>
+  CONTENT_TYPES[name.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream";
 
 // ---------------------------------------------------------------- the business company behind an e-mail (§11)
 

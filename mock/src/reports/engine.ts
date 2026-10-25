@@ -3,6 +3,7 @@
 // chEngine.ts), metric thresholds after. Each page is grouped base sums -> metrics -> threshold
 // filter -> sort and page; totals and the count use the same filtered groups. Raw EDRs are used: the
 // edr_hourly roll-up keeps too many keys to be smaller (2.98 M rows for 5.2 M EDRs).
+import { production } from "../mode.js";
 import type pg from "pg";
 import type {
   FieldDescriptor,
@@ -433,6 +434,9 @@ const seconds = (w: Window) => Math.max(1, Math.round((w.to.getTime() - w.from.g
  */
 let latest: { at: number; t: number } | null = null;
 export async function reportNow(): Promise<number> {
+  // Production (backend step 11): the clock. The fake data's "now" is its latest EDR, which in production would pull
+  // every window back to the last message during a quiet spell.
+  if (production) return Date.now();
   if (latest && Date.now() - latest.at < 1_000) return latest.t;
   const r = await chQuery<{ t: string }>("SELECT toString(max(start_time)) AS t FROM edr");
   // The minute after the latest EDR, so the last messages fall inside "today".

@@ -220,3 +220,7 @@ config :sms_api, Sms.Api.Forward,
 
 config :sms_api, Sms.Api.Auth, trust_proxy: System.get_env("TRUST_PROXY") == "1"
 config :sms_api, Sms.Api.Sessions, secure_cookie: System.get_env("COOKIE_SECURE") == "1"
+
+# Production (backend step 11): sign-in codes are queued for the TypeScript service's e-mail job (SMTP).
+config :sms_api, Sms.Api.SignIn,
+  email_status: if(System.get_env("SMS_MODE") == "production", do: "queued", else: "sent")

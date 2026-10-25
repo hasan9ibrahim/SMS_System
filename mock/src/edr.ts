@@ -1,6 +1,7 @@
 // Read access to the EDR store (ClickHouse) for figures that come from traffic, such as
 // today's revenue and margin per rate table (§13.12). Optional: when ClickHouse does not
 // answer, callers get null and screens show "—" instead of failing.
+import { production } from "./mode.js";
 import { sysToPlatformFactor } from "./currency.js";
 import { PLATFORM_DAY_START_SQL } from "./platform.js";
 
@@ -8,6 +9,12 @@ const env = process.env;
 const CH_URL = `http://${env.CLICKHOUSE_HOST ?? "localhost"}:${env.CLICKHOUSE_HTTP_PORT ?? 8123}`;
 const CH_DB = env.CLICKHOUSE_DB ?? "sms_edr";
 const AUTH = `Basic ${Buffer.from(`${env.CLICKHOUSE_USER ?? "sms_dev"}:${env.CLICKHOUSE_PASSWORD ?? "sms_dev_password"}`).toString("base64")}`;
+
+/**
+ * SQL for "now" in EDR windows: the clock in production (backend step 11); on the fake data its latest EDR, so the
+ * screens show traffic after the seed's last day.
+ */
+export const edrNowSql = () => (production ? "now64(3)" : "(SELECT max(submit_time) FROM edr)");
 
 export async function chRows<T>(sql: string, timeoutMs = 1500): Promise<T[] | null> {
   try {

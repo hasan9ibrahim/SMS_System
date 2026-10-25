@@ -304,7 +304,7 @@ export function sendTroubleTicket(request: FastifyRequest, reply: FastifyReply) 
       const t = await buildTicket(pool, b);
       if (Array.isArray(t)) return badInput(reply, t);
       const me = await getCurrentUser();
-      // The EDRs also go as a CSV attachment (edrCsv); the mock keeps attachment names only.
+      // The EDRs also go as a CSV attachment (edrCsv), with the user's own file.
       const csvName = `trouble_ticket_${t.trunkName.replace(/[^\w-]+/g, "_")}.csv`;
       await logEmail(pool, {
         type: "trouble_ticket",
@@ -316,6 +316,12 @@ export function sendTroubleTicket(request: FastifyRequest, reply: FastifyReply) 
         subject: t.subject,
         body: t.body,
         file: [csvName, b.attachment?.name].filter(Boolean).join(", "),
+        attachments: [
+          { fileName: csvName, contentType: "text/csv", content: edrCsv(t.rows, b.columns) },
+          ...(b.attachment
+            ? [{ fileName: b.attachment.name, content: Buffer.from(b.attachment.contentBase64, "base64") }]
+            : []),
+        ],
         userId: me.id,
       });
       const { rows: last } = await pool.query(

@@ -6,7 +6,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type { QbrOverrideInput, QbrStat } from "@sms/contract";
 import { db, withDb } from "../db.js";
-import { chRows } from "../edr.js";
+import { chRows, edrNowSql } from "../edr.js";
 import { qbrStatList } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
 import { recordChange, type DiffEntry } from "./records.js";
@@ -26,7 +26,7 @@ export async function refreshQbrStats(pool: Db = db()): Promise<number | null> {
            if(countIf(msg_status = 'DELIVRD') = 0, NULL,
               round(avgIf(delivery_delay_ms, msg_status = 'DELIVRD') / 1000, 1)) AS add_s
       FROM edr
-     WHERE submit_time > (SELECT max(submit_time) FROM edr) - INTERVAL 24 HOUR AND ${col} > 0
+     WHERE submit_time > ${edrNowSql()} - INTERVAL 24 HOUR AND ${col} > 0
      GROUP BY trunk, code`;
   const rows = await chRows<{
     side: string;
