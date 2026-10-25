@@ -134,6 +134,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
         support_multipart: true,
         max_msg_len: nil,
         multipart_format: "udh8",
+        overflow_buffer: 0,
         rate_table_ids: [200]
       },
       Map.new(fields)

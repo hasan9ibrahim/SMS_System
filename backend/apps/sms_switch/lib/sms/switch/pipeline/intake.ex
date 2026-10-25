@@ -33,6 +33,7 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   alias Sms.Switch.Pipeline.{
     Backlog,
+    Buffers,
     Config,
     Credit,
     Delayed,
@@ -467,13 +468,11 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   # ---------------------------------------------------------------- stored, or refused
 
-  # S-2.2: answered only once the bus has stored the message; if it cannot, 0x14 at once (S-2.3).
+  # S-2.2: answered only once the bus has stored the message; if it cannot, 0x14 at once (S-2.3). A message accepted
+  # over the trunk's TPS goes to the trunk's own overflow buffer, which releases it at the trunk's TPS (S-2.4,
+  # `Sms.Switch.Pipeline.Buffers`); every other one straight to the sender.
   defp store(msg) do
-    data = %{
-      "id" => msg.id,
-      "trunk_id" => msg.trunk.id,
-      "m" => Base.encode64(:erlang.term_to_binary(msg, compressed: 1))
-    }
+    data = event_data(msg)
 
     # Queued until the sender takes it: what cancel_sm and query_sm see (S-2.15, D8). Without Redis the message still
     # goes; it just cannot be cancelled.
@@ -486,7 +485,7 @@ defmodule Sms.Switch.Pipeline.Intake do
              "message #{msg.id} not marked queued, cannot be cancelled: #{inspect(reason)}"
            )
 
-    case Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}") do
+    case publish(msg, data) do
       {:ok, _} ->
         :ok
 
@@ -494,6 +493,29 @@ defmodule Sms.Switch.Pipeline.Intake do
         Store.drop_queued(ent, ids)
         error
     end
+  end
+
+  defp publish(%{buffered: true} = msg, data) do
+    queue = Buffers.customer_queue(msg.trunk.id)
+
+    with {:ok, _} = ok <- Bus.put(queue, "msg.buffered", data, id: "buffered:#{msg.id}") do
+      Buffers.kick(queue)
+      ok
+    end
+  end
+
+  defp publish(msg, data),
+    do: Bus.publish("sms.msg.accepted", "msg.accepted", data, id: "msg:#{msg.id}")
+
+  @doc false
+  # A message as the bus carries it (to the sender, or to an overflow buffer).
+  @spec event_data(map()) :: map()
+  def event_data(msg) do
+    %{
+      "id" => msg.id,
+      "trunk_id" => msg.trunk.id,
+      "m" => Base.encode64(:erlang.term_to_binary(msg, compressed: 1))
+    }
   end
 
   defp refuse(msg, status, reason) do
