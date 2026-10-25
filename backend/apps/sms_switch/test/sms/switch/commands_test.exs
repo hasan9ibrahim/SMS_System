@@ -2,6 +2,7 @@ defmodule Sms.Switch.CommandsTest do
   # Commands from the screens over NATS request/reply (backend step 11c): the answer shape, bind reloads and Network
   # Diagnosis. The subscription itself runs only on the NATS bus (production), so these call the handler directly.
   use ExUnit.Case, async: false
+  alias Sms.Core.Bus.Nats
   alias Sms.Switch.Commands
   alias Sms.Switch.Commands.Diagnose
 
@@ -58,22 +59,20 @@ defmodule Sms.Switch.CommandsTest do
 
     test "every server answers smscmd.all.*, one answers smscmd.any.*; the reply is the JSON answer" do
       settings =
-        Sms.Core.Bus.Nats.connection_settings(
-          Application.fetch_env!(:sms_core, Sms.Core.Bus.Nats)
-        )
+        Nats.connection_settings(Application.fetch_env!(:sms_core, Nats))
 
       start_supervised!(
         {Gnat.ConnectionSupervisor,
          %{
-           name: Sms.Core.Bus.Nats.connection(),
+           name: Nats.connection(),
            backoff_period: 500,
            connection_settings: settings
          }}
       )
 
-      assert_eventually(fn -> is_pid(Process.whereis(Sms.Core.Bus.Nats.connection())) end)
+      assert_eventually(fn -> is_pid(Process.whereis(Nats.connection())) end)
       start_supervised!(Commands)
-      conn = Sms.Core.Bus.Nats.connection()
+      conn = Nats.connection()
 
       ask = fn subject ->
         case Gnat.request(conn, subject, ~s({"side": "customer"}), receive_timeout: 2_000) do
