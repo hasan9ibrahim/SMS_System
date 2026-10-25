@@ -3,6 +3,7 @@ defmodule SmppSim.LoopTest do
   use ExUnit.Case, async: false
   alias SmppSim.{Esme, Load, Smsc, Stats}
   alias SmppSim.Smsc.Dlr
+  alias Sms.Switch.Smpp.Pdu
 
   setup do
     Stats.reset()
@@ -98,7 +99,7 @@ defmodule SmppSim.LoopTest do
   end
 
   defp decode_all(data, acc) do
-    case Sms.Switch.Smpp.Pdu.decode(data) do
+    case Pdu.decode(data) do
       {:ok, pdu, rest} -> decode_all(rest, acc ++ [pdu.command])
       _ -> acc
     end

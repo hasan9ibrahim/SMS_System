@@ -14,7 +14,9 @@ config :sms_core, Sms.Core.Bus,
   subjects: ["sms.>"],
   # A message published twice with the same id within this window is stored once.
   duplicate_window_ms: 120_000,
-  max_age_days: 7,
+  # Kept 2 days (about 1 TB per server at 50 million a day); a receipt later than that is matched from the EDRs (D5).
+  # Product owner 2026-10-25, backend step 7.
+  max_age_days: 2,
   replicas: 1,
   publish_timeout_ms: 5_000,
   # NATS connections per node (publishes and consumers spread over them; backend step 7).

@@ -7,9 +7,9 @@ defmodule SmppSim.Smsc.Conn do
   use GenServer, restart: :temporary
   require Logger
   import Bitwise
-  alias Sms.Switch.Smpp.Pdu
   alias SmppSim.{Smsc, Stats}
   alias SmppSim.Smsc.Dlr
+  alias Sms.Switch.Smpp.Pdu
 
   @registry SmppSim.SmscRegistry
 

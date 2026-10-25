@@ -2,6 +2,7 @@ defmodule Sms.Switch.Pipeline.BacklogTest do
   # Overload protection: new messages refused (0x58) while the sender is too far behind (backend step 7).
   use ExUnit.Case, async: false
   import ExUnit.CaptureLog
+  alias Sms.Core.Bus.Local
   alias Sms.Switch.Pipeline.{Backlog, Intake}
   alias Sms.Switch.Smpp.Pdu
 
@@ -48,6 +49,6 @@ defmodule Sms.Switch.Pipeline.BacklogTest do
   end
 
   test "the backlog of a consumer comes from the bus" do
-    assert {:ok, 0} = Sms.Core.Bus.Local.backlog("pipeline-sender")
+    assert {:ok, 0} = Local.backlog("pipeline-sender")
   end
 end

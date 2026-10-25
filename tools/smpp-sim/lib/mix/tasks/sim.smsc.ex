@@ -7,6 +7,8 @@ defmodule Mix.Tasks.Sim.Smsc do
       mix sim.smsc --port 9100 --resp-ms 1-5 --dlr-ms 500-3000 --vendor-errors 0.5
   """
   use Mix.Task
+  alias Mix.Tasks.Sim.Run
+  alias SmppSim.Smsc
 
   @impl true
   def run(args) do
@@ -14,9 +16,9 @@ defmodule Mix.Tasks.Sim.Smsc do
       OptionParser.parse(args, strict: [port: :integer, resp_ms: :string, dlr_ms: :string, vendor_errors: :float])
 
     Mix.Task.run("app.start")
-    o = Mix.Tasks.Sim.Run.options(Map.new(opts), "steady")
-    SmppSim.Smsc.configure(resp_ms: o.resp_ms, dlr_ms: o.dlr_ms, error_pct: o.error_pct)
-    {:ok, _} = SmppSim.Smsc.start_link(port: opts[:port] || 9100)
+    o = Run.options(Map.new(opts), "steady")
+    Smsc.configure(resp_ms: o.resp_ms, dlr_ms: o.dlr_ms, error_pct: o.error_pct)
+    {:ok, _} = Smsc.start_link(port: opts[:port] || 9100)
     Mix.shell().info("fake SMSC listening on #{opts[:port] || 9100}; Ctrl-C twice to stop")
     Process.sleep(:infinity)
   end

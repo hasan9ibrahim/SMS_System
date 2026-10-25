@@ -1,8 +1,9 @@
 defmodule Sms.Core.Bus.Nats do
   @moduledoc """
   The event bus on NATS JetStream (docs/BACKEND_PLAN.md). One stream (`SMS`, subjects `sms.>`) on file storage,
-  replicated on 3 nodes in production; the server writes every message to disk before it acknowledges it
-  (`sync_interval: always`, deploy/nats/nats.conf), so a published event survives a crash of any one node.
+  replicated on 3 nodes in production; a publish is acknowledged once a majority of them hold it, so a published
+  event survives a crash of any one node. Disk writes use the NATS default (every 2 minutes, deploy/nats/nats.conf):
+  writing every event first halved capacity in the load test (product owner 2026-10-25, backend step 7).
 
   `publish/4` is a JetStream publish: it waits for the stream's acknowledgement, and the `Nats-Msg-Id` header makes a
   retried publish a no-op within the duplicate window.
@@ -113,7 +114,7 @@ defmodule Sms.Core.Bus.Nats do
   @impl Sms.Core.Bus.Adapter
   def backlog(consumer) do
     case Gnat.Jetstream.API.Consumer.info(@conn, Keyword.fetch!(Bus.config(), :stream), consumer) do
-      {:ok, info} -> {:ok, (info.num_pending || 0) + (info.num_ack_pending || 0)}
+      {:ok, info} -> {:ok, info.num_pending + info.num_ack_pending}
       {:error, _} = error -> error
     end
   catch
@@ -308,14 +309,16 @@ defmodule Sms.Core.Bus.Nats do
     end
 
     # A batch consumer's puller fetches up to #{@fetch} events per pull request instead of one (the load test found
-    # one-at-a-time pulls holding EDRs back, backend step 7), and long-polls for 1 s so a partly filled fetch at low
-    # traffic waits no longer than that.
+    # one-at-a-time pulls holding EDRs back, backend step 7). The client holds a partly filled fetch until the pull
+    # expires: 1 s, and at most a quarter of ack_wait, so the batch is acknowledged before it would be delivered again.
     defp fetch_options(opts) do
       case opts[:batch_size] do
         nil -> []
-        size -> [batch_size: min(size, @fetch), request_expires: 1_000_000_000]
+        size -> [batch_size: min(size, @fetch), request_expires: expires_ms(opts) * 1_000_000]
       end
     end
+
+    defp expires_ms(opts), do: min(1_000, div(opts[:ack_wait_ms], 4))
 
     @impl true
     def handle_message(message, %{batcher: batcher} = state) when batcher != nil do

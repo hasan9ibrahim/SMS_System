@@ -21,14 +21,14 @@ The targets (Q3): **1,000 TPS peak, 50 million a day** (580/s on average).
 | Past capacity (600/s with `always`) | the new overload guard answers 0x58 (throttled) so the customer's platform slows down; every accepted message still got its receipt and EDR |
 | One server killed (`kill -9`) under traffic | **no message lost**: every accepted message delivered with an EDR. 1 duplicate receipt; 3 submits that were in flight on the dead server got no answer (the customer's platform resends them) |
 | The link between the two servers cut | **no message lost, no duplicate sent to a vendor**; 3–5 duplicate receipts; receipts up to 21 s late while the link was down (p99 about 9 s) |
-| 30-minute soak at 200/s on two nodes | see section 5 |
+| 30-minute soak at 200/s on two nodes | **383,071 messages, none lost**: a receipt and an EDR for every one, no duplicates, memory flat (375 + 404 MB), no drift; answer p99 128–274 ms (the VM at 85–88 % CPU) |
 
 **What this means for 1,000 TPS.** The switch costs about 4–7 ms of CPU per message on this vCPU (it does about
 20 Redis round trips and 20 NATS messages for each message: routing, TPS limits, credit check, store, send, receipt,
 EDR, charges). So 1,000/s needs about 5–7 cores of this kind for the switch alone, plus NATS, Redis and ClickHouse.
 A current dedicated server (16 or more cores, faster per core than this VM) should carry 1,000/s on one server with
-the other as standby, but without much headroom. Two follow-ups would add the headroom: the CPU work below (§6), and
-the NATS disk policy (open question 1).
+the other as standby, but without much headroom; the CPU work below (§6) would add it. The NATS disk setting decided
+on 2026-10-25 (the default) is the one these figures use; writing every event first would have halved them.
 
 ## 2. Problems found and fixed
 
@@ -72,14 +72,31 @@ EDR for every one, every receipt delivered, 1 duplicate receipt, 3 unanswered su
 **Cut the link between the servers** (both keep reaching the databases): no loss, no duplicate at the vendors,
 3–5 duplicate receipts, and each server opened the vendor connections it thought the other had lost, so vendors saw
 twice the connections while the link was down. With the witness VM (step 8) only the side that reaches 2 of 3 machines
-keeps them (open question 5).
+keeps them (§7, decision 5).
 
 **Spike** 150 → 1,000 → 150/s (20 s): every message accepted (resp p99 760 ms during the spike), receipts caught up
 in about 60 s, nothing lost.
 
 ## 5. Soak
 
-SOAK_RESULTS
+Two nodes, 200 msg/s for 30 minutes (NATS `default`, 5 % two-part messages, receipts on every message), measured
+in 5-minute chunks:
+
+| Chunk | resp p50 | resp p99 | Receipts/s | Machine CPU | Switch RSS (node a + b) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0–5 min | 19 ms | 274 ms | 209.7 | 88 % | 383 + 417 MB |
+| 5–10 | 17 ms | 207 ms | 210.3 | 87 % | 374 + 402 MB |
+| 10–15 | 20 ms | 182 ms | 210.0 | 88 % | 374 + 406 MB |
+| 15–20 | 15 ms | 162 ms | 209.8 | 86 % | 375 + 404 MB |
+| 20–25 | 12 ms | 124 ms | 209.9 | 84 % | 375 + 404 MB |
+| 25–30 | 12 ms | 128 ms | 210.2 | 84 % | 374 + 401 MB |
+
+- **Nothing lost:** 383,071 parts accepted, 383,206 receipts delivered, 0 accepted messages without a receipt, 0
+  duplicate receipts, 0 duplicate vendor submits; ClickHouse holds an EDR for every one of the 385,174 parts accepted
+  (warm-up included) and an outcome row for every vendor attempt.
+- **No leak, no drift:** memory flat after the first minutes, latency falling, not rising (the first 15 minutes
+  shared the VM with test builds). Submit to receipt p99 1.3 s.
+- The 100 ms answer target failed only because two nodes, the databases and the simulator share 4 vCPUs at 85 % CPU.
 
 ## 6. Follow-ups (not in this step)
 
@@ -91,16 +108,11 @@ SOAK_RESULTS
 - **Throttle by time, not count:** refuse when the oldest waiting message is older than N seconds, which does not
   depend on the traffic rate.
 
-## 7. Open questions (also in `docs/BACKEND_TODO.md`)
+## 7. Decisions (product owner, 2026-10-25)
 
-1. **NATS writes to disk:** `always` (every event on disk before the customer is answered; halves capacity) or the
-   default (written every 2 minutes; a crash of one server loses nothing because the other server holds a copy, but
-   a power cut of both at once could lose the last 2 minutes). Recommendation: default with 2 replicas.
-2. **Bus disk space:** events are kept 7 days, about 10 KB per message across all streams: at 50 M/day about 3.5 TB
-   per server. Recommendation: keep 2 days (receipts later than that come from the EDRs), about 1 TB.
-3. **Max Msg Len:** the seeded vendor trunks have 153/160 with multipart on, which blocks every multipart message.
-   Is it the length of one part or of the whole message?
-4. **Overload answer:** 0x58 (throttled, the customer retries later) as now, or 0x14 (queue full)? And the 20,000
-   default.
-5. **Vendor connections during a cut link:** wait for the witness VM (step 8) to decide which side keeps them, or
-   accept double connections for the few seconds of a cut?
+1. **NATS disk writes:** the NATS default (every 2 minutes) instead of every event; each event is held by more than
+   one server, so one server crashing loses nothing. Done in `deploy/nats/nats.conf`.
+2. **Bus retention:** 2 days instead of 7 (about 1 TB per server at 50 M/day). Done (`max_age_days`).
+3. **Max Msg Len:** the whole message; empty (any length) is the usual setting. The fake data now seeds it empty.
+4. **Overload answer:** still open: 0x58 or 0x14, and the 20,000 limit (`SWITCH_MAX_BACKLOG`).
+5. **Vendor connections during a cut link:** fixed in step 8 with the witness VM.

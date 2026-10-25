@@ -35,9 +35,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
       watched
       |> Enum.zip(levels)
       |> Enum.each(fn {account, stored} ->
-        balance = account.base - Map.fetch!(used, account.key)
-        level = level(account, balance)
-        if level != to_int(stored), do: raise_level(account, level, balance)
+        compare(account, Map.fetch!(used, account.key), stored)
       end)
     else
       :error -> Logger.warning("credit alerts not checked: ledger totals unavailable")
@@ -45,6 +43,12 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
     end
 
     :ok
+  end
+
+  defp compare(account, used, stored) do
+    balance = account.base - used
+    level = level(account, balance)
+    if level != to_int(stored), do: raise_level(account, level, balance)
   end
 
   defp watched?(%{side: :customer, alerts: [_ | _], limit: limit}) when limit > 0, do: true

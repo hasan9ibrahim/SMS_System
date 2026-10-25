@@ -19,8 +19,8 @@ defmodule SmppSim.Esme do
   use GenServer, restart: :transient
   require Logger
   import Bitwise
-  alias Sms.Switch.Smpp.Pdu
   alias SmppSim.Stats
+  alias Sms.Switch.Smpp.Pdu
 
   @tick_ms 5
   @timeout_us 30_000_000

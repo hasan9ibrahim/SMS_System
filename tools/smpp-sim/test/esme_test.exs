@@ -1,8 +1,8 @@
 defmodule SmppSim.EsmeTest do
   # A fake customer against a hand-written server: what the switch may send besides answers.
   use ExUnit.Case, async: false
-  alias Sms.Switch.Smpp.Pdu
   alias SmppSim.{Esme, Load, Stats}
+  alias Sms.Switch.Smpp.Pdu
 
   setup do
     Stats.reset()

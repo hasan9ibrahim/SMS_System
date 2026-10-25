@@ -42,7 +42,7 @@ defmodule Sms.Switch.Pipeline.Backlog do
       reader: Keyword.get(config, :reader, fn -> Bus.backlog(@consumer) end)
     }
 
-    if state.max > 0, do: Process.send_after(self(), :tick, state.interval)
+    _ = if state.max > 0, do: Process.send_after(self(), :tick, state.interval)
     {:ok, state}
   end
 
