@@ -17,24 +17,42 @@ defmodule Sms.Switch.Pipeline.BacklogTest do
     end
 
     start_supervised!(
-      {Backlog, Keyword.merge([max: 100, interval_ms: 3_600_000, reader: reader], opts)}
+      {Backlog,
+       Keyword.merge(
+         [max: 100, max_wait_ms: 10_000, interval_ms: 3_600_000, reader: reader],
+         opts
+       )}
     )
   end
 
-  test "over the limit: refused until the backlog is under 80 % of it; a failed read keeps the state" do
-    start([{:ok, 50}, {:ok, 101}, {:ok, 90}, {:error, :down}, {:ok, 79}])
+  defp waited(ms), do: Backlog.observe(DateTime.add(DateTime.utc_now(), -ms, :millisecond))
+
+  test "messages waiting over max_wait_ms: refused until the wait is under 80 % of it" do
+    start([{:ok, 0}])
+    waited(2_000)
     Backlog.check()
     refute Backlog.over?()
 
-    assert capture_log(fn -> Backlog.check() end) =~ "refused with 0x58"
+    # The shortest wait of the second counts: one old redelivered message alone does not trip it.
+    waited(60_000)
+    waited(3_000)
+    Backlog.check()
+    refute Backlog.over?()
+
+    waited(11_000)
+    waited(12_000)
+    assert capture_log(fn -> Backlog.check() end) =~ "messages wait over 10000 ms"
     assert Backlog.over?()
     assert {:error, :esme_rthrottled} = Intake.handle(%{}, Pdu.new(:submit_sm, %{}))
 
-    # 90 is under the limit but over 80 % of it: still refused.
+    # Nothing taken in a second: the state is kept. 9 s is over 80 % of the limit: still refused.
     Backlog.check()
     assert Backlog.over?()
+    waited(9_000)
     Backlog.check()
     assert Backlog.over?()
+
+    waited(1_000)
 
     assert capture_log([level: :warning], fn -> Backlog.check() end) =~
              "taking new messages again"
@@ -42,8 +60,26 @@ defmodule Sms.Switch.Pipeline.BacklogTest do
     refute Backlog.over?()
   end
 
-  test "max 0 turns it off" do
-    start([{:ok, 1_000_000}], max: 0)
+  test "safety cap on the messages unfinished: refused until under 80 % of it; a failed read keeps the state" do
+    start([{:ok, 50}, {:ok, 101}, {:ok, 90}, {:error, :down}, {:ok, 79}])
+    Backlog.check()
+    refute Backlog.over?()
+
+    assert capture_log(fn -> Backlog.check() end) =~ "over 100 waiting"
+    assert Backlog.over?()
+
+    Backlog.check()
+    assert Backlog.over?()
+    Backlog.check()
+    assert Backlog.over?()
+    Backlog.check()
+    refute Backlog.over?()
+  end
+
+  test "0 turns each measure off; without the guard running, observe does nothing" do
+    assert :ok = waited(1)
+    start([{:ok, 1_000_000}], max: 0, max_wait_ms: 0)
+    waited(60_000)
     Backlog.check()
     refute Backlog.over?()
   end

@@ -123,14 +123,18 @@ node_id =
             "SWITCH_NODE_ID must be 0 to 255, got #{inspect(env.("SWITCH_NODE_ID", ""))}"
   end
 
-# Accepted messages the sender may have unfinished before new ones are refused with 0x58 (backend step 7); 0 = off.
-max_backlog =
-  case Integer.parse(env.("SWITCH_MAX_BACKLOG", "20000")) do
+# Overload guard (backend step 7, product owner 2026-10-25): new messages are refused with 0x58 while accepted ones wait
+# longer than SWITCH_MAX_WAIT_MS for the sender, or more than SWITCH_MAX_BACKLOG are unfinished (a safety cap); 0 = off.
+non_negative = fn name, default ->
+  case Integer.parse(env.(name, default)) do
     {n, ""} when n >= 0 -> n
-    _ -> raise ArgumentError, "SWITCH_MAX_BACKLOG must be 0 or more"
+    _ -> raise ArgumentError, "#{name} must be 0 or more"
   end
+end
 
-config :sms_switch, Sms.Switch.Pipeline.Backlog, max: max_backlog
+config :sms_switch, Sms.Switch.Pipeline.Backlog,
+  max: non_negative.("SWITCH_MAX_BACKLOG", "100000"),
+  max_wait_ms: non_negative.("SWITCH_MAX_WAIT_MS", "10000")
 
 config :sms_switch, Sms.Switch.Pipeline,
   node_id: node_id,

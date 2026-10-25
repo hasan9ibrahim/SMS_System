@@ -36,6 +36,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   alias Sms.Switch.Message.{Concat, Text}
 
   alias Sms.Switch.Pipeline.{
+    Backlog,
     Billing,
     Config,
     Delayed,
@@ -67,9 +68,18 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   @impl true
   def handle_event(event) do
-    if Config.ready?(),
-      do: handle_message(Intake.decode(event.data)),
-      else: {:error, :config_not_loaded}
+    if Config.ready?() do
+      msg = Intake.decode(event.data)
+
+      # How long it waited for the sender, for the overload guard (backend step 7). Not a message from a customer
+      # trunk's overflow buffer, nor a resend: their waits are meant (S-2.4, S-5.11).
+      _ =
+        if not msg[:buffered] and not is_map(msg[:resend]), do: Backlog.observe(event.occurred_at)
+
+      handle_message(msg)
+    else
+      {:error, :config_not_loaded}
+    end
   end
 
   defp handle_message(msg) do

@@ -39,7 +39,7 @@ config :sms_switch, Sms.Switch.Pipeline,
 config :sms_switch, Sms.Switch.Pipeline.Store, backend: :redis
 
 # Overload protection (backend step 7): new messages refused (0x58) while the sender has more than `max` unfinished.
-config :sms_switch, Sms.Switch.Pipeline.Backlog, max: 20_000, interval_ms: 1_000
+config :sms_switch, Sms.Switch.Pipeline.Backlog, max: 100_000, max_wait_ms: 10_000, interval_ms: 1_000
 
 # The customer side of the switch (build step 2, Sms.Switch.Customer): listeners and ports come from the environment
 # in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session. Submits go to the pipeline.
