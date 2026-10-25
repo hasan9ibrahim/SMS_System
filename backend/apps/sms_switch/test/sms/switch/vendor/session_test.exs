@@ -540,5 +540,23 @@ defmodule Sms.Switch.Vendor.SessionTest do
       assert opts[:versions] == [:"tlsv1.3"]
       assert opts[:verify] == :verify_peer and opts[:server_name_indication] == ~c"smsc.example"
     end
+
+    test "a trunk with Skip certificate check binds without checking the vendor's certificate (Q3)" do
+      trunk = trunk(1, tls: :"tls1.2", host: "smsc.example", tls_skip_verify: true)
+      assert Session.tls_options(trunk, Session.settings())[:verify] == :verify_none
+    end
+
+    test "a self-signed vendor certificate is accepted when the trunk skips the check (Q3)", %{
+      certfile: c,
+      keyfile: k
+    } do
+      smsc = start_smsc(tls: [certfile: c, keyfile: k])
+
+      start_vendor([
+        trunk(FakeSmsc.port(smsc), host: "localhost", tls: :"tls1.2", tls_skip_verify: true)
+      ])
+
+      await_bound(1, 1)
+    end
   end
 end

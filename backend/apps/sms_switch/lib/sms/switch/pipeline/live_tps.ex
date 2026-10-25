@@ -15,7 +15,8 @@ defmodule Sms.Switch.Pipeline.LiveTps do
   the rule switches, and with `release_pct` a condition that is on stays on until the TPS is back past its value by
   that %.
 
-  Scope "rule" counts the messages the rule routed (it cannot count before its other conditions are known).
+  Scope "rule" counts every message the rule's other conditions let through, whichever rule routes it
+  (`Sms.Switch.Pipeline.Router`; decided 2026-10-25 as the spec words it: "all traffic matching this rule").
   """
   use GenServer
   require Logger

@@ -594,6 +594,32 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "TPS conditions (§13.8)" do
+    test "measured on the rule: every message its other conditions let through counts, whichever rule routes it" do
+      over = %{"op" => ">", "value" => 50, "scope" => "rule"}
+
+      %{client: client} =
+        start_all(
+          config: [
+            route_rules: [
+              %{id: 1, priority: 200, tps_condition: over},
+              %{id: 2, priority: 100},
+              # Its other conditions do not let the message through: not counted.
+              %{id: 3, priority: 300, tps_condition: over, sender_pattern: "^NOPE$"}
+            ],
+            route_vendors: for(r <- 1..3, do: PipelineConfig.route_vendor(r, 1))
+          ]
+        )
+
+      {_, resp} = submit(client, %{short_message: "x"})
+      assert resp.status == 0
+      counts = :ets.tab2list(:sms_live_tps_local)
+      assert Enum.any?(counts, &match?({{"r:1", _}, 1}, &1))
+      refute Enum.any?(counts, &match?({{"r:2", _}, _}, &1))
+      refute Enum.any?(counts, &match?({{"r:3", _}, _}, &1))
+    end
+  end
+
   describe "long messages" do
     test "a long text sent as message_payload goes as UDH parts; one receipt once every part has its own (S-5.9)" do
       %{client: client, conns: [conn]} = start_all()

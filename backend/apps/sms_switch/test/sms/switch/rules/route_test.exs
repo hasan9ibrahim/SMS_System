@@ -137,6 +137,29 @@ defmodule Sms.Switch.Rules.RouteTest do
     refute decide(rev, msg(sell_rate: 0.03)).matched
   end
 
+  test "a message the rule's other conditions let through counts for its own TPS scope (§13.8)" do
+    over = rule(tps: %{op: ">", value: 50, scope: "rule"})
+    # TPS 0 on the rule: it does not match, but the message still counts for it.
+    assert Route.others_match?(over, msg(tps: 0))
+    refute decide(over, msg(tps: 0)).matched
+    refute Route.others_match?(over, msg(sender: "BANK", customer_trunk_id: 8))
+    refute Route.others_match?(rule(status: :inactive, tps: over.conditions.tps), msg())
+    refute Route.others_match?(rule(stops_at: ~U[2021-01-01 00:00:00Z]), msg())
+
+    # "Any" mode: one other condition is enough; a rule with only the TPS condition counts everything.
+    assert Route.others_match?(rule(match_mode: :any, tps: over.conditions.tps), msg(sender: "x"))
+
+    only =
+      rule(
+        customer_trunk_mode: :all,
+        mccmnc_mode: :all,
+        sender_pattern: nil,
+        tps: over.conditions.tps
+      )
+
+    assert Route.others_match?(only, msg(customer_trunk_id: 99))
+  end
+
   test "the fast match agrees with the full checks; destination pre-filter keeps the order" do
     rules = [
       rule(),

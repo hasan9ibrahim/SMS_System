@@ -437,14 +437,13 @@ defmodule Sms.Switch.Pipeline.Intake do
   end
 
   defp route_now(msg) do
-    input = router_input(msg)
-    # Live TPS per scope (§13.8): this message counts before its own routing.
+    # Live TPS per scope (§13.8): this message counts before its own routing, against the rules too.
+    input = msg |> router_input() |> Map.merge(%{count_rule_tps: true, parts: msg.parts})
     LiveTps.count(LiveTps.message_keys(msg), msg.parts)
 
     case Router.route(input) do
       {:ok, routed} ->
         route = route_of(routed)
-        if route.rule_id, do: LiveTps.count(["r:#{route.rule_id}"], msg.parts)
         # The EDR records the customer trunk's TPS when it was routed (§13.8 Visibility).
         {:ok,
          %{msg | route: Map.put(route, :measured_tps, LiveTps.rate("ct:#{msg.trunk.id}", 5))}}

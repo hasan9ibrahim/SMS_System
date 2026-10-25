@@ -21,6 +21,8 @@ defmodule Sms.Switch.Pipeline.Router do
 
   @type input :: %{
           optional(:hlr_ported) => boolean() | nil,
+          optional(:count_rule_tps) => boolean(),
+          optional(:parts) => pos_integer(),
           customer_trunk: map(),
           sender: String.t(),
           receiver: String.t(),
@@ -79,7 +81,18 @@ defmodule Sms.Switch.Pipeline.Router do
       list_has?: &Config.list_has?/3
     }
 
+    _ = if input[:count_rule_tps], do: count_rule_tps(rules, context, input)
     try_route(rules, context, options, input, skip, @egress_tries)
+  end
+
+  # §13.8 "Measured on: all traffic matching this rule": each rule with that scope counts every message its other
+  # conditions let through, whichever rule then routes it; so "TPS > 50 → second vendor" can start once the traffic
+  # passes 50 (decided 2026-10-25, as the spec words it). Counted once, when the message is taken (not on re-routes).
+  defp count_rule_tps(rules, context, input) do
+    for %{conditions: %{tps: %{scope: "rule"}}} = rule <- rules,
+        Route.others_match?(rule, context) do
+      LiveTps.count(["r:#{rule.id}"], input[:parts] || 1)
+    end
   end
 
   defp bound?(vendor_trunk_id) do

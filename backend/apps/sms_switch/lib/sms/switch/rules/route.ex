@@ -271,6 +271,25 @@ defmodule Sms.Switch.Rules.Route do
     end
   end
 
+  @doc """
+  Whether a rule's conditions other than its TPS condition let the message through (status, time and the rest, by
+  the rule's match mode). The switch counts such a message against the rule's own TPS scope ("all traffic matching
+  this rule", §13.8), whether or not this rule routes it.
+  """
+  @spec others_match?(Rule.t(), context()) :: boolean()
+  def others_match?(%Rule{status: status}, _m) when status != :active, do: false
+
+  def others_match?(%Rule{conditions: c} = r, m) do
+    others = conditions(c) -- [:tps]
+
+    live?(r, m.now) and
+      case others do
+        [] -> true
+        _ when r.match_mode == :all -> Enum.all?(others, &condition_ok?(&1, c, m))
+        _ -> Enum.any?(others, &condition_ok?(&1, c, m))
+      end
+  end
+
   # The conditions a rule sets, in the mock's order.
   defp conditions(c) do
     set = [
