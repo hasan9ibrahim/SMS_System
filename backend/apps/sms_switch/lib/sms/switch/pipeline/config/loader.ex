@@ -39,7 +39,14 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
     (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM mccmnc),
     (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM countries),
     (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') || ':' || coalesce(max(refreshed_at)::text, '')
-       FROM qbr_stats))
+       FROM qbr_stats),
+    (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM hlr_providers),
+    (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM hlr_provider_rates),
+    (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM hlr_rules),
+    (SELECT md5(coalesce(string_agg(t::text, ',' ORDER BY t.id), '')) FROM hlr_rule_targets t),
+    (SELECT md5(coalesce(string_agg(s::text, ',' ORDER BY s.id), '')) FROM hlr_rule_trunk_settings s),
+    (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM hlr_policies),
+    (SELECT md5(coalesce(string_agg(h::text, ',' ORDER BY h.hlr_provider_id), '')) FROM hlr_provider_stats h))
   """
 
   @doc "A value that changes whenever anything in the snapshot changes."
@@ -195,7 +202,28 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
              CASE WHEN q.overridden THEN coalesce(q.override_add_s, q.add_s) ELSE q.add_s END
         FROM qbr_stats q JOIN mccmnc m ON m.id = q.mccmnc_id WHERE q.side = 'vendor'
       """,
-      fx: "SELECT trim(iso), rate_per_eur FROM currency_latest"
+      fx: "SELECT trim(iso), rate_per_eur FROM currency_latest",
+      # HLR (§6.5, §13.24): providers with their live status as the HLR page shows it (mock `hlrLiveStatusSql`).
+      hlr_providers: """
+      SELECT hp.id, hp.name, hp.url, hp.username, hp.password, hp.extra_headers, hp.post_data, trim(hp.currency) AS currency,
+             hp.default_rate, hp.cache_days, hp.timeout_ms, hp.daily_budget, hp.response_mapping, hs.success_pct,
+             CASE WHEN hp.status = 'inactive' THEN 'inactive'
+                  WHEN hs.success_pct IS NOT NULL AND hs.success_pct < 50 THEN 'down'
+                  ELSE 'up' END AS live_status
+        FROM hlr_providers hp LEFT JOIN hlr_provider_stats hs ON hs.hlr_provider_id = hp.id
+       WHERE hp.deleted_at IS NULL
+      """,
+      hlr_rates: """
+      SELECT r.hlr_provider_id, m.mccmnc, m.mcc, m.is_all_networks, r.rate
+        FROM hlr_provider_rates r JOIN mccmnc m ON m.id = r.mccmnc_id WHERE r.deleted_at IS NULL
+      """,
+      hlr_rules:
+        "SELECT id, hlr_provider_id, dnid_pattern, status FROM hlr_rules WHERE deleted_at IS NULL",
+      hlr_targets: "SELECT hlr_rule_id, target_type, target_id, insert_at FROM hlr_rule_targets",
+      hlr_settings:
+        "SELECT hlr_rule_id, customer_trunk_id, position, enabled FROM hlr_rule_trunk_settings",
+      hlr_policies:
+        "SELECT id, entries FROM hlr_policies WHERE deleted_at IS NULL AND status = 'active'"
     ]
   end
 
@@ -231,6 +259,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
           }
         ),
       lists: lists(rows.list_entries),
+      hlr: hlr(rows, customer_trunks),
       quality: quality,
       quality_dlr: quality_dlr,
       fx: Map.new(elem(rows.fx, 1), fn [iso, rate] -> {iso, Decimal.to_float(rate)} end)
@@ -273,7 +302,15 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       end)
 
     longest = prefixes |> Map.keys() |> Enum.map(&byte_size/1) |> Enum.max(fn -> 0 end)
-    %{prefixes: prefixes, mccmnc: by_id, longest: longest}
+
+    # By MCCMNC code, for a destination an HLR lookup names (a network before its country's "all networks" entry).
+    by_code =
+      by_id
+      |> Map.values()
+      |> Enum.sort_by(& &1.all_networks)
+      |> Enum.reduce(%{}, fn d, acc -> Map.put_new(acc, d.mccmnc, d) end)
+
+    %{prefixes: prefixes, mccmnc: by_id, longest: longest, by_code: by_code}
   end
 
   @affinities %{"strict" => :strict, "same_ip" => :same_ip, "same_trunk" => :same_trunk}
@@ -469,6 +506,132 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
        }}
     end)
     |> Map.new()
+  end
+
+  # ---------------------------------------------------------------- HLR (§6.5, §13.24)
+
+  defp hlr(rows, customer_trunks) do
+    providers =
+      rows
+      |> dataset(:hlr_providers)
+      |> maps()
+      |> each_row("HLR provider", &hlr_provider/1)
+      |> Map.new(&{&1.id, &1})
+
+    rates =
+      for r <- maps(dataset(rows, :hlr_rates)), into: %{} do
+        key =
+          if r.is_all_networks,
+            do: {r.hlr_provider_id, {:all, r.mcc}},
+            else: {r.hlr_provider_id, r.mccmnc}
+
+        {key, r.rate}
+      end
+
+    hlr_rules =
+      rows
+      |> dataset(:hlr_rules)
+      |> maps()
+      |> each_row("HLR rule", fn r ->
+        %{
+          id: r.id,
+          provider_id: r.hlr_provider_id,
+          regex: Regex.compile!(r.dnid_pattern),
+          active: r.status == "active"
+        }
+      end)
+      |> Map.new(&{&1.id, &1})
+
+    %{
+      providers: providers,
+      rates: rates,
+      rules: hlr_rules,
+      trunk_rules: hlr_trunk_rules(rows, hlr_rules, customer_trunks),
+      policies:
+        Map.new(maps(dataset(rows, :hlr_policies)), fn p ->
+          {p.id, Enum.map(p.entries || [], &policy_entry/1)}
+        end),
+      # Route rules' "Do HLR with policy X" action (§13.24): rule id → policy and the customer trunks it is for.
+      actions:
+        for(
+          r <- maps(dataset(rows, :route_rules)),
+          a = r[:hlr_action],
+          is_map(a) and is_integer(a["policy_id"]),
+          into: %{},
+          do:
+            {r.id,
+             %{policy_id: a["policy_id"], customer_trunk_ids: a["customer_trunk_ids"] || []}}
+        )
+    }
+  end
+
+  defp dataset(rows, key), do: Map.get(rows, key, {[], []})
+
+  defp hlr_provider(p) do
+    %{
+      id: p.id,
+      name: p.name,
+      url: p.url,
+      username: p.username,
+      password: p.password,
+      extra_headers: p.extra_headers,
+      post_data: p.post_data,
+      currency: p.currency,
+      default_rate: p.default_rate,
+      cache_days: p.cache_days || 0,
+      timeout_ms: p.timeout_ms,
+      daily_budget: p.daily_budget,
+      mapping: p.response_mapping || %{},
+      success_pct: p.success_pct && Decimal.to_float(p.success_pct),
+      live_status: Map.get(%{"inactive" => :inactive, "down" => :down}, p.live_status, :up)
+    }
+  end
+
+  defp policy_entry(e) do
+    %{
+      code: e["code"],
+      mode: if(e["mode"] == "auto", do: :auto, else: :ordered),
+      provider_ids: e["providerIds"] || [],
+      min_success_pct: e["minSuccessPct"],
+      cache_hours_ported: e["cacheHoursPorted"],
+      cache_hours_not_ported: e["cacheHoursNotPorted"]
+    }
+  end
+
+  # A customer trunk's HLR rules in run order, as its Rules tab shows them (mock `trunkRuleOrder`, the same ranking as
+  # translation rules): the first whose DNID pattern matches the receiver picks the provider.
+  defp hlr_trunk_rules(rows, hlr_rules, customer_trunks) do
+    settings =
+      Map.new(maps(dataset(rows, :hlr_settings)), &{{&1.customer_trunk_id, &1.hlr_rule_id}, &1})
+
+    targets =
+      rows
+      |> dataset(:hlr_targets)
+      |> maps()
+      |> Enum.filter(&Map.has_key?(hlr_rules, &1.hlr_rule_id))
+
+    for {id, trunk} <- customer_trunks, into: %{} do
+      order =
+        targets
+        |> Enum.filter(&reaches?(&1, id, trunk))
+        |> Enum.group_by(& &1.hlr_rule_id)
+        |> Enum.map(fn {rule_id, ts} ->
+          hlr_trunk_rule(rule_id, ts, hlr_rules, settings[{id, rule_id}])
+        end)
+        |> Enum.sort()
+        |> Enum.filter(fn {_rank, _id, running} -> running end)
+        |> Enum.map(fn {_rank, rule_id, _} -> rule_id end)
+
+      {id, order}
+    end
+  end
+
+  defp hlr_trunk_rule(rule_id, ts, hlr_rules, s) do
+    top = Enum.any?(ts, &(&1.insert_at == "top"))
+    position = s && s.position
+    rank = if position, do: {1, position}, else: {if(top, do: 0, else: 2), 0}
+    enabled = if s, do: s.enabled != false, else: true
+    {{rank, rule_id}, rule_id, enabled and hlr_rules[rule_id].active}
   end
 
   # ---------------------------------------------------------------- translation rules

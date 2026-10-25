@@ -8,7 +8,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   alias Sms.Switch.Pipeline
   alias Sms.Switch.Pipeline.Held.OnBind
   alias Sms.Switch.Pipeline.Ledger.Sync
-  alias Sms.Switch.Test.{Client, CustomerCase, LedgerSource, PipelineConfig}
+  alias Sms.Switch.Test.{Client, CustomerCase, FakeHlr, LedgerSource, PipelineConfig}
 
   @dest "4915112345678"
 
@@ -368,6 +368,125 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       [attempt] = edr("edr.attempt")
       assert attempt["is_final_attempt"] == 1
       assert attempt["c_msg_status"] == "REJECTD"
+    end
+  end
+
+  describe "HLR / MNP before the resp (§13.24, S-6.5)" do
+    # Germany has a second network, 26202, with its own rates; the HLR rule looks up every 4915 number.
+    defp hlr_config(extra) do
+      {rule, target} = PipelineConfig.hlr_rule(1, 1, "^4915")
+
+      Keyword.merge(
+        [
+          destinations: [
+            ["4915", 1, "26201", "262", "01", "Fake Mobile", false, "DE", "Germany"],
+            ["4917", 3, "26202", "262", "02", "Other Mobile", false, "DE", "Germany"],
+            ["49", 2, "262", "262", "", nil, true, "DE", "Germany"]
+          ],
+          rates: [
+            PipelineConfig.rate(100, 1, "26201", "0.05"),
+            PipelineConfig.rate(100, 3, "26202", "0.07"),
+            PipelineConfig.rate(200, 2, "26201", "0.02"),
+            PipelineConfig.rate(200, 4, "26202", "0.03")
+          ],
+          hlr_providers: [
+            PipelineConfig.hlr_provider(id: 1),
+            PipelineConfig.hlr_provider(id: 2, name: "Second")
+          ],
+          hlr_rules: [rule],
+          hlr_targets: [target]
+        ],
+        extra
+      )
+    end
+
+    defp policy_rule(cache_hours) do
+      [
+        hlr_rules: [],
+        hlr_targets: [],
+        route_rules: [%{id: 1, hlr_action: %{"policy_id" => 1, "customer_trunk_ids" => []}}],
+        hlr_policies: [
+          %{
+            id: 1,
+            entries: [
+              %{
+                "code" => nil,
+                "mode" => "ordered",
+                "providerIds" => [1, 2],
+                "cacheHoursPorted" => nil,
+                "cacheHoursNotPorted" => cache_hours
+              }
+            ]
+          }
+        ]
+      ]
+    end
+
+    test "a ported number is rated and routed by the network the lookup names; the EDR records the lookup" do
+      FakeHlr.script(%{1 => FakeHlr.found("26202", true)})
+      # Only ported numbers match the rule (HLR Ported condition).
+      %{client: client, conns: [conn]} =
+        start_all(config: hlr_config(route_rules: [%{id: 1, hlr_ported: true}]))
+
+      {_, resp} = submit(client, %{short_message: "ported"})
+      assert resp.status == 0
+      assert_receive {:hlr_request, 1, @dest}
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+      [row] = edr("edr.attempt")
+      assert %{"c_mccmnc" => "26202", "c_rate" => "0.07", "v_rate" => "0.03"} = row
+
+      assert %{
+               "hlr_provider_id" => 1,
+               "hlr_fetch_type" => "live",
+               "hlr_is_ported" => 1,
+               "hlr_is_accomplished" => 1,
+               "hlr_cost_sys" => "0.001"
+             } = row
+    end
+
+    test "no answer within the provider's timeout: the master table at once, no other provider asked" do
+      FakeHlr.script(%{1 => {:error, :timeout}, 2 => FakeHlr.found("26202")})
+      %{client: client, conns: [conn]} = start_all(config: hlr_config(policy_rule(1)))
+
+      {_, %{status: 0}} = submit(client, %{short_message: "slow hlr"})
+      assert_receive {:hlr_request, 1, _}
+      refute_received {:hlr_request, 2, _}
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+
+      assert [%{"c_mccmnc" => "26201", "hlr_is_accomplished" => 0, "hlr_error_code" => 408}] =
+               edr("edr.attempt")
+    end
+
+    test "a provider error falls back to the policy's next provider; the answer is cached and free after" do
+      FakeHlr.script(%{1 => {:error, :boom}, 2 => FakeHlr.found("26202")})
+      %{client: client} = start_all(config: hlr_config(policy_rule(1)))
+
+      {client, %{status: 0}} = submit(client, %{short_message: "first"}, 2)
+      assert_receive {:hlr_request, 1, _}
+      assert_receive {:hlr_request, 2, _}
+      {_, %{status: 0}} = submit(client, %{short_message: "second"}, 3)
+      refute_receive {:hlr_request, _, _}, 200
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, second] = edr("edr.attempt")
+      assert %{"c_mccmnc" => "26202", "hlr_provider_id" => 2, "hlr_fetch_type" => "live"} = first
+
+      assert %{"c_mccmnc" => "26202", "hlr_fetch_type" => "cached", "hlr_cost_sys" => "0"} =
+               second
+    end
+
+    test "traffic without HLR is not looked up; a number no rule pattern matches neither" do
+      FakeHlr.script(%{1 => FakeHlr.found("26202")})
+      %{client: client} = start_all(config: hlr_config(hlr_rules: [], hlr_targets: []))
+      {client, %{status: 0}} = submit(client, %{short_message: "no hlr"}, 2)
+      {_, %{status: 0}} = submit(client, %{destination_addr: "4917123456", short_message: "x"}, 3)
+      refute_receive {:hlr_request, _, _}, 200
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.all?(edr("edr.attempt"), &(&1["hlr_fetch_type"] == "none"))
     end
   end
 

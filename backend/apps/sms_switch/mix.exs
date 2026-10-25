@@ -23,7 +23,7 @@ defmodule Sms.Switch.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :crypto, :ssl, :public_key],
+      extra_applications: [:logger, :crypto, :ssl, :public_key, :inets],
       mod: {Sms.Switch.Application, []}
     ]
   end

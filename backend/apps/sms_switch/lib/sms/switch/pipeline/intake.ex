@@ -38,6 +38,7 @@ defmodule Sms.Switch.Pipeline.Intake do
     Credit,
     Delayed,
     Edr,
+    Hlr,
     LiveTps,
     MessageId,
     Queries,
@@ -138,6 +139,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   @spec process(map()) :: :ok | {:reject, atom(), term(), map()} | {:error, term()}
   def process(msg) do
     with {:ok, msg} <- run_ingress(msg),
+         msg = hlr(msg),
          {:ok, msg} <- rate(msg),
          {:ok, msg} <- route_now(msg),
          :ok <- credit(msg) do
@@ -382,9 +384,43 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
+  # §6.5, §13.24, S-6.5 (product owner 2026-10-25): traffic with HLR is looked up before the resp, and is rated and
+  # routed by the network the lookup names; without an answer, by the master table. A route rule's HLR action needs
+  # the route first: it is decided on the master table's destination (without counting it) when a rule could ask.
+  defp hlr(msg) do
+    receiver = msg.ingress.route_receiver
+    table = Config.destination(receiver)
+    rule_id = if Hlr.actions_for?(msg.trunk.id), do: table_rule(msg, table)
+
+    case Hlr.plan(msg.trunk.id, receiver, table, rule_id) do
+      nil ->
+        msg
+
+      plan ->
+        result = Hlr.lookup(plan, receiver, table)
+        found = result && result.accomplished && Config.destination_of_mccmnc(result.mccmnc)
+        msg |> Map.put(:hlr, result) |> Map.put(:hlr_destination, found || nil)
+    end
+  end
+
+  defp table_rule(_msg, nil), do: nil
+
+  defp table_rule(msg, table) do
+    case Config.sell_rate(msg.trunk.id, table.mccmnc, msg.received_at) do
+      nil ->
+        nil
+
+      sell ->
+        case Router.route(router_input(%{msg | destination: table, sell: sell})) do
+          {:ok, routed} -> routed.decision.rule_id
+          {:error, _reason, decision} -> decision && decision.rule_id
+        end
+    end
+  end
+
   # §6.1, §5.4, S-6.2: no destination or no rate for it → 0x0B.
   defp rate(msg) do
-    case Config.destination(msg.ingress.route_receiver) do
+    case msg[:hlr_destination] || Config.destination(msg.ingress.route_receiver) do
       nil ->
         {:reject, :esme_rinvdstadr, :unknown_destination, msg}
 
@@ -428,6 +464,7 @@ defmodule Sms.Switch.Pipeline.Intake do
       sender_npi: msg.ingress.sender_npi,
       destination: msg.destination,
       sell: msg.sell,
+      hlr_ported: msg[:hlr][:ported],
       now_ms: System.os_time(:millisecond)
     }
   end

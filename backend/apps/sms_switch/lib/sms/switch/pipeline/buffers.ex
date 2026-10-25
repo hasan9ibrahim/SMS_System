@@ -89,15 +89,16 @@ defmodule Sms.Switch.Pipeline.Buffers do
 
     @impl true
     def handle_info(:discover, interval) do
-      case Bus.queues() do
-        {:ok, queues} ->
-          for {queue, _n} <- queues,
-              match?("ct." <> _, queue) or match?("vt." <> _, queue),
-              do: Buffers.kick(queue)
+      _ =
+        case Bus.queues() do
+          {:ok, queues} ->
+            for {queue, _n} <- queues,
+                match?("ct." <> _, queue) or match?("vt." <> _, queue),
+                do: Buffers.kick(queue)
 
-        {:error, reason} ->
-          Logger.debug("buffer queues not listed: #{inspect(reason)}")
-      end
+          {:error, reason} ->
+            Logger.debug("buffer queues not listed: #{inspect(reason)}")
+        end
 
       Process.send_after(self(), :discover, interval)
       {:noreply, interval}
@@ -143,13 +144,14 @@ defmodule Sms.Switch.Pipeline.Buffers.Drain do
     Process.demonitor(ref, [:flush])
     {handle, tasks} = Map.pop(tasks, ref)
 
-    case result do
-      :ok ->
-        _ = Bus.ack(handle)
+    _ =
+      case result do
+        :ok ->
+          Bus.ack(handle)
 
-      other ->
-        Logger.warning("buffered message on #{state.queue} not finished: #{inspect(other)}")
-    end
+        other ->
+          Logger.warning("buffered message on #{state.queue} not finished: #{inspect(other)}")
+      end
 
     {:noreply, work(%{state | tasks: tasks})}
   end

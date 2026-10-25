@@ -152,15 +152,14 @@ defmodule Sms.Switch.Pipeline.Sender do
     case submits(msg, route) do
       {:skip, reason} ->
         Logger.info("message #{msg.id}: vendor trunk #{vt} skipped (#{reason})")
-        if held, do: Throttle.buffer_release(vendor_buffer_key(vt))
+        left_buffer(held, vt)
         next(msg, no, tried, rows, nil)
 
       {:ok, submits, coding} ->
         started = System.os_time(:millisecond)
         outcome = send_parts(vt, submits, msg.id, first_part_deadline(held))
         finished = System.os_time(:millisecond)
-        # It left the vendor's buffer, whatever happened.
-        if held, do: Throttle.buffer_release(vendor_buffer_key(vt))
+        left_buffer(held, vt)
         vendor = Map.merge(route, %{data_coding: coding})
 
         attempt = %{
@@ -176,17 +175,8 @@ defmodule Sms.Switch.Pipeline.Sender do
           {:sent, results} ->
             sent(msg, route, Map.put(attempt, :tried, tried), results, rows)
 
-          # The vendor is at its TPS or its window is full: its overflow buffer, or the next vendor (S-5.1).
-          {:busy, reason} when held == nil ->
-            buffer(msg, route, no, tried, rows, reason)
-
           {:busy, reason} ->
-            Logger.info(
-              "message #{msg.id}: vendor trunk #{vt} still #{reason} after #{vendor_buffer_wait_ms()} ms " <>
-                "in its buffer; next vendor (S-5.1)"
-            )
-
-            next(msg, no, tried, rows, nil)
+            busy(msg, route, no, tried, rows, held, reason)
 
           {:unavailable, reason} ->
             Logger.info("message #{msg.id}: vendor trunk #{vt} unavailable (#{inspect(reason)})")
@@ -221,6 +211,24 @@ defmodule Sms.Switch.Pipeline.Sender do
             )
         end
     end
+  end
+
+  # A message from a vendor's buffer gives its place back once tried there, whatever happened.
+  defp left_buffer(nil, _vt), do: :ok
+  defp left_buffer(_held, vt), do: Throttle.buffer_release(vendor_buffer_key(vt))
+
+  # The vendor is at its TPS or its window is full: its overflow buffer, or the next vendor (S-5.1); a message that
+  # waited its time in the buffer already goes to the next vendor.
+  defp busy(msg, route, no, tried, rows, nil, reason),
+    do: buffer(msg, route, no, tried, rows, reason)
+
+  defp busy(msg, route, no, tried, rows, _held, reason) do
+    Logger.info(
+      "message #{msg.id}: vendor trunk #{route.vendor_trunk_id} still #{reason} after #{vendor_buffer_wait_ms()} ms " <>
+        "in its buffer; next vendor (S-5.1)"
+    )
+
+    next(msg, no, tried, rows, nil)
   end
 
   # S-5.1 (product owner 2026-10-25): a vendor with an overflow buffer keeps the message for when it has room, while
@@ -260,7 +268,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   room up to 30 s from when it was buffered, then the next vendor (S-5.1). A message already sent (a redelivery after a
   crash) is not sent again.
   """
-  @spec resume(map()) :: :ok | {:error, term()}
+  @spec resume(map()) :: :ok | {:error, :config_not_loaded}
   def resume(%{"m" => blob}) do
     {msg, route, no, tried, rows, queued_at} =
       blob |> Base.decode64!() |> :erlang.binary_to_term([:safe])
