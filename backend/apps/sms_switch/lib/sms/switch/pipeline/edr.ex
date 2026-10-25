@@ -344,6 +344,15 @@ defmodule Sms.Switch.Pipeline.Edr do
     })
   end
 
+  # The attempt's columns its outcome row repeats beyond edr_hourly's dimensions, so reports group and convert a
+  # receipt's figures (deliveries, delay, money) like the attempt's (step 11b, ClickHouse edr_all).
+  @outcome_keys ~w(c_ip v_ip v_mccmnc src_addr v_src_addr route_type c_rate_table_id v_rate_table_id hlr_provider_id
+                   c_rate v_rate c_currency c_ex_rate v_currency v_ex_rate msg_count)
+
+  @doc "The attempt row's columns an outcome row of the same attempt carries too (`outcome_row/2`)."
+  @spec outcome_dims(map(), map()) :: %{optional(String.t()) => term()}
+  def outcome_dims(msg, attempt), do: msg |> attempt_row(attempt) |> Map.take(@outcome_keys)
+
   @doc "A new EDR id."
   @spec new_id() :: String.t()
   def new_id do

@@ -16,7 +16,7 @@ import type {
 } from "@sms/contract";
 import { withDb } from "../db.js";
 import { chQuery, ChError, ChUnavailable } from "../edr.js";
-import { chSelect, lit, nameMaps, runChList, type ChListDef } from "../lists/chEngine.js";
+import { chSelect, lit, nameMaps, runChList, withOutcomes, type ChListDef } from "../lists/chEngine.js";
 import {
   EDR_TEMPLATE_FROM,
   EDR_TEMPLATE_SELECT,
@@ -77,6 +77,10 @@ export async function edrsByIds(pool: pg.Pool, ids: string[], columns: string[])
     ),
     nameMaps(pool, def),
   ]);
+  if (rows.length) {
+    const times = rows.map((r) => String(r.startTime)).sort();
+    await withOutcomes(def, rows, times[0]!, times[times.length - 1]!, want);
+  }
   return rows.map((r) => edrList.mapRow({ ...r }, names));
 }
 
@@ -370,7 +374,9 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
       const ids = [...new Set(b.edrIds)];
       const inList = ids.map((id) => lit(id)).join(",");
       const eligible = await chQuery<{ id: string }>(
-        `SELECT toString(edr_id) AS id FROM edr WHERE edr_id IN (${inList}) AND is_final_attempt = 1 AND msg_status != 'DELIVRD'`,
+        // Delivered per the attempt row or the switch's outcome row (backend step 11b).
+        `SELECT toString(edr_id) AS id FROM edr WHERE edr_id IN (${inList}) AND is_final_attempt = 1 AND msg_status != 'DELIVRD'
+           AND edr_id NOT IN (SELECT edr_id FROM edr_receipt WHERE kind = 'outcome' AND edr_id IN (${inList}) AND msg_status = 'DELIVRD')`,
       );
       const me = await getCurrentUser();
       const { rows } = await pool.query(

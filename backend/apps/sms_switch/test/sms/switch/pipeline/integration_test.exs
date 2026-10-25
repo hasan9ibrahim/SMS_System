@@ -331,11 +331,26 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
       assert count("edr", attempt["edr_id"]) == 1
 
       # The outcome row (ClickHouse 005) lands in edr_receipt and, through its view, in edr_hourly.
+      # Step 11b: the outcome row repeats the attempt's report columns (ClickHouse 006, edr_all).
+      dims =
+        Edr.outcome_dims(full, %{
+          edr_id: attempt["edr_id"],
+          no: 1,
+          final: true,
+          success: true,
+          command_status: 0,
+          vendor: vendor,
+          submit_time: now,
+          resp_time: now,
+          vendor_message_id: "abc"
+        })
+
       bill =
         full
         |> Map.put(:route, nil)
         |> Billing.of_attempt(vendor, 1)
         |> Map.merge(%{c_type: "delivery", v_type: "delivery", attempt_no: 1})
+        |> Map.update!(:dims, &Map.merge(&1, dims))
 
       data =
         Map.merge(full, %{edr_id: attempt["edr_id"], vendor_trunk_id: 1, bill: bill})
@@ -348,6 +363,8 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
           customer_billable: true,
           vendor_billable: true
         })
+
+      assert %{"c_currency" => _, "c_rate_table_id" => _, "msg_count" => _} = outcome
 
       assert MapSet.subset?(keys(outcome), columns("edr_receipt")),
              inspect(MapSet.difference(keys(outcome), columns("edr_receipt")))

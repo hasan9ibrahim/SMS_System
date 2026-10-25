@@ -66,9 +66,11 @@ function baseAggregates(side: "customer" | "vendor", factor: string): string {
   const c = side === "customer";
   const ex = c ? "c_ex_rate" : "v_ex_rate";
   return [
-    "count() AS attempts",
+    // edr_all (ClickHouse 006): attempt rows and the switch's outcome rows; deliveries, delays and money add up over
+    // both, attempts are the attempt rows (backend step 11b).
+    "countIf(kind = 'attempt') AS attempts",
     "countIf(is_submit_success = 1) AS successful",
-    "countIf(v_trunk_id > 0) AS submitted",
+    "countIf(kind = 'attempt' AND v_trunk_id > 0) AS submitted",
     "countIf(is_customer_billable = 1) AS billable_c",
     "countIf(is_vendor_billable = 1) AS billable_v",
     "countIf(c_msg_status = 'DELIVRD') AS delivered_c",
@@ -389,7 +391,7 @@ export async function runEnterpriseReport(
     const k = keys.map((x) => x.replace("PERIOD", BUCKET[reportBy]?.(g.timezone) ?? "''"));
     return `SELECT ${k.join(", ")}, ${tz} AS timezone,
          ${aggs}
-       FROM edr
+       FROM edr_all
       WHERE ${s}_trunk_id IN (${ids(g.trunkIds)})
         AND submit_time >= toDateTime64(${lit(`${p.from.replace("T", " ")}:00`)}, 3, ${tz})
         AND submit_time < toDateTime64(${lit(`${p.to.replace("T", " ")}:00`)}, 3, ${tz})

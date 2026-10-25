@@ -275,10 +275,13 @@ export function portalChangePassword(request: FastifyRequest, reply: FastifyRepl
 
 // ---------------------------------------------------------------- traffic figures
 
-const FINAL = "is_final_attempt = 1 AND msg_type = 'MT'";
+// Over edr_all (backend step 11b): the final MT attempts, and the switch's outcome rows that carry the customer's final
+// status and the money billed on the receipt. Messages and parts count attempt rows only.
+const FINAL = "(kind = 'outcome' OR (is_final_attempt = 1 AND msg_type = 'MT'))";
 const FAILED_STATUSES = ["UNDELIV", "REJECTD", "EXPIRED", "DELETED", "UNKNOWN"];
-const TOTALS_SQL = `count() AS messages, sum(msg_count) AS parts, countIf(c_msg_status = 'DELIVRD') AS delivered,
-  countIf(c_msg_status IN (${FAILED_STATUSES.map(lit).join(",")}) OR is_submit_success = 0) AS failed,
+const TOTALS_SQL = `countIf(kind = 'attempt') AS messages, sumIf(msg_count, kind = 'attempt') AS parts,
+  countIf(c_msg_status = 'DELIVRD') AS delivered,
+  countIf(c_msg_status IN (${FAILED_STATUSES.map(lit).join(",")}) OR (kind = 'attempt' AND is_submit_success = 0)) AS failed,
   toFloat64(sum(revenue)) AS amount`;
 
 function totals(r: Record<string, unknown> | undefined): PortalTotals {
@@ -336,7 +339,7 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
       ),
       chQuery<Record<string, unknown>>(
         `SELECT toDate(submit_time, ${lit(b.tz)}) = toDate(${lit(today)}) AS is_today, ${TOTALS_SQL}
-           FROM edr WHERE c_enterprise_id = ${me.enterpriseId} AND ${FINAL} AND ${dateRange(b.tz, monthStart, today)}
+           FROM edr_all WHERE c_enterprise_id = ${me.enterpriseId} AND ${FINAL} AND ${dateRange(b.tz, monthStart, today)}
           GROUP BY is_today`,
       ),
     ]);
@@ -391,7 +394,7 @@ export function portalTraffic(request: FastifyRequest, reply: FastifyReply) {
           ? "c_country_iso"
           : "toString(c_trunk_id)";
     const rows = await chQuery<Record<string, unknown>>(
-      `SELECT ${key} AS k, ${TOTALS_SQL} FROM edr
+      `SELECT ${key} AS k, ${TOTALS_SQL} FROM edr_all
         WHERE c_enterprise_id = ${me.enterpriseId} AND ${FINAL} AND ${dateRange(b.tz, q.from, q.to)}
         GROUP BY k ORDER BY ${q.groupBy === "day" ? "k" : "messages DESC"} LIMIT 1000`,
     );
@@ -547,7 +550,11 @@ export function portalExportRates(request: FastifyRequest, reply: FastifyReply) 
 const MESSAGE_COLUMNS: ChListDef<PortalMessageRow>["columns"] = {
   id: { sql: "toString(edr_id)" },
   submitTime: { sql: "submit_time" },
-  deliveryTime: { sql: "delivery_time", nullable: true },
+  deliveryTime: {
+    sql: "delivery_time",
+    nullable: true,
+    outcome: { sql: "receipt_time", merge: "status", when: "c_msg_status != ''" },
+  },
   messageId: { sql: "c_message_id" },
   trunk: {
     sql: "c_trunk_id",
@@ -558,18 +565,19 @@ const MESSAGE_COLUMNS: ChListDef<PortalMessageRow>["columns"] = {
   country: { sql: "c_country_iso" },
   mccmnc: { sql: "c_mccmnc" },
   parts: { sql: "msg_count" },
-  status: { sql: "c_msg_status" },
-  errorCode: { sql: "c_delivery_error" },
+  status: { sql: "c_msg_status", outcome: { sql: "c_msg_status", merge: "status" } },
+  errorCode: { sql: "c_delivery_error", outcome: { sql: "c_delivery_error", merge: "status", when: "c_msg_status != ''" } },
   rate: { sql: "toFloat64(c_rate)" },
   currency: { sql: "c_currency" },
-  amount: { sql: "toFloat64(revenue)" },
+  amount: { sql: "toFloat64(revenue)", outcome: { sql: "revenue", merge: "add" } },
   messageText: { sql: "message_text" },
 };
 
 export const messageList = (enterpriseId: number): ChListDef<PortalMessageRow> => ({
   fields: listFields.portal_messages,
   table: "edr",
-  baseWhere: `c_enterprise_id = ${Number(enterpriseId)} AND ${FINAL}`,
+  // One row per message: its final attempt, with the switch's outcome row merged in (backend step 11b).
+  baseWhere: `c_enterprise_id = ${Number(enterpriseId)} AND is_final_attempt = 1 AND msg_type = 'MT'`,
   columns: MESSAGE_COLUMNS,
   search: ["senderId", "receiver", "messageId"],
   searchNumbers: ["senderId", "receiver"],

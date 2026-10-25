@@ -622,7 +622,9 @@ defmodule Sms.Switch.Pipeline.Sender do
 
     # A vendor that answered without a message id cannot send a receipt we could match (S-5.12).
     parts = for {id, n} <- Enum.with_index(ids, 1), id not in [nil, ""], do: {n, vt, id}
-    record = record_of(charged, route, trunk, attempt, length(results))
+
+    record =
+      record_of(charged, route, trunk, attempt, length(results), Edr.outcome_dims(msg, row))
 
     with {:error, reason} <-
            record_sent(msg.id, record, parts, {timeout_s + 3_600, timeout_at}, 3),
@@ -663,14 +665,20 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
-  defp record_of(msg, route, trunk, attempt, parts) do
+  defp record_of(msg, route, trunk, attempt, parts, dims) do
+    bill =
+      msg
+      |> Billing.of_attempt(route, parts)
+      |> Map.put(:attempt_no, attempt.no)
+      |> Map.update!(:dims, &Map.merge(&1, dims))
+
     Map.merge(Forwarder.core(msg), %{
       edr_id: attempt.edr_id,
       vendor_trunk_id: route.vendor_trunk_id,
       parts: parts,
       sent_at: attempt.resp_time,
-      # What the outcome row needs once the final status is known (§7, `Billing`).
-      bill: msg |> Billing.of_attempt(route, parts) |> Map.put(:attempt_no, attempt.no),
+      # What the outcome row needs once the final status is known (§7, `Billing`), with the attempt's report columns.
+      bill: bill,
       # What a re-route after a failed receipt needs (S-5.11, D2), kept only where one can happen.
       resend:
         if(reroutable?(trunk),

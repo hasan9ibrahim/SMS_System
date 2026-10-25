@@ -232,10 +232,10 @@ export function salesInsights(request: FastifyRequest, reply: FastifyReply) {
         b.productCategoryId ? `product_category_id = ${Number(b.productCategoryId)}` : "1",
       ].join(" AND ");
       const rows = await chQuery<Record<string, string>>(
-        `SELECT c_enterprise_id AS id, countIf(${cur}) AS a, countIf(NOT ${cur}) AS pa,
+        `SELECT c_enterprise_id AS id, countIf(kind = 'attempt' AND ${cur}) AS a, countIf(kind = 'attempt' AND NOT ${cur}) AS pa,
                 toFloat64(sumIf(revenue_sys * ${factor}, ${cur})) AS r, toFloat64(sumIf(revenue_sys * ${factor}, NOT ${cur})) AS pr,
                 toFloat64(sumIf((revenue_sys - cost_sys) * ${factor}, ${cur})) AS m, argMax(c_am_user_id, start_time) AS am
-           FROM edr WHERE ${where} GROUP BY id`,
+           FROM edr_all WHERE ${where} GROUP BY id`,
       );
       const ids = rows.map((r) => Number(r.id));
       const ams = rows.map((r) => Number(r.am)).filter(Boolean);
@@ -318,11 +318,11 @@ export function queryBillingReport(request: FastifyRequest, reply: FastifyReply)
                   toFloat64(sumIf(revenue_sys * c_ex_rate, is_customer_billable = 1)) AS amount,
                   countIf(is_customer_billable = 1 AND revenue_sys < cost_sys) AS neg,
                   toFloat64(sumIf((cost_sys - revenue_sys) * ${factor}, is_customer_billable = 1 AND revenue_sys < cost_sys)) AS neg_amount
-             FROM edr WHERE ${inWindow} GROUP BY id`,
+             FROM edr_all WHERE ${inWindow} GROUP BY id`,
         ),
         chQuery<Record<string, string>>(
           `SELECT v_enterprise_id AS id, countIf(is_vendor_billable = 1) AS billable, toFloat64(sumIf(cost, is_vendor_billable = 1)) AS amount
-             FROM edr WHERE ${inWindow} AND v_enterprise_id > 0 GROUP BY id`,
+             FROM edr_all WHERE ${inWindow} AND v_enterprise_id > 0 GROUP BY id`,
         ),
       ]);
       const traffic = new Map<number, number[]>();
@@ -392,10 +392,11 @@ export function nocInsights(request: FastifyRequest, reply: FastifyReply) {
              FROM edr WHERE ${inWindow} AND command_status != 0 GROUP BY code ORDER BY n DESC LIMIT 8`,
         ),
         chQuery<Record<string, string>>(
-          `SELECT v_trunk_id AS id, count() AS a, if(count() = 0, NULL, round(countIf(is_submit_success = 1) / count() * 100, 1)) AS asr,
+          `SELECT v_trunk_id AS id, countIf(kind = 'attempt') AS a,
+                  if(a = 0, NULL, round(countIf(is_submit_success = 1) / a * 100, 1)) AS asr,
                   if(countIf(is_submit_success = 1) = 0, NULL, round(countIf(msg_status = 'DELIVRD') / countIf(is_submit_success = 1) * 100, 1)) AS dlr,
                   if(countIf(msg_status = 'DELIVRD') = 0, NULL, round(sumIf(delivery_delay_ms, msg_status = 'DELIVRD') / countIf(msg_status = 'DELIVRD') / 1000, 1)) AS delay
-             FROM edr WHERE ${inWindow} AND v_trunk_id > 0 GROUP BY id HAVING a >= 100`,
+             FROM edr_all WHERE ${inWindow} AND v_trunk_id > 0 GROUP BY id HAVING a >= 100`,
         ),
       ]);
       const { rows: vt } = await pool.query("SELECT id, name FROM vendor_trunks WHERE id = ANY($1)", [
@@ -833,10 +834,10 @@ async function dailySummary(pool: pg.Pool, enterpriseId: number) {
   const t = (d: Date) => `toDateTime64(${lit(iso(d).replace("T", " ").replace("Z", ""))}, 3, 'UTC')`;
   const rows = await chQuery<Record<string, string>>(
     `SELECT if(c_enterprise_id = ${enterpriseId}, 'customer', 'vendor') AS side, if(c_enterprise_id = ${enterpriseId}, c_trunk_id, v_trunk_id) AS trunk,
-            count() AS a, countIf(msg_status = 'DELIVRD') AS d, countIf(is_submit_success = 1) AS s,
+            countIf(kind = 'attempt') AS a, countIf(msg_status = 'DELIVRD') AS d, countIf(is_submit_success = 1) AS s,
             toFloat64(sumIf(revenue_sys * ${factor}, c_enterprise_id = ${enterpriseId})) AS r,
             toFloat64(sumIf(cost_sys * ${factor}, v_enterprise_id = ${enterpriseId})) AS c
-       FROM edr WHERE start_time >= ${t(w.from)} AND start_time < ${t(w.to)}
+       FROM edr_all WHERE start_time >= ${t(w.from)} AND start_time < ${t(w.to)}
         AND (c_enterprise_id = ${enterpriseId} OR v_enterprise_id = ${enterpriseId}) GROUP BY side, trunk ORDER BY side, a DESC`,
   );
   const ids = (side: string) => rows.filter((r) => r.side === side).map((r) => Number(r.trunk));

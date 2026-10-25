@@ -93,8 +93,8 @@ export async function trafficTodayByRateTable() {
   const factor = await sysToPlatformFactor();
   const q = (col: string) =>
     chRows<{ id: number; n: string; rev: string; cost: string }>(
-      `SELECT ${col} AS id, count() AS n, sum(revenue_sys * ${factor}) AS rev, sum(cost_sys * ${factor}) AS cost
-         FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} GROUP BY id`,
+      `SELECT ${col} AS id, countIf(kind = 'attempt') AS n, sum(revenue_sys * ${factor}) AS rev, sum(cost_sys * ${factor}) AS cost
+         FROM edr_all WHERE submit_time >= ${PLATFORM_DAY_START_SQL} GROUP BY id`,
     );
   const [c, v] = await Promise.all([q("c_rate_table_id"), q("v_rate_table_id")]);
   if (!c || !v) return null;

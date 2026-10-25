@@ -39,6 +39,13 @@ export interface ChColumn {
   /** Name field: the condition runs on these names and applies to `idSql`. */
   names?: NameSource & { idSql: string };
   where?: (c: FilterCondition) => string;
+  /**
+   * The value the switch's outcome row of the attempt carries (backend step 11b, ClickHouse 006): `sql` a column of
+   * `edr_receipt`. "status" replaces the attempt row's value when the outcome has a final status (vendor or customer
+   * status, error, delivery time and delay), and filters on the field match that value; "add" adds the outcome's
+   * money, "or" its billable flag (filters and sorts on those read the attempt row).
+   */
+  outcome?: { sql: string; merge: "status" | "add" | "or"; when?: string };
 }
 
 export interface ChListDef<Row> {
@@ -115,6 +122,14 @@ async function resolveNames(pool: pg.Pool, def: ChListDef<unknown>, group: Filte
 
 function conditionSql(c: FilterCondition, f: FieldDescriptor, col: ChColumn, resolved: Resolved): string {
   if (col.where) return col.where(c);
+  const o = col.outcome;
+  if (o?.merge === "status") {
+    // The outcome's value when it has one, else the attempt row's (append-only EDRs, backend step 11b).
+    const plain = { ...col, outcome: undefined };
+    const has = `SELECT edr_id FROM edr_receipt WHERE kind = 'outcome' AND ${o.when ?? `${o.sql} != ''`}`;
+    return `(edr_id IN (${has} AND ${conditionSql(c, f, { ...plain, sql: o.sql }, resolved)})
+      OR (${conditionSql(c, f, plain, resolved)} AND edr_id NOT IN (${has})))`;
+  }
   if (col.names) {
     const idSql = col.names.idSql;
     if (c.op === "empty") return `${idSql} = 0`;
@@ -366,12 +381,80 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
     );
     const byId = new Map(full.map((r) => [String(r._id), r]));
     rows = pageIds.map((r) => byId.get(r.id)).filter((r): r is Record<string, unknown> => !!r);
+    await withOutcomes(d, rows, times[0]!, times[times.length - 1]!);
   }
   return {
     rows: rows.map((r) => def.mapRow(r, names)),
     total: count ? Number(count[0]?.n ?? 0) : offset + rows.length + (more ? 1 : 0),
     totalIsEstimate: count === null,
     nextCursor: more ? encodeCursor(offset + limit) : null,
+  };
+}
+
+/**
+ * Merges the switch's outcome rows into a page of attempt rows (backend step 11b): the final status, errors, delivery
+ * time and delay, and the money billed on the receipt. `from`/`to` bound the page's start times (partition pruning).
+ */
+export async function withOutcomes(
+  def: ChListDef<unknown>,
+  rows: Record<string, unknown>[],
+  from: string,
+  to: string,
+  only?: string[],
+) {
+  const cols = Object.entries(def.columns).filter(([f, c]) => c.outcome && (!only || only.includes(f)));
+  if (!cols.length || !rows.length) return;
+  const agg = cols.map(([f, c]) => {
+    const o = c.outcome!;
+    const when = o.when ?? `${o.sql} != ''`;
+    if (o.merge === "add") return `toFloat64(sum(${o.sql})) AS ${f}`;
+    if (o.merge === "or") return `max(${o.sql}) AS ${f}`;
+    return `argMaxIf(${o.sql}, receipt_time, ${when}) AS ${f}, countIf(${when}) AS _has_${f}`;
+  });
+  const out = await chQuery<Record<string, unknown>>(
+    `SELECT toString(edr_id) AS _id, ${agg.join(", ")}
+       FROM edr_receipt
+      PREWHERE edr_id IN (${rows.map((r) => lit(String(r._id ?? r.id))).join(",")})
+      WHERE kind = 'outcome' AND start_time BETWEEN ${lit(from)} AND ${lit(to)}
+      GROUP BY edr_id`,
+  );
+  const byId = new Map(out.map((r) => [String(r._id), r]));
+  for (const r of rows) {
+    const o = byId.get(String(r._id ?? r.id));
+    if (!o) continue;
+    for (const [f, c] of cols) {
+      const v = o[f];
+      if (c.outcome!.merge === "add") r[f] = Number(r[f] ?? 0) + Number(v ?? 0);
+      else if (c.outcome!.merge === "or") r[f] = Math.max(Number(r[f] ?? 0), Number(v ?? 0));
+      else if (Number(o[`_has_${f}`]) > 0) r[f] = v;
+    }
+  }
+}
+
+/**
+ * The same merge in SQL, for exports that stream every matching row (backend step 11b): `from` joins the outcome rows
+ * of the attempts `where` matches, and `expr(field)` is the field's merged value.
+ */
+export function outcomeJoin(def: ChListDef<unknown>, columns: string[], where: string) {
+  const cols = columns.filter((f) => def.columns[f]?.outcome);
+  if (!cols.length) return { from: def.table, expr: (f: string) => def.columns[f]!.sql };
+  const agg = cols.map((f) => {
+    const o = def.columns[f]!.outcome!;
+    const when = o.when ?? `${o.sql} != ''`;
+    if (o.merge === "add") return `sum(${o.sql}) AS o_${f}`;
+    if (o.merge === "or") return `max(${o.sql}) AS o_${f}`;
+    return `argMaxIf(${o.sql}, receipt_time, ${when}) AS o_${f}, countIf(${when}) AS o_has_${f}`;
+  });
+  return {
+    from: `${def.table} LEFT JOIN (SELECT edr_id, ${agg.join(", ")} FROM edr_receipt
+      WHERE kind = 'outcome' AND edr_id IN (SELECT edr_id FROM ${def.table} WHERE ${where}) GROUP BY edr_id) AS o USING edr_id`,
+    expr: (f: string) => {
+      const c = def.columns[f]!;
+      if (!c.outcome) return c.sql;
+      if (c.outcome.merge === "add") return `(${c.sql} + toFloat64(o_${f}))`;
+      if (c.outcome.merge === "or") return `greatest(${c.sql}, o_${f})`;
+      return `if(o_has_${f} > 0, o_${f}, ${c.sql})`;
+    },
   };
 }
 
