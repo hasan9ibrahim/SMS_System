@@ -24,6 +24,14 @@ defmodule Sms.Switch.Pipeline.Config.Server do
   """
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
+  @doc """
+  Reads everything that changed now, without waiting (backend step 9: the API sends it to every server after a saved
+  change, so the change is live at once instead of at the next 5-second check). Nothing is read twice: an unchanged
+  fingerprint reads nothing.
+  """
+  @spec nudge() :: :ok
+  def nudge, do: GenServer.cast(__MODULE__, :nudge)
+
   @doc "Reads everything that changed now, and waits (after a save; also done on the timers)."
   @spec refresh(timeout()) :: :ok | {:error, term()}
   def refresh(timeout \\ 60_000), do: GenServer.call(__MODULE__, :refresh, timeout)
@@ -79,6 +87,18 @@ defmodule Sms.Switch.Pipeline.Config.Server do
 
       {:error, reason, state} ->
         {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_cast(:nudge, state) do
+    case load_all(state) do
+      {:ok, state} ->
+        {:noreply, state}
+
+      {:error, reason, state} ->
+        Logger.error("pipeline configuration not refreshed on request: #{inspect(reason)}")
+        {:noreply, state}
     end
   end
 

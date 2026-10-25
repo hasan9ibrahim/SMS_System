@@ -190,18 +190,8 @@ defmodule Sms.Api.Lists.Engine do
 
   defp condition_sql(c, field, x, params) do
     type = field["type"]
-    numeric = type in @numeric
-    time = type in @time
-    typed = numeric or time or type == "boolean"
-
-    cast =
-      cond do
-        type == "integer" -> "::bigint"
-        numeric -> "::numeric"
-        time -> "::timestamptz"
-        type == "boolean" -> "::boolean"
-        true -> ""
-      end
+    cast = cast_of(type)
+    typed = cast != ""
 
     subject = if typed, do: x, else: "lower((#{x})::text)"
 
@@ -262,6 +252,12 @@ defmodule Sms.Api.Lists.Engine do
     {p, params} = param(params, to_text(c["value"]))
     {"(#{x})::text ~* #{p}", params}
   end
+
+  defp cast_of("integer"), do: "::bigint"
+  defp cast_of(type) when type in @numeric, do: "::numeric"
+  defp cast_of(type) when type in @time, do: "::timestamptz"
+  defp cast_of("boolean"), do: "::boolean"
+  defp cast_of(_type), do: ""
 
   defp with_param(params, one, value, sql) do
     {p, params} = one.(params, value)

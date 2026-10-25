@@ -111,21 +111,7 @@ defmodule Sms.Api.Lists.Query do
         else: [err("#{at}/op", ~s(operator "#{op}" is not allowed on "#{field["field"]}"))]
 
     values = c["values"]
-
-    arity =
-      cond do
-        op in @multi and not (is_list(values) and values != []) ->
-          [err("#{at}/values", ~s("#{op}" needs values))]
-
-        op == "between" and length(values) != 2 ->
-          [err("#{at}/values", ~s("between" needs exactly 2 values))]
-
-        op not in @multi and op not in @no_value and not Map.has_key?(c, "value") ->
-          [err("#{at}/value", ~s("#{op}" needs a value))]
-
-        true ->
-          []
-      end
+    arity = arity_errors(op, c, values, at)
 
     operands =
       if is_list(values),
@@ -135,6 +121,25 @@ defmodule Sms.Api.Lists.Query do
     allowed ++
       arity ++
       Enum.flat_map(operands, &operand_errors(&1, field["type"], at)) ++ regex_errors(c, at)
+  end
+
+  defp arity_errors(op, _c, values, at) when op in @multi do
+    cond do
+      not (is_list(values) and values != []) ->
+        [err("#{at}/values", ~s("#{op}" needs values))]
+
+      op == "between" and length(values) != 2 ->
+        [err("#{at}/values", ~s("between" needs exactly 2 values))]
+
+      true ->
+        []
+    end
+  end
+
+  defp arity_errors(op, _c, _values, _at) when op in @no_value, do: []
+
+  defp arity_errors(op, c, _values, at) do
+    if Map.has_key?(c, "value"), do: [], else: [err("#{at}/value", ~s("#{op}" needs a value))]
   end
 
   defp operand_errors(v, type, at) when type in @numeric do

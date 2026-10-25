@@ -16,7 +16,7 @@ defmodule Sms.Api.Forward do
   @behaviour Plug
   import Plug.Conn
   require Logger
-  alias Sms.Api.{Access, Auth, Operations, PasswordGate, Problem}
+  alias Sms.Api.{Access, Auth, ConfigPush, Operations, PasswordGate, Problem}
 
   # Hop-by-hop headers and the ones this API sets itself.
   @dropped ~w(connection keep-alive proxy-connection transfer-encoding te trailer upgrade host content-length cookie)
@@ -47,6 +47,7 @@ defmodule Sms.Api.Forward do
          :ok <- Access.check(session.user_id, op) do
       conn = forward(conn, session)
       forget_cached(conn, op)
+      :ok = ConfigPush.after_call(conn.method, conn.request_path, conn.status || 0)
       conn
     else
       # No such operation: the mock answers 404 as the contract does.

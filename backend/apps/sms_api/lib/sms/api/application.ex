@@ -7,6 +7,7 @@ defmodule Sms.Api.Application do
     children = [
       {Finch, name: Sms.Api.Finch, pools: %{default: [size: 50]}},
       Sms.Api.RateLimit,
+      Sms.Api.ConfigPush,
       Sms.Api.Endpoint
     ]
 

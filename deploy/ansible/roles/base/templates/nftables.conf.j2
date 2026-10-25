@@ -33,6 +33,10 @@ table inet sms {
     # SMPP from the partners (Q33).
     ip saddr { {{ smpp_cidrs | join(', ') }} } tcp dport { {{ (ports.smpp + ports.smpp_tls) | join(', ') }} } accept
 {% endif %}
+{% if inventory_hostname in groups['servers'] and api_enabled %}
+    # The API, from the team's network (nginx in front, backend step 9).
+    ip saddr $admin tcp dport {{ ports.api }} accept
+{% endif %}
 {% if inventory_hostname in groups['witness'] %}
     # Grafana, Prometheus and Alertmanager for the team.
     ip saddr $admin tcp dport { {{ [ports.grafana, ports.prometheus, ports.alertmanager] | join(', ') }} } accept
