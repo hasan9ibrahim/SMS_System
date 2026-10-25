@@ -260,8 +260,10 @@ defmodule Sms.Switch.Pipeline.ConfigTest do
         assert is_pid(Process.whereis(child)), "#{inspect(child)} is not running"
       end
 
-      ids =
-        for {id, _pid, _type, _modules} <- Supervisor.which_children(Pipeline.Supervisor), do: id
+      # The consumers start once the configuration is loaded, under the starter (backend step 7).
+      assert_eventually(&Pipeline.Starter.started?/0)
+      consumers = :sys.get_state(Pipeline.Starter).sup
+      ids = for {id, _pid, _type, _modules} <- Supervisor.which_children(consumers), do: id
 
       for consumer <- [
             Pipeline.EdrWriter,

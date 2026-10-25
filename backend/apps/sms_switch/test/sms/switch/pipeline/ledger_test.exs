@@ -144,6 +144,26 @@ defmodule Sms.Switch.Pipeline.LedgerTest do
     assert {:error, :esme_rsubmitfail} = Ledger.check(msg(18))
   end
 
+  @tag capture_log: true
+  test "several totals in one read; Redis unavailable: the last ones within a minute (Q24), else none" do
+    start([[enterprise_id: 41, base: "1"], [enterprise_id: 42, base: "1"]])
+    Ledger.charge(:customer, 41, "m1", @eur, 2)
+    assert {:ok, %{}} = Ledger.used_many([])
+    assert {:ok, %{"c41" => 100_000, "c42" => 0}} = Ledger.used_many(["c41", "c42"])
+
+    previous = Application.get_env(:sms_switch, Store)
+    Application.put_env(:sms_switch, Store, backend: :redis)
+    on_exit(fn -> Application.put_env(:sms_switch, Store, previous) end)
+
+    assert {:ok, %{"c41" => 100_000, "c42" => 0}} = Ledger.used_many(["c41", "c42"])
+    :ets.insert(Ledger.seen_table(), {"c42", 0, System.monotonic_time(:millisecond) - 61_000})
+    assert :error = Ledger.used_many(["c41", "c42"])
+
+    # Credit alerts are skipped for that run, not raised on a guess.
+    account = %{key: "c42", side: :customer, alerts: [50], limit: 1_000_000, base: 0}
+    assert :ok = Ledger.Alerts.check([account])
+  end
+
   test "amounts" do
     assert Ledger.to_micro(nil) == 0
     assert Ledger.to_micro(2) == 2_000_000

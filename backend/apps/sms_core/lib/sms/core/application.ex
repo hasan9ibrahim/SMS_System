@@ -19,6 +19,14 @@ defmodule Sms.Core.Application do
         Map.fetch!(@children, name)
       end
 
+    # The other servers (SWITCH_PEERS), when this node is distributed.
+    peers = :sms_core |> Application.get_env(Sms.Core.Cluster, []) |> Keyword.get(:peers, [])
+
+    children =
+      if peers != [] and Node.alive?(),
+        do: [{Sms.Core.Cluster, peers: peers} | children],
+        else: children
+
     Supervisor.start_link(children, strategy: :one_for_one, name: Sms.Core.Supervisor)
   end
 end

@@ -46,6 +46,10 @@ config :sms_core, Sms.Core.ClickHouse,
   password: required.("CLICKHOUSE_PASSWORD", "sms_dev_password"),
   pool_size: int.("CLICKHOUSE_POOL_SIZE", "5")
 
+# The other servers' node names (BACKEND_PLAN §3), e.g. "sms@10.0.0.2"; empty on a single node.
+config :sms_core, Sms.Core.Cluster,
+  peers: env.("SWITCH_PEERS", "") |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
 config :sms_core, Sms.Core.Bus.Nats,
   hosts: env.("NATS_HOSTS", "localhost:4222"),
   username: System.get_env("NATS_USER"),
@@ -118,6 +122,19 @@ node_id =
       raise ArgumentError,
             "SWITCH_NODE_ID must be 0 to 255, got #{inspect(env.("SWITCH_NODE_ID", ""))}"
   end
+
+# Overload guard (backend step 7, product owner 2026-10-25): new messages are refused with 0x58 while accepted ones wait
+# longer than SWITCH_MAX_WAIT_MS for the sender, or more than SWITCH_MAX_BACKLOG are unfinished (a safety cap); 0 = off.
+non_negative = fn name, default ->
+  case Integer.parse(env.(name, default)) do
+    {n, ""} when n >= 0 -> n
+    _ -> raise ArgumentError, "#{name} must be 0 or more"
+  end
+end
+
+config :sms_switch, Sms.Switch.Pipeline.Backlog,
+  max: non_negative.("SWITCH_MAX_BACKLOG", "100000"),
+  max_wait_ms: non_negative.("SWITCH_MAX_WAIT_MS", "10000")
 
 config :sms_switch, Sms.Switch.Pipeline,
   node_id: node_id,

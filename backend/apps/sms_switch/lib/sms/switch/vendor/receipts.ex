@@ -26,6 +26,20 @@ defmodule Sms.Switch.Vendor.Receipts do
   @callback handle(context(), Pdu.t()) ::
               :ok | {:error, Sms.Switch.Smpp.Status.name() | pos_integer()}
 
+  @doc """
+  Whether receipts can be taken now. Vendor connections are not opened before (a server starting: the pipeline's
+  configuration is loaded first), so no receipt arrives that could not be handled (backend step 7).
+  """
+  @callback ready?() :: boolean()
+  @optional_callbacks ready?: 0
+
+  @doc "Whether `module` can take receipts now (true when it does not say)."
+  @spec ready?(module()) :: boolean()
+  def ready?(module) do
+    Code.ensure_loaded?(module) and
+      (not function_exported?(module, :ready?, 0) or module.ready?())
+  end
+
   @doc "The configured implementation (`config :sms_switch, Sms.Switch.Vendor, receipts: Module`)."
   @spec impl() :: module()
   def impl do

@@ -139,6 +139,50 @@ defmodule Sms.Switch.Pipeline.Ledger do
     end
   end
 
+  @doc """
+  The traffic charged on several accounts since their last invoice, read in one round trip; the last totals read in
+  the past minute when Redis cannot be read (Q24), `:error` when an account has none.
+  """
+  @spec used_many([String.t()]) :: {:ok, %{String.t() => integer()}} | :error
+  def used_many([]), do: {:ok, %{}}
+
+  def used_many(keys) do
+    now = System.monotonic_time(:millisecond)
+
+    case Store.command(["MGET" | Enum.map(keys, &"cht:#{&1}")]) do
+      {:ok, values} ->
+        totals = keys |> Enum.zip(Enum.map(values, &to_int/1)) |> Map.new()
+
+        remember(totals, now)
+        {:ok, totals}
+
+      {:error, reason} ->
+        Logger.warning("ledger read failed (#{inspect(reason)}); last totals used (Q24 grace)")
+
+        Enum.reduce_while(keys, {:ok, %{}}, &add_last_seen(&1, &2, now))
+    end
+  end
+
+  defp remember(totals, now) do
+    if :ets.whereis(@seen) != :undefined,
+      do: :ets.insert(@seen, for({k, u} <- totals, do: {k, u, now}))
+  end
+
+  defp add_last_seen(key, {:ok, acc}, now) do
+    case last_seen(key, now) do
+      {:ok, used} -> {:cont, {:ok, Map.put(acc, key, used)}}
+      :error -> {:halt, :error}
+    end
+  end
+
+  # The total read for an account within the grace period (Q24).
+  defp last_seen(key, now) do
+    case :ets.whereis(@seen) != :undefined && :ets.lookup(@seen, key) do
+      [{_, used, at}] when now - at <= @grace_ms -> {:ok, used}
+      _ -> :error
+    end
+  end
+
   @doc "The live balance of an account (micro-units), or nil without billing."
   @spec balance(String.t()) :: integer() | nil
   def balance(key) do

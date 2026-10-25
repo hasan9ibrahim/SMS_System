@@ -48,7 +48,7 @@ defmodule Sms.Switch.Pipeline.Store do
         ) :: :ok | {:error, term()}
   def record_sent(message_id, data, parts, ttl_s, timeout_at_ms \\ nil) do
     hash = "m:#{message_id}"
-    blob = :erlang.term_to_binary(data, [:compressed])
+    blob = :erlang.term_to_binary(data, compressed: 1)
 
     commands =
       [
@@ -214,7 +214,7 @@ defmodule Sms.Switch.Pipeline.Store do
   def add_part(key, n, id, part, ttl_s, deadline_ms) do
     group = "rg:#{key}"
 
-    with {:ok, 1} <- run(["HSETNX", group, "p#{n}", :erlang.term_to_binary(part, [:compressed])]),
+    with {:ok, 1} <- run(["HSETNX", group, "p#{n}", :erlang.term_to_binary(part, compressed: 1)]),
          {:ok, _} <- run(["HSET", group, "i#{n}", id]),
          {:ok, count} <- run(["HINCRBY", group, "count", 1]),
          {:ok, _} <- run(["EXPIRE", group, ttl_s]),
@@ -395,7 +395,7 @@ defmodule Sms.Switch.Pipeline.Store do
   @doc "Remembers the attempt of a part whose submit timed out, for `ttl_s` (D4)."
   @spec put_possibly_sent(String.t(), term(), pos_integer()) :: :ok | {:error, term()}
   def put_possibly_sent(ref, attempt, ttl_s),
-    do: ok(run(["SET", "pd:#{ref}", :erlang.term_to_binary(attempt, [:compressed]), "EX", ttl_s]))
+    do: ok(run(["SET", "pd:#{ref}", :erlang.term_to_binary(attempt, compressed: 1), "EX", ttl_s]))
 
   @doc "Takes the attempt of a timed-out part (`ref` is `<message id>:<part>`)."
   @spec take_possibly_sent(String.t()) :: {:ok, term()} | :none | {:error, term()}
@@ -678,6 +678,7 @@ defmodule Sms.Switch.Pipeline.Store do
   end
 
   defp exec(["GET", key]), do: lookup(key)
+  defp exec(["MGET" | keys]), do: Enum.map(keys, &lookup/1)
 
   defp exec(["INCRBY", key, by]) do
     n = String.to_integer(lookup(key) || "0") + by

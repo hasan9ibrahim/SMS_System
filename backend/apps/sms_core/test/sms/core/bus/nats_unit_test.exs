@@ -1,16 +1,29 @@
 defmodule Sms.Core.Bus.NatsUnitTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   alias Sms.Core.Bus.Nats
 
-  test "NATS_HOSTS becomes one connection setting per server, with credentials when given" do
+  test "NATS_HOSTS becomes one connection setting per server (no Nagle delay), with credentials when given" do
+    tcp = [:binary, nodelay: true]
+
     assert Nats.connection_settings(hosts: "a:4222, b:4223,c") == [
-             %{host: "a", port: 4222},
-             %{host: "b", port: 4223},
-             %{host: "c", port: 4222}
+             %{host: "a", port: 4222, tcp_opts: tcp},
+             %{host: "b", port: 4223, tcp_opts: tcp},
+             %{host: "c", port: 4222, tcp_opts: tcp}
            ]
 
     assert [%{host: "a", username: "u", password: "p"}] =
              Nats.connection_settings(hosts: "a:1", username: "u", password: "p")
+  end
+
+  test "a pool of connections: the first is the main one, any index wraps onto the pool" do
+    previous = Application.get_env(:sms_core, Sms.Core.Bus)
+    Application.put_env(:sms_core, Sms.Core.Bus, Keyword.put(previous, :connections, 4))
+    on_exit(fn -> Application.put_env(:sms_core, Sms.Core.Bus, previous) end)
+
+    assert Nats.connection(0) == Nats.connection()
+    assert Nats.connection(4) == Nats.connection()
+    assert Nats.connection(1) == :sms_bus_nats_2
+    assert Nats.connection(-3) == :sms_bus_nats_4
   end
 
   test "the stream is file-backed, replicated as configured, with the duplicate window in nanoseconds" do

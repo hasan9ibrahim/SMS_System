@@ -38,16 +38,24 @@ defmodule Sms.Switch.Pipeline.Receipts do
   alias Sms.Switch.Vendor.MessageId
 
   @impl true
-  def handle(context, pdu) do
-    if Receipt.receipt?(pdu) do
-      receipt(context, pdu)
-    else
-      Logger.info(
-        "MO message from vendor trunk #{context.trunk.id} answered OK, not processed (no MO in v1, Q7)"
-      )
+  def ready?, do: Config.ready?()
 
-      :ok
+  @impl true
+  def handle(context, pdu) do
+    cond do
+      # Not loaded yet (vendor connections wait for it, `ready?/0`): the vendor is asked to send it again later.
+      not Config.ready?() -> {:error, :esme_rsyserr}
+      Receipt.receipt?(pdu) -> receipt(context, pdu)
+      true -> mo(context)
     end
+  end
+
+  defp mo(context) do
+    Logger.info(
+      "MO message from vendor trunk #{context.trunk.id} answered OK, not processed (no MO in v1, Q7)"
+    )
+
+    :ok
   end
 
   defp receipt(context, pdu) do
@@ -134,17 +142,21 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
       if first and reroute?(rec, receipt),
         do: reroute(message_id, rec, final),
-        # Also on a repeated final: a receipt whose forwarding failed before is sent then (the claim stops doubles).
-        else: maybe_forward(message_id)
+        # Also on a repeated final: a receipt whose forwarding failed before is sent then.
+        else: maybe_forward(message_id, not first)
     end
   end
 
   # Once every part has its final status, one receipt for the message (S-5.9); only one caller gets to send it. The
   # message is then forgotten: nothing more is done with it, and Redis keeps only messages still waiting (§13.1).
-  defp maybe_forward(message_id) do
+  #
+  # A repeated final for a message still in Redis forwards even when the claim is taken: the claimer stopped before
+  # queuing the receipt (a server killed between the two, found by the failover test, backend step 7), and the
+  # forward's bus id is the same, so one queued by both is stored once.
+  defp maybe_forward(message_id, repeated) do
     with {:ok, rec} <- Store.message(message_id),
          true <- map_size(rec.finals) >= rec.data.parts,
-         {:ok, true} <- Store.claim_forward(message_id) do
+         {:ok, true} <- claim(message_id, rec, repeated) do
       forward(message_id, rec)
     else
       false -> :ok
@@ -153,6 +165,9 @@ defmodule Sms.Switch.Pipeline.Receipts do
       {:error, _} = error -> error
     end
   end
+
+  defp claim(_message_id, %{forwarded: true}, true), do: {:ok, true}
+  defp claim(message_id, _rec, _repeated), do: Store.claim_forward(message_id)
 
   # S-5.11, D2: a failed receipt sends the whole message to the next vendor when the vendor trunk re-routes on that
   # status, bills on delivery (the failure costs nothing) and no part was delivered yet; it does not wait for the other
@@ -242,7 +257,7 @@ defmodule Sms.Switch.Pipeline.Receipts do
       end
     end)
 
-    maybe_forward(message_id)
+    maybe_forward(message_id, false)
   end
 
   defp forward(message_id, rec) do

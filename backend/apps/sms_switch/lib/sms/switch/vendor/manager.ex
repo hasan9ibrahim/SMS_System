@@ -10,7 +10,8 @@ defmodule Sms.Switch.Vendor.Manager do
   returns. During the hand-over a vendor may briefly see one connection more than Max Connections; a vendor that
   refuses it is retried on the reconnect schedule.
 
-  On every trunk load (`Sms.Switch.Vendor.TrunkStore`) and every membership change it reconciles:
+  On every trunk load (`Sms.Switch.Vendor.TrunkStore`) and every membership change it reconciles, once the receipts'
+  handler is ready (`Sms.Switch.Vendor.Receipts.ready?/1`: a starting server binds only when it can take receipts):
 
     * an active trunk's connections owned here are started (`Sms.Switch.Vendor.Session`);
     * connections no longer owned here, of an inactive trunk, or of a trunk that is gone are unbound and stopped;
@@ -20,7 +21,7 @@ defmodule Sms.Switch.Vendor.Manager do
   """
   use GenServer
   require Logger
-  alias Sms.Switch.Vendor.{Session, TrunkStore}
+  alias Sms.Switch.Vendor.{Receipts, Session, TrunkStore}
 
   @scope :sms_vendor_sessions
   @group :vendor_nodes
@@ -106,7 +107,17 @@ defmodule Sms.Switch.Vendor.Manager do
   def handle_info(_msg, state), do: {:noreply, state}
 
   defp do_reconcile(state) do
-    if TrunkStore.ready?(), do: apply_trunks(state, TrunkStore.all()), else: state
+    cond do
+      not TrunkStore.ready?() ->
+        state
+
+      # The receipts' handler (the pipeline) not ready yet: no connection opened, tried again in a second.
+      not Receipts.ready?(state.opts[:receipts] || Receipts.impl()) ->
+        schedule(state, @restart_after_ms)
+
+      true ->
+        apply_trunks(state, TrunkStore.all())
+    end
   end
 
   defp apply_trunks(state, trunks) do

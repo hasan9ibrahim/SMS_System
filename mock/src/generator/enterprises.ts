@@ -353,7 +353,9 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         allowed_dst_ton: [1],
         allowed_src_npi: v.id % 5 === 0 ? [0, 1] : null,
         allowed_dst_npi: [1],
-        max_msg_len: rng.pick([null, null, 160, 153]),
+        // Any length: the usual setting; the limit is on the whole message (backend step 7). The draw is kept so the
+        // rest of the generated data stays the same.
+        max_msg_len: (rng.next(), null),
         support_multipart: rng.chance(0.9),
         dlr_timeout_s: rng.pick([3600, 86400, 172800]),
         dlr_timeout_stat: rng.weighted(["UNKNOWN", "EXPIRED", "DELIVRD"], [70, 25, 5]),

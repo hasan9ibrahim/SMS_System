@@ -157,3 +157,31 @@ jobs:
           restore-keys: backend-${{ runner.os }}-
       - run: mix deps.get
       - run: mix check
+
+  # The SMPP simulator and load tests (tools/smpp-sim, backend step 7): it compiles the switch's PDU codec, so a codec
+  # change that breaks it fails here. Its tests run a fake customer against the fake SMSC on loopback; no stores.
+  smpp-sim:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: tools/smpp-sim
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: backend/.tool-versions
+          version-type: strict
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tools/smpp-sim/deps
+            tools/smpp-sim/_build
+          key: smpp-sim-${{ runner.os }}-${{ hashFiles('backend/.tool-versions', 'tools/smpp-sim/mix.lock') }}
+          restore-keys: smpp-sim-${{ runner.os }}-
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+      - run: mix credo --strict
+      - run: mix test --cover

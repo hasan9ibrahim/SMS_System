@@ -14,9 +14,13 @@ config :sms_core, Sms.Core.Bus,
   subjects: ["sms.>"],
   # A message published twice with the same id within this window is stored once.
   duplicate_window_ms: 120_000,
-  max_age_days: 7,
+  # Kept 2 days (about 1 TB per server at 50 million a day); a receipt later than that is matched from the EDRs (D5).
+  # Product owner 2026-10-25, backend step 7.
+  max_age_days: 2,
   replicas: 1,
   publish_timeout_ms: 5_000,
+  # NATS connections per node (publishes and consumers spread over them; backend step 7).
+  connections: 4,
   # At start, how many times (1 s apart) to try reaching NATS before the node gives up.
   setup_attempts: 30
 
@@ -33,6 +37,13 @@ config :sms_switch, Sms.Switch.Pipeline,
 
 # What the pipeline keeps about messages in flight is shared by both servers through Redis (§13.1).
 config :sms_switch, Sms.Switch.Pipeline.Store, backend: :redis
+
+# Overload protection (backend step 7): new messages refused (0x58) while accepted ones wait over `max_wait_ms` for the
+# sender, or more than `max` are unfinished (a safety cap).
+config :sms_switch, Sms.Switch.Pipeline.Backlog,
+  max: 100_000,
+  max_wait_ms: 10_000,
+  interval_ms: 1_000
 
 # The customer side of the switch (build step 2, Sms.Switch.Customer): listeners and ports come from the environment
 # in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session. Submits go to the pipeline.

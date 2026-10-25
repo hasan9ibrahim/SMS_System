@@ -1,11 +1,16 @@
 defmodule Sms.Core.Bus.Nats do
   @moduledoc """
   The event bus on NATS JetStream (docs/BACKEND_PLAN.md). One stream (`SMS`, subjects `sms.>`) on file storage,
-  replicated on 3 nodes in production; the server writes every message to disk before it acknowledges it
-  (`sync_interval: always`, deploy/nats/nats.conf), so a published event survives a crash of any one node.
+  replicated on 3 nodes in production; a publish is acknowledged once a majority of them hold it, so a published
+  event survives a crash of any one node. Disk writes use the NATS default (every 2 minutes, deploy/nats/nats.conf):
+  writing every event first halved capacity in the load test (product owner 2026-10-25, backend step 7).
 
   `publish/4` is a JetStream publish: it waits for the stream's acknowledgement, and the `Nats-Msg-Id` header makes a
   retried publish a no-op within the duplicate window.
+
+  The node keeps `:connections` connections (default 4): one connection process carried every publish and every
+  consumer's pulls, and became the limit under load (backend step 7). A process always publishes on the same
+  connection, so its own events keep their order; consumers' pullers are spread over the connections.
   """
   @behaviour Sms.Core.Bus.Adapter
   alias Gnat.Jetstream.API.Stream
@@ -16,17 +21,32 @@ defmodule Sms.Core.Bus.Nats do
   @doc false
   def connection, do: @conn
 
+  @doc false
+  # The `i`-th connection (any integer, wrapped onto the pool); the first is `connection/0`.
+  @spec connection(integer()) :: atom()
+  def connection(i) do
+    case rem(abs(i), connections()) do
+      0 -> @conn
+      n -> :"#{@conn}_#{n + 1}"
+    end
+  end
+
+  defp connections, do: Keyword.get(Bus.config(), :connections, 1)
+
   @impl Sms.Core.Bus.Adapter
   def child_spec(config) do
-    children = [
-      {Gnat.ConnectionSupervisor,
-       %{
-         name: @conn,
-         backoff_period: 1_000,
-         connection_settings: connection_settings(nats_config())
-       }},
-      {__MODULE__.Setup, config}
-    ]
+    settings = connection_settings(nats_config())
+
+    connections =
+      for i <- 0..(Keyword.get(config, :connections, 1) - 1) do
+        Supervisor.child_spec(
+          {Gnat.ConnectionSupervisor,
+           %{name: connection(i), backoff_period: 1_000, connection_settings: settings}},
+          id: {Gnat.ConnectionSupervisor, i}
+        )
+      end
+
+    children = connections ++ [{__MODULE__.Setup, config}]
 
     %{
       id: __MODULE__,
@@ -37,7 +57,7 @@ defmodule Sms.Core.Bus.Nats do
 
   @impl Sms.Core.Bus.Adapter
   def publish(subject, payload, msg_id, timeout) do
-    case Gnat.request(@conn, subject, payload,
+    case Gnat.request(connection(:erlang.phash2(self())), subject, payload,
            headers: [{"Nats-Msg-Id", msg_id}],
            receive_timeout: timeout
          ) do
@@ -92,6 +112,16 @@ defmodule Sms.Core.Bus.Nats do
   end
 
   @impl Sms.Core.Bus.Adapter
+  def backlog(consumer) do
+    case Gnat.Jetstream.API.Consumer.info(@conn, Keyword.fetch!(Bus.config(), :stream), consumer) do
+      {:ok, info} -> {:ok, info.num_pending + info.num_ack_pending}
+      {:error, _} = error -> error
+    end
+  catch
+    :exit, _ -> {:error, :not_connected}
+  end
+
+  @impl Sms.Core.Bus.Adapter
   def health do
     case Stream.info(@conn, Keyword.fetch!(Bus.config(), :stream)) do
       {:ok, _} -> :ok
@@ -100,6 +130,10 @@ defmodule Sms.Core.Bus.Nats do
   catch
     :exit, _ -> {:error, :not_connected}
   end
+
+  # Publishes wait for JetStream's ack: without nodelay, Nagle can hold a publish for the previous write's ACK (up to
+  # 40 ms with delayed ACKs), which the load test found in every submit_sm_resp (backend step 7).
+  @tcp_opts [:binary, nodelay: true]
 
   @doc false
   # "host:port,host:port" (the 2 servers + witness) into Gnat connection settings.
@@ -116,8 +150,11 @@ defmodule Sms.Core.Bus.Nats do
     |> String.split(",", trim: true)
     |> Enum.map(fn host_port ->
       case String.split(String.trim(host_port), ":") do
-        [host, port] -> Map.merge(%{host: host, port: String.to_integer(port)}, auth)
-        [host] -> Map.merge(%{host: host, port: 4222}, auth)
+        [host, port] ->
+          Map.merge(%{host: host, port: String.to_integer(port), tcp_opts: @tcp_opts}, auth)
+
+        [host] ->
+          Map.merge(%{host: host, port: 4222, tcp_opts: @tcp_opts}, auth)
       end
     end)
   end
@@ -251,12 +288,14 @@ defmodule Sms.Core.Bus.Nats do
     use Gnat.Jetstream.PullConsumer
     require Logger
     alias Gnat.Jetstream.PullConsumer
+
+    @fetch 256
     alias Sms.Core.Bus.{Consumer, Event, Nats}
 
     def start_link(arg), do: PullConsumer.start_link(__MODULE__, arg)
 
     @impl true
-    def init({module, stream, opts, _i}) do
+    def init({module, stream, opts, i}) do
       state = %{
         module: module,
         name: opts[:name],
@@ -265,8 +304,21 @@ defmodule Sms.Core.Bus.Nats do
       }
 
       {:ok, state,
-       connection_name: Nats.connection(), stream_name: stream, consumer_name: opts[:name]}
+       [connection_name: Nats.connection(i), stream_name: stream, consumer_name: opts[:name]] ++
+         fetch_options(opts)}
     end
+
+    # A batch consumer's puller fetches up to #{@fetch} events per pull request instead of one (the load test found
+    # one-at-a-time pulls holding EDRs back, backend step 7). The client holds a partly filled fetch until the pull
+    # expires: 1 s, and at most a quarter of ack_wait, so the batch is acknowledged before it would be delivered again.
+    defp fetch_options(opts) do
+      case opts[:batch_size] do
+        nil -> []
+        size -> [batch_size: min(size, @fetch), request_expires: expires_ms(opts) * 1_000_000]
+      end
+    end
+
+    defp expires_ms(opts), do: min(1_000, div(opts[:ack_wait_ms], 4))
 
     @impl true
     def handle_message(message, %{batcher: batcher} = state) when batcher != nil do

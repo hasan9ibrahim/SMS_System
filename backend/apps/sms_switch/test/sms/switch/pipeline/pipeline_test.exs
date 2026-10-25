@@ -210,6 +210,23 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert {:error, :timeout} = Client.recv(client, 500)
     end
 
+    test "a server stopped between claiming a receipt and queuing it: the vendor's repeat forwards it (step 7)" do
+      %{client: client, conns: [conn]} = start_all()
+      {client, resp} = submit(client, %{short_message: "claimed", registered_delivery: 1})
+      id = resp.fields.message_id
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      # The other server took the claim and died before queuing the receipt.
+      assert {:ok, true} = Pipeline.Store.claim_forward(id)
+      receipt(conn, "1", "DELIVRD")
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, status: 0}}, 2_000
+      assert {:error, :timeout} = Client.recv(client, 300)
+
+      receipt(conn, "1", "DELIVRD")
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "id:#{id} "
+    end
+
     test "a receipt that comes before the submit_sm_resp is handled is kept and applied (S-5.5)" do
       %{client: client, smscs: [smsc], conns: [conn]} = start_all()
       FakeSmsc.set(smsc, :submit, {:delay, 300})
@@ -576,6 +593,29 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert %{"attempt_no" => 1, "v_trunk_id" => 1, "is_submit_success" => 0} = first
       assert first["command_status"] == -1
       assert %{"attempt_no" => 2, "v_trunk_id" => 2, "is_submit_success" => 1} = second
+    end
+
+    test "no routed vendor connected on either server: refused at once with 0x45, nothing sent (Q15)" do
+      config =
+        two_vendors(
+          vendor_trunks: [
+            PipelineConfig.vendor_trunk(id: 1),
+            PipelineConfig.vendor_trunk(id: 3, rate_table_ids: [203])
+          ],
+          rates: [
+            PipelineConfig.rate(100, 1, "26201", "0.05"),
+            PipelineConfig.rate(203, 4, "26201", "0.01")
+          ],
+          route_vendors: [PipelineConfig.route_vendor(1, 3, 1)]
+        )
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{short_message: "nobody bound"})
+      assert resp.status == 0x45
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 0, "c_msg_status" => "REJECTD"}] = attempts()
     end
 
     test "a routed vendor with no bound connection is skipped for the next (S-5.4)" do

@@ -14,6 +14,9 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
   Each account's last level is kept in Redis (`cal:`), so one alert goes out per level reached, by one server, and a
   payment that brings the level down re-arms it. Alerts are events (`sms.billing.credit_alert`); the API sends the
   Credit Alert / Balance Alert e-mails from them.
+
+  Every watched account's total and last level are read in one round trip; only an account whose level changed is
+  written (two commands per account on every run grew with the number of partners, backend step 7).
   """
   require Logger
   alias Sms.Core.Bus
@@ -24,9 +27,28 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
   @doc "Checks every account's level and publishes the alerts newly reached."
   @spec check([Ledger.account()]) :: :ok
   def check(accounts) do
-    Enum.each(accounts, fn account ->
-      if watched?(account), do: check_one(account)
-    end)
+    watched = Enum.filter(accounts, &watched?/1)
+    keys = Enum.map(watched, & &1.key)
+
+    with {:ok, used} <- Ledger.used_many(keys),
+         {:ok, levels} <- Store.command(["MGET" | Enum.map(keys, &"cal:#{&1}")]) do
+      watched
+      |> Enum.zip(levels)
+      |> Enum.each(fn {account, stored} ->
+        compare(account, Map.fetch!(used, account.key), stored)
+      end)
+    else
+      :error -> Logger.warning("credit alerts not checked: ledger totals unavailable")
+      {:error, reason} -> Logger.warning("credit alerts not checked: #{inspect(reason)}")
+    end
+
+    :ok
+  end
+
+  defp compare(account, used, stored) do
+    balance = account.base - used
+    level = level(account, balance)
+    if level != to_int(stored), do: raise_level(account, level, balance)
   end
 
   defp watched?(%{side: :customer, alerts: [_ | _], limit: limit}) when limit > 0, do: true
@@ -35,18 +57,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
   defp watched?(%{side: :vendor, prepaid: true, alerts: [_ | _]}), do: true
   defp watched?(_account), do: false
 
-  defp check_one(account) do
-    with {:ok, used} <- Ledger.used(account.key) do
-      balance = account.base - used
-      level = level(account, balance)
-
-      raise_level(account, level, balance)
-    end
-
-    :ok
-  end
-
-  # The level is swapped in Redis: only the server that raises it alerts.
+  # The level is swapped in Redis: only the server that raises it alerts (the other may have swapped it already).
   defp raise_level(account, level, balance) do
     case Store.command(["SET", "cal:#{account.key}", Integer.to_string(level), "GET"]) do
       {:ok, old} ->
