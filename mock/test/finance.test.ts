@@ -86,7 +86,7 @@ describe("transactions (§7, §13.33)", { skip }, () => {
     const r = created.record;
     assert.equal(r.currency, "EUR");
     assert.ok(r.amountBase > 0 && r.exRate > 0);
-    assert.equal(r.amountBase, Math.round(123.45 * r.exRate * 100) / 100, "Final Amount = amount x rate");
+    assert.equal(r.amountBase, Math.round(123.45 * r.exRate * 10_000) / 10_000, "Final Amount = amount x rate");
     assert.ok(["sent", "failed"].includes(r.confirmationStatus));
 
     const noReason = await call("PUT", `/transactions/${r.id}`, payment(f, { currency: "EUR", includeInSoa: false }));

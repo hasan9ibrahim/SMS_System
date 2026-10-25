@@ -250,7 +250,7 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
           <FormField label="Payment Date" required error={form.error("paymentDate")}>
             <input type="date" value={v.paymentDate} onChange={(e) => form.set("paymentDate", e.target.value)} />
           </FormField>
-          <NumberField form={form} path="amount" label="Amount" required min={0.01} step={0.01} />
+          <NumberField form={form} path="amount" label="Amount" required min={0.0001} step={0.0001} />
           <SelectField
             form={form}
             path="currency"

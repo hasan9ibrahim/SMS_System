@@ -14,15 +14,20 @@ export interface PdfLine {
 
 const esc = (s: string) => s.replace(/[\\()]/g, (c) => `\\${c}`).replace(/[^\x20-\x7e]/g, "?");
 
-export function simplePdf(lines: PdfLine[]): Buffer {
+/** `pageHeader`: lines repeated at the top of every page after the first (a long table's column headings). */
+export function simplePdf(lines: PdfLine[], pageHeader: PdfLine[] = []): Buffer {
   const pages: string[][] = [[]];
   let y = 800;
-  for (const l of lines) {
+  const queue = [...lines];
+  while (queue.length) {
+    const l = queue.shift()!;
     const size = l.size ?? 10;
     y -= l.gap ?? size + 5;
     if (y < 40) {
       pages.push([]);
-      y = 800 - (size + 5);
+      y = 800;
+      queue.unshift(...pageHeader.map((h) => ({ ...h, gap: (h.size ?? 10) + 5 })), { ...l, gap: size + 5 });
+      continue;
     }
     const font = l.bold ? "F2" : "F1";
     const ops = pages[pages.length - 1]!;

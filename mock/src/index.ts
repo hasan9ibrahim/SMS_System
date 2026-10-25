@@ -28,6 +28,7 @@ import { startAutoInvoicing } from "./jobs/autoInvoices.js";
 import { startImapIntake } from "./jobs/imap.js";
 import { startRnReminders } from "./jobs/rnReminders.js";
 import { startSwitchJobs } from "./jobs/switchJobs.js";
+import { encryptStoredTotp } from "./admin/passwords.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -54,6 +55,8 @@ startLive();
 // One server at a time (jobs/leader.ts): jobs that write shared tables or send e-mail.
 whenLeader(() => {
   app.log.info(production ? "this server runs the background jobs" : "background jobs started");
+  // Authenticator secrets written before they were encrypted (backend step 12).
+  void encryptStoredTotp(db()).catch((err: Error) => app.log.warn(`authenticator secrets: ${err.message}`));
   startBestBuyRefresh();
   startRouteTrafficRefresh();
   startQbrRefresh();

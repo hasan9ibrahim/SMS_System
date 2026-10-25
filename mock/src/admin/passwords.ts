@@ -213,3 +213,27 @@ export function decryptSecret(stored: string): string | null {
     return null;
   }
 }
+
+/**
+ * An authenticator secret as stored (backend step 12): encrypted (`enc:v1:`, the Elixir API decrypts it with the same
+ * key) or, written before encryption, plain base32.
+ */
+export const totpSecretOf = (stored: unknown): string | null =>
+  typeof stored !== "string" || !stored ? null : stored.startsWith("enc:") ? decryptSecret(stored) : stored;
+
+/** Encrypts authenticator secrets still stored in plain text (run once at start; cheap when there are none). */
+export async function encryptStoredTotp(pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }) {
+  const { rows } = await pool.query(
+    `SELECT id, totp_secret, totp_pending_secret FROM users
+      WHERE (totp_secret IS NOT NULL AND totp_secret NOT LIKE 'enc:%')
+         OR (totp_pending_secret IS NOT NULL AND totp_pending_secret NOT LIKE 'enc:%')`,
+  );
+  const enc = (v: unknown) => (typeof v === "string" && v && !v.startsWith("enc:") ? encryptSecret(v) : v);
+  for (const r of rows)
+    await pool.query("UPDATE users SET totp_secret = $2, totp_pending_secret = $3 WHERE id = $1", [
+      r.id,
+      enc(r.totp_secret),
+      enc(r.totp_pending_secret),
+    ]);
+  return rows.length;
+}

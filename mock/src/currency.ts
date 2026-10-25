@@ -41,3 +41,10 @@ export async function sysToPlatformFactor(): Promise<string> {
 export async function sysToPlatformFactors(): Promise<Map<number, number>> {
   return (await loadFactors()).byCompany;
 }
+
+/** Money amounts (invoices, payments, SOA, balances) keep 4 decimals (Q20 in docs/BACKEND_PLAN.md; was cents). */
+export const money = (v: number) => Math.round(v * 10_000) / 10_000;
+
+/** A money amount for documents and e-mails: 2 decimals, up to 4 when the amount has them (1,234.50; 0.0125). */
+export const fmtMoney = (v: number) =>
+  v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });

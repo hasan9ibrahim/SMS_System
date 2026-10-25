@@ -72,6 +72,15 @@ describe("SOA files (§13.31 export)", () => {
     assert.ok(xml.includes('ss:Name="SOA &lt;test&gt;"'));
     assert.ok(xml.includes("A &amp; B") && xml.includes('<Data ss:Type="Number">12.5</Data>'));
   });
+
+  test("a long PDF keeps every line and repeats the column headings on each page (backend step 12)", () => {
+    const rows = Array.from({ length: 5000 }, (_, i) => ({ text: `Row ${i}`, size: 8 }));
+    const pdf = simplePdf(rows, [{ text: "Destination | Messages", size: 8, bold: true }]).toString("latin1");
+    assert.ok(pdf.includes("(Row 4999)"), "the last row is in the file");
+    const pages = Number(/\/Count (\d+) >>/.exec(pdf)![1]);
+    assert.ok(pages > 50);
+    assert.equal(pdf.split("(Destination | Messages)").length - 1, pages - 1, "headings on every page after the first");
+  });
 });
 
 describe("SOA statement (§7, §13.31, §13.33)", { skip }, () => {

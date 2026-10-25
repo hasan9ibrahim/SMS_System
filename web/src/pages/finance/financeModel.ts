@@ -96,7 +96,7 @@ export const netWords = (net: number | null) =>
 export const money = (v: number | null | undefined, currency?: string | null) =>
   v === null || v === undefined
     ? "—"
-    : `${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${currency ? ` ${currency}` : ""}`;
+    : `${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}${currency ? ` ${currency}` : ""}`;
 
 /** Inclusive day count of a period, for the Charges Calculator header. */
 export const periodDays = (from: string, to: string) =>

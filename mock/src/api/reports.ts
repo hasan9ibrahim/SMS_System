@@ -176,18 +176,27 @@ export function reportFile(q: MasterReportSettings, r: ReportResult, fileType: "
   if (fileType === "pdf") {
     // The PDF fonts are Latin-1 only.
     const latin = (t: string) => t.replace(/[·–—]/g, "-").replace(/[^\x20-\xff]/g, "?");
-    const line = (cells: (string | number | null)[]) =>
-      latin(cells.map((c) => (c === null ? "-" : String(c))).join("  |  ")).slice(0, 150);
+    // Every row (backend step 12; the dialog allows up to 100,000); a row wider than the page goes on to the next
+    // lines, and the column headings repeat on every page.
+    const lines = (cells: (string | number | null)[], bold = false, gap?: number) => {
+      const text = latin(cells.map((c) => (c === null ? "-" : String(c))).join("  |  "));
+      const parts = text.match(/.{1,150}/g) ?? [""];
+      return parts.map((p, i) => ({ text: i ? `    ${p}` : p, size: 8, bold, ...(i === 0 && gap ? { gap } : {}) }));
+    };
+    const heading = lines(t.header, true);
     return {
       type: "application/pdf",
       ext: "pdf",
-      body: simplePdf([
-        { text: title, size: 15, bold: true },
-        { text: latin(period), size: 9 },
-        { text: line(t.header), size: 8, bold: true, gap: 18 },
-        ...t.rows.slice(0, 2000).map((cells) => ({ text: line(cells), size: 8 })),
-        { text: line(t.total), size: 8, bold: true, gap: 14 },
-      ]),
+      body: simplePdf(
+        [
+          { text: title, size: 15, bold: true },
+          { text: latin(period), size: 9 },
+          ...lines(t.header, true, 18),
+          ...t.rows.flatMap((cells) => lines(cells)),
+          ...lines(t.total, true, 14),
+        ],
+        heading,
+      ),
     };
   }
   return {

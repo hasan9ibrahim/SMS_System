@@ -15,7 +15,7 @@ import { PeriodTabs, RangeChip } from "../../ui/DateRange";
 
 const page = pageForPath("/reports/billing")!;
 const money = (v: number | null) =>
-  v === null ? "—" : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  v === null ? "—" : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const int = (v: number) => v.toLocaleString("en-US");
 const muted = (v: string) => <span className="muted">{v}</span>;
 

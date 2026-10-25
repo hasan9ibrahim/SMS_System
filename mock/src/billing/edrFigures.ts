@@ -9,6 +9,7 @@ export type Side = "customer" | "vendor";
 
 const lit = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 import { nextDay, zonedMidnight } from "./zone.js";
+import { money } from "../currency.js";
 
 export { nextDay, zonedMidnight };
 
@@ -108,7 +109,7 @@ export async function usageLines(
 
 export const sumLines = (lines: UsageLine[]) => ({
   messages: lines.reduce((t, l) => t + l.messages, 0),
-  amount: Math.round(lines.reduce((t, l) => t + l.amount, 0) * 100) / 100,
+  amount: money(lines.reduce((t, l) => t + l.amount, 0)),
 });
 
 /** Country and network names for MCCMNC codes. */

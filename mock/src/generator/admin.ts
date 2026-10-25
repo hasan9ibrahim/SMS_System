@@ -7,7 +7,7 @@ import { companyName, domainOf, fakeSecret, personName, phone, street, city } fr
 import { json, type TableSink } from "./sink.js";
 import { DAY, type User, type World } from "./world.js";
 import type { Profile } from "./profiles.js";
-import { hashPassword } from "../admin/passwords.js";
+import { encryptSecret, hashPassword } from "../admin/passwords.js";
 
 /** Every seeded staff and portal user signs in with this fake password (CLAUDE.md rule 1). */
 export const SEED_PASSWORD = "demo-password-2026";
@@ -291,7 +291,11 @@ async function adminColumns(
       city: city(rng),
       zip: rng.chance(0.6) ? rng.digits(5) : null,
       temp_password_expires_at: temp ? new Date(world.anchor + rng.int(1, 23) * 3600_000) : null,
-      totp_secret: id === 1 ? DEMO_TOTP_SECRET : u.totp_enabled ? base32Fake(rng) : null,
+      // Stored encrypted like the platform stores them (backend step 12); the IV follows the user so seeds repeat.
+      totp_secret:
+        id === 1 || u.totp_enabled
+          ? encryptSecret(id === 1 ? DEMO_TOTP_SECRET : base32Fake(rng), Buffer.alloc(12, id % 256))
+          : null,
       totp_pending_secret: null,
       updated_by_id: 1,
       password_changed_at: temp ? new Date(world.anchor - rng.int(1, 20) * 3600_000) : changed,

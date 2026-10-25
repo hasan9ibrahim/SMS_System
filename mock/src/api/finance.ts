@@ -21,7 +21,7 @@ import type {
 import { refreshRates } from "./fx.js";
 import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
-import { PLATFORM_CURRENCY, PLATFORM_PER_EUR, sysToPlatformFactor } from "../currency.js";
+import { fmtMoney, money, PLATFORM_CURRENCY, PLATFORM_PER_EUR, sysToPlatformFactor } from "../currency.js";
 import {
   BALANCE_FROM,
   billingCycleList,
@@ -43,7 +43,6 @@ type Params = { id: number };
 
 const badInput = (reply: FastifyReply, errors: FieldError[]) =>
   sendProblem(reply, 400, "Check the highlighted fields", { errors });
-const money = (v: number) => Math.round(v * 100) / 100;
 
 // ---------------------------------------------------------------- transactions
 
@@ -188,18 +187,18 @@ async function confirmationEmail(db: Db, t: TransactionInput, txId: number | nul
   const mode = (t.paymentMode ?? "reprocess").replace(/_/g, " ");
   return {
     recipients,
-    subject: `Payment confirmation · ${t.amount.toFixed(2)} ${t.currency} · ${t.paymentDate}`,
+    subject: `Payment confirmation · ${fmtMoney(t.amount)} ${t.currency} · ${t.paymentDate}`,
     body: [
       `Dear ${e[0]?.name ?? "partner"},`,
       "",
       `We confirm the ${t.paymentType === "credit" ? "payment received" : "payment sent"} below.`,
       "",
-      `Amount: ${t.amount.toFixed(2)} ${t.currency}`,
+      `Amount: ${fmtMoney(t.amount)} ${t.currency}`,
       `Date: ${t.paymentDate}`,
       `Mode: ${mode}`,
       `Reference: ${txId ? `TX-${txId}` : "assigned on save"}`,
       ...(invoice ? [`Invoice: ${invoice}`] : []),
-      `Balance after this payment: ${after.toFixed(2)} ${currency}`,
+      `Balance after this payment: ${fmtMoney(after)} ${currency}`,
       "",
       "Regards,",
       "Billing team",
@@ -253,7 +252,7 @@ export function createTransaction(request: FastifyRequest, reply: FastifyReply) 
         entityIds: [id],
         changeType: "create",
         diff: [{ entity_id: id, field: "*", before: null, after: { amount: t.amount, currency: t.currency } }],
-        note: `Added ${t.transactionType.replace("_", " ")} ${t.amount.toFixed(2)} ${t.currency}${
+        note: `Added ${t.transactionType.replace("_", " ")} ${fmtMoney(t.amount)} ${t.currency}${
           status === "sent"
             ? " · confirmation sent"
             : status === "failed"
@@ -362,7 +361,7 @@ export function archiveTransaction(request: FastifyRequest, reply: FastifyReply)
       entityType: "transaction",
       archive: true,
       note:
-        gate.note ?? `Deleted TX-${id} ${(before.amount ?? 0).toFixed(2)} ${before.currency} (${before.enterprise})`,
+        gate.note ?? `Deleted TX-${id} ${fmtMoney(before.amount ?? 0)} ${before.currency} (${before.enterprise})`,
     });
     if ("reply" in r) return r.reply;
     return { record: await loadTransaction(pool, id), change: r.change };
@@ -416,8 +415,8 @@ async function logConfirmation(c: Db, txId: number, enterpriseId: number, to: st
     enterpriseId,
     to,
     sender: await companyMailbox(c, enterpriseId, "paymentConfirmation"),
-    subject: `Payment confirmation TX-${txId}: ${Number(t.amount).toFixed(2)} ${String(t.currency).trim()}`,
-    body: `We confirm your payment of ${Number(t.amount).toFixed(2)} ${String(t.currency).trim()} dated ${
+    subject: `Payment confirmation TX-${txId}: ${fmtMoney(Number(t.amount))} ${String(t.currency).trim()}`,
+    body: `We confirm your payment of ${fmtMoney(Number(t.amount))} ${String(t.currency).trim()} dated ${
       t.payment_date instanceof Date ? t.payment_date.toISOString().slice(0, 10) : t.payment_date
     }.`,
     error: to.length ? null : "No billing contact",

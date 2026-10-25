@@ -187,7 +187,43 @@ export async function createFeedSimulator(): Promise<Simulator> {
   }
   for (const t of sim.trunks) t.segments = [];
   await loadHistory(sim).catch((err: Error) => console.warn(`live history: ${err.message}`));
+  await refreshBaselines(sim);
+  setInterval(() => void refreshBaselines(sim), 15 * 60_000).unref();
   return sim;
+}
+
+/**
+ * The alert engine's "normal" levels (backend step 12, §13.6): each trunk's TPS, ASR and DLR in the same hour
+ * yesterday and a week ago (half an hour either side of now), from the EDR store. A trunk that sent nothing then has
+ * a normal of no traffic.
+ */
+export async function refreshBaselines(sim: Simulator) {
+  type Row = { id: string; n: string; ok: string; dl: string };
+  const around = (days: number) =>
+    `start_time BETWEEN now() - INTERVAL ${days} DAY - INTERVAL 30 MINUTE AND now() - INTERVAL ${days} DAY + INTERVAL 30 MINUTE`;
+  const q = (col: string) =>
+    chRows<Row>(
+      `SELECT toString(${col}) AS id, countIf(kind = 'attempt') AS n, countIf(is_submit_success = 1) AS ok,
+              countIf(msg_status = 'DELIVRD') AS dl
+         FROM edr_all WHERE ${col} > 0 AND ((${around(1)}) OR (${around(7)})) GROUP BY id`,
+      15_000,
+    );
+  const [c, v] = await Promise.all([q("c_trunk_id"), q("v_trunk_id")]).catch(() => [null, null]);
+  if (!c || !v) return;
+  const ratio = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
+  const apply = (xs: (SimTrunk | SimVendor)[], rows: Row[]) => {
+    const byId = new Map(rows.map((r) => [Number(r.id), r]));
+    for (const x of xs) {
+      const r = byId.get(x.id);
+      const n = r ? Number(r.n) : 0;
+      // Two windows of an hour each: messages per second over 7,200 s.
+      if ("base" in x) x.base = n / 7200;
+      x.asr = r ? ratio(Number(r.ok), n) : null;
+      x.dlr = r ? ratio(Number(r.dl), Number(r.ok)) : null;
+    }
+  };
+  apply(sim.trunks, c);
+  apply(sim.vendors, v);
 }
 
 /** The last two hours per minute (TPS) from the EDR store, so the charts and movers start filled. */

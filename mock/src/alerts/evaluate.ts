@@ -80,7 +80,7 @@ export function fmtMetric(metric: AlertRuleFields["metric"], v: number | null, c
   return Math.round(v).toLocaleString("en-US");
 }
 
-/** The entities a rule watches. Country, MCCMNC, sender ID and category scopes use all traffic in this phase. */
+/** The entities a rule watches. Country, MCCMNC, sender ID and category scopes with values are read from the EDR store (engine.ts dimensionEntity); here they fall back to all traffic. */
 export function entitiesFor(rule: Pick<Rule, "scope" | "metric">, customers: Series[], vendors: Series[]): Entity[] {
   const { kind, ids, values } = rule.scope;
   const each = (list: Series[], k: string): Entity[] =>
