@@ -13,10 +13,34 @@ interface InjectOptions {
   payload?: object;
 }
 
-export function injector(app: FastifyInstance) {
+/**
+ * A session on the remote server as the seeded administrator (user 1, the mock's default user): password, then the
+ * authenticator code. Calls without their own cookie use it.
+ */
+let remoteCookie: Promise<string> | null = null;
+export function remoteSession(username: string, password: string, code: () => string): Promise<string> {
+  remoteCookie ??= (async () => {
+    const post = (path: string, body: object) =>
+      fetch(`${API_URL}/api/v1${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const first = await post("/session", { username, password });
+    let res = first;
+    const body = (await first.clone().json()) as { status: string; challenge?: string };
+    if (body.status === "code_required") res = await post("/session/code", { challenge: body.challenge, code: code() });
+    if (!res.ok) throw new Error(`remote sign-in failed: ${res.status} ${await res.text()}`);
+    return res.headers.getSetCookie()[0]!.split(";")[0]!;
+  })();
+  return remoteCookie;
+}
+
+export function injector(app: FastifyInstance, session?: () => Promise<string>) {
   return async (opts: InjectOptions): Promise<LightMyRequestResponse> => {
     if (!API_URL) return app.inject(opts as FastifyInjectOptions);
     const headers: Record<string, string> = { ...(opts.headers ?? {}) };
+    if (session && !headers.cookie) headers.cookie = await session();
     if (opts.payload !== undefined) headers["content-type"] = "application/json";
     const res = await fetch(`${API_URL}${opts.url}`, {
       method: opts.method,
