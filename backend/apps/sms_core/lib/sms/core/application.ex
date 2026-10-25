@@ -27,6 +27,14 @@ defmodule Sms.Core.Application do
         do: [{Sms.Core.Cluster, peers: peers} | children],
         else: children
 
+    # The health and metrics endpoint (backend step 8), last: it reports on the others.
+    http = Application.get_env(:sms_core, Sms.Core.Http, [])
+
+    children =
+      if Keyword.get(http, :port, 0) > 0,
+        do: children ++ [{Sms.Core.Http, http}],
+        else: children
+
     Supervisor.start_link(children, strategy: :one_for_one, name: Sms.Core.Supervisor)
   end
 end

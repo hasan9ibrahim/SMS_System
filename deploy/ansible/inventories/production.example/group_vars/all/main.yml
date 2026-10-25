@@ -1,0 +1,16 @@
+lab: false
+# Who may reach SSH and the monitoring pages (office / VPN ranges, Q33).
+admin_cidrs: [192.0.2.0/24]
+# Who may reach the SMPP ports: the partners' IPs (Q33). The Firewall screen's banned / trusted lists apply on top.
+smpp_cidrs: [0.0.0.0/0]
+# Off-site backups (Q31): S3-compatible storage at another provider.
+s3_endpoint: s3.example-provider.com
+s3_port: 443
+s3_region: eu-central-1
+s3_bucket: sms-backups
+s3_verify_tls: true
+# Alerts (Q29): the engineer's and the NOC group's Telegram chat ids.
+telegram_chat_ids: [-1001234567890]
+# The SMPP TLS certificate on each server (S-1.17).
+smpp_tls_certfile: /etc/sms/tls/smpp.crt
+smpp_tls_keyfile: /etc/sms/tls/smpp.key

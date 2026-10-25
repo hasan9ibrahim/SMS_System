@@ -32,10 +32,23 @@ config :sms_core, Sms.Core.Repo,
   # The schema is the one the mock server and the screens use today (db/postgres/migrations).
   parameters: [search_path: env.("PG_SCHEMA", "sms") <> ",public"]
 
+# On the servers (backend step 8) REDIS_SENTINELS lists the sentinels ("10.0.0.1:26379,..."); the connections follow
+# the primary of REDIS_SENTINEL_GROUP. Without it, REDIS_HOST and REDIS_PORT.
+sentinels =
+  for part <- String.split(env.("REDIS_SENTINELS", ""), ",", trim: true) do
+    case String.split(String.trim(part), ":") do
+      [host, port] -> [host: host, port: String.to_integer(port)]
+      [host] -> [host: host, port: 26_379]
+    end
+  end
+
 config :sms_core, Sms.Core.Redis,
   host: env.("REDIS_HOST", "localhost"),
   port: int.("REDIS_PORT", "6379"),
   password: System.get_env("REDIS_PASSWORD"),
+  sentinels: sentinels,
+  sentinel_group: env.("REDIS_SENTINEL_GROUP", "sms"),
+  sentinel_password: System.get_env("REDIS_SENTINEL_PASSWORD"),
   pool_size: int.("REDIS_POOL_SIZE", "5")
 
 config :sms_core, Sms.Core.ClickHouse,
@@ -47,8 +60,28 @@ config :sms_core, Sms.Core.ClickHouse,
   pool_size: int.("CLICKHOUSE_POOL_SIZE", "5")
 
 # The other servers' node names (BACKEND_PLAN §3), e.g. "sms@10.0.0.2"; empty on a single node.
+# SWITCH_WITNESS (backend step 8) is the witness VM's node, one of the peers: it carries no traffic and breaks the tie
+# when the two servers lose each other (Sms.Switch.Vendor.Quorum).
 config :sms_core, Sms.Core.Cluster,
-  peers: env.("SWITCH_PEERS", "") |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  peers: env.("SWITCH_PEERS", "") |> String.split(",", trim: true) |> Enum.map(&String.trim/1),
+  witness: System.get_env("SWITCH_WITNESS")
+
+# The health and metrics endpoint for monitoring (backend step 8): GET /health and /metrics; 0 = off.
+config :sms_core, Sms.Core.Http, port: String.to_integer(env.("SWITCH_HTTP_PORT", "0"))
+
+# SWITCH_ROLE=witness (backend step 8): the witness VM runs the release only to join the cluster and break ties; no data
+# store, no SMPP, no pipeline.
+case env.("SWITCH_ROLE", "switch") do
+  "switch" ->
+    :ok
+
+  "witness" ->
+    config :sms_core, :services, []
+    config :sms_switch, :role, :witness
+
+  other ->
+    raise ArgumentError, "SWITCH_ROLE must be switch or witness, got #{inspect(other)}"
+end
 
 config :sms_core, Sms.Core.Bus.Nats,
   hosts: env.("NATS_HOSTS", "localhost:4222"),

@@ -30,6 +30,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Customer.Intake.NotReady
   alias Sms.Switch.Customer.Trunk
   alias Sms.Switch.Message.{Concat, Text}
+  alias Sms.Switch.Metrics
 
   alias Sms.Switch.Pipeline.{
     Backlog,
@@ -68,6 +69,7 @@ defmodule Sms.Switch.Pipeline.Intake do
     if Map.get(context, :buffered, false) and match?({:error, _}, reply),
       do: Throttle.buffer_release(Trunk.buffer_key(context.trunk))
 
+    Metrics.submit(reply)
     reply
   end
 

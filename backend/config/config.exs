@@ -7,6 +7,9 @@ config :sms_core, ecto_repos: [Sms.Core.Repo]
 # The data stores and the event bus this node starts (Sms.Core.Application). Tests start them one by one.
 config :sms_core, :services, [:repo, :redis, :clickhouse, :bus]
 
+# The health and metrics endpoint (backend step 8; port from SWITCH_HTTP_PORT): the switch adds its own metrics.
+config :sms_core, Sms.Core.Http, providers: [Sms.Switch.Metrics]
+
 # Event bus (docs/BACKEND_PLAN.md: NATS JetStream behind one module). Every event goes to one stream, "SMS".
 config :sms_core, Sms.Core.Bus,
   adapter: Sms.Core.Bus.Nats,

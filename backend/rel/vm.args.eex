@@ -1,0 +1,15 @@
+## VM flags of the release on the servers (backend step 8).
++K true
+## The busy-waiting schedulers burn CPU the databases on the same server need (load test, backend step 7).
++sbwt none
++sbwtdcpu none
++sbwtdio none
+## A lost link to the other server is noticed in 10 s, not 60 (backend step 7, partition test).
+-kernel net_ticktime 10
+## Keep the witness connected to both servers when only the link between them is cut: with overlapping partitions
+## prevented (OTP's default) global would disconnect the witness from one of them, and both servers would then see
+## a majority of none (Sms.Switch.Vendor.Quorum).
+-kernel prevent_overlapping_partitions false
+## One fixed distribution port, so the firewall opens exactly it between the three machines.
+-kernel inet_dist_listen_min 9150
+-kernel inet_dist_listen_max 9150

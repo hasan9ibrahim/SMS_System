@@ -1,0 +1,28 @@
+# {{ ansible_managed }} (deploy/ansible/roles/postgres)
+# Off-site copies (Q31): the WAL is archived continuously, full backups weekly and differential ones nightly
+# (roles/backup), all encrypted before they leave the server.
+[global]
+repo1-type=s3
+repo1-s3-endpoint={{ s3_endpoint }}
+repo1-storage-port={{ s3_port }}
+repo1-s3-region={{ s3_region }}
+repo1-s3-bucket={{ s3_bucket }}
+repo1-s3-uri-style=path
+repo1-s3-key={{ vault_s3_access_key }}
+repo1-s3-key-secret={{ vault_s3_secret_key }}
+repo1-storage-verify-tls={{ 'y' if s3_verify_tls else 'n' }}
+repo1-path=/pgbackrest
+repo1-retention-full=4
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass={{ vault_pgbackrest_cipher_pass }}
+compress-type=zst
+process-max=2
+start-fast=y
+archive-async=n
+log-level-console=info
+log-level-file=info
+
+[sms]
+pg1-path=/var/lib/postgresql/{{ pg_version }}/main
+pg1-port={{ ports.pg }}
+pg1-socket-path=/var/run/postgresql

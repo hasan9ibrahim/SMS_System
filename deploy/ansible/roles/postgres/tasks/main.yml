@@ -1,0 +1,106 @@
+# PostgreSQL on the two servers (the config schema, balances; spec §14): Patroni keeps one primary and one streaming
+# standby, holding the leader lease in etcd; HAProxy on each server sends the switch to the current primary; every
+# WAL segment is archived off site by pgBackRest (decided 2026-10-24; Q31).
+- name: postgresql-common first
+  ansible.builtin.apt: {name: postgresql-common, update_cache: true, cache_valid_time: 3600}
+
+- name: No cluster created by the package (Patroni creates and owns it)
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql-common/createcluster.conf
+    regexp: '^#?\s*create_main_cluster'
+    line: create_main_cluster = false
+
+- name: PostgreSQL, Patroni, HAProxy, pgBackRest
+  ansible.builtin.apt:
+    name: ["postgresql-{{ pg_version }}", patroni, haproxy, pgbackrest, python3-etcd]
+
+- name: The distribution's PostgreSQL service off (Patroni starts PostgreSQL)
+  ansible.builtin.systemd_service: {name: postgresql, enabled: false, state: stopped}
+
+- name: Folders
+  ansible.builtin.file: {path: "{{ item.path }}", state: directory, owner: postgres, group: postgres, mode: "{{ item.mode }}"}
+  loop:
+    - {path: /etc/patroni, mode: "0750"}
+    - {path: "/var/lib/postgresql/{{ pg_version }}", mode: "0750"}
+    - {path: /var/spool/pgbackrest, mode: "0750"}
+    - {path: /var/log/pgbackrest, mode: "0750"}
+    - {path: /etc/pgbackrest, mode: "0750"}
+
+- name: pgBackRest settings (WAL archive and backups to S3, encrypted)
+  ansible.builtin.template: {src: pgbackrest.conf.j2, dest: /etc/pgbackrest/pgbackrest.conf, owner: postgres, group: postgres, mode: "0640"}
+
+- name: Patroni settings
+  ansible.builtin.template: {src: patroni.yml.j2, dest: /etc/patroni/config.yml, owner: postgres, group: postgres, mode: "0640"}
+  notify: patroni reload
+
+- name: Patroni service
+  ansible.builtin.template: {src: patroni.service.j2, dest: /etc/systemd/system/sms-patroni.service, mode: "0644"}
+  notify: patroni restart
+
+- name: The package's own Patroni services off (ours is sms-patroni)
+  ansible.builtin.systemd_service: {name: patroni, enabled: false, state: stopped}
+  failed_when: false
+
+- name: Patroni running
+  ansible.builtin.systemd_service: {name: sms-patroni, enabled: true, state: started, daemon_reload: true}
+
+- name: HAProxy to the primary
+  ansible.builtin.template: {src: haproxy.cfg.j2, dest: /etc/haproxy/haproxy.cfg, mode: "0644", validate: haproxy -c -f %s}
+  notify: haproxy reload
+
+- name: HAProxy running
+  ansible.builtin.systemd_service: {name: haproxy, enabled: true, state: started}
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: A primary elected
+  ansible.builtin.uri: {url: "http://{{ private_ip }}:{{ ports.patroni }}/cluster", return_content: true}
+  register: cluster
+  retries: 60
+  delay: 2
+  until: cluster.status == 200 and (cluster.json.members | selectattr('role', 'equalto', 'leader') | list | length) == 1
+  run_once: true
+
+- name: Which server is primary
+  ansible.builtin.set_fact:
+    pg_leader: "{{ (cluster.json.members | selectattr('role', 'equalto', 'leader') | first).name }}"
+  run_once: true
+
+- name: The application's role and database (on the primary)
+  ansible.builtin.shell: |
+    set -e
+    psql -p {{ ports.pg }} -v ON_ERROR_STOP=1 -tAc "SELECT 1 FROM pg_roles WHERE rolname = '{{ pg_app_user }}'" | grep -q 1 \
+      || psql -p {{ ports.pg }} -v ON_ERROR_STOP=1 -c "CREATE ROLE {{ pg_app_user }} LOGIN"
+    psql -p {{ ports.pg }} -v ON_ERROR_STOP=1 -c "ALTER ROLE {{ pg_app_user }} PASSWORD '{{ vault_pg_app_password }}'"
+    psql -p {{ ports.pg }} -tAc "SELECT 1 FROM pg_database WHERE datname = '{{ pg_database }}'" | grep -q 1 \
+      || psql -p {{ ports.pg }} -v ON_ERROR_STOP=1 -c "CREATE DATABASE {{ pg_database }} OWNER {{ pg_app_user }} ENCODING 'UTF8'"
+  become: true
+  become_user: postgres
+  delegate_to: "{{ pg_leader }}"
+  run_once: true
+  changed_when: false
+  no_log: true
+
+- name: The backup repository for the cluster (once; safe to repeat)
+  ansible.builtin.command: pgbackrest --stanza=sms stanza-create
+  become: true
+  become_user: postgres
+  delegate_to: "{{ pg_leader }}"
+  run_once: true
+  register: stanza
+  # The archiver may hold the lock for a moment while it retries.
+  retries: 10
+  delay: 3
+  until: stanza.rc == 0
+  changed_when: "'already exists' not in stanza.stdout"
+
+- name: Both members streaming
+  ansible.builtin.uri: {url: "http://{{ private_ip }}:{{ ports.patroni }}/cluster", return_content: true}
+  register: cluster
+  retries: 60
+  delay: 2
+  until: >-
+    (cluster.json.members | selectattr('state', 'in', ['running', 'streaming']) | list | length)
+    == (groups['servers'] | length)
+  run_once: true

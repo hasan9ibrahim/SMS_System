@@ -1,0 +1,58 @@
+# Settings shared by every environment (backend step 8). The inventory's group_vars hold what differs (addresses,
+# storage, alert targets) and the secrets.
+
+# --- the machines
+cluster_hosts: "{{ groups['servers'] + groups['witness'] }}"
+server_hosts: "{{ groups['servers'] }}"
+witness_host: "{{ groups['witness'][0] }}"
+cluster_ips: "{{ cluster_hosts | map('extract', hostvars, 'private_ip') | list }}"
+server_ips: "{{ server_hosts | map('extract', hostvars, 'private_ip') | list }}"
+witness_ip: "{{ hostvars[witness_host].private_ip }}"
+smpp_cidrs: [0.0.0.0/0]
+
+# --- versions (pinned; upgraded on purpose, one at a time)
+pg_version: 16
+clickhouse_version: 24.8.14.39
+nats_version: 2.14.8
+nats_exporter_version: 0.17.3
+
+# --- ports
+ports:
+  pg: 5433              # PostgreSQL itself (Patroni)
+  pg_primary: 5432      # HAProxy on each server: always the current primary
+  patroni: 8008
+  etcd_client: 2379
+  etcd_peer: 2380
+  redis: 6379
+  sentinel: 26379
+  nats: 4222
+  nats_cluster: 6222
+  nats_monitor: 8222
+  ch_http: 8123
+  ch_native: 9000
+  ch_interserver: 9009
+  ch_metrics: 9363
+  keeper: 9181
+  keeper_raft: 9234
+  epmd: 4369
+  erlang_dist: 9150
+  switch_http: 9568
+  smpp: [2775]
+  smpp_tls: [2776]
+  node_exporter: 9100
+  pg_exporter: 9187
+  redis_exporter: 9121
+  nats_exporter: 7777
+  prometheus: 9090
+  alertmanager: 9093
+  grafana: 3000
+
+# --- application
+pg_database: sms_config
+pg_app_user: sms
+ch_database: sms_edr
+ch_app_user: sms
+redis_sentinel_group: sms
+switch_user: sms
+switch_root: /opt/sms
+platform_currency: EUR

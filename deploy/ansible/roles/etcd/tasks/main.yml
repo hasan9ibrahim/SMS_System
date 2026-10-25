@@ -1,0 +1,23 @@
+# etcd on the three machines: the leader lease for PostgreSQL (Patroni). With 2 of 3 needed, only the side of a split
+# that still reaches the witness can hold or take the primary (BACKEND_PLAN §3.5, decided 2026-10-24).
+- name: etcd
+  ansible.builtin.apt: {name: [etcd-server, etcd-client], update_cache: true, cache_valid_time: 3600}
+
+- name: etcd settings
+  ansible.builtin.template: {src: etcd.env.j2, dest: /etc/default/etcd, mode: "0644"}
+  notify: etcd
+
+- name: etcd running
+  ansible.builtin.systemd_service: {name: etcd, enabled: true, state: started}
+
+- name: Flush handlers (the cluster must be up before Patroni)
+  ansible.builtin.meta: flush_handlers
+
+- name: etcd healthy
+  ansible.builtin.command: etcdctl --endpoints=http://{{ private_ip }}:{{ ports.etcd_client }} endpoint health
+  environment: {ETCDCTL_API: "3"}
+  register: health
+  retries: 30
+  delay: 2
+  until: health.rc == 0
+  changed_when: false

@@ -1,0 +1,26 @@
+# {{ ansible_managed }} (deploy/ansible/roles/postgres)
+# The switch connects to 127.0.0.1:{{ ports.pg_primary }}; HAProxy forwards it to whichever server Patroni says is the
+# primary (GET /primary answers 200 only there). After a failover the old connections are closed and the pool
+# reconnects to the new primary.
+global
+  maxconn 2000
+  log /dev/log local0
+
+defaults
+  mode tcp
+  log global
+  retries 2
+  timeout connect 3s
+  timeout client 30m
+  timeout server 30m
+  timeout check 2s
+
+listen postgres_primary
+  bind 127.0.0.1:{{ ports.pg_primary }}
+  bind {{ private_ip }}:{{ ports.pg_primary }}
+  option httpchk GET /primary
+  http-check expect status 200
+  default-server inter 2s fall 2 rise 2 on-marked-down shutdown-sessions
+{% for h in groups['servers'] %}
+  server {{ h }} {{ hostvars[h].private_ip }}:{{ ports.pg }} check port {{ ports.patroni }}
+{% endfor %}
