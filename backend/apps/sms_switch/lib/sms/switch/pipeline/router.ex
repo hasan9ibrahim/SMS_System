@@ -134,6 +134,43 @@ defmodule Sms.Switch.Pipeline.Router do
     end
   end
 
+  @doc """
+  The route to one chosen vendor trunk (Test SMS or Repush to a vendor, backend step 11c): its egress translation and
+  its cost, with no route rule (`decided_by` manual). Errors: `:unknown_vendor`, `:vendor_inactive` (inactive or
+  stopped), `:blocked` (its egress translation blocks the message).
+  """
+  @spec forced(integer(), input()) ::
+          {:ok, routed()} | {:error, :unknown_vendor | :vendor_inactive | :blocked, nil}
+  def forced(vendor_trunk_id, input) do
+    case Config.vendor_trunk(vendor_trunk_id) do
+      nil ->
+        {:error, :unknown_vendor, nil}
+
+      %{active: false} ->
+        {:error, :vendor_inactive, nil}
+
+      _trunk ->
+        egress = egress(vendor_trunk_id, input)
+
+        if egress.blocked do
+          {:error, :blocked, nil}
+        else
+          {:ok,
+           %{
+             decision: %{
+               rule_id: nil,
+               route_type: :manual,
+               outcome: :route,
+               vendor: %{vendor_trunk_id: vendor_trunk_id, level: 0, decided_by: :manual}
+             },
+             vendor_trunk_id: vendor_trunk_id,
+             cost: Config.vendor_rate(vendor_trunk_id, input.destination.mccmnc, input.now_ms),
+             egress: egress
+           }}
+        end
+    end
+  end
+
   @doc "The vendor trunk's egress translation of the message after ingress (S-4.8)."
   @spec egress(integer(), map()) :: Translation.result()
   def egress(vendor_trunk_id, input) do

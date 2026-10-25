@@ -78,6 +78,46 @@ defmodule Sms.Switch.Pipeline.Intake do
   def handle(context, %Pdu{command: :cancel_sm} = pdu), do: Queries.cancel(context, pdu.fields)
   def handle(context, pdu), do: NotReady.handle(context, pdu)
 
+  @doc """
+  A message from the platform itself (backend step 11c): Test SMS from the Route Simulator or EDR Repush (§9.2), taken
+  as if the customer trunk had submitted it, with `internal`:
+
+    * `kind`: `"test"` or `"repush"`;
+    * `vendor_trunk_id`: send to this vendor trunk instead of the route rules' choice, and never re-route to another
+      (nil: the route rules decide, as for the customer's own traffic);
+    * `repush_request_id`: written on its EDRs, so the screen counts the request's outcome.
+
+  It is never billed to the customer and the customer gets no receipt for it (it never sent it); the vendor is billed
+  as usual. No duplicate filter, Delayed Submit, overflow buffer or customer credit check applies. Answers the message
+  id, or why it was refused (nothing is written for a refused one).
+  """
+  @spec inject(map(), Pdu.t(), map()) :: {:ok, String.t()} | {:error, term()}
+  def inject(context, %Pdu{} = pdu, internal) do
+    cond do
+      not Config.ready?() ->
+        {:error, :not_ready}
+
+      trunk = Config.customer_trunk(context.origin.trunk_id) ->
+        inject(context, pdu, internal, trunk)
+
+      true ->
+        {:error, :unknown_trunk}
+    end
+  end
+
+  defp inject(context, pdu, internal, trunk) do
+    msg = context |> new_message(pdu, trunk) |> Map.merge(%{internal: internal, charged: true})
+
+    with {:ok, msg} <- build(msg, pdu),
+         :ok <- process(msg) do
+      {:ok, msg.id}
+    else
+      {:part, _msg} -> {:error, :multipart}
+      {:reject, status, reason, _msg} -> {:error, {status, reason}}
+      {:error, _} = error -> error
+    end
+  end
+
   defp accept(context, pdu) do
     case Config.customer_trunk(context.origin.trunk_id) do
       # The trunk is newer than the pipeline's configuration (loaded within seconds): the client retries.
@@ -436,6 +476,14 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
+  # Test SMS or Repush to a chosen vendor trunk (backend step 11c): that vendor, whatever the route rules say.
+  defp route_now(%{internal: %{vendor_trunk_id: vt}} = msg) when is_integer(vt) do
+    case Router.forced(vt, router_input(msg)) do
+      {:ok, routed} -> {:ok, %{msg | route: Map.put(route_of(routed), :measured_tps, 0.0)}}
+      {:error, reason, _decision} -> {:reject, :esme_rsubmitfail, reason, msg}
+    end
+  end
+
   defp route_now(msg) do
     # Live TPS per scope (§13.8): this message counts before its own routing, against the rules too.
     input = msg |> router_input() |> Map.merge(%{count_rule_tps: true, parts: msg.parts})
@@ -496,6 +544,9 @@ defmodule Sms.Switch.Pipeline.Intake do
       }
     }
   end
+
+  # A Test SMS or Repush is not the customer's traffic and never charges it (backend step 11c).
+  defp credit(%{internal: %{}}), do: :ok
 
   defp credit(msg) do
     case Credit.impl().check(msg) do

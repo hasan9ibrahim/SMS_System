@@ -106,6 +106,25 @@ defmodule Sms.Switch.Customer.IntegrationTest do
       refute Map.has_key?(by_id, ids.http)
       refute Map.has_key?(by_id, ids.deleted)
     end
+
+    test "a trunk stopped on Network Status loads as inactive until Start (backend step 11c)" do
+      statuses =
+        in_rollback(fn ->
+          ids = fixtures()
+          stop = "INSERT INTO trunk_binds (side, trunk_id, status) VALUES ('customer', $1, $2)"
+          {:ok, _} = Repo.query(stop, [ids.smpp, "stopped"])
+          {:ok, stopped} = Loader.load()
+
+          {:ok, _} =
+            Repo.query("UPDATE trunk_binds SET status = 'offline' WHERE trunk_id = $1", [ids.smpp])
+
+          {:ok, started} = Loader.load()
+          find = fn trunks -> Enum.find(trunks, &(&1.id == ids.smpp)).status end
+          {find.(stopped), find.(started)}
+        end)
+
+      assert statuses == {:inactive, :active}
+    end
   end
 
   describe "vendor Loader on the real schema" do
@@ -166,8 +185,18 @@ defmodule Sms.Switch.Customer.IntegrationTest do
             smpp: trunk.(active, "vt smpp", "smpp", false),
             http: trunk.(active, "vt http", "http", false),
             deleted: trunk.(active, "vt deleted", "smpp", true),
-            of_inactive: trunk.(inactive, "vt inactive", "smpp", false)
+            of_inactive: trunk.(inactive, "vt inactive", "smpp", false),
+            stopped: trunk.(active, "vt stopped", "smpp", false)
           }
+
+          # Stopped on Network Status (backend step 11c): its connections close until Start.
+          {:ok, _} =
+            Repo.query(
+              "INSERT INTO trunk_binds (side, trunk_id, status) VALUES ('vendor', $1, 'stopped')",
+              [
+                ids.stopped
+              ]
+            )
 
           {:ok, trunks} = Vendor.Loader.load()
           {ids, trunks}
@@ -183,6 +212,7 @@ defmodule Sms.Switch.Customer.IntegrationTest do
       assert t.bind_addr_ton == 1 and t.bind_addr_range == "^49" and t.system_type == "VMA"
       assert t.status == :active
       assert by_id[ids.of_inactive].status == :inactive
+      assert by_id[ids.stopped].status == :inactive
       refute Map.has_key?(by_id, ids.http)
       refute Map.has_key?(by_id, ids.deleted)
     end

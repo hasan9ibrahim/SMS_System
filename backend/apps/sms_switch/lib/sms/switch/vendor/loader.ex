@@ -2,14 +2,19 @@ defmodule Sms.Switch.Vendor.Loader do
   @moduledoc """
   Reads the SMPP vendor trunks from PostgreSQL (`vendor_trunks`, spec §5.5), the rows the screens edit. Deleted
   trunks (safe delete, §13.29) and trunks of deleted enterprises are left out; inactive ones are kept so their
-  connections can be closed. A trunk of an inactive enterprise counts as inactive.
+  connections can be closed. A trunk of an inactive enterprise counts as inactive, and so does one a user stopped on
+  Network Status (`trunk_binds` status `stopped`, §9.2, backend step 11c): its connections close and stay closed
+  until Start.
   """
   require Logger
   alias Sms.Core.Repo
   alias Sms.Switch.Vendor.Trunk
 
   @query """
-  SELECT t.id, t.enterprise_id, t.name, t.status, e.status, t.bind_type, t.username, t.password, t.host, t.port,
+  SELECT t.id, t.enterprise_id, t.name,
+         CASE WHEN EXISTS (SELECT 1 FROM trunk_binds b WHERE b.side = 'vendor' AND b.trunk_id = t.id
+                             AND b.status = 'stopped') THEN 'stopped' ELSE t.status END,
+         e.status, t.bind_type, t.username, t.password, t.host, t.port,
          host(t.source_host), t.max_connections, t.system_type, t.service_type, t.ssl_type, t.submit_interval_ms,
          t.submit_timeout_s, t.enquire_link_timeout_s, t.enquire_link_interval_s, t.reconnect_schedule_s,
          t.bind_alert_after_min, t.auth_fail_retry_min, t.msg_id_type, t.tps, t.overflow_buffer, t.window_size,

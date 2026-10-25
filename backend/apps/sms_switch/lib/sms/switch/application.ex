@@ -35,10 +35,15 @@ defmodule Sms.Switch.Application do
           []
 
         true ->
-          [Sms.Switch.Throttle | fence()] ++ sides
+          [Sms.Switch.Throttle | fence()] ++ sides ++ commands()
       end
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Sms.Switch.Supervisor)
+  end
+
+  # Commands from the screens over NATS request/reply (backend step 11c); none on the in-memory test bus.
+  defp commands do
+    if Sms.Core.Bus.adapter() == Sms.Core.Bus.Nats, do: [Sms.Switch.Commands], else: []
   end
 
   # On the servers, with a witness (backend step 8): which server steps back when they lose each other.
