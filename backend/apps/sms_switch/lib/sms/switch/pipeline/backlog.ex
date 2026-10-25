@@ -138,10 +138,12 @@ defmodule Sms.Switch.Pipeline.Backlog do
   defp decide(true, false, state) do
     :persistent_term.put(@key, true)
 
-    Logger.error(
-      "sender behind (#{if state.slow, do: "messages wait over #{state.max_wait} ms", else: "over #{state.max} waiting"}): " <>
-        "new messages refused with 0x58"
-    )
+    why =
+      if state.slow,
+        do: "messages wait over #{state.max_wait} ms",
+        else: "over #{state.max} waiting"
+
+    Logger.error("sender behind (#{why}): new messages refused with 0x58")
   end
 
   defp decide(false, true, _state) do

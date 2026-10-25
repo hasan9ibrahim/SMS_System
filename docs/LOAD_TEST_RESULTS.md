@@ -40,7 +40,7 @@ Each was found by a scenario, fixed in this step and the scenario run again.
 | 2 | ramp | one NATS connection per node was the limit | 4 connections per node |
 | 3 | ramp | the EDR writer fetched one event per request from NATS | 256 per request; charges with 4 workers |
 | 4 | ramp | docker's port proxy took a third of a core for NATS | host networking for NATS (test setup; production runs NATS natively) |
-| 5 | overload | past capacity the switch kept accepting while the sender fell behind: messages left minutes late although accepted | **overload guard**: above 20,000 messages waiting (`SWITCH_MAX_BACKLOG`, about 20 s at 1,000/s) new submits get 0x58 until it is under 80 % |
+| 5 | overload | past capacity the switch kept accepting while the sender fell behind: messages left minutes late although accepted | **overload guard**: while accepted messages wait longer than 10 s for the sender (`SWITCH_MAX_WAIT_MS`), new submits get 0x58 until the wait is under 80 %; a cap of 100,000 unfinished messages as a safety net |
 | 6 | failover | a restarted server took queued messages before its routing config was loaded; they failed and some were dropped | the pipeline starts only once the config is loaded; the other server carries the work meanwhile |
 | 7 | failover | a restarted server bound to vendors and got receipts it could not match yet: lost receipts | vendor connections open only when receipts can be handled; a receipt that comes too early is refused (0x08) so the vendor sends it again |
 | 8 | failover | a server killed between claiming a receipt and queuing it: the customer never got that receipt | the vendor's repeated receipt now forwards it (one stored copy even if both send) |
@@ -114,5 +114,5 @@ in 5-minute chunks:
    one server, so one server crashing loses nothing. Done in `deploy/nats/nats.conf`.
 2. **Bus retention:** 2 days instead of 7 (about 1 TB per server at 50 M/day). Done (`max_age_days`).
 3. **Max Msg Len:** the whole message; empty (any length) is the usual setting. The fake data now seeds it empty.
-4. **Overload answer:** still open: 0x58 or 0x14, and the 20,000 limit (`SWITCH_MAX_BACKLOG`).
+4. **Overload answer:** 0x58, when accepted messages wait over 10 s for the sender (`SWITCH_MAX_WAIT_MS`); messages in a customer trunk's overflow buffer do not count.
 5. **Vendor connections during a cut link:** fixed in step 8 with the witness VM.

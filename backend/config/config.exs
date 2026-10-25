@@ -38,8 +38,12 @@ config :sms_switch, Sms.Switch.Pipeline,
 # What the pipeline keeps about messages in flight is shared by both servers through Redis (§13.1).
 config :sms_switch, Sms.Switch.Pipeline.Store, backend: :redis
 
-# Overload protection (backend step 7): new messages refused (0x58) while the sender has more than `max` unfinished.
-config :sms_switch, Sms.Switch.Pipeline.Backlog, max: 100_000, max_wait_ms: 10_000, interval_ms: 1_000
+# Overload protection (backend step 7): new messages refused (0x58) while accepted ones wait over `max_wait_ms` for the
+# sender, or more than `max` are unfinished (a safety cap).
+config :sms_switch, Sms.Switch.Pipeline.Backlog,
+  max: 100_000,
+  max_wait_ms: 10_000,
+  interval_ms: 1_000
 
 # The customer side of the switch (build step 2, Sms.Switch.Customer): listeners and ports come from the environment
 # in config/runtime.exs; timeouts and windows are in Sms.Switch.Customer.Session. Submits go to the pipeline.

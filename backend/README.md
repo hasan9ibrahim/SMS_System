@@ -188,8 +188,10 @@ The connection settings come from the same environment variables as the mock ser
 `POSTGRES_*`, `CLICKHOUSE_*`, `REDIS_*`, and `NATS_HOSTS` (comma-separated `host:port`). The switch adds
 `SWITCH_NODE_ID`, `SWITCH_CLUSTER_SIZE`, `PLATFORM_CURRENCY` and the `SMPP_*` listener settings.
 `SWITCH_PEERS` (the other servers' node names, comma-separated) connects the nodes, reconnects every 5 s and notices
-a lost link within 10 s. `SWITCH_MAX_BACKLOG` (default 20,000; 0 = off) is the overload guard: above that many
-accepted messages not yet sent, new submits get 0x58 until the backlog is under 80 % (backend step 7).
+a lost link within 10 s. `SWITCH_MAX_WAIT_MS` (default 10,000; 0 = off) is the overload guard: while accepted
+messages wait longer than that for the sender (messages in a customer trunk's overflow buffer do not count), new
+submits get 0x58 until the wait is under 80 %; `SWITCH_MAX_BACKLOG` (default 100,000) is a safety cap on the messages
+not yet finished (backend step 7).
 
 Load tests: `tools/smpp-sim` and `docs/LOAD_TEST_RESULTS.md`.
 
