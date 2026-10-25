@@ -193,6 +193,7 @@ defmodule Sms.Switch.Commands.Inject do
 
   @doc false
   @spec reason_text(term()) :: String.t()
+  def reason_text({:bad_input, text}) when is_binary(text), do: text
   def reason_text({status, reason}) when is_atom(status), do: "#{reason_text(reason)} (#{status})"
   def reason_text(:no_customer_rate), do: "no customer rate for the destination"
   def reason_text(:no_rule), do: "no route rule matches"
@@ -203,7 +204,6 @@ defmodule Sms.Switch.Commands.Inject do
   def reason_text(:unknown_trunk), do: "unknown customer trunk"
   def reason_text(:not_ready), do: "the switch is still loading its configuration"
   def reason_text(:multipart), do: "a multipart message cannot be sent this way"
-  def reason_text({:bad_input, text}), do: text
 
   def reason_text(reason) when is_atom(reason),
     do: reason |> Atom.to_string() |> String.replace("_", " ")
