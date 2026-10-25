@@ -11,7 +11,7 @@ import addFormatsModule from "ajv-formats";
 import { buildServer } from "../src/server.js";
 import { simulateTick } from "../src/live/socket.js";
 import { closeDb } from "../src/db.js";
-import { CURRENT_USER_ID } from "../src/api/session.js";
+import { currentUserId } from "../src/api/session.js";
 
 const require = createRequire(import.meta.url);
 const eventsDir = dirname(require.resolve("@sms/contract/events/catalog.json"));
@@ -51,7 +51,7 @@ test("join, heartbeat, then tps ticks and incidents that match the event schemas
   await new Promise((r) => ws.once("open", r));
 
   ws.send(JSON.stringify(["1", "1", "live:tps", "phx_join", {}]));
-  ws.send(JSON.stringify(["2", "2", `alerts:${CURRENT_USER_ID}`, "phx_join", {}]));
+  ws.send(JSON.stringify(["2", "2", `alerts:${currentUserId()}`, "phx_join", {}]));
   ws.send(JSON.stringify(["3", "3", "nope:topic", "phx_join", {}]));
   ws.send(JSON.stringify([null, "4", "phoenix", "heartbeat", {}]));
   const joined = await waitFor((f) => f[1] === "1" && f[3] === "phx_reply");

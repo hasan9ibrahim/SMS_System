@@ -20,7 +20,7 @@ import { LIFETIME_SQL, leakedListSize, loadPolicy, mapPolicy } from "../admin/pa
 import { logEmail } from "./emailLog.js";
 import type { DiffEntry } from "./records.js";
 import { iso, recordChange } from "./records.js";
-import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
+import { currentUserId, getCurrentUser } from "./session.js";
 
 type Db = pg.Pool | pg.PoolClient;
 /** The Users list's "expiring" filter (§13.28: expiring within 7 days). */
@@ -286,7 +286,7 @@ export function getMyPasswordStatus(_request: FastifyRequest, reply: FastifyRepl
               floor(extract(epoch FROM (u.password_changed_at + ${LIFETIME_SQL} - now())) / 86400)::int AS days_left,
               ${STATE_SQL} AS state
          FROM users u WHERE u.id = $1`,
-      [CURRENT_USER_ID],
+      [currentUserId()],
     );
     const r = rows[0];
     if (!r) return sendProblem(reply, 401, "Sign in again");

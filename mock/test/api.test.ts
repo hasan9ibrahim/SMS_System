@@ -7,7 +7,7 @@ import type { LightMyRequestResponse } from "fastify";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { CURRENT_USER_ID } from "../src/api/session.js";
+import { currentUserId } from "../src/api/session.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -250,7 +250,7 @@ describe("saved views (§13.25)", { skip }, () => {
     );
     await db().query("INSERT INTO saved_view_shares (saved_view_id, user_id) VALUES ($1, $2)", [
       rows[0].id,
-      CURRENT_USER_ID,
+      currentUserId(),
     ]);
     const list = await call("GET", "/views?list=enterprises");
     check("listViews", list);

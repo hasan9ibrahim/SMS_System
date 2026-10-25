@@ -761,3 +761,20 @@
   gap: 4px;
   margin-top: 3px;
 }
+
+/* Staff sign-in (backend step 9, §13.28) */
+.signin-card {
+  width: min(380px, 100%);
+}
+.signin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.signin-field span {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.signin-actions {
+  gap: 8px;
+}

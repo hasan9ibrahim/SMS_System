@@ -13,7 +13,7 @@ import { checkListQuery } from "../lists/validate.js";
 import { isBadRegex } from "./lists.js";
 import { withDescriptions } from "../history/describe.js";
 import { sendProblem } from "../problem.js";
-import { CURRENT_USER_ID, canUndoOthers, getCurrentUser } from "./session.js";
+import { currentUserId, canUndoOthers, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { applyEnterpriseField } from "./enterprises.js";
 import { applyTrunkField } from "./trunks.js";
@@ -566,7 +566,7 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
           JSON.stringify([...revert].reverse().map((d) => ({ ...d, before: d.after, after: d.before }))),
           body.note ?? `Undo of #${id} by ${me.displayName}`,
           id,
-          CURRENT_USER_ID,
+          currentUserId(),
           request.ip,
         ],
       );

@@ -30,7 +30,7 @@ import { sendProblem } from "../problem.js";
 import { archiveGate } from "./enterprises.js";
 import { exportList, notFound, setArchived } from "./masterData.js";
 import { dependencies, recordChange, type DiffEntry, type FieldError } from "./records.js";
-import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
+import { currentUserId, getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
 import { inTransaction } from "./views.js";
 
@@ -429,7 +429,7 @@ export const getIncident = (request: FastifyRequest, reply: FastifyReply) => {
 
 export function listOpenIncidents(_request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
-    const where = `i.state <> 'recovered' AND ${NOTIFIES_ME_SQL(CURRENT_USER_ID)}`;
+    const where = `i.state <> 'recovered' AND ${NOTIFIES_ME_SQL(currentUserId())}`;
     const { rows } = await pool.query(
       `SELECT ${INCIDENT_SELECT} FROM ${INCIDENT_FROM} WHERE ${where} ORDER BY i.started_at DESC LIMIT 50`,
     );

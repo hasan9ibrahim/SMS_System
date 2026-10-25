@@ -58,7 +58,7 @@ import { sendProblem } from "../problem.js";
 import { archiveGate } from "./enterprises.js";
 import { notFound, setArchived } from "./masterData.js";
 import { dependencies, recordChange, type DiffEntry, type FieldError } from "./records.js";
-import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
+import { currentUserId, getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
 import { inTransaction } from "./views.js";
 import { companyDetails, companyPlaceholders, logEmail, senderFor } from "./emailLog.js";
@@ -382,7 +382,7 @@ const users = records<UserInput, NonNullable<Awaited<ReturnType<typeof loadUser>
   check: checkUser,
   nameOf: (b) => b.username,
   deps: userDeps,
-  onArchive: async (c, id) => void (await endSessions(c, "user_id = $1", [id], "forced", CURRENT_USER_ID)),
+  onArchive: async (c, id) => void (await endSessions(c, "user_id = $1", [id], "forced", currentUserId())),
 });
 export const getUser = users.get;
 export const getUserDependencies = users.dependencies;
@@ -460,7 +460,7 @@ export function setUserPassword(request: FastifyRequest, reply: FastifyReply) {
         id,
         hash,
       ]);
-      await endSessions(c, "user_id = $1", [id], "password_change", CURRENT_USER_ID);
+      await endSessions(c, "user_id = $1", [id], "password_change", currentUserId());
       return passwordChange(
         request,
         c,
@@ -572,7 +572,7 @@ const CODE_TRIES = 5;
 const CODE_GAP_S = 60;
 const codeHash = (userId: number, code: string) =>
   createHash("sha256").update(`pwcode:${userId}:${code}`).digest("hex");
-const maskEmail = (e: string) => {
+export const maskEmail = (e: string) => {
   const [local = "", domain = ""] = e.split("@");
   return `${local.slice(0, 1)}***@${domain}`;
 };
@@ -1255,7 +1255,7 @@ const portalUsers = records<PortalUserInput, NonNullable<Awaited<ReturnType<type
   }),
   check: checkPortalUser,
   nameOf: (b) => b.username,
-  onArchive: async (c, id) => void (await endSessions(c, "portal_user_id = $1", [id], "forced", CURRENT_USER_ID)),
+  onArchive: async (c, id) => void (await endSessions(c, "portal_user_id = $1", [id], "forced", currentUserId())),
   restoreClash: async (c, id) => {
     const { rows } = await c.query(
       `SELECT 1 FROM customer_portal_users x JOIN customer_portal_users p ON lower(p.username) = lower(x.username)
@@ -1324,7 +1324,7 @@ export function setPortalUserPassword(request: FastifyRequest, reply: FastifyRep
         id,
         hash,
       ]);
-      await endSessions(c, "portal_user_id = $1", [id], "password_change", CURRENT_USER_ID);
+      await endSessions(c, "portal_user_id = $1", [id], "password_change", currentUserId());
       return passwordChange(request, c, "portal_user_password", id, `Temporary portal password set for ${u.username}`);
     });
     return { record: await loadPortalUser(pool, id), change };

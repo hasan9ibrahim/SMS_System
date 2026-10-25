@@ -13,7 +13,7 @@ import type { FastifyInstance } from "fastify";
 import websocket from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { EVALUATE_EVERY_MS, evaluateRound, setPusher, toEvent } from "../alerts/engine.js";
-import { CURRENT_USER_ID } from "../api/session.js";
+import { currentUserId } from "../api/session.js";
 import { analyticsParams, analyticsSnapshot, type AnalyticsParams } from "./analytics.js";
 import {
   computeMovers,
@@ -235,7 +235,7 @@ export async function simulateTick(withIncident = false) {
   if (withIncident) {
     const at = new Date().toISOString();
     push(
-      `alerts:${CURRENT_USER_ID}`,
+      `alerts:${currentUserId()}`,
       "incident",
       toEvent(
         {

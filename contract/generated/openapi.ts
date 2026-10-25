@@ -22,6 +22,67 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sign in (staff, §13.28)
+     * @description Username and password of a staff user (Admin › Users, §11). Every login then asks for a 2FA code (product owner 2026-10-25): from the authenticator app when the user has one, otherwise a 6-digit code e-mailed to the user's own address. Only an administrator can turn the code off for a user (OTP verification Off). Without a code step the session cookie is set at once. Five wrong passwords in a row lock the user for 15 minutes. One message for an unknown user and a wrong password. A user without Allow Multiple Login has their other sessions ended when the new one starts. An expired, temporary or must-change password still signs in; then only the password change works (403 password_change_required elsewhere). Sessions end after 8 hours without activity and 24 hours after sign-in at most.
+     */
+    post: operations["signIn"];
+    /** Sign out (ends this session) */
+    delete: operations["signOut"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/session/code": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Finish signing in with the 2FA code (§13.28)
+     * @description The challenge from `signIn` and the code. The challenge works for 10 minutes and 5 tries; a wrong code uses one try. On success the session cookie is set.
+     */
+    post: operations["signInCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/session/code/resend": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * E-mail the sign-in code again
+     * @description For an e-mailed code only; at most one per minute. The new code replaces the previous one.
+     */
+    post: operations["resendSignInCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/me": {
     parameters: {
       query?: never;
@@ -32,8 +93,8 @@ export type paths = {
     /**
      * The signed-in user, role and UI preferences
      * @description Drives the avatar menu (§3), the theme (§15.2) and which buttons are shown
-     *     (GUI Access Group, §1). Authentication itself (login, 2FA, monthly password
-     *     change, §13.28) is added in a later contract revision.
+     *     (GUI Access Group, §1). 401 when not signed in: the GUI shows the sign-in screen
+     *     (`signIn`, §13.28).
      */
     get: operations["getCurrentUser"];
     put?: never;
@@ -10393,6 +10454,37 @@ export type components = {
      * @enum {string}
      */
     Theme: "light" | "dark";
+    SignInInput: {
+      username: string;
+      password: string;
+    };
+    SignInChallengeRef: {
+      challenge: string;
+    };
+    SignInCodeInput: {
+      challenge: string;
+      code: string;
+    };
+    /** @description `signed_in` with the user (the cookie is set), or `code_required` with the challenge to send back with the code. */
+    SignInResult: {
+      /** @enum {string} */
+      status: "signed_in" | "code_required";
+      user?: components["schemas"]["CurrentUser"];
+      /** @description Opaque; only with code_required. */
+      challenge?: string;
+      /**
+       * @description Where the code comes from; only with code_required.
+       * @enum {string}
+       */
+      method?: "authenticator" | "email";
+      /** @description The masked e-mail address the code went to (method email), e.g. j***@example.com. */
+      sentTo?: string;
+      /**
+       * Format: date-time
+       * @description When the challenge ends.
+       */
+      expiresAt?: string;
+    };
     CurrentUser: {
       id: components["schemas"]["Id"];
       username: string;
@@ -15782,7 +15874,7 @@ export type components = {
       status: components["schemas"]["RecordStatus"];
       allowMultipleLogin: boolean;
       /**
-       * @description OTP verification at login (§13.28, team trial round 1): a code by e-mail, or from an authenticator app such as Google Authenticator (the user enrols with the QR 2FA set-up first).
+       * @description OTP verification at login (§13.28, team trial round 1): a code by e-mail, or from an authenticator app such as Google Authenticator (the user enrols with the QR 2FA set-up first). A code is asked at every login (product owner 2026-10-25); e-mail is the default and Off is an administrator's choice for one user.
        * @enum {string}
        */
       otpMethod: "off" | "email" | "authenticator";
@@ -19087,7 +19179,7 @@ export type components = {
         "application/problem+json": components["schemas"]["Problem"];
       };
     };
-    /** @description Not signed in, or not allowed by the user's GUI Access Group (§1) */
+    /** @description Not signed in (problem `code: sign_in_required`: no session, or it ended - signed out, 8 hours idle, 24 hours after sign-in), or not allowed by the user's GUI Access Group (§1) */
     Unauthorized: {
       headers: {
         [name: string]: unknown;
@@ -19175,6 +19267,132 @@ export interface operations {
           "application/json": components["schemas"]["Health"];
         };
       };
+    };
+  };
+  signIn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SignInInput"];
+      };
+    };
+    responses: {
+      /** @description Signed in, or a code is needed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignInResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      /** @description Locked after too many wrong passwords, or too many sign-ins from this address */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  signOut: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Signed out; the session cookie is cleared */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+    };
+  };
+  signInCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SignInCodeInput"];
+      };
+    };
+    responses: {
+      /** @description Signed in */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignInResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      /** @description Wrong code, or the challenge expired or used all its tries (sign in again) */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  resendSignInCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SignInChallengeRef"];
+      };
+    };
+    responses: {
+      /** @description Sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignInResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      /** @description The challenge expired (sign in again) */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
     };
   };
   getCurrentUser: {

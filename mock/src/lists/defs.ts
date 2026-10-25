@@ -10,7 +10,7 @@ import {
   sessionList,
   userList,
 } from "./adminDefs.js";
-import { CURRENT_USER_ID } from "../api/session.js";
+import { currentUserId } from "../api/session.js";
 import { alertRuleList, incidentList } from "./alertDefs.js";
 import { rnLineList, rnList } from "./rnDefs.js";
 import { marketMoveList } from "../api/marketMoves.js";
@@ -3143,7 +3143,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   email_templates: emailTemplateList as ListDef<unknown>,
   departments: departmentList as ListDef<unknown>,
   access_groups: accessGroupList as ListDef<unknown>,
-  user_sessions: sessionList(CURRENT_USER_ID) as ListDef<unknown>,
+  user_sessions: sessionList(currentUserId()) as ListDef<unknown>,
   audit_log: auditList as ListDef<unknown>,
   business_companies: businessCompanyList as ListDef<unknown>,
   customer_portal_users: portalUserList as ListDef<unknown>,

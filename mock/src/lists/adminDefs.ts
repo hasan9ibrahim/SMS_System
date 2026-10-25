@@ -14,6 +14,7 @@ import type {
 import { LIFETIME_SQL } from "../admin/passwords.js";
 import type { ListDef } from "./engine.js";
 import { listFields } from "./fields.js";
+import { currentSessionId } from "../auth/user.js";
 
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
 const str = (v: unknown) => (v as string | null) ?? null;
@@ -210,8 +211,13 @@ export const accessGroupList: ListDef<AccessGroupRow> = {
 // ---------------------------------------------------------------- logged-in users
 
 /** The mock has no sign-in yet: "this session" is the newest open session of the current user. */
-export const currentSessionSql = (userId: number) =>
-  `(SELECT max(x.id) FROM user_sessions x WHERE x.user_id = ${Number(userId)} AND x.ended_at IS NULL)`;
+/** The request's own session when signed in (backend step 9), else the user's newest open one. */
+export const currentSessionSql = (userId: number) => {
+  const sid = currentSessionId();
+  return sid !== null
+    ? String(Number(sid))
+    : `(SELECT max(x.id) FROM user_sessions x WHERE x.user_id = ${Number(userId)} AND x.ended_at IS NULL)`;
+};
 export const SESSION_FROM = `user_sessions s
     LEFT JOIN users u ON u.id = s.user_id
     LEFT JOIN customer_portal_users p ON p.id = s.portal_user_id

@@ -34,7 +34,7 @@ import { logEmail } from "./emailLog.js";
 import { applyLineEdits, checkLineEdits, noticePeriods, type EditTable } from "./rates.js";
 import { iso, recordChange, type DiffEntry } from "./records.js";
 import { emailRateSheets } from "./switchTools.js";
-import { CURRENT_USER_ID, getCurrentUser } from "./session.js";
+import { currentUserId, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -879,7 +879,7 @@ async function autoApply(moveId: number): Promise<number> {
     const table: EditTable = { id: Number(t.id), name: t.name, kind: "customer", currency: t.currency, notice: null };
     await inTransaction(c as pg.Pool, async (tx) => {
       const diff: DiffEntry[] = [];
-      await applyLineEdits(tx, table, edits, ids, CURRENT_USER_ID, new Date(), diff, []);
+      await applyLineEdits(tx, table, edits, ids, currentUserId(), new Date(), diff, []);
       if (!diff.length) return;
       await tx.query("SELECT refresh_rate_table_stats($1::bigint[])", [[table.id]]);
       await recordChange(tx, {
@@ -888,7 +888,7 @@ async function autoApply(moveId: number): Promise<number> {
         changeType: "edit",
         diff,
         note: `Auto-apply after market move #${moveId} (${ruleLabel(rule)})`,
-        userId: CURRENT_USER_ID,
+        userId: currentUserId(),
       });
       await log(
         tx,

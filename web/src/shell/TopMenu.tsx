@@ -16,6 +16,7 @@ import { openAlertSounds } from "../pages/monitoring/alerts/parts";
 import { ask } from "../ui/feedback";
 import { ViewAsDialog } from "./ViewAsBanner";
 import { SystemClock } from "./SystemClock";
+import { signOut } from "./SignIn";
 
 const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n < 100 ? 1 : 0 });
 
@@ -201,7 +202,7 @@ function Avatar() {
             { label: "Change password", icon: "lock", disabled: !me, onSelect: () => me && void openMyPassword(me.id) },
             // §13.6: mute and a sound per severity.
             { label: "Alert sounds", icon: "bell", onSelect: () => void openAlertSounds() },
-            { label: "Sign out", icon: "logout", disabled: true, hint: "§13.28", onSelect: () => undefined },
+            { label: "Sign out", icon: "logout", onSelect: () => void signOut() },
           ]}
         />
       </Popover>
