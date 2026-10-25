@@ -8,6 +8,9 @@
 #   lab.sh cut <a> <b>     cut the network between two machines (both directions)
 #   lab.sh heal            remove every cut
 #   lab.sh poweroff <m>    stop a machine at once (a server losing power); lab.sh start <m> starts it again
+#
+# LAB_CA_FILE: a CA bundle the machines should also trust (a network that inspects HTTPS through a proxy).
+# LAB_HTTPS_PROXY: a proxy the machines must use to reach the internet (e.g. http://10.88.0.1:3128).
 set -euo pipefail
 cd "$(dirname "$0")"
 NET=sms-lab
@@ -29,6 +32,23 @@ case "${1:-}" in
         sms-lab-node >/dev/null
       docker exec -i "lab-$m" sh -c "cat > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys" < $KEY.pub
     done
+    if [[ -n "${LAB_HTTPS_PROXY:-}" ]]; then
+      no_proxy="localhost,127.0.0.1,${IP[srv-a]},${IP[srv-b]},${IP[witness]},${IP[s3]}"
+      for m in srv-a srv-b witness; do
+        docker exec -i "lab-$m" sh -c "cat > /etc/environment && printf 'Acquire::https::Proxy \"%s\";\n' \
+          '$LAB_HTTPS_PROXY' > /etc/apt/apt.conf.d/90lab-proxy" <<ENV
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+https_proxy=$LAB_HTTPS_PROXY
+no_proxy=$no_proxy
+ENV
+      done
+    fi
+    if [[ -n "${LAB_CA_FILE:-}" ]]; then
+      for m in srv-a srv-b witness; do
+        docker exec -i "lab-$m" sh -c "cat > /usr/local/share/ca-certificates/lab-extra.crt && update-ca-certificates >/dev/null 2>&1" \
+          < "$LAB_CA_FILE"
+      done
+    fi
     # S3 storage with a self-signed certificate (pgBackRest speaks S3 only over TLS). SeaweedFS's S3 gateway stands in
     # for the off-site provider; MinIO no longer publishes images or binaries.
     if ! docker inspect lab-s3 >/dev/null 2>&1; then

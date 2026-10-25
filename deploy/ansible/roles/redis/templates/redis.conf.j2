@@ -1,0 +1,6 @@
+# {{ ansible_managed }} (deploy/ansible/roles/redis). Written once: Sentinel rewrites the replication lines after a
+# failover. Settings that may change are in /etc/redis/sms.conf.
+include /etc/redis/sms.conf
+{% if inventory_hostname != groups['servers'][0] %}
+replicaof {{ hostvars[groups['servers'][0]].private_ip }} {{ ports.redis }}
+{% endif %}

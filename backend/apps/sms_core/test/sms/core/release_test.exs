@@ -119,6 +119,19 @@ defmodule Sms.Core.ReleaseUnitTest do
            ]
   end
 
+  test "on a Replicated database the MergeTree family becomes replicated" do
+    assert Release.replicated("CREATE TABLE a (x Int8)\nENGINE = MergeTree\nORDER BY x") ==
+             "CREATE TABLE a (x Int8)\nENGINE = ReplicatedMergeTree\nORDER BY x"
+
+    assert Release.replicated("ENGINE=SummingMergeTree ORDER BY x") ==
+             "ENGINE = ReplicatedSummingMergeTree ORDER BY x"
+
+    assert Release.replicated("ENGINE = ReplicatedMergeTree ORDER BY x") ==
+             "ENGINE = ReplicatedMergeTree ORDER BY x"
+
+    assert Release.replicated("ENGINE = Memory") == "ENGINE = Memory"
+  end
+
   test "the schema files: SMS_DB_DIR, else the release's db/, else the repository's" do
     assert File.dir?(Path.join(Release.db_dir(), "postgres/migrations"))
     System.put_env("SMS_DB_DIR", "/elsewhere")

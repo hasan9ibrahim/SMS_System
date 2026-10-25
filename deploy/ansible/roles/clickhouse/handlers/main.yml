@@ -1,0 +1,4 @@
+- name: clickhouse restart
+  ansible.builtin.systemd_service: {name: clickhouse-server, state: restarted}
+- name: keeper restart
+  ansible.builtin.systemd_service: {name: clickhouse-keeper, state: restarted}

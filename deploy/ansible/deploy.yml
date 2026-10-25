@@ -1,0 +1,121 @@
+# Installs a switch release and rolls it out one machine at a time (backend step 8, README.md "Deploying").
+#
+#   ./build-release.sh                                         builds releases/sms-<commit>.tar.gz
+#   ansible-playbook deploy.yml -e release=<commit>            the lab
+#   ansible-playbook -i inventories/production deploy.yml -e release=<commit> --ask-vault-pass
+#
+# Rollback: the same with the previous release's id (it is still on the machines; nothing is uploaded again).
+# Migrations run first, from the first server, before any machine runs the new code: they must work with the old
+# version too (spec §14.1).
+- name: Upload the release to every machine
+  hosts: all
+  vars:
+    release_dir: "{{ switch_root }}/releases/{{ release }}"
+  tasks:
+    - name: A release id is given
+      ansible.builtin.assert:
+        that: release is defined
+        fail_msg: "-e release=<id> (see build-release.sh)"
+      run_once: true
+
+    - name: Already on the machine?
+      ansible.builtin.stat: {path: "{{ release_dir }}/bin/sms"}
+      register: present
+
+    - name: Folder
+      ansible.builtin.file: {path: "{{ release_dir }}", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0750"}
+      when: not present.stat.exists
+
+    - name: Unpack
+      ansible.builtin.unarchive:
+        src: "releases/sms-{{ release }}.tar.gz"
+        dest: "{{ release_dir }}"
+        owner: "{{ switch_user }}"
+        group: "{{ switch_user }}"
+      when: not present.stat.exists
+
+- name: Migrate the databases (once, from the first server)
+  hosts: "{{ groups['servers'][0] }}"
+  tasks:
+    - name: Migrations
+      ansible.builtin.shell: |
+        set -a; . /etc/sms/switch.env; set +a
+        {{ switch_root }}/releases/{{ release }}/bin/sms eval 'IO.inspect(Sms.Core.Release.migrate())'
+      become: true
+      become_user: "{{ switch_user }}"
+      register: migrated
+      changed_when: "'postgres: []' not in migrated.stdout"
+
+    - name: Applied
+      ansible.builtin.debug: {var: migrated.stdout_lines}
+
+- name: Which machines run the switch now
+  hosts: servers:witness
+  tasks:
+    - name: Running?
+      ansible.builtin.command: systemctl is-active sms-switch
+      register: active
+      changed_when: false
+      failed_when: false
+
+    - name: Remember
+      ansible.builtin.set_fact: {switch_was_running: "{{ active.stdout == 'active' }}"}
+
+- name: Roll out, one server at a time, then the witness
+  hosts: servers:witness
+  serial: 1
+  order: inventory
+  vars:
+    others_running: >-
+      {{ (groups['servers'] + groups['witness']) | difference([inventory_hostname])
+         | map('extract', hostvars, 'switch_was_running') | map('bool') | select | list }}
+  tasks:
+    - name: Current release
+      ansible.builtin.stat: {path: "{{ switch_root }}/current"}
+      register: before
+
+    - name: Stop (customers and vendors unbound cleanly; the other server carries the traffic)
+      ansible.builtin.systemd_service: {name: sms-switch, state: stopped}
+      when: before.stat.exists
+
+    - name: Point to the release
+      ansible.builtin.file:
+        src: "{{ switch_root }}/releases/{{ release }}"
+        dest: "{{ switch_root }}/current"
+        state: link
+        force: true
+        owner: "{{ switch_user }}"
+        group: "{{ switch_user }}"
+
+    - name: Start
+      ansible.builtin.systemd_service: {name: sms-switch, state: started, daemon_reload: true}
+
+    - name: Healthy (every store and the bus answer)
+      ansible.builtin.uri: {url: "http://127.0.0.1:{{ ports.switch_health | default(ports.switch_http) }}/health"}
+      register: health
+      retries: 60
+      delay: 2
+      until: health.status == 200
+
+    # On a first install the other machines are not running the switch yet, so only the configuration is awaited.
+    - name: Joined the cluster (when another machine runs it) and, on a server, has its routing configuration
+      ansible.builtin.uri: {url: "http://127.0.0.1:{{ ports.switch_http }}/metrics", return_content: true}
+      register: metrics
+      retries: 60
+      delay: 2
+      until: >-
+        metrics.status == 200
+        and (others_running | length == 0 or metrics.content is search('sms_cluster_peers_connected [1-9]'))
+        and (inventory_hostname in groups['witness'] or 'sms_config_loaded 1' in metrics.content)
+
+- name: Keep the last five releases
+  hosts: all
+  tasks:
+    - name: Releases, oldest first
+      ansible.builtin.shell: ls -1tr {{ switch_root }}/releases
+      register: releases
+      changed_when: false
+
+    - name: Remove older ones (never the current one)
+      ansible.builtin.file: {path: "{{ switch_root }}/releases/{{ item }}", state: absent}
+      loop: "{{ releases.stdout_lines[:-5] | reject('equalto', release) | list }}"

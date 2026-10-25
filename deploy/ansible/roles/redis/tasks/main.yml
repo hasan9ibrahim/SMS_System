@@ -1,0 +1,54 @@
+# Redis for the live counters both servers share (TPS, credit, duplicate filter, messages in flight; spec §14): the
+# primary on the first server, a replica on the second, Sentinel on all three machines. When the primary is gone for
+# 5 s, the sentinels (2 of 3 agreeing) promote the replica and the switch follows (REDIS_SENTINELS).
+#
+# Sentinel and Redis rewrite their own files after a failover, so those files are written once (marker file); the
+# settings that may change later are in sms.conf, which Redis includes.
+- name: Redis
+  ansible.builtin.apt:
+    name: "{{ ['redis-server', 'redis-sentinel'] if inventory_hostname in groups['servers'] else ['redis-sentinel'] }}"
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Whether the files Redis and Sentinel rewrite are ours yet (the package ships its own)
+  ansible.builtin.stat: {path: /etc/redis/.sms-initialized}
+  register: initialized
+
+- name: Redis settings that may change
+  ansible.builtin.template: {src: sms.conf.j2, dest: /etc/redis/sms.conf, owner: redis, group: redis, mode: "0640"}
+  when: inventory_hostname in groups['servers']
+  notify: redis restart
+
+- name: Redis main file (written once; Sentinel rewrites its replicaof line)
+  ansible.builtin.template: {src: redis.conf.j2, dest: /etc/redis/redis.conf, owner: redis, group: redis, mode: "0640"}
+  when: inventory_hostname in groups['servers'] and not initialized.stat.exists
+  notify: redis restart
+
+- name: Redis running
+  ansible.builtin.systemd_service: {name: redis-server, enabled: true, state: started}
+  when: inventory_hostname in groups['servers']
+
+- name: Sentinel file (written once; Sentinel keeps its state in it)
+  ansible.builtin.template: {src: sentinel.conf.j2, dest: /etc/redis/sentinel.conf, owner: redis, group: redis, mode: "0640"}
+  when: not initialized.stat.exists
+  notify: sentinel restart
+
+- name: From now on Redis and Sentinel own those two files
+  ansible.builtin.copy: {dest: /etc/redis/.sms-initialized, content: "written by deploy/ansible; delete to rewrite\n", mode: "0644"}
+
+- name: Sentinel running
+  ansible.builtin.systemd_service: {name: redis-sentinel, enabled: true, state: started}
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: The sentinels agree on a primary
+  ansible.builtin.command: >-
+    redis-cli -p {{ ports.sentinel }} -a {{ vault_redis_password }} --no-auth-warning
+    sentinel get-master-addr-by-name {{ redis_sentinel_group }}
+  register: primary
+  retries: 30
+  delay: 2
+  until: primary.rc == 0 and primary.stdout_lines | length == 2
+  changed_when: false
+  no_log: true

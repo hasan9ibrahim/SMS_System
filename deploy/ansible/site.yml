@@ -8,3 +8,16 @@
 - name: The two servers' PostgreSQL
   hosts: servers
   roles: [postgres]
+
+- name: Redis (servers) and Sentinel, NATS (every machine)
+  hosts: all
+  roles: [redis, nats]
+
+- name: ClickHouse (servers) and Keeper (every machine)
+  hosts: all
+  roles: [clickhouse]
+
+- name: The switch's service and settings (one machine at a time, as a settings change restarts it)
+  hosts: servers:witness
+  serial: 1
+  roles: [switch]

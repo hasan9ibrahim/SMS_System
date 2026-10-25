@@ -1,0 +1,80 @@
+# ClickHouse for EDRs and reports (spec §14): both servers hold every EDR (a Replicated database: each table
+# replicated, DDL run on both), coordinated by ClickHouse Keeper on all three machines (the servers run it inside
+# ClickHouse, the witness alone). Inserts go to the local server; a server that was down catches up on start.
+- name: ClickHouse apt key
+  ansible.builtin.get_url:
+    url: https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key
+    dest: /usr/share/keyrings/clickhouse.asc
+    mode: "0644"
+
+- name: ClickHouse apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/clickhouse.list
+    content: "deb [signed-by=/usr/share/keyrings/clickhouse.asc] https://packages.clickhouse.com/deb stable main\n"
+  register: repo
+
+- name: ClickHouse {{ clickhouse_version }} (servers)
+  ansible.builtin.apt:
+    name:
+      - "clickhouse-common-static={{ clickhouse_version }}"
+      - "clickhouse-server={{ clickhouse_version }}"
+      - "clickhouse-client={{ clickhouse_version }}"
+    update_cache: "{{ repo.changed }}"
+  environment: {DEBIAN_FRONTEND: noninteractive}
+  when: inventory_hostname in groups['servers']
+
+- name: ClickHouse Keeper {{ clickhouse_version }} (witness)
+  ansible.builtin.apt:
+    name: ["clickhouse-keeper={{ clickhouse_version }}"]
+    update_cache: "{{ repo.changed }}"
+  when: inventory_hostname in groups['witness']
+
+- name: Server settings (listen, cluster, Keeper, macros, metrics)
+  ansible.builtin.template: {src: config.xml.j2, dest: /etc/clickhouse-server/config.d/sms.xml, owner: clickhouse, group: clickhouse, mode: "0640"}
+  when: inventory_hostname in groups['servers']
+  notify: clickhouse restart
+
+- name: Users (the switch's, the backup's)
+  ansible.builtin.template: {src: users.xml.j2, dest: /etc/clickhouse-server/users.d/sms.xml, owner: clickhouse, group: clickhouse, mode: "0640"}
+  when: inventory_hostname in groups['servers']
+  notify: clickhouse restart
+
+- name: Server running
+  ansible.builtin.systemd_service: {name: clickhouse-server, enabled: true, state: started}
+  when: inventory_hostname in groups['servers']
+
+- name: Keeper settings folder (witness)
+  ansible.builtin.file: {path: /etc/clickhouse-keeper/keeper_config.d, state: directory, owner: clickhouse, group: clickhouse, mode: "0750"}
+  when: inventory_hostname in groups['witness']
+
+- name: Keeper settings (witness)
+  ansible.builtin.template: {src: keeper.xml.j2, dest: /etc/clickhouse-keeper/keeper_config.d/sms.xml, owner: clickhouse, group: clickhouse, mode: "0640"}
+  when: inventory_hostname in groups['witness']
+  notify: keeper restart
+
+- name: Keeper running (witness)
+  ansible.builtin.systemd_service: {name: clickhouse-keeper, enabled: true, state: started}
+  when: inventory_hostname in groups['witness']
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Server answers
+  ansible.builtin.uri: {url: "http://127.0.0.1:{{ ports.ch_http }}/ping"}
+  register: ping
+  retries: 30
+  delay: 2
+  until: ping.status == 200
+  when: inventory_hostname in groups['servers']
+
+- name: The EDR database, replicated (on each server)
+  ansible.builtin.command: >-
+    clickhouse-client --user {{ ch_app_user }} --password {{ vault_clickhouse_password }} --query
+    "CREATE DATABASE IF NOT EXISTS {{ ch_database }} ENGINE = Replicated('/clickhouse/databases/{{ ch_database }}', '{shard}', '{replica}')"
+  register: created
+  retries: 15
+  delay: 4
+  until: created.rc == 0
+  changed_when: false
+  when: inventory_hostname in groups['servers']
+  no_log: true

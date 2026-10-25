@@ -9,7 +9,10 @@ defmodule Sms.Core.Release do
       recorded with its SHA-256. A file whose content changed after it was applied is refused: a new file is needed.
       An advisory lock keeps two runs apart. A database that already has the schema but no record (made by the
       mock's seed) is refused unless `baseline()` first records every file as applied.
-    * **ClickHouse:** every file runs each time (they are idempotent, `IF NOT EXISTS`), statement by statement.
+    * **ClickHouse:** every file runs each time (they are idempotent, `IF NOT EXISTS`), statement by statement. On the
+      servers the EDR database is `Replicated` (both servers hold every EDR; deploy/ansible/roles/clickhouse): there
+      a `...MergeTree` engine is created as `Replicated...MergeTree`, which the database places in Keeper itself.
+      Development and CI keep the plain engines of the same files.
 
   Migrations must work with the version still running on the other server (spec §14.1): add, never rename or drop in
   the same release.
@@ -136,8 +139,14 @@ defmodule Sms.Core.Release do
     {:ok, conn} = Ch.start_link(Keyword.drop(config, [:pool_size]))
 
     try do
+      replicated? =
+        Ch.query!(conn, "SELECT engine FROM system.databases WHERE name = currentDatabase()").rows ==
+          [["Replicated"]]
+
       for {name, path, _sha} <- files(dir, ["clickhouse/migrations"]) do
-        for statement <- statements(File.read!(path)), do: Ch.query!(conn, statement)
+        for statement <- statements(File.read!(path)),
+            do: Ch.query!(conn, if(replicated?, do: replicated(statement), else: statement))
+
         name
       end
     after
@@ -154,6 +163,16 @@ defmodule Sms.Core.Release do
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
   end
+
+  @doc false
+  # A table engine of the MergeTree family as its replicated twin, with no Keeper path (a Replicated database sets it).
+  def replicated(statement),
+    do:
+      Regex.replace(
+        ~r/ENGINE\s*=\s*(?!Replicated)(\w*MergeTree)\b/,
+        statement,
+        "ENGINE = Replicated\\1"
+      )
 
   # ---------------------------------------------------------------- files
 

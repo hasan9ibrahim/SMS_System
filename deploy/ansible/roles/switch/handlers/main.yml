@@ -1,0 +1,5 @@
+# Only once a release is installed; a settings change on a running cluster restarts one machine at a time (serial in
+# site.yml), so the other server carries the traffic meanwhile.
+- name: switch restart
+  ansible.builtin.systemd_service: {name: sms-switch, state: restarted, daemon_reload: true}
+  when: current.stat.exists

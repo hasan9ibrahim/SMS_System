@@ -13,11 +13,13 @@ int = fn name, default ->
 end
 
 prod? = config_env() == :prod
+# The witness VM's node keeps no data store (SWITCH_ROLE below), so it needs none of their credentials.
+witness? = System.get_env("SWITCH_ROLE") == "witness"
 
 required = fn name, dev_default ->
   case System.get_env(name) do
     value when value not in [nil, ""] -> value
-    _ when prod? -> raise ArgumentError, "#{name} is required in production"
+    _ when prod? and not witness? -> raise ArgumentError, "#{name} is required in production"
     _ -> dev_default
   end
 end
@@ -115,6 +117,9 @@ tls_ports =
   cond do
     tls_ports == [] or (certfile != "" and keyfile != "") ->
       tls_ports
+
+    witness? ->
+      []
 
     prod? ->
       raise ArgumentError,
