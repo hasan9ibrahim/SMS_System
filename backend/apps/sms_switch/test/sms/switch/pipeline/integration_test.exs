@@ -98,13 +98,49 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
           [ent, cycle]
         )
 
+        # A prepaid vendor side with its own balance alert levels (migration 073).
+        q.(
+          """
+          INSERT INTO enterprise_billing (enterprise_id, side, currency, billing_cycle_id, billing_type, opening_balance,
+                                          balance_alert_notice)
+          VALUES ($1, 'vendor', 'EUR', $2, 'prepaid', 100, 40)
+          """,
+          [ent, cycle]
+        )
+
+        # A payment of 11 USD counts at the USD rate of its date (product owner 2026-10-25).
+        q.(
+          "INSERT INTO currencies (iso, name, symbol) VALUES ('USD', 'US dollar', '$') ON CONFLICT (iso) DO NOTHING",
+          []
+        )
+
+        q.(
+          "INSERT INTO currency_rates (iso, rate_per_eur, valid_from) VALUES ('USD', 1.1, '2020-01-01') ON CONFLICT DO NOTHING",
+          []
+        )
+
+        q.(
+          """
+          INSERT INTO transactions (enterprise_id, side, payment_mode, payment_type, transaction_type, amount, currency,
+                                    amount_base, payment_date)
+          VALUES ($1, 'customer', 'bank_transfer', 'credit', 'receipt', 11, 'USD', 10, '2026-01-15')
+          """,
+          [ent]
+        )
+
+        [[usd]] = q.("SELECT rate_per_eur_at('USD', '2026-01-15'::timestamptz)", [])
+        paid = Decimal.div(Decimal.new(11), usd)
+        base = paid |> Decimal.add(10) |> Ledger.to_micro()
+
         assert {:ok, accounts} = Postgres.accounts()
-        account = Enum.find(accounts, &(&1.enterprise_id == ent))
+        account = Enum.find(accounts, &(&1.enterprise_id == ent and &1.side == :customer))
+        vendor = Enum.find(accounts, &(&1.enterprise_id == ent and &1.side == :vendor))
+        assert %{prepaid: true, alerts: [40, 70, 90], limit: 0, base: 100_000_000} = vendor
 
         assert %{
                  key: key,
                  side: :customer,
-                 base: 10_000_000,
+                 base: ^base,
                  limit: 50_000_000,
                  prepaid: false,
                  cutoff: 0
@@ -123,12 +159,16 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
 
         # The uninvoiced traffic is in the balance.
         assert {:ok, again} = Postgres.accounts()
-        assert Enum.find(again, &(&1.enterprise_id == ent)).base == 10_000_000
+        assert Enum.find(again, &(&1.enterprise_id == ent and &1.side == :customer)).base == base
 
         assert [[balance]] =
-                 q.("SELECT balance FROM balance_ledger WHERE enterprise_id = $1", [ent])
+                 q.(
+                   "SELECT balance FROM balance_ledger WHERE enterprise_id = $1 AND side = 'customer'",
+                   [ent]
+                 )
 
-        assert Decimal.equal?(balance, Decimal.new(8))
+        # Opening 10 + the payment − 2 of traffic not invoiced yet.
+        assert Ledger.to_micro(balance) == base - 2_000_000
 
         Repo.rollback(:done)
       end)

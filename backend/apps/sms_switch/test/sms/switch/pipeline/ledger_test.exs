@@ -194,10 +194,46 @@ defmodule Sms.Switch.Pipeline.LedgerTest do
       assert List.last(alerts())["level"] == "notice"
     end
 
+    test "a prepaid vendor: Notice / Warning / Critical as its prepaid funds are used, then used up; Balance Alert off: none" do
+      start([
+        [enterprise_id: 31, side: :vendor, prepaid: true, base: "100", alerts: [50, 70, 90]],
+        [enterprise_id: 32, side: :vendor, prepaid: true, base: "1", alerts: []]
+      ])
+
+      assert alerts() == []
+
+      spend = fn id, units ->
+        Ledger.apply_charge(%{
+          "k" => "v31",
+          "id" => id,
+          "b" => 1,
+          "m" => units * 1_000_000,
+          "n" => 1
+        })
+      end
+
+      spend.("a", 55)
+      Sync.sync()
+      assert [%{"level" => "notice", "side" => "vendor", "enterprise_id" => 31}] = alerts()
+      spend.("b", 20)
+      Sync.sync()
+      assert List.last(alerts())["level"] == "warning"
+      spend.("c", 20)
+      Sync.sync()
+      assert List.last(alerts())["level"] == "critical"
+      spend.("d", 5)
+      Sync.sync()
+      assert List.last(alerts())["level"] == "used_up"
+
+      Ledger.apply_charge(%{"k" => "v32", "id" => "x", "b" => 1, "m" => 5_000_000, "n" => 1})
+      Sync.sync()
+      refute Enum.any?(alerts(), &(&1["enterprise_id"] == 32))
+    end
+
     test "a prepaid customer or vendor: an alert when the balance is used up; Credit Alert off: none" do
       start([
         [enterprise_id: 22, prepaid: true, base: "0.01"],
-        [enterprise_id: 23, side: :vendor, prepaid: true, base: "0"],
+        [enterprise_id: 23, side: :vendor, prepaid: true, base: "0", alerts: [50, 70, 90]],
         [enterprise_id: 24, base: "-5", limit: "1", alerts: []]
       ])
 

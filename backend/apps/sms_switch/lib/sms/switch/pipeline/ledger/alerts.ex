@@ -6,8 +6,10 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
     * a customer with a credit limit and Credit Alert on: the share of the limit in use (how far the balance is below
       0) is compared with its Notice, Warning and Critical percentages; at 100 % it has reached its limit and its
       messages are refused;
-    * a prepaid customer (no credit limit) or a prepaid vendor: an alert when the balance is used up (0 or less).
-      Q22: our balance with a prepaid vendor only alerts, it never stops traffic.
+    * a prepaid customer (no credit limit): an alert when the balance is used up (0 or less);
+    * a prepaid vendor with Balance Alert on (Q22, product owner 2026-10-25): its Notice / Warning / Critical
+      percentages (default 50 / 70 / 90) of the prepaid funds used, and the funds used up. It only alerts, it never
+      stops traffic.
 
   Each account's last level is kept in Redis (`cal:`), so one alert goes out per level reached, by one server, and a
   payment that brings the level down re-arms it. Alerts are events (`sms.billing.credit_alert`); the API sends the
@@ -28,7 +30,9 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
   end
 
   defp watched?(%{side: :customer, alerts: [_ | _], limit: limit}) when limit > 0, do: true
-  defp watched?(%{prepaid: true}), do: true
+  defp watched?(%{side: :customer, prepaid: true}), do: true
+  # Balance alert off: no alerts for this vendor.
+  defp watched?(%{side: :vendor, prepaid: true, alerts: [_ | _]}), do: true
   defp watched?(_account), do: false
 
   defp check_one(account) do
@@ -57,6 +61,14 @@ defmodule Sms.Switch.Pipeline.Ledger.Alerts do
   # 0 none; 1–3 the Notice / Warning / Critical percentage of the credit limit in use; 4 the limit reached; 5 a
   # prepaid balance used up.
   @spec level(Ledger.account(), integer()) :: 0..5
+  # A prepaid vendor: the share of the prepaid funds (the base: payments − accepted invoices) used since its last
+  # invoice, against its balance alert levels (product owner 2026-10-25).
+  def level(%{side: :vendor, prepaid: true, base: base, alerts: alerts}, balance) do
+    if balance <= 0,
+      do: 5,
+      else: alerts |> Enum.take_while(&((base - balance) * 100 / base >= &1)) |> length()
+  end
+
   def level(%{prepaid: true}, balance), do: if(balance <= 0, do: 5, else: 0)
 
   def level(%{limit: limit, alerts: alerts}, balance) do

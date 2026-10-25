@@ -23,7 +23,11 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
     @accounts """
     SELECT l.enterprise_id, l.side, l.currency, l.billing_type, l.credit_limit, l.base,
            CASE WHEN l.cutoff = '-infinity' THEN NULL ELSE extract(epoch FROM l.cutoff)::bigint END,
-           e.credit_alert, e.credit_alert_notice, e.credit_alert_warning, e.credit_alert_critical,
+           -- Customer: the enterprise's credit alert; vendor: its balance alert (Q22, migration 073).
+           CASE WHEN l.side = 'vendor' THEN b.balance_alert ELSE e.credit_alert END,
+           CASE WHEN l.side = 'vendor' THEN b.balance_alert_notice ELSE e.credit_alert_notice END,
+           CASE WHEN l.side = 'vendor' THEN b.balance_alert_warning ELSE e.credit_alert_warning END,
+           CASE WHEN l.side = 'vendor' THEN b.balance_alert_critical ELSE e.credit_alert_critical END,
            -- Period starts in the partner's time zone, for accumulated revenue conditions (§13.9).
            extract(epoch FROM date_trunc('day', now() AT TIME ZONE b.timezone) AT TIME ZONE b.timezone)::bigint,
            extract(epoch FROM date_trunc('week', now() AT TIME ZONE b.timezone) AT TIME ZONE b.timezone)::bigint,

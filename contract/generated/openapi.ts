@@ -10779,12 +10779,15 @@ export type components = {
       billingCycleId?: components["schemas"]["Id"];
       timezone?: string;
       /**
-       * @description Customer side only.
+       * @description Customer: prepaid stops at a balance of 0, postpaid may use its credit limit (§7). Vendor: prepaid means we pay the vendor in advance; its balance alerts (`balanceAlert`, Q22) and never stops traffic.
        * @enum {string|null}
        */
       billingType?: "prepaid" | "postpaid" | null;
       /** @description Customer side, postpaid. */
       creditLimit?: number | null;
+      /** @description Vendor side, prepaid (Q22, product owner 2026-10-25). Alert when the share of the prepaid funds used reaches each level of `balanceAlertPercent`, and when they are used up. Default on. */
+      balanceAlert?: boolean;
+      balanceAlertPercent?: components["schemas"]["CreditAlertPercent"];
       /** @description Positive = the partner starts in credit, negative = they start owing (§7 balance sign). */
       openingBalance?: number;
       /** @description Customer side only. */
@@ -10801,7 +10804,7 @@ export type components = {
       components["schemas"]["BillingSideFields"],
       "currency" | "billingCycleId" | "timezone" | "openingBalance"
     > & {
-      /** @description Opening balance + payments and credits − usage charges, in the side's currency (§7, decided 2026-10-17): positive = the partner's credit with us, negative = what the client owes us (customer) or what we owe the vendor (vendor). */
+      /** @description Opening balance + payments and credits − invoiced charges − traffic charged since the last invoice, in the side's currency (§7, decided 2026-10-17; live from backend step 6). Payments and invoices in another currency count at the exchange rate of their date (product owner 2026-10-25). Positive = the partner's credit with us, negative = what the client owes us (customer) or what we owe the vendor (vendor). */
       balance: number;
       billingCycleName: string;
       updatedBy: string | null;

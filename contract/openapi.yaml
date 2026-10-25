@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.94.0
+  version: 0.95.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -16252,11 +16252,18 @@ components:
         billingType:
           type: [string, "null"]
           enum: [prepaid, postpaid, null]
-          description: Customer side only.
+          description: >-
+            Customer: prepaid stops at a balance of 0, postpaid may use its credit limit (§7). Vendor: prepaid means we
+            pay the vendor in advance; its balance alerts (`balanceAlert`, Q22) and never stops traffic.
         creditLimit:
           type: [number, "null"]
           minimum: 0
           description: Customer side, postpaid.
+        balanceAlert:
+          type: boolean
+          description: Vendor side, prepaid (Q22, product owner 2026-10-25). Alert when the share of the prepaid funds used reaches each level of `balanceAlertPercent`, and when they are used up. Default on.
+        balanceAlertPercent:
+          $ref: "#/components/schemas/CreditAlertPercent"
         openingBalance:
           type: number
           description: Positive = the partner starts in credit, negative = they start owing (§7 balance sign).
@@ -16285,7 +16292,7 @@ components:
           properties:
             balance:
               type: number
-              description: "Opening balance + payments and credits − usage charges, in the side's currency (§7, decided 2026-10-17): positive = the partner's credit with us, negative = what the client owes us (customer) or what we owe the vendor (vendor)."
+              description: "Opening balance + payments and credits − invoiced charges − traffic charged since the last invoice, in the side's currency (§7, decided 2026-10-17; live from backend step 6). Payments and invoices in another currency count at the exchange rate of their date (product owner 2026-10-25). Positive = the partner's credit with us, negative = what the client owes us (customer) or what we owe the vendor (vendor)."
             billingCycleName:
               type: string
             updatedBy:
