@@ -1434,6 +1434,7 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "monitoring_alert", label: "Monitoring Alert" },
           { value: "currency_alert", label: "Currency Alert" },
           { value: "am_handover", label: "Account Manager Handover" },
+          { value: "rn_reminder", label: "RN Reminder" },
         ],
       }),
       field({
@@ -1442,6 +1443,7 @@ export const listFields: Record<ListId, ListFields> = {
         type: "enum",
         defaultOperator: "in",
         enumValues: [
+          { value: "queued", label: "Queued" },
           { value: "sent", label: "Sent" },
           { value: "failed", label: "Failed" },
         ],

@@ -12,6 +12,20 @@ import { maskPayload } from "./visibility/walk.js";
 import { isPortalOperation } from "./api/portal.js";
 import { db } from "./db.js";
 import { DEFAULT_USER_ID, requestUser, runAsRequestUser } from "./auth/user.js";
+import { production } from "./mode.js";
+
+/** Operations that would need a command to the switch (contract: SwitchCommandPending). */
+const SWITCH_COMMANDS = new Set([
+  "startTrunkBind",
+  "stopTrunkBind",
+  "repushEdrs",
+  "runRouteSimulator",
+  "startSignalingCapture",
+  "extractRecording",
+  "downloadPcapTrace",
+  "downloadSignalingCapture",
+  "runNetworkDiagnosis",
+]);
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
 const PUBLIC_OPS = new Set(["getHealth", "signIn", "signInCode", "resendSignInCode", "signOut"]);
@@ -94,6 +108,13 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
                 `${op.operationId} is in the contract but not implemented by the mock yet`,
               );
             }
+            // Production (backend step 11): actions that need a switch command are not simulated.
+            if (production && SWITCH_COMMANDS.has(op.operationId))
+              return sendProblem(reply, 501, "Not available yet", {
+                detail:
+                  "This action needs a command to the SMPP switch, which comes in a later backend step. Nothing was done.",
+                code: "switch_command_pending",
+              });
             // The customer portal has its own sign-in and sees only its own data: no staff gate or visibility.
             if (isPortalOperation(op.operationId)) return handler(request, reply);
             // The signed-in user: forwarded by the Elixir API, from the session cookie, or the default user

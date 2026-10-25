@@ -25,7 +25,15 @@ import { billingContacts } from "./finance.js";
 import { exportList, load, notFound, setArchived } from "./masterData.js";
 import { dependencies, isTimezone, recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
-import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
+import {
+  companyDetails,
+  companyMailbox,
+  companyPlaceholders,
+  companyTemplate,
+  logEmail,
+  type EmailAttachment,
+} from "./emailLog.js";
+import { production } from "../mode.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -36,8 +44,8 @@ const badInput = (reply: FastifyReply, errors: FieldError[]) =>
 const money = (v: number) => Math.round(v * 100) / 100;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (day: string, n: number) => ymd(new Date(Date.parse(day) + n * 86400_000));
-/** Pause between job steps, so the grid shows each status (INVOICE_JOB_STEP_MS, default 700 ms). */
-const stepMs = () => Number(process.env.INVOICE_JOB_STEP_MS ?? 700);
+/** Pause between job steps, so the grid shows each status (INVOICE_JOB_STEP_MS, default 700 ms; none in production). */
+const stepMs = () => (production ? 0 : Number(process.env.INVOICE_JOB_STEP_MS ?? 700));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------------- read
@@ -237,58 +245,62 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
         409,
         `Invoice ${inv.invoiceNumber} is ${inv.status}; the PDF exists once it is completed`,
       );
-    const { rows } = await pool.query("SELECT name, address_line1, city, vat_number, account_number FROM enterprises WHERE id = $1", [
-      inv.enterpriseId,
-    ]);
-    const p = rows[0]!;
-    // The partner's business company issues the invoice: its name, address and bank account (§11).
-    const bc = await companyDetails(pool, { enterpriseId: inv.enterpriseId });
-    const charges = await chargeLines(pool, inv);
-    const top = charges.rows.slice(0, 18);
-    const pdf = simplePdf([
-      { text: bc?.name ?? "", size: 16, bold: true, gap: 0 },
-      { text: bc?.address ?? "" },
-      { text: bc?.website ?? "" },
-      { text: inv.kind === "proforma" ? "PROFORMA INVOICE" : "INVOICE", size: 14, bold: true, gap: 30 },
-      { text: `Invoice No: ${inv.invoiceNumber}` },
-      // The client's account number with us, when set (team trial round 4).
-      ...(p.account_number ? [{ text: `Account No: ${p.account_number}` }] : []),
-      { text: `Invoice Date: ${inv.invoiceDate}    Payment Due Date: ${inv.dueDate}` },
-      { text: `Usage period: ${inv.usageStart} to ${inv.usageEnd} (${inv.timezone})` },
-      { text: "Bill to", bold: true, gap: 24 },
-      { text: p.name },
-      { text: [p.address_line1, p.city].filter(Boolean).join(", ") },
-      { text: p.vat_number ? `VAT ${p.vat_number}` : "" },
-      { text: "Summary", bold: true, gap: 24 },
-      { text: `Messages: ${inv.messageCount.toLocaleString("en-US")}` },
-      { text: `Opening Balance: ${amt(inv.openingBalance ?? 0, inv.currency)}` },
-      { text: `Usage Charges: ${amt(inv.usageCharges ?? 0, inv.currency)}` },
-      { text: `Closing Balance: ${amt(inv.closingBalance ?? 0, inv.currency)}` },
-      { text: `Due Amount: ${amt(inv.dueAmount ?? 0, inv.currency)}`, bold: true },
-      { text: "Balances: positive = your credit with us, negative = amount owed.", size: 8 },
-      ...(top.length
-        ? [
-            { text: "Charge details (largest first)", bold: true, gap: 24 },
-            ...top.map((r) => ({
-              text: `${r.mccmnc}  ${r.country ?? ""} ${r.network ?? ""}  ${r.messages.toLocaleString("en-US")} msgs  ${amt(r.amount, inv.currency)}`,
-              size: 9,
-            })),
-          ]
-        : []),
-      ...(charges.note ? [{ text: charges.note, size: 8, gap: 18 }] : []),
-      ...(bc?.bank.length
-        ? [
-            { text: "Payment details", bold: true, gap: 24 },
-            ...bc.bank.map((b) => ({ text: `${b.label}: ${b.value}`, size: 9 })),
-            { text: `Please quote invoice ${inv.invoiceNumber} with your payment.`, size: 8, gap: 16 },
-          ]
-        : []),
-    ]);
     return reply
       .type("application/pdf")
       .header("content-disposition", `attachment; filename="${inv.invoiceNumber}.pdf"`)
-      .send(pdf);
+      .send(await invoicePdf(pool, inv));
   });
+}
+
+/** The invoice PDF (downloaded, and attached to the invoice e-mail). */
+async function invoicePdf(pool: Db, inv: NonNullable<Awaited<ReturnType<typeof loadInvoice>>>): Promise<Buffer> {
+  const { rows } = await pool.query("SELECT name, address_line1, city, vat_number, account_number FROM enterprises WHERE id = $1", [
+    inv.enterpriseId,
+  ]);
+  const p = rows[0]!;
+  // The partner's business company issues the invoice: its name, address and bank account (§11).
+  const bc = await companyDetails(pool, { enterpriseId: inv.enterpriseId });
+  const charges = await chargeLines(pool, inv);
+  const top = charges.rows.slice(0, 18);
+  return simplePdf([
+    { text: bc?.name ?? "", size: 16, bold: true, gap: 0 },
+    { text: bc?.address ?? "" },
+    { text: bc?.website ?? "" },
+    { text: inv.kind === "proforma" ? "PROFORMA INVOICE" : "INVOICE", size: 14, bold: true, gap: 30 },
+    { text: `Invoice No: ${inv.invoiceNumber}` },
+    // The client's account number with us, when set (team trial round 4).
+    ...(p.account_number ? [{ text: `Account No: ${p.account_number}` }] : []),
+    { text: `Invoice Date: ${inv.invoiceDate}    Payment Due Date: ${inv.dueDate}` },
+    { text: `Usage period: ${inv.usageStart} to ${inv.usageEnd} (${inv.timezone})` },
+    { text: "Bill to", bold: true, gap: 24 },
+    { text: p.name },
+    { text: [p.address_line1, p.city].filter(Boolean).join(", ") },
+    { text: p.vat_number ? `VAT ${p.vat_number}` : "" },
+    { text: "Summary", bold: true, gap: 24 },
+    { text: `Messages: ${inv.messageCount.toLocaleString("en-US")}` },
+    { text: `Opening Balance: ${amt(inv.openingBalance ?? 0, inv.currency)}` },
+    { text: `Usage Charges: ${amt(inv.usageCharges ?? 0, inv.currency)}` },
+    { text: `Closing Balance: ${amt(inv.closingBalance ?? 0, inv.currency)}` },
+    { text: `Due Amount: ${amt(inv.dueAmount ?? 0, inv.currency)}`, bold: true },
+    { text: "Balances: positive = your credit with us, negative = amount owed.", size: 8 },
+    ...(top.length
+      ? [
+          { text: "Charge details (largest first)", bold: true, gap: 24 },
+          ...top.map((r) => ({
+            text: `${r.mccmnc}  ${r.country ?? ""} ${r.network ?? ""}  ${r.messages.toLocaleString("en-US")} msgs  ${amt(r.amount, inv.currency)}`,
+            size: 9,
+          })),
+        ]
+      : []),
+    ...(charges.note ? [{ text: charges.note, size: 8, gap: 18 }] : []),
+    ...(bc?.bank.length
+      ? [
+          { text: "Payment details", bold: true, gap: 24 },
+          ...bc.bank.map((b) => ({ text: `${b.label}: ${b.value}`, size: 9 })),
+          { text: `Please quote invoice ${inv.invoiceNumber} with your payment.`, size: 8, gap: 16 },
+        ]
+      : []),
+  ]);
 }
 
 // ---------------------------------------------------------------- send and mark
@@ -316,6 +328,42 @@ async function invoiceMail(c: Db, id: number) {
     due_date: inv.dueDate,
   };
   return { subject: fillText(tpl.subject, vars), body: fillBody(tpl.body, vars) };
+}
+
+/** The invoice PDF for its e-mail (production only: nothing is sent elsewhere). */
+async function invoiceAttachment(c: Db, id: number, fileName: string): Promise<EmailAttachment[]> {
+  if (!production) return [];
+  const inv = await loadInvoice(c, id);
+  return inv ? [{ fileName, contentType: "application/pdf", content: await invoicePdf(c, inv) }] : [];
+}
+
+/**
+ * E-mails one completed invoice to the partner's billing contacts (Auto Invoicing, §12.3: generated at the end of
+ * the billing cycle and sent with the business company's Invoice template). Returns false when it could not go.
+ */
+export async function emailInvoice(pool: pg.Pool, id: number): Promise<boolean> {
+  const inv = await loadInvoice(pool, id);
+  if (!inv || inv.status !== "completed") return false;
+  const to = await billingContacts(pool, inv.enterpriseId);
+  const mail = await invoiceMail(pool, id);
+  const file = `${inv.invoiceNumber}.pdf`;
+  const status = await logEmail(pool, {
+    type: "invoice",
+    enterpriseId: inv.enterpriseId,
+    to,
+    sender: await companyMailbox(pool, inv.enterpriseId, "invoice"),
+    subject: mail?.subject ?? `Invoice ${inv.invoiceNumber}`,
+    body: mail?.body ?? `Please find attached invoice ${inv.invoiceNumber}.`,
+    file,
+    attachments: to.length ? await invoiceAttachment(pool, id, file) : [],
+    error: to.length ? null : "No billing contact",
+  });
+  if (status !== "sent") return false;
+  await pool.query(
+    "UPDATE invoices SET email_status = 'sent', email_sent_at = now(), email_recipients = $2, updated_at = now() WHERE id = $1",
+    [id, to],
+  );
+  return true;
 }
 
 export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
@@ -371,6 +419,7 @@ export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
           subject: mail?.subject ?? `Invoice ${s.number}`,
           body: mail?.body ?? `Please find attached invoice ${s.number}.`,
           file: `${s.number}.pdf`,
+          attachments: await invoiceAttachment(c, s.id, `${s.number}.pdf`),
           userId: me.id,
         });
       }
@@ -729,7 +778,8 @@ export async function runInvoiceRequest(requestId: number): Promise<void> {
       const cov = await edrCoverage();
       if (!cov) throw new JobError("The EDR store is not reachable");
       const coverage = coverageOf(cov, from, to, r.timezone);
-      if (coverage !== "full")
+      // Production (backend step 11): days before the first message are simply days without traffic.
+      if (coverage !== "full" && !production)
         throw new JobError(
           `EDRs in this environment cover ${fmtDay(cov.from)} to ${fmtDay(cov.to)}; the usage period ${from} to ${to} is not fully covered`,
         );

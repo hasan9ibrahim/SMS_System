@@ -1,8 +1,10 @@
 // Business Company (§11): the selling entity's form - company, format files, default e-mail templates,
 // address, bank and one sender block per department mailbox. SMTP passwords and OAuth client secrets
-// are write-only: stored encrypted, never returned (only hasX flags). Check SMTP Connection is
-// simulated in this phase; no network connection is made (CLAUDE.md rule 1).
+// are write-only: stored encrypted, never returned (only hasX flags). Check SMTP Connection connects to
+// the mail server in production only (backend step 11); elsewhere it is simulated (CLAUDE.md rule 1).
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { production } from "../mode.js";
+import { verifyMailbox } from "../jobs/mailer.js";
 import type pg from "pg";
 import type {
   ArchiveRequest,
@@ -96,6 +98,10 @@ function mapMailbox(r: Row): MailboxRow {
     hasClientSecret: r.client_secret_enc != null,
     lastCheckAt: iso(r.last_check_at),
     lastCheckOk: (r.last_check_ok as boolean | null) ?? null,
+    imapHost: str(r.imap_host),
+    imapPort: Number(r.imap_port ?? 993),
+    imapLastReadAt: iso(r.imap_last_read_at),
+    imapLastError: str(r.imap_last_error),
   };
 }
 
@@ -241,13 +247,15 @@ async function writeMailboxes(c: pg.PoolClient, id: number, list: (MailboxInput 
       "clientSecret" in m && m.clientSecret != null ? encryptSecret(m.clientSecret) : (old?.client_secret_enc ?? null);
     await c.query(
       `INSERT INTO business_company_mailboxes (business_company_id, department, name, phone, smtp_email, smtp_secure, smtp_host,
-         smtp_port, smtp_username, smtp_password_enc, extension, skype_name, oauth_redirect_uris, client_id, client_secret_enc)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         smtp_port, smtp_username, smtp_password_enc, extension, skype_name, oauth_redirect_uris, client_id, client_secret_enc,
+         imap_host, imap_port)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        ON CONFLICT (business_company_id, department) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone,
          smtp_email = EXCLUDED.smtp_email, smtp_secure = EXCLUDED.smtp_secure, smtp_host = EXCLUDED.smtp_host,
          smtp_port = EXCLUDED.smtp_port, smtp_username = EXCLUDED.smtp_username, smtp_password_enc = EXCLUDED.smtp_password_enc,
          extension = EXCLUDED.extension, skype_name = EXCLUDED.skype_name, oauth_redirect_uris = EXCLUDED.oauth_redirect_uris,
-         client_id = EXCLUDED.client_id, client_secret_enc = EXCLUDED.client_secret_enc`,
+         client_id = EXCLUDED.client_id, client_secret_enc = EXCLUDED.client_secret_enc, imap_host = EXCLUDED.imap_host,
+         imap_port = EXCLUDED.imap_port`,
       [
         id,
         m.department,
@@ -264,6 +272,8 @@ async function writeMailboxes(c: pg.PoolClient, id: number, list: (MailboxInput 
         m.oauthRedirectUris.map((u) => u.trim()).filter(Boolean),
         m.clientId.trim(),
         secret,
+        trimOrNull(m.imapHost ?? null),
+        m.imapPort ?? 993,
       ],
     );
   }
@@ -668,7 +678,9 @@ export const listFormatVariables = () => ({
   })),
 });
 
-// ---------------------------------------------------------------- Check SMTP Connection (simulated)
+// ---------------------------------------------------------------- Check SMTP Connection
+// The settings are checked first; in production (backend step 11) the mailbox's server is then really connected to
+// and logged in to (jobs/mailer.ts verifyMailbox). Elsewhere that last step is simulated.
 
 const HOST = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
 export function checkSmtp(request: FastifyRequest, reply: FastifyReply) {
@@ -703,6 +715,19 @@ export function checkSmtp(request: FastifyRequest, reply: FastifyReply) {
         detail: password ? `as ${m.smtpUsername || m.smtpEmail}` : "no SMTP password stored or entered",
       },
     ];
+    if (production && steps.every((s) => s.ok)) {
+      const answer = await verifyMailbox({
+        id: null,
+        name: null,
+        email: m.smtpEmail,
+        host,
+        port: m.smtpPort,
+        secure: m.smtpSecure,
+        username: m.smtpUsername || m.smtpEmail,
+        password,
+      });
+      steps.push({ step: "Server", ok: answer === null, detail: answer ?? `${host} accepted the login` });
+    }
     // A step after a failed one does not run.
     const firstFail = steps.findIndex((s) => !s.ok);
     const out = steps.map((s, i) => (firstFail >= 0 && i > firstFail ? { ...s, ok: false, detail: "skipped" } : s));
@@ -715,7 +740,9 @@ export function checkSmtp(request: FastifyRequest, reply: FastifyReply) {
     return {
       ok,
       message: ok
-        ? `Connected to ${host}:${m.smtpPort} (simulated - no e-mail is sent in this phase)`
+        ? production
+          ? `Connected to ${host}:${m.smtpPort} and logged in`
+          : `Connected to ${host}:${m.smtpPort} (simulated - no e-mail is sent in this phase)`
         : `Failed at “${steps[firstFail]!.step}”`,
       steps: out,
     };

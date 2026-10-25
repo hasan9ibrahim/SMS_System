@@ -21,6 +21,7 @@ import { sendProblem } from "../problem.js";
 import { recordChange, type DiffEntry } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { production } from "../mode.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -408,7 +409,7 @@ export const declineReratingRequest = (request: FastifyRequest, reply: FastifyRe
   decide(request, reply, false, (request.body as ReratingDecline).reason.trim());
 
 /** Background job: In Queue, then In Process, then Completed (or Failed). */
-function scheduleProcessing(pool: pg.Pool, id: number, userId: number, delayMs = 1500) {
+function scheduleProcessing(pool: pg.Pool, id: number, userId: number, delayMs = production ? 0 : 1500) {
   setTimeout(() => void processRerating(pool, id, userId), delayMs).unref();
 }
 

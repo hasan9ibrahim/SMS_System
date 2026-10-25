@@ -14,14 +14,10 @@ export const PLATFORM_PER_EUR = `(SELECT pc.rate_per_eur FROM currency_latest pc
 export const toPlatformSql = (amount: string, perEur = "cl.rate_per_eur") =>
   `(${amount} / ${perEur} * ${PLATFORM_PER_EUR})`;
 
-let factors: { at: number; sql: string } | null = null;
+let factors: { at: number; sql: string; byCompany: Map<number, number> } | null = null;
 
-/**
- * ClickHouse expression turning an EDR `*_sys` amount (each business company's base currency,
- * §9.1) into the platform currency, by business_company_id. Cached for five minutes.
- */
-export async function sysToPlatformFactor(): Promise<string> {
-  if (factors && Date.now() - factors.at < 5 * 60_000) return factors.sql;
+async function loadFactors() {
+  if (factors && Date.now() - factors.at < 5 * 60_000) return factors;
   const { rows } = await db().query(
     `SELECT bc.id, ${PLATFORM_PER_EUR} / cl.rate_per_eur AS f
        FROM business_companies bc JOIN currency_latest cl ON cl.iso = bc.base_currency`,
@@ -29,6 +25,19 @@ export async function sysToPlatformFactor(): Promise<string> {
   const ids = rows.map((r) => Number(r.id));
   const fs = rows.map((r) => Number(r.f).toFixed(8));
   const sql = ids.length ? `transform(business_company_id, [${ids.join(",")}], [${fs.join(",")}], 1.0)` : "1.0";
-  factors = { at: Date.now(), sql };
-  return sql;
+  factors = { at: Date.now(), sql, byCompany: new Map(ids.map((id, i) => [id, Number(fs[i])])) };
+  return factors;
+}
+
+/**
+ * ClickHouse expression turning an EDR `*_sys` amount (each business company's base currency,
+ * §9.1) into the platform currency, by business_company_id. Cached for five minutes.
+ */
+export async function sysToPlatformFactor(): Promise<string> {
+  return (await loadFactors()).sql;
+}
+
+/** The same factors by business company id, for EDR rows read from the bus (live feed, backend step 11). */
+export async function sysToPlatformFactors(): Promise<Map<number, number>> {
+  return (await loadFactors()).byCompany;
 }

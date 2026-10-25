@@ -25,7 +25,8 @@ import type {
   RuleUsedBy,
 } from "@sms/contract";
 import { db as defaultDb, withDb } from "../db.js";
-import { chRows } from "../edr.js";
+import { chRows, edrNowSql } from "../edr.js";
+import { production } from "../mode.js";
 import { hlrLiveStatusSql, hlrProviderRateList, hlrUsedBySql } from "../lists/defs.js";
 import { runList } from "../lists/engine.js";
 import { listFields } from "../lists/fields.js";
@@ -63,6 +64,9 @@ const HEALTH = [
   { success: 0.45, response: 0.4 },
   { success: 0.96, response: 0.22 },
 ];
+/** The fake data's profile; production uses the measured success only (backend step 11). */
+const health = (id: number): { success: number; response: number | null } =>
+  production ? { success: 1, response: null } : HEALTH[(id - 1) % HEALTH.length]!;
 
 /** Pulls the last 24 hours per provider from the EDR store into hlr_provider_stats. */
 export async function refreshHlrStats(pool: Db = defaultDb()): Promise<number | null> {
@@ -79,7 +83,7 @@ export async function refreshHlrStats(pool: Db = defaultDb()): Promise<number | 
             countIf(hlr_fetch_type = 'cached') AS cached, countIf(hlr_fetch_type = 'live' AND hlr_is_accomplished = 1) AS ok,
             countIf(hlr_is_ported = 1) AS ported, toFloat64(sum(hlr_cost_sys)) AS cost
        FROM edr
-      WHERE submit_time > (SELECT max(submit_time) FROM edr) - INTERVAL 24 HOUR AND hlr_provider_id > 0
+      WHERE submit_time > ${edrNowSql()} - INTERVAL 24 HOUR AND hlr_provider_id > 0
       GROUP BY p`,
     30_000,
   );
@@ -89,7 +93,7 @@ export async function refreshHlrStats(pool: Db = defaultDb()): Promise<number | 
   for (const p of providers) {
     const id = Number(p.id);
     const r = byId.get(id);
-    const h = HEALTH[(id - 1) % HEALTH.length]!;
+    const h = health(id);
     const live = Number(r?.live ?? 0);
     const success = live ? Math.round((Number(r!.ok) / live) * h.success * 1000) / 10 : null;
     await pool.query(
@@ -103,7 +107,8 @@ export async function refreshHlrStats(pool: Db = defaultDb()): Promise<number | 
         live,
         Number(r?.cached ?? 0),
         success,
-        live ? Math.round(Number(p.timeout_ms) * h.response) : null,
+        // The switch does not record lookup times yet: none in production rather than an invented one.
+        live && h.response !== null ? Math.round(Number(p.timeout_ms) * h.response) : null,
         Number(r?.cost ?? 0),
         Number(r?.ported ?? 0),
       ],
@@ -1164,7 +1169,7 @@ export function testHlrPolicy(request: FastifyRequest, reply: FastifyReply) {
           `SELECT hlr_provider_id AS p, countIf(hlr_fetch_type = 'live') AS live,
                   countIf(hlr_fetch_type = 'live' AND hlr_is_accomplished = 1) AS ok
              FROM edr WHERE c_mccmnc = '${mccmnc.replace(/\D/g, "")}' AND hlr_provider_id IN (${entry.providerIds.join(",")})
-              AND submit_time > (SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY
+              AND submit_time > ${edrNowSql()} - INTERVAL 7 DAY
             GROUP BY p`,
         )
       : null;
@@ -1172,7 +1177,7 @@ export function testHlrPolicy(request: FastifyRequest, reply: FastifyReply) {
       (perDest ?? [])
         .filter((r) => Number(r.live) >= 20)
         .map((r) => {
-          const h = HEALTH[(Number(r.p) - 1) % HEALTH.length]!;
+          const h = health(Number(r.p));
           return [Number(r.p), Math.round((Number(r.ok) / Number(r.live)) * h.success * 1000) / 10];
         }),
     );

@@ -32,6 +32,7 @@ import { sendProblem } from "../problem.js";
 import { csvCell, notFound } from "./masterData.js";
 import { getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
+import { production } from "../mode.js";
 
 type Side = "customer" | "vendor";
 type TrunkParams = { side: Side; id: number };
@@ -190,6 +191,9 @@ async function bindTick(pool: pg.Pool) {
  * the first reconnect step. Nothing is sent in this phase.
  */
 export async function rebindVendorTrunk(pool: pg.Pool, trunkId: number): Promise<void> {
+  // Production (backend step 11): the switch re-reads the trunk and rebinds it itself; the status comes from its
+  // session events (jobs/binds.ts).
+  if (production) return;
   const { rows } = await pool.query(
     "SELECT status, max_connections, reconnect_schedule_s FROM vendor_trunks WHERE id = $1 AND deleted_at IS NULL",
     [trunkId],

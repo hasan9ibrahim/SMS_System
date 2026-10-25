@@ -14640,7 +14640,8 @@ export type components = {
       | "password_reminder"
       | "template_test"
       | "currency_alert"
-      | "am_handover";
+      | "am_handover"
+      | "rn_reminder";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -14648,8 +14649,12 @@ export type components = {
       customerTrunk: string | null;
       vendorTrunk: string | null;
       emailType: components["schemas"]["EmailType"];
-      /** @enum {string} */
-      status: "sent" | "failed";
+      /**
+       * @description queued = written, waiting for the mail server (backend step 11: e-mail goes out through an outbox and is
+       *     retried when the server is down); sent = the mail server accepted it; failed = refused, or no recipient.
+       * @enum {string}
+       */
+      status: "queued" | "sent" | "failed";
       /** Format: date */
       rateDate: string | null;
       /** @description Attachment file name. */
@@ -16263,6 +16268,10 @@ export type components = {
       skypeName: string | null;
       oauthRedirectUris: string[];
       clientId: string;
+      /** @description Incoming mail (backend step 11): the IMAP server of this mailbox, read with the SMTP UserName and Password over SSL. On the Rates mailbox, e-mails with rate sheets become Incoming RNs (§13.13 A). Null = not read. */
+      imapHost?: string | null;
+      /** @default 993 */
+      imapPort: number;
     };
     MailboxInput: components["schemas"]["MailboxFields"] & {
       /** @description Null keeps the stored one. */
@@ -16275,6 +16284,13 @@ export type components = {
       hasClientSecret: boolean;
       lastCheckAt: components["schemas"]["Timestamp"] | null;
       lastCheckOk: boolean | null;
+      /**
+       * Format: date-time
+       * @description When the IMAP mailbox was last read successfully.
+       */
+      imapLastReadAt?: string | null;
+      /** @description The IMAP server's answer when the last read failed. */
+      imapLastError?: string | null;
     };
     CompanyAddress: {
       line1: string | null;
@@ -19230,6 +19246,19 @@ export type components = {
     };
   };
   responses: {
+    /**
+     * @description Production only (backend step 11): this action needs a command to the SMPP switch (send a test SMS, resubmit,
+     *     stop or start a bind, capture packets, run a diagnosis on the switch servers), which is not available yet. The
+     *     screen says so instead of showing simulated results. Elsewhere (the trial on fake data) it is simulated.
+     */
+    SwitchCommandPending: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["Problem"];
+      };
+    };
     /** @description The request does not match the contract (e.g. unknown filter field or operator) */
     BadRequest: {
       headers: {
@@ -28180,6 +28209,7 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28615,6 +28645,7 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28641,6 +28672,7 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28696,6 +28728,7 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       409: components["responses"]["Conflict"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28749,6 +28782,7 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      501: components["responses"]["SwitchCommandPending"];
     };
   };
   extractRecording: {
@@ -28775,6 +28809,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28879,6 +28914,7 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28907,6 +28943,7 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };
@@ -28934,6 +28971,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      501: components["responses"]["SwitchCommandPending"];
       503: components["responses"]["Unavailable"];
     };
   };

@@ -648,7 +648,7 @@ export function setCurrencyRate(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
-/** Sync Rates: pulls the provider's rates now (simulated in this phase) and checks the currency alerts. */
+/** Sync Rates: pulls the provider's rates now (the real source in production, simulated elsewhere) and checks the currency alerts. */
 export function syncCurrencyRates(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();

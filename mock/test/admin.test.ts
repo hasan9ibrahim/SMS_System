@@ -660,7 +660,15 @@ describe("§11 business companies", { skip }, () => {
       defaultTemplates: r.defaultTemplates,
       senders: r.senders,
       mailboxes: r.mailboxes.map(
-        ({ hasSmtpPassword: _a, hasClientSecret: _b, lastCheckAt: _c, lastCheckOk: _d, ...m }) => ({
+        ({
+          hasSmtpPassword: _a,
+          hasClientSecret: _b,
+          lastCheckAt: _c,
+          lastCheckOk: _d,
+          imapLastReadAt: _e,
+          imapLastError: _f,
+          ...m
+        }) => ({
           ...m,
           smtpPassword: null,
           clientSecret: null,

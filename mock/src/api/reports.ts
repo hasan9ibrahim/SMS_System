@@ -54,7 +54,7 @@ import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { archiver, badInput, contactEmails } from "./switchTools.js";
 import { inTransaction } from "./views.js";
-import { buildTeamReport } from "./team.js";
+import { buildTeamReport, teamCsv } from "./team.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -638,13 +638,15 @@ export async function runScheduled(pool: pg.Pool, id: number, userId: number | n
       rows: String(result.total),
       company: bc[0]?.name ?? "",
     };
+    const fileName = `${r.name.replace(/[^\w-]+/g, "_")}_${iso(w.from).slice(0, 10)}.${f.ext}`;
     status = await logEmail(pool, {
       type: "schedule_report_alert",
       to: r.notificationEmails,
       sender: await senderFor(pool, { companyId: r.businessCompanyId }, "scheduledReport"),
       subject: `${r.name}: ${vars.from} to ${vars.to} UTC`,
       body: fillBody(r.emailBody, vars),
-      file: `${r.name.replace(/[^\w-]+/g, "_")}_${iso(w.from).slice(0, 10)}.${f.ext}`,
+      file: fileName,
+      attachments: [{ fileName, contentType: f.type, content: f.body }],
       userId,
     });
   } catch (e) {
@@ -684,6 +686,13 @@ async function runScheduledTeam(pool: pg.Pool, r: ScheduledReportRow, userId: nu
         company: r.businessCompany,
       }),
       file: `${r.name.replace(/[^\w-]+/g, "_")}_${report.period.from.slice(0, 10)}.csv`,
+      attachments: [
+        {
+          fileName: `${r.name.replace(/[^\w-]+/g, "_")}_${report.period.from.slice(0, 10)}.csv`,
+          contentType: "text/csv",
+          content: teamCsv(report),
+        },
+      ],
       userId,
     });
   } catch (e) {

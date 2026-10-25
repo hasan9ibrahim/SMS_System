@@ -1,8 +1,8 @@
 // Exchange rates against EUR, the base currency (team trial round 2): the source (any rate API: XE, Open
 // Exchange Rates, Fixer, ExchangeRate-API, the ECB, a custom JSON URL, or manual entry; round 3), the hourly
 // check that only changes rates which moved at least the minimum change, the daily update that takes every
-// rate whatever the difference, and currency alerts. This phase never calls a rate API: each source's quote
-// is simulated (sourceQuote) and the system takes that quote. The API key is admin-only, stored encrypted and never returned (§13.22).
+// rate whatever the difference, and currency alerts. Production calls the source's API (api/fxFetch.ts, backend
+// step 11); elsewhere each source's quote is simulated (sourceQuote) and the system takes that quote. The API key is admin-only, stored encrypted and never returned (§13.22).
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -19,6 +19,8 @@ import { decryptSecret, encryptSecret } from "../admin/passwords.js";
 import { db, withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
 import { logEmail } from "./emailLog.js";
+import { fetchQuotes, type FxSource } from "./fxFetch.js";
+import { production } from "../mode.js";
 import type { Change } from "@sms/contract";
 import { isAdmin, iso, recordChange } from "./records.js";
 import { getCurrentUser } from "./session.js";
@@ -177,6 +179,9 @@ export async function refreshRates(
       WHERE c.deleted_at IS NULL AND c.iso <> 'EUR' ORDER BY c.iso`,
   );
   const now = Date.now();
+  // Production (backend step 11): the source's real quotes; a currency it does not quote keeps its rate.
+  const provider = String(rows[0]?.provider ?? "manual");
+  const real = production && provider !== "manual" ? await fetchQuotes(await sourceOf(pool)) : null;
   const checked: RateMove[] = rows.map((r) => {
     const before = Number(r.rate_per_eur);
     const code = String(r.iso).trim();
@@ -184,7 +189,9 @@ export async function refreshRates(
     const after =
       r.provider === "manual"
         ? before
-        : sourceQuote(String(r.provider), code, referenceRate(code, Number(r.anchor ?? before)), now);
+        : real
+          ? (real.get(code) ?? before)
+          : sourceQuote(String(r.provider), code, referenceRate(code, Number(r.anchor ?? before)), now);
     return { id: Number(r.id), iso: code, before, after };
   });
   const moves = checked.filter(
@@ -210,6 +217,23 @@ export async function refreshRates(
     return ch;
   });
   return { checked: checked.length, updated: moves.length, change };
+}
+
+/** The configured rate source with its API key (production calls it). */
+async function sourceOf(c: Db): Promise<FxSource> {
+  const { rows } = await c.query("SELECT * FROM fx_provider WHERE id = 1");
+  const p = rows[0] ?? {};
+  const preset = FX_PRESETS.find((x) => x.provider === p.provider);
+  return {
+    provider: String(p.provider ?? "manual"),
+    apiUrl: (p.api_url as string | null) ?? preset?.apiUrl ?? null,
+    authType: String(p.auth_type ?? preset?.authType ?? "none"),
+    authParam: (p.auth_param as string | null) ?? preset?.authParam ?? null,
+    accountId: (p.account_id as string | null) ?? null,
+    ratesPath: (p.rates_path as string | null) ?? preset?.ratesPath ?? null,
+    baseCurrency: String(p.base_currency ?? preset?.baseCurrency ?? "EUR").trim(),
+    apiKey: p.api_key_enc ? decryptSecret(String(p.api_key_enc)) : null,
+  };
 }
 
 async function systemUser(c: Db): Promise<number> {
@@ -248,8 +272,8 @@ async function loadProvider(c: Db, now = Date.now()): Promise<FxProvider> {
     minChange: Number(p.min_change ?? 0),
     dailyUpdateAt: daily,
     enabled: !!p.enabled,
-    // No call to any rate API in this phase: always simulated.
-    simulated: true,
+    // Production calls the rate API (backend step 11); elsewhere the quotes are simulated.
+    simulated: !production,
     timezone: PLATFORM_TIMEZONE,
     lastRunAt: iso(p.last_run_at),
     lastStatus: p.last_status ?? null,
@@ -339,6 +363,7 @@ export async function runFxRefresh(pool: pg.Pool, now = Date.now()): Promise<"da
   const checkDue = !p.lastRunAt || now - Date.parse(p.lastRunAt) >= p.refreshMinutes * 60_000 - 5_000;
   if (!dailyDue && !checkDue) return null;
   const threshold = p.minChangeMode === "percent" ? `${p.minChange} %` : `${p.minChange} per EUR`;
+  const sim = production ? "" : "simulated ";
   try {
     const r = await refreshRates(
       pool,
@@ -346,16 +371,16 @@ export async function runFxRefresh(pool: pg.Pool, now = Date.now()): Promise<"da
         userId: null,
         ip: null,
         note: dailyDue
-          ? `Daily update of {n} exchange rates (simulated ${source} feed)`
-          : `{n} exchange rates moved ≥ ${threshold} (simulated ${source} feed)`,
+          ? `Daily update of {n} exchange rates (${sim}${source} feed)`
+          : `{n} exchange rates moved ≥ ${threshold} (${sim}${source} feed)`,
       },
       { force: dailyDue, mode: p.minChangeMode, min: p.minChange },
     );
     const message = dailyDue
-      ? `Daily update: ${r.updated} of ${r.checked} rates updated (simulated: no call to ${source})`
-      : `${r.checked} checked, ${r.updated} updated, ${r.checked - r.updated} below ${threshold} (simulated)`;
+      ? `Daily update: ${r.updated} of ${r.checked} rates updated${production ? ` from ${source}` : ` (simulated: no call to ${source})`}`
+      : `${r.checked} checked, ${r.updated} updated, ${r.checked - r.updated} below ${threshold}${production ? "" : " (simulated)"}`;
     await pool.query(
-      `UPDATE fx_provider SET last_run_at = to_timestamp($2 / 1000.0), last_status = 'simulated', last_message = $1,
+      `UPDATE fx_provider SET last_run_at = to_timestamp($2 / 1000.0), last_status = '${production ? "ok" : "simulated"}', last_message = $1,
               last_daily_at = CASE WHEN $3::boolean THEN to_timestamp($2 / 1000.0) ELSE last_daily_at END WHERE id = 1`,
       [message, now, dailyDue],
     );

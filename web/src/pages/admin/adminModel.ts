@@ -141,6 +141,8 @@ export function blankMailbox(department: MailboxInput["department"], website: st
     clientId: "",
     smtpPassword: null,
     clientSecret: null,
+    imapHost: null,
+    imapPort: 993,
   };
 }
 
@@ -162,7 +164,15 @@ export function companyInput(r: BusinessCompanyRecord): BusinessCompanyInput {
     defaultTemplates: { ...r.defaultTemplates },
     senders: { ...SENDER_DEFAULTS, ...r.senders },
     mailboxes: r.mailboxes.map(
-      ({ hasSmtpPassword: _p, hasClientSecret: _s, lastCheckAt: _a, lastCheckOk: _o, ...m }) => ({
+      ({
+        hasSmtpPassword: _p,
+        hasClientSecret: _s,
+        lastCheckAt: _a,
+        lastCheckOk: _o,
+        imapLastReadAt: _r,
+        imapLastError: _e,
+        ...m
+      }) => ({
         ...m,
         smtpPassword: null,
         clientSecret: null,

@@ -6,6 +6,7 @@ import type { RouteTraffic, TrafficWindow } from "@sms/contract";
 import { db } from "../db.js";
 import { sysToPlatformFactor } from "../currency.js";
 import { chRows } from "../edr.js";
+import { production } from "../mode.js";
 
 export const WINDOWS: Record<TrafficWindow, { sql: string; bucket: string; ms: number }> = {
   "15m": { sql: "INTERVAL 15 MINUTE", bucket: "toStartOfMinute", ms: 15 * 60_000 },
@@ -23,9 +24,11 @@ const figuresSql = (factor: string) => `count() AS n,
   round(countIf(msg_status = 'DELIVRD') / greatest(countIf(is_submit_success = 1), 1) * 100, 1) AS dlr,
   ${marginSql(factor)} AS margin`;
 
-/** End of the traffic windows: now, or the latest EDR when the fake data ends earlier. */
+/** End of the traffic windows: now, or the latest EDR when the fake data ends earlier (never in production). */
 export async function windowEnd(): Promise<string | null> {
-  const rows = await chRows<{ t: string }>("SELECT toString(least(now64(3), max(submit_time))) AS t FROM edr");
+  const rows = await chRows<{ t: string }>(
+    production ? "SELECT toString(now64(3)) AS t" : "SELECT toString(least(now64(3), max(submit_time))) AS t FROM edr",
+  );
   return rows?.[0]?.t ?? null;
 }
 

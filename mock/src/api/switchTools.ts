@@ -54,6 +54,7 @@ import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { mccmncLookup } from "./translationRules.js";
 import { inTransaction } from "./views.js";
+import { production } from "../mode.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -216,7 +217,7 @@ async function rateSheet(c: Db, t: TrunkInfo) {
   }));
 }
 
-function sheetFile(t: TrunkInfo, lines: Awaited<ReturnType<typeof rateSheet>>, fileType: "excel" | "csv") {
+export function sheetFile(t: TrunkInfo, lines: Awaited<ReturnType<typeof rateSheet>>, fileType: "excel" | "csv") {
   const head = ["Country", "Network", "MCCMNC", "Dial Code", "Rate", "Currency", "Effective Date", "Change"];
   const name = `Rates_${t.name.replace(/\W+/g, "_")}_${today()}.${fileType === "csv" ? "csv" : "xls"}`;
   if (fileType === "csv") {
@@ -386,6 +387,7 @@ export async function emailRateSheets(pool: pg.Pool | pg.PoolClient, b: SendRate
     if (!b.sendEmail) continue;
     const m = await rateMail(pool, t);
     const lines = await rateSheet(pool, t);
+    const sheet = sheetFile(t, lines, b.fileType);
     const status = await logEmail(pool, {
       type: "send_rate",
       enterpriseId: t.enterpriseId,
@@ -394,7 +396,8 @@ export async function emailRateSheets(pool: pg.Pool | pg.PoolClient, b: SendRate
       sender: await companyMailbox(pool, t.enterpriseId, "rateSheet"),
       subject: m.subject,
       body: appendText(m.body, `(${lines.length} rate lines attached)`),
-      file: sheetFile(t, [], b.fileType).name,
+      file: sheet.name,
+      attachments: [{ fileName: sheet.name, contentType: sheet.type, content: sheet.body }],
       rateDate: today(),
       userId,
     });
@@ -799,11 +802,12 @@ export function cloneTrafficAlert(request: FastifyRequest, reply: FastifyReply) 
   });
 }
 
-/** Measures one alert's last sample interval (ending at the latest EDR) and records the result. */
+/** Measures one alert's last sample interval (ending now; on the fake data at its latest EDR) and records the result. */
 export async function runAlertCheck(c: Db, id: number): Promise<TrafficAlertCheck | null> {
   const a = await loadAlert(c, id);
   if (!a) return null;
-  const cov = await edrCoverage();
+  // Production (backend step 11): a quiet trunk reads as no traffic, not as its last traffic.
+  const cov = production ? null : await edrCoverage();
   const end = cov?.to && cov.to.getTime() < Date.now() ? cov.to : new Date();
   const start = new Date(end.getTime() - a.sampleMinutes * 60_000);
   const lit = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
@@ -1167,8 +1171,11 @@ export function sendBroadcast(request: FastifyRequest, reply: FastifyReply) {
           to: e.emails,
           sender: b.sender,
           subject: b.subject.trim(),
-          body: textOf(html),
+          body: html,
           file: b.attachment?.name ?? null,
+          attachments: b.attachment
+            ? [{ fileName: b.attachment.name, content: Buffer.from(b.attachment.contentBase64, "base64") }]
+            : [],
           userId: me.id,
         });
         if (status === "failed") failed++;

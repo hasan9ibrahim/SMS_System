@@ -130,6 +130,21 @@ function MailboxBlock({
           autoComplete="new-password"
           placeholder={stored?.hasSmtpPassword ? "•••••• stored – type to replace" : "not set"}
         />
+        <TextField
+          form={form}
+          path={`${p}.imapHost`}
+          label="IMAP Host (incoming)"
+          maxLength={200}
+          placeholder="not read"
+          hint={
+            stored?.imapLastError
+              ? `Last read failed: ${stored.imapLastError}`
+              : stored?.imapLastReadAt
+                ? `Read ${new Date(stored.imapLastReadAt).toLocaleString()}`
+                : "Read with the SMTP login over SSL; on the Rates mailbox, rate sheets become Incoming RNs"
+          }
+        />
+        <NumberField form={form} path={`${p}.imapPort`} label="IMAP Port" min={1} max={65535} step={1} />
         <TextField form={form} path={`${p}.extension`} label="Extension Number" maxLength={20} />
         <TextField form={form} path={`${p}.skypeName`} label="Skype Name" maxLength={100} />
         <TextField form={form} path={`${p}.clientId`} label="Client ID" required maxLength={200} />

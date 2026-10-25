@@ -24,6 +24,7 @@ import type {
 import { db, withDb } from "../db.js";
 import { mapSoaReport, SOA_REPORT_FROM, SOA_REPORT_SELECT } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
+import { production } from "../mode.js";
 import { simplePdf, spreadsheetXml, type PdfLine } from "../billing/files.js";
 import { billingContacts, convert } from "./finance.js";
 import { notFound, setArchived } from "./masterData.js";
@@ -42,7 +43,7 @@ const badInput = (reply: FastifyReply, errors: FieldError[]) =>
 const money = (v: number) => Math.round(v * 100) / 100;
 const ymd = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
 const fmt = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const stepMs = () => Number(process.env.SOA_JOB_STEP_MS ?? 600);
+const stepMs = () => (production ? 0 : Number(process.env.SOA_JOB_STEP_MS ?? 600));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function checkPeriod(from: string, to: string): FieldError[] {
@@ -761,6 +762,7 @@ async function logSoaEmail(
   // No template picked: the partner's business company's SOA Statement template (§11).
   const tid = templateId ?? (await companyTemplate(c, { enterpriseId: st.enterpriseId }, "soa_statement"))?.id ?? null;
   const mail = tid === null ? null : await emailFor(c, st, tid);
+  const file = `SOA_${st.from}_${st.to}.${fileType === "excel" ? "xls" : "pdf"}`;
   await logEmail(c, {
     type: "send_soa",
     enterpriseId: st.enterpriseId,
@@ -768,7 +770,15 @@ async function logSoaEmail(
     sender: await companyMailbox(c, st.enterpriseId, "soa"),
     subject: mail?.subject ?? `Statement of account ${st.from} to ${st.to}`,
     body: mail?.body ?? "",
-    file: `SOA_${st.from}_${st.to}.${fileType === "excel" ? "xls" : "pdf"}`,
+    file,
+    // The statement itself (sent in production only; backend step 11).
+    attachments: production
+      ? [
+          fileType === "excel"
+            ? { fileName: file, contentType: "application/vnd.ms-excel", content: soaSheet(st) }
+            : { fileName: file, contentType: "application/pdf", content: soaPdf(st) },
+        ]
+      : [],
     error: to.length ? null : "No billing contact",
     userId: userId === null || userId === undefined ? null : Number(userId),
   });

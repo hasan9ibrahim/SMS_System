@@ -9,6 +9,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type pg from "pg";
+import { production } from "../mode.js";
 
 export const SESSION_COOKIE = "sms_session";
 /** Decided 2026-10-25: 8 hours without activity, 24 hours after sign-in at most. */
@@ -34,7 +35,8 @@ export function runAsRequestUser<T>(user: RequestUser, fn: () => T): T {
   return als.run(user, fn);
 }
 
-export const requireSignIn = () => process.env.MOCK_REQUIRE_SIGN_IN === "1";
+// Production always requires a signed-in user (backend step 11): no request runs as the default user.
+export const requireSignIn = () => production || process.env.MOCK_REQUIRE_SIGN_IN === "1";
 
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
