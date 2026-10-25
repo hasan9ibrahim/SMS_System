@@ -21,3 +21,11 @@
   hosts: servers:witness
   serial: 1
   roles: [switch]
+
+- name: Monitoring (every machine; Prometheus, Alertmanager and Grafana on the witness)
+  hosts: all
+  roles: [monitoring]
+
+- name: Backups and traffic recording (servers)
+  hosts: servers
+  roles: [backup, pcap]

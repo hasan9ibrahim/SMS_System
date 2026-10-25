@@ -1,0 +1,175 @@
+# Alert rules (backend step 8, Q29). Each has a runbook in docs/RUNBOOKS.md: what to check, what to do. "critical"
+# means traffic stops or is at risk now (Telegram at any hour); "warning" can wait for working hours.
+groups:
+  - name: machines
+    rules:
+      - alert: MachineDown
+        expr: up{job="node"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }} does not answer (node_exporter down or the machine is off)"
+          runbook: "RUNBOOKS.md#machinedown"
+      - alert: DiskFilling
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.15
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.machine }}: {{ $labels.mountpoint }} has {{ $value | humanizePercentage }} free"
+          runbook: "RUNBOOKS.md#diskfilling"
+      - alert: DiskAlmostFull
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }}: {{ $labels.mountpoint }} has {{ $value | humanizePercentage }} free"
+          runbook: "RUNBOOKS.md#diskfilling"
+      - alert: MemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.machine }}: {{ $value | humanizePercentage }} memory available"
+          runbook: "RUNBOOKS.md#memorylow"
+
+  - name: switch
+    rules:
+      - alert: SwitchDown
+        expr: up{job="switch"} == 0 or sms_up == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "The switch on {{ $labels.machine }} is down or a data store does not answer it"
+          runbook: "RUNBOOKS.md#switchdown"
+      - alert: SwitchOverloaded
+        expr: sms_overload == 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }} refuses new messages (0x58): accepted ones wait over 10 s for the sender"
+          runbook: "RUNBOOKS.md#switchoverloaded"
+      - alert: VendorSideMinority
+        expr: sms_vendor_nodes{role="server"} == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }} reaches neither the other server nor the witness: it opens no vendor connection"
+          runbook: "RUNBOOKS.md#clustersplit"
+      - alert: ClusterPeerLost
+        expr: sms_cluster_peers_connected < 2
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.machine }} reaches {{ $value }} of its 2 cluster peers"
+          runbook: "RUNBOOKS.md#clustersplit"
+      - alert: ConfigNotLoaded
+        expr: sms_config_loaded{role="server"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }} has no routing configuration loaded: it takes no traffic"
+          runbook: "RUNBOOKS.md#switchdown"
+      - alert: SenderBacklog
+        expr: sms_sender_backlog > 20000
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} accepted messages wait for the sender"
+          runbook: "RUNBOOKS.md#switchoverloaded"
+      - alert: SubmitsRefused
+        expr: sum by (machine) (rate(sms_submits_total{result="refused"}[5m])) > 5
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.machine }} refuses {{ $value | humanize }} submits/s (other than throttling)"
+          runbook: "RUNBOOKS.md#submitsrefused"
+
+  - name: databases
+    rules:
+      - alert: PostgresNoPrimary
+        expr: max(patroni_primary) < 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "PostgreSQL has no primary (Patroni)"
+          runbook: "RUNBOOKS.md#postgresnoprimary"
+      - alert: PostgresStandbyNotStreaming
+        expr: count(patroni_postgres_streaming == 1) < 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The PostgreSQL standby is not streaming: a failover now could not happen"
+          runbook: "RUNBOOKS.md#postgresstandby"
+      - alert: PostgresArchiveFailing
+        expr: rate(pg_stat_archiver_failed_count[15m]) > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "WAL archiving to the backup bucket fails on {{ $labels.machine }}"
+          runbook: "RUNBOOKS.md#backupfailed"
+      - alert: RedisNotOnePrimary
+        expr: count(redis_instance_info{role="master"}) != 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Redis has {{ $value }} primaries (should be exactly 1)"
+          runbook: "RUNBOOKS.md#redis"
+      - alert: RedisReplicaMissing
+        expr: max(redis_connected_slaves) < 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The Redis primary has no replica"
+          runbook: "RUNBOOKS.md#redis"
+      - alert: ClickHouseReplicaBehind
+        expr: ClickHouseAsyncMetrics_ReplicasMaxAbsoluteDelay > 300
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "ClickHouse on {{ $labels.machine }} is {{ $value | humanizeDuration }} behind the other server"
+          runbook: "RUNBOOKS.md#clickhouse"
+      - alert: ClickHouseReadonly
+        expr: ClickHouseMetrics_ReadonlyReplica > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "ClickHouse tables on {{ $labels.machine }} are read-only (Keeper not reached): EDRs wait on the bus"
+          runbook: "RUNBOOKS.md#clickhouse"
+      - alert: EtcdNoLeader
+        expr: etcd_server_has_leader == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "etcd on {{ $labels.machine }} has no leader: PostgreSQL failover is not possible"
+          runbook: "RUNBOOKS.md#etcd"
+      - alert: NatsUnhealthy
+        expr: sms_nats_healthy == 0 or sms_nats_meta_leader == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "NATS JetStream on {{ $labels.machine }} is unhealthy or has no leader"
+          runbook: "RUNBOOKS.md#nats"
+
+  - name: backups
+    rules:
+      - alert: BackupMissing
+        expr: time() - max by (kind) (sms_backup_last_success_timestamp_seconds) > 26 * 3600
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "No successful {{ $labels.kind }} backup for {{ $value | humanizeDuration }}"
+          runbook: "RUNBOOKS.md#backupfailed"
+      - alert: BackupNeverRan
+        expr: absent(sms_backup_last_success_timestamp_seconds{kind="postgres"})
+        for: 26h
+        labels: {severity: warning}
+        annotations:
+          summary: "No PostgreSQL backup has been recorded yet"
+          runbook: "RUNBOOKS.md#backupfailed"
+      - alert: RestoreTestOverdue
+        expr: time() - max(sms_restore_test_last_success_timestamp_seconds) > 35 * 86400
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "The monthly restore test has not passed for {{ $value | humanizeDuration }}"
+          runbook: "RUNBOOKS.md#restoretest"

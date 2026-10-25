@@ -1,0 +1,48 @@
+# {{ ansible_managed }} (deploy/ansible/roles/monitoring)
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels: {cluster: sms}
+
+alerting:
+  alertmanagers:
+    - static_configs: [{targets: ["127.0.0.1:{{ ports.alertmanager }}"]}]
+
+rule_files: [/etc/prometheus/sms-alerts.yml]
+
+scrape_configs:
+  - job_name: node
+    static_configs:
+{% for h in cluster_hosts %}
+      - {targets: ["{{ hostvars[h].private_ip }}:{{ ports.node_exporter }}"], labels: {machine: {{ h }}}}
+{% endfor %}
+  - job_name: switch
+    static_configs:
+{% for h in cluster_hosts %}
+      - {targets: ["{{ hostvars[h].private_ip }}:{{ ports.switch_http }}"], labels: {machine: {{ h }}, role: {{ 'witness' if h in groups['witness'] else 'server' }}}}
+{% endfor %}
+  - job_name: etcd
+    static_configs:
+{% for h in cluster_hosts %}
+      - {targets: ["{{ hostvars[h].private_ip }}:{{ ports.etcd_client }}"], labels: {machine: {{ h }}}}
+{% endfor %}
+  - job_name: patroni
+    static_configs:
+{% for h in groups['servers'] %}
+      - {targets: ["{{ hostvars[h].private_ip }}:{{ ports.patroni }}"], labels: {machine: {{ h }}}}
+{% endfor %}
+  - job_name: postgres
+    static_configs:
+{% for h in groups['servers'] %}
+      - {targets: ["{{ hostvars[h].private_ip }}:{{ ports.pg_exporter }}"], labels: {machine: {{ h }}}}
+{% endfor %}
+  - job_name: redis
+    static_configs:
+{% for h in groups['servers'] %}
+      - {targets: ["{{ hostvars[h].private_ip }}:{{ ports.redis_exporter }}"], labels: {machine: {{ h }}}}
+{% endfor %}
+  - job_name: clickhouse
+    static_configs:
+{% for h in groups['servers'] %}
+      - {targets: ["{{ hostvars[h].private_ip }}:{{ ports.ch_metrics }}"], labels: {machine: {{ h }}}}
+{% endfor %}

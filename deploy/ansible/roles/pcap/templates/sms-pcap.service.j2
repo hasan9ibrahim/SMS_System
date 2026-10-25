@@ -1,0 +1,18 @@
+# {{ ansible_managed }} (deploy/ansible/roles/pcap)
+# SMPP with customers (ports {{ (ports.smpp + ports.smpp_tls) | join(', ') }}) and vendors (any outside address), not the
+# traffic between the three machines, SSH or HTTPS. {{ pcap_files }} files of {{ pcap_minutes }} minutes = {{ (pcap_files | int * pcap_minutes | int / 1440) | round(1) }} days.
+[Unit]
+Description=SMPP traffic recording (60-day ring)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/dumpcap -q -i any -s 0 \
+  -f "tcp and not port 22 and not port 443 and not port 80 and not ({% for ip in cluster_ips %}host {{ ip }}{{ ' or ' if not loop.last }}{% endfor %})" \
+  -b duration:{{ pcap_minutes | int * 60 }} -b files:{{ pcap_files }} -w {{ pcap_dir }}/smpp.pcapng
+Restart=always
+RestartSec=5
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

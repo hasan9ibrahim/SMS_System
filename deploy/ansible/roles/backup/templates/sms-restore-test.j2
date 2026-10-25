@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }} (deploy/ansible/roles/backup). The monthly restore test (plan §4 "Restore"), on the standby so
+# the primary is not loaded: restores the latest PostgreSQL backup into scratch space and starts it on a spare port,
+# restores the EDR table from the latest ClickHouse full backup into a scratch table, checks both hold data, cleans up
+# and records the result and how long it took.
+set -euo pipefail
+prom=/var/lib/prometheus/node-exporter/restore.prom
+scratch=/var/lib/sms-restore-test
+port=5499
+
+if curl -sf -m 5 http://127.0.0.1:{{ ports.patroni }}/primary >/dev/null && [[ "${1:-}" != --here ]]; then
+  echo "this server is the primary: the test runs on the standby (or pass --here)"; exit 0
+fi
+
+start=$(date +%s)
+cleanup() {
+  sudo -u postgres /usr/lib/postgresql/{{ pg_version }}/bin/pg_ctl -D "$scratch/pg" -m immediate stop >/dev/null 2>&1 || true
+  rm -rf "$scratch"
+  clickhouse-client --user {{ ch_app_user }} --password '{{ vault_clickhouse_password }}' \
+    --query "DROP TABLE IF EXISTS default.restore_test_edr SYNC" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+cleanup
+mkdir -p "$scratch/pg" && chown postgres:postgres "$scratch" "$scratch/pg" && chmod 700 "$scratch/pg"
+
+# PostgreSQL: the latest backup plus the archived WAL up to now.
+sudo -u postgres pgbackrest --stanza=sms --pg1-path="$scratch/pg" --type=immediate --target-action=promote \
+  --archive-mode=off restore
+cat >> "$scratch/pg/postgresql.auto.conf" <<CONF
+port = $port
+archive_mode = off
+listen_addresses = ''
+unix_socket_directories = '$scratch'
+CONF
+rm -f "$scratch/pg/standby.signal"
+sudo -u postgres /usr/lib/postgresql/{{ pg_version }}/bin/pg_ctl -D "$scratch/pg" -w -t 600 start >/dev/null
+tables=$(sudo -u postgres psql -h "$scratch" -p $port -d {{ pg_database }} -tAc \
+  "SELECT count(*) FROM pg_tables WHERE schemaname = 'sms'")
+[[ "$tables" -gt 50 ]] || { echo "restored PostgreSQL has only $tables tables"; exit 1; }
+pg_seconds=$(( $(date +%s) - start ))
+
+# ClickHouse: the EDR table from the latest full backup.
+ch_start=$(date +%s)
+full="$(ETCDCTL_API=3 etcdctl --endpoints=http://127.0.0.1:{{ ports.etcd_client }} get --print-value-only /sms/backup/ch-last-full || true)"
+if [[ -z "$full" ]]; then
+  echo "no full ClickHouse backup recorded yet"
+  exit 1
+else
+  clickhouse-client --user {{ ch_app_user }} --password '{{ vault_clickhouse_password }}' --query "
+    RESTORE TABLE {{ ch_database }}.edr AS default.restore_test_edr
+    FROM S3('https://{{ s3_endpoint }}:{{ s3_port }}/{{ s3_bucket }}/$full', '{{ vault_s3_access_key }}', '{{ vault_s3_secret_key }}')" >/dev/null
+  rows=$(clickhouse-client --user {{ ch_app_user }} --password '{{ vault_clickhouse_password }}' \
+    --query "SELECT count() FROM default.restore_test_edr")
+  echo "ClickHouse: $rows EDR rows restored"
+  ch_seconds=$(( $(date +%s) - ch_start ))
+fi
+
+total=$(( $(date +%s) - start ))
+cat > "$prom.tmp" <<PROM
+# HELP sms_restore_test_last_success_timestamp_seconds When the restore test last passed
+# TYPE sms_restore_test_last_success_timestamp_seconds gauge
+sms_restore_test_last_success_timestamp_seconds $(date +%s)
+# HELP sms_restore_test_duration_seconds How long each part of the last restore test took
+# TYPE sms_restore_test_duration_seconds gauge
+sms_restore_test_duration_seconds{part="postgres"} $pg_seconds
+sms_restore_test_duration_seconds{part="clickhouse"} $ch_seconds
+sms_restore_test_duration_seconds{part="total"} $total
+PROM
+mv "$prom.tmp" "$prom"
+echo "restore test passed: PostgreSQL $tables tables in ${pg_seconds}s, ClickHouse ${ch_seconds}s, total ${total}s"

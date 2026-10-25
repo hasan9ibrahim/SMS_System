@@ -1,0 +1,5 @@
+pcap_dir: /var/lib/sms-pcap
+pcap_minutes: 15
+# 60 days of 15-minute files (spec §9.2). Size the disk for it: about 0.6 KB per message each way, so roughly 60 GB a
+# day at 50 million messages (3.6 TB for 60 days) before compression; see docs/OPERATIONS.md.
+pcap_files: 5760

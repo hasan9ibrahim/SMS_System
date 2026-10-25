@@ -1,0 +1,128 @@
+# Monitoring (backend step 8; Q29): exporters on every machine, and on the witness (it survives either server failing)
+# Prometheus, Alertmanager (alerts to Telegram, each with a runbook: docs/RUNBOOKS.md) and Grafana.
+- name: Exporters
+  ansible.builtin.apt:
+    name: "{{ ['prometheus-node-exporter'] + (['prometheus-postgres-exporter', 'prometheus-redis-exporter'] if inventory_hostname in groups['servers'] else []) }}"
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: node_exporter on the private address, with the text files our checks write
+  ansible.builtin.copy:
+    dest: /etc/default/prometheus-node-exporter
+    content: |
+      ARGS="--web.listen-address={{ private_ip }}:{{ ports.node_exporter }} --collector.textfile.directory=/var/lib/prometheus/node-exporter --collector.systemd"
+  notify: node_exporter restart
+
+- name: Text file folder
+  ansible.builtin.file: {path: /var/lib/prometheus/node-exporter, state: directory, mode: "0755"}
+
+- name: PostgreSQL exporter (local socket, as postgres)
+  ansible.builtin.copy:
+    dest: /etc/default/prometheus-postgres-exporter
+    content: |
+      DATA_SOURCE_NAME="user=postgres host=/var/run/postgresql port={{ ports.pg }} sslmode=disable"
+      ARGS="--web.listen-address={{ private_ip }}:{{ ports.pg_exporter }}"
+    mode: "0640"
+  when: inventory_hostname in groups['servers']
+  notify: postgres_exporter restart
+
+- name: PostgreSQL exporter drop-in folder
+  ansible.builtin.file: {path: /etc/systemd/system/prometheus-postgres-exporter.service.d, state: directory, mode: "0755"}
+  when: inventory_hostname in groups['servers']
+
+- name: PostgreSQL exporter runs as postgres (peer authentication)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prometheus-postgres-exporter.service.d/user.conf
+    content: "[Service]\nUser=postgres\n"
+  when: inventory_hostname in groups['servers']
+  notify: postgres_exporter restart
+
+- name: Redis exporter
+  ansible.builtin.copy:
+    dest: /etc/default/prometheus-redis-exporter
+    content: |
+      ARGS="--web.listen-address={{ private_ip }}:{{ ports.redis_exporter }} --redis.addr=redis://127.0.0.1:{{ ports.redis }} --redis.password={{ vault_redis_password }}"
+    mode: "0640"
+  when: inventory_hostname in groups['servers']
+  notify: redis_exporter restart
+  no_log: true
+
+- name: NATS check (JetStream health and stream state into node_exporter, every 30 s)
+  ansible.builtin.copy: {src: nats-check.sh, dest: /usr/local/bin/sms-nats-check, mode: "0755"}
+
+- name: NATS check timer
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    content: "{{ item.content }}"
+  loop:
+    - name: sms-nats-check.service
+      content: "[Unit]\nDescription=NATS health for monitoring\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/sms-nats-check {{ ports.nats_monitor }}\n"
+    - name: sms-nats-check.timer
+      content: "[Unit]\nDescription=NATS health every 30 s\n[Timer]\nOnBootSec=30\nOnUnitActiveSec=30\nAccuracySec=5\n[Install]\nWantedBy=timers.target\n"
+
+- name: Exporters running
+  ansible.builtin.systemd_service: {name: "{{ item }}", enabled: true, state: started, daemon_reload: true}
+  loop: "{{ ['prometheus-node-exporter', 'sms-nats-check.timer'] + (['prometheus-postgres-exporter', 'prometheus-redis-exporter'] if inventory_hostname in groups['servers'] else []) }}"
+
+# ---------------------------------------------------------------- the witness: Prometheus, Alertmanager, Grafana
+
+- name: Monitoring server (witness)
+  when: inventory_hostname in groups['witness']
+  block:
+    - name: Prometheus and Alertmanager
+      ansible.builtin.apt: {name: [prometheus, prometheus-alertmanager]}
+
+    - name: Alert rules
+      ansible.builtin.copy: {src: alerts.yml, dest: /etc/prometheus/sms-alerts.yml, mode: "0644", validate: promtool check rules %s}
+      notify: prometheus reload
+
+    - name: Prometheus settings
+      ansible.builtin.template: {src: prometheus.yml.j2, dest: /etc/prometheus/prometheus.yml, mode: "0644", validate: promtool check config %s}
+      notify: prometheus reload
+
+    - name: Prometheus keeps 30 days
+      ansible.builtin.copy:
+        dest: /etc/default/prometheus
+        content: |
+          ARGS="--storage.tsdb.retention.time=30d --web.listen-address=0.0.0.0:{{ ports.prometheus }}"
+      notify: prometheus restart
+
+    - name: Alertmanager settings (Telegram)
+      ansible.builtin.template: {src: alertmanager.yml.j2, dest: /etc/prometheus/alertmanager.yml, mode: "0640", owner: root, group: prometheus}
+      notify: alertmanager restart
+
+    - name: Running
+      ansible.builtin.systemd_service: {name: "{{ item }}", enabled: true, state: started}
+      loop: [prometheus, prometheus-alertmanager]
+
+    - name: Grafana apt key
+      ansible.builtin.get_url: {url: https://apt.grafana.com/gpg.key, dest: /usr/share/keyrings/grafana.asc, mode: "0644"}
+
+    - name: Grafana apt repository
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/grafana.list
+        content: "deb [signed-by=/usr/share/keyrings/grafana.asc] https://apt.grafana.com stable main\n"
+      register: grafana_repo
+
+    - name: Grafana
+      ansible.builtin.apt: {name: grafana, update_cache: "{{ grafana_repo.changed }}"}
+
+    - name: Grafana settings
+      ansible.builtin.template: {src: grafana.ini.j2, dest: /etc/grafana/grafana.ini, owner: root, group: grafana, mode: "0640"}
+      notify: grafana restart
+
+    - name: Grafana data source and dashboards
+      ansible.builtin.template: {src: "{{ item.src }}", dest: "{{ item.dest }}", owner: root, group: grafana, mode: "0640"}
+      loop:
+        - {src: grafana-datasource.yml.j2, dest: /etc/grafana/provisioning/datasources/sms.yml}
+        - {src: grafana-dashboards.yml.j2, dest: /etc/grafana/provisioning/dashboards/sms.yml}
+      notify: grafana restart
+
+    - name: Dashboard folder
+      ansible.builtin.file: {path: /var/lib/grafana/dashboards, state: directory, owner: grafana, group: grafana, mode: "0755"}
+
+    - name: The SMS dashboard
+      ansible.builtin.copy: {src: dashboard-sms.json, dest: /var/lib/grafana/dashboards/sms.json, owner: grafana, group: grafana, mode: "0644"}
+
+    - name: Grafana running
+      ansible.builtin.systemd_service: {name: grafana-server, enabled: true, state: started}

@@ -1,0 +1,29 @@
+# Off-site backups (Q31, backend step 8), run on whichever server is the PostgreSQL primary at the time (both servers
+# have the timers; the other one does nothing):
+#   * PostgreSQL: pgBackRest full on Sunday, differential the other nights, WAL archived continuously (roles/postgres);
+#     4 full backups kept;
+#   * ClickHouse: the EDR database to the same bucket nightly (full on Sunday, incremental on the last full otherwise);
+#   * NATS is not backed up: it holds 2 days of in-flight events on three machines.
+# Every run writes its result for monitoring (BackupMissing). The restore test (sms-restore-test, monthly) restores
+# both into scratch space on the standby, checks them and records how long it took.
+- name: Scripts
+  ansible.builtin.template: {src: "{{ item }}.j2", dest: "/usr/local/bin/{{ item }}", mode: "0750"}
+  loop: [sms-backup, sms-restore-test]
+
+- name: Units
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    content: "{{ item.content }}"
+  loop:
+    - name: sms-backup.service
+      content: "[Unit]\nDescription=Nightly off-site backup (if this server is the primary)\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/sms-backup\nTimeoutStartSec=6h\n"
+    - name: sms-backup.timer
+      content: "[Unit]\nDescription=Nightly off-site backup\n[Timer]\nOnCalendar=*-*-* 02:15:00 UTC\nRandomizedDelaySec=10m\nPersistent=true\n[Install]\nWantedBy=timers.target\n"
+    - name: sms-restore-test.service
+      content: "[Unit]\nDescription=Monthly restore test (on the standby)\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/sms-restore-test\nTimeoutStartSec=12h\n"
+    - name: sms-restore-test.timer
+      content: "[Unit]\nDescription=Monthly restore test\n[Timer]\nOnCalendar=*-*-01 04:30:00 UTC\nPersistent=true\n[Install]\nWantedBy=timers.target\n"
+
+- name: Timers on
+  ansible.builtin.systemd_service: {name: "{{ item }}", enabled: true, state: started, daemon_reload: true}
+  loop: [sms-backup.timer, sms-restore-test.timer]
