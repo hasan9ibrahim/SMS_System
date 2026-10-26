@@ -10,6 +10,8 @@ import {
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 /** §13.28 floors: the settings can raise these, never lower them (and the lifetime can't be turned off). */
 export const MIN_PASSWORD_LENGTH = 12;
@@ -72,31 +74,19 @@ export function verifyPassword(password: string, stored: string): boolean {
   return timingSafeEqual(want, got);
 }
 
-/** A short list standing in for a known-leaked password list (the backend uses a full k-anonymity check). */
-const LEAKED = new Set(
-  [
-    "123456789012",
-    "password1234",
-    "password12345",
-    "passwordpassword",
-    "qwertyuiop12",
-    "qwertyuiopasdf",
-    "letmein123456",
-    "welcome12345",
-    "iloveyou1234",
-    "admin1234567",
-    "administrator",
-    "changeme1234",
-    "111111111111",
-    "000000000000",
-    "abc123456789",
-    "p@ssw0rd1234",
-    "football1234",
-    "monkey123456",
-    "sunshine1234",
-    "trustno1trustno1",
-  ].map((p) => p.toLowerCase()),
-);
+/**
+ * Known-leaked passwords (§13.28; product owner 2026-10-26: checked on the server, nothing sent out): the entries of
+ * 12 characters or more (shorter ones fail the length rule anyway) from public lists of the most used breached
+ * passwords (SecLists, MIT licence: Pwdb top 1,000,000, xato-net top 1,000,000 and the NCSC top 100,000),
+ * lower-cased, in data/leaked-passwords.txt (SMS_DATA_DIR in the release). A few always-blocked ones stay inline.
+ */
+const LEAKED_FILE = process.env.SMS_DATA_DIR
+  ? `${process.env.SMS_DATA_DIR}/leaked-passwords.txt`
+  : fileURLToPath(new URL("../../data/leaked-passwords.txt", import.meta.url));
+const LEAKED = new Set([
+  ...["administrator", "changeme1234", "p@ssw0rd1234", "trustno1trustno1"],
+  ...(existsSync(LEAKED_FILE) ? readFileSync(LEAKED_FILE, "utf8").split("\n").filter(Boolean) : []),
+]);
 
 export interface RuleResult {
   key: "length" | "not_name" | "not_recent" | "not_leaked";
