@@ -1,7 +1,8 @@
+# Only a running Patroni is reloaded or restarted: on a first install "Patroni running" starts it once, after the
+# settings are in place (a reload or restart there would interrupt it while it creates the cluster).
 - name: patroni reload
-  ansible.builtin.systemd_service: {name: sms-patroni, state: reloaded}
-  failed_when: false
+  ansible.builtin.command: systemctl try-reload-or-restart sms-patroni
 - name: patroni restart
-  ansible.builtin.systemd_service: {name: sms-patroni, state: restarted, daemon_reload: true}
+  ansible.builtin.shell: systemctl daemon-reload && systemctl try-restart sms-patroni
 - name: haproxy reload
   ansible.builtin.systemd_service: {name: haproxy, state: reloaded}

@@ -41,6 +41,8 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 https_proxy=$LAB_HTTPS_PROXY
 no_proxy=$no_proxy
 ENV
+        # A proxy that only tunnels HTTPS: fetch the Ubuntu packages over HTTPS too.
+        docker exec "lab-$m" sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources
       done
     fi
     if [[ -n "${LAB_CA_FILE:-}" ]]; then

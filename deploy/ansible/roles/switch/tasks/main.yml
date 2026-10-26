@@ -4,9 +4,14 @@
 - name: sms user
   ansible.builtin.user: {name: "{{ switch_user }}", system: true, shell: /usr/sbin/nologin, home: "{{ switch_root }}", create_home: false}
 
+# {{ switch_root }} can be passed through but not listed by other users: nginx reaches the screens' files in
+# {{ switch_root }}/web (roles/web) and nothing else (rehearsal 2026-10-26: with 0750 every page answered 500).
 - name: Folders
-  ansible.builtin.file: {path: "{{ item }}", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0750"}
-  loop: ["{{ switch_root }}", "{{ switch_root }}/releases", /var/log/sms]
+  ansible.builtin.file: {path: "{{ item.path }}", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "{{ item.mode }}"}
+  loop:
+    - {path: "{{ switch_root }}", mode: "0751"}
+    - {path: "{{ switch_root }}/releases", mode: "0750"}
+    - {path: /var/log/sms, mode: "0750"}
 
 - name: Settings folder
   ansible.builtin.file: {path: /etc/sms, state: directory, owner: root, group: "{{ switch_user }}", mode: "0750"}

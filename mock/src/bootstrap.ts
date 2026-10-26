@@ -20,7 +20,7 @@ import { BILLING_CYCLES, CATEGORIES, CURRENCIES, loadMccmncCsv, regionOf } from 
 import { ACCESS_GROUPS, DEPARTMENTS } from "./generator/admin.js";
 
 export interface BootstrapOptions {
-  /** withoutCode: no e-mailed sign-in code (only while platform e-mail is not set up, e.g. the lab; §13.28). */
+  /** withoutCode: no e-mailed sign-in code (§13.28); the new password still needs an e-mailed code (R6). */
   admin?: { username: string; email: string; firstName: string; lastName: string; withoutCode?: boolean };
   /** The weekly Cleanup Center summary (§13.19); the migration's placeholder addresses are removed when not given. */
   summaryEmails?: string[];
@@ -264,9 +264,12 @@ async function main() {
       console.log(`\nTemporary password (valid 24 hours, shown once): ${result.adminPassword}`);
       console.log(
         a["admin-without-code"]
-          ? "Sign in, then choose a new password. Turn the sign-in code on (Admin › Users) once e-mail works."
-          : "Sign in, enter the code e-mailed to the administrator, then choose a new password.",
+          ? "Sign in without a code; choosing the new password still needs a code e-mailed to the administrator."
+          : "Sign in, enter the code e-mailed to the administrator, then choose a new password (another e-mailed code).",
       );
+      // A password is only changed with a code (R6, §13.28), so the first sign-in cannot finish without platform e-mail.
+      if (!process.env.SMTP_URL)
+        console.log("Warning: SMTP_URL is not set. Set vault_smtp_url and run site.yml before the first sign-in.");
     }
   } finally {
     await client.end();

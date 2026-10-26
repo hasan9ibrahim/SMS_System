@@ -22,8 +22,10 @@
   serial: 1
   roles: [switch]
 
-- name: The TypeScript service and the screens over HTTPS (servers; the release itself comes with deploy.yml)
+- name: The TypeScript service and the screens over HTTPS (servers, one at a time so a settings change never restarts both;
+    the release itself comes with deploy.yml)
   hosts: servers
+  serial: 1
   roles: [service, web]
 
 - name: Monitoring (every machine; Prometheus, Alertmanager and Grafana on the witness)

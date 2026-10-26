@@ -3,6 +3,9 @@
 # from the development database (docker compose, fake data only), then the load-test trunks, rates and route rule of
 # tools/smpp-sim/scripts/setup.sql, with the vendors' SMSC on this host (the simulator). Writes the simulator's
 # tools/smpp-sim/run/loadtest.json for the lab.
+#
+# SKIP_REFERENCE=1: keep the reference data already there (the go-live rehearsal fills it with the production bootstrap,
+# docs/GO_LIVE.md step 4) and add only the load-test trunks.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
@@ -17,13 +20,15 @@ primary="$(docker exec lab-srv-a curl -s -m 5 http://127.0.0.1:8008/cluster \
 lab_psql() { docker exec -i "lab-$primary" su postgres -c "psql -p 5433 -d sms_config -v ON_ERROR_STOP=1 -q $*"; }
 echo "primary: $primary"
 
-args=(); for t in "${TABLES[@]}"; do args+=(--table="sms.$t"); done
-echo "reference data: ${TABLES[*]}"
-{
-  echo "SET session_replication_role = replica;"
-  for t in "${TABLES[@]}"; do echo "TRUNCATE sms.$t CASCADE;"; done
-  docker exec "$DEV_PG" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --data-only --no-owner "${args[@]}"
-} | lab_psql >/dev/null
+if [[ "${SKIP_REFERENCE:-}" != 1 ]]; then
+  args=(); for t in "${TABLES[@]}"; do args+=(--table="sms.$t"); done
+  echo "reference data: ${TABLES[*]}"
+  {
+    echo "SET session_replication_role = replica;"
+    for t in "${TABLES[@]}"; do echo "TRUNCATE sms.$t CASCADE;"; done
+    docker exec "$DEV_PG" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --data-only --no-owner "${args[@]}"
+  } | lab_psql >/dev/null
+fi
 
 echo "load-test trunks (vendors at $VENDOR_HOST:${VENDOR_PORT:-9100})"
 lab_psql -v customer_trunks="${CUSTOMER_TRUNKS:-10}" -v vendor_trunks="${VENDOR_TRUNKS:-10}" \
