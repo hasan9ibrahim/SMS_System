@@ -8,6 +8,7 @@
 // Each answer is `{ ok, node, data | error, skip? }`. No server answering is `SwitchUnreachable` (503 on the screen).
 import type { FastifyReply } from "fastify";
 import { connect, RequestStrategy, type NatsConnection } from "nats";
+import { natsServers } from "../natsServers.js";
 import { sendProblem } from "../problem.js";
 
 export interface SwitchAnswer<T> {
@@ -32,7 +33,7 @@ let nc: Promise<NatsConnection> | null = null;
 
 function conn(): Promise<NatsConnection> {
   nc ??= connect({
-    servers: (process.env.NATS_URL ?? "nats://127.0.0.1:4222").split(","),
+    ...natsServers(),
     maxReconnectAttempts: -1,
     name: "sms-service-commands",
   }).catch((err: unknown) => {

@@ -11,6 +11,7 @@
 // A shared durable consumer drives the bind status (`sms.session.*`, jobs/binds.ts) and the credit alert e-mails
 // (`sms.billing.credit_alert`, jobs/creditAlerts.ts), each event once across the servers.
 import { AckPolicy, connect, DeliverPolicy, nanos, type JsMsg, type NatsConnection } from "nats";
+import { natsServers } from "../natsServers.js";
 import { sysToPlatformFactors } from "../currency.js";
 import { db } from "../db.js";
 import { platformDay } from "../platform.js";
@@ -369,7 +370,7 @@ const stream = () => process.env.NATS_STREAM ?? "SMS";
 
 async function run() {
   nc = await connect({
-    servers: (process.env.NATS_URL ?? "nats://127.0.0.1:4222").split(","),
+    ...natsServers(),
     maxReconnectAttempts: -1,
     name: "sms-service",
   });
