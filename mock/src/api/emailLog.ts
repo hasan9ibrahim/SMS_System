@@ -35,7 +35,43 @@ export interface EmailAttachment {
 }
 
 /** Logs an e-mail and returns its status; `id` receives the log row's ID when given. */
-export async function logEmail(c: Db, m: EmailLogInput, id?: { value: number }): Promise<"sent" | "failed"> {
+/**
+ * E-mails about a partner's account that its account manager gets a copy of (product owner 2026-10-26: the AM is in
+ * CC of every e-mail about their accounts). Mass mailings (Broadcast) and our own internal mail are not.
+ */
+const AM_COPY: ReadonlySet<EmailLogInput["type"]> = new Set<EmailLogInput["type"]>([
+  "send_rate",
+  "send_tech_info",
+  "invoice",
+  "bind_down_alert",
+  "auto_upload_rate",
+  "auto_upload_rejected",
+  "credit_alert",
+  "balance_alert",
+  "traffic_alert",
+  "trouble_ticket",
+  "send_soa",
+  "payment_confirmation",
+  "invoice_acceptance",
+  "invoice_rejection",
+  "daily_report",
+]);
+
+/** The partner's account manager, when the e-mail is one they get a copy of and they have an address. */
+async function amCopy(c: Db, m: EmailLogInput): Promise<string | null> {
+  if (!m.enterpriseId || !AM_COPY.has(m.type)) return null;
+  const { rows } = await c.query(
+    `SELECT u.email FROM enterprises e JOIN users u ON u.id = e.account_manager_id
+      WHERE e.id = $1 AND u.status = 'active' AND u.deleted_at IS NULL`,
+    [m.enterpriseId],
+  );
+  return (rows[0]?.email as string | undefined)?.trim() || null;
+}
+
+export async function logEmail(c: Db, input: EmailLogInput, id?: { value: number }): Promise<"sent" | "failed"> {
+  const am = await amCopy(c, input);
+  const known = [...input.to, ...(input.cc ?? [])].map((x) => x.toLowerCase());
+  const m = am && !known.includes(am.toLowerCase()) ? { ...input, cc: [...(input.cc ?? []), am] } : input;
   const error = m.error ?? (m.to.length ? null : "No recipient: the partner has no contact for this e-mail");
   const status = error ? "failed" : "sent";
   // In production "sent" means accepted for delivery: the e-mail job sends it within seconds.

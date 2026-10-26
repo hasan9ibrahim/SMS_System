@@ -3,8 +3,8 @@
 // account; this sends the e-mail:
 //   * a customer (credit limit reached a level, or prepaid used up): its finance contacts (else commercial), with its
 //     business company's Low Balance template, when Credit Alert is on;
-//   * a prepaid vendor (our funds with it used): our own billing mailbox and the vendor's account manager, so the
-//     team tops up the balance. It never goes to the vendor.
+//   * a prepaid vendor (our funds with it used): our own billing mailbox (the business company's), with the vendor's
+//     account manager in CC, so the team tops up the balance. It never goes to the vendor.
 import type pg from "pg";
 import { fillBody, fillText } from "../email/html.js";
 import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "../api/emailLog.js";
@@ -41,8 +41,7 @@ export async function sendCreditAlert(c: Db, raw: Record<string, unknown>): Prom
   if (!enterpriseId) return null;
   const vendor = a.side === "vendor";
   const { rows } = await c.query(
-    `SELECT e.name, e.credit_alert, u.email AS am_email
-       FROM enterprises e LEFT JOIN users u ON u.id = e.account_manager_id WHERE e.id = $1`,
+    `SELECT e.name, e.credit_alert FROM enterprises e WHERE e.id = $1`,
     [enterpriseId],
   );
   const e = rows[0];
@@ -61,7 +60,8 @@ export async function sendCreditAlert(c: Db, raw: Record<string, unknown>): Prom
   };
   const sender = await companyMailbox(c, enterpriseId, "invoice");
   if (vendor) {
-    const to = [...new Set([sender, e.am_email as string | null].filter((x): x is string => !!x))];
+    // Our own billing mailbox (business company); the AM is copied by logEmail (product owner 2026-10-26).
+    const to = sender ? [sender] : [];
     const subject = `Vendor balance ${level.toLowerCase()} – ${vars.enterprise}`;
     const body =
       `<p>Our prepaid balance with <b>${escapeHtml(vars.enterprise!)}</b> reached <b>${escapeHtml(level)}</b>.</p>` +

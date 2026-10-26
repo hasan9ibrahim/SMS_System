@@ -8,6 +8,7 @@ import { json, type TableSink } from "./sink.js";
 import { DAY, type User, type World } from "./world.js";
 import type { Profile } from "./profiles.js";
 import { encryptSecret, hashPassword } from "../admin/passwords.js";
+import { MODULES } from "../admin/catalog.js";
 
 /** Every seeded staff and portal user signs in with this fake password (CLAUDE.md rule 1). */
 export const SEED_PASSWORD = "demo-password-2026";
@@ -74,6 +75,13 @@ export const ACCESS_GROUPS: { name: string; description: string; permissions: Re
       signaling: ["view", "add", "export"],
       "noc-report": ["view", "export"],
       "traffic-alerts": ["view", "add", "edit"],
+      // Go-live review (product owner 2026-10-26): the monitoring pages NOC works from.
+      incidents: ["view", "edit", "export"],
+      "alert-rules": ["view", "add", "edit"],
+      "failed-edr": ["view", "export"],
+      repush: ["view", "add"],
+      "pcap-trace": ["view", "add", "export"],
+      diagnosis: ["view"],
     },
   },
   {
@@ -85,6 +93,9 @@ export const ACCESS_GROUPS: { name: string; description: string; permissions: Re
       "route-rules": ["view", "edit"],
       lcr: ["view", "add", "export"],
       mccmnc: ["view", "export"],
+      "market-moves": ["view", "export"],
+      "rate-lookup": ["view", "export"],
+      bulk: ["view", "edit", "import"],
     },
   },
   {
@@ -97,9 +108,21 @@ export const ACCESS_GROUPS: { name: string; description: string; permissions: Re
       soa: ["view", "export", "send"],
       balances: ["view", "export"],
       "billing-report": ["view", "export"],
+      enterprises: ["view"],
+      "soa-report": ["view", "export", "send"],
+      charges: ["view"],
+      currencies: ["view", "add", "edit", "export"],
+      "billing-cycles": ["view", "add", "edit", "export"],
     },
   },
-  { name: "Read Only", description: "View every page", permissions: { "*": ["view"] } },
+  {
+    name: "Read Only",
+    description: "View every page except Finance and Admin",
+    // Go-live review (product owner 2026-10-26): read-only users do not see finance.
+    permissions: Object.fromEntries(
+      MODULES.filter((x) => x.section !== "finance" && x.section !== "admin").map((x) => [x.key, ["view"]]),
+    ),
+  },
 ];
 
 const DEPT_GROUP: Record<string, string> = {

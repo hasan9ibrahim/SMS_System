@@ -63,7 +63,7 @@ async function recount(c: Db, side: string, trunkId: number) {
   );
 }
 
-/** The Bind Down e-mail to the vendor's technical contacts, when its enterprise has Bind Alert on. */
+/** The Bind Down e-mail to the vendor's technical contacts and ours, when its enterprise has Bind Alert on. */
 async function bindDownAlert(c: Db, trunkId: number, downForMs: number) {
   const { rows } = await c.query(
     `SELECT t.name, t.enterprise_id, e.bind_alert FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
@@ -85,8 +85,9 @@ async function bindDownAlert(c: Db, trunkId: number, downForMs: number) {
     type: "bind_down_alert",
     enterpriseId,
     vendorTrunkId: trunkId,
-    to: await contactEmails(c, enterpriseId, ["technical"]),
-    cc: sender ? [sender] : [],
+    // The vendor's technical contacts and our own technical mailbox (business company); the AM is copied by logEmail
+    // (product owner 2026-10-26).
+    to: [...new Set([...(await contactEmails(c, enterpriseId, ["technical"])), ...(sender ? [sender] : [])])],
     sender,
     subject: tpl ? fillText(tpl.subject, vars) : `Bind down: ${vars.trunk}`,
     body: tpl ? fillBody(tpl.body, vars) : `<p>Our connection to ${vars.trunk} has been down since ${since} UTC.</p>`,

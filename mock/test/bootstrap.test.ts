@@ -101,7 +101,8 @@ describe("go-live bootstrap (step 14)", { skip }, () => {
       },
     );
     assert.ok(verifyPassword(r.adminPassword, u[1].password_hash));
-    assert.deepEqual((await c.query("SELECT summary_emails FROM cleanup_settings")).rows[0].summary_emails, []);
+    const { rows: cs } = await c.query("SELECT summary_emails, require_approval FROM cleanup_settings");
+    assert.deepEqual(cs[0], { summary_emails: [], require_approval: true }, "Cleanup changes need approval");
   });
 
   test("running it again changes nothing", async () => {

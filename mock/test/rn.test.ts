@@ -364,6 +364,33 @@ describe("incoming RNs (§13.32)", { skip }, () => {
     if (rn.changeId) await call("POST", `/changes/${rn.changeId}/undo`, {});
   });
 
+  test("auto-accept: an increase with notice is accepted, a back-dated rate waits (go-live 2026-10-26)", async () => {
+    const t = await trunk();
+    const [g, h] = [t.codes[6]!, t.codes[7]!];
+    const upload = (name: string, row: string) =>
+      ok(
+        "intakeRateNotification",
+        call("POST", "/rate-notifications/intake", {
+          source: "upload",
+          vendorTrunkId: t.id,
+          attachments: [{ fileName: name, content: `MCCMNC,Rate,Effective Date\n${row}` }],
+        }),
+        201,
+      );
+    // Notice is 7 days (set above): an increase starting in 12 days needs no one, live traffic or not.
+    const up = await upload("up.csv", `${g.mccmnc},${(g.rate * 1.2).toFixed(6)},${day(12)}`);
+    assert.equal(up.autoAccepted, 1);
+    const upRn = await ok("getRateNotification", call("GET", `/rate-notifications/${up.created[0].id}`));
+    assert.equal(upRn.status, "accepted");
+    if (upRn.changeId) await call("POST", `/changes/${upRn.changeId}/undo`, {});
+    // A back-dated rate waits for a person.
+    const back = await upload("back.csv", `${h.mccmnc},${(h.rate * 0.9).toFixed(6)},${day(-3)}`);
+    assert.equal(back.autoAccepted, 0);
+    const backRn = await ok("getRateNotification", call("GET", `/rate-notifications/${back.created[0].id}`));
+    assert.equal(backRn.status, "pending");
+    await ok("rejectRateNotification", call("POST", `/rate-notifications/${backRn.id}/reject`, { reason: "test" }));
+  });
+
   test("Excel upload: protected sheet, given header row, original file kept (team trial round 2)", async () => {
     const t = await trunk();
     const [a] = t.codes;
