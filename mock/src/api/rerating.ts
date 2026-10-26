@@ -22,6 +22,7 @@ import { recordChange, type DiffEntry } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { production } from "../mode.js";
+import { money } from "../currency.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -438,7 +439,7 @@ export async function processRerating(pool: pg.Pool, id: number, userId: number)
               r.enterpriseId,
               input.side,
               r.paymentType,
-              Math.abs(r.amount),
+              money(Math.abs(r.amount)),
               r.currency,
               `Re-rating #${id}: ${detail.rateTableName} ${input.startDate} to ${input.endDate}`,
               userId,
