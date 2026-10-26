@@ -1469,7 +1469,7 @@ Decided in team trial round 1 (2026-10-19).
   - today's reports and Live analytics under 500 ms;
   - reports over months under 2 s.
 - **EDR retention: 18 months online, then archive** (12 months decided 2026-10-19; 18 months decided by the product owner 2026-10-26).
-  - Message text is kept 1 year, then blanked; every other EDR field follows the retention below (decided 2026-10-24).
+  - Message text is kept 18 months, then blanked; every other EDR field follows the retention below (1 year decided 2026-10-24; 18 months decided by the product owner 2026-10-26).
   - Every EDR stays online for 18 months on the fast disks: in EDR search, EDR download, reports, Live analytics, re-rating, invoices and SOAs.
   - After 18 months a daily background job moves the oldest day to compressed archive storage (cheap disk or object storage). The archive keeps the full EDR, with the rate and cost as billed.
   - The archive is kept for the legal retention period set by the admin, minimum 7 years (§13.29); after that the admin may purge, as in §13.29.
