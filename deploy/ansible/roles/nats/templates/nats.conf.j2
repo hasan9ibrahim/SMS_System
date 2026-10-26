@@ -12,7 +12,9 @@ authorization {
 
 jetstream {
   store_dir: /var/lib/nats/jetstream
-  max_file_store: {{ nats_max_file_store | default('1200G' if not lab else '2G') }}
+  # Ceiling for the stored events (2 days kept, max_age_days): ~40 GB at 50 M messages a month, so 200 GB leaves room on
+  # a 1.92 TB server disk (product owner 2026-10-26). The witness VM sets its own (inventory).
+  max_file_store: {{ nats_max_file_store | default('200G' if not lab else '2G') }}
   max_memory_store: {{ nats_max_memory_store | default('1G' if not lab else '128M') }}
   # The NATS default (written to disk every 2 minutes): each event is on three machines, so one crashing loses
   # nothing (product owner 2026-10-25, backend step 7).

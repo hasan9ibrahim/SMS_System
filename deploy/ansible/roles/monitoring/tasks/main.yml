@@ -84,7 +84,7 @@
       ansible.builtin.copy:
         dest: /etc/default/prometheus
         content: |
-          ARGS="--storage.tsdb.retention.time=30d --web.listen-address=0.0.0.0:{{ ports.prometheus }}"
+          ARGS="--storage.tsdb.retention.time=30d --storage.tsdb.retention.size=15GB --web.listen-address=0.0.0.0:{{ ports.prometheus }}"
       notify: prometheus restart
 
     - name: Alertmanager settings (Telegram)
