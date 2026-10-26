@@ -41,6 +41,11 @@
   ansible.builtin.systemd_service: {name: patroni, enabled: false, state: stopped}
   failed_when: false
 
+# Settings changes first: on a first install a restart notified by the new files would otherwise stop Patroni in the
+# middle of creating the cluster, which leaves it without its replication role (rehearsal 2026-10-26).
+- name: Apply settings changes before starting
+  ansible.builtin.meta: flush_handlers
+
 - name: Patroni running
   ansible.builtin.systemd_service: {name: sms-patroni, enabled: true, state: started, daemon_reload: true}
 
