@@ -8,8 +8,9 @@
 import { readFileSync } from "node:fs";
 import type { CurrentUser } from "@sms/contract";
 import { getCurrentUser } from "../api/session.js";
+import { contractFile } from "../contract.js";
 
-const access = JSON.parse(readFileSync(new URL("../../../contract/access.json", import.meta.url), "utf8")) as {
+const access = JSON.parse(readFileSync(contractFile("access.json"), "utf8")) as {
   admin: string[];
   lookups?: Record<string, string[]>;
 };

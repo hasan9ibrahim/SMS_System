@@ -14,12 +14,12 @@ import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 import { viewer } from "../auth/access.js";
 import { isBadRegex } from "./lists.js";
+import { contractFile } from "../contract.js";
 
-const root = new URL("../../../contract/", import.meta.url);
-const access = JSON.parse(readFileSync(new URL("access.json", root), "utf8")) as {
+const access = JSON.parse(readFileSync(contractFile("access.json"), "utf8")) as {
   lookups: Record<string, { pages: string[]; fields: string[] }>;
 };
-const operations = JSON.parse(readFileSync(new URL("generated/operations.json", root), "utf8")) as {
+const operations = JSON.parse(readFileSync(contractFile("generated/operations.json"), "utf8")) as {
   path: string;
   method: string;
   module: string | null;

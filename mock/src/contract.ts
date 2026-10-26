@@ -2,6 +2,7 @@
 // The mock registers a route for EVERY operation in the contract, so the GUI can rely on
 // each path existing; operations without a handler yet answer 501 (CLAUDE.md rule 2).
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { parse } from "yaml";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
@@ -36,6 +37,9 @@ const DOC_ID = "openapi";
 
 // SMS_CONTRACT_FILE: the contract in the bundled server image (deploy/Dockerfile.mock).
 export const openapiPath = process.env.SMS_CONTRACT_FILE ?? require.resolve("@sms/contract/openapi.yaml");
+/** Another file of the contract folder (e.g. access.json), found next to openapi.yaml in the repository, the trial
+ *  image and the production release alike: a path relative to the source file breaks once the server is bundled. */
+export const contractFile = (name: string): string => join(dirname(openapiPath), name);
 export const document = parse(readFileSync(openapiPath, "utf8")) as JsonObject & {
   info: { version: string };
   paths: Record<string, Record<string, JsonObject>>;
