@@ -34,12 +34,27 @@ really down (the witness lost it too) is simply taken over.
 
 ## Sizing (production)
 
+Chosen 2026-10-26 for 10–20 million messages a month, 50 million at peak, EDRs online 18 months (spec §14.3).
+
 | Machine | CPU / RAM | Disk |
 | --- | --- | --- |
-| Each server | 16+ cores, 64 GB | NVMe: ~1.2 TB NATS (2 days at 50 M/day), ClickHouse EDRs (~30 GB/day compressed), PostgreSQL, ~3.6 TB traffic recording (60 days; or lower `pcap_files`) |
-| Witness VM | 2–4 cores, 8 GB | ~1.2 TB for the third NATS copy, plus Prometheus (30 days) |
+| Each server | 12+ fast cores (e.g. Ryzen 9 5900X), 128 GB ECC | 2 × 3.84 TB NVMe, RAID 1 (2 × 1.92 TB is the minimum) |
+| Witness VM | 4–6 vCPU, 8–12 GB | 200 GB (100 GB is the minimum) |
+| Off-site backups | – | S3-compatible bucket at another provider, from ~1 TB |
 
-The witness holds a full copy of the event bus. A smaller witness disk means shorter bus retention (`max_age_days`).
+What one server stores at 50 million messages a month:
+
+| Data | Size |
+| --- | --- |
+| EDRs, 18 months online (ClickHouse) | 180–540 GB |
+| Traffic recording, 60 days (`pcap_files`, compressed) | 50–70 GB |
+| Event bus, 2 days (`max_age_days`; capped by `nats_max_file_store`, 200 G) | ~40 GB |
+| PostgreSQL, OS, applications, logs | ~200 GB |
+| **Total** | **~0.5–0.9 TB** |
+
+Each server can carry all the traffic alone (1,000 TPS peak). The witness keeps a third copy of the event bus (capped
+at 60 G there, `inventories/production.example/hosts.yml`) and Prometheus (30 days, at most 15 GB). Storage grows with
+traffic: at about 150 million messages a month, look again at the disks or the months kept online.
 
 ## First setup
 

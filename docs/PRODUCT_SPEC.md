@@ -1286,7 +1286,7 @@ Deleting a trunk, enterprise, rate table, route rule, translation or HLR rule, v
 
 **Data kept forever (or for the legal retention period set by admin, minimum 7 years)**
 
-- EDRs and CDRs, with the trunk, enterprise, vendor, rate and cost as they were at send time. Each EDR stores a copy of the rate and cost it was billed at, so later rate changes or deletes don't change past billing. EDRs stay online (search, reports, Live analytics) for 12 months, then move to the archive and are kept there for the retention period (§14.3).
+- EDRs and CDRs, with the trunk, enterprise, vendor, rate and cost as they were at send time. Each EDR stores a copy of the rate and cost it was billed at, so later rate changes or deletes don't change past billing. EDRs stay online (search, reports, Live analytics) for 18 months, then move to the archive and are kept there for the retention period (§14.3).
 - Rate table history and every rate version with its effective dates.
 - Invoices, SOAs, payments, credit notes, balance history and disputes.
 - Route rule and translation rule versions (the undo history from §13.10).
@@ -1462,19 +1462,19 @@ Decision (confirmed 2026-10-24, `docs/BACKEND_PLAN.md` §3.1): Elixir for the wh
 Decided in team trial round 1 (2026-10-19).
 
 - **Capacity.** At least 1,000 TPS peak and 50 million SMS a day, with no message or EDR lost when a service restarts. Acceptance tests and server sizing are in `docs/BACKEND_TODO.md`.
-- **Speed at that volume** (p95 unless noted, over 12 months of EDRs):
+- **Speed at that volume** (p95 unless noted, over 18 months of EDRs):
   - submit_sm_resp within 50 ms (p99);
   - EDRs visible in reports and Live analytics within 2 s;
   - lists, filters and record pages under 300 ms;
   - today's reports and Live analytics under 500 ms;
   - reports over months under 2 s.
-- **EDR retention: 12 months online, then archive.**
-  - Message text is kept 1 year, then blanked; every other EDR field follows the retention below (decided 2026-10-24).
-  - Every EDR stays online for 12 months on the fast disks: in EDR search, EDR download, reports, Live analytics, re-rating, invoices and SOAs.
-  - After 12 months a daily background job moves the oldest day to compressed archive storage (cheap disk or object storage). The archive keeps the full EDR, with the rate and cost as billed.
+- **EDR retention: 18 months online, then archive** (12 months decided 2026-10-19; 18 months decided by the product owner 2026-10-26).
+  - Message text is kept 18 months, then blanked; every other EDR field follows the retention below (1 year decided 2026-10-24; 18 months decided by the product owner 2026-10-26).
+  - Every EDR stays online for 18 months on the fast disks: in EDR search, EDR download, reports, Live analytics, re-rating, invoices and SOAs.
+  - After 18 months a daily background job moves the oldest day to compressed archive storage (cheap disk or object storage). The archive keeps the full EDR, with the rate and cost as billed.
   - The archive is kept for the legal retention period set by the admin, minimum 7 years (§13.29); after that the admin may purge, as in §13.29.
   - Archived days can be restored on request (admin, for a period and filter, e.g. one client's month) as a background job with progress. Restored rows are searchable and downloadable until the admin releases them.
-  - Hourly and daily summaries, invoices, SOAs, payments, balances, rate history and audit data stay online for good. Reports and invoices for periods older than 12 months still work from the summaries.
+  - Hourly and daily summaries, invoices, SOAs, payments, balances, rate history and audit data stay online for good. Reports and invoices for periods older than 18 months still work from the summaries.
   - Screens that search EDRs say when the chosen period is partly archived and offer the restore request.
 
 ## 15. Adopted GUI design
