@@ -12,7 +12,7 @@ setup itself is in `deploy/ansible/README.md`; this list adds what the platform 
 | 1.3 | A name for the screens and the portal, e.g. `sms.<your-domain>`: an A record to **both** servers (or the provider's failover address) | `dig +short sms.<your-domain>` shows both |
 | 1.4 | The SMPP address partners bind to: each server's public address (customers are given both; S-1.17 TLS on 2776) | – |
 | 1.5 | A certificate for the screens' name (full chain + key), and one for SMPP TLS if partners use it. Renewal: when the certificate is replaced on the servers, run `systemctl reload nginx` | `openssl x509 -noout -dates -in web.crt` |
-| 1.6 | A mailbox the platform sends from (sign-in codes, password codes, alerts): SMTP host, port, login | send a test mail with any client |
+| 1.6 | A mailbox the platform sends from (sign-in codes, password codes, alerts): SMTP host, port, login. **Needed before the first sign-in**: every password change, the administrator's first one included, needs an e-mailed code (R6, §13.28) | send a test mail with any client |
 | 1.7 | A Telegram bot and the engineer's and NOC's chat ids (Q29) | – |
 
 ## 2. Inventory and secrets
@@ -65,7 +65,9 @@ It fills what every screen needs (safe to run again: tables that have rows are l
 * the first administrator, with a temporary password printed once (valid 24 hours).
 
 Then sign in at `https://<web_domain>`: the temporary password, the code e-mailed to the administrator, then a new
-password (another e-mailed code). If no code arrives, check `vault_smtp_url` and Switch › Email logs.
+password (another e-mailed code). If no code arrives, check `vault_smtp_url` (`smtp://` uses STARTTLS, `smtps://` SSL;
+add `?secure=none` only for a server without either) and Switch › Email logs. `--admin-without-code` skips only the
+sign-in code: the new password still needs an e-mailed one, so platform e-mail must work first either way.
 
 ## 5. In the screens (administrator)
 

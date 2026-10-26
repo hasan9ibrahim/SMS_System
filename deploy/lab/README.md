@@ -22,6 +22,19 @@ ansible-playbook deploy.yml -e release=$(./build-release.sh)
 ../lab/seed.sh                           # reference data and the load-test trunks (vendors on this host)
 ```
 
+The go-live rehearsal (`docs/GO_LIVE.md` sections 3–7, results in `docs/TEST_PASS.md`) uses the production bootstrap
+instead of the dev reference data, and a mail catcher for the platform e-mail (sign-in and password codes):
+
+```sh
+deploy/lab/lab.sh up
+python3 deploy/lab/smtp-sink.py deploy/lab/mail &   # 10.88.0.1:2525; every platform e-mail lands in deploy/lab/mail
+cd deploy/ansible && ansible-playbook site.yml
+ansible-playbook deploy.yml -e release=$(./build-release.sh)
+deploy/lab/lab.sh ssh srv-a                          # then the bootstrap command of docs/GO_LIVE.md step 4
+# browse https://sms.lab.test (hosts file: 10.88.0.11 or 10.88.0.12); codes are in deploy/lab/mail
+SKIP_REFERENCE=1 ../lab/seed.sh                      # load-test trunks on top of the bootstrap data
+```
+
 Drills (`docs/FAILOVER_DRILLS.md`):
 
 ```sh
