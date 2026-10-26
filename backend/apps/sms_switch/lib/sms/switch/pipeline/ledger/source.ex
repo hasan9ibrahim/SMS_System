@@ -40,7 +40,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
 
     @impl true
     def accounts do
-      case Repo.query(@accounts, [], log: false, timeout: 15_000) do
+      case query(@accounts, [], log: false, timeout: 15_000) do
         {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &account/1)}
         {:error, _} = error -> error
       end
@@ -93,7 +93,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
        WHERE enterprise_id = $1 AND side = $2 AND bucket >= to_timestamp($3)
       """
 
-      case Repo.query(sql, [account.enterprise_id, side(account), cutoff * Ledger.bucket_s()],
+      case query(sql, [account.enterprise_id, side(account), cutoff * Ledger.bucket_s()],
              log: false
            ) do
         {:ok, %{rows: rows}} ->
@@ -123,10 +123,18 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
         DO UPDATE SET amount = EXCLUDED.amount, messages = EXCLUDED.messages, updated_at = now()
       """
 
-      case Repo.query(sql, [ents, sides, buckets, amounts, counts], log: false) do
+      case query(sql, [ents, sides, buckets, amounts, counts], log: false) do
         {:ok, _} -> :ok
         {:error, _} = error -> error
       end
+    end
+
+    # The pool not running (the node starting or stopping) is the database being unreachable, not a crash that would
+    # take the pipeline's supervisor down with it (backend step 12).
+    defp query(sql, params, opts) do
+      Repo.query(sql, params, opts)
+    rescue
+      e -> {:error, Exception.message(e)}
     end
 
     defp side(%{side: :vendor}), do: "vendor"
