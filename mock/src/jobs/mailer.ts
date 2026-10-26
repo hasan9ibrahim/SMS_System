@@ -63,10 +63,10 @@ export function platformMailbox(env = process.env): Mailbox | null {
   if (!env.SMTP_URL) return null;
   const u = new URL(env.SMTP_URL);
   const ssl = u.protocol === "smtps:";
-  const from = env.SMTP_FROM ?? decodeURIComponent(u.username);
+  const from = env.SMTP_FROM || decodeURIComponent(u.username);
   return {
     id: null,
-    name: env.SMTP_FROM_NAME ?? null,
+    name: env.SMTP_FROM_NAME || null,
     email: from,
     host: u.hostname,
     port: Number(u.port || (ssl ? 465 : 587)),

@@ -18,7 +18,7 @@ export const DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 export const DEPARTMENTS = ["Management", "Sales", "NOC", "Rates", "Billing", "Admin"];
 
 // Permission keys are page keys of the menu (admin/catalog.ts, §11).
-const ACCESS_GROUPS: { name: string; description: string; permissions: Record<string, string[]> }[] = [
+export const ACCESS_GROUPS: { name: string; description: string; permissions: Record<string, string[]> }[] = [
   {
     name: "Administrator",
     description: "Every page and button",

@@ -13,7 +13,7 @@
     "gen:small": "npm run gen -- --profile small",
     "gen:full": "npm run gen -- --profile full",
     "gen:csv": "npm run gen -- --profile small --target csv --out out",
-    "bundle": "esbuild src/index.ts src/generator/cli.ts --bundle --platform=node --format=esm --target=node22 --minify --legal-comments=none --outdir=dist --entry-names=[name] --out-extension:.js=.mjs --external:pg-native --external:bufferutil --external:utf-8-validate \"--banner:js=import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\"",
+    "bundle": "esbuild src/index.ts src/generator/cli.ts src/bootstrap.ts --bundle --platform=node --format=esm --target=node22 --minify --legal-comments=none --outdir=dist --entry-names=[name] --out-extension:.js=.mjs --external:pg-native --external:bufferutil --external:utf-8-validate \"--banner:js=import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\"",
     "gen:lists": "tsx scripts/export-lists.ts",
     "build:mccmnc": "tsx scripts/build-mccmnc.ts data/source/mcc-mnc-table.csv data/mccmnc.csv"
   },

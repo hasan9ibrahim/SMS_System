@@ -186,7 +186,7 @@ const UCS2_HEAVY = new Set([
   "VN",
 ]);
 
-function regionOf(iso: string, mcc: string): string {
+export function regionOf(iso: string, mcc: string): string {
   if (GCC.has(iso)) return "GCC";
   if (EU.has(iso)) return "EU";
   switch (mcc[0]) {

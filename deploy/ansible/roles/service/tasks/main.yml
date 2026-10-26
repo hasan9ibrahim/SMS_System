@@ -1,0 +1,38 @@
+# The TypeScript service on each server (backend step 14): Node.js, its settings and its systemd unit. The release
+# itself (server.mjs, bootstrap.mjs, the SQL files, the contract and the MCC/MNC list) is installed by deploy.yml.
+- name: Node.js {{ node_version }}
+  ansible.builtin.get_url:
+    url: "https://nodejs.org/dist/v{{ node_version }}/node-v{{ node_version }}-linux-x64.tar.xz"
+    dest: "/opt/node-v{{ node_version }}-linux-x64.tar.xz"
+    checksum: "sha256:{{ node_sha256 }}"
+    mode: "0644"
+  register: node_archive
+
+- name: Unpack Node.js
+  ansible.builtin.unarchive:
+    src: "/opt/node-v{{ node_version }}-linux-x64.tar.xz"
+    dest: /opt
+    remote_src: true
+    creates: "/opt/node-v{{ node_version }}-linux-x64/bin/node"
+
+- name: node on the PATH
+  ansible.builtin.file:
+    src: "/opt/node-v{{ node_version }}-linux-x64/bin/node"
+    dest: /usr/local/bin/node
+    state: link
+    force: true
+
+- name: Folders
+  ansible.builtin.file: {path: "{{ item }}", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0750"}
+  loop: ["{{ service_root }}", "{{ service_root }}/releases", "{{ service_root }}/work"]
+
+- name: Settings (secrets included; read by the service only)
+  ansible.builtin.template: {src: service.env.j2, dest: /etc/sms/service.env, owner: root, group: "{{ switch_user }}", mode: "0640"}
+  notify: service restart
+
+- name: Service
+  ansible.builtin.template: {src: sms-service.service.j2, dest: /etc/systemd/system/sms-service.service, mode: "0644"}
+  notify: service restart
+
+- name: Enabled (started by deploy.yml once a release is installed)
+  ansible.builtin.systemd_service: {name: sms-service, enabled: true, daemon_reload: true}

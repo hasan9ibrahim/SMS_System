@@ -17,8 +17,11 @@ mock/              Fastify mock server and fake data generator (live traffic sim
 db/                PostgreSQL and ClickHouse init scripts and migrations (config schema, EDR tables)
 backend/           Elixir umbrella (later phase)
 tools/smpp-sim/    SMPP simulator and load tests (later phase)
+deploy/            Ansible for the two servers and the witness (deploy/ansible/README.md), lab, trial images
 docker-compose.yml postgres, clickhouse, redis
 ```
+
+Going live on the servers: `docs/GO_LIVE.md` (from empty machines to the first test partners).
 
 ## Getting started
 

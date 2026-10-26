@@ -11,6 +11,9 @@ Fake data only until the go-live (CLAUDE.md rule 1).
 | | srv-a | srv-b | witness VM |
 | --- | --- | --- | --- |
 | Switch (`sms-switch`) | traffic | traffic | `SWITCH_ROLE=witness`: no traffic, breaks ties |
+| API (in `sms-switch`, 127.0.0.1:4100) | ✓ | ✓ | – |
+| TypeScript service (`sms-service`, 127.0.0.1:4010; jobs on one server at a time) | ✓ | ✓ | – |
+| nginx: the screens and the portal over HTTPS (80 → 443) | ✓ | ✓ | – |
 | PostgreSQL 16 (Patroni) | primary or standby | primary or standby | – |
 | HAProxy → current primary | 127.0.0.1:5432 | 127.0.0.1:5432 | – |
 | etcd (Patroni's lease) | ✓ | ✓ | ✓ |
@@ -61,20 +64,26 @@ The witness holds a full copy of the event bus. A smaller witness disk means sho
    ```
 
    `site.yml` is safe to run again; run it after any change to the inventory or the roles.
-5. **Telegram:** create a bot with @BotFather, add it to the engineer's and the NOC's chats, put the token and the
+5. **Screens and e-mail (backend step 14):** in the inventory set `web_domain` (the name DNS points at both servers),
+   `smtp_from`, and `vault_smtp_url` in the secrets; put the certificate (full chain) and key for `web_domain` on both
+   servers at `web_tls_certfile` / `web_tls_keyfile` before `site.yml` (the web role stops without them). Then deploy a
+   release (below) and create the first administrator: `docs/GO_LIVE.md` has the whole list.
+6. **Telegram:** create a bot with @BotFather, add it to the engineer's and the NOC's chats, put the token and the
    chat ids in the inventory, run `site.yml` again. Test: stop the switch on one server for two minutes.
 
 ## Deploying a new version
 
 ```sh
-./build-release.sh                       # on Ubuntu 24.04; prints the release id, e.g. 1a2b3c4d5e
+./build-release.sh                       # on Ubuntu 24.04 with Node.js 22; prints the release id, e.g. 1a2b3c4d5e
 ansible-playbook -i inventories/production deploy.yml -e release=1a2b3c4d5e --ask-vault-pass
 ```
 
 `deploy.yml` uploads the release to the three machines, runs the database migrations once (from srv-a), then
 restarts srv-a, srv-b and the witness one at a time: each stops cleanly (customers unbound, vendors unbound, queued
 work left to the other server), starts the new version, and must be healthy, back in the cluster and have its routing
-configuration before the next one goes. In the lab, a deploy under 100 msg/s took about a minute with no message lost
+configuration before the next one goes. Then, one server at a time, the TypeScript service is pointed at the new
+release, restarted and must answer, and the screens are switched to the new files (nginx serves them at once). While
+one server's service restarts (a few seconds) its API answers 502; the other server is unaffected. In the lab, a deploy under 100 msg/s took about a minute with no message lost
 (2 submits refused, 49 resent by the customers after their session closed).
 
 **Migrations** must work with the version still running on the other server: add columns and tables, never rename or
@@ -125,5 +134,7 @@ and write to `/var/lib/sms-pcap/captures`, kept 30 days unless kept on the scree
 ## Firewall
 
 Only listed traffic is accepted (`roles/base/templates/nftables.conf.j2`): SSH and the monitoring pages from
-`admin_cidrs`, SMPP from `smpp_cidrs`, the cluster's ports between the three machines only. The Firewall screen's
+`admin_cidrs`, SMPP from `smpp_cidrs`, HTTPS (and 80, which only redirects) to the servers from `web_cidrs` (everyone
+by default, for the customer portal), the cluster's ports between the three machines only. The API and the TypeScript
+service listen on the servers' loopback only, behind nginx. The Firewall screen's
 banned and trusted lists (§8) apply on top, in the switch.

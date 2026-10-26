@@ -1,0 +1,51 @@
+# nginx in front of the API and the TypeScript service (backend step 14). The web app itself is installed by
+# deploy.yml into {{ web_root }}/releases and pointed at by {{ web_root }}/current.
+- name: nginx
+  ansible.builtin.apt: {name: nginx, state: present, update_cache: true, cache_valid_time: 86400}
+
+- name: Folders
+  ansible.builtin.file: {path: "{{ item }}", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0755"}
+  loop: ["{{ web_root }}", "{{ web_root }}/releases"]
+
+- name: Certificate folder
+  ansible.builtin.file: {path: /etc/sms/tls, state: directory, mode: "0755"}
+
+- name: Lab only, a self-signed certificate
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj "/CN={{ web_domain }}"
+      -keyout {{ web_tls_keyfile }} -out {{ web_tls_certfile }}
+    creates: "{{ web_tls_certfile }}"
+  when: lab | default(false)
+
+- name: The certificate is in place
+  ansible.builtin.stat: {path: "{{ item }}"}
+  loop: ["{{ web_tls_certfile }}", "{{ web_tls_keyfile }}"]
+  register: web_tls
+
+- name: Stop without a certificate (nginx would not start)
+  ansible.builtin.fail:
+    msg: >-
+      {{ item.item }} is missing: put the certificate (full chain) and key for {{ web_domain }} there first
+      (docs/GO_LIVE.md, step 3).
+  loop: "{{ web_tls.results }}"
+  when: not item.stat.exists
+
+- name: No default site
+  ansible.builtin.file: {path: /etc/nginx/sites-enabled/default, state: absent}
+  notify: nginx reload
+
+- name: The site
+  ansible.builtin.template: {src: sms.conf.j2, dest: /etc/nginx/sites-available/sms.conf, mode: "0644"}
+  notify: nginx reload
+
+- name: Enabled
+  ansible.builtin.file: {src: /etc/nginx/sites-available/sms.conf, dest: /etc/nginx/sites-enabled/sms.conf, state: link}
+  notify: nginx reload
+
+- name: The configuration is valid (before any reload)
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Running
+  ansible.builtin.systemd_service: {name: nginx, state: started, enabled: true}

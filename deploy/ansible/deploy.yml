@@ -1,6 +1,8 @@
-# Installs a switch release and rolls it out one machine at a time (backend step 8, README.md "Deploying").
+# Installs a release and rolls it out one machine at a time (backend steps 8 and 14, README.md "Deploying"): the
+# switch and the API on every machine (the API only answers on the servers), then on each server the TypeScript service
+# and the screens.
 #
-#   ./build-release.sh                                         builds releases/sms-<commit>.tar.gz
+#   ./build-release.sh                                         builds releases/{sms,service,web}-<commit>.tar.gz
 #   ansible-playbook deploy.yml -e release=<commit>            the lab
 #   ansible-playbook -i inventories/production deploy.yml -e release=<commit> --ask-vault-pass
 #
@@ -33,6 +35,30 @@
         owner: "{{ switch_user }}"
         group: "{{ switch_user }}"
       when: not present.stat.exists
+
+- name: Upload the TypeScript service and the screens to the servers
+  hosts: servers
+  tasks:
+    - name: Already on the server?
+      ansible.builtin.stat: {path: "{{ item.dir }}/{{ release }}/{{ item.check }}"}
+      register: parts
+      loop:
+        - {name: service, dir: "{{ switch_root }}/service/releases", check: server.mjs}
+        - {name: web, dir: "{{ switch_root }}/web/releases", check: index.html}
+
+    - name: Folders
+      ansible.builtin.file: {path: "{{ item.item.dir }}/{{ release }}", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0755"}
+      loop: "{{ parts.results }}"
+      when: not item.stat.exists
+
+    - name: Unpack
+      ansible.builtin.unarchive:
+        src: "releases/{{ item.item.name }}-{{ release }}.tar.gz"
+        dest: "{{ item.item.dir }}/{{ release }}"
+        owner: "{{ switch_user }}"
+        group: "{{ switch_user }}"
+      loop: "{{ parts.results }}"
+      when: not item.stat.exists
 
 - name: Migrate the databases (once, from the first server)
   hosts: "{{ groups['servers'][0] }}"
@@ -108,14 +134,66 @@
         and (others_running | length == 0 or metrics.content is search('sms_cluster_peers_connected [1-9]'))
         and (inventory_hostname in groups['witness'] or 'sms_config_loaded 1' in metrics.content)
 
+- name: The TypeScript service and the screens, one server at a time
+  hosts: servers
+  serial: 1
+  order: inventory
+  tasks:
+    - name: Point the service to the release
+      ansible.builtin.file:
+        src: "{{ switch_root }}/service/releases/{{ release }}"
+        dest: "{{ switch_root }}/service/current"
+        state: link
+        force: true
+        owner: "{{ switch_user }}"
+        group: "{{ switch_user }}"
+
+    - name: Restart the service
+      ansible.builtin.systemd_service: {name: sms-service, state: restarted, daemon_reload: true}
+
+    - name: Healthy (answers)
+      ansible.builtin.uri: {url: "http://127.0.0.1:{{ service_port }}/api/v1/health", return_content: true}
+      register: service_health
+      retries: 60
+      delay: 2
+      until: service_health.status == 200
+
+    - name: Point the screens to the release (nginx serves the new files at once)
+      ansible.builtin.file:
+        src: "{{ switch_root }}/web/releases/{{ release }}"
+        dest: "{{ switch_root }}/web/current"
+        state: link
+        force: true
+        owner: "{{ switch_user }}"
+        group: "{{ switch_user }}"
+
+    - name: The screens answer through nginx and the API
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/api/v1/health"
+        headers: {Host: "{{ web_domain }}"}
+        validate_certs: false
+      register: web_health
+      retries: 30
+      delay: 2
+      until: web_health.status == 200
+
 - name: Keep the last five releases
   hosts: all
   tasks:
+    - name: Release folders
+      ansible.builtin.set_fact:
+        release_roots: >-
+          {{ [switch_root ~ '/releases'] + ([switch_root ~ '/service/releases', switch_root ~ '/web/releases']
+             if inventory_hostname in groups['servers'] else []) }}
+
     - name: Releases, oldest first
-      ansible.builtin.shell: ls -1tr {{ switch_root }}/releases
+      ansible.builtin.shell: ls -1tr {{ item }}
       register: releases
       changed_when: false
+      loop: "{{ release_roots }}"
 
     - name: Remove older ones (never the current one)
-      ansible.builtin.file: {path: "{{ switch_root }}/releases/{{ item }}", state: absent}
-      loop: "{{ releases.stdout_lines[:-5] | reject('equalto', release) | list }}"
+      ansible.builtin.file: {path: "{{ item.0.item }}/{{ item.1 }}", state: absent}
+      loop: "{{ releases.results | subelements('stdout_lines') }}"
+      loop_control: {label: "{{ item.0.item }}/{{ item.1 }}"}
+      when: item.1 in (item.0.stdout_lines[:-5] | reject('equalto', release) | list)
