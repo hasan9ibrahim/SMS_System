@@ -24,6 +24,7 @@ import { production } from "../mode.js";
 import type { Change } from "@sms/contract";
 import { isAdmin, iso, recordChange } from "./records.js";
 import { getCurrentUser } from "./session.js";
+import { systemUserId } from "../jobs/system.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -236,10 +237,8 @@ async function sourceOf(c: Db): Promise<FxSource> {
   };
 }
 
-async function systemUser(c: Db): Promise<number> {
-  const { rows } = await c.query("SELECT id FROM users ORDER BY id LIMIT 1");
-  return Number(rows[0].id);
-}
+// Automatic fetches act as the system user (deploy bootstrap, step 14), like the other background jobs.
+const systemUser = (c: Db) => systemUserId(c);
 
 // ---------------------------------------------------------------- provider
 

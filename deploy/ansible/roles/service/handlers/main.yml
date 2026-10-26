@@ -1,0 +1,4 @@
+# Only when a release is installed (deploy.yml starts it the first time).
+- name: service restart
+  ansible.builtin.shell: test -e {{ service_root }}/current/server.mjs && systemctl restart sms-service || true
+  changed_when: true

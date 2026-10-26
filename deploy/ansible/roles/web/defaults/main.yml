@@ -1,0 +1,7 @@
+# The screens (backend step 14): nginx on each server serves the built web app over HTTPS and sends /api to the
+# API (apps/sms_api) and the live WebSocket to the TypeScript service. Both servers answer the same name; DNS (or the
+# provider's failover address) points web_domain at them (docs/GO_LIVE.md).
+web_root: "{{ switch_root }}/web"
+# Certificate and key for web_domain (full chain), placed by the team or a certbot hook; the inventory may override.
+web_tls_certfile: /etc/sms/tls/web.crt
+web_tls_keyfile: /etc/sms/tls/web.key

@@ -198,11 +198,13 @@ config :sms_switch, Sms.Switch.Vendor, session: [tls_verify: tls_verify]
 
 # The API (backend step 9): API_PORT (0 = off, e.g. on the witness), the mock server it forwards unported calls to
 # (MOCK_URL, with the shared MOCK_PROXY_SECRET the mock checks), the client address from nginx (TRUST_PROXY=1) and
-# Secure cookies behind HTTPS (COOKIE_SECURE=1).
+# Secure cookies behind HTTPS (COOKIE_SECURE=1). API_IP: the address it listens on (127.0.0.1 on the servers, where
+# only nginx on the same machine calls it; backend step 14).
 api_port = String.to_integer(env.("API_PORT", "0"))
+{:ok, api_ip} = :inet.parse_address(String.to_charlist(env.("API_IP", "0.0.0.0")))
 
 config :sms_api, Sms.Api.Endpoint,
-  http: [ip: {0, 0, 0, 0}, port: api_port],
+  http: [ip: api_ip, port: api_port],
   server: api_port > 0,
   secret_key_base:
     if(api_port > 0,

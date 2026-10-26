@@ -11,3 +11,7 @@ s3_verify_tls: false
 telegram_chat_ids: []
 # Lab disk is small: one hour of recorded traffic.
 pcap_files: 4
+# The screens: the lab's own name (add it to the hosts file of the machine you browse from) and a self-signed
+# certificate made by roles/web. No platform e-mail in the lab: bootstrap the administrator with --admin-without-code.
+web_domain: sms.lab.test
+smtp_from: ""

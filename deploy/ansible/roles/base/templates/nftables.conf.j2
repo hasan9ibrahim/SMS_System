@@ -33,9 +33,10 @@ table inet sms {
     # SMPP from the partners (Q33).
     ip saddr { {{ smpp_cidrs | join(', ') }} } tcp dport { {{ (ports.smpp + ports.smpp_tls) | join(', ') }} } accept
 {% endif %}
-{% if inventory_hostname in groups['servers'] and api_enabled %}
-    # The API, from the team's network (nginx in front, backend step 9).
-    ip saddr $admin tcp dport {{ ports.api }} accept
+{% if inventory_hostname in groups['servers'] and web_enabled %}
+    # The screens and the customer portal over HTTPS (nginx, backend step 14); 80 only redirects to 443. The API and
+    # the TypeScript service listen on this server's loopback only, behind nginx.
+    ip saddr { {{ web_cidrs | join(', ') }} } tcp dport { 80, 443 } accept
 {% endif %}
 {% if inventory_hostname in groups['witness'] %}
     # Grafana, Prometheus and Alertmanager for the team.

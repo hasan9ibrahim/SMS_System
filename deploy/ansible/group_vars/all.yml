@@ -59,8 +59,22 @@ switch_user: sms
 switch_root: /opt/sms
 platform_currency: EUR
 
-# The API (backend step 9, apps/sms_api): sign-in and the ported operations; every other call goes to the mock server
-# at mock_url. Off until the screens are served from the servers (phase B); then nginx sends /api to api on port
-# ports.api of both servers.
-api_enabled: false
-mock_url: ""
+# The API (backend step 9, apps/sms_api): sign-in and the ported operations; every other call goes to the TypeScript
+# service at mock_url on the same server. nginx (roles/web) sends /api to it on port ports.api (backend step 14).
+api_enabled: true
+mock_url: "http://127.0.0.1:{{ service_port }}"
+
+# The TypeScript service (roles/service, backend step 14): only the API and nginx on the same server reach it.
+service_port: 4010
+# Times in reports, invoices and the daily jobs (PLATFORM_TIMEZONE, mock/src/platform.ts).
+platform_timezone: UTC
+
+# The screens over HTTPS (roles/web): nginx on both servers answers web_domain (set in the inventory, with the
+# certificate paths web_tls_certfile / web_tls_keyfile when not the defaults).
+web_enabled: true
+# Who may open the screens: everyone by default, as customers use the portal (staff sign-in has a password and a code).
+web_cidrs: [0.0.0.0/0]
+
+# Platform e-mail: sign-in and password codes, alerts, reminders. The address the team's mail system accepts mail from;
+# the server and its login are vault_smtp_url (smtp://user:password@host:587 or smtps://...:465).
+smtp_from_name: SMS Platform

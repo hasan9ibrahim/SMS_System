@@ -14,3 +14,10 @@ telegram_chat_ids: [-1001234567890]
 # The SMPP TLS certificate on each server (S-1.17).
 smpp_tls_certfile: /etc/sms/tls/smpp.crt
 smpp_tls_keyfile: /etc/sms/tls/smpp.key
+# The screens and the customer portal (backend step 14): the name DNS points at both servers, and its certificate
+# (full chain) and key on each server.
+web_domain: sms.example.com
+web_tls_certfile: /etc/sms/tls/web.crt
+web_tls_keyfile: /etc/sms/tls/web.key
+# Platform e-mail (sign-in codes, alerts): the sender address; the server and login are vault_smtp_url.
+smtp_from: noreply@example.com

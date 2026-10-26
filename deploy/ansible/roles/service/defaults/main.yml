@@ -1,0 +1,6 @@
+# The TypeScript service (backend step 14): every screen's operations the API has not ported yet, the background jobs
+# (on one server at a time, mock/src/jobs/leader.ts) and the live WebSocket. Installed natively like the switch.
+service_root: "{{ switch_root }}/service"
+# Node.js from nodejs.org (pinned; the release bundles are built for it).
+node_version: 22.11.0
+node_sha256: 83bf07dd343002a26211cf1fcd46a9d9534219aad42ee02847816940bf610a72  # from nodejs.org SHASUMS256.txt

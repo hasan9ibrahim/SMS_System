@@ -1,0 +1,22 @@
+# {{ ansible_managed }} (deploy/ansible/roles/service)
+[Unit]
+Description=SMS platform service (screens, jobs, live screens)
+After=network-online.target haproxy.service nats.service clickhouse-server.service sms-switch.service
+Wants=network-online.target
+
+[Service]
+User={{ switch_user }}
+Group={{ switch_user }}
+EnvironmentFile=/etc/sms/service.env
+WorkingDirectory={{ service_root }}/work
+ExecStart=/usr/local/bin/node {{ service_root }}/current/server.mjs
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths={{ service_root }}/work /tmp
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
