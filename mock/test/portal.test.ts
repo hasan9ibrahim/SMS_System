@@ -4,11 +4,21 @@
 import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { LightMyRequestResponse } from "fastify";
-import type { PortalMessagePage, PortalOverview, PortalRatePage, PortalSession, PortalTraffic } from "@sms/contract";
+import type {
+  PortalMessagePage,
+  PortalOverview,
+  PortalRatePage,
+  PortalSession,
+  PortalSignInResult,
+  PortalTraffic,
+} from "@sms/contract";
 import { buildServer, API_PREFIX } from "../src/server.js";
+import { resetPortalAddressLimits } from "../src/api/portal.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { SEED_PASSWORD } from "../src/generator/admin.js";
+import { chQuery } from "../src/edr.js";
+import { randomUUID } from "node:crypto";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -19,7 +29,8 @@ const started = new Date();
 const user = ready
   ? (
       await db().query(
-        `SELECT u.id, u.username, u.enterprise_id, u.password_hash, u.must_change_password, u.password_changed_at
+        `SELECT u.id, u.username, u.enterprise_id, u.password_hash, u.must_change_password, u.password_changed_at,
+                u.otp_method, u.email
            FROM customer_portal_users u
           WHERE u.status = 'active' AND u.deleted_at IS NULL AND NOT u.must_change_password
             AND u.temp_password_expires_at IS NULL AND u.password_changed_at > now() - interval '25 days'
@@ -28,13 +39,15 @@ const user = ready
       )
     ).rows[0]
   : null;
+// The sign-in code tests turn the code on; the others sign in without it.
+if (user) await db().query("UPDATE customer_portal_users SET otp_method = 'off' WHERE id = $1", [user.id]);
 
 after(async () => {
   if (ready && user) {
     await db().query(
       `UPDATE customer_portal_users SET password_hash = $2, must_change_password = $3, password_changed_at = $4,
-              failed_logins = 0, locked_until = NULL WHERE id = $1`,
-      [user.id, user.password_hash, user.must_change_password, user.password_changed_at],
+              failed_logins = 0, locked_until = NULL, otp_method = $5 WHERE id = $1`,
+      [user.id, user.password_hash, user.must_change_password, user.password_changed_at, user.otp_method],
     );
     await db().query("DELETE FROM user_sessions WHERE portal_user_id = $1 AND logged_in_at >= $2", [user.id, started]);
     await db().query("DELETE FROM password_history WHERE portal_user_id = $1 AND changed_at >= $2", [user.id, started]);
@@ -94,7 +107,9 @@ describe("customer portal (§1)", { skip: skip || (!user && "no portal user") },
     assert.equal(r.statusCode, 200, r.body);
     check("portalSignIn", r);
     assert.match(String(r.headers["set-cookie"]), /HttpOnly/);
-    const s = r.json() as PortalSession;
+    const res = r.json() as PortalSignInResult;
+    assert.equal(res.status, "signed_in", "this login has the e-mailed code turned off");
+    const s = res.session!;
     assert.equal(s.enterprise.id, Number(user.enterprise_id));
     assert.equal(s.mustChangePassword, false);
     assert.equal((await expect<PortalSession>("portalGetSession", call("GET", "/portal/session"))).user.id, user.id);
@@ -175,4 +190,88 @@ describe("customer portal (§1)", { skip: skip || (!user && "no portal user") },
     );
     await expect("portalListFields", call("GET", "/portal/meta/lists/portal_messages/fields"));
   });
+
+  test("our Test SMS and repushed messages on the customer's trunk never show (backend step 13)", async () => {
+    if (!cookie) assert.equal((await signIn()).statusCode, 200);
+    const trunk = Number(
+      (await db().query("SELECT id FROM customer_trunks WHERE enterprise_id = $1 ORDER BY id LIMIT 1", [user.enterprise_id]))
+        .rows[0].id,
+    );
+    const receiver = `99${Date.now()}`.slice(0, 15);
+    const ids = [randomUUID(), randomUUID(), randomUUID()];
+    const row = (id: string, kind: string) =>
+      `('${id}', now(), now(), 'MT', 1, ${user.enterprise_id}, ${trunk}, '${receiver}', 1, 1, 1, 1, 'ACCEPTD', '${kind}')`;
+    await chQuery(
+      `INSERT INTO edr (edr_id, start_time, submit_time, msg_type, business_company_id, c_enterprise_id, c_trunk_id,
+                        dst_addr, attempt_no, is_final_attempt, is_submit_success, msg_count, c_msg_status, internal_kind)
+       VALUES ${row(ids[0]!, "")}, ${row(ids[1]!, "test")}, ${row(ids[2]!, "repush")}`,
+    );
+    try {
+      const msgs = await expect<PortalMessagePage>(
+        "portalQueryMessages",
+        call("POST", "/portal/messages/query", {
+          limit: 10,
+          filter: { logic: "and", conditions: [{ field: "receiver", op: "eq", value: receiver }] },
+        }),
+      );
+      assert.deepEqual(
+        msgs.rows.map((m) => m.id),
+        [ids[0]],
+        "only the customer's own message",
+      );
+    } finally {
+      await chQuery(`ALTER TABLE edr DELETE WHERE dst_addr = '${receiver}' SETTINGS mutations_sync = 1`);
+    }
+  });
+
+  test("the e-mailed sign-in code: wrong code, resend too soon, right code (backend step 13)", async () => {
+    cookie = "";
+    resetPortalAddressLimits();
+    // An earlier test changed the password: back to the seeded one.
+    await db().query(
+      `UPDATE customer_portal_users SET otp_method = 'email', password_hash = $2, must_change_password = false,
+              password_changed_at = now(), failed_logins = 0, locked_until = NULL WHERE id = $1`,
+      [user.id, user.password_hash],
+    );
+    try {
+      const r = await signIn();
+      assert.equal(r.statusCode, 200, r.body);
+      check("portalSignIn", r);
+      const res = r.json() as PortalSignInResult;
+      assert.equal(res.status, "code_required");
+      assert.equal(cookie, "", "no session before the code");
+      assert.match(res.sentTo!, /\*\*\*@/);
+      const { rows } = await db().query(
+        `SELECT body FROM email_logs WHERE email_type = 'otp' AND $1 = ANY(to_addresses) ORDER BY id DESC LIMIT 1`,
+        [user.email],
+      );
+      const code = /code is (\d{6})/.exec(String(rows[0]?.body))![1]!;
+      const wrong = String((Number(code) + 1) % 1_000_000).padStart(6, "0");
+      const bad = await call("POST", "/portal/session/code", { challenge: res.challenge, code: wrong });
+      assert.equal(bad.statusCode, 401);
+      check("portalSignInCode", bad);
+      assert.equal(bad.json().code, "wrong_code");
+      const soon = await call("POST", "/portal/session/code/resend", { challenge: res.challenge });
+      assert.equal(soon.statusCode, 409, "one code a minute");
+      const ok = await call("POST", "/portal/session/code", { challenge: res.challenge, code });
+      assert.equal(ok.statusCode, 200, ok.body);
+      check("portalSignInCode", ok);
+      cookie = String(ok.headers["set-cookie"]).split(";")[0]!;
+      assert.equal((await expect<PortalSession>("portalGetSession", call("GET", "/portal/session"))).user.id, user.id);
+      const again = await call("POST", "/portal/session/code", { challenge: res.challenge, code });
+      assert.equal(again.statusCode, 401, "a challenge signs in once");
+    } finally {
+      await db().query("UPDATE customer_portal_users SET otp_method = 'off' WHERE id = $1", [user.id]);
+    }
+  });
+
+  test("one address cannot keep trying, whatever the usernames (backend step 13)", async () => {
+    resetPortalAddressLimits();
+    let last = 0;
+    for (let i = 0; i < 31; i++)
+      last = (await call("POST", "/portal/session", { username: `nobody-${i}`, password: "x" })).statusCode;
+    assert.equal(last, 429);
+    resetPortalAddressLimits();
+  });
 });
+

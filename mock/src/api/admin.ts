@@ -1247,10 +1247,13 @@ const portalUsers = records<PortalUserInput, NonNullable<Awaited<ReturnType<type
     ["firstName", "first_name"],
     ["lastName", "last_name"],
     ["status", "status"],
+    ["otpMethod", "otp_method"],
   ],
   load: loadPortalUser,
   values: (b) => ({
     ...b,
+    // The e-mailed sign-in code (backend step 13): on unless staff turn it off for the user.
+    otpMethod: b.otpMethod ?? "email",
     email: b.email.trim(),
     username: b.username.trim(),
     firstName: b.firstName.trim(),

@@ -55,8 +55,6 @@ defmodule Sms.Switch.Pipeline.Edr do
       "c_msg_status" => msg_status(attempt),
       "v_registered_delivery" => flag(vendor),
       "attempt_no" => attempt.no,
-      # EDR Repush (§9.1, backend step 11c): the request the attempt belongs to.
-      "repush_request_id" => get_in(msg, [:internal, :repush_request_id]) || 0,
       "is_final_attempt" => flag(attempt.final),
       "is_submit_success" => flag(attempt.success),
       "command_status" => attempt.command_status,
@@ -65,6 +63,7 @@ defmodule Sms.Switch.Pipeline.Edr do
       "measured_tps" => get_in(msg, [Access.key(:route), :measured_tps]) || 0,
       "revenue_checked" => decimal(msg.sell && msg.sell.platform)
     }
+    |> Map.merge(internal(msg[:internal]))
     |> Map.merge(customer_leg(msg))
     |> Map.merge(customer_addresses(msg.fields))
     |> Map.merge(vendor_addresses(msg, vendor, egress))
@@ -349,7 +348,7 @@ defmodule Sms.Switch.Pipeline.Edr do
   # The attempt's columns its outcome row repeats beyond edr_hourly's dimensions, so reports group and convert a
   # receipt's figures (deliveries, delay, money) like the attempt's (step 11b, ClickHouse edr_all).
   @outcome_keys ~w(c_ip v_ip v_mccmnc src_addr v_src_addr route_type c_rate_table_id v_rate_table_id hlr_provider_id
-                   c_rate v_rate c_currency c_ex_rate v_currency v_ex_rate msg_count)
+                   c_rate v_rate c_currency c_ex_rate v_currency v_ex_rate msg_count internal_kind)
 
   @doc "The attempt row's columns an outcome row of the same attempt carries too (`outcome_row/2`)."
   @spec outcome_dims(map(), map()) :: %{optional(String.t()) => term()}
@@ -365,6 +364,16 @@ defmodule Sms.Switch.Pipeline.Edr do
     <<p1::binary-8, p2::binary-4, p3::binary-4, p4::binary-4, p5::binary-12>> = hex
     "#{p1}-#{p2}-#{p3}-#{p4}-#{p5}"
   end
+
+  # EDR Repush (§9.1, backend step 11c): the request the attempt belongs to; Test SMS and Repush (backend step 13) are
+  # marked so the customer portal leaves them out.
+  defp internal(%{} = internal),
+    do: %{
+      "repush_request_id" => internal[:repush_request_id] || 0,
+      "internal_kind" => to_string(internal[:kind] || "")
+    }
+
+  defp internal(_), do: %{"repush_request_id" => 0, "internal_kind" => ""}
 
   defp time(ms),
     do:

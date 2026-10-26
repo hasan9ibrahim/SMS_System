@@ -8047,11 +8047,51 @@ export type paths = {
     put?: never;
     /**
      * Sign in to the customer portal
-     * @description Username and password of a customer portal user (Admin › Customer Portal, §11). Sets the portal session cookie. Five wrong passwords in a row lock the user for 15 minutes. A temporary or expired password signs in with mustChangePassword, and only the password change works until it is changed (§13.28).
+     * @description Username and password of a customer portal user (Admin › Customer Portal, §11). Five wrong passwords in a row lock the user for 15 minutes, and too many attempts from one address are refused for a while (429). A 2FA code is e-mailed to the user at every sign-in (backend step 13, spec §15 security) unless staff turned it off for that user: the answer is then `code_required` with a challenge for POST /portal/session/code; otherwise `signed_in` with the session (the cookie is set). A temporary or expired password signs in with mustChangePassword, and only the password change works until it is changed (§13.28).
      */
     post: operations["portalSignIn"];
     /** Sign out of the customer portal */
     delete: operations["portalSignOut"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/session/code": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The e-mailed sign-in code of the customer portal
+     * @description The 6-digit code e-mailed after the password (backend step 13). It works for 10 minutes and 5 tries; then the user signs in again. Sets the portal session cookie.
+     */
+    post: operations["portalSignInCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/portal/session/code/resend": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * E-mail the customer portal sign-in code again
+     * @description A new code for the same challenge, at most once a minute (backend step 13).
+     */
+    post: operations["portalResendSignInCode"];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -16460,6 +16500,12 @@ export type components = {
       firstName: string;
       lastName: string;
       status: components["schemas"]["RecordStatus"];
+      /**
+       * @description The sign-in code e-mailed at every portal sign-in (backend step 13); `off` only on request of the customer.
+       * @default email
+       * @enum {string}
+       */
+      otpMethod: "email" | "off";
     };
     PortalUserInput: components["schemas"]["PortalUserFields"] & {
       /** @description Create only - temporary password, valid 24 hours. */
@@ -16505,6 +16551,21 @@ export type components = {
     PortalSignInInput: {
       username: string;
       password: string;
+    };
+    /** @description `signed_in` with the session (the cookie is set), or `code_required` with the challenge to send back with the e-mailed code (backend step 13). */
+    PortalSignInResult: {
+      /** @enum {string} */
+      status: "signed_in" | "code_required";
+      session?: components["schemas"]["PortalSession"];
+      /** @description Opaque; only with code_required. */
+      challenge?: string;
+      /** @description The masked e-mail address the code went to, e.g. j***@example.com. */
+      sentTo?: string;
+      /**
+       * Format: date-time
+       * @description When the challenge ends.
+       */
+      expiresAt?: string;
     };
     PortalPasswordInput: {
       currentPassword: string;
@@ -31154,13 +31215,13 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Signed in */
+      /** @description Signed in, or a code is needed */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["PortalSession"];
+          "application/json": components["schemas"]["PortalSignInResult"];
         };
       };
       400: components["responses"]["BadRequest"];
@@ -31194,6 +31255,61 @@ export interface operations {
         content?: never;
       };
       401: components["responses"]["Unauthorized"];
+    };
+  };
+  portalSignInCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SignInCodeInput"];
+      };
+    };
+    responses: {
+      /** @description Signed in */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalSession"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  portalResendSignInCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SignInChallengeRef"];
+      };
+    };
+    responses: {
+      /** @description A new code was sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PortalSignInResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
     };
   };
   portalChangePassword: {

@@ -29,8 +29,18 @@ function PortalUserDialog({ row, done }: { row: PortalUserRow | null; done: () =
           firstName: row.firstName,
           lastName: row.lastName,
           status: row.status,
+          otpMethod: row.otpMethod,
         }
-      : { email: "", username: "", enterpriseId: 0, firstName: "", lastName: "", status: "active", password: null },
+      : {
+          email: "",
+          username: "",
+          enterpriseId: 0,
+          firstName: "",
+          lastName: "",
+          status: "active",
+          otpMethod: "email",
+          password: null,
+        },
   );
   const save = useSavePortalUser();
   const notifySaved = useNotifySaved();
@@ -80,6 +90,17 @@ function PortalUserDialog({ row, done }: { row: PortalUserRow | null; done: () =
         options={[
           { value: "active", label: "Active" },
           { value: "inactive", label: "Inactive" },
+        ]}
+      />
+      <SelectField
+        form={form}
+        path="otpMethod"
+        label="Sign-in code"
+        required
+        hint="A code is e-mailed at every portal sign-in. Turn it off only when the customer asks."
+        options={[
+          { value: "email", label: "E-mailed at every sign-in" },
+          { value: "off", label: "Off" },
         ]}
       />
       {!row && (

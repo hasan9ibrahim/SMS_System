@@ -103,7 +103,7 @@ defmodule Sms.Switch.Pipeline.InjectTest do
       [row] = attempts()
       assert row["is_customer_billable"] == 0 and row["revenue"] == "0"
       assert row["is_vendor_billable"] == 1
-      assert row["repush_request_id"] == 0
+      assert row["repush_request_id"] == 0 and row["internal_kind"] == "test"
       refute row["route_decided_by"] == "manual"
 
       receipt(c1, "1", "DELIVRD")
@@ -260,8 +260,14 @@ defmodule Sms.Switch.Pipeline.InjectTest do
 
       assert_eventually(fn -> match?([_], attempts()) end)
 
-      assert [%{"repush_request_id" => 77, "v_trunk_id" => 2, "is_customer_billable" => 0}] =
-               attempts()
+      assert [
+               %{
+                 "repush_request_id" => 77,
+                 "internal_kind" => "repush",
+                 "v_trunk_id" => 2,
+                 "is_customer_billable" => 0
+               }
+             ] = attempts()
 
       receipt(c2, "1", "DELIVRD")
       assert {:error, :timeout} = Client.recv(client, 500)

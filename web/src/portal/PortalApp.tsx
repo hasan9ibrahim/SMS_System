@@ -19,7 +19,9 @@ import {
   useOverview,
   usePortalFields,
   usePortalSession,
+  useResendCode,
   useSignIn,
+  useSignInCode,
   useSignOut,
   useTraffic,
 } from "./api";
@@ -61,6 +63,8 @@ function SignIn() {
     e.preventDefault();
     signIn.mutate({ username, password });
   };
+  const pending = signIn.data?.status === "code_required" ? signIn.data : null;
+  if (pending?.challenge) return <SignInCode challenge={pending.challenge} sentTo={pending.sentTo} onBack={() => signIn.reset()} />;
   return (
     <div className="portal-center">
       <form className="portal-card portal-signin" onSubmit={submit}>
@@ -91,6 +95,64 @@ function SignIn() {
           Sign in
         </Button>
         <p className="muted small">Forgot your password? Ask your account manager for a new one.</p>
+      </form>
+    </div>
+  );
+}
+
+/** The 6-digit code e-mailed after the password (backend step 13). */
+function SignInCode({ challenge, sentTo, onBack }: { challenge: string; sentTo?: string; onBack: () => void }) {
+  const send = useSignInCode();
+  const resend = useResendCode();
+  const [code, setCode] = useState("");
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    send.mutate({ challenge, code });
+  };
+  const expired = send.error instanceof ApiError && send.error.problem.code === "challenge_expired";
+  return (
+    <div className="portal-center">
+      <form className="portal-card portal-signin" onSubmit={submit}>
+        <div className="portal-brand">
+          <span className="portal-logo">
+            <Icon name="send" size={18} />
+          </span>
+          <div>
+            <strong>Sign-in code</strong>
+            <span className="muted small">We e-mailed a 6-digit code{sentTo ? ` to ${sentTo}` : ""}.</span>
+          </div>
+        </div>
+        <label className="portal-field">
+          <span>Code</span>
+          <input
+            autoFocus
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          />
+        </label>
+        {send.error && <p className="error-text">{problem(send.error)}</p>}
+        {resend.error && <p className="error-text">{problem(resend.error)}</p>}
+        {resend.isSuccess && <p className="muted small">A new code is on its way.</p>}
+        {expired ? (
+          <Button variant="primary" type="button" onClick={onBack}>
+            Sign in again
+          </Button>
+        ) : (
+          <Button variant="primary" type="submit" disabled={code.length !== 6 || send.isPending}>
+            Continue
+          </Button>
+        )}
+        <div className="portal-code-actions">
+          <Button variant="ghost" type="button" onClick={() => resend.mutate(challenge)} disabled={resend.isPending}>
+            Send a new code
+          </Button>
+          <Button variant="ghost" type="button" onClick={onBack}>
+            Back
+          </Button>
+        </div>
       </form>
     </div>
   );

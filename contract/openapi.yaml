@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.99.0
+  version: 0.100.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -11908,8 +11908,11 @@ paths:
       operationId: portalSignIn
       summary: Sign in to the customer portal
       description: >-
-        Username and password of a customer portal user (Admin › Customer Portal, §11). Sets the portal session cookie.
-        Five wrong passwords in a row lock the user for 15 minutes. A temporary or expired password signs in with
+        Username and password of a customer portal user (Admin › Customer Portal, §11). Five wrong passwords in a row
+        lock the user for 15 minutes, and too many attempts from one address are refused for a while (429). A 2FA code
+        is e-mailed to the user at every sign-in (backend step 13, spec §15 security) unless staff turned it off for
+        that user: the answer is then `code_required` with a challenge for POST /portal/session/code; otherwise
+        `signed_in` with the session (the cookie is set). A temporary or expired password signs in with
         mustChangePassword, and only the password change works until it is changed (§13.28).
       security: []
       requestBody:
@@ -11920,11 +11923,11 @@ paths:
               $ref: '#/components/schemas/PortalSignInInput'
       responses:
         '200':
-          description: Signed in
+          description: Signed in, or a code is needed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PortalSession'
+                $ref: '#/components/schemas/PortalSignInResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -11949,6 +11952,64 @@ paths:
           description: Signed out
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /portal/session/code:
+    post:
+      tags:
+      - portal
+      operationId: portalSignInCode
+      summary: The e-mailed sign-in code of the customer portal
+      description: >-
+        The 6-digit code e-mailed after the password (backend step 13). It works for 10 minutes and 5 tries; then
+        the user signs in again. Sets the portal session cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInCodeInput'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /portal/session/code/resend:
+    post:
+      tags:
+      - portal
+      operationId: portalResendSignInCode
+      summary: E-mail the customer portal sign-in code again
+      description: A new code for the same challenge, at most once a minute (backend step 13).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInChallengeRef'
+      responses:
+        '200':
+          description: A new code was sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalSignInResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /portal/password:
     post:
       tags:
@@ -28386,6 +28447,12 @@ components:
           maxLength: 80
         status:
           $ref: '#/components/schemas/RecordStatus'
+        otpMethod:
+          type: string
+          enum: [email, "off"]
+          default: email
+          description: >-
+            The sign-in code e-mailed at every portal sign-in (backend step 13); `off` only on request of the customer.
     PortalUserInput:
       allOf:
       - $ref: '#/components/schemas/PortalUserFields'
@@ -28413,6 +28480,7 @@ components:
         - mustChangePassword
         - tempPasswordExpiresAt
         - lastLoginAt
+        - otpMethod
         - updatedBy
         - updatedAt
         - archivedAt
@@ -28525,6 +28593,29 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+    PortalSignInResult:
+      type: object
+      additionalProperties: false
+      required: [status]
+      description: >-
+        `signed_in` with the session (the cookie is set), or `code_required` with the challenge to send back with the
+        e-mailed code (backend step 13).
+      properties:
+        status:
+          type: string
+          enum: [signed_in, code_required]
+        session:
+          $ref: "#/components/schemas/PortalSession"
+        challenge:
+          type: string
+          description: Opaque; only with code_required.
+        sentTo:
+          type: string
+          description: The masked e-mail address the code went to, e.g. j***@example.com.
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the challenge ends.
     PortalPasswordInput:
       type: object
       additionalProperties: false

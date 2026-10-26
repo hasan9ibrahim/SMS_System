@@ -2,7 +2,7 @@
 // traffic and messages. Every answer is scoped to the signed-in user's enterprise; no vendor, route, cost or
 // margin data is ever selected. Portal users are managed by staff in Admin › Customer Portal (§11); their
 // sessions sit in user_sessions (user_kind 'customer'), found by a hash of the cookie.
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -14,6 +14,9 @@ import type {
   PortalRateRow,
   PortalSession,
   PortalSignInInput,
+  PortalSignInResult,
+  SignInChallengeRef,
+  SignInCodeInput,
   PortalTotals,
   PortalTraffic,
   PortalTrafficQuery,
@@ -37,11 +40,20 @@ import {
 import { badInput } from "./switchTools.js";
 import type { FieldError } from "./records.js";
 import { money } from "../currency.js";
+import { logEmail } from "./emailLog.js";
+import { maskEmail } from "./admin.js";
 
 export const PORTAL_COOKIE = "sms_portal";
 const SESSION_HOURS = 12;
+/** A session ends 24 hours after sign-in however active it is (as the staff sessions, §13.28). */
+const SESSION_MAX_HOURS = 24;
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
+const CODE_MINUTES = 10;
+const CODE_TRIES = 5;
+const RESEND_GAP_S = 60;
+/** Sign-in attempts (passwords and codes) one address may make in 10 minutes, whatever the usernames. */
+const ADDRESS_LIMIT = 30;
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
@@ -129,6 +141,7 @@ async function currentPortalUser(pool: pg.Pool, request: FastifyRequest): Promis
        FROM user_sessions s JOIN customer_portal_users u ON u.id = s.portal_user_id
       WHERE s.token_hash = $1 AND s.user_kind = 'customer' AND s.ended_at IS NULL
         AND s.last_seen_at > now() - make_interval(hours => ${SESSION_HOURS})
+        AND s.logged_in_at > now() - make_interval(hours => ${SESSION_MAX_HOURS})
         AND u.status = 'active' AND u.deleted_at IS NULL`,
     [sha(token)],
   );
@@ -166,11 +179,74 @@ export function portalGetSession(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
+// ---------------------------------------------------------------- sign-in limits per address
+
+const attempts = new Map<string, number[]>();
+/** False once the address made too many sign-in attempts in the last 10 minutes (per server). */
+function addressAllowed(ip: string, now = Date.now()) {
+  const recent = (attempts.get(ip) ?? []).filter((t) => now - t < 10 * 60_000);
+  recent.push(now);
+  attempts.set(ip, recent);
+  if (attempts.size > 10_000) for (const [k, v] of attempts) if (now - v[v.length - 1]! > 10 * 60_000) attempts.delete(k);
+  return recent.length <= ADDRESS_LIMIT;
+}
+const tooManyFromAddress = (reply: FastifyReply) =>
+  sendProblem(reply, 429, "Too many sign-in attempts", { detail: "Wait a few minutes, then try again." });
+
+/** Exported for tests: forgets the attempts counted per address. */
+export const resetPortalAddressLimits = () => attempts.clear();
+
+// ---------------------------------------------------------------- sign-in
+
+const codeHash = (challengeId: number, code: string) =>
+  createHash("sha256").update(`portal-signin:${challengeId}:${code}`).digest("hex");
+
+async function openSession(pool: pg.Pool, request: FastifyRequest, reply: FastifyReply, userId: number) {
+  const token = randomBytes(32).toString("base64url");
+  const d = device(String(request.headers["user-agent"] ?? ""));
+  await pool.query(
+    `INSERT INTO user_sessions (user_kind, portal_user_id, ip, device, os, browser, logged_in_at, last_seen_at, token_hash)
+     VALUES ('customer', $1, $2, $3, $4, $5, now(), now(), $6)`,
+    [userId, request.ip || "127.0.0.1", d.device, d.os, d.browser, sha(token)],
+  );
+  await pool.query(
+    "UPDATE customer_portal_users SET failed_logins = 0, locked_until = NULL, last_login_at = now() WHERE id = $1",
+    [userId],
+  );
+  setCookie(reply, token, SESSION_HOURS * 3600);
+  return (await sessionOf(pool, userId))!;
+}
+
+/** E-mails a new code for the challenge (the code only; never a password or a sign-in link, §13.28). */
+async function sendCode(pool: pg.Pool, challengeId: number, userId: number): Promise<string> {
+  const { rows } = await pool.query(
+    "SELECT first_name, email, enterprise_id FROM customer_portal_users WHERE id = $1",
+    [userId],
+  );
+  const u = rows[0]!;
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  await pool.query("UPDATE sign_in_challenges SET code_hash = $2, sent_at = now(), tries = 0 WHERE id = $1", [
+    challengeId,
+    codeHash(challengeId, code),
+  ]);
+  await logEmail(pool, {
+    type: "otp",
+    enterpriseId: Number(u.enterprise_id),
+    to: u.email ? [u.email as string] : [],
+    subject: "Your customer portal sign-in code",
+    body:
+      `Hello ${u.first_name},\n\nYour sign-in code is ${code}. It works for ${CODE_MINUTES} minutes.\n\n` +
+      `If you did not try to sign in, change your password and tell your account manager.`,
+  });
+  return maskEmail(String(u.email ?? ""));
+}
+
 export function portalSignIn(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as PortalSignInInput;
   return withDb(reply, async (pool) => {
+    if (!addressAllowed(request.ip || "127.0.0.1")) return tooManyFromAddress(reply);
     const { rows } = await pool.query(
-      `SELECT id, password_hash, status, failed_logins, locked_until, temp_password_expires_at
+      `SELECT id, password_hash, status, failed_logins, locked_until, temp_password_expires_at, otp_method, email
          FROM customer_portal_users WHERE lower(username) = lower($1) AND deleted_at IS NULL`,
       [b.username.trim()],
     );
@@ -200,19 +276,71 @@ export function portalSignIn(request: FastifyRequest, reply: FastifyReply) {
       return sendProblem(reply, 401, "This login is not active. Contact your account manager.");
     if (u.temp_password_expires_at && (u.temp_password_expires_at as Date).getTime() < Date.now())
       return sendProblem(reply, 401, "Your temporary password expired. Ask your account manager for a new one.");
-    const token = randomBytes(32).toString("base64url");
-    const d = device(String(request.headers["user-agent"] ?? ""));
-    await pool.query(
-      `INSERT INTO user_sessions (user_kind, portal_user_id, ip, device, os, browser, logged_in_at, last_seen_at, token_hash)
-       VALUES ('customer', $1, $2, $3, $4, $5, now(), now(), $6)`,
-      [u.id, request.ip || "127.0.0.1", d.device, d.os, d.browser, sha(token)],
+    // The e-mailed code at every sign-in (backend step 13), unless staff turned it off for this user.
+    if (u.otp_method === "off")
+      return { status: "signed_in", session: await openSession(pool, request, reply, Number(u.id)) } satisfies PortalSignInResult;
+    if (!u.email)
+      return sendProblem(reply, 401, "Your login has no e-mail address for the sign-in code. Contact your account manager.");
+    const challenge = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + CODE_MINUTES * 60_000);
+    const { rows: ch } = await pool.query(
+      `INSERT INTO sign_in_challenges (token_hash, portal_user_id, method, ip, user_agent, expires_at)
+       VALUES ($1, $2, 'email', $3, $4, $5) RETURNING id`,
+      [sha(challenge), u.id, request.ip || "127.0.0.1", String(request.headers["user-agent"] ?? ""), expiresAt],
     );
-    await pool.query(
-      "UPDATE customer_portal_users SET failed_logins = 0, locked_until = NULL, last_login_at = now() WHERE id = $1",
-      [u.id],
-    );
-    setCookie(reply, token, SESSION_HOURS * 3600);
-    return sessionOf(pool, Number(u.id));
+    const sentTo = await sendCode(pool, Number(ch[0].id), Number(u.id));
+    return { status: "code_required", challenge, sentTo, expiresAt: expiresAt.toISOString() } satisfies PortalSignInResult;
+  });
+}
+
+async function openChallenge(pool: pg.Pool, challenge: string) {
+  const { rows } = await pool.query(
+    `SELECT c.id, c.portal_user_id, c.code_hash, c.tries, c.expires_at,
+            c.sent_at > now() - make_interval(secs => ${RESEND_GAP_S}) AS too_soon
+       FROM sign_in_challenges c JOIN customer_portal_users u ON u.id = c.portal_user_id
+      WHERE c.token_hash = $1 AND c.used_at IS NULL AND c.expires_at > now() AND c.tries < ${CODE_TRIES}
+        AND u.status = 'active' AND u.deleted_at IS NULL`,
+    [sha(challenge)],
+  );
+  return rows[0] ?? null;
+}
+
+const challengeExpired = (reply: FastifyReply) =>
+  sendProblem(reply, 401, "The sign-in expired. Sign in again.", { code: "challenge_expired" });
+
+export function portalSignInCode(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as SignInCodeInput;
+  return withDb(reply, async (pool) => {
+    if (!addressAllowed(request.ip || "127.0.0.1")) return tooManyFromAddress(reply);
+    const c = await openChallenge(pool, b.challenge);
+    if (!c) return challengeExpired(reply);
+    const want = Buffer.from(String(c.code_hash ?? ""), "hex");
+    const got = Buffer.from(codeHash(Number(c.id), b.code), "hex");
+    if (!(want.length === got.length && timingSafeEqual(want, got))) {
+      await pool.query("UPDATE sign_in_challenges SET tries = tries + 1 WHERE id = $1", [c.id]);
+      const left = CODE_TRIES - Number(c.tries) - 1;
+      return left > 0
+        ? sendProblem(reply, 401, "The code does not match", { detail: `${left} tries left.`, code: "wrong_code" })
+        : sendProblem(reply, 401, "Too many wrong codes. Sign in again.", { code: "challenge_expired" });
+    }
+    await pool.query("UPDATE sign_in_challenges SET used_at = now() WHERE id = $1", [c.id]);
+    return openSession(pool, request, reply, Number(c.portal_user_id));
+  });
+}
+
+export function portalResendSignInCode(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as SignInChallengeRef;
+  return withDb(reply, async (pool) => {
+    const c = await openChallenge(pool, b.challenge);
+    if (!c) return challengeExpired(reply);
+    if (c.too_soon) return sendProblem(reply, 409, "A code was sent less than a minute ago");
+    const sentTo = await sendCode(pool, Number(c.id), Number(c.portal_user_id));
+    return {
+      status: "code_required",
+      challenge: b.challenge,
+      sentTo,
+      expiresAt: (c.expires_at as Date).toISOString(),
+    } satisfies PortalSignInResult;
   });
 }
 
@@ -280,7 +408,8 @@ export function portalChangePassword(request: FastifyRequest, reply: FastifyRepl
 
 // Over edr_all (backend step 11b): the final MT attempts, and the switch's outcome rows that carry the customer's final
 // status and the money billed on the receipt. Messages and parts count attempt rows only.
-const FINAL = "(kind = 'outcome' OR (is_final_attempt = 1 AND msg_type = 'MT'))";
+// Test SMS and Repush messages (internal_kind, backend step 13) are ours, never the customer's.
+const FINAL = "(kind = 'outcome' OR (is_final_attempt = 1 AND msg_type = 'MT')) AND internal_kind = ''";
 const FAILED_STATUSES = ["UNDELIV", "REJECTD", "EXPIRED", "DELETED", "UNKNOWN"];
 const TOTALS_SQL = `countIf(kind = 'attempt') AS messages, sumIf(msg_count, kind = 'attempt') AS parts,
   countIf(c_msg_status = 'DELIVRD') AS delivered,
@@ -580,7 +709,7 @@ export const messageList = (enterpriseId: number): ChListDef<PortalMessageRow> =
   fields: listFields.portal_messages,
   table: "edr",
   // One row per message: its final attempt, with the switch's outcome row merged in (backend step 11b).
-  baseWhere: `c_enterprise_id = ${Number(enterpriseId)} AND is_final_attempt = 1 AND msg_type = 'MT'`,
+  baseWhere: `c_enterprise_id = ${Number(enterpriseId)} AND is_final_attempt = 1 AND msg_type = 'MT' AND internal_kind = ''`,
   columns: MESSAGE_COLUMNS,
   search: ["senderId", "receiver", "messageId"],
   searchNumbers: ["senderId", "receiver"],
