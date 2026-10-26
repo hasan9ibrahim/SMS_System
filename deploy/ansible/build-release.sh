@@ -2,7 +2,8 @@
 # Builds the three parts of a release for the servers (Ubuntu 24.04, x86-64) into releases/ and prints the id to pass
 # to deploy.yml (backend steps 8 and 14):
 #   sms-<id>.tar.gz      the switch and the API (Elixir release, with the Erlang runtime and the SQL files)
-#   service-<id>.tar.gz  the TypeScript service: server.mjs, bootstrap.mjs, the contract, the MCC/MNC list, the SQL files
+#   service-<id>.tar.gz  the TypeScript service: server.mjs, bootstrap.mjs, the contract, the MCC/MNC and
+#                        leaked-password lists, the SQL files
 #   web-<id>.tar.gz      the screens (the built web app)
 # Build on Ubuntu 24.04 (the Elixir release is linked against its libraries), with Node.js 22 and npm.
 set -euo pipefail
@@ -26,7 +27,7 @@ mkdir -p "$stage/service/contract" "$stage/service/data" "$stage/service/db"
 cp mock/dist/index.mjs "$stage/service/server.mjs"
 cp mock/dist/bootstrap.mjs "$stage/service/bootstrap.mjs"
 cp contract/openapi.yaml "$stage/service/contract/"
-cp mock/data/mccmnc.csv "$stage/service/data/"
+cp mock/data/mccmnc.csv mock/data/leaked-passwords.txt "$stage/service/data/"
 cp -r db/postgres db/clickhouse "$stage/service/db/"
 tar -czf "$here/releases/service-$id.tar.gz" -C "$stage/service" .
 tar -czf "$here/releases/web-$id.tar.gz" -C web/dist .

@@ -144,6 +144,11 @@ export async function bootstrap(c: pg.ClientBase, opts: BootstrapOptions = {}): 
     } else log("administrator: none yet; run again with --admin-username and the other --admin-* options");
 
     const placeholder = "{rates@example.com,noc@example.com}";
+    // First run only (the migration's placeholder addresses are still there): Cleanup Center changes wait for an
+    // approval in production (product owner 2026-10-26).
+    await c.query(
+      `UPDATE cleanup_settings SET require_approval = true WHERE id = 1 AND summary_emails = '${placeholder}'::text[]`,
+    );
     const { rowCount: cleanup } = await c.query(
       `UPDATE cleanup_settings SET summary_emails = $1
         WHERE id = 1 AND ($2::boolean OR summary_emails = '${placeholder}'::text[])`,

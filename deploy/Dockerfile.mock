@@ -18,6 +18,7 @@ COPY --from=build /app/mock/dist/index.mjs server.mjs
 COPY --from=build /app/mock/dist/cli.mjs seed.mjs
 COPY contract/openapi.yaml contract/openapi.yaml
 COPY mock/data/mccmnc.csv data/mccmnc.csv
+COPY mock/data/leaked-passwords.txt data/leaked-passwords.txt
 COPY db/postgres db/postgres
 COPY db/clickhouse db/clickhouse
 ENV NODE_ENV=production MOCK_HOST=0.0.0.0 MOCK_PORT=4010 TRUST_PROXY=1 \

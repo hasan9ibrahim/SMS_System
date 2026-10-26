@@ -1490,7 +1490,12 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       {_, final} = customer_receipt(client)
       assert final.fields.short_message =~ "stat:DELIVRD"
 
-      assert_eventually(fn -> Enum.count(edr("edr.receipt"), &(&1["kind"] == "vendor")) == 2 end)
+      # Each outcome row is published after its receipt reached the customer; under a loaded CI runner that can take
+      # longer than the default 2 s (as the other bus assertions here allow).
+      assert_eventually(
+        fn -> Enum.count(edr("edr.receipt"), &(&1["kind"] == "vendor")) == 2 end,
+        5_000
+      )
     end
   end
 

@@ -58,7 +58,9 @@ It fills what every screen needs (safe to run again: tables that have rows are l
 * every country and network of the MCC/MNC list, one "All networks" code per MCC, and each country's dial code in the
   Master table (§6.1). **Network prefixes are not included** (no reliable public list): import them in Routing ›
   Master table before routing by network;
-* the departments and GUI access groups to start from (§11; edit them in Admin);
+* the departments and GUI access groups to start from (§11; edit them in Admin): Administrator, Department Manager,
+  Account Manager, NOC Engineer, Rates Analyst, Finance and Read Only (every page but Finance and Admin);
+* Cleanup Center changes set to wait for an approval;
 * the `system` user the background jobs act as (cannot sign in);
 * the first administrator, with a temporary password printed once (valid 24 hours).
 

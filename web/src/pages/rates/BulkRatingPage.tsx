@@ -82,6 +82,9 @@ const CHANGE_LABEL: Record<string, string> = {
   skip: "Skip",
 };
 
+// Picker rows come from the rate-table lookup (names-only for pickers, step 10): only its fields are there.
+type TablePick = Pick<RateTableRow, "id" | "name" | "category" | "currency">;
+
 /**
  * Clients' rate tables as a searchable checklist (team trial round 4, like the route rule trunk picker): Inclusive =
  * the ticked tables, Exclusive = every client table except the ticked ones. The search also finds a table by its
@@ -95,7 +98,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
   const results = useQuery({
     queryKey: ["list", "bulk-tables", q],
     queryFn: () =>
-      fetchPickPage<RateTableRow>("rate_tables", {
+      fetchPickPage<TablePick>("rate_tables", {
         limit: 60,
         withTotal: true,
         ...(q.trim() ? { search: q.trim() } : {}),
@@ -108,7 +111,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
   const all = useQuery({
     queryKey: ["list", "bulk-tables", "all"],
     queryFn: () =>
-      fetchPickPage<RateTableRow>("rate_tables", {
+      fetchPickPage<TablePick>("rate_tables", {
         limit: 4000,
         withTotal: false,
         filter: { logic: "and", conditions: [{ field: "kind", op: "in", values: ["customer"] }] },
@@ -123,7 +126,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
   const names = useQuery({
     queryKey: ["list", "names", "rate_tables", ticked],
     queryFn: () =>
-      fetchPickPage<RateTableRow>("rate_tables", {
+      fetchPickPage<TablePick>("rate_tables", {
         limit: 500,
         withTotal: false,
         filter: { logic: "and", conditions: [{ field: "id", op: "in", values: ticked }] },
@@ -164,7 +167,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
       </div>
       <div className="chips">
         {ticked.map((id) => (
-          <span key={id} className="chip" title={byId.get(id)?.enterpriseNames.join(", ")}>
+          <span key={id} className="chip" title={[byId.get(id)?.category, byId.get(id)?.currency].filter(Boolean).join(" · ")}>
             {byId.get(id)?.name ?? `#${id}`}
             <button type="button" aria-label={`Remove ${byId.get(id)?.name ?? id}`} onClick={() => toggle(id)}>
               <Icon name="x" size={11} />
@@ -208,7 +211,7 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
             <input type="checkbox" checked={ticked.includes(r.id)} onChange={() => toggle(r.id)} />
             <span>{r.name}</span>
             <span className="muted small">
-              {[r.trunkNames.slice(0, 2).join(", ") || r.enterpriseNames.slice(0, 2).join(", "), r.currency]
+              {[r.category, r.currency]
                 .filter(Boolean)
                 .join(" · ")}
             </span>

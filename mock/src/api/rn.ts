@@ -1072,18 +1072,16 @@ async function createRn(
   );
   const ef = await effectiveSettings(c, d.trunk!.enterpriseId);
   const { rows: n } = await c.query(
-    "SELECT flagged, notice_breaches, errors, backdated_live FROM rate_notifications WHERE id = $1",
+    `SELECT n.errors, n.backdated,
+            (SELECT count(*)::int FROM rate_notification_lines l
+              WHERE l.rn_id = n.id AND l.flagged AND l.change_type = 'increase' AND l.notice_breach) AS urgent_increases
+       FROM rate_notifications n WHERE n.id = $1`,
     [id],
   );
-  // Auto-accept only when nothing needs review: no live-traffic flag, notice breach, error, or back-dated rate that
-  // affected traffic already sent (team trial round 2).
-  if (
-    ef.autoAccept &&
-    n[0].flagged === 0 &&
-    n[0].notice_breaches === 0 &&
-    n[0].errors === 0 &&
-    n[0].backdated_live === 0
-  ) {
+  // Auto-accept unless a person must look (product owner 2026-10-26): an increase on live traffic without the notice
+  // period, a back-dated rate, or a file error. Everything else (decreases, new and closed destinations, increases
+  // with notice) is accepted at once.
+  if (ef.autoAccept && n[0].urgent_increases === 0 && n[0].backdated === 0 && n[0].errors === 0) {
     await acceptLines(c, id, null, userId, ip, true);
     await afterDecision(c, id, null);
     return { id, auto: true };
