@@ -8,6 +8,7 @@ import type {
   PortalRateRow,
   PortalSignInInput,
   PortalTrafficQuery,
+  SignInCodeInput,
 } from "@sms/contract";
 import { api, ApiError, unwrap } from "../api/client";
 import type { ListPage } from "../api/hooks";
@@ -31,16 +32,34 @@ export function usePortalSession() {
   });
 }
 
+/** Password first; the session comes now, or after the e-mailed code (backend step 13). */
 export function useSignIn() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: PortalSignInInput) => unwrap(api.POST("/portal/session", { body })),
+    onSuccess: (r) => {
+      if (r.status !== "signed_in" || !r.session) return;
+      dropData(qc);
+      qc.setQueryData(SESSION_KEY, r.session);
+    },
+  });
+}
+
+export function useSignInCode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SignInCodeInput) => unwrap(api.POST("/portal/session/code", { body })),
     onSuccess: (s) => {
       dropData(qc);
       qc.setQueryData(SESSION_KEY, s);
     },
   });
 }
+
+export const useResendCode = () =>
+  useMutation({
+    mutationFn: (challenge: string) => unwrap(api.POST("/portal/session/code/resend", { body: { challenge } })),
+  });
 
 export function useSignOut() {
   const qc = useQueryClient();

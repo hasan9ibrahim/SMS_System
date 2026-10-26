@@ -375,6 +375,7 @@ export const mapPortalUser = (r: Record<string, unknown>): PortalUserRow => ({
   mustChangePassword: r.must_change_password as boolean,
   tempPasswordExpiresAt: iso(r.temp_password_expires_at),
   lastLoginAt: iso(r.last_login_at),
+  otpMethod: (r.otp_method as PortalUserRow["otpMethod"]) ?? "email",
   updatedBy: str(r.updated_by),
   updatedAt: iso(r.updated_at)!,
   archivedAt: iso(r.deleted_at),

@@ -275,3 +275,10 @@
 .portal-kv dd.num {
   text-align: left;
 }
+
+/* Sign-in code step (backend step 13). */
+.portal-code-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}

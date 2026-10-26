@@ -710,6 +710,7 @@ export type SignInInput = Schemas["SignInInput"];
 export type SignInCodeInput = Schemas["SignInCodeInput"];
 export type SignInChallengeRef = Schemas["SignInChallengeRef"];
 export type SignInResult = Schemas["SignInResult"];
+export type PortalSignInResult = Schemas["PortalSignInResult"];
 export type PortalPasswordInput = Schemas["PortalPasswordInput"];
 export type PortalSession = Schemas["PortalSession"];
 export type PortalTotals = Schemas["PortalTotals"];

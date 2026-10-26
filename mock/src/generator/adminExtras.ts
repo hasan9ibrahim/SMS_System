@@ -168,6 +168,9 @@ export async function generateAdminExtras(world: World, rng: Rng, sink: TableSin
         password_changed_at: new Date(now - (temp ? rng.int(1, 20) * 3600_000 : ageDays * DAY + rng.int(0, DAY))),
         must_change_password: temp || ageDays > 30,
         temp_password_expires_at: temp ? new Date(now + rng.int(2, 23) * 3600_000) : null,
+        // The trial sends no real e-mail, so the fake logins skip the e-mailed sign-in code (backend step 13);
+        // logins created in Admin › Customer Portal get it.
+        otp_method: "off",
         last_login_at: rng.chance(0.8) ? new Date(now - rng.int(0, 20 * DAY)) : null,
         updated_by_id: rng.pick(world.users).id,
         inserted_at: new Date(now - rng.int(30, 600) * DAY),

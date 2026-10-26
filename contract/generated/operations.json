@@ -3874,6 +3874,28 @@
  },
  {
   "method": "POST",
+  "path": "/portal/session/code",
+  "operationId": "portalSignInCode",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/portal/session/code/resend",
+  "operationId": "portalResendSignInCode",
+  "tag": "portal",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
   "path": "/portal/traffic",
   "operationId": "portalTraffic",
   "tag": "portal",

@@ -19,7 +19,9 @@ import {
   portalOverview,
   portalQueryMessages,
   portalQueryRates,
+  portalResendSignInCode,
   portalSignIn,
+  portalSignInCode,
   portalSignOut,
   portalTraffic,
 } from "./api/portal.js";
@@ -1193,6 +1195,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   // Customer portal (§1, team trial round 5).
   portalGetSession,
   portalSignIn,
+  portalSignInCode,
+  portalResendSignInCode,
   portalSignOut,
   portalChangePassword,
   portalOverview,
