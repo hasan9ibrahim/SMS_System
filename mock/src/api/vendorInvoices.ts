@@ -21,7 +21,7 @@ import type {
   VendorInvoiceSummaryInput,
 } from "@sms/contract";
 import { db, withDb } from "../db.js";
-import { PLATFORM_CURRENCY } from "../currency.js";
+import { money, PLATFORM_CURRENCY } from "../currency.js";
 import {
   mapReconRule,
   RECON_RULE_FROM,
@@ -57,7 +57,6 @@ type Params = { id: number };
 
 const badInput = (reply: FastifyReply, errors: FieldError[]) =>
   sendProblem(reply, 400, "Check the highlighted fields", { errors });
-const money = (v: number) => Math.round(v * 100) / 100;
 const ymd = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
 const fmt = (v: number, digits = 2) =>
   v.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });

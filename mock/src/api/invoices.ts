@@ -35,13 +35,13 @@ import {
 } from "./emailLog.js";
 import { production } from "../mode.js";
 import { inTransaction } from "./views.js";
+import { fmtMoney, money } from "../currency.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
 
 const badInput = (reply: FastifyReply, errors: FieldError[]) =>
   sendProblem(reply, 400, "Check the highlighted fields", { errors });
-const money = (v: number) => Math.round(v * 100) / 100;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (day: string, n: number) => ymd(new Date(Date.parse(day) + n * 86400_000));
 /** Pause between job steps, so the grid shows each status (INVOICE_JOB_STEP_MS, default 700 ms; none in production). */
@@ -231,8 +231,7 @@ export function getInvoiceCharges(request: FastifyRequest, reply: FastifyReply) 
   });
 }
 
-const amt = (v: number, ccy: string) =>
-  `${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`;
+const amt = (v: number, ccy: string) => `${fmtMoney(v)} ${ccy}`;
 
 export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
@@ -309,7 +308,6 @@ async function invoicePdf(pool: Db, inv: NonNullable<Awaited<ReturnType<typeof l
  * The invoice e-mail: the partner's business company's Invoice template (§11), filled with the invoice and
  * the company's placeholders, so each entity's invoices carry its own wording and bank details.
  */
-const twoDp = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 async function invoiceMail(c: Db, id: number) {
   const inv = await loadInvoice(c, id);
   if (!inv) return null;
@@ -322,8 +320,8 @@ async function invoiceMail(c: Db, id: number) {
     from: inv.usageStart,
     to: inv.usageEnd,
     invoice_no: inv.invoiceNumber,
-    amount: twoDp(inv.usageCharges ?? 0),
-    due_amount: twoDp(inv.dueAmount ?? 0),
+    amount: fmtMoney(inv.usageCharges ?? 0),
+    due_amount: fmtMoney(inv.dueAmount ?? 0),
     currency: inv.currency,
     due_date: inv.dueDate,
   };

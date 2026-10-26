@@ -194,7 +194,7 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
     );
     for (const r of negative.rows) {
       assert.ok(r.closingBalance < 0, "something is due only when the closing balance is owed (§7 sign)");
-      assert.equal(r.dueAmount, Math.round(-r.closingBalance * 100) / 100);
+      assert.equal(r.dueAmount, Math.round(-r.closingBalance * 10_000) / 10_000);
     }
   });
 
@@ -212,8 +212,8 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
     const inv = await ok("getInvoice", call("GET", `/invoices/${done.invoiceId}`));
     assert.equal(inv.status, "completed");
     assert.equal(inv.invoiceType, "manual");
-    assert.equal(inv.closingBalance, Math.round((inv.openingBalance - inv.usageCharges) * 100) / 100);
-    assert.equal(inv.dueAmount, Math.max(0, Math.round(-inv.closingBalance * 100) / 100));
+    assert.equal(inv.closingBalance, Math.round((inv.openingBalance - inv.usageCharges) * 10_000) / 10_000);
+    assert.equal(inv.dueAmount, Math.max(0, Math.round(-inv.closingBalance * 10_000) / 10_000));
 
     const charges = await ok("getInvoiceCharges", call("GET", `/invoices/${inv.id}/charges`));
     assert.equal(charges.source, inv.messageCount > 0 ? "edr" : "none");

@@ -208,7 +208,7 @@ function VendorInvoiceEditor({
             step={1}
             hint="Messages on the invoice"
           />
-          <NumberField form={form} path="chargeAmount" label="Charge Amount" required min={0} step={0.01} />
+          <NumberField form={form} path="chargeAmount" label="Charge Amount" required min={0} step={0.0001} />
           <SelectField
             form={form}
             path="timezone"
@@ -1031,7 +1031,7 @@ function RuleDialog({ row, done }: { row: ReconRuleRow | null; done: () => void 
       </Section>
       <Section title="Amount" columns={3}>
         <NumberField form={form} path="amountPct" label="Within %" min={0} max={100} step={0.1} suffix="%" />
-        <NumberField form={form} path="amountFixed" label="Within amount" min={0} step={0.01} hint={unit} />
+        <NumberField form={form} path="amountFixed" label="Within amount" min={0} step={0.0001} hint={unit} />
         <SelectField form={form} path="amountCombine" label="With both" required options={combine} />
       </Section>
       <Section title="Message count" columns={3}>

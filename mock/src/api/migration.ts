@@ -27,7 +27,7 @@ import type {
 } from "@sms/contract";
 import { db, withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
-import { decryptSecret, encryptSecret, verifyTotp } from "../admin/passwords.js";
+import { decryptSecret, encryptSecret, totpSecretOf, verifyTotp } from "../admin/passwords.js";
 import { toCsv } from "../migration/csv.js";
 import { BUILT_IN_MAPPINGS, ENTITY, IMPORT_ENTITIES, REFERENCE_PLATFORM } from "../migration/entities.js";
 import { packageFiles } from "../migration/fromPackage.js";
@@ -58,7 +58,7 @@ async function totpRefusal(c: Db, reply: FastifyReply, me: CurrentUser, code: st
   const u = rows[0];
   if (!u?.totp_enabled || !u.totp_secret)
     return () => sendProblem(reply, 403, "Turn on 2FA for your account first: credentials need a 2FA code (§13.28)");
-  const secret = String(u.totp_secret).startsWith("enc:") ? decryptSecret(u.totp_secret) : String(u.totp_secret);
+  const secret = totpSecretOf(u.totp_secret);
   if (!code) return () => fieldError(reply, "/totpCode", "enter the code from your 2FA app");
   if (!secret || !verifyTotp(secret, code)) return () => fieldError(reply, "/totpCode", "the 2FA code does not match");
   return null;

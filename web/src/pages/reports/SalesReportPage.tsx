@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import type { SalesMover, UserSummary } from "@sms/contract";
 import { useSalesInsights } from "../../api/masterReports";
-import { usePlatformCurrency } from "../../api/records";
+import { usePlatformCurrency, useReference } from "../../api/records";
 import { pageForPath } from "../../nav/registry";
 import { ListLookup } from "../../records/parts";
 import { problemText } from "../routing/dialogs";
@@ -83,6 +83,8 @@ function SalesPanel({ settings }: { settings: Settings }) {
     () => tree.map((c): CheckItem<string> => ({ value: c.iso, label: c.name, detail: `${c.iso} · ${c.mcc}` })),
     [tree],
   );
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const ref = useReference();
   const [threshold, setThreshold] = useState(20);
   const q = useSalesInsights({
     period: settings.period,
@@ -91,7 +93,7 @@ function SalesPanel({ settings }: { settings: Settings }) {
     timezone: settings.timezone,
     accountManagerId: amId,
     ...(countries.length ? { countries } : {}),
-    productCategoryId: null,
+    productCategoryId: categoryId,
     thresholdPct: threshold,
   });
   return (
@@ -117,6 +119,17 @@ function SalesPanel({ settings }: { settings: Settings }) {
             allLabel="All countries"
           />
         </div>
+        <label className="small">
+          Product category
+          <select value={categoryId ?? ""} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">All categories</option>
+            {(ref.data?.productCategories ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="small">
           Growth / decline threshold %
           <input

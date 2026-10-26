@@ -36,6 +36,7 @@ import {
 } from "../admin/passwords.js";
 import { badInput } from "./switchTools.js";
 import type { FieldError } from "./records.js";
+import { money } from "../currency.js";
 
 export const PORTAL_COOKIE = "sms_portal";
 const SESSION_HOURS = 12;
@@ -53,9 +54,11 @@ function cookieToken(request: FastifyRequest): string | null {
   return null;
 }
 
+// Behind HTTPS (COOKIE_SECURE=1, as the API, backend step 12) the browser sends the cookie over HTTPS only.
+const SECURE = process.env.COOKIE_SECURE === "1" ? "; Secure" : "";
 const setCookie = (reply: FastifyReply, token: string, maxAge: number) =>
   // The backend adds Secure behind HTTPS (BACKEND_TODO); the trial instance may run on plain HTTP.
-  reply.header("set-cookie", `${PORTAL_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`);
+  reply.header("set-cookie", `${PORTAL_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${SECURE}`);
 
 /** Desktop / mobile, OS and browser in words, for Logged In Users (§11). */
 export function device(ua: string) {
@@ -357,7 +360,7 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
       billingType: b.billingType,
       balance,
       creditLimit: b.creditLimit,
-      availableCredit: balance === null ? null : Math.round((balance + (b.creditLimit ?? 0)) * 100) / 100,
+      availableCredit: balance === null ? null : money(balance + (b.creditLimit ?? 0)),
       today: totals(todayRow),
       thisMonth: totals(month),
       trunks: trunks.rows.map((t) => ({

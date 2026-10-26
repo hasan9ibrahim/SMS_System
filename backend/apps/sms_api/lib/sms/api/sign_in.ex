@@ -13,7 +13,7 @@ defmodule Sms.Api.SignIn do
   E-mailed codes are written to the e-mail log, as the mock does. In production (`SMS_MODE=production`, backend step 11)
   they are written as queued and the TypeScript service's e-mail job sends them over SMTP (mock/src/jobs/mailer.ts).
   """
-  alias Sms.Api.{Password, Problem, Sessions, Totp}
+  alias Sms.Api.{Password, Problem, Secret, Sessions, Totp}
   alias Sms.Core.Repo
 
   @max_failed 5
@@ -177,7 +177,7 @@ defmodule Sms.Api.SignIn do
   end
 
   defp code_ok?(%{method: "authenticator", totp_secret: secret}, code),
-    do: Totp.valid?(secret, code)
+    do: Totp.valid?(Secret.reveal(secret), code)
 
   defp code_ok?(%{method: "email", id: id, code_hash: want}, code) when is_binary(want),
     do: :crypto.hash_equals(code_hash(id, code), want)

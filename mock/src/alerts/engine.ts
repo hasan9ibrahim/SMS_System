@@ -99,6 +99,76 @@ export async function storedMinutes(): Promise<Stored | null> {
   return { customers: group(c), vendors: group(v) };
 }
 
+/** The EDR column behind each traffic scope that is not a trunk or an enterprise. */
+const DIMENSION: Partial<Record<AlertRuleRow["scope"]["kind"], string>> = {
+  country: "c_country_iso",
+  mccmnc: "c_mccmnc",
+  sender_id: "src_addr",
+  product_category: "product_category_id",
+};
+
+const chText = (v: string) => `'${v.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+
+/**
+ * The traffic a country, MCCMNC, sender ID or product category rule watches (backend step 12, §13.6): one entity with
+ * that traffic's per-minute figures from the EDR store, and its normal levels from the same hour yesterday and a week
+ * ago. Null when the rule names no values (it then watches all traffic) or the store does not answer (no alert on a
+ * guess).
+ */
+export async function dimensionEntity(rule: AlertRuleRow, now = Date.now()): Promise<Entity | null | undefined> {
+  const col = DIMENSION[rule.scope.kind];
+  if (!col) return undefined;
+  const values =
+    rule.scope.kind === "product_category" ? rule.scope.ids.map((id) => String(Number(id))) : rule.scope.values.map(chText);
+  if (!values.length) return undefined;
+  const where = `${col} IN (${values.join(", ")})`;
+  const f = await sysToPlatformFactor();
+  const minutesQ = chRows<{ m: number; n: string; ok: string; dl: string; rev: number; cost: number; delay: number }>(
+    `SELECT toUnixTimestamp(toStartOfMinute(start_time)) AS m, countIf(kind = 'attempt') AS n,
+            countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl,
+            toFloat64(sum(revenue_sys * ${f})) AS rev, toFloat64(sum(cost_sys * ${f})) AS cost,
+            toFloat64(sumIf(delivery_delay_ms, msg_status = 'DELIVRD')) / 1000 AS delay
+       FROM edr_all WHERE start_time >= now() - INTERVAL ${MINUTES} MINUTE AND ${where} GROUP BY m`,
+    10_000,
+  );
+  const around = (days: number) =>
+    `start_time BETWEEN now() - INTERVAL ${days} DAY - INTERVAL 30 MINUTE AND now() - INTERVAL ${days} DAY + INTERVAL 30 MINUTE`;
+  const normalQ = chRows<{ n: string; ok: string; dl: string }>(
+    `SELECT countIf(kind = 'attempt') AS n, countIf(is_submit_success = 1) AS ok, countIf(msg_status = 'DELIVRD') AS dl
+       FROM edr_all WHERE ${where} AND ((${around(1)}) OR (${around(7)}))`,
+    10_000,
+  );
+  const [rows, normal] = await Promise.all([minutesQ, normalQ]);
+  if (!rows || !normal) return null;
+  const byMinute = new Map<number, StoredMinute>(
+    rows.map((r) => [
+      Number(r.m) * 1000,
+      { n: Number(r.n), ok: Number(r.ok), dl: Number(r.dl), rev: r.rev, cost: r.cost, delay: r.delay },
+    ]),
+  );
+  const store = fromStore(byMinute, now);
+  const n = Number(normal[0]?.n ?? 0);
+  const ok = Number(normal[0]?.ok ?? 0);
+  const dl = Number(normal[0]?.dl ?? 0);
+  const name = `${rule.scope.kind.replace("_", " ")} ${rule.scope.values.join(", ") || rule.scope.ids.join(", ")}`;
+  const series: Series = {
+    kind: "customer_trunk",
+    id: 0,
+    name,
+    enterpriseId: 0,
+    enterpriseName: name,
+    tps: store.minutes[store.minutes.length - 1] ?? 0,
+    revenue: 0,
+    cost: 0,
+    ...store,
+    normalTps: n / 7200,
+    normalAsr: n ? (ok / n) * 100 : null,
+    normalDlr: ok ? (dl / ok) * 100 : null,
+    normalDelay: BASE_DELAY,
+  };
+  return { kind: rule.scope.kind, id: null, name, enterpriseId: null, series: [series] };
+}
+
 /** A trunk's per-minute arrays from the store, aligned with the simulator's (the last is this minute). */
 function fromStore(byMinute: Map<number, StoredMinute> | undefined, now: number) {
   const nowMinute = Math.floor(now / 60_000) * 60_000;
@@ -501,7 +571,15 @@ export async function evaluateRound(
   let recovered = 0;
   for (const rule of rules) {
     if (!isActiveAt(rule.activeHours, now)) continue;
-    for (const entity of entitiesFor(rule, customers, vendors)) {
+    // Country, MCCMNC, sender ID and category scopes watch their own traffic from the EDR store (backend step 12).
+    const dimension = fromEdrStore ? await dimensionEntity(rule, now) : undefined;
+    if (dimension === null) {
+      // The store did not answer: what is open for the rule stays open until it can be checked.
+      for (const key of open.keys()) if (key.startsWith(`${rule.id}|`)) seen.add(key);
+      continue;
+    }
+    const entities = dimension === undefined ? entitiesFor(rule, customers, vendors) : [dimension];
+    for (const entity of entities) {
       const key = keyOf(rule.id, entity);
       const ev = evaluate(rule, entity, down.has(`${entity.kind}|${entity.id}`), PLATFORM_CURRENCY);
       const cur = open.get(key);

@@ -26,6 +26,7 @@ import type {
 import { withDb } from "../db.js";
 import { ACTIONS, checkPermissions, checkTabs, MODULES, normalisePermissions, SECTIONS } from "../admin/catalog.js";
 import {
+  encryptSecret,
   hashPassword,
   newTotpSecret,
   otpauthUri,
@@ -33,6 +34,7 @@ import {
   passwordExpiry,
   passwordRules,
   policy,
+  totpSecretOf,
   verifyPassword,
   verifyTotp,
 } from "../admin/passwords.js";
@@ -508,7 +510,7 @@ export function setupUserTotp(request: FastifyRequest, reply: FastifyReply) {
     const u = await loadUser(pool, id);
     if (!u) return notFound(reply, "User", id);
     const secret = newTotpSecret();
-    await pool.query("UPDATE users SET totp_pending_secret = $2 WHERE id = $1", [id, secret]);
+    await pool.query("UPDATE users SET totp_pending_secret = $2 WHERE id = $1", [id, encryptSecret(secret)]);
     return { secret, otpauthUri: otpauthUri(secret, u.username) };
   });
 }
@@ -532,7 +534,7 @@ export function confirmUserTotp(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const { rows } = await pool.query("SELECT username, totp_pending_secret FROM users WHERE id = $1", [id]);
     if (!rows[0]) return notFound(reply, "User", id);
-    const pending = rows[0].totp_pending_secret as string | null;
+    const pending = totpSecretOf(rows[0].totp_pending_secret);
     if (!pending) return badInput(reply, [{ path: "/code", message: "start the QR enrolment first" }]);
     if (!verifyTotp(pending, code))
       return badInput(reply, [{ path: "/code", message: "the code does not match; check the phone's clock" }]);
@@ -647,7 +649,8 @@ export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
       errors.push({ path: "/currentPassword", message: "the current password is wrong" });
     // A code is always needed (R6): the authenticator's when 2FA is on, otherwise the e-mailed one.
     if (u.totp_enabled) {
-      if (!b.totpCode || !verifyTotp(u.totp_secret as string, b.totpCode))
+      const secret = totpSecretOf(u.totp_secret);
+      if (!b.totpCode || !secret || !verifyTotp(secret, b.totpCode))
         errors.push({
           path: "/totpCode",
           message: b.totpCode ? "the 2FA code does not match" : "enter the code from your 2FA app",

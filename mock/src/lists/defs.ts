@@ -19,7 +19,7 @@ import { lcrChangeList, lcrProfileList } from "../api/lcr.js";
 import { visibilityAssignmentList, visibilityGrantList, visibilityPolicyList } from "../api/visibility.js";
 import { teamTimelineList } from "../api/team.js";
 import { cleanupFindingList } from "../api/cleanup.js";
-import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
+import { money, PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   PcapTraceRow,
   Change,
@@ -2927,7 +2927,7 @@ export const BALANCE_FROM = `enterprises e
     LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
     LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
 const netSql = `round(COALESCE(bal.customer, 0)
-    - COALESCE(bal.vendor * COALESCE(ccl.rate_per_eur, vcl.rate_per_eur) / vcl.rate_per_eur, 0), 2)`;
+    - COALESCE(bal.vendor * COALESCE(ccl.rate_per_eur, vcl.rate_per_eur) / vcl.rate_per_eur, 0), 4)`;
 /** Credit used: what the client owes us (a negative balance) as a share of the limit, never below 0. */
 const creditUsedSql = `CASE WHEN cb.credit_limit > 0 THEN GREATEST(0, round(-bal.customer / cb.credit_limit * 100, 1)) END`;
 
@@ -2939,9 +2939,9 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
     id: { sql: "e.id" },
     enterprise: visCol(enterpriseMask("e")),
     enterpriseType: { sql: "e.type" },
-    customerBalance: visCol(hide("balances", "round(bal.customer, 2)", byEnterprise("e.id"))),
+    customerBalance: visCol(hide("balances", "round(bal.customer, 4)", byEnterprise("e.id"))),
     customerCurrency: { sql: "cb.currency" },
-    vendorBalance: visCol(hide("balances", "round(bal.vendor, 2)", byEnterprise("e.id"))),
+    vendorBalance: visCol(hide("balances", "round(bal.vendor, 4)", byEnterprise("e.id"))),
     vendorCurrency: { sql: "vb.currency" },
     netBalance: visCol(hide("balances", netSql, byEnterprise("e.id"))),
     accountManager: { sql: fullName("am") },
@@ -2953,8 +2953,8 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
   },
   search: ["enterprise", "accountManager"],
   idSql: "e.id",
-  select: `e.id, e.name, e.type, round(bal.customer, 2) AS customer_balance, cb.currency AS customer_currency,
-    round(bal.vendor, 2) AS vendor_balance, vb.currency AS vendor_currency, ${netSql} AS net_balance,
+  select: `e.id, e.name, e.type, round(bal.customer, 4) AS customer_balance, cb.currency AS customer_currency,
+    round(bal.vendor, 4) AS vendor_balance, vb.currency AS vendor_currency, ${netSql} AS net_balance,
     ${fullName("am")} AS account_manager, cb.billing_type, cb.credit_limit, ${creditUsedSql} AS credit_used_pct,
     bcy.name AS billing_cycle, COALESCE(cb.currency, vb.currency) AS currency`,
   mapRow: (r) => ({
@@ -3016,21 +3016,21 @@ export const billingReportList: ListDef<BillingReportRow> = {
     billingCycle: { sql: "bcy.name" },
     currency: { sql: brCurrency },
     customerBillable: { sql: "coalesce(tr.c_billable, 0)" },
-    customerAmount: { sql: "round(coalesce(tr.c_amount, 0), 2)" },
+    customerAmount: { sql: "round(coalesce(tr.c_amount, 0), 4)" },
     vendorBillable: { sql: "coalesce(tr.v_billable, 0)" },
-    vendorAmount: { sql: "round(coalesce(tr.v_amount, 0), 2)" },
+    vendorAmount: { sql: "round(coalesce(tr.v_amount, 0), 4)" },
     invoicesIssued: { sql: "inv.n" },
-    invoicedAmount: { sql: "round(inv.amount, 2)" },
-    paymentsReceived: { sql: "round(pay.received, 2)" },
-    paymentsMade: { sql: "round(pay.made, 2)" },
-    balance: { sql: "round(COALESCE(bal.customer, -bal.vendor), 2)" },
+    invoicedAmount: { sql: "round(inv.amount, 4)" },
+    paymentsReceived: { sql: "round(pay.received, 4)" },
+    paymentsMade: { sql: "round(pay.made, 4)" },
+    balance: { sql: "round(COALESCE(bal.customer, -bal.vendor), 4)" },
     creditLimit: { sql: "cb.credit_limit" },
     creditUsePct: { sql: creditUsedSql },
     disputedInvoices: { sql: "vin.disputed" },
-    vendorInvoiceDifference: { sql: "round(vin.diff, 2)" },
+    vendorInvoiceDifference: { sql: "round(vin.diff, 4)" },
     negativeMarginMessages: { sql: "coalesce(tr.neg_msgs, 0)" },
-    negativeMarginAmount: { sql: "round(coalesce(tr.neg_amount, 0), 2)" },
-    reratedAmount: { sql: "round(rer.amount, 2)" },
+    negativeMarginAmount: { sql: "round(coalesce(tr.neg_amount, 0), 4)" },
+    reratedAmount: { sql: "round(rer.amount, 4)" },
   },
   search: ["enterprise", "accountManager"],
   idSql: "e.id",
@@ -3047,21 +3047,21 @@ export const billingReportList: ListDef<BillingReportRow> = {
     billingCycle: (r.billing_cycle as string | null) ?? null,
     currency: String(r.currency).trim(),
     customerBillable: Number(r.c_billable),
-    customerAmount: Math.round(Number(r.c_amount) * 100) / 100,
+    customerAmount: money(Number(r.c_amount)),
     vendorBillable: Number(r.v_billable),
-    vendorAmount: Math.round(Number(r.v_amount) * 100) / 100,
+    vendorAmount: money(Number(r.v_amount)),
     invoicesIssued: Number(r.invoices),
-    invoicedAmount: Math.round(Number(r.invoiced) * 100) / 100,
-    paymentsReceived: Math.round(Number(r.received) * 100) / 100,
-    paymentsMade: Math.round(Number(r.made) * 100) / 100,
-    balance: r.balance == null ? null : Math.round(Number(r.balance) * 100) / 100,
+    invoicedAmount: money(Number(r.invoiced)),
+    paymentsReceived: money(Number(r.received)),
+    paymentsMade: money(Number(r.made)),
+    balance: r.balance == null ? null : money(Number(r.balance)),
     creditLimit: r.credit_limit == null ? null : Number(r.credit_limit),
     creditUsePct: r.credit_use == null ? null : Number(r.credit_use),
     disputedInvoices: Number(r.disputed),
-    vendorInvoiceDifference: Math.round(Number(r.diff) * 100) / 100,
+    vendorInvoiceDifference: money(Number(r.diff)),
     negativeMarginMessages: Number(r.neg_msgs),
-    negativeMarginAmount: Math.round(Number(r.neg_amount) * 100) / 100,
-    reratedAmount: Math.round(Number(r.rerated) * 100) / 100,
+    negativeMarginAmount: money(Number(r.neg_amount)),
+    reratedAmount: money(Number(r.rerated)),
   }),
 };
 

@@ -199,7 +199,7 @@ function EntryDialog({ st, done }: { st: SoaStatement; done: () => void }) {
         </label>
         <label className="field">
           <span>Amount ({ccy})</span>
-          <input type="number" min={0.01} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input type="number" min={0.0001} step={0.0001} value={amount} onChange={(e) => setAmount(e.target.value)} />
         </label>
         <div className="field">
           <span>Effect on the balance</span>

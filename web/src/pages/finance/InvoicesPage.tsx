@@ -238,7 +238,7 @@ function GenerateDialog({ done }: { done: (rows: InvoiceRequestRow[] | null) => 
           />
           {proforma && (
             <>
-              <NumberField form={form} path="amount" label="Amount" required min={0.01} step={0.01} />
+              <NumberField form={form} path="amount" label="Amount" required min={0.0001} step={0.0001} />
               <NumberField form={form} path="volume" label="Volume" min={0} step={1} />
               <SelectField
                 form={form}

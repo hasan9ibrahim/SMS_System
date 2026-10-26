@@ -219,6 +219,15 @@ config :sms_api, Sms.Api.Forward,
     )
 
 config :sms_api, Sms.Api.Auth, trust_proxy: System.get_env("TRUST_PROXY") == "1"
+
+# Authenticator secrets are stored encrypted by the TypeScript service with MOCK_SECRET_KEY (backend step 12).
+config :sms_api, Sms.Api.Secret,
+  key:
+    if(api_port > 0 and System.get_env("SMS_MODE") == "production",
+      do: required.("MOCK_SECRET_KEY", "dev-only-not-a-real-key"),
+      else: System.get_env("MOCK_SECRET_KEY", "dev-only-not-a-real-key")
+    )
+
 config :sms_api, Sms.Api.Sessions, secure_cookie: System.get_env("COOKIE_SECURE") == "1"
 
 # Production (backend step 11): sign-in codes are queued for the TypeScript service's e-mail job (SMTP).

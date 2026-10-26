@@ -9,7 +9,7 @@ import type pg from "pg";
 import type { SignInChallengeRef, SignInCodeInput, SignInInput, SignInResult } from "@sms/contract";
 import { withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
-import { verifyPassword, verifyTotp } from "../admin/passwords.js";
+import { totpSecretOf, verifyPassword, verifyTotp } from "../admin/passwords.js";
 import { cookieToken, MAX_HOURS, SESSION_COOKIE, sha } from "../auth/user.js";
 import { device } from "./portal.js";
 import { maskEmail } from "./admin.js";
@@ -25,9 +25,11 @@ const RESEND_GAP_S = 60;
 const codeHash = (challengeId: number, code: string) =>
   createHash("sha256").update(`signin:${challengeId}:${code}`).digest("hex");
 
+// Behind HTTPS (COOKIE_SECURE=1, as the API, backend step 12) the browser sends the cookie over HTTPS only.
+const SECURE = process.env.COOKIE_SECURE === "1" ? "; Secure" : "";
 const setCookie = (reply: FastifyReply, token: string, maxAge: number) =>
   // The backend adds Secure behind HTTPS (BACKEND_TODO); the trial instance may run on plain HTTP.
-  reply.header("set-cookie", `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`);
+  reply.header("set-cookie", `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${SECURE}`);
 
 /** The user to record in the audit trail for a sign-in call (no session yet). */
 const auditAs = (request: FastifyRequest, userId: number) => {
@@ -158,7 +160,10 @@ export function signInCode(request: FastifyRequest, reply: FastifyReply) {
     if (!c) return sendProblem(reply, 401, "The sign-in expired. Sign in again.", { code: "challenge_expired" });
     auditAs(request, Number(c.user_id));
     let ok: boolean;
-    if (c.method === "authenticator") ok = Boolean(c.totp_secret) && verifyTotp(c.totp_secret as string, b.code);
+    if (c.method === "authenticator") {
+      const secret = totpSecretOf(c.totp_secret);
+      ok = Boolean(secret) && verifyTotp(secret!, b.code);
+    }
     else {
       const want = Buffer.from(String(c.code_hash ?? ""), "hex");
       const got = Buffer.from(codeHash(Number(c.id), b.code), "hex");

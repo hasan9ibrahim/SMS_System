@@ -62,7 +62,7 @@ const toForm = (b: EnterpriseBilling): Form => ({
 });
 
 const money = (n: number, ccy: string) =>
-  `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`;
+  `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${ccy}`;
 
 function CreditUse({ side, enterprise }: { side: BillingSide; enterprise: EnterpriseDetail }) {
   if (side.billingType !== "postpaid" || !side.creditLimit) return null;
@@ -172,7 +172,7 @@ function SideSection({
         label="Opening balance"
         hint="Positive = starts in credit, negative = starts owing"
         required
-        step={0.01}
+        step={0.0001}
         suffix={v.currency}
       />
       {side === "customer" && <CheckField form={form} path={p("autoInvoicing")} label="Auto invoicing" />}
@@ -250,7 +250,7 @@ function LastInvoiceCard({ enterpriseId }: { enterpriseId: number }) {
       ) : (
         <>
           <span className="bill-card-value small-value">
-            {(inv.dueAmount ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+            {(inv.dueAmount ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}{" "}
             <small>{inv.currency}</small>
           </span>
           <span className="small">
@@ -292,7 +292,7 @@ function BillingSummary({ billing, enterprise }: { billing: EnterpriseBilling; e
               Current balance{sides.length > 1 ? ` · ${k === "customer" ? "customer" : "vendor"}` : ""}
             </span>
             <span className="bill-card-value">
-              {b.balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+              {b.balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}{" "}
               <small>{b.currency}</small>
             </span>
             <span className="small">

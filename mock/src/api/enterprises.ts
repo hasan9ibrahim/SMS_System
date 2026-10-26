@@ -49,6 +49,7 @@ import { resolveSql } from "../visibility/sql.js";
 import { companyDetails, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
 import { fillBody, fillText } from "../email/html.js";
 import { platformDateTime } from "../platform.js";
+import { money } from "../currency.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -441,7 +442,7 @@ async function loadBilling(db: Db, id: number): Promise<EnterpriseBilling> {
     if (!r) return null;
     return {
       ...(rowToObject(r, BILLING_SPECS) as unknown as BillingSideInput),
-      balance: Math.round(balances[s] * 100) / 100,
+      balance: money(balances[s]),
       billingCycleName: r.cycle_name,
       updatedBy: r.updated_by ?? null,
       updatedAt: iso(r.updated_at)!,
