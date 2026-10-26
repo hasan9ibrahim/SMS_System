@@ -26,7 +26,9 @@ trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/service/contract" "$stage/service/data" "$stage/service/db"
 cp mock/dist/index.mjs "$stage/service/server.mjs"
 cp mock/dist/bootstrap.mjs "$stage/service/bootstrap.mjs"
-cp contract/openapi.yaml "$stage/service/contract/"
+mkdir -p "$stage/service/contract/generated"
+cp contract/openapi.yaml contract/access.json "$stage/service/contract/"
+cp contract/generated/operations.json "$stage/service/contract/generated/"
 cp mock/data/mccmnc.csv mock/data/leaked-passwords.txt "$stage/service/data/"
 cp -r db/postgres db/clickhouse "$stage/service/db/"
 tar -czf "$here/releases/service-$id.tar.gz" -C "$stage/service" .
