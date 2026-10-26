@@ -41,8 +41,9 @@
   ansible.builtin.systemd_service: {name: patroni, enabled: false, state: stopped}
   failed_when: false
 
-# Settings changes first: on a first install a restart notified by the new files would otherwise stop Patroni in the
-# middle of creating the cluster, which leaves it without its replication role (rehearsal 2026-10-26).
+# Settings changes first (the handlers touch only a running Patroni): on a first install a reload or restart after the
+# start would stop Patroni in the middle of creating the cluster, leaving it without its replication role (rehearsal
+# 2026-10-26).
 - name: Apply settings changes before starting
   ansible.builtin.meta: flush_handlers
 
