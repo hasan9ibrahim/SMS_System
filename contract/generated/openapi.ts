@@ -12273,12 +12273,14 @@ export type components = {
       total: number;
     };
     MarketTopVendorInput: {
+      /** @description Any number of destinations (team trial round 6 lifted the 2,000 cap). */
       mccmncs: string[];
-      /** @description May be empty when `includeTier1` is true (Tier 1 vendors only). */
+      /** @description May be empty when `includeTier1` is true (Tier 1 vendors only). Any number of vendor trunks (team trial round 6 lifted the 50 cap). */
       vendorTrunkIds: components["schemas"]["Id"][];
       includeTier1: boolean;
     };
     MarketTopVendorRemove: {
+      /** @description Any number of destinations (team trial round 6 lifted the 2,000 cap). */
       mccmncs: string[];
     };
     MarketTopVendorCandidates: {
@@ -18696,6 +18698,8 @@ export type components = {
       sortable: boolean;
       /** @description Not shown as a column by default, but still filterable (§13.25). */
       hidden: boolean;
+      /** @description Plain text in the column filter box matches anywhere in the value instead of from the start (team trial round 6: route rule names). */
+      matchAnywhere?: boolean;
       /**
        * @description A filter with no column of its own (never offered as a column or in column templates), e.g. EDR Search's
        *     `numberOrMsgId` (team trial round 2).

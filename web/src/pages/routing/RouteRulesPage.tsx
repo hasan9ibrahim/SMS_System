@@ -11,7 +11,6 @@ import { useMe } from "../../api/hooks";
 import { useRestore } from "../../api/records";
 import {
   useBulkRouteRules,
-  useCloneRouteRule,
   useDiscardRouteRule,
   exportRouteRules,
   useRouteRule,
@@ -30,7 +29,7 @@ import { AddCondition, ConditionsSection, DraftRuleContext, RuleTitle, useRuleSa
 import { BulkDialog, DEFAULT_PRIORITY, RuleDialog, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
 import { InlineCondition } from "./ConditionEditor";
 import { codesText, useDestinationTree } from "../rates/DestinationTree";
-import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, type ConditionKey } from "./ruleModel";
+import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, toInput, type ConditionKey } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
 import { TrafficAside, TrafficHover, TrafficSection, money, usePlatformCurrency } from "./Traffic";
 import { VendorsSection, VendorsView } from "./VendorsSection";
@@ -181,7 +180,9 @@ function ConfigurationSection({
  * outside or Escape does nothing. "Rule on" ticks itself once the rule has customer trunks and vendors, unless
  * switched by hand.
  */
-function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
+const copyName = (name: string) => `${name} (copy)`.slice(0, 120);
+
+function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from?: RouteRuleDetail }) {
   const [id, setId] = useState<number | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const create = useSaveRouteRule();
@@ -193,7 +194,10 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
     create
       .mutateAsync({
         id: null,
-        input: { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
+        // Clone (team trial round 6): the draft starts as a full copy of the rule, named "… (copy)".
+        input: from
+          ? toInput(from, { name: copyName(from.name), status: "inactive" })
+          : { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
       })
       .then((r) => setId(r.record.id))
       .catch((e) => setCreateError(problemText(e)));
@@ -229,7 +233,7 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
   };
   return (
     <Modal
-      title="New route rule"
+      title={from ? `Clone of ${from.name}` : "New route rule"}
       width={1180}
       onClose={() => void close()}
       onlyCloseButton
@@ -259,6 +263,7 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
                 <RuleGeneralForm
                   rule={r}
                   draft
+                  {...(from ? { draftName: copyName(from.name) } : {})}
                   hideStatus
                   onSaved={() => undefined}
                   bindSubmit={(fn) => (submitGeneral.current = fn)}
@@ -378,7 +383,6 @@ export function RouteRulesPage() {
   const qc = useQueryClient();
   const [state, setState] = useGridUrlState();
   const bulk = useBulkRouteRules();
-  const clone = useCloneRouteRule();
   const notifySaved = useNotifySaved();
   const deleteRecord = useDeleteRecord();
   const { data: me } = useMe();
@@ -418,16 +422,16 @@ export function RouteRulesPage() {
       },
     );
 
-  const duplicate = (row: RouteRuleRow) =>
-    clone.mutate(row.id, {
-      onSuccess: (r) => {
-        if (r.change) notifySaved(r.change, `Duplicated as #${r.record.id} (off)`);
-        showRule(r.record.id);
-        // The copy opens in the editor right away so it can be renamed (team trial round 1).
-        void ask<number>((done) => <RuleDialog rule={r.record} done={done} />);
-      },
-      onError: (e) => toast({ tone: "error", message: problemText(e) }),
-    });
+  // Clone (team trial round 6): the New rule window filled from the rule, nothing saved until Save; × discards it.
+  const duplicate = async (row: RouteRuleRow) => {
+    try {
+      const from = await loadRule(row.id);
+      const id = await ask<number | null>((done) => <NewRuleDialog done={done} from={from} />);
+      if (id) showRule(id);
+    } catch (e) {
+      toast({ tone: "error", message: problemText(e) });
+    }
+  };
 
   const edit = async (row: RouteRuleRow) => {
     try {
@@ -631,7 +635,7 @@ export function RouteRulesPage() {
         {
           label: "Clone",
           icon: "copy",
-          disabled: r.archived || clone.isPending,
+          disabled: r.archived,
           hint: r.archived ? "Deleted rule" : "A copy, turned off",
           onSelect: () => duplicate(r),
         },

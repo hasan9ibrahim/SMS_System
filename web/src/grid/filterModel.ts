@@ -36,8 +36,8 @@ export const isChoice = (f: FieldDescriptor) => f.type === "enum" || f.type === 
 export function filterPlaceholder(f: FieldDescriptor): string {
   if (isNumeric(f)) return f.defaultOperator === "eq" ? "=" : "≥ ≤";
   if (isTime(f)) return "from..to";
-  // Text matches from the start unless % is typed (team trial round 4).
-  return "starts with…";
+  // Text matches from the start unless % is typed (team trial round 4), or anywhere on some fields (round 6).
+  return f.matchAnywhere ? "contains…" : "starts with…";
 }
 
 const allowed = (f: FieldDescriptor, op: FilterOperator) => f.operators.includes(op);
@@ -128,20 +128,28 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
     return { field, op: "regex", value: source };
   }
   if (text.startsWith("=") && allowed(f, "eq")) return { field, op: "eq", value: text.slice(1) };
+  const pattern = f.matchAnywhere ? anywherePattern : textPattern;
   if (text.startsWith("!") && allowed(f, "not_like")) {
     const v = text.slice(1);
-    return { field, op: "not_like", value: textPattern(v) };
+    return { field, op: "not_like", value: pattern(v) };
   }
-  return { field, op: "like", value: textPattern(text) };
+  return { field, op: "like", value: pattern(text) };
 }
 
 /** Plain text starts with; a leading % alone (`%au`) searches anywhere (team trial round 4); other wildcards as typed. */
 const textPattern = (v: string) =>
   !/[%_]/.test(v) ? `${v}%` : v.length > 1 && v.startsWith("%") && !/[%_]/.test(v.slice(1)) ? `${v}%` : v;
 
+/** Plain text anywhere (fields with matchAnywhere, team trial round 6); wildcards as typed. */
+const anywherePattern = (v: string) => (!/[%_]/.test(v) ? `%${v}%` : v);
+
 /** "abc%" (starts with, the plain-text default) → "abc"; anything else null. */
 const startsWithText = (s: string) =>
   s.length > 1 && s.endsWith("%") && !/[%_]/.test(s.slice(0, -1)) ? s.slice(0, -1) : null;
+
+/** "%abc%" (anywhere, the default on matchAnywhere fields) → "abc"; anything else null. */
+const anywhereText = (s: string) =>
+  s.length > 2 && s.startsWith("%") && s.endsWith("%") && !/[%_]/.test(s.slice(1, -1)) ? s.slice(1, -1) : null;
 
 /** Text to show in the column filter box for a condition (inverse of parseColumnFilter). */
 export function formatColumnFilter(f: FieldDescriptor, c: FilterCondition | undefined): string {
@@ -172,11 +180,11 @@ export function formatColumnFilter(f: FieldDescriptor, c: FilterCondition | unde
       return isNumeric(f) ? v(c.value) : `=${v(c.value)}`;
     case "not_like": {
       const s = String(c.value);
-      return `!${startsWithText(s) ?? s}`;
+      return `!${(f.matchAnywhere ? anywhereText(s) : startsWithText(s)) ?? s}`;
     }
     case "like": {
       const s = String(c.value);
-      return startsWithText(s) ?? s;
+      return (f.matchAnywhere ? anywhereText(s) : startsWithText(s)) ?? s;
     }
     default:
       return String(c.value ?? "");

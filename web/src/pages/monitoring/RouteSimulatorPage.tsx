@@ -5,7 +5,8 @@
 // also sends it (simulated outcome in this phase). Team trial round 1: a vendor trunk can be tested
 // directly (instead of Service Type Routing), several receivers run at once, and the data coding and
 // TON / NPI follow the text and the addresses until changed by hand.
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
+import { useRouteRule, useVendorCosts } from "../../api/routing";
 import type { RouteSimulatorResult, TrunkListRow } from "@sms/contract";
 import { autoCoding, autoTonNpi, parseReceivers } from "./monitorModel";
 import { runRouteSimulator } from "../../api/observation";
@@ -81,9 +82,17 @@ function MatchedRules({ steps, none }: { steps: Step[]; none: string }) {
   );
 }
 
+/**
+ * One simulated message (team trial round 6: clearer and simpler): the verdict on one line, then the steps the
+ * message goes through, each a row that opens for its details. The route step lists the matching rule's whole split
+ * (every vendor with its share, cost and margin; the one picked this time marked), not only the picked vendor.
+ */
 function Result({ r }: { r: RouteSimulatorResult }) {
   const d = r.route.decision;
   const forced = r.forcedVendor;
+  const t = r.translation;
+  const changed = t.after.sender !== t.before.sender || t.after.receiver !== t.before.receiver;
+  const margin = r.marginPct === null ? "—" : `${r.marginPct} %`;
   return (
     <div className="rs-result">
       <div className={`rs-verdict ${r.blocked ? "tone-bad" : "tone-ok"}`}>
@@ -92,14 +101,12 @@ function Result({ r }: { r: RouteSimulatorResult }) {
           <strong>{r.blocked}</strong>
         ) : forced ? (
           <strong>
-            Sent straight to {forced.name} (routing skipped) · cost {money(forced.rate, forced.currency ?? undefined)} ·
-            margin {r.marginPct === null ? "—" : `${r.marginPct} %`}
+            Sent straight to {forced.name} (routing skipped) · cost {money(forced.rate, forced.currency ?? undefined)}{" "}
+            · margin {margin}
           </strong>
         ) : (
           <strong>
-            Routes to {d!.vendor!.name} ({d!.vendor!.decidedBy}, level {d!.vendor!.level}) · cost{" "}
-            {money(r.vendorCost?.rate, r.vendorCost?.currency)} · margin{" "}
-            {r.marginPct === null ? "—" : `${r.marginPct} %`}
+            Routes to {d!.vendor!.name} · cost {money(r.vendorCost?.rate, r.vendorCost?.currency)} · margin {margin}
           </strong>
         )}
         {r.testSms && (
@@ -109,44 +116,85 @@ function Result({ r }: { r: RouteSimulatorResult }) {
           </span>
         )}
       </div>
-      <div className="rs-cards">
-        <section className="card">
-          <h3>Translation · {r.trunk.name}</h3>
+      <div className="rs-steps">
+        <Step
+          n={1}
+          title={`Customer trunk ${r.trunk.name}`}
+          tone={t.blocked ? "error" : "good"}
+          summary={t.blocked ? "blocked by a translation rule" : changed ? "message changed by translation" : "no change"}
+        >
           <dl className="kv">
             <dt>Sender</dt>
-            <dd>
-              {r.translation.before.sender || "—"}
-              {r.translation.after.sender !== r.translation.before.sender && (
-                <>
-                  {" "}
-                  → <strong>{r.translation.after.sender}</strong>
-                </>
-              )}
-            </dd>
+            <dd>{change(t.before.sender, t.after.sender)}</dd>
             <dt>Receiver</dt>
+            <dd>{change(t.before.receiver, t.after.receiver)}</dd>
+            <dt>Translation rules</dt>
             <dd>
-              {r.translation.before.receiver}
-              {r.translation.after.receiver !== r.translation.before.receiver && (
-                <>
-                  {" "}
-                  → <strong>{r.translation.after.receiver}</strong>
-                </>
-              )}
-            </dd>
-            <dt>Rules</dt>
-            <dd>
-              <MatchedRules steps={r.translation.steps} none="none on this trunk" />
+              <MatchedRules steps={t.steps} none="none on this trunk" />
             </dd>
             <dt>HLR rule</dt>
-            <dd>{r.translation.hlr ? `${r.translation.hlr.ruleName} → ${r.translation.hlr.providerName}` : "none"}</dd>
+            <dd>{t.hlr ? `${t.hlr.ruleName} → ${t.hlr.providerName}` : "none"}</dd>
           </dl>
-        </section>
+        </Step>
+        <Step
+          n={2}
+          title={`Destination ${r.destination ?? "unknown"}`}
+          tone={r.customerRate ? "good" : "error"}
+          summary={
+            r.customerRate
+              ? `customer rate ${money(r.customerRate.rate, r.customerRate.currency)}`
+              : "no customer rate"
+          }
+        >
+          <dl className="kv">
+            <dt>MCCMNC</dt>
+            <dd className="num">{r.mccmnc ?? "—"}</dd>
+            <dt>Customer rate</dt>
+            <dd>
+              {r.customerRate ? (
+                <>
+                  {money(r.customerRate.rate, r.customerRate.currency)}{" "}
+                  <span className="muted">({r.customerRate.rateTable})</span>
+                </>
+              ) : (
+                <span className="tone-error">no rate now</span>
+              )}
+            </dd>
+            <dt>Encoding</dt>
+            <dd>
+              {r.encoding.label} · {r.encoding.chars} chars · {r.encoding.segments} SMS · {r.encoding.bytes} bytes
+            </dd>
+          </dl>
+        </Step>
+        <Step
+          n={3}
+          title={d ? `Route rule #${d.ruleId}` : "Route rule"}
+          tone={!d || d.outcome !== "route" ? "error" : "good"}
+          summary={
+            forced
+              ? "skipped: the test went straight to a vendor"
+              : !d
+                ? "no rule matched"
+                : d.outcome === "route"
+                  ? `${d.vendor!.name} picked (${d.vendor!.decidedBy})`
+                  : d.outcome.replace("_", " ")
+          }
+          open
+        >
+          {d && <RuleSplit ruleId={d.ruleId} picked={d.vendor?.vendorTrunkId ?? null} r={r} />}
+          <details className="rs-more">
+            <summary className="small">Every rule tried, in order ({r.route.tried.length})</summary>
+            <ol className="rs-tried">
+              {r.route.tried.map((x) => (
+                <li key={x.ruleId} className={x.matched ? "" : "muted"}>
+                  <span className="num">#{x.ruleId}</span> {x.name} <span className="small">({x.reason})</span>
+                </li>
+              ))}
+            </ol>
+          </details>
+        </Step>
         {r.egressSkipped.length > 0 && (
-          <section className="card">
-            <h3>Vendors skipped</h3>
-            <p className="muted small">
-              Their own vendor translation rules block this message, so the next vendor was tried.
-            </p>
+          <Step n={4} title="Vendors skipped" tone="warning" summary={`${r.egressSkipped.length} blocked by their own rules`}>
             <dl className="kv">
               {r.egressSkipped.map((x) => (
                 <Fragment key={x.vendorTrunkId}>
@@ -161,98 +209,147 @@ function Result({ r }: { r: RouteSimulatorResult }) {
                 </Fragment>
               ))}
             </dl>
-          </section>
+          </Step>
         )}
-        {r.vendorTranslation && <VendorTranslation v={r.vendorTranslation} />}
-        <section className="card">
-          <h3>Destination and rate</h3>
-          <dl className="kv">
-            <dt>Destination</dt>
-            <dd>
-              {r.destination ?? "unknown"} <span className="num muted">{r.mccmnc ?? ""}</span>
-            </dd>
-            <dt>Customer rate</dt>
-            <dd>
-              {r.customerRate ? (
-                <>
-                  {money(r.customerRate.rate, r.customerRate.currency)}{" "}
-                  <span className="muted">({r.customerRate.rateTable})</span>
-                </>
-              ) : (
-                <span className="tone-error">no rate</span>
-              )}
-            </dd>
-            <dt>Encoding</dt>
-            <dd>
-              {r.encoding.label} · {r.encoding.chars} chars · {r.encoding.segments} SMS · {r.encoding.bytes} bytes
-            </dd>
-          </dl>
-        </section>
-        <section className="card rs-wide">
-          <h3>
-            Route {d ? `· rule ${d.ruleId} (${d.outcome.replace("_", " ")})` : "· no rule matched"}
-            {forced && <span className="muted small"> · shown for reference; the test went to {forced.name}</span>}
-          </h3>
-          {d && d.candidates.length > 0 && (
-            <table className="mini-table">
-              <thead>
-                <tr>
-                  <th>Vendor trunk</th>
-                  <th className="num">Level</th>
-                  <th className="num">Cost</th>
-                  <th className="num">Margin</th>
-                  <th>Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.candidates.map((c) => (
-                  <tr
-                    key={c.vendorTrunkId}
-                    className={c.vendorTrunkId === d.vendor?.vendorTrunkId ? "row-current" : undefined}
-                  >
-                    <td>{c.name}</td>
-                    <td className="num">{c.level}</td>
-                    <td className="num">{money(c.cost)}</td>
-                    <td className="num">{c.margin === null ? "—" : c.margin.toFixed(6)}</td>
-                    <td className="small muted">{c.note ?? ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <details>
-            <summary className="small">Rules tried ({r.route.tried.length})</summary>
-            <ol className="rs-tried">
-              {r.route.tried.map((t) => (
-                <li key={t.ruleId} className={t.matched ? "" : "muted"}>
-                  <span className="num">#{t.ruleId}</span> {t.name} <span className="small">({t.reason})</span>
-                </li>
-              ))}
-            </ol>
-          </details>
-        </section>
+        {r.vendorTranslation && (
+          <Step
+            n={r.egressSkipped.length > 0 ? 5 : 4}
+            title={`Vendor trunk ${r.vendorTranslation.vendorTrunk}`}
+            tone="good"
+            summary="what the vendor receives"
+          >
+            <VendorTranslation v={r.vendorTranslation} />
+          </Step>
+        )}
       </div>
     </div>
+  );
+}
+
+const change = (a: string, b: string) => (
+  <>
+    {a || "—"}
+    {b !== a && (
+      <>
+        {" "}
+        → <strong>{b || "—"}</strong>
+      </>
+    )}
+  </>
+);
+
+/** A step of the message's path: a row with its outcome that opens for the details. */
+function Step({
+  n,
+  title,
+  summary,
+  tone,
+  open = false,
+  children,
+}: {
+  n: number;
+  title: string;
+  summary: string;
+  tone: "good" | "warning" | "error";
+  open?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="rs-step" open={open}>
+      <summary>
+        <span className="rs-step-n">{n}</span>
+        <strong>{title}</strong>
+        <span className={`rs-step-sum tone-${tone === "good" ? "good" : tone}`}>{summary}</span>
+      </summary>
+      <div className="rs-step-body">{children}</div>
+    </details>
+  );
+}
+
+/** The matching rule's vendors (every level and share), with their cost and margin here; the picked one marked. */
+function RuleSplit({ ruleId, picked, r }: { ruleId: number; picked: number | null; r: RouteSimulatorResult }) {
+  const rule = useRouteRule(ruleId);
+  const d = r.route.decision!;
+  const vendors = rule.data?.vendors ?? [];
+  const names = new Map((rule.data?.labels.vendorTrunks ?? []).map((v) => [v.id, v.name]));
+  const costs = useVendorCosts(
+    vendors.map((v) => v.vendorTrunkId),
+    { mccmncMode: "inclusive", mccmncs: r.mccmnc ? [r.mccmnc] : [], mccmncPattern: null },
+  );
+  const sell = r.customerRate?.platformRate ?? null;
+  // Least cost and quality rules rank every vendor in scope: their candidates are the list.
+  if (!vendors.length)
+    return (
+      <table className="mini-table">
+        <thead>
+          <tr>
+            <th>Vendor trunk</th>
+            <th>Level</th>
+            <th>Cost (EUR)</th>
+            <th>Margin</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {d.candidates.map((c) => (
+            <tr key={c.vendorTrunkId} className={c.vendorTrunkId === picked ? "row-current" : undefined}>
+              <td>
+                {c.vendorTrunkId === picked && <Icon name="check" size={12} />} {c.name}
+              </td>
+              <td className="num">{c.level}</td>
+              <td className="num">{money(c.cost)}</td>
+              <td className="num">{c.margin === null ? "—" : c.margin.toFixed(6)}</td>
+              <td className="small muted">{c.note ?? ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  return (
+    <>
+      <p className="small muted">
+        {rule.data?.name} · {rule.data?.huntPolicy?.replace("_", " ")} · this message went to the marked vendor
+      </p>
+      <table className="mini-table">
+        <thead>
+          <tr>
+            <th>Vendor trunk</th>
+            <th>Level</th>
+            <th>Share</th>
+            <th>Cost (EUR)</th>
+            <th>Margin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {vendors.map((v, i) => {
+            const cost = costs.get(v.vendorTrunkId)?.minEur ?? null;
+            return (
+              <tr key={i} className={v.vendorTrunkId === picked ? "row-current" : undefined}>
+                <td>
+                  {v.vendorTrunkId === picked && <Icon name="check" size={12} />}{" "}
+                  {names.get(v.vendorTrunkId) ?? `#${v.vendorTrunkId}`}
+                  {v.isBackup && <span className="muted small"> · backup</span>}
+                </td>
+                <td className="num">{v.level}</td>
+                <td className="num">{v.sharePct === null || v.sharePct === undefined ? "—" : `${v.sharePct} %`}</td>
+                <td className="num">{cost === null ? "no rate" : money(cost)}</td>
+                <td className="num">
+                  {sell === null || cost === null ? "—" : `${Math.round(((sell - cost) / sell) * 1000) / 10} %`}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
   );
 }
 
 /** Egress translation (§6.4, §13.2): what the chosen vendor trunk's rules do after routing. */
 function VendorTranslation({ v }: { v: NonNullable<RouteSimulatorResult["vendorTranslation"]> }) {
   const { before, after, steps } = v.result;
-  const change = (a: string, b: string) => (
-    <>
-      {a || "—"}
-      {b !== a && (
-        <>
-          {" "}
-          → <strong>{b || "—"}</strong>
-        </>
-      )}
-    </>
-  );
   return (
-    <section className="card">
-      <h3>Vendor translation · {v.vendorTrunk}</h3>
+    <>
       <dl className="kv">
         <dt>Sender</dt>
         <dd>{change(before.sender, after.sender)}</dd>
@@ -271,10 +368,7 @@ function VendorTranslation({ v }: { v: NonNullable<RouteSimulatorResult["vendorT
           <MatchedRules steps={steps} none="none on this vendor trunk" />
         </dd>
       </dl>
-      <p className="muted small">
-        What the vendor receives. Routing and the customer rate use the message before this step.
-      </p>
-    </section>
+    </>
   );
 }
 

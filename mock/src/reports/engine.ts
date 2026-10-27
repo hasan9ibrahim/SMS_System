@@ -615,7 +615,8 @@ export async function runMasterReport(
     const s = String(id ?? "");
     if (dim.names)
       return Number(id) ? (names.get(d)!.get(Number(id)) ?? `#${s}`) : d.startsWith("vendor") ? "not routed" : "—";
-    if (dim.lookup === "country") return s ? `${lk!.country.get(s) ?? s} (${s})` : "unknown";
+    // Country names alone (team trial round 6: "Brazil", not "Brazil (BR)").
+    if (dim.lookup === "country") return s ? (lk!.country.get(s) ?? s) : "unknown";
     if (dim.lookup === "mcc") return s ? `${lk!.mcc.get(s) ?? "Unknown country"} (${s})` : "not routed";
     if (dim.lookup === "mccmnc")
       return s

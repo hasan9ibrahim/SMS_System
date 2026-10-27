@@ -273,8 +273,8 @@ function TopVendorsDialog({ done }: { done: () => void }) {
             {search ? "No destination matches." : "No destination has a hand-picked list yet."}
           </p>
         )}
-        {q.data && q.data.total > rows.length && limit < 500 && (
-          <Button small onClick={() => setLimit(limit + 100)}>
+        {q.data && q.data.total > rows.length && (
+          <Button small onClick={() => setLimit(limit + 500)}>
             Show more
           </Button>
         )}

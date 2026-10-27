@@ -19,7 +19,6 @@ import { problemText } from "../routing/dialogs";
 import { Icon } from "../../ui/Icon";
 import { scopeUrl } from "./bulkModel";
 import { NewRateTableDialog } from "./dialogs";
-import { RateTablePanel } from "./RateTablePanel";
 import { RateTableView } from "./RateTableView";
 import { openSendRates } from "./SendRatesDialog";
 
@@ -105,7 +104,8 @@ function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridS
   );
 }
 
-function FullList() {
+/** The rate tables list; `compact` beside an open table shows names only (team trial round 6). */
+function FullList({ compact = false }: { compact?: boolean }) {
   const open = useOpenTable();
   const navigate = useTabNavigate();
   const deleteOne = useDeleteRecord();
@@ -129,6 +129,7 @@ function FullList() {
     <ListScreen<RateTableRow>
       list="rate_tables"
       page={page}
+      {...(compact ? { onlyColumns: ["name"] } : {})}
       historyScope={{ entityTypes: ["rate_table"] }}
       rowActions={(r) => [
         // Editing the rates opens the table beside the list (§13.12).
@@ -286,7 +287,10 @@ export function RateManagerPage() {
   if (tableId === null) return <FullList />;
   return (
     <div className="page rate-split">
-      <RateTablePanel openId={tableId} />
+      {/* The same rate tables list as before opening, narrower (team trial round 6; a separate side panel before). */}
+      <div className="rate-list-pane">
+        <FullList compact />
+      </div>
       <RateTableView key={tableId} id={tableId} />
     </div>
   );

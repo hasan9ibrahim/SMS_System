@@ -95,11 +95,6 @@ const BY: Record<string, ReportDimension> = {
 };
 
 const metricsOf = (cols: Column[]) => cols.map((c) => c.metric);
-/** Money and rates (6 decimals) get wider columns than counts (team trial round 3). */
-const WEIGHT: Record<Fmt, number> = { money: 1.95, rate: 1.33, int: 1.14, pct: 1, sec: 0.88, tps: 0.88 };
-const weightOf = (cols: Column[]) => cols.reduce((n, c) => n + WEIGHT[c.fmt], 0);
-/** The figures share what the name (13 %, round 6) and EDRs (5.5 %) columns leave, so the table always fits. */
-const colWidth = (cols: Column[], c: Column) => `${((WEIGHT[c.fmt] / weightOf(cols)) * 81.5).toFixed(2)}%`;
 
 /**
  * Add or remove columns, like dashboard panels (team trial round 3): grouped checkboxes, saved in the user's
@@ -241,7 +236,7 @@ function DetailPanel({
           <colgroup>
             <col className="la-col-name" />
             {cols.map((c) => (
-              <col key={c.metric} style={{ width: colWidth(cols, c) }} />
+              <col key={c.metric} />
             ))}
             <col className="la-col-act" />
           </colgroup>
@@ -323,7 +318,7 @@ function DetailSplitter({ height, onChange }: { height: number | null; onChange:
   };
   return (
     <div
-      className="la-hsplit"
+      className="h-splitter"
       role="separator"
       aria-orientation="horizontal"
       aria-label="Resize the detail panel"
@@ -464,7 +459,8 @@ function Cells({ metrics }: { metrics: Record<string, number | null> }) {
         return (
           <td
             key={c.metric}
-            className={`num${TONED.has(c.metric) ? " la-strong" : ""}${c.fmt === "pct" && TONED.has(c.metric) ? " la-center" : ""}${t ? ` la-${t}` : ""}`}
+            // Coloured figures (ASR, DLRs, margin) centred, plain or in a chip (team trial round 6: margin too).
+            className={`num${TONED.has(c.metric) ? " la-strong la-center" : ""}${t ? ` la-${t}` : ""}`}
           >
             {/* Amber and red in a filled chip (team trial round 5, third pass). */}
             {t === "warn" || t === "bad" ? <span className="la-pill">{fmt(v, c.fmt)}</span> : fmt(v, c.fmt)}
@@ -896,7 +892,7 @@ export function LiveAnalyticsPage() {
               <colgroup>
                 <col className="la-col-name" />
                 {cols.map((c) => (
-                  <col key={c.metric} style={{ width: colWidth(cols, c) }} />
+                  <col key={c.metric} />
                 ))}
                 <col className="la-col-act" />
               </colgroup>

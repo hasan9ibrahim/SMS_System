@@ -47,6 +47,7 @@ export function RuleGeneralForm({
   hint,
   hideStatus = false,
   draft = false,
+  draftName,
   bindSubmit,
 }: {
   rule: RouteRuleDetail | null;
@@ -61,6 +62,8 @@ export function RuleGeneralForm({
    * be picked, and there is no button of its own: the window's Save calls the function given to `bindSubmit`.
    */
   draft?: boolean;
+  /** The name a draft starts with (Clone: "… (copy)", team trial round 6); empty otherwise. */
+  draftName?: string;
   bindSubmit?: (submit: (patch?: Partial<RouteRuleInput>) => Promise<string | null>) => void;
 }) {
   const save = useSaveRouteRule();
@@ -69,7 +72,7 @@ export function RuleGeneralForm({
   const [g, setG] = useState<General>(
     rule
       ? {
-          name: draft ? "" : rule.name,
+          name: draft ? (draftName ?? "") : rule.name,
           priority: rule.priority,
           status: rule.status,
           routeType: rule.routeType,

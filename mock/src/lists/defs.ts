@@ -1105,7 +1105,20 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
         return parts.length ? `(${parts.join(" OR ")})` : "FALSE";
       },
     },
-    customerTrunks: { sql: `(CASE WHEN r.customer_trunk_mode = 'all' THEN 'All trunks' ELSE ${trunkNamesSql} END)` },
+    // A trunk search finds every rule that applies to a matching trunk (team trial round 6): rules on all trunks,
+    // lists naming it, and exclusions that leave it in.
+    customerTrunks: {
+      sql: `(CASE WHEN r.customer_trunk_mode = 'all' THEN 'All trunks' ELSE ${trunkNamesSql} END)`,
+      where: (op, c, p) => {
+        const v = p(op === "eq" ? String(c.value).replace(/[%_\\]/g, "\\$&") : String(c.value));
+        const match = `(${ruleTrunkName}) ILIKE ${v}`;
+        const hit = `(r.customer_trunk_mode = 'all'
+          OR (r.customer_trunk_mode = 'inclusive' AND EXISTS (SELECT 1 FROM customer_trunks t WHERE t.id = ANY(r.customer_trunk_ids) AND ${match}))
+          OR (r.customer_trunk_mode = 'exclusive' AND EXISTS (SELECT 1 FROM customer_trunks t
+                WHERE t.deleted_at IS NULL AND NOT t.id = ANY(r.customer_trunk_ids) AND ${match})))`;
+        return op === "not_like" ? `(NOT ${hit})` : hit;
+      },
+    },
     // "505" finds rules on 505 (All networks) and its networks (50501…); "50501" finds rules on 50501 only
     // (a 3-digit code is the All networks entry, not the whole country; team trial round 1).
     destination: {
@@ -1125,7 +1138,22 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
           : `(EXISTS (SELECT 1 FROM unnest(r.mccmncs) m WHERE m LIKE ${v} || '%'))`;
       },
     },
-    vendors: { sql: vendorNamesSql },
+    // Likewise for vendors (team trial round 6): the rule's own vendors, and least cost / quality rules whose scope
+    // is every vendor trunk or a list naming a matching one.
+    vendors: {
+      sql: vendorNamesSql,
+      where: (op, c, p) => {
+        const v = p(op === "eq" ? String(c.value).replace(/[%_\\]/g, "\\$&") : String(c.value));
+        const match = `(${ruleVendorName}) ILIKE ${v}`;
+        const hit = `(EXISTS (SELECT 1 FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
+              WHERE v.route_rule_id = r.id AND ${match})
+          OR (r.route_type IN ('dynamic', 'qbr') AND (r.vendor_trunk_mode = 'all'
+            OR (r.vendor_trunk_mode = 'inclusive' AND EXISTS (SELECT 1 FROM vendor_trunks vt WHERE vt.id = ANY(r.vendor_trunk_ids) AND ${match}))
+            OR (r.vendor_trunk_mode = 'exclusive' AND EXISTS (SELECT 1 FROM vendor_trunks vt
+                  WHERE vt.deleted_at IS NULL AND NOT vt.id = ANY(r.vendor_trunk_ids) AND ${match})))))`;
+        return op === "not_like" ? `(NOT ${hit})` : hit;
+      },
+    },
     messages: visCol(hide("traffic", "tr.messages", ownedRule)),
     asr: { sql: "tr.asr" },
     dlr: { sql: "tr.dlr" },

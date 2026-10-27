@@ -101,6 +101,24 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
           rateTable: rows[0].rate_table,
         };
     }
+    // No rate now: say when one starts, if it is only scheduled (team trial round 6: a new or raised customer rate
+    // waits for its notice period, so the simulator saw "no rate" with no hint why).
+    let upcomingRate: string | null = null;
+    if (m.mccmnc && !customerRate) {
+      const { rows } = await pool.query(
+        `SELECT l.rate, l.currency, l.valid_from FROM customer_trunk_rate_tables x
+           JOIN rate_lines l ON l.rate_table_id = x.rate_table_id
+          WHERE x.customer_trunk_id = $1 AND l.mccmnc = ANY($2) AND l.sender_id IS NULL AND NOT l.is_blocked
+            AND l.valid_from > now()
+          ORDER BY l.valid_from, x.position, length(l.mccmnc) DESC LIMIT 1`,
+        [b.customerTrunkId, [m.mccmnc, m.mccmnc.slice(0, 3)]],
+      );
+      if (rows[0])
+        upcomingRate = `${Number(rows[0].rate)} ${String(rows[0].currency).trim()} from ${new Date(rows[0].valid_from)
+          .toISOString()
+          .slice(0, 16)
+          .replace("T", " ")} UTC`;
+    }
     // Straight to one vendor: its own line for the network, else for the country.
     let forcedVendor: RouteSimulatorResult["forcedVendor"] = null;
     if (b.vendorTrunkId) {
@@ -154,7 +172,9 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       : !m.mccmnc
         ? "Unknown destination: no dial code matches the number"
         : !customerRate
-          ? "No customer rate for the destination (ESME_RINVDSTADR)"
+          ? upcomingRate
+            ? `No customer rate yet: ${upcomingRate} (scheduled; ESME_RINVDSTADR until then)`
+            : "No customer rate for the destination (ESME_RINVDSTADR)"
           : forcedVendor
             ? forcedVendor.rate === null
               ? `${forcedVendor.name} has no rate for the destination`

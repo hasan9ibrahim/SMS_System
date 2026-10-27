@@ -2517,7 +2517,8 @@ export const listFields: Record<ListId, ListFields> = {
     ],
     fields: [
       field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
-      field({ field: "name", label: "Rule", type: "text", defaultOperator: "like" }),
+      // Rule names are searched anywhere (team trial round 6): "OTP" finds BLOCK_VN_04_OTP.
+      field({ field: "name", label: "Rule", type: "text", defaultOperator: "like", matchAnywhere: true }),
       field({ field: "priority", label: "Priority", type: "integer", defaultOperator: "between" }),
       field({
         field: "routeType",
@@ -2546,6 +2547,7 @@ export const listFields: Record<ListId, ListFields> = {
         type: "text",
         defaultOperator: "like",
         sortable: false,
+        operators: ["like", "not_like", "eq"],
       }),
       field({
         field: "destination",
@@ -2555,7 +2557,14 @@ export const listFields: Record<ListId, ListFields> = {
         operators: ["like", "eq", "empty", "not_empty"],
         sortable: false,
       }),
-      field({ field: "vendors", label: "Vendors", type: "text", defaultOperator: "like", sortable: false }),
+      field({
+        field: "vendors",
+        label: "Vendors",
+        type: "text",
+        defaultOperator: "like",
+        operators: ["like", "not_like", "eq"],
+        sortable: false,
+      }),
       field({ field: "messages", label: "24h", type: "integer", defaultOperator: "gte" }),
       field({ field: "asr", label: "ASR", type: "percent", defaultOperator: "gte" }),
       field({ field: "dlr", label: "DLR", type: "percent", defaultOperator: "lte" }),

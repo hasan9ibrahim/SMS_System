@@ -321,3 +321,19 @@ table th.num,
   font-size: 10.5px;
 }
 
+/* Live analytics columns fit their longest figure (team trial round 6): every figure column shrinks to its content
+   and the space left goes to the name column, so nothing is wider than it needs to be. */
+.la-grid {
+  table-layout: auto;
+}
+.la-grid col.la-col-name {
+  width: auto;
+}
+.la-grid td.num,
+.la-grid thead .la-col-titles th,
+.la-grid col.la-col-act,
+.la-grid td.la-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+

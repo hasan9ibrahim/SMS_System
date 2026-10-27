@@ -91,7 +91,7 @@ test("a row's + offers every level not used above it; headers are one line (team
   assert.equal(COLUMNS.find((c) => c.metric === "submitted")?.label, "Submitted");
   assert.equal(COLUMNS.find((c) => c.metric === "tpsNow")?.label, "TPS");
   // Team trial round 3: Ported shown, HLR renamed HLR/MNP; Cached HLR/MNP hidden until added.
-  assert.equal(COLUMNS.find((c) => c.metric === "hlrTotal")?.label, "HLR/MNP");
+  assert.equal(COLUMNS.find((c) => c.metric === "hlrTotal")?.label, "HLR");
   assert.ok(COLUMNS.some((c) => c.metric === "hlrPorted"));
   assert.ok(!COLUMNS.some((c) => c.metric === "hlrCached"));
   assert.deepEqual(

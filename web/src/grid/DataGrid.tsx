@@ -492,7 +492,9 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     return naturalCells.map((c) => ({ ...c, width: Math.max(FIT_MIN, Math.floor(c.width * scale)) }));
   }, [naturalCells, boxWidth, trailing?.width]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
-  const mobile = boxWidth > 0 && boxWidth < CARD_BELOW;
+  // Cards on a phone-sized window only (team trial round 6): a narrow pane on a desktop (Rate manager beside an open
+  // table) keeps the table and scrolls sideways.
+  const mobile = boxWidth > 0 && window.innerWidth < CARD_BELOW;
 
   const virtualizer = useVirtualizer({
     count: rows.length + (result.hasNextPage ? 1 : 0),

@@ -742,30 +742,7 @@
   min-height: 160px;
   margin-top: 0;
 }
-.la-hsplit {
-  flex: none;
-  height: 8px;
-  cursor: row-resize;
-  position: relative;
-}
-.la-hsplit::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 3px;
-  width: 40px;
-  height: 2px;
-  margin-left: -20px;
-  border-radius: 1px;
-  background: var(--color-border);
-}
-.la-hsplit:hover::after {
-  background: var(--color-accent);
-}
-body.resizing-split-h {
-  cursor: row-resize;
-  user-select: none;
-}
+
 /* Network status (team trial round 4): two-line cells, IP chips with sessions, a connections bar. */
 .two-line {
   display: flex;
@@ -1048,4 +1025,59 @@ body.resizing-split-h {
 }
 .la-grid .la-bands th.la-band {
   color: color-mix(in srgb, var(--band) 85%, var(--color-text));
+}
+
+/* Route Simulator steps (team trial round 6): one row per step with its outcome, opened for the details. */
+.rs-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.rs-step {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+.rs-step > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.rs-step > summary::-webkit-details-marker {
+  display: none;
+}
+.rs-step > summary::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--color-text-secondary);
+}
+.rs-step[open] > summary::after {
+  content: "▾";
+}
+.rs-step-n {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-head-tint);
+  font-size: 11px;
+  font-weight: 600;
+}
+.rs-step-sum {
+  font-size: 12.5px;
+}
+.rs-step-sum.tone-good {
+  color: var(--color-text-secondary);
+}
+.rs-step-body {
+  padding: 4px 12px 12px 42px;
+  border-top: var(--border-width) solid var(--color-border);
+}
+.rs-more {
+  margin-top: 8px;
 }

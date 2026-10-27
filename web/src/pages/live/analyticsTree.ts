@@ -61,7 +61,7 @@ export interface Column {
 /**
  * The old platform's Analytics Report columns, plus Attempts and the two DLRs. Success (the same as
  * Submitted) and Reported were dropped at the team's request (trial round 1). Team trial round 3: Ported added,
- * HLR renamed HLR/MNP, and more columns the user can add (hidden by default), like dashboard panels.
+ * HLR renamed HLR/MNP (back to HLR in team trial round 6), and more columns the user can add (hidden by default), like dashboard panels.
  */
 export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   {
@@ -163,7 +163,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     // Under Network, with the HLR and TPS figures (team trial round 6).
     group: "Network",
   },
-  { metric: "hlrTotal", label: "HLR/MNP", title: "HLR / MNP lookups", fmt: "int", shown: true, group: "HLR/MNP" },
+  { metric: "hlrTotal", label: "HLR", title: "HLR lookups", fmt: "int", shown: true, group: "HLR/MNP" },
   {
     metric: "hlrPorted",
     label: "Ported",
@@ -183,7 +183,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   },
   {
     metric: "hlrCost",
-    label: "HLR/MNP cost",
+    label: "HLR cost",
     title: "HLR / MNP cost (platform currency)",
     fmt: "money",
     shown: true,
@@ -192,7 +192,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   // Hidden by default (team trial round 3).
   {
     metric: "hlrCached",
-    label: "Cached HLR/MNP",
+    label: "Cached HLR",
     title:
       "Of all HLR / MNP lookups, numbers already looked up in the last 24 hours: answered from the cache, not looked up again",
     fmt: "int",
@@ -201,7 +201,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   },
   {
     metric: "hlrLive",
-    label: "Live HLR/MNP",
+    label: "Live HLR",
     title: "HLR / MNP lookups sent to a provider (not from the cache)",
     fmt: "int",
     shown: false,
@@ -209,7 +209,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
   },
   {
     metric: "hlrAccomplished",
-    label: "HLR/MNP answered",
+    label: "HLR answered",
     title: "HLR / MNP lookups that returned a result",
     fmt: "int",
     shown: false,

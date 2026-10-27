@@ -2598,3 +2598,39 @@ select.chip-select {
   overflow: visible;
   row-gap: 6px;
 }
+
+/* A bar to drag a panel below a table up or down (team trial round 6: Live analytics, Market moves). */
+.h-splitter {
+  flex: none;
+  height: 8px;
+  cursor: row-resize;
+  position: relative;
+}
+.h-splitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 40px;
+  height: 2px;
+  margin-left: -20px;
+  border-radius: 1px;
+  background: var(--color-border);
+}
+.h-splitter:hover::after {
+  background: var(--color-accent);
+}
+body.resizing-split-h {
+  cursor: row-resize;
+  user-select: none;
+}
+.list-body.detail-below {
+  flex-direction: column;
+  gap: 0;
+}
+.list-body.detail-below > .detail.below {
+  flex: 0 0 42%;
+  min-width: 0;
+  min-height: 200px;
+}
+

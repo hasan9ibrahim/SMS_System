@@ -733,6 +733,7 @@ export function MarketMovesPage() {
       // and each move as a card row with a direction edge.
       above={<MoveKpis />}
       rowHeight={62}
+      detailBelow
       initialState={{
         columns: { state: { field: "state", op: "in", values: ["open"] } },
         visible: ["country", "avgChangePct", "firstEffective", "newCost", "affectedClients", "state"],
