@@ -604,17 +604,13 @@ export function RouteSimulatorPage() {
                     placeholder="Detected from the number"
                     onChange={(e) => setMccmnc(e.target.value.replace(/\D/g, ""))}
                   />
-                  <span className="muted small">Leave empty to detect it automatically</span>
                 </label>
               </div>
             ) : (
               <>
               <div className="field">
                 <SimDestinationPick value={dests} onChange={setDests} />
-                <span className="muted small">
-                  Up to {MAX_DESTS} networks; a whole country is its All networks (default) entry. A test number is made
-                  from each one&apos;s dial code.
-                </span>
+                <span className="muted small">Up to {MAX_DESTS} networks</span>
               </div>
               {testSms && (
                 // A real test needs a real phone (team trial round 6): the made-up number is replaced by this one.
@@ -672,9 +668,6 @@ export function RouteSimulatorPage() {
                 placeholder="Any (by the route rules)"
                 limit={1000}
               />
-              <span className="muted small">
-                Empty = by the route rules. Every vendor trunk is listed; type to narrow.
-              </span>
             </div>
           </section>
           <section className="sim-card">

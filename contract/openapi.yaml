@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.106.0
+  version: 0.107.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18402,6 +18402,11 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        respectNotice:
+          type: boolean
+          description: >-
+            Team trial round 6: a change that would start sooner than its client's notice period starts when the
+            notice ends instead, counted from this save, so time spent reviewing the preview never makes a breach.
         notificationNote:
           type: [string, "null"]
           maxLength: 2000

@@ -242,6 +242,10 @@ export const topics: HelpTopic[] = [
                 values: "Ticked by default.",
               },
               {
+                name: "Keywords \\Numeric and \\Alpha",
+                what: "Sender ID only. `\\Numeric` in the Sender ID pattern matches numeric Sender IDs; `\\Alpha` matches Sender IDs with at least one letter.",
+              },
+              {
                 name: "Receiver ID (regex)",
                 what: "A pattern the receiver number must match.",
                 values: "Regex. Example: `^00` (starts with 00), `^4477`.",
@@ -492,6 +496,26 @@ export const topics: HelpTopic[] = [
           {
             kind: "text",
             text: "Click **Add word** for each word or phrase (up to 50) and the **×** to remove one.",
+          },
+          {
+            kind: "fields",
+            title: "Format numbers",
+            fields: [
+              {
+                name: "Number pattern",
+                what: "Formats every number in the text with a digit pattern: `#` stands for one digit. A longer number repeats the last group. Click a common pattern to use it, or again to clear it.",
+                values: "Empty = off. Example: `### ### ###` turns `210271019` into `210 271 019`.",
+              },
+              {
+                name: "From … digits",
+                what: "Only numbers with at least this many digits are formatted.",
+                values: "2–20. Default 6.",
+              },
+              {
+                name: "Sample text",
+                what: "Type a sample to see the result next to it. Not saved.",
+              },
+            ],
           },
           {
             kind: "fields",
@@ -991,6 +1015,10 @@ export const topics: HelpTopic[] = [
             ],
           },
           {
+            kind: "text",
+            text: "Saving applies the rule everywhere it targets, straight away. With no targets the form says **Not assigned**: the rule runs on no trunk.",
+          },
+          {
             kind: "tip",
             text: "HLR rules apply to customer trunks only. If a rule runs on more than one trunk, saving asks you to confirm “Save on n trunks”.",
           },
@@ -1217,7 +1245,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "The detail panel explains the type, shows what uses the list, and has **Open entries**, **Edit** and **Delete**. Double-click a list (or press Enter) to open its entries in the same tab.",
+            text: "The detail panel shows the type and what uses the list, and has **Open entries**, **Edit** and **Delete**. Double-click a list (or press Enter) to open its entries in the same tab.",
           },
           {
             kind: "fields",

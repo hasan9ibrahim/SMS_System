@@ -22,7 +22,7 @@ import { HoverList } from "../../ui/HoverList";
 import { Button } from "../../ui/primitives";
 import { fmtWhen, openImport, RecordActions, RecordDialog } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
-import { LIST_TYPES, listTypeHint, listTypeLabel, splitTemplates, splitValues } from "./switchModel";
+import { LIST_TYPES, listTypeLabel, splitTemplates, splitValues } from "./switchModel";
 
 const page = pageForPath("/switch/number-lists")!;
 
@@ -72,7 +72,6 @@ export function NumberListDialog({
         wide
         disabled={!!fixedType}
         options={LIST_TYPES}
-        hint={listTypeHint(form.values.listType)}
       />
     </RecordDialog>
   );
@@ -120,8 +119,8 @@ function AddEntriesDialog({ list, done }: { list: NumberList; done: () => void }
         wide
         hint={
           template
-            ? `One per line. ${listTypeHint(list.listType)}`
-            : `One per line, or separated by commas. ${listTypeHint(list.listType)}`
+            ? "One per line. {n} = random digit, {code} = code found, {text} = original text"
+            : "One per line, or separated by commas"
         }
       >
         <textarea
@@ -261,7 +260,7 @@ function Lists({ open }: { open: (id: number) => void }) {
             content: (
               <dl className="kv">
                 <dt>Type</dt>
-                <dd>{listTypeHint(r.listType)}</dd>
+                <dd>{listTypeLabel(r.listType)}</dd>
                 <dt>Used by</dt>
                 <dd>
                   {r.usedBy
@@ -367,8 +366,7 @@ function Entries({ id, back }: { id: number; back: () => void }) {
                 title: `Import List · ${l.name}`,
                 help: (
                   <p>
-                    One value per line, or a CSV with a <code>value</code> (or <code>number</code>) column.{" "}
-                    {listTypeHint(l.listType)} Values already in the list are left as they are.
+                    One value per line, or a CSV with a <code>value</code> (or <code>number</code>) column.
                   </p>
                 ),
                 replaceHint: `Entries of ${l.name} missing from the file are deleted.`,

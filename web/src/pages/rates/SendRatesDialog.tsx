@@ -112,7 +112,6 @@ function SendRatesDialog({
             </ul>
           </>
         )}
-        <p className="muted small">Every e-mail is in Switch › Email logs.</p>
       </Modal>
     );
   }
@@ -131,9 +130,8 @@ function SendRatesDialog({
       }
     >
       <p>
-        Each customer trunk using {tables.length === 1 ? "this table" : "these tables"}
-        {trunks ? ` (${trunks})` : ""} gets one e-mail with its current rate sheet, to the enterprise&apos;s Rates
-        contact (Commercial when there is none).
+        Sends the current rate sheet to each customer trunk using {tables.length === 1 ? "this table" : "these tables"}
+        {trunks ? ` (${trunks})` : ""}.
       </p>
       {tables.length > 1 && <p className="muted small">{tables.map((t) => t.name).join(", ")}</p>}
       <label className="field">

@@ -39,14 +39,6 @@ export function BalancesPage() {
           onSelect: () => navigate(`/finance/transactions`),
         },
       ]}
-      above={
-        <div className="rm-trunk">
-          <span className="muted small">
-            Balance = opening + payments − usage: positive = the partner&apos;s credit, negative = owed (red; positive green). Net =
-            customer − vendor in the customer currency. Payments left off the SOA still count (§13.33).
-          </span>
-        </div>
-      }
       onExport={(s) =>
         void downloadCsv("/enterprise-balances/export", toListQuery(s)).catch((e) =>
           toast({ tone: "error", message: problemText(e) }),

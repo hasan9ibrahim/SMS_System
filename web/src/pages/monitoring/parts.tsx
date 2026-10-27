@@ -146,9 +146,6 @@ export function RequestDialog({
           </select>
         </label>
       )}
-      <p className="muted small">
-        Uses the current filters and sort. Runs in the background: at most 1,000,000 rows (XLSX 1,048,575).
-      </p>
     </Modal>
   );
 }

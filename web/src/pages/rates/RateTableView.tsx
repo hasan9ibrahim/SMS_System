@@ -253,7 +253,6 @@ function DateForm({ value, onApply }: { value: string | null; onApply: (iso: str
       }}
     >
       <EffectiveFromField label="Effective from for this batch" autoFocus value={v} onChange={setV} />
-      <p className="muted small">Rates never start in the past (traffic already sent keeps its rate).</p>
       <Button small type="submit">
         Set date
       </Button>
@@ -336,11 +335,6 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
           </tbody>
         </table>
       </div>
-      <p className="muted small">
-        {byTable
-          ? 'Or tick "Respect notice periods" and preview again: each change then starts on its client\'s earliest date.'
-          : "Or set the effective date to the earliest date with notice from the bulk bar."}
-      </p>
     </Modal>
   );
 }

@@ -528,21 +528,12 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
             {num("targetMarginPct", "Target margin for suggestions (%)", 0.5)}
             {num("digestHour", "Daily digest at (UTC hour)")}
           </div>
-          <p className="muted small">
-            Destinations can have their own hand-picked top vendors (with or without Tier 1): use{" "}
+          <p className="small">
             <button type="button" className="link" onClick={() => void openTopVendors()}>
-              Top vendors per destination
+              Top vendors per destination…
             </button>
-            . Destinations without one use the choice above: by default their Tier 1 vendors, and a destination with
-            fewer Tier 1 vendors than &quot;At least N vendors&quot; is not watched.
           </p>
           <h3 className="part-title">Auto-apply rules</h3>
-          <p className="muted small">
-            Follow market moves automatically for a client: re-price when the margin at the new market cost falls below
-            the minimum, from the move&apos;s date or the client&apos;s increase (or decrease) notice, whichever is
-            later. Each re-price is one undoable change, and the client&apos;s customer trunks get the normal rate
-            notification e-mail at once, showing the new rate and its start date.
-          </p>
           <ul className="mm-rules">
             {rules.data?.rules.map((r) => (
               <AutoRuleRow key={r.id} rule={r} />
@@ -622,9 +613,9 @@ const STATE_CHIP: Record<MarketMoveRow["state"], string> = {
 function MoveKpis() {
   const q = useMarketSummary();
   const d = q.data;
-  const tiles: { label: string; value: number | undefined; tone?: string; note?: string }[] = [
+  const tiles: { label: string; value: number | undefined; tone?: string }[] = [
     { label: "Open moves", value: d?.open },
-    { label: "Urgent", value: d?.urgent, tone: "red", note: "Large increases starting soon" },
+    { label: "Urgent", value: d?.urgent, tone: "red" },
     { label: "Increases", value: d?.up, tone: "red" },
     { label: "Decreases", value: d?.down, tone: "green" },
     { label: "For my clients", value: d?.mine, tone: "blue" },
@@ -635,7 +626,6 @@ function MoveKpis() {
         <div key={t.label} className="kpi-tile">
           <span className={`kpi-label${t.tone ? ` tone-dot ${t.tone}` : ""}`}>{t.label}</span>
           <span className="kpi-value">{t.value === undefined ? "…" : t.value.toLocaleString("en-US")}</span>
-          {t.note && <span className="muted small">{t.note}</span>}
         </div>
       ))}
     </div>

@@ -278,7 +278,7 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
             </strong>
           </FormField>
         </Section>
-        <Section title="Confirmation and SOA" columns={2} note="§13.33">
+        <Section title="Confirmation and SOA" columns={2}>
           <div className="ff check">
             <label className="toggle-inline strong-label">
               <input
@@ -372,7 +372,6 @@ function ReasonDialog({ count, done }: { count: number; done: (reason: string | 
         </span>
         <input autoFocus value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
       </label>
-      <p className="muted small">They stay in balances and finance reports (§13.33).</p>
     </Modal>
   );
 }

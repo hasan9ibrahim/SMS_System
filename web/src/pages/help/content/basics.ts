@@ -2101,7 +2101,7 @@ export const topics: HelpTopic[] = [
             items: [
               "Double-click any row (or the Total row). A panel opens on the right of the table with that row's traffic over time, newest first.",
               "Choose the **Period** of each line: **Second**, **Minute** (default), **15 minutes**, **Hour** or **Day**. **Show older** loads more lines.",
-              "Click a time line. The table above then shows only that moment, with a strip **Showing only …**.",
+              "Click a time line. The table above then shows only that moment, with a strip **Showing only …**. Levels and totals are then for that moment.",
               "Click **Show the whole period** in the strip to go back. Close the panel with ✕.",
             ],
           },

@@ -297,7 +297,6 @@ function NetworksCell({ form }: { form: FormApi<TranslationRuleInput> }) {
  * columns Pattern (regex), Number list, Length. Every condition keeps its Match / Not Match switch.
  */
 function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
-  const v = form.values;
   return (
     <div className="match-grid">
       <span className="mg-head" />
@@ -338,14 +337,6 @@ function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
       <Negate form={form} path="mccmncNegate" />
       <span />
 
-      <small className="mg-foot muted">
-        {"Sender ID keywords: \\Numeric = numeric, \\Alpha = with a letter. "}
-        {v.senderMatchCase === false
-          ? "Any capitals match (Case sensitive is off). "
-          : "Exact capitals (Case sensitive is on). "}
-        A network matches when it is picked or matches the MCCMNC pattern; a 3-digit MCC is only the country&apos;s All
-        networks entry.
-      </small>
     </div>
   );
 }
@@ -372,7 +363,7 @@ function NumberFormatField({
   const [sample, setSample] = useState("Your number is 210271019");
   const PRESETS = ["### ### ###", "###-###-####", "(###) ###-####", "## ## ## ##"];
   return (
-    <FormField label="Format numbers" wide error={error} hint="# = one digit · longer numbers repeat the last group">
+    <FormField label="Format numbers" wide error={error} hint="# = one digit">
       <div className="numfmt">
         <input
           className="input"
@@ -551,7 +542,7 @@ function TargetsEditor({
       <p className="muted small">
         {value.length === 0
           ? "Not assigned: the rule runs nowhere until it applies to something."
-          : `Applies to ${value.map(label).join(", ")}. Trunks added later to a targeted enterprise or category get the rule too.`}
+          : `Applies to ${value.map(label).join(", ")}.`}
       </p>
     </div>
   );
@@ -784,7 +775,6 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               { value: "ingress", label: "Ingress" },
               { value: "egress", label: "Egress" },
             ]}
-            hint="Override only: a customer trunk means ingress, a vendor trunk egress"
           />
           <SelectField
             form={form}
@@ -810,7 +800,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             form={form}
             path="continueAfter"
             label="Is Continue"
-            hint="Apply further rules after this one (a trunk can override)"
+            hint="Apply further rules after this one"
           />
           <FormField label="Start" hint="Empty = now">
             <DateTimeInput
@@ -830,7 +820,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
           </FormField>
         </Section>
 
-        <Section title="Applies to" columns={1} note="Saving applies the rule everywhere it targets (§13.2)">
+        <Section title="Applies to" columns={1}>
           <FormField label="Targets" wide error={form.error("targets")}>
             <TargetsEditor
               value={v.targets}
@@ -848,11 +838,10 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               { value: "bottom", label: "After the ordered rules" },
               { value: "top", label: "Before the ordered rules" },
             ]}
-            hint="Where the rule runs on a trunk that has not ordered it yet"
           />
         </Section>
 
-        <Section title="Match conditions" note="All set conditions must hold">
+        <Section title="Match conditions">
           {/* Compact grid (team trial round 5): a row per field, the pattern and the list each with Match / Not Match,
               the lengths last; the networks open in a dialog instead of a tree on the page. */}
           <MatchGrid form={form} />
@@ -860,11 +849,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
 
         {!blocks && (
           <>
-            <Section
-              title="Sender and receiver conversion"
-              columns={3}
-              note="Translation swaps a prefix; Regex Replace rewrites any part"
-            >
+            <Section title="Sender and receiver conversion" columns={3}>
               <SelectField
                 form={form}
                 path="senderConversion"
@@ -895,7 +880,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                   path="senderConversionReplacement"
                   label="Replace with"
                   maxLength={100}
-                  hint="$1..$9 insert the pattern's groups; empty removes the match"
+                  hint="$1..$9 = groups; empty removes the match"
                 />
               ) : (
                 <div />
@@ -922,13 +907,13 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                   label="Replace with"
                   maxLength={100}
                   placeholder="44$1"
-                  hint="$1..$9 insert the pattern's groups; empty removes the match"
+                  hint="$1..$9 = groups; empty removes the match"
                 />
               ) : (
                 <div />
               )}
             </Section>
-            <Section title="SMPP field overrides" columns={3} note="Empty = keep what the message has">
+            <Section title="SMPP field overrides" columns={3}>
               <SelectField form={form} path="senderTon" label="Sender TON" placeholder="Keep" options={TON_OPTIONS} />
               <SelectField form={form} path="senderNpi" label="Sender NPI" placeholder="Keep" options={NPI_OPTIONS} />
               <SelectField
@@ -963,11 +948,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                 ]}
               />
             </Section>
-            <Section
-              title="DLR Status & Error Code Convert"
-              columns={1}
-              note="The vendor's stat and error as the customer gets them"
-            >
+            <Section title="DLR Status & Error Code Convert" columns={1}>
               <FormField label="Conversions" wide error={form.error("dlrMap")}>
                 <DlrMapEditor value={v.dlrMap} onChange={(m) => form.set("dlrMap", m)} />
               </FormField>
@@ -976,7 +957,6 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               <FormField
                 label="Replace or remove words"
                 wide
-                hint="Done first, as typed (no regex); then the regex rewrite and the template"
                 error={form.error("contentWords")}
               >
                 <ContentWordsEditor value={v.contentWords ?? []} onChange={(w) => form.set("contentWords", w)} />
@@ -1012,7 +992,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                 label="Message Text"
                 maxLength={1000}
                 disabled={!v.contentRegex}
-                hint="$1..$9 insert the pattern's groups, $0 the whole match"
+                hint="$1..$9 = groups, $0 = whole match"
               />
               <TextField
                 form={form}
@@ -1097,10 +1077,7 @@ function DuplicateDialog({ rule, done }: { rule: TranslationRuleDetail; done: (i
         </>
       }
     >
-      <p className="muted">
-        An independent copy for one trunk only (§13.2): the trunk runs the copy where it ran this rule, and this rule no
-        longer runs there. Edit the copy afterwards; the other trunks keep this rule.
-      </p>
+      <p className="muted">An independent copy for one trunk only.</p>
       <label className="field">
         <span>Trunk</span>
         <select value={pick} onChange={(e) => setPick(e.target.value)} autoFocus>
@@ -1428,10 +1405,7 @@ export function TranslationRulesPage() {
             key: "test",
             label: "Test",
             content: (
-              <TranslationTest
-                run={(m) => testTranslationRule(r.id, m)}
-                note="Runs the saved rule on a sample message, whatever its status and targets."
-              />
+              <TranslationTest run={(m) => testTranslationRule(r.id, m)} />
             ),
           },
           {

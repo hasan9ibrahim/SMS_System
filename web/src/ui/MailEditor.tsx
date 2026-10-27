@@ -99,9 +99,6 @@ function ImagePicker({
         />
         {upload.isPending ? "Uploading…" : "Upload PNG, JPEG or GIF (up to 2 MB)"}
       </label>
-      <p className="muted small">
-        Uploaded images are embedded in the e-mail, so readers see them without allowing pictures.
-      </p>
       <div className="mail-assets">
         {(assets.data?.items ?? []).map((a) => (
           <button key={a.id} type="button" title={`${a.name} · ${a.width}×${a.height}`} onClick={() => onPick(a)}>

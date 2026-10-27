@@ -306,8 +306,7 @@ export function RuleCodesDialog({ initial, done }: { initial: string[]; done: (c
       footer={
         <>
           <span className="muted small fb-spacer">
-            {codes.length} code{codes.length === 1 ? "" : "s"} (a whole country is all its codes; the All networks row
-            is only the country default)
+            {codes.length} code{codes.length === 1 ? "" : "s"}
           </span>
           <Button onClick={() => done(null)}>Cancel</Button>
           <Button variant="primary" disabled={!tree.length} onClick={() => done(codes)}>

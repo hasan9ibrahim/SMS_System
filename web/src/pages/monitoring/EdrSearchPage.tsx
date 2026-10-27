@@ -340,7 +340,7 @@ function TroubleTicketDialog({ rows, done }: { rows: EdrGridRow[]; done: () => v
       onClose={done}
       footer={
         <>
-          <span className="muted small">{missing ?? "The EDRs go in the body and as a CSV attachment."}</span>
+          <span className="muted small">{missing}</span>
           <span className="fb-spacer" />
           <Button onClick={done}>Cancel</Button>
           <Button disabled={!!missing} onClick={showPreview}>
@@ -487,8 +487,7 @@ export function RepushDialog({ ids, eligible, done }: { ids: string[]; eligible:
         />
       </div>
       <p className="muted small">
-        {eligible} of {ids.length} can be re-sent: only final attempts that were not delivered. Each becomes a new
-        attempt on this trunk, marked with the repush request.
+        {eligible} of {ids.length} can be re-sent (undelivered final attempts only).
       </p>
     </Modal>
   );

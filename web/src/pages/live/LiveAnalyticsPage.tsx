@@ -215,7 +215,7 @@ function DetailPanel({
     >
       <div className="la-detail-head">
         <strong>{detail.title}</strong>
-        <span className="muted small">over time · click a time to see all traffic at that moment above</span>
+        <span className="muted small">over time</span>
         <span className="fb-spacer" />
         <label className="field inline">
           <span>Period</span>
@@ -395,7 +395,7 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
       footer={
         <>
           <span className="muted small la-cdr-note">
-            The hours-of-day filter is not applied here · loaded {loadedAt.toISOString().slice(11, 19)} UTC
+            Loaded {loadedAt.toISOString().slice(11, 19)} UTC
           </span>
           <Button
             icon="refresh"
@@ -874,7 +874,6 @@ export function LiveAnalyticsPage() {
         {settings.at && (
           <div className="la-at" role="status">
             <strong>Showing only {settings.at.label}</strong>
-            <span className="muted small">picked in the detail panel; levels and totals are for that moment</span>
             <Button
               onClick={() => {
                 setSettings({ ...settings, at: null });

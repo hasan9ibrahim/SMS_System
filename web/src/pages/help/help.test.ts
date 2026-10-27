@@ -73,3 +73,18 @@ test("search needs every word and matches word starts", () => {
   assert.ok(search(index, "marg").length > 0);
   assert.equal(search(index, "zzqx nothing").length, 0);
 });
+
+test("help pictures: each opens a topic's Quick tour, its image exists and its marks fit the picture", async () => {
+  const { existsSync } = await import("node:fs");
+  const figures = (await import("./content/figures.json")).default as Record<
+    string,
+    { src: string; marks: { x: number; y: number; bx: number; by: number }[] }
+  >;
+  const withTour = new Set(TOPICS.filter((t) => t.sections[0]?.id === "tour").map((t) => t.id));
+  assert.ok(Object.keys(figures).length >= 10);
+  assert.ok(withTour.has("route-rules") && withTour.has("grids-and-filters"));
+  for (const [id, f] of Object.entries(figures)) {
+    assert.ok(existsSync(new URL(`../../../public${f.src}`, import.meta.url)), `${id}: missing ${f.src}`);
+    for (const m of f.marks) for (const v of [m.x, m.y, m.bx, m.by]) assert.ok(v >= 0 && v <= 100, `${id}: mark off the picture`);
+  }
+});

@@ -87,7 +87,6 @@ function PatternBuilder({
   setValues,
   pattern,
   setPattern,
-  matchCase,
 }: {
   field: ConditionKey;
   kinds: PatternKind[];
@@ -97,8 +96,6 @@ function PatternBuilder({
   setValues: (v: string[]) => void;
   pattern: string;
   setPattern: (p: string) => void;
-  /** Sender only: Case sensitive (team trial round 1); receiver and content always ignore case. */
-  matchCase?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   // Sender IDs and numbers can be pasted as a list; content phrases keep their commas.
@@ -179,9 +176,6 @@ function PatternBuilder({
             />
             <Button small icon="plus" onClick={add} disabled={!draft.trim()} aria-label={`Add ${noun}`} />
           </div>
-          <small className="muted">
-            {matchCase ? "Capitals must match exactly." : "Upper and lower case match alike."}
-          </small>
         </>
       )}
     </div>
@@ -412,7 +406,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
           <>
             <Mode value={mode} onChange={setMode} allowAll />
             {mode === "all" ? (
-              <p className="muted small">Every destination, including ones added later. A pattern below narrows it.</p>
+              <p className="muted small">Every destination, including ones added later.</p>
             ) : (
               <DestinationPick value={codes} onChange={setCodes} />
             )}
@@ -471,7 +465,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
               setValues={setPatternValues}
               pattern={pattern}
               setPattern={setPattern}
-              matchCase={key === "sender" && matchCase}
             />
             {key !== "content" && (
               <div className="cond-list">
@@ -554,9 +547,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                 onChange={(v) => setTps({ ...tps, holdS: v ?? 0 })}
               />
             </div>
-            <p className="muted small">
-              The rule applies while live TPS meets the condition. Release and hold stop it flapping (§13.8).
-            </p>
           </>
         ),
         patch: () =>
@@ -633,7 +623,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                 onChange={(m) => setRevenue({ ...revenue, minMargin: m.value, minMarginUnit: m.type })}
               />
             </div>
-            <p className="muted small">Revenue in the base currency, from the customer rate at send time (§13.9).</p>
           </>
         ),
         patch: () =>
@@ -695,7 +684,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                 detailOf={(p) => `${p.destinations} destinations${p.hasCatchAll ? " + catch-all" : ""} · ${p.status}`}
                 placeholder="Choose a policy…"
               />
-              <small className="muted">Which providers are asked per destination: Switch › HLR › Policies.</small>
             </div>
             <div className="field">
               <span>For the rule's customer trunks</span>
@@ -722,7 +710,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                   ))}
                 </div>
               )}
-              <small className="muted">None ticked = all of the rule's trunks (§13.24).</small>
+              <small className="muted">None ticked = all</small>
             </div>
           </>
         ),

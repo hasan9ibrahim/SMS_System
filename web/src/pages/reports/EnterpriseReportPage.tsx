@@ -422,18 +422,10 @@ export function EnterpriseReportPage() {
             onRun={run}
             running={false}
           />
-          {applied ? (
-            <Totals data={result} visible={visible} ccy={ccy} />
-          ) : (
-            <p className="muted rp-hint">
-              Choose customers or vendors, a period and how to group the rows, then press Run report. Totals per day and
-              month are cut at midnight in each partner's billing time zone unless you pick UTC or the platform time
-              zone.
-            </p>
-          )}
+          {applied && <Totals data={result} visible={visible} ccy={ccy} />}
         </>
       }
-      shortcuts="Run report applies the settings · Columns picks the metrics · filters under each column narrow the rows"
+      shortcuts="Run report applies the settings"
     />
   );
 }

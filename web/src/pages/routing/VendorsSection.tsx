@@ -720,9 +720,6 @@ export function VendorsSection({
                     }
                     placeholder="None: the cheapest vendors in scope"
                   />
-                  <small className="muted">
-                    The profile filters vendors (tiers, quality, max rate, TPS), orders them and sets how many are used.
-                  </small>
                 </div>
               )}
               {d.routeType === "qbr" && (
@@ -791,7 +788,6 @@ export function VendorsSection({
                     value={d.skipVendorAtTpsPct ?? ""}
                     onChange={(e) => set({ skipVendorAtTpsPct: numOrNull(e.target.value) })}
                   />
-                  <small className="muted">§13.8 vendor capacity</small>
                 </label>
               )}
               {limits.has("cap") && (
@@ -861,13 +857,10 @@ export function VendorsSection({
                 </Popover>
               </>
             )}
-            <p className="muted small">
-              Revenue and cost limits per customer and vendor trunk are set on the trunk page (§13.26).
-            </p>
           </fieldset>
 
           <fieldset className="vf-group">
-            <legend>Number whitelists (checked before warm-up and split, §13.27)</legend>
+            <legend>Number whitelists</legend>
             {whitelists.map((w, i) => (
               <div key={i} className="wl-row">
                 <div className="field">

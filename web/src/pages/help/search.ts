@@ -23,6 +23,8 @@ export function blockText(b: HelpBlock): string {
       return [b.title ?? "", ...b.items.map(plain)].join(" ");
     case "fields":
       return [b.title ?? "", ...b.fields.map((f) => `${f.name}: ${plain(f.what)} ${plain(f.values ?? "")}`)].join(" ");
+    case "figure":
+      return b.figure.marks.map((m) => `${m.label}: ${plain(m.text)}`).join(" ");
   }
 }
 

@@ -247,7 +247,7 @@ function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
             required
             maxLength={200}
             autoComplete="new-password"
-            hint="Valid 24 hours; changed at first login (§13.28)"
+            hint="Valid 24 hours; changed at first login"
           />
           <div className="ff">
             <PasswordRules
@@ -306,7 +306,7 @@ function AccessOverrides({
       {open && (
         <>
           <p className="muted small">
-            Override the access group for this user only. Inherit follows {group ? group.name : "the group"}.
+            Inherit follows {group ? group.name : "the group"}.
           </p>
           <div className="tab-vis-grid">
             {catalog.sections.map((sec) => {
@@ -422,7 +422,7 @@ function TotpDialog({ row, done }: { row: UserRow; done: () => void }) {
       ) : (
         <div className="totp-setup">
           <p className="muted small">
-            Add this key to the authenticator app (or the otpauth link as a QR code), then type the code it shows.
+            Add this key to the authenticator app, then type the code it shows.
           </p>
           <div className="mono-pre selectable">{setup.secret.replace(/(.{4})/g, "$1 ").trim()}</div>
           <div className="mono-pre small selectable">{setup.otpauthUri}</div>

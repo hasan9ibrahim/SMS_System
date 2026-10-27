@@ -30,7 +30,7 @@ export function useHlrNav() {
 }
 
 /** The Providers / Rules / Policies switch shown above each grid. */
-export function ViewSwitch({ note }: { note?: string }) {
+export function ViewSwitch() {
   const { view, go } = useHlrNav();
   return (
     <div className="rm-trunk">
@@ -48,7 +48,6 @@ export function ViewSwitch({ note }: { note?: string }) {
           </button>
         ))}
       </div>
-      {note && <span className="muted small">{note}</span>}
     </div>
   );
 }

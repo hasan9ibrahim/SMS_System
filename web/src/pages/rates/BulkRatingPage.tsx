@@ -276,7 +276,7 @@ function PasteDialog({ done }: { done: (v: { mccmncs: string[]; countries: strin
       }
     >
       <label className="field">
-        <span>MCCMNC codes or country ISO codes, one per line or comma separated (e.g. from Excel)</span>
+        <span>MCCMNC or country ISO codes, one per line or comma separated</span>
         <textarea autoFocus rows={8} value={text} onChange={(e) => setText(e.target.value)} />
       </label>
       <p className="muted small">
@@ -314,8 +314,7 @@ function ApplyDialog({
       }
     >
       <p>
-        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change in History, undone as one (§13.10).
-        New rates open new versions; traffic already sent keeps its rate.
+        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change (§13.10).
       </p>
       <label className="field">
         <span>Note (optional, shown in History)</span>
@@ -460,6 +459,7 @@ export function BulkRatingPage() {
     try {
       const r = await apply.mutateAsync({
         items,
+        respectNotice,
         sendNotification: sendRn,
         ...(sendRn && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
@@ -666,8 +666,7 @@ export function BulkRatingPage() {
           <strong>
             {move.country} · {move.network} ({move.mccmnc})
           </strong>{" "}
-          {moveLabel(move)} for {overrides.length} client table{overrides.length === 1 ? "" : "s"}: review, adjust and
-          apply. The move is marked handled after applying.
+          {moveLabel(move)} for {overrides.length} client table{overrides.length === 1 ? "" : "s"}.
         </div>
       )}
       <div className="bulk-setup">
@@ -798,7 +797,7 @@ export function BulkRatingPage() {
           <div className="bulk-row">
             <label className="toggle-inline">
               <input type="checkbox" checked={respectNotice} onChange={(e) => setRespectNotice(e.target.checked)} />
-              Respect notice periods (increases start when each client's notice ends)
+              Respect notice periods
             </label>
             {(type === "set" || costPlus) && (
               <label className="toggle-inline">
@@ -941,8 +940,7 @@ export function BulkRatingPage() {
       )}
       {!preview && (
         <div className="grid-message muted bulk-empty">
-          Choose the clients' tables and destinations, pick an action and press Preview. Nothing changes until you
-          apply.
+          Choose the clients' tables and destinations, pick an action and press Preview.
         </div>
       )}
     </div>

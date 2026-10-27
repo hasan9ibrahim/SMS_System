@@ -374,7 +374,6 @@ function ExportDialog({ done }: { done: (t: "csv" | "excel" | "pdf" | null) => v
       onClose={() => done(null)}
       footer={<Button onClick={() => done(null)}>Cancel</Button>}
     >
-      <p className="muted small">Every row (up to 100,000) with the totals, in the current sort.</p>
       <div className="rp-export">
         <Button icon="download" onClick={() => done("excel")}>
           Excel
@@ -696,7 +695,7 @@ export function ReportScreen({
           },
         ],
       })}
-      shortcuts="Column filters on group-by fields apply before grouping, on metrics after (e.g. margin < 0) · click a row to drill down"
+      shortcuts="Click a row to drill down"
     />
   );
 }

@@ -59,10 +59,6 @@ export function ViewAsDialog({ done }: { done: (v: null) => void }) {
           placeholder="Choose a user…"
         />
       </div>
-      <p className="muted small">
-        See the system with that user&apos;s visibility policy (§13.17): others&apos; enterprises masked, hidden values
-        withheld. Your own rights do not change; saves to masked records are refused.
-      </p>
     </Modal>
   );
 }

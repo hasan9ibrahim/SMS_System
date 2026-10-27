@@ -230,10 +230,6 @@ function EntriesEditor({
             Add catch-all
           </Button>
         )}
-        <span className="muted small">
-          A network&apos;s own entry wins over its country&apos;s (3-digit MCC); the catch-all covers the rest. No
-          matching entry = no HLR.
-        </span>
       </div>
     </div>
   );
@@ -294,11 +290,7 @@ function PolicyEditor({ detail, done }: { detail: HlrPolicyDetail | null; done: 
             ]}
           />
         </Section>
-        <Section
-          title="Destinations"
-          columns={1}
-          note="On error or timeout the next provider is tried; cached answers are free and instant"
-        >
+        <Section title="Destinations" columns={1}>
           <EntriesEditor
             value={form.values.entries}
             errors={form.error}
@@ -526,7 +518,7 @@ export function PoliciesView() {
         icon: "plus",
         onClick: () => void openEditor(null).then((id) => id && setSelectId(id)),
       }}
-      above={<ViewSwitch note="Route rules do HLR with a policy (HLR action); it wins over the trunk's HLR rules." />}
+      above={<ViewSwitch />}
       columns={{
         id: { width: 60 },
         name: { width: 220, render: (r) => <strong>{r.name}</strong> },

@@ -196,9 +196,6 @@ export function TabVisibility({
   return (
     <div className="tab-visibility">
       <h3>Tabs and sections</h3>
-      <p className="muted small">
-        Untick a tab or section to hide it from this group. Each user can be given an exception.
-      </p>
       <div className="tab-vis-grid">
         {withTabs.map((m) => (
           <fieldset key={m.key}>

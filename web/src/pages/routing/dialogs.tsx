@@ -307,7 +307,6 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
             value={shift}
             onChange={(e) => setShift(Number(e.target.value))}
           />
-          <small className="muted">Results are kept between 1 and 100.</small>
         </label>
       )}
       {kind === "set_lcr_profile" && (
@@ -321,7 +320,6 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
             detailOf={(r) => `${r.vendorCount} vendors`}
             placeholder="Profile…"
           />
-          <small className="muted">The rules become Least cost with this profile. One Undo restores them all.</small>
         </div>
       )}
       {kind === "replace_vendor" && (
@@ -348,9 +346,6 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
               placeholder="Vendor trunk…"
             />
           </div>
-          <p className="muted small" style={{ gridColumn: "1 / -1" }}>
-            Swaps the vendor on every level, in the vendor scope and in number whitelists of the chosen rules.
-          </p>
         </div>
       )}
       <label className="field">

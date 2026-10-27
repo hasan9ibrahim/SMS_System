@@ -1095,7 +1095,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Select the invoice and read the check reasons and the **Destinations** tab.",
-              "Click **Accept**, **Reject** or **Keep pending**.",
+              "Click **Accept**, **Reject** or **Keep pending**. **Keep pending** leaves the invoice Disputed; the note is kept for reference.",
               "Type the note. It is required to reject, to keep pending, and to accept an invoice that did not match (e.g. `agreed after discussion, credit note received`).",
               "For Accept and Reject, leave **Send the acceptance e-mail to the partner** (or rejection e-mail) ticked to e-mail the partner. The preview shows the recipients and text.",
               "Click the button (it reads e.g. **Accept and e-mail**). The status changes and the decision is logged in Notes and history.",
@@ -1424,7 +1424,7 @@ export const topics: HelpTopic[] = [
               "Correct anything that needs it (see below).",
               "Tick the partners to send to and click **Send Email**.",
               "In the window, check the preview (use **Preview for** to switch partner). A red “no billing contact” means that one will fail.",
-              "Click **Send … e-mails**. The sends run in the background; a message tells you when they are done. Each one appears on [[soa-report|SOA report]] with a copy of the statement as sent.",
+              "Click **Send … e-mails**. The sends run in the background; a message tells you when they are done. Each one appears on [[soa-report|SOA report]] with a copy of the statement as sent. The statement goes as a PDF attachment.",
             ],
           },
           {

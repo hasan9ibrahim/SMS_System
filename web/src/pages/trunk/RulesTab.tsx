@@ -10,7 +10,6 @@ import { testTrunkRules } from "../../api/switchRules";
 import { useNotifySaved } from "../../history/undo";
 import { HeaderAction, type SectionProps } from "../../records/parts";
 import { toast } from "../../ui/feedback";
-import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { TranslationTest } from "../switch/TranslationTest";
 import { useDragOrder } from "../../records/dragOrder";
@@ -182,10 +181,6 @@ export function RulesTab({
           </Button>
         )}
       </HeaderAction>
-      <p className="muted small">
-        <Icon name="route" size={13} /> Rules reach a trunk through what they apply to (§13.2). Order and on/off here
-        change this trunk only; to change where an inherited rule applies, edit the rule.
-      </p>
       {/* Translation and HLR rules side by side (team trial round 4); vendor trunks have translation rules only. */}
       <div className={`rules-split${kind === "customer" ? " two" : ""}`}>
         <RuleTable
@@ -202,9 +197,6 @@ export function RulesTab({
       <section className="fsection">
         <header>
           <h2>Test</h2>
-          <span className="muted small">
-            A sample message through this trunk&apos;s rules{kind === "customer" ? " and HLR rules" : ""} (§13.2)
-          </span>
         </header>
         <TranslationTest
           run={(m) => testTrunkRules(kind, id, m)}

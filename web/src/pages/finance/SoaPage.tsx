@@ -97,7 +97,6 @@ function ReasonDialog({
         </span>
         <input autoFocus value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
       </label>
-      <p className="muted small">Logged with your name and the time (§13.31); Undo takes it back.</p>
     </Modal>
   );
 }
@@ -243,8 +242,8 @@ function EntryDialog({ st, done }: { st: SoaStatement; done: () => void }) {
       </div>
       <p className="muted small">
         {affectsBalance
-          ? `Also records a real ${kind === "payment" ? (side === "customer" ? "Receipt" : "Bill Payment") : kind === "credit_note" ? "Credit Note" : "Adjustment"} transaction for this amount, so the ${side} balance changes. Taking the entry back or Undo deletes it again.`
-          : "Shows on the SOA only; balances do not change and the SOA shows the difference."}
+          ? `Also records a real ${kind === "payment" ? (side === "customer" ? "Receipt" : "Bill Payment") : kind === "credit_note" ? "Credit Note" : "Adjustment"} transaction; the ${side} balance changes.`
+          : "SOA only; balances do not change."}
       </p>
     </Modal>
   );
@@ -291,7 +290,6 @@ function SendDialog({
       onClose={() => done(false)}
       footer={
         <>
-          <span className="muted small">PDF attached; a copy is kept in the SOA Report.</span>
           <span className="fb-spacer" />
           <Button onClick={() => done(false)}>Cancel</Button>
           <Button variant="primary" icon="mail" disabled={busy} onClick={() => void submit()}>
@@ -834,10 +832,7 @@ export function SoaPage() {
         <StatementView key={`${open}:${JSON.stringify(params)}`} enterpriseId={open} params={params} />
       )}
       {!query && (
-        <p className="muted soa-hint">
-          Choose enterprises and a period, then Search. Click an enterprise to see its statement: every line with its
-          source, the disputed block, payments left off and manual entries, before anything is sent (§13.31).
-        </p>
+        <p className="muted soa-hint">Choose enterprises and a period, then Search.</p>
       )}
     </div>
   );

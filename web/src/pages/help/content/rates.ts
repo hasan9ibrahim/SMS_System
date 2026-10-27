@@ -578,6 +578,7 @@ export const topics: HelpTopic[] = [
               "**Search** (**Country, network or MCCMNC**): type a country name, ISO code (e.g. `DE`), MCC, network name or code. `%` matches any text and `_` any one character, e.g. `2620%`. When a country matches, all its networks are shown; otherwise only the matching networks.",
               "Tick a **country** to select all its (shown) networks. A half-filled box means only some are selected. The arrow opens the country to tick single networks.",
               "The country's **All networks** row (shown in grey) is the country-level fallback code.",
+              "When you pick codes for a rule (for example top vendors per destination), a whole country counts as all its codes; the **All networks** row is only the country default.",
               "**Selected X of Y networks** counts what you picked. **Select all** / **Clear all** act on everything; while searching they become **Select shown** / **Clear shown** and act only on the search results.",
             ],
           },
@@ -666,7 +667,7 @@ export const topics: HelpTopic[] = [
               "Each new rate starts a new version from its effective date; the version before it ends at that moment. Versions that would start on or after that date are replaced.",
               'A rate equal to the current one is skipped ("Nothing changed").',
               "Blocks are applied first, then rate changes; a new version keeps the block of the rate it replaces.",
-              "On customer tables, changes that start sooner than the clients' notice period for that kind stop the save and open **Changes sooner than the client's notice**: the table lists MCCMNC, Change (with the notice days), Now, New, From and Earliest with notice. Choose **Cancel** and set a later date, or **Apply anyway** (logged with the change).",
+              "On customer tables, changes that start sooner than the clients' notice period for that kind stop the save and open **Changes sooner than the client's notice**: the table lists MCCMNC, Change (with the notice days), Now, New, From and Earliest with notice. Choose **Cancel** and set a later date (for example the Earliest with notice date, with **Effective date…** in the bulk bar), or **Apply anyway** (logged with the change).",
               "If someone else saved the same rates at the same moment, you are asked to reload, review and save again.",
               "Vendor rate changes update best buy and routing costs straight away.",
               "The whole batch is one change: the toast offers Undo, and it appears in **Change log**.",
@@ -1577,7 +1578,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The SMS version of the team's swap-deal sheet. A swap deal has two legs with the same carrier: **Us to carrier** (we send traffic to them; the carrier is our vendor, so their price is our cost) and **Carrier to us** (they send traffic to us; the carrier is our customer, so their price is our selling rate). Nothing here changes rates or routing; it is a calculator, and deals can be saved for later.",
+            text: "The SMS version of the team's swap-deal sheet. A swap deal has two legs with the same carrier: **Us to carrier** (we send traffic to them; the carrier is our vendor, so their price is our cost, and we sell the traffic on to our clients) and **Carrier to us** (they send traffic to us; the carrier is our customer, so their price is our selling rate, and our vendors carry it at a cost). Nothing here changes rates or routing; it is a calculator, and deals can be saved for later.",
           },
         ],
       },

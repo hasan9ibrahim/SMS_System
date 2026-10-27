@@ -431,10 +431,6 @@ function AssignDialog({ done }: { done: (v: boolean | null) => void }) {
           placeholder="Choose a policy…"
         />
       </div>
-      <p className="muted small">
-        A user&apos;s own assignment wins over their department&apos;s, which wins over the one for all account
-        managers. Administrators are never restricted. Replaces the target&apos;s earlier assignment.
-      </p>
     </Modal>
   );
 }

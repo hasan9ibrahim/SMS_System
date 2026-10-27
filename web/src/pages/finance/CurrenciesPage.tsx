@@ -31,7 +31,7 @@ function useView(): [View, (v: View) => void] {
   return [view, (v) => navigate(`/finance/currencies?view=${v}`, { replace: true })];
 }
 
-function ViewSwitch({ note }: { note: string }) {
+function ViewSwitch() {
   const [view, setView] = useView();
   return (
     <div className="rm-trunk">
@@ -56,7 +56,6 @@ function ViewSwitch({ note }: { note: string }) {
           </button>
         ))}
       </div>
-      <span className="muted small">{note}</span>
     </div>
   );
 }
@@ -151,7 +150,7 @@ function RateDialog({ row, done }: { row: CurrencyRateRow; done: () => void }) {
         min={0}
         step={0.000001}
         suffix={`${row.iso} per 1 EUR`}
-        hint={`Now ${rateText(row.ratePerEur)}${move ? ` · change ${move > 0 ? "+" : ""}${move.toFixed(2)} %` : ""}. Applies from now; amounts already converted keep their rate.`}
+        hint={`Now ${rateText(row.ratePerEur)}${move ? ` · change ${move > 0 ? "+" : ""}${move.toFixed(2)} %` : ""}`}
       />
     </RecordDialog>
   );
@@ -179,7 +178,7 @@ function CurrenciesView() {
         icon: "plus",
         onClick: () => void ask<void>((d) => <CurrencyDialog row={null} done={() => d()} />),
       }}
-      above={<ViewSwitch note="Rates are kept per EUR; the platform currency is used for totals." />}
+      above={<ViewSwitch />}
       onExport={(s) =>
         void downloadCsv("/currencies/export", toListQuery(s)).catch((e) =>
           toast({ tone: "error", message: problemText(e) }),
@@ -254,7 +253,7 @@ function ExchangeView() {
     const ok = await confirmDialog({
       title: "Sync Rates?",
       message: (
-        <p>Pulls today&apos;s market rate for every currency. New rates apply from now; past amounts keep theirs.</p>
+        <p>Pulls today&apos;s market rate for every currency.</p>
       ),
       ok: "Sync rates",
     });
@@ -296,7 +295,7 @@ function ExchangeView() {
           Exchange history
         </Button>
       }
-      above={<ViewSwitch note="The rate in force per currency, in units per 1 EUR." />}
+      above={<ViewSwitch />}
       columns={{
         id: { width: 90 },
         iso: { width: 80, render: (r) => <strong>{r.iso}</strong> },
@@ -372,7 +371,7 @@ function HistoryView() {
       title="Currency Exchange History"
       noSelection
       historyScope={null}
-      above={<ViewSwitch note="Every rate ever set. Filter ISO for one currency." />}
+      above={<ViewSwitch />}
       columns={{
         iso: { width: 80, render: (r) => <strong>{r.iso}</strong> },
         currency: { width: 200 },
@@ -394,7 +393,7 @@ function SourceView() {
     <div className="page">
       <PageHeader page={page} title="Rate source & alerts" />
       <div className="page-body">
-        <ViewSwitch note="Where the rates per 1 EUR come from, how often, and who is told when a currency moves." />
+        <ViewSwitch />
         <FxSettings />
       </div>
     </div>

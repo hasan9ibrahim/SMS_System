@@ -89,10 +89,6 @@ export function RouteMapPage() {
               placeholder="Choose a customer trunk…"
             />
           </div>
-          <span className="muted small">
-            Today&apos;s route for every destination the trunk sells: live rules in order, as a message without receiver
-            or content (no warm-up, no number whitelists).
-          </span>
         </div>
       }
       onExport={

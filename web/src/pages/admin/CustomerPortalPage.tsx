@@ -97,7 +97,7 @@ function PortalUserDialog({ row, done }: { row: PortalUserRow | null; done: () =
         path="otpMethod"
         label="Sign-in code"
         required
-        hint="A code is e-mailed at every portal sign-in. Turn it off only when the customer asks."
+        hint="Turn off only when the customer asks"
         options={[
           { value: "email", label: "E-mailed at every sign-in" },
           { value: "off", label: "Off" },

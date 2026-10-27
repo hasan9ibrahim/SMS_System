@@ -93,7 +93,7 @@ export function PcapTracePage() {
           </Button>
         ),
       }}
-      shortcuts="Double-click or Enter downloads · one file per 15 minutes · kept 60 days"
+      shortcuts="Double-click or Enter downloads"
     />
   );
 }

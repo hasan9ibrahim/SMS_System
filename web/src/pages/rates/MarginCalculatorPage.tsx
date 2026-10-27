@@ -121,7 +121,6 @@ function DestinationCell({ line, onChange }: { line: MarginDealLine; onChange: (
 
 function LegTable({
   title,
-  hint,
   side,
   lines,
   periodDays,
@@ -129,7 +128,6 @@ function LegTable({
   onChange,
 }: {
   title: string;
-  hint: string;
   side: "outbound" | "inbound";
   lines: MarginDealLine[];
   periodDays: number;
@@ -143,7 +141,6 @@ function LegTable({
     <section className="mc-leg" aria-label={title}>
       <header>
         <h2>{title}</h2>
-        <span className="muted small">{hint}</span>
       </header>
       <div className="mc-table-wrap">
         <table className="mc-table">
@@ -506,7 +503,6 @@ export function MarginCalculatorPage() {
 
         <LegTable
           title={`Us to ${carrier}`}
-          hint="We send this traffic to the carrier: the carrier is our vendor (cost) and we sell it on to our clients."
           side="outbound"
           lines={deal.outbound}
           periodDays={deal.periodDays}
@@ -515,7 +511,6 @@ export function MarginCalculatorPage() {
         />
         <LegTable
           title={`${deal.carrierName.trim() || "Carrier"} to us`}
-          hint="The carrier sends us this traffic: the carrier is our customer (selling rate) and our vendors carry it (cost)."
           side="inbound"
           lines={deal.inbound}
           periodDays={deal.periodDays}

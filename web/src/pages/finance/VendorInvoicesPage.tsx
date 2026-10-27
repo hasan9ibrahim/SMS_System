@@ -79,7 +79,7 @@ function useView(): [View, (v: View) => void] {
   return [view, (v) => navigate(`/finance/vendor-invoices${v === "invoices" ? "" : `?view=${v}`}`)];
 }
 
-function ViewSwitch({ note }: { note?: string }) {
+function ViewSwitch() {
   const [view, go] = useView();
   return (
     <div className="rm-trunk">
@@ -97,7 +97,6 @@ function ViewSwitch({ note }: { note?: string }) {
           </button>
         ))}
       </div>
-      {note && <span className="muted small">{note}</span>}
     </div>
   );
 }
@@ -215,7 +214,7 @@ function VendorInvoiceEditor({
             label="Timezone"
             options={tzOptions(ref?.timezones ?? ["UTC"])}
             placeholder="Partner's billing time zone"
-            hint="Our figures are cut at midnight here (§13.31)"
+            hint="Our figures are cut at midnight here"
           />
           <FormField label="Invoice Date" required error={form.error("invoiceDate")}>
             <input type="date" value={v.invoiceDate} onChange={(e) => form.set("invoiceDate", e.target.value)} />
@@ -415,9 +414,6 @@ function DecisionDialog({ inv, action, done }: { inv: VendorInvoiceDetail; actio
           )}
         </div>
       )}
-      {action === "keep_pending" && (
-        <p className="muted small">The invoice stays Disputed and waits; the note is kept for reference (§13.31).</p>
-      )}
     </Modal>
   );
 }
@@ -591,7 +587,7 @@ function ResultView({ row }: { row: VendorInvoiceRow }) {
         </dd>
         <dt>Period</dt>
         <dd>
-          {d.periodFrom} → {d.periodTo} <span className="muted small">({d.timezone}, printed on every result)</span>
+          {d.periodFrom} → {d.periodTo} <span className="muted small">({d.timezone})</span>
         </dd>
         <dt>Input period</dt>
         <dd>
@@ -826,7 +822,7 @@ function InvoicesView() {
         ];
       }}
       above={
-        <ViewSwitch note="Dispute amount = their amount − ours, from our EDRs for the same period and time zone." />
+        <ViewSwitch />
       }
       primary={{
         label: "Add",
@@ -1011,7 +1007,7 @@ function RuleDialog({ row, done }: { row: ReconRuleRow | null; done: () => void 
         </>
       }
     >
-      <Section title="Partner" columns={1} note="Enterprise › Billing › Reconciliation rules (§13.31)">
+      <Section title="Partner" columns={1}>
         {isDefault ? (
           <p className="muted small">Applies to every partner without its own rule.</p>
         ) : (
@@ -1099,7 +1095,7 @@ function RulesView() {
           : deleteOrRestore(r.id, `${r.enterprise}'s rule`, !!r.archivedAt),
       ]}
       above={
-        <ViewSwitch note="A partner matches when amount and count are within tolerance. Later rule changes do not alter past results." />
+        <ViewSwitch />
       }
       primary={{ label: "Add partner rule", icon: "plus", onClick: () => void open(null) }}
       columns={{
@@ -1217,7 +1213,7 @@ function SummaryView() {
   return (
     <div className="page charges-page">
       <PageHeader page={page} />
-      <ViewSwitch note="For the billing team: how many partner invoices matched, and the money in dispute." />
+      <ViewSwitch />
       <div className="charges-form recon-summary-form">
         <label className="field">
           <span>From month</span>

@@ -471,6 +471,7 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
           now,
           diff,
           breaches,
+          { respectNotice: body.respectNotice },
         );
         if (diff.length > before) changed.push(id);
       }

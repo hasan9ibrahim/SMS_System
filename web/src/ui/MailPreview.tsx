@@ -88,7 +88,6 @@ export function IssueList({ issues }: { issues: EmailCompatIssue[] }) {
 /** The three views and the compatibility list for a template preview. */
 export function MailPreview({ preview, sender }: { preview: EmailTemplatePreview; sender?: string | null }) {
   const [view, setView] = useState<View>("system");
-  const current = VIEWS.find((v) => v.key === view)!;
   const warnings = preview.issues.filter((i) => i.level === "warning").length;
   return (
     <div className="mail-views">
@@ -100,13 +99,13 @@ export function MailPreview({ preview, sender }: { preview: EmailTemplatePreview
             role="tab"
             aria-selected={view === v.key}
             className={view === v.key ? "on" : ""}
+            title={v.hint}
             onClick={() => setView(v.key)}
           >
             {v.label}
           </button>
         ))}
       </div>
-      <p className="muted small">{current.hint}</p>
       <div className={`mail-chrome ${view}`}>
         <div className="mail-chrome-head small">
           {sender && (

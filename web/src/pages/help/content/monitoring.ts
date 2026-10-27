@@ -1458,7 +1458,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "**From Date** and **To Date** (UTC) above the grid set the time range.",
-              "**Export** opens the **Failed EDR Request** dialog: choose CSV or XLSX and click **Generate Request**; it appears on the Failed EDR Download tab.",
+              "**Export** opens the **Failed EDR Request** dialog: choose CSV or XLSX and click **Generate Request**; it appears on the Failed EDR Download tab. The export uses the current filters and sort and runs in the background, with at most 1,000,000 rows (1,048,575 for XLSX).",
             ],
           },
           {

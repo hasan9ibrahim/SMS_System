@@ -156,8 +156,7 @@ function DestinationDialog({ row, done }: { row: Destination | null; done: () =>
       )}
       {row && (
         <p className="muted small wide">
-          The MCC and MNC of a code in use (rate lines, rules, dial codes, MO numbers) cannot change; add a new code
-          instead.
+          MCC and MNC are fixed once the code is in use.
         </p>
       )}
     </RecordDialog>
@@ -175,7 +174,7 @@ const importCodes = () =>
       <p>
         Columns <code>mcc</code>, <code>mnc</code> (empty = All networks), <code>original_mnc</code>,{" "}
         <code>country</code> (name; or <code>iso</code>) and <code>network</code>. Codes are matched by MCC + MNC:
-        existing ones are updated, new ones added. Production loads the list supplied by the team (decision 2026-10-16).
+        existing ones are updated, new ones added.
       </p>
     ),
     replaceHint:

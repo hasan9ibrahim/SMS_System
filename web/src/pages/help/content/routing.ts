@@ -630,7 +630,7 @@ export const topics: HelpTopic[] = [
               { name: "Operator", what: ">, ≥, =, ≤, < or between.", values: "Default ≥." },
               {
                 name: "Revenue (base currency)",
-                what: "The amount to compare with, in the platform currency.",
+                what: "The amount to compare with, in the platform (base) currency. Revenue comes from the customer rate at send time.",
                 values: "e.g. `0.04` (default).",
               },
               { name: "and", what: "The upper amount, for between." },
@@ -814,6 +814,10 @@ export const topics: HelpTopic[] = [
               },
               { name: "per", what: "The cap's interval.", values: "Minute, Hour or Day (default Day)." },
             ],
+          },
+          {
+            kind: "tip",
+            text: "Revenue and cost limits per customer and vendor trunk are not set here but on the trunk page (see [[trunk-record]]).",
           },
           {
             kind: "fields",
@@ -1042,7 +1046,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Replace vendor…",
-                what: "Swaps one vendor trunk for another in the selected rules.",
+                what: "Swaps one vendor trunk for another in the selected rules: on every level, in the vendor scope and in number whitelists.",
                 values: "Replace vendor trunk … with … (two different trunks).",
               },
               {

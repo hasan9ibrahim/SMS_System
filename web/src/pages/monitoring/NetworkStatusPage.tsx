@@ -168,12 +168,6 @@ export function NetworkStatusPage() {
       above={
         <div className="deck-above">
           <ViewTabs label="Side" views={[...SIDES]} value={side} onChange={go} />
-          <span className="muted small">
-            {vendor
-              ? "Our binds to each vendor, with the messages waiting."
-              : "Sessions each customer has bound to us."}{" "}
-            Refreshes every 10 s.
-          </span>
         </div>
       }
       toolbar={(state) => (

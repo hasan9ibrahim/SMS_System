@@ -144,7 +144,7 @@ function TempPasswordDialog({
       }
     >
       <p className="muted small">
-        The user must change it at first login. It is valid 24 hours, and their open sessions are signed out (§13.28).
+        Valid 24 hours, changed at first login. Open sessions are signed out.
       </p>
       <div className="fgrid cols-1">
         <PasswordInput

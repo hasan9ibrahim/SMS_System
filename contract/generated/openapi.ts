@@ -11850,6 +11850,8 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Team trial round 6: a change that would start sooner than its client's notice period starts when the notice ends instead, counted from this save, so time spent reviewing the preview never makes a breach. */
+      respectNotice?: boolean;
       /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
       notificationNote?: string | null;
       /**

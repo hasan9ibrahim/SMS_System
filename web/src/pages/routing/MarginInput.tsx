@@ -45,7 +45,7 @@ export function MarginInput({
       />
       <small className={ok ? "muted" : "tone-error"}>
         {ok
-          ? "Amount in the platform currency, or % of the sell rate; - for negative"
+          ? "Amount, or % of the sell rate"
           : "A number, with % for a percentage (e.g. 0.002, 5%, -1%)"}
       </small>
     </label>

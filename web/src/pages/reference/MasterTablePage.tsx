@@ -54,7 +54,7 @@ function ProfileDialog({ row, done }: { row: DialCodeProfile | null; done: (id: 
     >
       <TextField form={form} path="name" label="Profile" required wide maxLength={40} nullable={false} />
       {!row && (
-        <FormField label="Copy dial codes from" wide hint="Optional: start with another profile's prefixes">
+        <FormField label="Copy dial codes from" wide hint="Optional">
           <ListLookup<DialCodeProfile>
             list="dial_code_profiles"
             value={form.values.copyFromId}
@@ -110,7 +110,7 @@ function DialCodeDialog({ profile, row, done }: { profile: DialCodeProfile; row:
         maxLength={16}
         placeholder="4915"
         nullable={false}
-        hint="Digits only; the longest matching prefix decides the network"
+        hint="Digits only"
       />
       <FormField label="MCCMNC" required wide error={form.error("destinationId")}>
         <ListLookup<Destination>
@@ -243,8 +243,8 @@ function ProfileList({ open }: { open: (id: number) => void }) {
             content: (
               <p className="muted">
                 {r.isDefault
-                  ? "The default profile: numbers are resolved with these prefixes (longest match wins). It cannot be renamed or deleted."
-                  : "A named set of prefixes. Open it to add, change, import or export its dial codes."}
+                  ? "Default profile. It cannot be renamed or deleted."
+                  : "Open it to edit its dial codes."}
               </p>
             ),
           },

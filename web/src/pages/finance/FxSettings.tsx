@@ -113,11 +113,6 @@ function ProviderCard() {
   return (
     <section className="fx-card">
       <h2>Rate source</h2>
-      <p className="small">
-        Rates are kept <strong>per 1 EUR</strong>, the base currency. Pick any rate API (or a custom JSON URL). The
-        platform <strong>checks</strong> it on the schedule below but only <strong>changes a rate</strong> when it moved
-        at least the minimum change; once a day at the update time every rate is taken whatever the difference.
-      </p>
       <div className="fgrid cols-2">
         <label className="field">
           <span>Source</span>
@@ -217,7 +212,6 @@ function ProviderCard() {
                   </option>
                 ))}
               </select>
-              <small className="muted">Converted to per 1 EUR when saved.</small>
             </label>
             <label className="field">
               <span>Check the source</span>
@@ -251,7 +245,6 @@ function ProviderCard() {
                   <option value="amount">units per 1 EUR</option>
                 </select>
               </div>
-              <small className="muted">0 = every check updates the rates.</small>
             </div>
             <div className="field">
               <span>Daily update (24-hour, {p.timezone})</span>
@@ -271,7 +264,6 @@ function ProviderCard() {
                   onChange={(t) => set({ dailyUpdateAt: t })}
                 />
               </div>
-              <small className="muted">Takes every rate from the source whatever the difference.</small>
             </div>
           </>
         )}
@@ -293,10 +285,7 @@ function ProviderCard() {
         <dd>{p.nextDailyAt ? fmtWhen(p.nextDailyAt) : "—"}</dd>
       </dl>
       {p.simulated && (
-        <p className="muted small">
-          Trial phase: checks are simulated (small market moves); nothing is sent to the rate API. The key is stored
-          encrypted and never shown again. Sync Rates on Currencies takes every rate at once, like the daily update.
-        </p>
+        <p className="muted small">Trial phase: checks are simulated; nothing is sent to the rate API.</p>
       )}
       {error && <p className="error-text">{error}</p>}
       <div className="bulk-row">
@@ -426,7 +415,6 @@ function RuleDialog({ rule, done }: { rule: FxAlertRule | null; done: () => void
         <input type="checkbox" checked={v.enabled} onChange={(e) => setV({ ...v, enabled: e.target.checked })} />
         Enabled
       </label>
-      <p className="muted small">Up or down. Checked every time rates are refreshed or synced.</p>
       {error && <p className="error-text">{error}</p>}
     </Modal>
   );
@@ -486,7 +474,7 @@ function AlertsCard() {
           </tbody>
         </table>
       ) : (
-        <p className="muted small">No alert yet. Add one to be e-mailed when a currency moves against EUR.</p>
+        <p className="muted small">No alert yet.</p>
       )}
       <h3>Fired recently</h3>
       {events.data?.length ? (

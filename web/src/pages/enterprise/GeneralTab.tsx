@@ -316,7 +316,7 @@ export function GeneralTab({
       {/* Record redesign (team trial round 4): cards with a purpose line, choices as cards and joined buttons,
           notice periods and alert levels as tiles. */}
       <fieldset disabled={readOnly} className="plain-fieldset form-main">
-        <Section id="ent-general" title="General information" subtitle="Who this partner is and how it's classified.">
+        <Section id="ent-general" title="General information">
           <TextField form={form} path="name" label="Full legal name" required maxLength={200} nullable={false} />
           <TextField
             form={form}
@@ -369,7 +369,7 @@ export function GeneralTab({
               label="Account manager"
               required
               options={opts(ref.data?.accountManagers, (u) => u.displayName)}
-              hint="Later changes go through the Account managers tab (§13.30)"
+              hint="Change it later on the Account managers tab"
             />
           )}
         </Section>
@@ -426,7 +426,7 @@ export function GeneralTab({
         <Section
           id="ent-notice"
           title="Rate notice periods"
-          subtitle="Days of notice before a rate change takes effect. 0 = no notice needed."
+          subtitle="Days of notice. 0 = none."
           columns={3}
         >
           <NoticeTile form={form} path="rateNoticeDays" label="Rate increase" tone="up" />
@@ -434,7 +434,7 @@ export function GeneralTab({
           <NoticeTile form={form} path="rateNoticeDaysNew" label="New destination" tone="new" />
         </Section>
 
-        <Section id="ent-alerts" title="Alerts" subtitle="Get notified when something needs attention." columns={2}>
+        <Section id="ent-alerts" title="Alerts" columns={2}>
           <ToggleCard form={form} path="bindAlert" label="Bind alert" hint="Alert when a trunk's binds drop" />
           <ToggleCard
             form={form}
@@ -477,7 +477,7 @@ export function GeneralTab({
         <Section
           id="ent-contacts"
           title="Contacts"
-          subtitle="Who we reach for each topic. Each role needs at least one email."
+          subtitle="Each role needs at least one email."
           columns={1}
         >
           <div className="contact-grid">

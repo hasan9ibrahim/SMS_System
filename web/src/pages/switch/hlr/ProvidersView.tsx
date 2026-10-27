@@ -103,7 +103,7 @@ function ProviderEditor({ detail, done }: { detail: HlrProviderDetail | null; do
             min={0}
             max={1}
             step={0.000001}
-            hint="Per live lookup, where a destination has no price"
+            hint="Per live lookup"
           />
           <NumberField
             form={form}
@@ -114,7 +114,7 @@ function ProviderEditor({ detail, done }: { detail: HlrProviderDetail | null; do
             max={7}
             step={1}
             suffix="days"
-            hint="0 = no cache; a policy can set its own"
+            hint="0 = no cache"
           />
           <NumberField
             form={form}
@@ -132,7 +132,7 @@ function ProviderEditor({ detail, done }: { detail: HlrProviderDetail | null; do
             label="Daily Budget"
             min={0}
             step={10}
-            hint="Skipped for the day once spent; empty = no limit"
+            hint="Empty = no limit"
           />
         </Section>
         <Section title="Request" columns={2} note="{DNID} is replaced by the number">
@@ -151,8 +151,8 @@ function ProviderEditor({ detail, done }: { detail: HlrProviderDetail | null; do
             label="Password"
             hint={
               detail?.passwordSet
-                ? "Stored and never shown. Type a new one to replace it."
-                : "Never shown again after saving (§13.22)."
+                ? "Stored. Type a new one to replace it."
+                : "Never shown again after saving"
             }
           >
             <input
@@ -166,7 +166,7 @@ function ProviderEditor({ detail, done }: { detail: HlrProviderDetail | null; do
           <TextArea form={form} path="extraHeaders" label="Extra Headers" rows={3} placeholder="X-Api-Key: …" />
           <TextArea form={form} path="postData" label="Data (POST body)" rows={3} placeholder='{"msisdn":"{DNID}"}' />
         </Section>
-        <Section title="Response mapping" columns={4} note="Where each value is found in the provider's answer">
+        <Section title="Response mapping" columns={4}>
           {MAPPING_FIELDS.map((f) => (
             <TextField
               key={f.key}
@@ -329,7 +329,6 @@ function RateDialog({
           required
           wide
           error={form.error("destinationId")}
-          hint="The country’s All networks code is the default price for networks without their own"
         >
           <ListLookup<Destination>
             list="destinations"
@@ -446,8 +445,7 @@ function Prices({ id }: { id: number }) {
                 title: `Import Rate · ${p.name}`,
                 help: (
                   <p>
-                    Columns <code>mccmnc</code> and <code>rate</code> ({p.currency} per live lookup). A destination
-                    already priced is updated, a new one added.
+                    Columns <code>mccmnc</code> and <code>rate</code> ({p.currency} per live lookup).
                   </p>
                 ),
                 replaceHint: `Prices of ${p.name} missing from the file are removed (those destinations use the default rate).`,
@@ -466,8 +464,7 @@ function Prices({ id }: { id: number }) {
       above={
         <div className="rm-trunk">
           <span className="muted small">
-            Default rate {p.defaultRate} {p.currency} for every destination not listed here. A network&apos;s own price
-            wins over its country&apos;s.
+            Default rate {p.defaultRate} {p.currency} for destinations not listed.
           </span>
         </div>
       }
@@ -594,7 +591,7 @@ export function ProvidersView() {
         icon: "plus",
         onClick: () => void openEditor(null).then((id) => id && setSelectId(id)),
       }}
-      above={<ViewSwitch note="Live status and figures: last 24 hours, refreshed every 5 minutes." />}
+      above={<ViewSwitch />}
       columns={{
         id: { width: 60 },
         name: { width: 200, render: (r) => <strong>{r.name}</strong> },

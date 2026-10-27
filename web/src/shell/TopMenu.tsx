@@ -127,7 +127,7 @@ function AlertBell() {
           </button>
         </div>
         {live.incidents.length === 0 && (
-          <p className="muted pad">No incidents yet. They appear here as alert rules fire.</p>
+          <p className="muted pad">No incidents yet.</p>
         )}
         <ul className="bell-list">
           {live.incidents.slice(0, 12).map((i) => (
