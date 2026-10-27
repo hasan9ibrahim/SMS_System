@@ -244,7 +244,7 @@ ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_t
   'check_smtp','bind_down_alert','otp','forgot_password','auto_upload_rate','credit_alert','balance_alert','schedule_report_alert',
   'traffic_alert','auto_upload_rejected','daily_report','broadcast','trouble_ticket','send_soa','payment_confirmation',
   'invoice_acceptance','invoice_rejection','monitoring_alert','cleanup_summary','credential_transfer','password_reminder',
-  'template_test','currency_alert','am_handover'));
+  'template_test','currency_alert','am_handover','rn_reminder')); -- rn_reminder too, so this step never fails once RN reminders exist
 
 -- The shared AM handover template (every business company uses it until it has its own).
 INSERT INTO email_templates (business_company_id, name, email_type, subject, body)

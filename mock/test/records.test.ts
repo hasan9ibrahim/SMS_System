@@ -481,7 +481,7 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(saved.record.allowedSrcTon, null);
     assert.equal(saved.record.allowedSrcNpi, null);
     assert.equal(saved.record.maxMsgLen, null);
-    assert.deepEqual(saved.record.allowedDstTon, [1]);
+    assert.equal(saved.record.allowedDstTon, null); // any destination TON on new vendor trunks (team trial round 6)
     assert.equal(saved.record.supportMultipart, true);
     const restricted = await ok(
       "updateVendorTrunk",

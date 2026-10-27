@@ -2073,6 +2073,8 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "id", label: "Info ID", type: "integer", defaultOperator: "eq" }),
       field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
       field({ field: "columnCount", label: "Columns", type: "integer", defaultOperator: "gte" }),
+      // The template's column names (team trial round 6): EDR search switches its columns from the lookup.
+      field({ field: "columns", label: "Column names", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
       field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between" }),
       ARCHIVED,

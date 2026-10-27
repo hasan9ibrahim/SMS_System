@@ -5355,6 +5355,25 @@
    },
    {
     "sortable": true,
+    "hidden": true,
+    "field": "columns",
+    "label": "Column names",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
     "hidden": false,
     "field": "updatedBy",
     "label": "Updated By",

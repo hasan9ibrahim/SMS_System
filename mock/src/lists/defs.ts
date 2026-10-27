@@ -171,15 +171,16 @@ export const enterpriseList: ListDef<Enterprise> = {
  * its enterprise, its category or all trunks of the kind, active, and not switched off here.
  */
 /** The same rules by name, for the hover list (team trial round 1). */
-const ruleNamesSql = (kind: "customer" | "vendor") => `ARRAY(SELECT DISTINCT r.name
+// One name per rule (two rules may share a name), so the list always matches the count.
+const ruleNamesSql = (kind: "customer" | "vendor") => `ARRAY(SELECT x.name FROM (SELECT DISTINCT r.id, r.name
     FROM translation_rule_targets tg JOIN translation_rules r ON r.id = tg.translation_rule_id
    WHERE tg.trunk_kind = '${kind}' AND r.deleted_at IS NULL AND r.status = 'active'
      AND (tg.target_type = 'all' OR (tg.target_type = 'trunk' AND tg.target_id = t.id)
           OR (tg.target_type = 'enterprise' AND tg.target_id = t.enterprise_id)
           OR (tg.target_type = 'category' AND tg.target_id = t.product_category_id))
      AND NOT EXISTS (SELECT 1 FROM translation_rule_trunk_settings s
-                      WHERE s.translation_rule_id = r.id AND s.trunk_kind = '${kind}' AND s.trunk_id = t.id AND NOT s.enabled)
-   ORDER BY r.name LIMIT 100)`;
+                      WHERE s.translation_rule_id = r.id AND s.trunk_kind = '${kind}' AND s.trunk_id = t.id AND NOT s.enabled)) x
+   ORDER BY x.name LIMIT 100)`;
 const rulesCountSql = (kind: "customer" | "vendor") => `(SELECT count(DISTINCT r.id)::int
     FROM translation_rule_targets tg JOIN translation_rules r ON r.id = tg.translation_rule_id
    WHERE tg.trunk_kind = '${kind}' AND r.deleted_at IS NULL AND r.status = 'active'
@@ -2347,6 +2348,7 @@ export const edrTemplateList: ListDef<EdrTemplateRow> = {
     id: { sql: "t.id" },
     name: { sql: "t.name" },
     columnCount: { sql: "cardinality(t.columns)" },
+    columns: { sql: "array_to_string(t.columns, ',')" },
     updatedBy: { sql: "u.username" },
     updatedAt: { sql: "t.updated_at" },
     archived: { sql: "(t.deleted_at IS NOT NULL)" },
