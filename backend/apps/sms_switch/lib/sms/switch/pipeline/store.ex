@@ -523,6 +523,25 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
+  @doc false
+  # A plain counter (`Sms.Switch.Pipeline.Warmup`): its value, 0 when missing.
+  @spec counter(String.t()) :: {:ok, integer()} | {:error, term()}
+  def counter(key) do
+    case run(["GET", key]) do
+      {:ok, nil} -> {:ok, 0}
+      {:ok, n} when is_integer(n) -> {:ok, n}
+      {:ok, n} -> {:ok, String.to_integer(n)}
+      error -> error
+    end
+  end
+
+  @doc false
+  # Adds `by` to a counter kept `ttl_s` seconds.
+  @spec add(String.t(), integer(), pos_integer()) :: :ok | {:error, term()}
+  def add(key, by, ttl_s) do
+    with {:ok, _} <- run(["INCRBY", key, by]), do: ok(run(["EXPIRE", key, ttl_s]))
+  end
+
   defp ok({:ok, _}), do: :ok
   defp ok(:ok), do: :ok
   defp ok({:error, _} = error), do: error

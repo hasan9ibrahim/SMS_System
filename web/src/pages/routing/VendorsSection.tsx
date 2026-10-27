@@ -10,10 +10,12 @@ import type {
   RouteWhitelist,
   TrunkListRow,
 } from "@sms/contract";
-import { useVendorCosts } from "../../api/routing";
+import { useResetWarmup, useVendorCosts } from "../../api/routing";
 import { useReference } from "../../api/records";
 import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
+import { toast } from "../../ui/feedback";
+import { problemText } from "./dialogs";
 import { Button, Menu, Popover } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
 import { MarginInput } from "./MarginInput";
@@ -60,7 +62,8 @@ const draftOf = (r: RouteRuleDetail): Draft => ({
   vendorCategoryIds: r.vendorCategoryIds,
   vendorTrunkMode: r.vendorTrunkMode,
   vendorTrunkIds: r.vendorTrunkIds,
-  vendors: r.vendors,
+  // The Reset time is shown, never saved (team trial round 6).
+  vendors: r.vendors.map(({ warmupResetAt: _, ...v }) => v),
   whitelists: r.whitelists,
 });
 
@@ -223,12 +226,15 @@ export function VendorsSection({
   saving,
   onSave,
   onCancel,
+  bind,
 }: {
   rule: RouteRuleDetail;
   saving: boolean;
-  onSave: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
+  onSave?: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
   /** In the popup: Cancel closes it. */
   onCancel?: () => void;
+  /** New rule (team trial round 6): no button of its own; the window's one Save collects the patch. */
+  bind?: (collect: () => Partial<RouteRuleInput> | string) => void;
 }) {
   const ref = useReference();
   const initial = useMemo(() => draftOf(rule), [rule]);
@@ -262,20 +268,32 @@ export function VendorsSection({
   );
   const problems = block ? [] : shareProblems(vendors, d.huntPolicy ?? "top_down");
 
-  const save = async () => {
-    if (problems.length) return setError(problems.join(" "));
+  // The vendors' patch, or what is wrong with them.
+  const check = (): Partial<RouteRuleInput> | string => {
+    if (problems.length) return problems.join(" ");
     const bp = backupProblems(vendors, vendorName);
-    if (bp.length) return setError(bp.join(" "));
+    if (bp.length) return bp.join(" ");
     const w = d.qbrWeights;
     if (d.routeType === "qbr" && w && w.asr + w.dlr + w.delay + w.cost !== 100)
-      return setError("The quality weights must add up to 100 %.");
-    if (d.routeType === "static" && vendors.length === 0) return setError("A static rule needs at least one vendor.");
-    if (vendors.some((v) => !v.vendorTrunkId)) return setError("Choose a vendor trunk on every row.");
+      return "The quality weights must add up to 100 %.";
+    if (d.routeType === "static" && vendors.length === 0) return "A static rule needs at least one vendor.";
+    if (vendors.some((v) => !v.vendorTrunkId)) return "Choose a vendor trunk on every row.";
     if (whitelists.some((w) => !w.vendorTrunkId || (!w.numbers.length && !w.numberListId)))
-      return setError("Each whitelist needs a vendor and numbers or a number list.");
-    if (!marginOk) return setError("Minimum margin: a number, with % for a percentage.");
-    setError(await onSave({ ...d, vendorTrunkIds: scopeTrunks.map((t) => t.key) }));
+      return "Each whitelist needs a vendor and numbers or a number list.";
+    if (!marginOk) return "Minimum margin: a number, with % for a percentage.";
+    return { ...d, vendorTrunkIds: scopeTrunks.map((t) => t.key) };
   };
+  const save = async () => {
+    const p = check();
+    if (typeof p === "string") return setError(p);
+    setError((await onSave?.(p)) ?? null);
+  };
+  bind?.(() => {
+    if (!dirty) return {};
+    const p = check();
+    setError(typeof p === "string" ? p : null);
+    return p;
+  });
 
   return (
     <div className="vendors-form">
@@ -518,6 +536,7 @@ export function VendorsSection({
                             onChange={(e) => setVendor(i, { warmupResetHours: numOrNull(e.target.value) })}
                           />
                         )}
+                        {v.warmupCount ? <WarmupReset rule={rule} vendorTrunkId={v.vendorTrunkId} /> : null}
                       </td>
                       <td>
                         <button
@@ -922,17 +941,54 @@ export function VendorsSection({
       <div className="vf-save">
         {error && <span className="error-text">{error}</span>}
         <span className="fb-spacer" />
-        {onCancel ? (
-          <Button onClick={onCancel}>Cancel</Button>
-        ) : (
-          <Button disabled={!dirty || saving} onClick={() => (setD(initial), setError(null))}>
-            Revert
+        {!bind &&
+          (onCancel ? (
+            <Button onClick={onCancel}>Cancel</Button>
+          ) : (
+            <Button disabled={!dirty || saving} onClick={() => (setD(initial), setError(null))}>
+              Revert
+            </Button>
+          ))}
+        {!bind && (
+          <Button icon="save" disabled={!dirty || saving} onClick={() => void save()}>
+            Save vendors
           </Button>
         )}
-        <Button icon="save" disabled={!dirty || saving} onClick={() => void save()}>
-          Save vendors
-        </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Reset (team trial round 6, §13.27): starts the vendor's warm-up count again from 0 now. Saving or editing the rule
+ * never does; only this and the reset period. Works on the saved rule, so a vendor added since the last save waits.
+ */
+function WarmupReset({ rule, vendorTrunkId }: { rule: RouteRuleDetail; vendorTrunkId: number }) {
+  const reset = useResetWarmup();
+  const saved = rule.vendors.find((x) => x.vendorTrunkId === vendorTrunkId && x.warmupCount);
+  const at = saved?.warmupResetAt;
+  return (
+    <button
+      type="button"
+      className="icon-btn"
+      aria-label="Reset warm-up count"
+      disabled={!saved || reset.isPending}
+      title={
+        !saved
+          ? "Save first, then reset the count"
+          : `Start the warm-up count again now${at ? ` (last reset ${new Date(at).toLocaleString("en-GB")})` : ""}`
+      }
+      onClick={() =>
+        reset.mutate(
+          { id: rule.id, vendorTrunkId },
+          {
+            onSuccess: () => toast({ tone: "good", message: "Warm-up count started again" }),
+            onError: (e) => toast({ tone: "error", message: problemText(e) }),
+          },
+        )
+      }
+    >
+      <Icon name="refresh" size={13} />
+    </button>
   );
 }

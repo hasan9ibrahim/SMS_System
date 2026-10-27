@@ -10020,6 +10020,28 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/route-rules/{id}/warmup-reset": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start a vendor's warm-up count again (§13.27)
+     * @description Team trial round 6: the warm-up count of one vendor of the rule starts again from 0 now, for every customer
+     *     trunk, as when its period (warmupReset) turns over. Editing or saving the rule never restarts a count; only
+     *     this and the period do. Not a change of the rule: nothing to undo (change is null).
+     */
+    post: operations["resetRouteRuleWarmup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/{id}/restore": {
     parameters: {
       query?: never;
@@ -18075,6 +18097,11 @@ export type components = {
       warmupResetHours?: number | null;
       /** @enum {string|null} */
       warmupPer?: "rule" | "customer_trunk" | null;
+      /**
+       * Format: date-time
+       * @description When Reset last started this vendor's warm-up count again (team trial round 6); ignored on save, where the count carries on.
+       */
+      readonly warmupResetAt?: string | null;
     };
     /** @description Numbers pinned to one vendor of the rule (§13.27); checked before warm-up and split. */
     RouteWhitelist: {
@@ -34167,6 +34194,39 @@ export interface operations {
           "application/problem+json": components["schemas"]["ArchiveBlocked"];
         };
       };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  resetRouteRuleWarmup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          vendorTrunkId: components["schemas"]["Id"];
+        };
+      };
+    };
+    responses: {
+      /** @description Count restarted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

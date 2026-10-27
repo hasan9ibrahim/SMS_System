@@ -208,6 +208,42 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     assert.equal(off.change.changeType, "disable");
   });
 
+  test("warm-up Reset restarts one vendor's count; saves keep it; backups keep their vendor (team trial round 6)", async () => {
+    const f = await fixtures();
+    const created = (
+      await ok("createRouteRule", call("POST", "/route-rules", ruleInput(f, { name: `Warm ${run}` })), 201)
+    ).record;
+    assert.equal(created.vendors[0].warmupResetAt, null);
+    const reset = await ok(
+      "resetRouteRuleWarmup",
+      call("POST", `/route-rules/${created.id}/warmup-reset`, { vendorTrunkId: f.vendors[0] }),
+    );
+    assert.equal(reset.change, null);
+    const at = reset.record.vendors[0].warmupResetAt;
+    assert.ok(at, "the reset time is shown");
+    // No threshold on the second vendor: nothing to reset.
+    const bad = await call("POST", `/route-rules/${created.id}/warmup-reset`, { vendorTrunkId: f.vendors[1] });
+    assert.equal(bad.statusCode, 400);
+    check("resetRouteRuleWarmup", bad);
+
+    const input = {
+      ...ruleInput(f, { name: `Warm ${run}` }),
+      vendors: [
+        { level: 1, vendorTrunkId: f.vendors[0], sharePct: 60, warmupCount: 900, warmupReset: "day", warmupPer: "rule" },
+        { level: 1, vendorTrunkId: f.vendors[1], sharePct: 40 },
+        { level: 1, vendorTrunkId: f.vendors[2], isBackup: true, backupForVendorTrunkId: f.vendors[0] },
+      ],
+    };
+    const edited = await ok("updateRouteRule", call("PUT", `/route-rules/${created.id}`, input));
+    assert.deepEqual(edited.change.diff.map((d: { field: string }) => d.field), ["vendors"]);
+    assert.equal(edited.record.vendors[0].warmupResetAt, at, "a save keeps the count going");
+    const backup = edited.record.vendors.find((v: { isBackup: boolean }) => v.isBackup);
+    assert.equal(backup.backupForVendorTrunkId, f.vendors[0]);
+    // Saving the same vendors again is no change at all.
+    const again = await ok("updateRouteRule", call("PUT", `/route-rules/${created.id}`, input));
+    assert.equal(again.change, null);
+  });
+
   test("duplicate is an inactive copy; bulk is one change; archive and restore", async () => {
     const f = await fixtures();
     const created = (

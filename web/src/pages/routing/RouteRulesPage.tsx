@@ -93,12 +93,23 @@ export function readyToRun(r: RouteRuleDetail): boolean {
   return customers && vendors;
 }
 
+type Collect = () => Partial<RouteRuleInput> | string;
+
 /**
  * Configuration (team trial round 2): Category, Customer trunks and Destination, each a block like the vendors,
  * then the vendors. In the detail panel a block opens its editor in place; in New rule (`expanded`) every block is
- * open and the vendors are edited in place too. Each save is one change (§13.10).
+ * open, the vendors are edited in place too, and the blocks have no Save of their own: the window's one Save gathers
+ * them through `bind` (team trial round 6). Each save is one change (§13.10).
  */
-function ConfigurationSection({ id, expanded = false }: { id: number; expanded?: boolean }) {
+function ConfigurationSection({
+  id,
+  expanded = false,
+  bind,
+}: {
+  id: number;
+  expanded?: boolean;
+  bind?: (key: string, collect: Collect) => void;
+}) {
   const rule = useRouteRule(id);
   const { save, saving } = useSaver(rule.data);
   const [open, setOpen] = useState<ConditionKey | null>(null);
@@ -131,16 +142,21 @@ function ConfigurationSection({ id, expanded = false }: { id: number; expanded?:
           </div>
           {(expanded || open === k) && !locked && (
             <InlineCondition
-              key={`${k}${r.updatedAt}`}
+              // In New rule the edits wait for the window's Save, so a saved "other condition" must not reset them.
+              key={expanded ? k : `${k}${r.updatedAt}`}
               conditionKey={k}
               rule={r}
               saving={saving}
-              onSave={async (patch) => {
-                const err = await save(patch, `${LABEL[k]} saved`);
-                if (!err && !expanded) setOpen(null);
-                return err;
-              }}
-              {...(expanded ? {} : { onCancel: () => setOpen(null) })}
+              {...(expanded
+                ? { bind: (c: Collect) => bind?.(k, c) }
+                : {
+                    onSave: async (patch: Partial<RouteRuleInput>) => {
+                      const err = await save(patch, `${LABEL[k]} saved`);
+                      if (!err) setOpen(null);
+                      return err;
+                    },
+                    onCancel: () => setOpen(null),
+                  })}
             />
           )}
         </section>
@@ -150,7 +166,7 @@ function ConfigurationSection({ id, expanded = false }: { id: number; expanded?:
           <strong>Vendors</strong>
         </div>
         {expanded ? (
-          <VendorsSection key={r.updatedAt} rule={r} saving={saving} onSave={(patch) => save(patch, "Vendors saved")} />
+          <VendorsSection rule={r} saving={saving} bind={(c) => bind?.("vendors", c)} />
         ) : (
           <VendorsSectionFor id={id} />
         )}
@@ -186,9 +202,10 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
   const [manual, setManual] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitGeneral = useRef<((patch?: Partial<RouteRuleInput>) => Promise<string | null>) | null>(null);
+  const blocks = useRef(new Map<string, Collect>());
   const r = id !== null ? rule.data : undefined;
-  const ready = r ? readyToRun(r) : false;
-  const on = manual ?? ready;
+  // Unless switched by hand, Save turns the rule on when it has what it needs to run.
+  const on = manual ?? true;
   const [busy, setBusy] = useState(false);
   const close = async () => {
     setBusy(true);
@@ -197,8 +214,15 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
   };
   const saveRule = async () => {
     if (!submitGeneral.current) return;
+    // One Save for the whole window (team trial round 6): every block's edits and Rule on, as one change.
+    const patches = [...blocks.current.values()].map((c) => c());
+    const bad = patches.find((p): p is string => typeof p === "string");
+    if (bad) return setError(bad);
+    setError(null);
+    const merged: Partial<RouteRuleInput> = Object.assign({}, ...patches);
+    const run = manual ?? (r ? readyToRun({ ...r, ...merged } as RouteRuleDetail) : false);
     setBusy(true);
-    const err = await submitGeneral.current({ status: on ? "active" : "inactive" });
+    const err = await submitGeneral.current({ ...merged, status: run ? "active" : "inactive" });
     setBusy(false);
     if (err) return setError(err);
     done(id);
@@ -211,18 +235,11 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
       onlyCloseButton
       footer={
         <>
-          <label className="toggle-inline" title="On by default once the rule has customer trunks and vendors">
+          <label className="toggle-inline" title="Saved on when it has customer trunks and vendors (unless switched off); × discards the rule">
             <input type="checkbox" checked={on} disabled={!r} onChange={(e) => setManual(e.target.checked)} />
             Rule on
           </label>
-          {r && !ready && (
-            <span className="muted small">
-              Choose the customer trunks{r.routeType === "block" ? "" : " and the vendors"}; the rule then turns on by
-              default.
-            </span>
-          )}
           <span className="fb-spacer" />
-          <span className="muted small">× discards the rule</span>
           <Button variant="primary" icon="save" onClick={() => void saveRule()} disabled={!r || busy}>
             Save
           </Button>
@@ -247,7 +264,7 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
                   bindSubmit={(fn) => (submitGeneral.current = fn)}
                 />
               </section>
-              <ConfigurationSection id={r.id} expanded />
+              <ConfigurationSection id={r.id} expanded bind={(k, c) => blocks.current.set(k, c)} />
               <section className="cfg-block">
                 <div className="cfg-head">
                   <strong>Other conditions</strong>

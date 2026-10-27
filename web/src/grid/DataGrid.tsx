@@ -342,6 +342,12 @@ export function Withheld({ text }: { text: string }) {
   );
 }
 
+/** The x of each column's right edge, after the 40 px check column. */
+function lineOffsets(cells: { width: number }[]): number[] {
+  let x = 40;
+  return cells.map((c) => (x += c.width) - 1);
+}
+
 export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) {
   const {
     list,
@@ -704,6 +710,14 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
               />
             );
           })}
+          {/* Column lines (team trial round 6): one overlay over the rows, at each column's right edge. */}
+          {!mobile && (
+            <div className="g-lines" style={{ height: virtualizer.getTotalSize() }} aria-hidden>
+              {lineOffsets(cells).map((x) => (
+                <span key={x} style={{ left: x }} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

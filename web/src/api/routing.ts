@@ -39,6 +39,16 @@ export function useSaveRouteRule() {
   });
 }
 
+/** Starts one vendor's warm-up count again from 0 now (team trial round 6, §13.27); not a change of the rule. */
+export function useResetWarmup() {
+  const refresh = useRefreshRecords();
+  return useMutation({
+    mutationFn: ({ id, vendorTrunkId }: { id: number; vendorTrunkId: number }): Promise<RouteRuleSaved> =>
+      unwrap(api.POST("/route-rules/{id}/warmup-reset", { params: { path: { id } }, body: { vendorTrunkId } })),
+    onSuccess: () => void refresh(),
+  });
+}
+
 /** Removes a New rule draft that was never saved (team trial round 3). */
 export function useDiscardRouteRule() {
   const refresh = useRefreshRecords();

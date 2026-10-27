@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.101.0
+  version: 0.102.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14748,6 +14748,46 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /route-rules/{id}/warmup-reset:
+    post:
+      tags: [routing]
+      operationId: resetRouteRuleWarmup
+      summary: "Start a vendor's warm-up count again (§13.27)"
+      description: |
+        Team trial round 6: the warm-up count of one vendor of the rule starts again from 0 now, for every customer
+        trunk, as when its period (warmupReset) turns over. Editing or saving the rule never restarts a count; only
+        this and the period do. Not a change of the rule: nothing to undo (change is null).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorTrunkId]
+              additionalProperties: false
+              properties:
+                vendorTrunkId:
+                  $ref: "#/components/schemas/Id"
+      responses:
+        "200":
+          description: Count restarted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -32395,6 +32435,13 @@ components:
         warmupPer:
           type: [string, "null"]
           enum: [rule, customer_trunk, null]
+        warmupResetAt:
+          type: [string, "null"]
+          format: date-time
+          readOnly: true
+          description: >-
+            When Reset last started this vendor's warm-up count again (team trial round 6); ignored on save, where the
+            count carries on.
 
     RouteWhitelist:
       type: object

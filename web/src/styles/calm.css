@@ -111,12 +111,12 @@
 }
 .la-grid thead th,
 .la-grid thead th.num {
-  text-align: center;
+  text-align: left;
 }
 .la-grid thead th .la-sort {
   display: block;
-  margin: 0 auto;
-  text-align: center;
+  margin: 0;
+  text-align: left;
 }
 .la-grid td {
   overflow: hidden;
@@ -124,12 +124,12 @@
   white-space: nowrap;
 }
 
-/* Grid headers centred in their cells (team trial round 5). */
+/* Grid headers read from the left in their cells (team trial round 6; centred in round 5). */
 .gh-cell,
 .gh-cell.align-right,
 .gh-cell.align-center {
-  justify-content: center;
-  text-align: center;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 /* Status: "Active" is the normal state, so plain text with a small green dot; "Inactive" is greyed. */
@@ -252,3 +252,34 @@
 .la-grid td.la-actions .la-act + .la-act {
   margin-left: 3px;
 }
+
+/* Team trial round 6: column lines in the data grids (route rules, rates, EDRs …), so wide rows read across. The
+   body's lines are one overlay (DataGrid .g-lines), so cells keep their own layout. */
+.grid:not(.mobile) .gh-cell,
+.grid:not(.mobile) .gf-cell {
+  border-right: var(--border-width) solid var(--color-border);
+}
+.g-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.g-lines span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: var(--border-width) solid color-mix(in srgb, var(--color-border) 75%, var(--color-panel));
+}
+
+/* Team trial round 6: every table header reads from the left, whatever its column's alignment. */
+th,
+thead th.num,
+table th.num,
+.vt-head .vt-cell {
+  text-align: left !important;
+  justify-content: flex-start !important;
+}
+

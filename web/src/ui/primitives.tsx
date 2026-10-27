@@ -1,8 +1,11 @@
 // Shared controls. Styling follows §15.3: one filled accent button per page (variant
 // "primary"), all others outlined or plain; 7–10 px corners, 1 px borders.
 import {
+  createContext,
+  useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -51,11 +54,17 @@ export function IconButton({
 }
 
 /** Closes on outside click and Escape. */
-export function useDismiss(open: boolean, onClose: () => void, refs: RefObject<HTMLElement | null>[]) {
+export function useDismiss(
+  open: boolean,
+  onClose: () => void,
+  refs: RefObject<HTMLElement | null>[],
+  inside?: Set<HTMLElement>,
+) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (refs.some((r) => r.current?.contains(e.target as Node))) return;
+      if (inside && [...inside].some((el) => el.contains(e.target as Node))) return;
       onClose();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -67,8 +76,12 @@ export function useDismiss(open: boolean, onClose: () => void, refs: RefObject<H
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose, refs]);
+  }, [open, onClose, refs, inside]);
 }
+
+/** The panels of popovers opened from inside a popover, for each enclosing popover: a click in a nested picker (e.g.
+ * the vendor trunk lookup in the grid's vendors popup) is not a click outside (team trial round 6). */
+const NestedPanels = createContext<Set<HTMLElement>[]>([]);
 
 /** A floating panel anchored under (or above) an element, rendered in a portal. */
 export function Popover({
@@ -88,7 +101,18 @@ export function Popover({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  useDismiss(open, onClose, [panel, anchor]);
+  const [nested] = useState(() => new Set<HTMLElement>());
+  const ancestors = useContext(NestedPanels);
+  const chain = useMemo(() => [...ancestors, nested], [ancestors, nested]);
+  useDismiss(open, onClose, [panel, anchor], nested);
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (!open || !el) return;
+    for (const s of ancestors) s.add(el);
+    return () => {
+      for (const s of ancestors) s.delete(el);
+    };
+  }, [open, ancestors]);
   useLayoutEffect(() => {
     if (!open || !anchor.current) return;
     const r = anchor.current.getBoundingClientRect();
@@ -108,7 +132,7 @@ export function Popover({
       style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
       role="dialog"
     >
-      {children}
+      <NestedPanels.Provider value={chain}>{children}</NestedPanels.Provider>
     </div>,
     document.body,
   );

@@ -111,6 +111,22 @@ defmodule Sms.Switch.Rules.RouteTest do
 
     assert decide(warm, msg(warmup_sent: 10)).vendor.decided_by == :warmup
     refute decide(warm, msg(warmup_sent: 500)).vendor.decided_by == :warmup
+
+    # The switch asks each vendor for its own count (team trial round 6); an unknown count skips warm-up.
+    two =
+      rule(
+        vendors: [
+          %{level: 1, vendor_trunk_id: 10, share_pct: 60, is_backup: false, warmup_count: 2},
+          %{level: 1, vendor_trunk_id: 11, share_pct: 40, is_backup: false, warmup_count: 2}
+        ]
+      )
+
+    counts = fn c -> fn _rule, v -> c[v.vendor_trunk_id] end end
+    first = decide(two, msg(warmup_sent: counts.(%{10 => 2, 11 => 1})))
+    assert {vendor_id(first), first.vendor.decided_by} == {11, :warmup}
+
+    refute decide(two, msg(warmup_sent: counts.(%{10 => nil, 11 => 2}))).vendor.decided_by ==
+             :warmup
   end
 
   test "least cost skips vendors below the margin; QBR orders by delivery; block blocks" do

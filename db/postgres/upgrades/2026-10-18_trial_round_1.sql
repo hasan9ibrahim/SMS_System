@@ -646,3 +646,6 @@ ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS content_number_format tex
   CHECK (content_number_format IS NULL OR (length(content_number_format) <= 40 AND content_number_format LIKE '%#%'));
 ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS content_number_min_digits smallint
   CHECK (content_number_min_digits BETWEEN 2 AND 20);
+
+-- Warm-up Reset (migration 083, team trial round 6): when a route rule vendor's warm-up count was last restarted.
+ALTER TABLE route_rule_vendors ADD COLUMN IF NOT EXISTS warmup_reset_at timestamptz;

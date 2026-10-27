@@ -1,7 +1,7 @@
 // Editor for one condition of a route rule (§6.3 General Information, §13.8 TPS, §13.9
 // revenue, §13.24 HLR action). Opened from a condition chip or "+ Add condition"; Save
 // writes the whole rule once, so every edit is one undoable change (§13.10).
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type {
   CompareOp,
   HlrAction,
@@ -781,7 +781,8 @@ export function ConditionEditor({
 
 /**
  * One condition edited in place (team trial round 2): Category, Customer trunks and Destination under
- * Configuration, in the detail panel and in New rule. Save writes it as one change.
+ * Configuration, in the detail panel and in New rule. Save writes it as one change. With `bind` (New rule, team trial
+ * round 6) it has no button of its own: the window's one Save collects the patch.
  */
 export function InlineCondition({
   conditionKey,
@@ -789,30 +790,49 @@ export function InlineCondition({
   saving,
   onSave,
   onCancel,
+  bind,
 }: {
   conditionKey: ConditionKey;
   rule: RouteRuleDetail;
   saving: boolean;
-  onSave: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
+  onSave?: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
   onCancel?: () => void;
+  bind?: (collect: () => Partial<RouteRuleInput> | string) => void;
 }) {
   const { form, patch } = useConditionForm(conditionKey, rule);
   const [error, setError] = useState<string | null>(null);
+  // With `bind`, a block left as it was adds nothing to the window's Save.
+  // A ref: re-rendering in the middle of a click would undo a controlled checkbox's toggle.
+  const touched = useRef(false);
   const submit = async () => {
     const p = patch();
     if (typeof p === "string") return setError(p);
-    setError(await onSave(p));
+    setError((await onSave?.(p)) ?? null);
   };
+  bind?.(() => {
+    if (!touched.current) return {};
+    const p = patch();
+    setError(typeof p === "string" ? p : null);
+    return p;
+  });
   return (
-    <div className="cond-form inline-cond">
+    <div
+      className="cond-form inline-cond"
+      onChangeCapture={() => (touched.current = true)}
+      onClickCapture={(e) => {
+        if ((e.target as HTMLElement).closest("button, input, select")) touched.current = true;
+      }}
+    >
       {form}
       {error && <p className="error-text">{error}</p>}
-      <div className="inline-cond-foot">
-        {onCancel && <Button onClick={onCancel}>Cancel</Button>}
-        <Button variant="primary" small onClick={() => void submit()} disabled={saving}>
-          Save {CONDITION_LABELS[conditionKey].toLowerCase()}
-        </Button>
-      </div>
+      {!bind && (
+        <div className="inline-cond-foot">
+          {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+          <Button variant="primary" small onClick={() => void submit()} disabled={saving}>
+            Save {CONDITION_LABELS[conditionKey].toLowerCase()}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
