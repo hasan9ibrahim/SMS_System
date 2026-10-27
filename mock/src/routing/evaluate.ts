@@ -585,6 +585,30 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
     return [hit, ...bs.filter((v) => v !== hit)];
   };
   const candidates: RouteCandidate[] = [];
+  /**
+   * After the pick, the rule's other vendors with what they would do (team trial round 6: the simulator listed only
+   * the picked one): their share of other messages, the next level or a backup, or why they cannot take traffic now.
+   */
+  const withRest = (tried: RouteCandidate[], picked: RouteCandidate): RouteCandidate[] => {
+    const seen = new Set(tried.map((c) => c.vendorTrunkId));
+    const rest: RouteCandidate[] = [];
+    for (const v of [...rule.vendors].sort((a, b) => a.level - b.level || Number(a.isBackup) - Number(b.isBackup))) {
+      if (seen.has(v.vendorTrunkId)) continue;
+      seen.add(v.vendorTrunkId);
+      const share = v.sharePct !== null && v.sharePct !== undefined ? `${v.sharePct}%` : null;
+      const c = candidate(v.vendorTrunkId, v.level, share);
+      const role = v.isBackup
+        ? "backup, used only if the vendors before it fail"
+        : v.level > picked.level
+          ? `level ${v.level}, used only if level ${picked.level} fails`
+          : rule.huntPolicy === "percentage"
+            ? `gets its ${share ?? "share"} of other messages`
+            : "next in line if the picked vendor fails";
+      c.note = !usable(c) ? `cannot take traffic now: ${skipWhy(c)}` : c.cost === null ? "no rate for this destination" : role;
+      rest.push(c);
+    }
+    return [...tried, ...rest];
+  };
   for (const level of levels) {
     const at = rule.vendors.filter((v) => v.level === level && !v.isBackup);
     let ordered = at;
@@ -621,7 +645,7 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
           ...base,
           outcome: "route",
           vendor: { vendorTrunkId: c.vendorTrunkId, name: c.name, level, decidedBy },
-          candidates,
+          candidates: withRest(candidates, c),
         };
       }
       c.note = skipWhy(c);
@@ -633,7 +657,7 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
             ...base,
             outcome: "route",
             vendor: { vendorTrunkId: bc.vendorTrunkId, name: bc.name, level, decidedBy },
-            candidates,
+            candidates: withRest(candidates, bc),
           };
         bc.note = `${bc.note}; ${skipWhy(bc)}`;
       }

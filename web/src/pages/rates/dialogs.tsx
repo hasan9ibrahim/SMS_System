@@ -1,5 +1,6 @@
 // Rate Manager dialogs (§6.2, §13.12): new rate table (optionally copied from a vendor
 // trunk's rates plus a margin), rename, and Add rates for new destinations (§13.21 picker).
+import { showRnSummary } from "./SendRatesDialog";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { RateLineEdit, RateTableDetail, TrunkListRow } from "@sms/contract";
@@ -249,8 +250,9 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
           if (r.change)
             notifySaved(
               r.change,
-              `Added ${r.applied} rate${r.applied === 1 ? "" : "s"}${r.notificationsSent ? ` · RN sent to ${r.notificationsSent} client${r.notificationsSent === 1 ? "" : "s"}` : ""}`,
+              `Added ${r.applied} rate${r.applied === 1 ? "" : "s"}`,
             );
+          showRnSummary(r.notifications);
           done();
         },
         onError: (e) => setError(problemText(e)),

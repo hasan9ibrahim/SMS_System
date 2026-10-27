@@ -11669,6 +11669,8 @@ export type components = {
     RateLineChangesSaved: {
       /** @description Rate notification e-mails written (when sendNotification was set). */
       notificationsSent?: number;
+      /** @description Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not. */
+      notifications?: components["schemas"]["RateNoticeOutcome"][];
       change: components["schemas"]["Change"] | null;
       /** @description Edits that changed something. */
       applied: number;
@@ -11855,6 +11857,8 @@ export type components = {
     RateBulkSaved: {
       /** @description Rate notification e-mails written (when sendNotification was set). */
       notificationsSent?: number;
+      /** @description Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not. */
+      notifications?: components["schemas"]["RateNoticeOutcome"][];
       change: components["schemas"]["Change"] | null;
       applied: number;
       skipped: number;
@@ -14763,6 +14767,17 @@ export type components = {
       fileType: "excel" | "csv";
       /** @description False = nothing is e-mailed; the page downloads the sheets instead (View Rate). */
       sendEmail: boolean;
+    };
+    /** @description One rate notification e-mail (team trial round 6, §8) - one per enterprise and customer rate table. */
+    RateNoticeOutcome: {
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      rateTable: string;
+      trunks: string[];
+      to: string[];
+      /** @enum {string} */
+      status: "sent" | "failed";
+      reason?: string | null;
     };
     NotificationResult: {
       sent: number;

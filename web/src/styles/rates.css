@@ -779,3 +779,8 @@
   min-width: 0;
   padding: 0;
 }
+.notice-list {
+  max-height: 46vh;
+  overflow: auto;
+  margin-top: 8px;
+}

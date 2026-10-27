@@ -2,7 +2,7 @@
 // customer trunk using it (one e-mail per trunk with its current sheet). The same window then shows what was sent
 // and, per customer trunk, what failed and why.
 import { useState } from "react";
-import type { NotificationResult, RateTableRow } from "@sms/contract";
+import type { NotificationResult, RateNoticeOutcome, RateTableRow } from "@sms/contract";
 import { useSendRate } from "../../api/switchTools";
 import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
@@ -150,4 +150,66 @@ function SendRatesDialog({
 
 export function openSendRates(tables: Pick<RateTableRow, "id" | "name" | "trunkCount">[]) {
   return ask<void>((done) => <SendRatesDialog tables={tables} done={() => done(undefined)} />);
+}
+
+// Who got the rate notification and who did not (team trial round 6, §8): shown after a save or bulk rating that
+// sent RNs, one row per enterprise and rate table.
+function RnSummaryDialog({ rows, done }: { rows: RateNoticeOutcome[]; done: () => void }) {
+  const sent = rows.filter((r) => r.status === "sent").length;
+  const failed = rows.length - sent;
+  return (
+    <Modal
+      title={failed ? (sent ? "RNs sent, with some failures" : "RNs not sent") : "RNs sent"}
+      width={720}
+      onClose={done}
+      footer={
+        <Button variant="primary" onClick={done}>
+          Close
+        </Button>
+      }
+    >
+      <div className={`send-summary ${failed ? (sent ? "partial" : "bad") : "good"}`}>
+        <Icon name={failed && !sent ? "alert" : "check"} />
+        <span>
+          <strong>{sent}</strong> e-mail{sent === 1 ? "" : "s"} sent
+          {failed ? (
+            <>
+              {" "}
+              · <strong>{failed}</strong> failed
+            </>
+          ) : null}
+        </span>
+      </div>
+      <table className="mini-table">
+        <thead>
+          <tr>
+            <th>Enterprise</th>
+            <th>Rate table</th>
+            <th>Customer trunks</th>
+            <th>To</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.enterpriseId}-${r.rateTable}`}>
+              <td className="strong">{r.enterprise}</td>
+              <td>{r.rateTable}</td>
+              <td className="small">{r.trunks.join(", ")}</td>
+              <td className="small">{r.to.join(", ") || "—"}</td>
+              <td className={r.status === "sent" ? "tone-good" : "tone-error"}>
+                {r.status === "sent" ? "Sent" : (r.reason ?? "Failed")}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Modal>
+  );
+}
+
+/** Opens the RN summary when the save sent any notifications. */
+export function showRnSummary(rows: RateNoticeOutcome[] | undefined) {
+  if (!rows?.length) return;
+  void ask<void>((done) => <RnSummaryDialog rows={rows} done={() => done(undefined)} />);
 }

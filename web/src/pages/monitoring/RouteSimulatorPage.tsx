@@ -6,7 +6,7 @@
 // directly (instead of Service Type Routing), several receivers run at once, and the data coding and
 // TON / NPI follow the text and the addresses until changed by hand.
 import { Fragment, useState, type ReactNode } from "react";
-import { useRouteRule, useVendorCosts } from "../../api/routing";
+import { useRouteRule } from "../../api/routing";
 import type { RouteSimulatorResult, TrunkListRow } from "@sms/contract";
 import { autoCoding, autoTonNpi, parseReceivers } from "./monitorModel";
 import { runRouteSimulator } from "../../api/observation";
@@ -182,11 +182,28 @@ function Result({ r }: { r: RouteSimulatorResult }) {
           open
         >
           {d && <RuleSplit ruleId={d.ruleId} picked={d.vendor?.vendorTrunkId ?? null} r={r} />}
+          {r.route.tried.some((x) => x.reason.startsWith("shadowed")) && (
+            <div className="rs-shadowed">
+              <strong className="small">Also match, never reached (rule #{d?.ruleId} decides first):</strong>
+              <ul>
+                {r.route.tried
+                  .filter((x) => x.reason.startsWith("shadowed"))
+                  .map((x) => (
+                    <li key={x.ruleId} className="small">
+                      <span className="num">#{x.ruleId}</span> {x.name} <span className="muted">· priority {x.priority}</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           <details className="rs-more">
             <summary className="small">Every rule tried, in order ({r.route.tried.length})</summary>
             <ol className="rs-tried">
               {r.route.tried.map((x) => (
-                <li key={x.ruleId} className={x.matched ? "" : "muted"}>
+                <li
+                  key={x.ruleId}
+                  className={x.matched ? "" : x.reason.startsWith("shadowed") ? "tone-warning" : "muted"}
+                >
                   <span className="num">#{x.ruleId}</span> {x.name} <span className="small">({x.reason})</span>
                 </li>
               ))}
@@ -266,51 +283,25 @@ function Step({
   );
 }
 
-/** The matching rule's vendors (every level and share), with their cost and margin here; the picked one marked. */
+/**
+ * The matching rule's vendors as the evaluator saw them for this message (team trial round 6): every vendor with its
+ * level, share, cost and margin, and what it does: picked, its share of other messages, next level or backup, or why
+ * it cannot take traffic now (no rate, margin below the rule's minimum, blocked by its own rules).
+ */
 function RuleSplit({ ruleId, picked, r }: { ruleId: number; picked: number | null; r: RouteSimulatorResult }) {
   const rule = useRouteRule(ruleId);
   const d = r.route.decision!;
-  const vendors = rule.data?.vendors ?? [];
-  const names = new Map((rule.data?.labels.vendorTrunks ?? []).map((v) => [v.id, v.name]));
-  const costs = useVendorCosts(
-    vendors.map((v) => v.vendorTrunkId),
-    { mccmncMode: "inclusive", mccmncs: r.mccmnc ? [r.mccmnc] : [], mccmncPattern: null },
-  );
+  const share = new Map((rule.data?.vendors ?? []).map((v) => [v.vendorTrunkId, v.sharePct]));
   const sell = r.customerRate?.platformRate ?? null;
-  // Least cost and quality rules rank every vendor in scope: their candidates are the list.
-  if (!vendors.length)
-    return (
-      <table className="mini-table">
-        <thead>
-          <tr>
-            <th>Vendor trunk</th>
-            <th>Level</th>
-            <th>Cost (EUR)</th>
-            <th>Margin</th>
-            <th>Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {d.candidates.map((c) => (
-            <tr key={c.vendorTrunkId} className={c.vendorTrunkId === picked ? "row-current" : undefined}>
-              <td>
-                {c.vendorTrunkId === picked && <Icon name="check" size={12} />} {c.name}
-              </td>
-              <td className="num">{c.level}</td>
-              <td className="num">{money(c.cost)}</td>
-              <td className="num">{c.margin === null ? "—" : c.margin.toFixed(6)}</td>
-              <td className="small muted">{c.note ?? ""}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
+  const problem = (note: string | null | undefined) => !!note && /^(cannot|no rate)/.test(note);
   return (
     <>
-      <p className="small muted">
-        {rule.data?.name} · {rule.data?.huntPolicy?.replace("_", " ")} · this message went to the marked vendor
-      </p>
-      <table className="mini-table">
+      {rule.data && (
+        <p className="small muted">
+          {rule.data.name} · {rule.data.routeType === "static" ? rule.data.huntPolicy.replace("_", " ") : routeKind(rule.data.routeType)}
+        </p>
+      )}
+      <table className="mini-table rs-split">
         <thead>
           <tr>
             <th>Vendor trunk</th>
@@ -318,23 +309,27 @@ function RuleSplit({ ruleId, picked, r }: { ruleId: number; picked: number | nul
             <th>Share</th>
             <th>Cost (EUR)</th>
             <th>Margin</th>
+            <th>For this message</th>
           </tr>
         </thead>
         <tbody>
-          {vendors.map((v, i) => {
-            const cost = costs.get(v.vendorTrunkId)?.minEur ?? null;
+          {d.candidates.map((c, i) => {
+            const isPicked = c.vendorTrunkId === picked;
+            const sh = share.get(c.vendorTrunkId);
+            const status = isPicked ? (c.cost === null ? "picked, but it has no rate here" : "picked") : (c.note ?? "");
             return (
-              <tr key={i} className={v.vendorTrunkId === picked ? "row-current" : undefined}>
+              <tr key={`${c.vendorTrunkId}-${i}`} className={isPicked ? "row-current" : undefined}>
                 <td>
-                  {v.vendorTrunkId === picked && <Icon name="check" size={12} />}{" "}
-                  {names.get(v.vendorTrunkId) ?? `#${v.vendorTrunkId}`}
-                  {v.isBackup && <span className="muted small"> · backup</span>}
+                  {isPicked ? <Icon name="check" size={12} /> : null} {c.name}
                 </td>
-                <td className="num">{v.level}</td>
-                <td className="num">{v.sharePct === null || v.sharePct === undefined ? "—" : `${v.sharePct} %`}</td>
-                <td className="num">{cost === null ? "no rate" : money(cost)}</td>
+                <td className="num">{c.level}</td>
+                <td className="num">{sh === null || sh === undefined ? "—" : `${sh} %`}</td>
+                <td className="num">{c.cost === null ? "—" : money(c.cost)}</td>
                 <td className="num">
-                  {sell === null || cost === null ? "—" : `${Math.round(((sell - cost) / sell) * 1000) / 10} %`}
+                  {sell === null || c.cost === null ? "—" : `${Math.round(((sell - c.cost) / sell) * 1000) / 10} %`}
+                </td>
+                <td className={`small ${problem(status) || (isPicked && c.cost === null) ? "tone-error" : "muted"}`}>
+                  {status}
                 </td>
               </tr>
             );
@@ -344,6 +339,8 @@ function RuleSplit({ ruleId, picked, r }: { ruleId: number; picked: number | nul
     </>
   );
 }
+
+const routeKind = (t: string) => (t === "dynamic" ? "least cost" : t === "qbr" ? "quality" : t);
 
 /** Egress translation (§6.4, §13.2): what the chosen vendor trunk's rules do after routing. */
 function VendorTranslation({ v }: { v: NonNullable<RouteSimulatorResult["vendorTranslation"]> }) {
@@ -430,6 +427,7 @@ export function RouteSimulatorPage() {
   const [text, setText] = useState("Your verification code is 482913");
   const [coding, setCoding] = useState(0);
   const [testSms, setTestSms] = useState(false);
+  const [testNumber, setTestNumber] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<{ receiver: string; r: RouteSimulatorResult | null; error?: string }[]>([]);
@@ -439,10 +437,11 @@ export function RouteSimulatorPage() {
     shortcuts: "Enter runs",
   });
   const list = parseReceivers(receivers);
+  const realNumber = testNumber.replace(/\D/g, "");
   const runs =
     mode === "numbers"
       ? list.map((r) => ({ key: r, receiver: r, mccmnc: null }))
-      : dests.map((d) => ({ key: d, receiver: null, mccmnc: d }));
+      : dests.map((d) => ({ key: d, receiver: testSms && realNumber ? realNumber : null, mccmnc: d }));
   // Auto values: coding from the text, TON / NPI from the sender and the first receiver.
   const autoSrc = autoTonNpi(sender);
   const autoDst = autoTonNpi(list[0] ?? "");
@@ -461,6 +460,13 @@ export function RouteSimulatorPage() {
       });
     if (mode === "numbers" && runs.length > 20)
       return toast({ tone: "warning", message: "At most 20 numbers at once" });
+    if (mode === "destinations" && testSms && (!realNumber || runs.length !== 1))
+      return toast({
+        tone: "warning",
+        message: !realNumber
+          ? "Enter the number the real test SMS goes to"
+          : "A real test SMS goes to one destination at a time",
+      });
     if (mode === "destinations" && runs.length > MAX_DESTS)
       return toast({ tone: "warning", message: `At most ${MAX_DESTS} networks at once` });
     setBusy(true);
@@ -602,6 +608,7 @@ export function RouteSimulatorPage() {
                 </label>
               </div>
             ) : (
+              <>
               <div className="field">
                 <SimDestinationPick value={dests} onChange={setDests} />
                 <span className="muted small">
@@ -609,6 +616,21 @@ export function RouteSimulatorPage() {
                   from each one&apos;s dial code.
                 </span>
               </div>
+              {testSms && (
+                // A real test needs a real phone (team trial round 6): the made-up number is replaced by this one.
+                <label className="field">
+                  <span>
+                    Number for the real test SMS<span className="req">*</span>
+                  </span>
+                  <input
+                    value={testNumber}
+                    inputMode="tel"
+                    placeholder="A phone on the picked network, e.g. 2348031234567"
+                    onChange={(e) => setTestNumber(e.target.value)}
+                  />
+                </label>
+              )}
+              </>
             )}
           </section>
           <section className="sim-card">

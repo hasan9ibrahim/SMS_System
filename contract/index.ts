@@ -531,6 +531,7 @@ export type EmailLogDetail = Schemas["EmailLogDetail"];
 export type NotificationTrunksInput = Schemas["NotificationTrunksInput"];
 export type SendRateInput = Schemas["SendRateInput"];
 export type NotificationResult = Schemas["NotificationResult"];
+export type RateNoticeOutcome = Schemas["RateNoticeOutcome"];
 export type NotificationPreviewInput = Schemas["NotificationPreviewInput"];
 export type FirewallRuleInput = Schemas["FirewallRuleInput"];
 export type FirewallRuleRow = Schemas["FirewallRuleRow"];

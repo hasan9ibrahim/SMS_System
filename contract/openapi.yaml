@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.104.0
+  version: 0.105.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -17987,6 +17987,11 @@ components:
         notificationsSent:
           type: integer
           description: Rate notification e-mails written (when sendNotification was set).
+        notifications:
+          type: array
+          description: Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not.
+          items:
+            $ref: "#/components/schemas/RateNoticeOutcome"
         change:
           oneOf:
             - $ref: "#/components/schemas/Change"
@@ -18404,6 +18409,11 @@ components:
         notificationsSent:
           type: integer
           description: Rate notification e-mails written (when sendNotification was set).
+        notifications:
+          type: array
+          description: Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not.
+          items:
+            $ref: "#/components/schemas/RateNoticeOutcome"
         change:
           oneOf:
           - $ref: '#/components/schemas/Change'
@@ -24347,6 +24357,31 @@ components:
         sendEmail:
           type: boolean
           description: False = nothing is e-mailed; the page downloads the sheets instead (View Rate).
+
+    RateNoticeOutcome:
+      type: object
+      description: One rate notification e-mail (team trial round 6, §8) - one per enterprise and customer rate table.
+      required: [enterpriseId, enterprise, rateTable, trunks, to, status]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        rateTable:
+          type: string
+        trunks:
+          type: array
+          items:
+            type: string
+        to:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [sent, failed]
+        reason:
+          type: [string, "null"]
 
     NotificationResult:
       type: object

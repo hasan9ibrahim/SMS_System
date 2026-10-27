@@ -52,19 +52,30 @@ export function noticeLines(diff: DiffEntry[]): Map<number, NoticeLine[]> {
   return out;
 }
 
-/** Logs the notifications; returns how many e-mails were written (customer tables only). */
 /** The line as the client reads it: its own "all networks" code for country rates. */
 export const noticeText = (l: NoticeLine, conv: AllNetworks | null) =>
   `${fromCountryCode(l.mccmnc, conv)}${l.senderId ? ` (sender ${l.senderId})` : ""}: ${l.text}`;
 
+/** One notification e-mail and how it went (team trial round 6, §8): the page lists who got it and who did not. */
+export type NoticeOutcome = {
+  enterpriseId: number;
+  enterprise: string;
+  rateTable: string;
+  trunks: string[];
+  to: string[];
+  status: "sent" | "failed";
+  reason: string | null;
+};
+
+/** Logs the notifications (customer tables only), one e-mail per enterprise and table; returns each e-mail's outcome. */
 export async function sendRateNotices(
   db: Db,
   diff: DiffEntry[],
   userId: number,
   note?: string | null,
-): Promise<number> {
+): Promise<NoticeOutcome[]> {
   const byTable = noticeLines(diff);
-  if (!byTable.size) return 0;
+  if (!byTable.size) return [];
   const { rows } = await db.query(
     `SELECT rt.id AS table_id, rt.name AS table_name, e.id AS enterprise_id, e.name AS enterprise_name, e.all_networks_code,
             array_agg(DISTINCT ct.name ORDER BY ct.name) AS trunks,
@@ -78,16 +89,17 @@ export async function sendRateNotices(
       GROUP BY rt.id, e.id`,
     [[...byTable.keys()]],
   );
-  let sent = 0;
+  const out: NoticeOutcome[] = [];
   for (const r of rows) {
     const lines = (byTable.get(Number(r.table_id)) ?? []).map((l) => noticeText(l, r.all_networks_code as AllNetworks));
     const extra = note?.trim();
     const sender = await companyMailbox(db, Number(r.enterprise_id), "rateSheet");
     const file = `${String(r.table_name).replace(/[^\w.-]+/g, "_")}_rates.csv`;
-    await logEmail(db, {
+    const to = (r.emails as string[] | null) ?? [];
+    const status = await logEmail(db, {
       type: "send_rate",
       enterpriseId: Number(r.enterprise_id),
-      to: (r.emails as string[] | null) ?? [],
+      to,
       sender,
       subject: `Rate notification – ${r.table_name} – ${lines.length} change${lines.length === 1 ? "" : "s"}`,
       body: [
@@ -106,7 +118,15 @@ export async function sendRateNotices(
       rateDate: new Date().toISOString().slice(0, 10),
       userId,
     });
-    sent++;
+    out.push({
+      enterpriseId: Number(r.enterprise_id),
+      enterprise: String(r.enterprise_name),
+      rateTable: String(r.table_name),
+      trunks: r.trunks as string[],
+      to,
+      status,
+      reason: status === "failed" ? "No rates or commercial contact e-mail for this enterprise" : null,
+    });
   }
-  return sent;
+  return out;
 }

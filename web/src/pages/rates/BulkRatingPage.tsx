@@ -3,6 +3,7 @@
 // Rate Manager), Step 2 one action (fixed rate, change by % or amount, cost + margin, close, block),
 // Step 3 review grid (type over a rate or a formula such as =cost*1.15, exclude rows with one click),
 // Step 4 impact on the last 7 days of traffic, Step 5 apply as ONE undoable change (§13.10).
+import { showRnSummary } from "./SendRatesDialog";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -83,6 +84,34 @@ const CHANGE_LABEL: Record<string, string> = {
 };
 
 // Picker rows come from the rate-table lookup (names-only for pickers, step 10): only its fields are there.
+/** Field names for the bulk form's errors (team trial round 6: the preview said only "Check the highlighted fields"). */
+const BULK_FIELD: Record<string, string> = {
+  rateTableIds: "Clients' rate tables",
+  mccmncs: "Destinations",
+  effectiveFrom: "Effective from",
+  action: "Change",
+  value: "Value",
+  round: "Rounding",
+  costSource: "Cost from",
+  vendorTrunkId: "Vendor trunk",
+  overrides: "Rates",
+  items: "Rates",
+};
+
+/** What is wrong, field by field ("Destinations: pick at least one"), else the problem's title. */
+export function bulkProblem(err: unknown): string {
+  if (!(err instanceof ApiError)) return String(err);
+  const errors = (err.problem.errors ?? []) as { path: string; message: string }[];
+  if (!errors.length) return err.problem.detail ? `${err.message}: ${err.problem.detail}` : err.message;
+  return errors
+    .map((x) => {
+      const parts = x.path.replace(/^\//, "").split("/");
+      const name = BULK_FIELD[parts.find((p) => BULK_FIELD[p]) ?? ""] ?? (parts.join(" ") || "Form");
+      return `${name}: ${x.message}`;
+    })
+    .join(" · ");
+}
+
 type TablePick = Pick<RateTableRow, "id" | "name" | "category" | "currency">;
 
 /**
@@ -150,9 +179,12 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
                 className="sr-only"
                 checked={mode === m}
                 onChange={() => {
+                  // The ticked tables stay ticked when switching (team trial round 6): the chosen ones become the
+                  // excluded ones and back.
+                  if (m === mode) return;
                   setMode(m);
-                  if (m === "inclusive") onChange([]);
-                  else setExcluded([]);
+                  if (m === "inclusive") onChange(excluded);
+                  else setExcluded(ids);
                 }}
               />
               {m === "inclusive" ? "Inclusive" : "Exclusive"}
@@ -418,7 +450,7 @@ export function BulkRatingPage() {
       setEdits(noEdits());
       setShow("all");
     } catch (err) {
-      toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
+      toast({ tone: "error", message: bulkProblem(err) });
     } finally {
       setLoading(false);
     }
@@ -436,8 +468,9 @@ export function BulkRatingPage() {
       if (r.change) {
         notifySaved(
           r.change,
-          `Applied ${r.applied} change${r.applied === 1 ? "" : "s"} on ${r.tables} tables${r.notificationsSent ? ` · RN sent to ${r.notificationsSent} client${r.notificationsSent === 1 ? "" : "s"}` : ""}`,
+          `Applied ${r.applied} change${r.applied === 1 ? "" : "s"} on ${r.tables} tables`,
         );
+        showRnSummary(r.notifications);
         if (move)
           void actOnMove(move.id, {
             action: "handled",
@@ -454,7 +487,7 @@ export function BulkRatingPage() {
         if (ok) return runApply(note, sendRn, true, rnNote);
         return;
       }
-      toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
+      toast({ tone: "error", message: bulkProblem(err) });
     }
   };
 

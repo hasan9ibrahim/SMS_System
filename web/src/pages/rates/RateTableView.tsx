@@ -2,6 +2,7 @@
 // summary cards, view tabs (Current, Scheduled, Closed, Change log) and the rate grid. Sell
 // rates edit in place; selected rows get the bulk bar (set rate, change by % or margin,
 // effective date, block, close); "Save n changes" sends one batch = one undoable change.
+import { showRnSummary } from "./SendRatesDialog";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import type { NoticeBreach, RateLineRow, RateTableDetail } from "@sms/contract";
@@ -260,15 +261,29 @@ function DateForm({ value, onApply }: { value: string | null; onApply: (iso: str
   );
 }
 
+/**
+ * Changes that start sooner than a client's notice period allows (§13.14). Team trial round 6: every breach is listed
+ * (scroll), with a search by client table or MCCMNC, instead of the first twelve and "+N more".
+ */
 export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok: boolean | null) => void }) {
   const byTable = breach.breaches.some((b) => b.table);
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const rows = needle
+    ? breach.breaches.filter((b) => `${b.table ?? ""} ${b.mccmnc}`.toLowerCase().includes(needle))
+    : breach.breaches;
+  const tables = new Set(breach.breaches.map((b) => b.table ?? ""));
   return (
     <Modal
       title="Changes sooner than the client's notice"
-      width={600}
+      width={720}
       onClose={() => done(null)}
       footer={
         <>
+          <span className="muted small fb-spacer">
+            {breach.breaches.length} change{breach.breaches.length === 1 ? "" : "s"}
+            {byTable ? ` on ${tables.size} client table${tables.size === 1 ? "" : "s"}` : ""} · applying anyway is logged
+          </span>
           <Button onClick={() => done(null)}>Cancel</Button>
           <Button variant="danger" onClick={() => done(true)}>
             Apply anyway
@@ -277,40 +292,54 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
       }
     >
       <p>{breach.detail}</p>
-      <table className="rtable">
-        <thead>
-          <tr>
-            {byTable && <th>Table</th>}
-            <th>MCCMNC</th>
-            <th>Change</th>
-            <th className="num">Now</th>
-            <th className="num">New</th>
-            <th>From</th>
-            <th>Earliest with notice</th>
-          </tr>
-        </thead>
-        <tbody>
-          {breach.breaches.slice(0, 12).map((b) => (
-            <tr key={`${b.rateTableId ?? ""}-${b.mccmnc}-${b.effectiveFrom}`}>
-              {byTable && <td>{b.table}</td>}
-              <td className="num">{b.mccmnc}</td>
-              <td>
-                {b.change === "new" ? "New" : b.change === "decrease" ? "Decrease" : "Increase"} ({b.noticeDays} d)
-              </td>
-              <td className="num">{b.currentRate === null ? "–" : formatRate(b.currentRate)}</td>
-              <td className="num">{formatRate(b.newRate)}</td>
-              <td>{shortDateTime(b.effectiveFrom)}</td>
-              <td>{shortDate(b.earliestAllowed)}</td>
+      <input
+        type="search"
+        placeholder={byTable ? "Search client tables or MCCMNC…" : "Search MCCMNC…"}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        aria-label="Search the changes"
+      />
+      <div className="notice-list">
+        <table className="rtable">
+          <thead>
+            <tr>
+              {byTable && <th>Client table</th>}
+              <th>MCCMNC</th>
+              <th>Change</th>
+              <th className="num">Now</th>
+              <th className="num">New</th>
+              <th>From</th>
+              <th>Earliest with notice</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {breach.breaches.length > 12 && <p className="muted small">and {breach.breaches.length - 12} more.</p>}
+          </thead>
+          <tbody>
+            {rows.map((b) => (
+              <tr key={`${b.rateTableId ?? ""}-${b.mccmnc}-${b.effectiveFrom}`}>
+                {byTable && <td>{b.table}</td>}
+                <td className="num">{b.mccmnc}</td>
+                <td>
+                  {b.change === "new" ? "New" : b.change === "decrease" ? "Decrease" : "Increase"} ({b.noticeDays} d)
+                </td>
+                <td className="num">{b.currentRate === null ? "–" : formatRate(b.currentRate)}</td>
+                <td className="num">{formatRate(b.newRate)}</td>
+                <td>{shortDateTime(b.effectiveFrom)}</td>
+                <td>{shortDate(b.earliestAllowed)}</td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr>
+                <td colSpan={byTable ? 7 : 6} className="muted">
+                  Nothing matches.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
       <p className="muted small">
         {byTable
-          ? 'Or tick "Respect notice periods" and preview again.'
-          : "Or set the effective date to the earliest date with notice from the bulk bar."}{" "}
-        Applying anyway is logged with the change (§13.14).
+          ? 'Or tick "Respect notice periods" and preview again: each change then starts on its client\'s earliest date.'
+          : "Or set the effective date to the earliest date with notice from the bulk bar."}
       </p>
     </Modal>
   );
@@ -661,9 +690,10 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       if (r.change)
         notifySaved(
           r.change,
-          `Saved ${r.applied} change${r.applied === 1 ? "" : "s"}${r.notificationsSent ? ` · RN sent to ${r.notificationsSent} client${r.notificationsSent === 1 ? "" : "s"}` : ""}`,
+          `Saved ${r.applied} change${r.applied === 1 ? "" : "s"}`,
         );
       else toast({ tone: "info", message: "Nothing changed" });
+      showRnSummary(r.notifications);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         const ok = await ask<boolean>((done) => (

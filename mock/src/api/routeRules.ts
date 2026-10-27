@@ -1184,6 +1184,26 @@ export function routeThrough(
     }
     if (!decision.matched) continue;
     if (decision.outcome === "no_vendor" && rule.continueRouting === "yes") continue;
+    // Rules further down that would also match are listed as shadowed (team trial round 6), so a new rule hiding
+    // an older one shows it; they are never reached for this message.
+    if (keep > 0) {
+      let shadowed = 0;
+      for (const later of rules.slice(rules.indexOf(rule) + 1)) {
+        if (shadowed >= 20) break;
+        if (!quickMatch(later, m)) continue;
+        const d = decide(later, m, options);
+        if (!d.matched) continue;
+        shadowed++;
+        tried.push({
+          ruleId: later.id,
+          name: later.name,
+          priority: later.priority,
+          matched: false,
+          reason: `shadowed: would match too, but rule #${rule.id} decides first`,
+        });
+      }
+      return { tried: tried.slice(-(keep + shadowed)), decision };
+    }
     return { tried: tried.slice(-keep), decision };
   }
   return { tried: tried.slice(-keep), decision: null };

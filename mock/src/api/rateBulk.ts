@@ -504,8 +504,9 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
     if (result === null) return sendNoticeBreach(reply, breaches);
     if (result.change && [...tables.values()].some((t) => t.kind === "vendor")) scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
-    const notificationsSent =
-      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : 0;
-    return { ...result, skipped, notificationsSent };
+    const notifications =
+      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : [];
+    const notificationsSent = notifications.filter((n) => n.status === "sent").length;
+    return { ...result, skipped, notificationsSent, notifications };
   });
 }
