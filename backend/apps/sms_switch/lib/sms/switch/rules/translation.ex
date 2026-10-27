@@ -687,16 +687,13 @@ defmodule Sms.Switch.Rules.Translation do
   def format_numbers(text, nil, _min), do: text
 
   def format_numbers(text, pattern, min) do
-    if String.contains?(pattern, "#") do
-      min = max(2, min || 6)
-
-      Regex.replace(~r/\d+/, text, fn run ->
-        if String.length(run) >= min, do: format_number(run, pattern), else: run
-      end)
-    else
-      text
-    end
+    if String.contains?(pattern, "#"),
+      do: Regex.replace(~r/\d+/, text, &format_run(&1, pattern, max(2, min || 6))),
+      else: text
   end
+
+  defp format_run(run, pattern, min) when byte_size(run) >= min, do: format_number(run, pattern)
+  defp format_run(run, _pattern, _min), do: run
 
   @doc "Content rewrite: words, the number format, then the Regex Index group (or the whole match), then the MSG Template."
   @spec rewrite_text(Rule.t(), String.t()) :: String.t()
