@@ -25,7 +25,9 @@ Check afterwards: `patronictl list` (it comes back as standby), Grafana "Cluster
 ## DiskFilling
 
 **Check:** `df -h`, then `du -sh /var/lib/{nats,postgresql,clickhouse,sms-pcap} /var/log`. **Do:** traffic recording
-is the easiest to shrink (`pcap_files` in the inventory, then `site.yml`); NATS keeps 2 days (`max_age_days`);
+is the easiest to shrink (`pcap_local_days` in the inventory, then `site.yml`: older files go off-site at the next
+`sms-pcap-archive`); EDRs older than `edr_hot_months` should be on the off-site volume (`SELECT disk_name,
+formatReadableSize(sum(bytes_on_disk)) FROM system.parts WHERE active GROUP BY disk_name`); NATS keeps 2 days (`max_age_days`);
 PostgreSQL WAL piling up means archiving fails (see BackupFailed). **At 5 %** (DiskAlmostFull) act at once: a full
 disk stops NATS JetStream (it turns itself off and stays off until `systemctl restart nats` once space is free —
 found in the lab) and Redis writes.
@@ -82,6 +84,14 @@ The standby does not stream: a failover now would have nothing to promote. **Che
 (BackupMissing, BackupNeverRan, PostgresArchiveFailing.) **Check:** `journalctl -u sms-backup`, `sudo -u postgres
 pgbackrest --stanza=sms check`, the bucket's credentials and reachability. **Do:** fix the cause, then `sms-backup`
 on the primary. Archiving that keeps failing fills the primary's disk with WAL.
+
+## PcapArchive
+
+(PcapArchiveFailing.) The recording archive (`sms-pcap-archive`, every 15 minutes) has not finished: finished files
+are not gzipped or moved off-site, and the PCAP screens list off-site files from an old index. **Check:** `journalctl -u
+sms-pcap-archive`, the bucket's credentials and reachability (`RCLONE_CONFIG=/etc/sms/rclone.conf rclone lsd
+offsite:`). **Do:** fix the cause, then `systemctl start sms-pcap-archive`. Files here more than two weeks past
+`pcap_local_days` are deleted without upload so the disk never fills.
 
 ## RestoreTest
 

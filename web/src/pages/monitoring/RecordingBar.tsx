@@ -1,4 +1,4 @@
-// Extract a PCAP from the 60-day traffic recording (§9.2, team trial round 1): a period of up to 24 hours
+// Extract a PCAP from the 120-day traffic recording (§9.2, team trial round 1): a period of up to 24 hours
 // and a customer or vendor trunk, number, message ID or IP. Used on PCAP Trace and the Signaling deck; the
 // file joins the capture files list.
 import { useState } from "react";
@@ -15,7 +15,7 @@ const toLocalInput = (t: number) => new Date(t).toISOString().slice(0, 16);
 const fromLocalInput = (v: string) => new Date(`${v}:00Z`).toISOString();
 
 /**
- * From the recording (§9, team trial round 1): every SMPP packet is recorded and kept 60 days; cut a PCAP
+ * From the recording (§9, team trial round 1): every SMPP packet is recorded and kept 120 days; cut a PCAP
  * for a window (up to 24 h) and a trunk, IP, number or message ID. The file joins the list below.
  */
 export function RecordingBar({ onExtracted }: { onExtracted?: () => void }) {

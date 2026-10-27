@@ -232,7 +232,19 @@ export function clickhouse(sql: string, body = "", database = CH_DB): Promise<st
 export async function resetClickHouse(log: (s: string) => void): Promise<void> {
   log(`clickhouse: recreating EDR tables in ${CH_DB}`);
   await clickhouse(`CREATE DATABASE IF NOT EXISTS ${CH_DB}`, "", "default");
-  for (const t of ["edr_hourly_mv", "edr_hourly", "edr"]) await clickhouse(`DROP TABLE IF EXISTS ${t} SYNC`);
+  // Views first, then their tables: a reseed starts the long-term totals (ClickHouse 008) from its own EDRs.
+  for (const t of [
+    "edr_totals_mv",
+    "edr_totals_outcome_mv",
+    "edr_sender_daily_mv",
+    "edr_sender_daily_outcome_mv",
+    "edr_totals",
+    "edr_sender_daily",
+    "edr_hourly_mv",
+    "edr_hourly",
+    "edr",
+  ])
+    await clickhouse(`DROP TABLE IF EXISTS ${t} SYNC`);
   const base = join(DB_DIR, "clickhouse", "migrations");
   for (const f of readdirSync(base)
     .filter((x) => x.endsWith(".sql"))

@@ -10,6 +10,7 @@ export type Side = "customer" | "vendor";
 const lit = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 import { nextDay, zonedMidnight } from "./zone.js";
 import { money } from "../currency.js";
+import { beforeDetail } from "../reports/source.js";
 
 export { nextDay, zonedMidnight };
 
@@ -18,8 +19,9 @@ let coverageCache: { at: number; from: Date | null; to: Date | null } | null = n
 /** First and last EDR in the store (cached a minute); null when ClickHouse does not answer. */
 export async function edrCoverage(): Promise<{ from: Date | null; to: Date | null } | null> {
   if (coverageCache && Date.now() - coverageCache.at < 60_000) return coverageCache;
+  // From the long-term totals, which keep every period (docs/BACKEND_PLAN.md §3.7); to the newest detailed EDR.
   const rows = await chRows<{ f: string; t: string; n: string }>(
-    "SELECT min(submit_time) AS f, max(submit_time) AS t, count() AS n FROM edr",
+    `SELECT (SELECT toString(min(submit_time)) FROM edr_totals) AS f, toString(max(submit_time)) AS t, count() AS n FROM edr`,
     10_000,
   );
   if (!rows) return null;
@@ -81,10 +83,12 @@ export async function usageLines(
   const billable = side === "customer" ? "is_customer_billable" : "is_vendor_billable";
   const money = side === "customer" ? "revenue" : "cost";
   const mccmnc = side === "customer" ? "c_mccmnc" : "if(v_mccmnc = '', c_mccmnc, v_mccmnc)";
+  // Days from midnight in `tz`: the long-term totals answer older periods exactly (docs/BACKEND_PLAN.md §3.7).
+  const src = beforeDetail(new Date(Date.parse(`${from}T00:00:00Z`) - 14 * 3_600_000)) ? "edr_totals" : "edr_all";
   const rows = await chRows<{ mccmnc: string; rate: number; cur: string; msgs: string; amount: number }>(
     `SELECT ${mccmnc} AS mccmnc, ${byRate ? `toFloat64(${s}_rate)` : "0"} AS rate, ${s}_currency AS cur,
             sum(msg_count * ${billable}) AS msgs, toFloat64(sum(${money})) AS amount
-       FROM edr_all
+       FROM ${src}
       WHERE ${s}_enterprise_id = ${Number(enterpriseId)}
         AND submit_time >= toDateTime64(${lit(`${from} 00:00:00`)}, 3, ${lit(tz)})
         AND submit_time < toDateTime64(${lit(`${nextDay(to)} 00:00:00`)}, 3, ${lit(tz)})

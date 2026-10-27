@@ -9,8 +9,9 @@ s3_bucket: sms-backups
 s3_verify_tls: false
 # No real Telegram in the lab: alerts are kept in Alertmanager only.
 telegram_chat_ids: []
-# Lab disk is small: one hour of recorded traffic.
-pcap_files: 4
+# Lab disk is small: a day of recorded traffic here, a day off-site.
+pcap_local_days: 1
+pcap_offsite_days: 1
 # The screens: the lab's own name (add it to the hosts file of the machine you browse from) and a self-signed
 # certificate made by roles/web. Platform e-mail goes to a mail catcher on the lab host (deploy/lab/smtp-sink.py).
 web_domain: sms.lab.test

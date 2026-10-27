@@ -60,6 +60,43 @@
     <asynchronous_metrics>true</asynchronous_metrics>
   </prometheus>
 
+  <!-- Detailed EDRs after {{ edr_hot_months }} months on the off-site bucket, read through a local cache (product owner
+       2026-10-27, docs/BACKEND_PLAN.md §3.7). The release's migrations put edr and edr_receipt on this policy
+       (Sms.Core.Release); the volume keeps the name `default` so a table can move onto it. Each server writes its own
+       copy under its name. -->
+  <storage_configuration>
+    <disks>
+      <edr_s3>
+        <type>s3</type>
+        <endpoint>https://{{ s3_endpoint }}:{{ s3_port }}/{{ s3_bucket }}/clickhouse-tier/{{ inventory_hostname }}/</endpoint>
+        <access_key_id>{{ vault_s3_access_key }}</access_key_id>
+        <secret_access_key>{{ vault_s3_secret_key }}</secret_access_key>
+        <region>{{ s3_region }}</region>
+        <metadata_path>/var/lib/clickhouse/disks/edr_s3/</metadata_path>
+      </edr_s3>
+      <edr_s3_cached>
+        <type>cache</type>
+        <disk>edr_s3</disk>
+        <path>/var/lib/clickhouse/disks/edr_s3_cache/</path>
+        <max_size>{{ ch_tier_cache_gb | default(50 if not lab else 1) }}Gi</max_size>
+      </edr_s3_cached>
+    </disks>
+    <policies>
+      <edr_tiered>
+        <volumes>
+          <default><disk>default</disk></default>
+          <cold>
+            <disk>edr_s3_cached</disk>
+            <!-- Parts there are not merged again (that would download them) nor written there on insert. -->
+            <prefer_not_to_merge>true</prefer_not_to_merge>
+            <perform_ttl_move_on_insert>false</perform_ttl_move_on_insert>
+          </cold>
+        </volumes>
+        <move_factor>0</move_factor>
+      </edr_tiered>
+    </policies>
+  </storage_configuration>
+
   <!-- Backups to the off-site bucket (roles/backup): BACKUP ... TO S3(...). -->
   <backups>
     <allowed_path>/var/lib/clickhouse/backups/</allowed_path>

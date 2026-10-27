@@ -2,6 +2,7 @@
 // answering on the local NATS as backend/apps/sms_switch/lib/sms/switch/commands.ex does (`smscmd.all|any|node.*`).
 import { test, after, before, describe } from "node:test";
 import assert from "node:assert/strict";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { connect, type NatsConnection } from "nats";
 import { closeDb, db, dbReady } from "../src/db.js";
 import {
@@ -299,6 +300,26 @@ describe("switch commands (step 11c)", { skip }, () => {
     ]))
       chunks.push(c as Buffer);
     assert.equal(Buffer.concat(chunks).toString(), "AAAABBBBCCCC");
+
+    // One gzip file: a server's .gz file as it is, a file not gzipped yet compressed on the way.
+    files.t_a = gzipSync(Buffer.from("FIRST|")).toString("latin1");
+    for (const node of ["t_a", "t_b"])
+      handlers[node]!.pcap_read = (d) => {
+        const body = Buffer.from(files[node]!, "latin1");
+        const offset = Number(d.offset);
+        const part = body.subarray(offset, offset + 3);
+        return { ok: true, data: { data: part.toString("base64"), size: body.length, eof: offset + 3 >= body.length } };
+      };
+    const gz: Buffer[] = [];
+    for await (const c of switchFiles(
+      [
+        { node: "t_a", file: "smpp_00001_20261025120000.pcapng.gz" },
+        { node: "t_b", file: "smpp_00009_20261025120000.pcapng" },
+      ],
+      true,
+    ))
+      gz.push(c as Buffer);
+    assert.equal(gunzipSync(Buffer.concat(gz)).toString(), "FIRST|CCCC");
   });
 
   test("the recording's files are kept per server for the PCAP Trace list; a quarter's files are found", async () => {

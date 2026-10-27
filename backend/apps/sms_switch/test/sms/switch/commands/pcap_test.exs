@@ -46,7 +46,10 @@ defmodule Sms.Switch.Commands.PcapTest do
         """),
       # mergecap -w out in...: the inputs one after another.
       "mergecap" => stub.("mergecap", "out=\"$2\"; shift 2; cat \"$@\" > \"$out\"\n"),
-      "capinfos" => stub.("capinfos", "echo -e \"file\\t42\"\n")
+      "capinfos" => stub.("capinfos", "echo -e \"file\\t42\"\n"),
+      # The off-site copy: a folder here.
+      "sms-pcap-fetch" =>
+        stub.("sms-pcap-fetch", "cp \"#{Path.join(tmp, "offsite")}/$1\" \"$2\"\n")
     }
 
     previous = Application.get_env(:sms_switch, Commands)
@@ -64,7 +67,7 @@ defmodule Sms.Switch.Commands.PcapTest do
     end)
 
     start_supervised!(Pcap)
-    %{ring: ring, captures: captures, log: log}
+    %{ring: ring, captures: captures, log: log, offsite: Path.join(tmp, "offsite")}
   end
 
   defp ask(name, data), do: Commands.answer(name, Jason.encode!(data))
@@ -96,6 +99,51 @@ defmodule Sms.Switch.Commands.PcapTest do
     assert first.name == a and first.started_at == "2026-10-25T12:00:00Z" and first.size == 5
     assert second.name == b and second.started_at == "2026-10-25T12:15:00Z"
     assert read_all(b) == "second-quarter"
+  end
+
+  test "gzipped and off-site files are listed, fetched once and extracted from", %{
+    ring: ring,
+    offsite: offsite,
+    log: log
+  } do
+    File.mkdir_p!(offsite)
+    old = "smpp_00001_20260801120000.pcapng.gz"
+    File.write!(Path.join(offsite, old), "moved-off-site|")
+    gone = "smpp_00009_20260701120000.pcapng.gz"
+    File.write!(Path.join(ring, "archive.index"), "#{old}\t15\n#{gone}\t9\nnotes.txt\t1\n")
+    zipped = ring_file(ring, 2, "20261025120000", "zipped|")
+    File.rename!(Path.join(ring, zipped), Path.join(ring, zipped <> ".gz"))
+    here = ring_file(ring, 3, "20261025121500", "here|")
+
+    assert %{ok: true, data: %{files: files}} = ask("pcap_files", %{})
+    assert Enum.map(files, & &1.name) == [gone, old, zipped <> ".gz", here]
+    assert Enum.find(files, &(&1.name == old)).started_at == "2026-08-01T12:00:00Z"
+
+    # Read off-site twice: fetched once, then from the captures folder.
+    assert read_all(old) == "moved-off-site|"
+    assert read_all(old) == "moved-off-site|"
+    assert File.read!(log) |> String.split("sms-pcap-fetch") |> length() == 2
+    # Listed under its old name, gzipped since: still read.
+    assert read_all(zipped) == "zipped|"
+
+    assert %{ok: true, data: %{files: 1}} =
+             ask("pcap_extract", %{
+               "id" => 21,
+               "from" => "2026-08-01T12:00:00Z",
+               "to" => "2026-08-01T12:10:00Z"
+             })
+
+    wait = fn wait ->
+      case ask("pcap_status", %{"ids" => [21]}) do
+        %{data: %{captures: [%{running: false, exists: true}]}} -> :ok
+        _ -> Process.sleep(50) && wait.(wait)
+      end
+    end
+
+    wait.(wait)
+    assert read_all("capture-21.pcapng") == "moved-off-site|"
+    # In the index but no longer off-site: the fetch fails and says so.
+    assert %{ok: false, error: "could not fetch " <> _} = ask("pcap_read", %{"file" => gone})
   end
 
   test "reads only capture and recording files, never a path" do

@@ -2,6 +2,7 @@
 // subjects of switch/commands.ts. Outside production these screens keep their simulated behaviour (api/network.ts,
 // api/observation.ts, api/routeSimulator.ts).
 import { Readable } from "node:stream";
+import { createGzip } from "node:zlib";
 import { isIP } from "node:net";
 import type pg from "pg";
 import { chRows } from "../edr.js";
@@ -319,20 +320,28 @@ export async function traceSources(pool: pg.Pool, start: Date): Promise<{ node: 
   return rows.map((r) => ({ node: r.node as string, file: r.name as string }));
 }
 
-/** The files one after another (pcapng sections), read from their servers in chunks. */
-export function switchFiles(sources: { node: string; file: string }[]): Readable {
+/**
+ * The files one after another (pcapng sections), read from their servers in chunks. With `gzip`, one gzip file: a
+ * recording file the server already gzipped (`.gz`, roles/pcap) as it is, any other gzipped on the way; gzip members
+ * one after another read as one file.
+ */
+export function switchFiles(sources: { node: string; file: string }[], gzip = false): Readable {
+  async function* raw(s: { node: string; file: string }) {
+    let offset = 0;
+    for (;;) {
+      const d = dataOf(
+        await askNode<{ data: string; size: number; eof: boolean }>(s.node, "pcap_read", { file: s.file, offset }, 30_000),
+      );
+      const bytes = Buffer.from(d.data, "base64");
+      if (bytes.length) yield bytes;
+      offset += bytes.length;
+      if (d.eof || !bytes.length) break;
+    }
+  }
   async function* chunks() {
     for (const s of sources) {
-      let offset = 0;
-      for (;;) {
-        const d = dataOf(
-          await askNode<{ data: string; size: number; eof: boolean }>(s.node, "pcap_read", { file: s.file, offset }, 30_000),
-        );
-        const bytes = Buffer.from(d.data, "base64");
-        if (bytes.length) yield bytes;
-        offset += bytes.length;
-        if (d.eof || !bytes.length) break;
-      }
+      if (!gzip || s.file.endsWith(".gz")) yield* raw(s);
+      else for await (const c of Readable.from(raw(s)).pipe(createGzip())) yield c as Buffer;
     }
   }
   return Readable.from(chunks());

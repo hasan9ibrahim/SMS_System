@@ -1,8 +1,8 @@
 // Master Report engine (§10, §13.15) on the EDR store. Group by up to 5 fields, any metrics, filters
 // with the §13.25 grammar: conditions on group-by fields run before grouping (names resolved to IDs,
 // chEngine.ts), metric thresholds after. Each page is grouped base sums -> metrics -> threshold
-// filter -> sort and page; totals and the count use the same filtered groups. Raw EDRs are used: the
-// edr_hourly roll-up keeps too many keys to be smaller (2.98 M rows for 5.2 M EDRs).
+// filter -> sort and page; totals and the count use the same filtered groups. Raw EDRs are used while the period is
+// within the detailed months; older periods read the long-term totals (masterSource, docs/BACKEND_PLAN.md §3.7).
 import { production } from "../mode.js";
 import type pg from "pg";
 import type {
@@ -22,6 +22,15 @@ import { decodeCursor, encodeCursor } from "../lists/engine.js";
 import { listFields } from "../lists/fields.js";
 import { causeName } from "../smpp.js";
 import { MAX_DAYS, previousWindow, resolvePeriod, type Window } from "./period.js";
+import {
+  beforeDetail,
+  checkQuarterBounds,
+  counter,
+  DETAIL_MONTHS,
+  PastDetailError,
+  pastDetail,
+  type EdrSource,
+} from "./source.js";
 
 const ENTERPRISES: NameSource = { table: "enterprises e", name: "e.name", id: "e.id" };
 /** The live screens label enterprises by alias (team trial round 1); the name stands in for an empty alias. */
@@ -168,33 +177,38 @@ export const DIMS: Record<ReportDimension, Dim> = {
 
 /** Base sums per group over `edr_all` (backend step 11b: attempts and the switch's receipt outcomes); counts of
  * attempts only on attempt rows, statuses, delays, billable counts and money on both. Money "_b" in the platform
- * currency, "_base" in the base currency. */
-const baseSums = (factor: string) =>
-  [
-    "countIf(kind = 'attempt') AS attempts",
-    "countIf(kind = 'attempt' AND is_submit_success = 1) AS successful",
-    "countIf(kind = 'attempt' AND v_trunk_id > 0) AS submitted",
-    "countIf(kind = 'attempt' AND v_trunk_id > 0 AND is_submit_success = 0) AS failed_submits",
-    "countIf(msg_status = 'DELIVRD') AS delivered_v",
-    "countIf(c_msg_status = 'DELIVRD') AS delivered_c",
-    "countIf(is_customer_billable = 1) AS billable_c",
-    "countIf(is_vendor_billable = 1) AS billable_v",
-    "countIf(c_msg_status NOT IN ('', 'ENROUTE')) AS reported_c",
-    "countIf(msg_status NOT IN ('', 'ENROUTE')) AS reported_v",
-    `toFloat64(sum(revenue_sys * ${factor})) AS revenue_b`,
-    `toFloat64(sum(cost_sys * ${factor})) AS cost_b`,
+ * currency, "_base" in the base currency: exact decimal sums, so the long-term totals give the same figures (they
+ * count their `rows`, source.ts). */
+const baseSums = (factor: string, src: EdrSource = "edr_all") => {
+  const n = counter(src);
+  // The factor depends on the row's business company; in decimals the sum is exact whatever the rows' grouping.
+  const fx = `toDecimal128(${factor}, 8)`;
+  return [
+    `${n("kind = 'attempt'")} AS attempts`,
+    `${n("kind = 'attempt' AND is_submit_success = 1")} AS successful`,
+    `${n("kind = 'attempt' AND v_trunk_id > 0")} AS submitted`,
+    `${n("kind = 'attempt' AND v_trunk_id > 0 AND is_submit_success = 0")} AS failed_submits`,
+    `${n("msg_status = 'DELIVRD'")} AS delivered_v`,
+    `${n("c_msg_status = 'DELIVRD'")} AS delivered_c`,
+    `${n("is_customer_billable = 1")} AS billable_c`,
+    `${n("is_vendor_billable = 1")} AS billable_v`,
+    `${n("c_msg_status NOT IN ('', 'ENROUTE')")} AS reported_c`,
+    `${n("msg_status NOT IN ('', 'ENROUTE')")} AS reported_v`,
+    `toFloat64(sum(toDecimal128(revenue_sys, 6) * ${fx})) AS revenue_b`,
+    `toFloat64(sum(toDecimal128(cost_sys, 6) * ${fx})) AS cost_b`,
     "toFloat64(sum(revenue_sys)) AS revenue_base",
     "toFloat64(sum(cost_sys)) AS cost_base",
     "uniqExact(business_company_id) AS companies",
     "toFloat64(sumIf(delivery_delay_ms, msg_status = 'DELIVRD')) AS delay_sum",
-    "countIf(hlr_fetch_type = 'cached') AS hlr_cached",
-    "countIf(hlr_fetch_type = 'live') AS hlr_live",
-    "countIf(hlr_is_accomplished = 1) AS hlr_acc",
-    "countIf(hlr_is_ported = 1) AS hlr_ported",
-    `toFloat64(sum(hlr_cost_sys * ${factor})) AS hlr_cost_b`,
-    "countIf(kind = 'attempt' AND (dlr_reroute = 1 OR attempt_no > 1)) AS reroutes",
-    "countIf(msg_type = 'MO') AS mo",
+    `${n("hlr_fetch_type = 'cached'")} AS hlr_cached`,
+    `${n("hlr_fetch_type = 'live'")} AS hlr_live`,
+    `${n("hlr_is_accomplished = 1")} AS hlr_acc`,
+    `${n("hlr_is_ported = 1")} AS hlr_ported`,
+    `toFloat64(sum(toDecimal128(hlr_cost_sys, 6) * ${fx})) AS hlr_cost_b`,
+    `${n("kind = 'attempt' AND (dlr_reroute = 1 OR attempt_no > 1)")} AS reroutes`,
+    `${n("msg_type = 'MO'")} AS mo`,
   ].join(", ");
+};
 export const BASE_COLUMNS = [
   "attempts",
   "successful",
@@ -415,6 +429,80 @@ export async function namedToCodes(pool: pg.Pool, group: FilterGroup): Promise<F
   return map(group) as FilterGroup;
 }
 
+// ---------------------------------------------------------------- long-term totals
+
+/** Only in the detailed EDRs (docs/BACKEND_PLAN.md §3.7). */
+const DETAIL_ONLY: Partial<Record<ReportDimension, string>> = {
+  second: "Grouping by second",
+  minute: "Grouping by minute",
+  customerIp: "The customer IP",
+  vendorIp: "The vendor IP",
+};
+const SENDER_DIMS = new Set<string>(["senderId", "senderGroup", "vendorSenderId", "vendorSenderGroup"]);
+/** What edr_sender_daily keeps beside the Sender IDs (ClickHouse 008). */
+const SENDER_TABLE_DIMS = new Set<string>([
+  ...SENDER_DIMS,
+  "date",
+  "week",
+  "month",
+  "customer",
+  "customerTrunk",
+  "vendor",
+  "vendorTrunk",
+  "country",
+  "destination",
+  "vendorCountry",
+  "vendorDestination",
+  "productCategory",
+  "accountManager",
+  "vendorAccountManager",
+  "businessCompany",
+  "msgType",
+  "deliveryStatus",
+]);
+const UTC_ZONES = new Set(["UTC", "Etc/UTC", "GMT", "Etc/GMT"]);
+
+function filterFields(node: FilterGroup | FilterCondition | null | undefined): string[] {
+  if (!node) return [];
+  return "logic" in node ? node.conditions.flatMap(filterFields) : [node.field];
+}
+
+/**
+ * The table a report reads: edr_all while every window is within the detailed months, else the 15-minute totals, or
+ * the daily Sender ID totals when a Sender ID is grouped or filtered on. Throws PastDetailError for what the totals
+ * do not keep.
+ */
+export function masterSource(
+  q: Pick<MasterReportQuery, "groupBy" | "metrics" | "sort" | "timezone" | "hourFrom" | "hourTo">,
+  windows: Window[],
+  dimFilter: FilterGroup | null,
+  now: number,
+): EdrSource {
+  if (!windows.some((w) => beforeDetail(w.from))) return "edr_all";
+  const used = new Set<string>([...q.groupBy, ...filterFields(dimFilter)]);
+  for (const f of used) {
+    const what = DETAIL_ONLY[f as ReportDimension];
+    if (what) throw pastDetail(what);
+  }
+  const tps = (f: string) => f === "tpsPeak" || f === "tpsNow";
+  if (q.metrics.some(tps) || q.sort?.some((x) => tps(x.field))) throw pastDetail("TPS peak and TPS now");
+  if (![...used].some((f) => SENDER_DIMS.has(f))) {
+    for (const w of windows) checkQuarterBounds(now, w.from, w.to);
+    return "edr_totals";
+  }
+  const other = [...used].find((f) => !SENDER_TABLE_DIMS.has(f));
+  if (other)
+    throw new PastDetailError(
+      `Sender IDs older than ${DETAIL_MONTHS} months are kept per day with partners, trunks, destinations, AMs and statuses; ${DIM_LABELS[other as ReportDimension] ?? other} is not among them`,
+    );
+  const days = windows.every((w) => w.from.getTime() % 86_400_000 === 0 && w.to.getTime() % 86_400_000 === 0);
+  if (!days || !UTC_ZONES.has(q.timezone) || q.hourFrom != null || q.hourTo != null)
+    throw new PastDetailError(
+      `Sender IDs older than ${DETAIL_MONTHS} months are kept per UTC day: choose the UTC time zone and whole days`,
+    );
+  return "edr_sender_daily";
+}
+
 // ---------------------------------------------------------------- run
 
 export interface ReportResult {
@@ -507,17 +595,22 @@ export async function runMasterReport(
   const D = dimsFor(q);
   const dimWhere = split.dims ? await chWhere(pool, dimDef(tz, D), { filter: split.dims }) : "1";
   const typeWhere = q.msgType ? `msg_type = ${lit(q.msgType)}` : "1";
+  const prevWindow = q.compare && q.compare !== "none" ? previousWindow(window, q.compare) : null;
+  const src = masterSource(q, prevWindow ? [window, prevWindow] : [window], split.dims, await reportNow());
   // Live TPS (team trial round 1): the last minute up to now, when the period includes now. "Now" is the
   // latest EDR in this phase (the fake data ends when it was generated); the backend uses its live counters.
   // Counted in the grouped query, so it can be sorted on like any metric.
-  const nowMs = q.metrics.includes("tpsNow") || q.sort?.some((x) => x.field === "tpsNow") ? await reportNow() : null;
+  const nowMs =
+    src === "edr_all" && (q.metrics.includes("tpsNow") || q.sort?.some((x) => x.field === "tpsNow"))
+      ? await reportNow()
+      : null;
   const nowWindow =
     nowMs !== null && window.from.getTime() <= nowMs && nowMs <= window.to.getTime()
       ? { from: new Date(nowMs - 60_000), to: new Date(nowMs + 1) }
       : null;
   const nowCol = nowWindow ? `countIf(kind = 'attempt' AND ${timeWhere(nowWindow)}) AS now_n` : "0 AS now_n";
   const grouped = (w: Window, extra = "1") =>
-    `SELECT ${dimIds.join(", ")}, ${baseSums(factor)}, ${nowCol} FROM edr_all WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
+    `SELECT ${dimIds.join(", ")}, ${baseSums(factor, src)}, ${nowCol} FROM ${src} WHERE ${tw(w)} AND ${typeWhere} AND ${dimWhere} AND ${extra}
       GROUP BY ${q.groupBy.map((d) => `d_${d}`).join(", ")}`;
   const withMetrics = (w: Window, extra = "1") =>
     `SELECT *, ${Object.entries(msql)
@@ -586,7 +679,6 @@ export async function runMasterReport(
           )
           .join(", ")})`
       : "0";
-  const prevWindow = q.compare && q.compare !== "none" ? previousWindow(window, q.compare) : null;
   const wantPeak = q.metrics.includes("tpsPeak");
   const peakSql = (w: Window, rs: Record<string, unknown>[] | null) =>
     `SELECT ${rs ? q.groupBy.map((d) => `d_${d}`).join(", ") + ", " : ""}max(n) AS peak FROM (

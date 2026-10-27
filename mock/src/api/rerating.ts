@@ -23,6 +23,7 @@ import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { production } from "../mode.js";
 import { money } from "../currency.js";
+import { beforeDetail, DETAIL_MONTHS, detailHorizon } from "../reports/source.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -61,6 +62,12 @@ async function checkInput(db: Db, input: ReratingInput) {
   const errors: { path: string; message: string }[] = [];
   if (input.endDate < input.startDate) errors.push({ path: "/endDate", message: "must be on or after the start date" });
   if (Date.parse(input.endDate) > Date.now()) errors.push({ path: "/endDate", message: "cannot be in the future" });
+  // Re-rating changes message by message: only the detailed EDRs have them (docs/BACKEND_PLAN.md §3.7).
+  if (beforeDetail(new Date(Date.parse(`${input.startDate}T00:00:00Z`) - 14 * 3_600_000)))
+    errors.push({
+      path: "/startDate",
+      message: `message details are kept for ${DETAIL_MONTHS} months; start on or after ${detailHorizon(Date.now() + 86_400_000).toISOString().slice(0, 10)}`,
+    });
   const { rows: t } = await db.query("SELECT kind, currency, name FROM rate_tables WHERE id = $1", [input.rateTableId]);
   if (!t[0]) errors.push({ path: "/rateTableId", message: "unknown rate table" });
   else if (t[0].kind !== input.side)

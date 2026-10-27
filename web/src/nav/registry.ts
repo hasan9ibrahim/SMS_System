@@ -465,7 +465,7 @@ export const PAGES: PageDef[] = [
     "wave",
     "§9.2",
     "5.9",
-    "Recording of all SMPP traffic, kept 60 days",
+    "Recording of all SMPP traffic, kept 120 days",
   ),
   p(
     "monitoring",

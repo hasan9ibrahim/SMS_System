@@ -1,0 +1,11 @@
+# {{ ansible_managed }} (deploy/ansible/roles/pcap): the off-site bucket for the recording (sms-pcap-archive) and the
+# switch's fetches (sms-pcap-fetch).
+[offsite]
+type = s3
+provider = Other
+access_key_id = {{ vault_s3_access_key }}
+secret_access_key = {{ vault_s3_secret_key }}
+endpoint = https://{{ s3_endpoint }}:{{ s3_port }}
+region = {{ s3_region }}
+force_path_style = true
+no_check_bucket = true

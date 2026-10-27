@@ -80,6 +80,7 @@ import { PRESETS } from "../reports/presets.js";
 import type { ListDef } from "./engine.js";
 import { isNameValue, mccmncByNameSql } from "./mccmncNames.js";
 import { byEnterprise, enterpriseLabel, hide, lit, maskName, vis, visCol } from "../visibility/sql.js";
+import { RECORDING_DAYS } from "../recording.js";
 
 // AM visibility (§13.17): names masked and values hidden for viewers who do not own the row.
 const enterpriseMask = (alias: string) =>
@@ -3103,10 +3104,11 @@ export type PgListId = Exclude<
 
 /**
  * PCAP Trace (§9.2, team trial round 1): every SMPP packet is recorded into one file per quarter-hour,
- * gzip-compressed once the quarter is over, and kept 60 days. The files are listed from a series of
- * quarters; sizes follow the platform volume and the hour of the day (fake, deterministic per quarter).
+ * gzip-compressed once the quarter is over, and kept 120 days: 60 on the servers, 60 more off-site (product owner
+ * 2026-10-27; PCAP_RECORDING_DAYS from deploy/ansible). The files are listed from a series of quarters; sizes follow
+ * the platform volume and the hour of the day (fake, deterministic per quarter).
  */
-export const RECORDING_KEEP_DAYS = 60;
+export const RECORDING_KEEP_DAYS = RECORDING_DAYS;
 const SIM_TPS = Number(process.env.SIM_TOTAL_TPS ?? 40) || 40;
 const PCAP_TRACE_FROM = `(SELECT q.*, CASE WHEN q.in_progress
           THEN greatest(24, (extract(epoch FROM now() - q.started_at) * ${SIM_TPS} * 1000)::bigint)

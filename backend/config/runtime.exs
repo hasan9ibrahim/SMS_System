@@ -54,6 +54,11 @@ config :sms_core, Sms.Core.Redis,
   sentinel_password: System.get_env("REDIS_SENTINEL_PASSWORD"),
   pool_size: int.("REDIS_POOL_SIZE", "5")
 
+# Detailed EDRs (product owner 2026-10-27): off-site after hot_months, deleted after keep_months (Sms.Core.Release).
+config :sms_core, :edr_retention,
+  hot_months: int.("EDR_HOT_MONTHS", "6"),
+  keep_months: int.("EDR_KEEP_MONTHS", "12")
+
 config :sms_core, Sms.Core.ClickHouse,
   hostname: env.("CLICKHOUSE_HOST", "localhost"),
   port: int.("CLICKHOUSE_HTTP_PORT", "8123"),

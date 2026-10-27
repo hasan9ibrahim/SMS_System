@@ -37,6 +37,7 @@ import { sendProblem } from "../problem.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { companyMailbox, logEmail } from "./emailLog.js";
+import { beforeDetail, dec, decFactor } from "../reports/source.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -882,12 +883,15 @@ export function calculateCharges(request: FastifyRequest, reply: FastifyReply) {
     const billing = new Map(ents.map((e) => [Number(e.id), { cur: e.cur as string, per: Number(e.per_platform) }]));
     const factor = await sysToPlatformFactor();
     const to = new Date(Date.parse(body.to) + 86400_000).toISOString().slice(0, 10);
+    // Days start at midnight in each zone (whole quarter hours): the long-term totals answer older periods exactly
+    // (docs/BACKEND_PLAN.md §3.7); 14 hours covers the zones' offsets.
+    const src = beforeDetail(new Date(Date.parse(`${body.from}T00:00:00Z`) - 14 * 3_600_000)) ? "edr_totals" : "edr_all";
     const side = (s: "c" | "v", ids: number[], tz: string) => `
       SELECT '${s}' AS side, ${s}_enterprise_id AS e, ${s}_currency AS cur,
              sum(msg_count * is_${s === "c" ? "customer" : "vendor"}_billable) AS msgs,
              toFloat64(sum(${s === "c" ? "revenue" : "cost"})) AS amount,
-             toFloat64(sum(${s === "c" ? "revenue_sys" : "cost_sys"} * ${factor})) AS platform
-        FROM edr_all
+             toFloat64(sum(${dec(s === "c" ? "revenue_sys" : "cost_sys")} * ${decFactor(factor)})) AS platform
+        FROM ${src}
        WHERE ${s}_enterprise_id IN (${ids.join(",")})
          AND submit_time >= toDateTime64(${lit(`${body.from} 00:00:00`)}, 3, ${lit(tz)})
          AND submit_time < toDateTime64(${lit(`${to} 00:00:00`)}, 3, ${lit(tz)})

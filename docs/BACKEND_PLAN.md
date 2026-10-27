@@ -12,7 +12,8 @@ reuse the D numbers.
 - §3.1 first decided as TypeScript API, then **changed the same day to Elixir for the whole backend** (Q2); spec §14 and CLAUDE.md say Elixir.
 - §3.2 receipts as appended rows; §3.3 checks before the resp, HLR after; §3.4 PCAP at OS level; §3.5 witness VM.
 - §3.6 vendor submit timeout **stays 30 s** for now (Q11).
-- §3.7 message text kept **1 year**, then blanked (Q30).
+- §3.7 detailed EDRs kept **12 months** (6 on the servers, 6 off-site), report figures **for ever** (Q30, revised
+  2026-10-27); traffic recording 60 days on the servers and 60 off-site.
 - Q1 phase A by 30 November (switch on test traffic, servers ready); Q3 design target **1,000 TPS peak and 50 million
   a day**; Q6 **99 % of customers use SMPP** (HTTP API: see Q6 below); Q7 **no MO traffic today** (MO not in v1);
   Q10 two IPs, under **one host name** (see Q10); Q25 migration by exported files; Q26 same SMPP usernames and
@@ -214,13 +215,28 @@ from the third NATS copy.
 With D4 (re-route on a vendor timeout), a 30-second timeout delays every re-routed message by 30 s, and it is longer
 than many clients wait when a Delayed Submit trunk (D11) is used. A healthy vendor answers in well under 1 s.
 
-### 3.7 Message text is not kept for 7 years *(Q30, decided: 1 year)*
+### 3.7 Retention: detailed EDRs 12 months, report figures for ever *(Q30, decided 2026-10-27)*
 
-EDRs hold the full message text: OTP codes, personal messages. Keeping it for 7 years (the billing retention) is a
-privacy and data-protection risk, and is likely a problem under GDPR for EU traffic.
+At 10 million messages a day (product owner 2026-10-27) the servers hold:
 
-Proposal: keep the text for a short period (for example 30 days) for troubleshooting, then blank it. All other EDR
-fields stay for the full retention. OTP-like codes are masked for roles without permission.
+* **Detailed EDRs, 12 months.** The last `edr_hot_months` (6) on the servers' NVMe; the 6 before on the off-site
+  bucket through ClickHouse tiered storage (policy `edr_tiered`, a local cache in front; deploy/ansible
+  `roles/clickhouse`), still searched, downloaded and reported from, a little slower; deleted after `edr_keep_months`
+  (12). `Sms.Core.Release` sets both on `edr` and `edr_receipt` (applied only when a table's TTL differs). This replaces
+  the earlier "text 1 year, other fields 7 years": nothing of a message is kept past 12 months.
+* **Report figures, for ever.** ClickHouse 008: `edr_totals` sums `edr_all` per 15 minutes (both arrival and submit
+  quarter) and per every column a report groups, filters or multiplies by (partners, trunks, AMs, destinations,
+  route, rate tables, rates, currencies and exchange rates, statuses, cause codes, billable flags, HLR); and
+  `edr_sender_daily` the same per UTC day with both Sender IDs. A report whose period starts before the detailed
+  months reads them (mock/src/reports/source.ts) and gives the same figures, proven by `mock/test/longTermTotals.test.ts`
+  on every report, invoice line and usage figure. Past 12 months: no EDR search, download, repush or re-rating; no
+  grouping by second, minute or IP; no TPS peak or TPS now; Sender IDs by UTC day only (refused with the reason).
+* **Traffic recording**, 60 days on the servers (gzipped every 15 minutes) and 60 more on the bucket (`roles/pcap`,
+  `sms-pcap-archive`); the PCAP screens list and fetch the off-site files (`sms-pcap-fetch`).
+
+Sizes per server (both hold every EDR): EDRs 0.45–0.8 TB, recording 0.2–0.4 TB, event bus ~0.2 TB, the rest ~0.2 TB:
+about 1.1–1.6 TB of the 3.84 TB mirror. Off-site: each server's own copy of EDR months 7–12, its recording days 61–120,
+and the backups.
 
 ## 4. Other risk areas the build must test
 
@@ -306,7 +322,7 @@ These come on top of the switch scenarios in `docs/SMPP_SCENARIOS.md`. Each gets
 | # | Question | Recommendation |
 | --- | --- | --- |
 | Q29 | With one engineer, who receives alerts at night? | Alerts go to your phone (Telegram or SMS) and the NOC team. Each alert comes with a written runbook (what to check, what to do) |
-| Q30 | Message text retention (§3.7)? **Decided:** text kept **1 year**, then blanked; all other fields for the full retention | Mask OTP-like codes for roles without permission (open) |
+| Q30 | Retention (§3.7)? **Decided 2026-10-27:** detailed EDRs **12 months** (6 on the servers, 6 off-site), then deleted; report figures **for ever** (15-minute totals, Sender IDs per day); recording 60 days here and 60 off-site (earlier: text 1 year, other fields 7 years) | Mask OTP-like codes for roles without permission (open) |
 | Q31 | Where do off-site backups go? | S3-compatible object storage at another provider: nightly full backup, continuous database log shipping, restore tested monthly |
 | Q32 | The 2 servers: same data centre, or 2 data centres in the same city? | **2 data centres of the same provider in the same city**, with under 2 ms between them, so the 50 ms resp target holds. Witness VM at another provider |
 | Q33 | Staff access to the portal | Over **VPN or an office IP allow-list**, plus 2FA. SMPP ports open only to whitelisted partner IPs |

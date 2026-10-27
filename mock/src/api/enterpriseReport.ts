@@ -18,6 +18,15 @@ import type {
   ReportMetrics,
 } from "@sms/contract";
 import { PLATFORM_CURRENCY, sysToPlatformFactor } from "../currency.js";
+import {
+  beforeDetail,
+  checkQuarterBounds,
+  counter,
+  dec,
+  decFactor,
+  PastDetailError,
+  type EdrSource,
+} from "../reports/source.js";
 import { db } from "../db.js";
 import { chRows } from "../edr.js";
 import { listFields } from "../lists/fields.js";
@@ -61,35 +70,40 @@ const BASE = [
 ] as const;
 type Base = Record<(typeof BASE)[number], number>;
 
-/** Per-EDR sums. Money "_p" is in the partner currency, "_b" in the platform currency (§13.9 decision). */
-function baseAggregates(side: "customer" | "vendor", factor: string): string {
+/**
+ * Per-EDR sums. Money "_p" is in the partner currency, "_b" in the platform currency (§13.9 decision), multiplied in
+ * exact decimals so the long-term totals (docs/BACKEND_PLAN.md §3.7) give the same figures.
+ */
+function baseAggregates(side: "customer" | "vendor", factor: string, src: EdrSource = "edr_all"): string {
   const c = side === "customer";
   const ex = c ? "c_ex_rate" : "v_ex_rate";
+  const n = counter(src);
+  const f = decFactor(factor);
   return [
     // edr_all (ClickHouse 006): attempt rows and the switch's outcome rows; deliveries, delays and money add up over
     // both, attempts are the attempt rows (backend step 11b).
-    "countIf(kind = 'attempt') AS attempts",
-    "countIf(is_submit_success = 1) AS successful",
-    "countIf(kind = 'attempt' AND v_trunk_id > 0) AS submitted",
-    "countIf(is_customer_billable = 1) AS billable_c",
-    "countIf(is_vendor_billable = 1) AS billable_v",
-    "countIf(c_msg_status = 'DELIVRD') AS delivered_c",
-    "countIf(msg_status = 'DELIVRD') AS delivered_v",
-    "countIf(c_msg_status NOT IN ('', 'ENROUTE')) AS reported_c",
-    "countIf(msg_status NOT IN ('', 'ENROUTE')) AS reported_v",
+    `${n("kind = 'attempt'")} AS attempts`,
+    `${n("is_submit_success = 1")} AS successful`,
+    `${n("kind = 'attempt' AND v_trunk_id > 0")} AS submitted`,
+    `${n("is_customer_billable = 1")} AS billable_c`,
+    `${n("is_vendor_billable = 1")} AS billable_v`,
+    `${n("c_msg_status = 'DELIVRD'")} AS delivered_c`,
+    `${n("msg_status = 'DELIVRD'")} AS delivered_v`,
+    `${n("c_msg_status NOT IN ('', 'ENROUTE')")} AS reported_c`,
+    `${n("msg_status NOT IN ('', 'ENROUTE')")} AS reported_v`,
     // The partner's side is in its own currency; the other side is converted into it via the base.
-    `toFloat64(${c ? "sum(revenue)" : `sum(revenue_sys * ${ex})`}) AS revenue_p`,
-    `toFloat64(${c ? `sum(cost_sys * ${ex})` : "sum(cost)"}) AS cost_p`,
-    `toFloat64(sum(revenue_sys * ${factor})) AS revenue_b`,
-    `toFloat64(sum(cost_sys * ${factor})) AS cost_b`,
+    `toFloat64(${c ? "sum(revenue)" : `sum(${dec("revenue_sys")} * ${ex})`}) AS revenue_p`,
+    `toFloat64(${c ? `sum(${dec("cost_sys")} * ${ex})` : "sum(cost)"}) AS cost_p`,
+    `toFloat64(sum(${dec("revenue_sys")} * ${f})) AS revenue_b`,
+    `toFloat64(sum(${dec("cost_sys")} * ${f})) AS cost_b`,
     "toFloat64(sumIf(delivery_delay_ms, msg_status = 'DELIVRD')) AS delay_sum",
-    "countIf(msg_status = 'DELIVRD') AS delay_n",
-    "countIf(hlr_fetch_type = 'cached') AS hlr_cached",
-    "countIf(hlr_fetch_type = 'live') AS hlr_live",
-    "countIf(hlr_is_accomplished = 1) AS hlr_acc",
-    "countIf(hlr_is_ported = 1) AS hlr_ported",
-    `toFloat64(sum(hlr_cost_sys * ${factor})) AS hlr_cost_b`,
-    `toFloat64(sum(hlr_cost_sys * ${ex})) AS hlr_cost_p`,
+    `${n("msg_status = 'DELIVRD'")} AS delay_n`,
+    `${n("hlr_fetch_type = 'cached'")} AS hlr_cached`,
+    `${n("hlr_fetch_type = 'live'")} AS hlr_live`,
+    `${n("hlr_is_accomplished = 1")} AS hlr_acc`,
+    `${n("hlr_is_ported = 1")} AS hlr_ported`,
+    `toFloat64(sum(${dec("hlr_cost_sys")} * ${f})) AS hlr_cost_b`,
+    `toFloat64(sum(${dec("hlr_cost_sys")} * ${ex})) AS hlr_cost_p`,
   ].join(",\n         ");
 }
 
@@ -345,7 +359,27 @@ function checkParams(p: EnterpriseReportParams): string | null {
   if (!Number.isFinite(from) || !Number.isFinite(to)) return "/report/from: invalid date";
   if (to <= from) return "/report/to: the end must be after the start";
   if (to - from > MAX_DAYS * 86_400_000) return `/report/to: at most ${MAX_DAYS} days per report`;
+  try {
+    sourceOf(p);
+  } catch (e) {
+    if (e instanceof PastDetailError) return `/report/from: ${e.message}`;
+    throw e;
+  }
   return null;
+}
+
+/**
+ * edr_all, or the long-term totals when the period starts before the detailed EDRs (docs/BACKEND_PLAN.md §3.7). The
+ * bounds are wall times in each partner's zone (offsets of whole quarter hours), so a bound within 14 hours either
+ * way of an instant is that instant's quarter hour or not alike.
+ */
+function sourceOf(p: Pick<EnterpriseReportParams, "from" | "to">): EdrSource {
+  const zone = 14 * 3_600_000;
+  const from = new Date(Date.parse(`${p.from}:00Z`));
+  const to = new Date(Date.parse(`${p.to}:00Z`));
+  if (!beforeDetail(new Date(from.getTime() - zone))) return "edr_all";
+  checkQuarterBounds(Date.now() + zone, from, to);
+  return "edr_totals";
 }
 
 export async function runEnterpriseReport(
@@ -358,6 +392,7 @@ export async function runEnterpriseReport(
   const groupBy = p.groupBy ?? ["enterprise", "trunk"];
   const reportBy = p.reportBy ?? "daily";
   const [groups, names, factor] = await Promise.all([timezoneGroups(p), loadNames(side), sysToPlatformFactor()]);
+  const src = sourceOf(p);
   const empty: EnterpriseReportPage = {
     rows: [],
     totals: metricsFrom(Object.fromEntries(BASE.map((k) => [k, 0])) as Base),
@@ -385,13 +420,13 @@ export async function runEnterpriseReport(
   if (p.accountManagerIds?.length) where.push(`${s}_am_user_id IN (${ids(p.accountManagerIds)})`);
   // Exact codes: a 3-digit code is the country's All networks entry, not the whole country (team trial round 1).
   if (p.mccmncs?.length) where.push(`c_mccmnc IN (${p.mccmncs.map(lit).join(",")})`);
-  const aggs = baseAggregates(side, factor);
+  const aggs = baseAggregates(side, factor, src);
   const parts = groups.map((g) => {
     const tz = lit(g.timezone);
     const k = keys.map((x) => x.replace("PERIOD", BUCKET[reportBy]?.(g.timezone) ?? "''"));
     return `SELECT ${k.join(", ")}, ${tz} AS timezone,
          ${aggs}
-       FROM edr_all
+       FROM ${src}
       WHERE ${s}_trunk_id IN (${ids(g.trunkIds)})
         AND submit_time >= toDateTime64(${lit(`${p.from.replace("T", " ")}:00`)}, 3, ${tz})
         AND submit_time < toDateTime64(${lit(`${p.to.replace("T", " ")}:00`)}, 3, ${tz})

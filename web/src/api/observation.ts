@@ -135,7 +135,7 @@ export const useKeepCapture = () =>
   useWrite(({ id, keep }: { id: number; keep: boolean }): Promise<SignalingCaptureRow> =>
     unwrap(api.POST("/signaling-captures/{id}/keep", { params: { path: { id } }, body: { keep } })),
   );
-/** Traffic recording (§9, team trial round 1): every packet kept 60 days; cut a PCAP for a past window. */
+/** Traffic recording (§9, team trial round 1): every packet kept 120 days (60 on the servers, 60 off-site); cut a PCAP for a past window. */
 export const useRecordingStatus = () =>
   useQuery<RecordingStatus>({
     queryKey: ["signaling-recording"],

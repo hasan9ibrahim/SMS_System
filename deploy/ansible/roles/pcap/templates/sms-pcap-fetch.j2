@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }} (deploy/ansible/roles/pcap). One recording file back from the off-site bucket, for the switch
+# (Sms.Switch.Commands.Pcap) when the PCAP screens read or extract a file moved there:  sms-pcap-fetch NAME DEST
+set -euo pipefail
+[[ "${1:-}" =~ ^[A-Za-z0-9_-]+_[0-9]{5}_[0-9]{14}\.pcapng(\.gz)?$ ]] || { echo "not a recording file: ${1:-}" >&2; exit 2; }
+export RCLONE_CONFIG=/etc/sms/rclone.conf
+{% if not s3_verify_tls %}
+export RCLONE_NO_CHECK_CERTIFICATE=true
+{% endif %}
+exec rclone copyto "offsite:{{ s3_bucket }}/pcap/{{ inventory_hostname }}/$1" "$2"

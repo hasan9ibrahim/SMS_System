@@ -38,6 +38,7 @@ import { inTransaction } from "./views.js";
 import { production } from "../mode.js";
 import { switchProblem } from "../switch/commands.js";
 import { switchRepush } from "../switch/operations.js";
+import { PastDetailError } from "../reports/source.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -45,6 +46,9 @@ type Params = { id: number };
 /** EDR store errors: unreachable = 503; a query ClickHouse rejects (e.g. a bad regex) = 400. */
 export function chProblem(reply: FastifyReply, err: unknown) {
   if (err instanceof ChUnavailable) return sendProblem(reply, 503, "The EDR store is not answering; try again shortly");
+  // Detail asked for a period older than the detailed EDRs (docs/BACKEND_PLAN.md §3.7).
+  if (err instanceof PastDetailError)
+    return sendProblem(reply, 400, err.message, { errors: [{ path: "/query", message: err.message }] });
   if (err instanceof ChError)
     return sendProblem(reply, 400, "The EDR store rejected the query", {
       errors: [{ path: "/filter", message: err.message.split("\n")[0]!.slice(0, 300) }],

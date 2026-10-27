@@ -2,7 +2,7 @@
 // In this phase the mock plays the switch: it keeps every trunk's bind status and SMPP sessions
 // (trunk_binds, bind_sessions) moving, builds pcap files from fake SMPP traffic, and answers
 // diagnosis tools with simulated output. Nothing here sends a packet.
-import { createGzip, gzipSync } from "node:zlib";
+import { gzipSync } from "node:zlib";
 import { isIP } from "node:net";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
@@ -25,6 +25,7 @@ import {
   NETWORK_FROM,
   networkBindList,
 } from "../lists/defs.js";
+import { RECORDING_DAYS } from "../recording.js";
 import { compileQuery, type ListDef } from "../lists/engine.js";
 import { listFields } from "../lists/fields.js";
 import { checkListQuery } from "../lists/validate.js";
@@ -409,8 +410,7 @@ export function validIpFilter(v: string): boolean {
   return Number(m[2]) <= (isIP(m[1]!) === 4 ? 32 : 128);
 }
 
-/** Traffic recording (§9, team trial round 1): every packet kept this many days. */
-export const RECORDING_DAYS = 60;
+export { RECORDING_DAYS };
 const RECORDING_MAX_HOURS = 24;
 
 /** Files cut from the recording are ready a few seconds after the request; size follows the window. */
@@ -643,16 +643,15 @@ function downloadSwitchTrace(reply: FastifyReply, id: number, start: number, now
       const sources = await traceSources(pool, new Date(start));
       if (!sources.length) return notFound(reply, "Trace file", id);
       const stamp = new Date(start).toISOString().slice(2, 19).replace(/[T:]/g, "-");
-      const file = switchFiles(sources);
       return start + 900_000 > now
         ? reply
             .type("application/vnd.tcpdump.pcap")
             .header("content-disposition", `attachment; filename="trace-${stamp}.pcapng"`)
-            .send(file)
+            .send(switchFiles(sources))
         : reply
             .type("application/gzip")
             .header("content-disposition", `attachment; filename="trace-${stamp}.pcapng.gz"`)
-            .send(file.pipe(createGzip()));
+            .send(switchFiles(sources, true));
     } catch (err) {
       return switchProblem(reply, err);
     }

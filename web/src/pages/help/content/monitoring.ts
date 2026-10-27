@@ -627,6 +627,10 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "Use it to answer questions like: did this number get the message, why did it fail, which vendor carried it, what did we charge and pay? The NOC and support use it daily; Account Managers use it to answer customer complaints.",
           },
+          {
+            kind: "text",
+            text: "EDRs are kept **12 months**: the last 6 on the platform's own servers, the 6 before in off-site storage (searches there take a little longer). Older messages cannot be searched, downloaded or repushed, but every report still has their figures.",
+          },
         ],
       },
       {
@@ -1261,7 +1265,7 @@ export const topics: HelpTopic[] = [
     title: "PCAP trace",
     group: "Monitoring",
     summary:
-      "Every SMPP packet on the switch is recorded and kept 60 days. Download the 15-minute trace files, or extract a PCAP for a period and a trunk, number, message ID or IP.",
+      "Every SMPP packet on the switch is recorded and kept 120 days: 60 on the servers, then 60 more in off-site storage. Download the 15-minute trace files, or extract a PCAP for a period and a trunk, number, message ID or IP.",
     keywords: ["PCAP", "trace", "recording", "Wireshark", "extract", "packet capture", "past traffic"],
     sections: [
       {
@@ -1292,7 +1296,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Files older than 60 days are deleted automatically. Filter by name or time under the column headers.",
+            text: "Files older than 120 days are deleted automatically. Files from 60 to 120 days old are in off-site storage: they download and extract the same, only a few seconds slower. Filter by name or time under the column headers.",
           },
         ],
       },
@@ -1303,7 +1307,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "fields",
             fields: [
-              { name: "From / To (UTC)", what: "The period, at most 24 hours, inside the last 60 days." },
+              { name: "From / To (UTC)", what: "The period, at most 24 hours, inside the last 120 days." },
               { name: "Customer trunk / Vendor trunk", what: "Only that trunk's traffic. Leave **Any** for all." },
               { name: "Number", what: "Messages with this sender or receiver." },
               { name: "Message ID", what: "One message (ours or the vendor's) and its receipts." },

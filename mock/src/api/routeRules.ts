@@ -775,7 +775,10 @@ export function discardRouteRule(request: FastifyRequest, reply: FastifyReply) {
       [id],
     );
     const { rows: now } = await pool.query("SELECT status FROM route_rules WHERE id = $1", [id]);
-    const traffic = await chRows<{ n: string }>(`SELECT count() AS n FROM edr WHERE route_rule_id = ${Number(id)}`);
+    // Ever: the long-term totals outlive the detailed EDRs (docs/BACKEND_PLAN.md §3.7).
+    const traffic = await chRows<{ n: string }>(
+      `SELECT sum(rows) AS n FROM edr_totals WHERE route_rule_id = ${Number(id)} AND kind = 'attempt'`,
+    );
     if (
       Number(rows[0].created_by_id) !== me.id ||
       !rows[0].recent ||
