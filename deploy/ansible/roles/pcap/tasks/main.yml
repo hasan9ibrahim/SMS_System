@@ -1,12 +1,14 @@
-# Recorded SMPP traffic for 60 days (spec §9.2; plan §3.4): dumpcap writes 15-minute files in a ring outside the
-# switch, so recording never slows the message path. The switch reads these files for the PCAP screens and runs its own
-# live captures, extracts and Network Diagnosis probes (backend step 11c, Sms.Switch.Commands.Pcap and .Diagnose).
+# Recorded SMPP traffic (spec §9.2; plan §3.4): dumpcap writes 15-minute files outside the switch, so recording never
+# slows the message path; sms-pcap-archive keeps them {{ pcap_local_days }} days here and {{ pcap_offsite_days }} more
+# off-site (product owner 2026-10-27). The switch reads these files for the PCAP screens, fetching back those moved
+# off-site, and runs its own live captures, extracts and Network Diagnosis probes (backend step 11c,
+# Sms.Switch.Commands.Pcap and .Diagnose).
 - name: Live captures run dumpcap as the switch user (capture rights through the wireshark group)
   ansible.builtin.debconf: {name: wireshark-common, question: wireshark-common/install-setuid, value: "true", vtype: boolean}
 
 - name: dumpcap, tshark, mergecap, capinfos and the diagnosis tools
   ansible.builtin.apt:
-    name: [wireshark-common, tshark, iputils-ping, traceroute, mtr-tiny]
+    name: [wireshark-common, tshark, iputils-ping, traceroute, mtr-tiny, rclone]
     update_cache: true
     cache_valid_time: 3600
   environment: {DEBIAN_FRONTEND: noninteractive}
@@ -27,9 +29,38 @@
 - name: Captures and extracts folder (written by the switch)
   ansible.builtin.file: {path: "{{ pcap_dir }}/captures", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0750"}
 
+- name: Files fetched back from off-site (written by the switch, cleared by the archive job)
+  ansible.builtin.file: {path: "{{ pcap_dir }}/captures/archive", state: directory, owner: "{{ switch_user }}", group: "{{ switch_user }}", mode: "0750"}
+
 - name: Service
   ansible.builtin.template: {src: sms-pcap.service.j2, dest: /etc/systemd/system/sms-pcap.service, mode: "0644"}
   register: unit
 
 - name: Running
   ansible.builtin.systemd_service: {name: sms-pcap, enabled: true, state: "{{ 'restarted' if unit.changed else 'started' }}", daemon_reload: true}
+
+- name: Settings folder (also made by roles/switch)
+  ansible.builtin.file: {path: /etc/sms, state: directory, owner: root, group: "{{ switch_user }}", mode: "0750"}
+
+- name: Off-site bucket for the recording (the switch reads it to fetch files back)
+  ansible.builtin.template: {src: rclone.conf.j2, dest: /etc/sms/rclone.conf, owner: root, group: "{{ switch_user }}", mode: "0640"}
+
+- name: Archive and fetch scripts
+  ansible.builtin.template: {src: "{{ item.name }}.j2", dest: "/usr/local/bin/{{ item.name }}", owner: root, group: "{{ switch_user }}", mode: "{{ item.mode }}"}
+  loop:
+    - {name: sms-pcap-archive, mode: "0750"} # run by root (the timer); the switch's group may read it
+    - {name: sms-pcap-fetch, mode: "0750"}
+
+- name: Archive every 15 minutes
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    content: "{{ item.content }}"
+    mode: "0644"
+  loop:
+    - name: sms-pcap-archive.service
+      content: "[Unit]\nDescription=Recording: gzip, move off-site, expire\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/sms-pcap-archive\nNice=10\nIOSchedulingClass=idle\nTimeoutStartSec=2h\n"
+    - name: sms-pcap-archive.timer
+      content: "[Unit]\nDescription=Recording archive every 15 minutes\n[Timer]\nOnCalendar=*:7/15\nPersistent=true\n[Install]\nWantedBy=timers.target\n"
+
+- name: Archive timer on
+  ansible.builtin.systemd_service: {name: sms-pcap-archive.timer, enabled: true, state: started, daemon_reload: true}

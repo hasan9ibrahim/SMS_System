@@ -101,3 +101,5 @@ sign-in code: the new password still needs an e-mailed one, so platform e-mail m
 | Failover | stop `sms-switch` on srv-a: customers rebind to srv-b, traffic continues; start it again |
 | The 1,000 TPS test and the drills on the real servers | `docs/LOAD_TEST_RESULTS.md`, `docs/FAILOVER_DRILLS.md` |
 | Sign-in codes are e-mailed | Switch › Email logs shows them as sent |
+| EDR retention (BACKEND_PLAN §3.7) | `SELECT name, engine_full FROM system.tables WHERE name IN ('edr', 'edr_receipt')` shows `storage_policy = 'edr_tiered'` and the TTL `TO VOLUME 'cold'` after 6 months, deleted after 12; `edr_totals` has none |
+| Recording archive | `systemctl list-timers sms-pcap-archive`; after its first run `/var/lib/sms-pcap/archive.index` exists and finished files end in `.pcapng.gz`; `RCLONE_CONFIG=/etc/sms/rclone.conf rclone lsd offsite:` reaches the bucket |

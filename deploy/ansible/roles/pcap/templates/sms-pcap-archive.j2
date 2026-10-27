@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }} (deploy/ansible/roles/pcap). Every 15 minutes (sms-pcap-archive.timer), on each server for its own
+# recording (product owner 2026-10-27, docs/BACKEND_PLAN.md §3.7):
+#   1. gzips each finished file (Wireshark and tshark read .pcapng.gz as is);
+#   2. moves files older than {{ pcap_local_days }} days to the off-site bucket and deletes them there after
+#      {{ pcap_local_days | int + pcap_offsite_days | int }} days (counted from the recording, which the upload keeps);
+#   3. lists what is off-site for the switch (archive.index: a name and its size per line), which fetches a file back
+#      into captures/archive when the PCAP screens read or extract it; those copies go after a day.
+# A file still here {{ pcap_local_days | int + 14 }} days after its recording (the bucket out of reach for two weeks) is
+# deleted so the disk never fills; PcapArchiveFailing says so long before (docs/RUNBOOKS.md#pcaparchive).
+set -euo pipefail
+export RCLONE_CONFIG=/etc/sms/rclone.conf
+{% if not s3_verify_tls %}
+export RCLONE_NO_CHECK_CERTIFICATE=true
+{% endif %}
+dir={{ pcap_dir }}
+remote="offsite:{{ s3_bucket }}/pcap/{{ inventory_hostname }}"
+prom=/var/lib/prometheus/node-exporter/pcap.prom
+
+# A file dumpcap still writes changes every few seconds; one untouched for longer than a file's span is finished.
+find "$dir" -maxdepth 1 -name 'smpp_*.pcapng' -mmin +{{ pcap_minutes | int + 5 }} -exec gzip -6 {} +
+
+list=$(mktemp)
+trap 'rm -f "$list"' EXIT
+find "$dir" -maxdepth 1 -name 'smpp_*.pcapng.gz' -mmin +{{ pcap_local_days | int * 1440 }} -printf '%f\n' > "$list"
+if [[ -s "$list" ]]; then
+  rclone move "$dir" "$remote" --files-from-raw "$list" --no-traverse
+fi
+rclone delete "$remote" --min-age {{ pcap_local_days | int + pcap_offsite_days | int }}d
+
+rclone lsf "$remote" --files-only --format ps --separator $'\t' > "$dir/archive.index.new"
+chgrp {{ switch_user }} "$dir/archive.index.new"
+chmod 0640 "$dir/archive.index.new"
+mv -f "$dir/archive.index.new" "$dir/archive.index"
+
+find "$dir" -maxdepth 1 -name 'smpp_*' -mmin +{{ (pcap_local_days | int + 14) * 1440 }} -delete
+find "$dir/captures/archive" -type f -mmin +1440 -delete 2>/dev/null || true
+
+{
+  echo "sms_pcap_archive_last_success_timestamp_seconds $(date +%s)"
+  echo "sms_pcap_local_bytes $(du -sb "$dir" | cut -f1)"
+  echo "sms_pcap_offsite_files $(wc -l < "$dir/archive.index")"
+} > "$prom.tmp"
+mv -f "$prom.tmp" "$prom"

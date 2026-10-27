@@ -54,6 +54,13 @@ pg_database: sms_config
 pg_app_user: sms
 ch_database: sms_edr
 ch_app_user: sms
+# Retention (product owner 2026-10-27, docs/BACKEND_PLAN.md §3.7): detailed EDRs on the servers for edr_hot_months,
+# then on the off-site bucket (ClickHouse tiered storage, roles/clickhouse) until edr_keep_months; the report totals
+# are kept for ever. PCAP files on the servers for pcap_local_days, then off-site for pcap_offsite_days (roles/pcap).
+edr_hot_months: 6
+edr_keep_months: 12
+pcap_local_days: 60
+pcap_offsite_days: 60
 redis_sentinel_group: sms
 switch_user: sms
 switch_root: /opt/sms

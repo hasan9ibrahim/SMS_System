@@ -1,14 +1,15 @@
 # {{ ansible_managed }} (deploy/ansible/roles/pcap)
 # SMPP with customers (ports {{ (ports.smpp + ports.smpp_tls) | join(', ') }}) and vendors (any outside address), not the
-# traffic between the three machines, SSH or HTTPS. {{ pcap_files }} files of {{ pcap_minutes }} minutes = {{ (pcap_files | int * pcap_minutes | int / 1440) | round(1) }} days.
+# traffic between the three machines, SSH or HTTPS. One file per {{ pcap_minutes }} minutes and no ring: sms-pcap-archive
+# gzips them, moves them off-site after {{ pcap_local_days }} days and removes what is left here.
 [Unit]
-Description=SMPP traffic recording (60-day ring)
+Description=SMPP traffic recording ({{ pcap_minutes }}-minute files)
 After=network-online.target
 
 [Service]
 ExecStart=/usr/bin/dumpcap -q -i any -s 0 \
   -f "tcp and not port 22 and not port 443 and not port 80 and not ({% for ip in cluster_ips %}host {{ ip }}{{ ' or ' if not loop.last }}{% endfor %})" \
-  -b interval:{{ pcap_minutes | int * 60 }} -b files:{{ pcap_files }} -w {{ pcap_dir }}/smpp.pcapng
+  -b interval:{{ pcap_minutes | int * 60 }} -w {{ pcap_dir }}/smpp.pcapng
 # Files of whole quarters (interval: switches on the clock), named smpp_NNNNN_YYYYMMDDHHMMSS.pcapng in UTC (base role),
 # readable by the switch (group) for the PCAP Trace downloads and extracts.
 Group={{ switch_user }}

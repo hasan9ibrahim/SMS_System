@@ -39,6 +39,10 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
+            text: "**Older periods.** Message details are kept 12 months; the figures are kept for ever, in totals per 15 minutes. A period that starts more than 12 months ago gives the same figures as before, in any time zone, by day, hour or quarter hour. What needs single messages cannot be shown for it: grouping by second, minute or IP address, and TPS peak and TPS now; the report says so. Sender IDs older than 12 months are kept per day (UTC) with the partners, trunks and destinations.",
+          },
+          {
+            kind: "text",
             text: "Every figure is explained in [[report-metrics|Report metrics explained]].",
           },
         ],

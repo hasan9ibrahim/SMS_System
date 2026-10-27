@@ -46,6 +46,7 @@ import {
 } from "../reports/engine.js";
 import { previousWindow, resolvePeriod, validZone, type Window } from "../reports/period.js";
 import { PRESETS } from "../reports/presets.js";
+import { counter, dec, decFactor, negMargin, periodSource } from "../reports/source.js";
 import { causeName } from "../smpp.js";
 import { chProblem } from "./observation.js";
 import { logEmail, senderFor } from "./emailLog.js";
@@ -229,7 +230,10 @@ export function salesInsights(request: FastifyRequest, reply: FastifyReply) {
       const w = windowOf({ period: b.period, from: b.from, to: b.to, timezone: b.timezone }, await reportNow());
       if (typeof w === "string") return badInput(reply, [{ path: "/period", message: w }]);
       const p = previousWindow(w, "previous_period");
-      const factor = await sysToPlatformFactor();
+      const factor = decFactor(await sysToPlatformFactor());
+      // Long-term totals for periods older than the detailed EDRs (docs/BACKEND_PLAN.md §3.7).
+      const src = periodSource(await reportNow(), w, p);
+      const n = counter(src);
       const t = (d: Date) => `toDateTime64(${lit(iso(d).replace("T", " ").replace("Z", ""))}, 3, 'UTC')`;
       const cur = `start_time >= ${t(w.from)}`;
       // Several countries (team trial round 1); the single `country` of older clients joins them.
@@ -241,10 +245,10 @@ export function salesInsights(request: FastifyRequest, reply: FastifyReply) {
         b.productCategoryId ? `product_category_id = ${Number(b.productCategoryId)}` : "1",
       ].join(" AND ");
       const rows = await chQuery<Record<string, string>>(
-        `SELECT c_enterprise_id AS id, countIf(kind = 'attempt' AND ${cur}) AS a, countIf(kind = 'attempt' AND NOT ${cur}) AS pa,
-                toFloat64(sumIf(revenue_sys * ${factor}, ${cur})) AS r, toFloat64(sumIf(revenue_sys * ${factor}, NOT ${cur})) AS pr,
-                toFloat64(sumIf((revenue_sys - cost_sys) * ${factor}, ${cur})) AS m, argMax(c_am_user_id, start_time) AS am
-           FROM edr_all WHERE ${where} GROUP BY id`,
+        `SELECT c_enterprise_id AS id, ${n(`kind = 'attempt' AND ${cur}`)} AS a, ${n(`kind = 'attempt' AND NOT ${cur}`)} AS pa,
+                toFloat64(sumIf(${dec("revenue_sys")} * ${factor}, ${cur})) AS r, toFloat64(sumIf(${dec("revenue_sys")} * ${factor}, NOT ${cur})) AS pr,
+                toFloat64(sumIf((${dec("revenue_sys")} - ${dec("cost_sys")}) * ${factor}, ${cur})) AS m, argMax(c_am_user_id, start_time) AS am
+           FROM ${src} WHERE ${where} GROUP BY id`,
       );
       const ids = rows.map((r) => Number(r.id));
       const ams = rows.map((r) => Number(r.am)).filter(Boolean);
@@ -318,20 +322,23 @@ export function queryBillingReport(request: FastifyRequest, reply: FastifyReply)
         await reportNow(),
       );
       if (typeof w === "string") return badInput(reply, [{ path: "/params/period", message: w }]);
-      const factor = await sysToPlatformFactor();
+      const factor = decFactor(await sysToPlatformFactor());
+      const src = periodSource(await reportNow(), w);
+      const n = counter(src);
+      const neg = negMargin(src);
       const t = (d: Date) => `toDateTime64(${lit(iso(d).replace("T", " ").replace("Z", ""))}, 3, 'UTC')`;
       const inWindow = `start_time >= ${t(w.from)} AND start_time < ${t(w.to)}`;
       const [cust, vend] = await Promise.all([
         chQuery<Record<string, string>>(
-          `SELECT c_enterprise_id AS id, countIf(is_customer_billable = 1) AS billable,
-                  toFloat64(sumIf(revenue_sys * c_ex_rate, is_customer_billable = 1)) AS amount,
-                  countIf(is_customer_billable = 1 AND revenue_sys < cost_sys) AS neg,
-                  toFloat64(sumIf((cost_sys - revenue_sys) * ${factor}, is_customer_billable = 1 AND revenue_sys < cost_sys)) AS neg_amount
-             FROM edr_all WHERE ${inWindow} GROUP BY id`,
+          `SELECT c_enterprise_id AS id, ${n("is_customer_billable = 1")} AS billable,
+                  toFloat64(sumIf(${dec("revenue_sys")} * c_ex_rate, is_customer_billable = 1)) AS amount,
+                  ${n(`is_customer_billable = 1 AND ${neg}`)} AS neg,
+                  toFloat64(sumIf((${dec("cost_sys")} - ${dec("revenue_sys")}) * ${factor}, is_customer_billable = 1 AND ${neg})) AS neg_amount
+             FROM ${src} WHERE ${inWindow} GROUP BY id`,
         ),
         chQuery<Record<string, string>>(
-          `SELECT v_enterprise_id AS id, countIf(is_vendor_billable = 1) AS billable, toFloat64(sumIf(cost, is_vendor_billable = 1)) AS amount
-             FROM edr_all WHERE ${inWindow} AND v_enterprise_id > 0 GROUP BY id`,
+          `SELECT v_enterprise_id AS id, ${n("is_vendor_billable = 1")} AS billable, toFloat64(sumIf(cost, is_vendor_billable = 1)) AS amount
+             FROM ${src} WHERE ${inWindow} AND v_enterprise_id > 0 GROUP BY id`,
         ),
       ]);
       const traffic = new Map<number, number[]>();
@@ -386,6 +393,8 @@ export function nocInsights(request: FastifyRequest, reply: FastifyReply) {
       if (typeof w === "string") return badInput(reply, [{ path: "/period", message: w }]);
       const t = (d: Date) => `toDateTime64(${lit(iso(d).replace("T", " ").replace("Z", ""))}, 3, 'UTC')`;
       const inWindow = `start_time >= ${t(w.from)} AND start_time < ${t(w.to)}`;
+      const src = periodSource(await reportNow(), w);
+      const n = counter(src);
       const [binds, errors, vendors] = await Promise.all([
         pool.query(
           `SELECT b.side, b.trunk_id, coalesce(ct.name, vt.name) AS trunk, e.name AS enterprise, b.status, b.since
@@ -397,15 +406,17 @@ export function nocInsights(request: FastifyRequest, reply: FastifyReply) {
             ORDER BY b.side DESC, b.since LIMIT 50`,
         ),
         chQuery<{ code: string; n: string; total: string }>(
-          `SELECT command_status AS code, count() AS n, (SELECT count() FROM edr WHERE ${inWindow}) AS total
-             FROM edr WHERE ${inWindow} AND command_status != 0 GROUP BY code ORDER BY n DESC LIMIT 8`,
+          // Attempt rows: edr, or the totals' attempt rows.
+          `SELECT command_status AS code, ${n("kind = 'attempt'")} AS n,
+                  (SELECT ${n("kind = 'attempt'")} FROM ${src} WHERE ${inWindow}) AS total
+             FROM ${src} WHERE ${inWindow} AND kind = 'attempt' AND command_status != 0 GROUP BY code ORDER BY n DESC LIMIT 8`,
         ),
         chQuery<Record<string, string>>(
-          `SELECT v_trunk_id AS id, countIf(kind = 'attempt') AS a,
-                  if(a = 0, NULL, round(countIf(is_submit_success = 1) / a * 100, 1)) AS asr,
-                  if(countIf(is_submit_success = 1) = 0, NULL, round(countIf(msg_status = 'DELIVRD') / countIf(is_submit_success = 1) * 100, 1)) AS dlr,
-                  if(countIf(msg_status = 'DELIVRD') = 0, NULL, round(sumIf(delivery_delay_ms, msg_status = 'DELIVRD') / countIf(msg_status = 'DELIVRD') / 1000, 1)) AS delay
-             FROM edr_all WHERE ${inWindow} AND v_trunk_id > 0 GROUP BY id HAVING a >= 100`,
+          `SELECT v_trunk_id AS id, ${n("kind = 'attempt'")} AS a,
+                  if(a = 0, NULL, round(${n("is_submit_success = 1")} / a * 100, 1)) AS asr,
+                  if(${n("is_submit_success = 1")} = 0, NULL, round(${n("msg_status = 'DELIVRD'")} / ${n("is_submit_success = 1")} * 100, 1)) AS dlr,
+                  if(${n("msg_status = 'DELIVRD'")} = 0, NULL, round(sumIf(delivery_delay_ms, msg_status = 'DELIVRD') / ${n("msg_status = 'DELIVRD'")} / 1000, 1)) AS delay
+             FROM ${src} WHERE ${inWindow} AND v_trunk_id > 0 GROUP BY id HAVING a >= 100`,
         ),
       ]);
       const { rows: vt } = await pool.query("SELECT id, name FROM vendor_trunks WHERE id = ANY($1)", [

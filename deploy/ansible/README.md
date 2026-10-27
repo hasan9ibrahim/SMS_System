@@ -34,23 +34,30 @@ really down (the witness lost it too) is simply taken over.
 
 ## Sizing (production)
 
-Chosen 2026-10-26 for 10–20 million messages a month, 50 million at peak, EDRs online 18 months (spec §14.3).
+Sized 2026-10-27 for 10 million messages a day (product owner): detailed EDRs 6 months on the servers and 6 more
+off-site, report totals for ever, traffic recording 60 days on the servers and 60 more off-site (docs/BACKEND_PLAN.md
+§3.7).
 
 | Machine | CPU / RAM | Disk |
 | --- | --- | --- |
-| Each server | 12+ fast cores (e.g. Ryzen 9 5900X), 128 GB ECC | 2 × 3.84 TB NVMe, RAID 1 (2 × 1.92 TB is the minimum) |
+| Each server | 12+ fast cores (e.g. Ryzen 9 5900X), 64 GB (128 GB makes year-long reports faster) | 2 × 3.84 TB NVMe, RAID 1 |
 | Witness VM | 4–6 vCPU, 8–12 GB | 200 GB (100 GB is the minimum) |
-| Off-site backups | – | S3-compatible bucket at another provider, from ~1 TB |
+| Off-site bucket | – | S3-compatible, at another provider: EDR months 7–12, recording days 61–120 and backups, from ~2 TB |
 
-What one server stores at 50 million messages a month:
+What one server stores at 10 million messages a day (both servers hold every EDR):
 
 | Data | Size |
 | --- | --- |
-| EDRs, 18 months online (ClickHouse) | 180–540 GB |
-| Traffic recording, 60 days (`pcap_files`, compressed) | 50–70 GB |
-| Event bus, 2 days (`max_age_days`; capped by `nats_max_file_store`, 200 G) | ~40 GB |
-| PostgreSQL, OS, applications, logs | ~200 GB |
-| **Total** | **~0.5–0.9 TB** |
+| Detailed EDRs, the last 6 months (`edr_hot_months`; ClickHouse, ~250–450 bytes a message) | 0.45–0.8 TB |
+| Report totals per 15 minutes and Sender IDs per day, kept for ever | tens of GB a year (measure in the first month) |
+| Traffic recording, 60 days (`pcap_local_days`, gzipped; ~2 KB a message before) | 0.2–0.4 TB |
+| Event bus, 2 days (`max_age_days`; capped by `nats_max_file_store`, 200 G) | ~0.2 TB |
+| PostgreSQL, OS, applications, logs, ClickHouse merge headroom | ~0.2 TB |
+| **Total** | **~1.1–1.6 TB of 3.84 TB** |
+
+Off-site, each server writes its own copy of EDR months 7–12 (ClickHouse tiered storage, 0.45–0.8 TB each) and its
+recording days 61–120 (0.15–0.2 TB each). RAM at that volume: ~22–32 GB in use, up to ~50 GB when year-long reports
+meet a traffic peak (ClickHouse is capped at 40 %); the rest is file cache.
 
 Each server can carry all the traffic alone (1,000 TPS peak). The witness keeps a third copy of the event bus (capped
 at 60 G there, `inventories/production.example/hosts.yml`) and Prometheus (30 days, at most 15 GB). Storage grows with
@@ -139,7 +146,10 @@ risk), warnings in working hours. Each alert names its runbook in `docs/RUNBOOKS
 ## Traffic recording (spec §9.2)
 
 `dumpcap` on each server writes the SMPP traffic (customers and vendors, not the traffic between the three machines)
-in files of whole 15-minute quarters (UTC), 60 days in a ring, outside the switch (`roles/pcap`). The switch reads
+in files of whole 15-minute quarters (UTC) outside the switch (`roles/pcap`). Every 15 minutes `sms-pcap-archive`
+gzips finished files, moves those older than `pcap_local_days` (60) to the off-site bucket (`pcap/<server>/`, deleted
+there after `pcap_offsite_days` more) and lists them in `archive.index`; the switch fetches a moved file back when a
+screen reads or extracts it (`sms-pcap-fetch`, rclone; alert PcapArchiveFailing). The switch reads
 them for the PCAP screens (backend step 11c): the PCAP Trace list and downloads (both servers' files of a quarter joined
 into one pcapng), and Extract Recording (`tshark` cuts the window's files with the criteria). Live captures run
 `dumpcap` as the switch user (capture rights through the `wireshark` group, effective after the switch's next restart)

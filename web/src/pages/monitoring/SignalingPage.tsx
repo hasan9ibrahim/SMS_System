@@ -74,7 +74,7 @@ function StartBar() {
 }
 
 export function SignalingPage() {
-  // Live capture from now on, or extract from the 60-day recording (team trial round 1); both kinds of file
+  // Live capture from now on, or extract from the 120-day recording (team trial round 1); both kinds of file
   // are listed here.
   const [mode, setMode] = useState<"live" | "extract">("live");
   return (

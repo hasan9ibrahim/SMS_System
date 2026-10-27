@@ -1,5 +1,5 @@
 // PCAP Trace (§9.2, team trial round 1): every SMPP packet on the switch is recorded into one file per
-// 15 minutes and kept 60 days. Trace files lists them (File Name, File Size, Download, Update Time UTC),
+// 15 minutes and kept 120 days (60 on the servers, then off-site; product owner 2026-10-27). Trace files lists them (File Name, File Size, Download, Update Time UTC),
 // filtered and paged on the server; the filter above extracts a PCAP for a period and a customer or vendor
 // trunk, number, message ID or IP into Extracted files (deleted 30 days after they are made unless kept).
 import { useState } from "react";

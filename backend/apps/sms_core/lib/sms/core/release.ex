@@ -13,6 +13,11 @@ defmodule Sms.Core.Release do
       servers the EDR database is `Replicated` (both servers hold every EDR; deploy/ansible/roles/clickhouse): there
       a `...MergeTree` engine is created as `Replicated...MergeTree`, which the database places in Keeper itself.
       Development and CI keep the plain engines of the same files.
+    * **EDR retention** (product owner 2026-10-27, docs/BACKEND_PLAN.md §3.7): where the server has the
+      `edr_tiered` storage policy (deploy/ansible/roles/clickhouse), the detailed EDRs (`edr`, `edr_receipt`) move
+      to the off-site volume after `hot_months` and are deleted after `keep_months` (`config :sms_core,
+      :edr_retention`, 6 and 12). Applied when a table's TTL differs, so a deploy does not recompute it. The report
+      totals (ClickHouse 008) keep everything.
 
   Migrations must work with the version still running on the other server (spec §14.1): add, never rename or drop in
   the same release.
@@ -150,16 +155,78 @@ defmodule Sms.Core.Release do
         Ch.query!(conn, "SELECT engine FROM system.databases WHERE name = currentDatabase()").rows ==
           [["Replicated"]]
 
-      for {name, path, _sha} <- files(dir, ["clickhouse/migrations"]) do
-        Enum.each(statements(File.read!(path)), fn statement ->
-          Ch.query!(conn, if(replicated?, do: replicated(statement), else: statement))
-        end)
+      applied =
+        for {name, path, _sha} <- files(dir, ["clickhouse/migrations"]) do
+          Enum.each(statements(File.read!(path)), fn statement ->
+            Ch.query!(conn, if(replicated?, do: replicated(statement), else: statement))
+          end)
 
-        name
-      end
+          name
+        end
+
+      retention(conn)
+      applied
     after
       GenServer.stop(conn)
     end
+  end
+
+  @retained ["edr", "edr_receipt"]
+
+  defp retention(conn) do
+    tiered? =
+      match?(
+        [[n]] when n > 0,
+        Ch.query!(
+          conn,
+          "SELECT count() FROM system.storage_policies WHERE policy_name = 'edr_tiered'"
+        ).rows
+      )
+
+    if tiered? do
+      config = Application.get_env(:sms_core, :edr_retention, [])
+      hot = Keyword.get(config, :hot_months, 6)
+      keep = Keyword.get(config, :keep_months, 12)
+      Enum.each(@retained, &retain(conn, &1, hot, keep))
+    end
+
+    :ok
+  end
+
+  defp retain(conn, table, hot, keep) do
+    %{rows: [[engine]]} =
+      Ch.query!(
+        conn,
+        "SELECT engine_full FROM system.tables WHERE database = currentDatabase() AND name = {t:String}",
+        %{"t" => table}
+      )
+
+    statements = retention_statements(table, engine, hot, keep)
+    Enum.each(statements, &Ch.query!(conn, &1))
+
+    if statements != [],
+      do: Logger.info("EDR retention on #{table}: #{hot} months here, #{keep} kept")
+  end
+
+  @doc false
+  # What makes a detailed EDR table move to the off-site volume after `hot` months and go after `keep` months: nothing
+  # when its engine (system.tables.engine_full) already says so.
+  @spec retention_statements(String.t(), String.t(), pos_integer(), pos_integer()) :: [String.t()]
+  def retention_statements(table, engine, hot, keep) do
+    policy = ["ALTER TABLE #{table} MODIFY SETTING storage_policy = 'edr_tiered'"]
+
+    ttl = [
+      "ALTER TABLE #{table} MODIFY SETTING ttl_only_drop_parts = 1",
+      "ALTER TABLE #{table} MODIFY TTL toDateTime(start_time) + INTERVAL #{hot} MONTH TO VOLUME 'cold', " <>
+        "toDateTime(start_time) + INTERVAL #{keep} MONTH DELETE"
+    ]
+
+    wanted =
+      "TTL toDateTime(start_time) + toIntervalMonth(#{hot}) TO VOLUME 'cold', " <>
+        "toDateTime(start_time) + toIntervalMonth(#{keep})"
+
+    if(String.contains?(engine, "storage_policy = 'edr_tiered'"), do: [], else: policy) ++
+      if String.contains?(engine, wanted), do: [], else: ttl
   end
 
   @doc false

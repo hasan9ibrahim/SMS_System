@@ -132,6 +132,29 @@ defmodule Sms.Core.ReleaseUnitTest do
     assert Release.replicated("ENGINE = Memory") == "ENGINE = Memory"
   end
 
+  test "EDR retention: off-site after the hot months, deleted after the kept ones, set once" do
+    plain =
+      "MergeTree PARTITION BY toYYYYMM(start_time) ORDER BY (start_time) SETTINGS index_granularity = 8192"
+
+    assert [policy, drop_parts, ttl] = Release.retention_statements("edr", plain, 6, 12)
+    assert policy == "ALTER TABLE edr MODIFY SETTING storage_policy = 'edr_tiered'"
+    assert drop_parts == "ALTER TABLE edr MODIFY SETTING ttl_only_drop_parts = 1"
+
+    assert ttl ==
+             "ALTER TABLE edr MODIFY TTL toDateTime(start_time) + INTERVAL 6 MONTH TO VOLUME 'cold', " <>
+               "toDateTime(start_time) + INTERVAL 12 MONTH DELETE"
+
+    # As ClickHouse shows the table once set (system.tables.engine_full): nothing left to do.
+    done =
+      "MergeTree PARTITION BY toYYYYMM(start_time) ORDER BY (start_time) TTL toDateTime(start_time) + " <>
+        "toIntervalMonth(6) TO VOLUME 'cold', toDateTime(start_time) + toIntervalMonth(12) SETTINGS " <>
+        "index_granularity = 8192, ttl_only_drop_parts = 1, storage_policy = 'edr_tiered'"
+
+    assert Release.retention_statements("edr", done, 6, 12) == []
+    # Other months: the TTL again, the policy stays.
+    assert [_, _] = Release.retention_statements("edr", done, 3, 12)
+  end
+
   test "the schema files: SMS_DB_DIR, else the release's db/, else the repository's" do
     assert File.dir?(Path.join(Release.db_dir(), "postgres/migrations"))
     System.put_env("SMS_DB_DIR", "/elsewhere")

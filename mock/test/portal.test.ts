@@ -199,11 +199,13 @@ describe("customer portal (§1)", { skip: skip || (!user && "no portal user") },
     );
     const receiver = `99${Date.now()}`.slice(0, 15);
     const ids = [randomUUID(), randomUUID(), randomUUID()];
+    // Marked (route type, Sender ID) so the long-term totals' copies (ClickHouse 008) are removed too, and only them.
     const row = (id: string, kind: string) =>
-      `('${id}', now(), now(), 'MT', 1, ${user.enterprise_id}, ${trunk}, '${receiver}', 1, 1, 1, 1, 'ACCEPTD', '${kind}')`;
+      `('${id}', now(), now(), 'MT', 1, ${user.enterprise_id}, ${trunk}, '${receiver}', 1, 1, 1, 1, 'ACCEPTD', '${kind}', 'portal-test', '${receiver}')`;
     await chQuery(
       `INSERT INTO edr (edr_id, start_time, submit_time, msg_type, business_company_id, c_enterprise_id, c_trunk_id,
-                        dst_addr, attempt_no, is_final_attempt, is_submit_success, msg_count, c_msg_status, internal_kind)
+                        dst_addr, attempt_no, is_final_attempt, is_submit_success, msg_count, c_msg_status, internal_kind,
+                        route_type, src_addr)
        VALUES ${row(ids[0]!, "")}, ${row(ids[1]!, "test")}, ${row(ids[2]!, "repush")}`,
     );
     try {
@@ -221,6 +223,9 @@ describe("customer portal (§1)", { skip: skip || (!user && "no portal user") },
       );
     } finally {
       await chQuery(`ALTER TABLE edr DELETE WHERE dst_addr = '${receiver}' SETTINGS mutations_sync = 1`);
+      const mine = `c_enterprise_id = ${user.enterprise_id} AND c_trunk_id = ${trunk}`;
+      await chQuery(`ALTER TABLE edr_totals DELETE WHERE ${mine} AND route_type = 'portal-test' SETTINGS mutations_sync = 1`);
+      await chQuery(`ALTER TABLE edr_sender_daily DELETE WHERE ${mine} AND src_addr = '${receiver}' SETTINGS mutations_sync = 1`);
     }
   });
 

@@ -1,5 +1,5 @@
 pcap_dir: /var/lib/sms-pcap
 pcap_minutes: 15
-# 60 days of 15-minute files (spec §9.2). Size the disk for it: about 0.6 KB per message each way, so roughly 60 GB a
-# day at 50 million messages (3.6 TB for 60 days) before compression; see docs/OPERATIONS.md.
-pcap_files: 5760
+# 60 days here, then 60 more off-site (pcap_local_days, pcap_offsite_days in group_vars; product owner 2026-10-27). Size
+# the disk for the days here: about 2 KB of packets per message (both legs, receipts, TCP), so roughly 20 GB a day at
+# 10 million messages before the archive job gzips each finished file to about a third; see docs/GO_LIVE.md.

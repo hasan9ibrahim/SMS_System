@@ -3249,7 +3249,7 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "entityId", label: "Record ID", type: "integer", defaultOperator: "eq", hidden: true }),
     ],
   },
-  // PCAP Trace (§9.2, team trial round 1): the 60-day traffic recording, one file per 15 minutes.
+  // PCAP Trace (§9.2, team trial round 1): the 120-day traffic recording, one file per 15 minutes.
   pcap_traces: {
     list: "pcap_traces",
     defaultSort: [{ field: "startedAt", dir: "desc" }],

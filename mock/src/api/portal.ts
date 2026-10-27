@@ -42,6 +42,7 @@ import type { FieldError } from "./records.js";
 import { money } from "../currency.js";
 import { logEmail } from "./emailLog.js";
 import { maskEmail } from "./admin.js";
+import { beforeDetail, counter, type EdrSource } from "../reports/source.js";
 
 export const PORTAL_COOKIE = "sms_portal";
 const SESSION_HOURS = 12;
@@ -411,10 +412,14 @@ export function portalChangePassword(request: FastifyRequest, reply: FastifyRepl
 // Test SMS and Repush messages (internal_kind, backend step 13) are ours, never the customer's.
 const FINAL = "(kind = 'outcome' OR (is_final_attempt = 1 AND msg_type = 'MT')) AND internal_kind = ''";
 const FAILED_STATUSES = ["UNDELIV", "REJECTD", "EXPIRED", "DELETED", "UNKNOWN"];
-const TOTALS_SQL = `countIf(kind = 'attempt') AS messages, sumIf(msg_count, kind = 'attempt') AS parts,
-  countIf(c_msg_status = 'DELIVRD') AS delivered,
-  countIf(c_msg_status IN (${FAILED_STATUSES.map(lit).join(",")}) OR (kind = 'attempt' AND is_submit_success = 0)) AS failed,
+/** The figures over edr_all, or over the long-term totals for days before the detailed EDRs (BACKEND_PLAN §3.7). */
+const totalsSql = (src: EdrSource = "edr_all") => {
+  const n = counter(src);
+  return `${n("kind = 'attempt'")} AS messages, sumIf(msg_count, kind = 'attempt') AS parts,
+  ${n("c_msg_status = 'DELIVRD'")} AS delivered,
+  ${n(`c_msg_status IN (${FAILED_STATUSES.map(lit).join(",")}) OR (kind = 'attempt' AND is_submit_success = 0)`)} AS failed,
   toFloat64(sum(revenue)) AS amount`;
+};
 
 function totals(r: Record<string, unknown> | undefined): PortalTotals {
   const delivered = Number(r?.delivered ?? 0);
@@ -470,7 +475,7 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
         [me.enterpriseId],
       ),
       chQuery<Record<string, unknown>>(
-        `SELECT toDate(submit_time, ${lit(b.tz)}) = toDate(${lit(today)}) AS is_today, ${TOTALS_SQL}
+        `SELECT toDate(submit_time, ${lit(b.tz)}) = toDate(${lit(today)}) AS is_today, ${totalsSql()}
            FROM edr_all WHERE c_enterprise_id = ${me.enterpriseId} AND ${FINAL} AND ${dateRange(b.tz, monthStart, today)}
           GROUP BY is_today`,
       ),
@@ -525,8 +530,10 @@ export function portalTraffic(request: FastifyRequest, reply: FastifyReply) {
         : q.groupBy === "country"
           ? "c_country_iso"
           : "toString(c_trunk_id)";
+    // Days from midnight in the billing zone, 14 hours either side of UTC.
+    const src = beforeDetail(new Date(Date.parse(`${q.from}T00:00:00Z`) - 14 * 3_600_000)) ? "edr_totals" : "edr_all";
     const rows = await chQuery<Record<string, unknown>>(
-      `SELECT ${key} AS k, ${TOTALS_SQL} FROM edr_all
+      `SELECT ${key} AS k, ${totalsSql(src)} FROM ${src}
         WHERE c_enterprise_id = ${me.enterpriseId} AND ${FINAL} AND ${dateRange(b.tz, q.from, q.to)}
         GROUP BY k ORDER BY ${q.groupBy === "day" ? "k" : "messages DESC"} LIMIT 1000`,
     );

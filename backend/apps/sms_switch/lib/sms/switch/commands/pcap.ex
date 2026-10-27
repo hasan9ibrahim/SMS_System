@@ -4,8 +4,11 @@ defmodule Sms.Switch.Commands.Pcap do
   records its own SMPP traffic, so every command runs on both and the screen joins their files (pcapng files simply
   follow one another: Wireshark reads each as a section).
 
-    * **Recording** (`pcap_files`): the 15-minute ring `dumpcap` writes outside the switch (deploy/ansible
-      `roles/pcap`, 60 days), listed with each file's quarter and size, and read by the PCAP Trace screen.
+    * **Recording** (`pcap_files`): the 15-minute files `dumpcap` writes outside the switch (deploy/ansible
+      `roles/pcap`), listed with each file's quarter and size, and read by the PCAP Trace screen. A finished file is
+      gzipped (`.pcapng.gz`, which Wireshark and tshark read as is); after 60 days it moves to off-site storage for
+      60 more (product owner 2026-10-27). Moved files stay listed from the archive job's index (`archive.index`) and
+      are fetched back into the captures folder (`sms-pcap-fetch`) when read or extracted.
     * **Live capture** (`pcap_capture`, `pcap_stop`): `dumpcap` from now on, for at most the duration and size asked,
       optionally only one address or range.
     * **Recording extract** (`pcap_extract`): a past window cut from the ring with `tshark` (by address, number or
@@ -23,7 +26,7 @@ defmodule Sms.Switch.Commands.Pcap do
   @chunk_max 524_288
   # SMPP only: not SSH, the web and the API (deploy/ansible roles/pcap uses the same filter for the recording).
   @base_filter "tcp and not port 22 and not port 443 and not port 80"
-  @ring_name ~r/^[A-Za-z0-9_-]+_\d{5}_(\d{14})\.pcapng$/
+  @ring_name ~r/^[A-Za-z0-9_-]+_\d{5}_(\d{14})\.pcapng(?:\.gz)?$/
   @capture_name ~r/^capture-(\d+)\.pcapng$/
   @safe_value ~r/^[A-Za-z0-9+_.:@-]{1,64}$/
 
@@ -63,6 +66,7 @@ defmodule Sms.Switch.Commands.Pcap do
          {:ok, to} <- time(data["to"], "to"),
          {:ok, filter} <- display_filter(from, to, data),
          :ok <- File.mkdir_p(capture_dir()) do
+      # Names: a file moved off-site is fetched in the task, not here.
       files = covering(from, to)
       task = Task.async(fn -> safe_extract(id, files, filter) end)
       {:reply, {:ok, %{started: true, files: length(files)}}, track(state, id, {:task, task})}
@@ -181,14 +185,39 @@ defmodule Sms.Switch.Commands.Pcap do
   # ---------------------------------------------------------------- the recording
 
   @doc false
-  # The ring's files, oldest first: name, the quarter it starts at (the server's clock is UTC) and size.
+  # The recording's files, oldest first: name, the quarter it starts at (the server's clock is UTC) and size; those
+  # here and those moved off-site.
   @spec ring_files() :: [map()]
   def ring_files do
-    case File.ls(ring_dir()) do
-      {:ok, names} ->
-        names
-        |> Enum.flat_map(&ring_file/1)
-        |> Enum.sort_by(& &1.started_at)
+    local =
+      case File.ls(ring_dir()) do
+        {:ok, names} -> Enum.flat_map(names, &ring_file/1)
+        {:error, _} -> []
+      end
+
+    here = MapSet.new(local, &plain(&1.name))
+
+    (local ++ Enum.reject(archived_files(), &MapSet.member?(here, plain(&1.name))))
+    |> Enum.sort_by(& &1.started_at)
+  end
+
+  defp plain(name), do: String.replace_suffix(name, ".gz", "")
+
+  @doc false
+  # Files moved off-site, from the index the archive job writes (deploy/ansible roles/pcap, sms-pcap-archive): a name
+  # and its size per line, a tab between.
+  @spec archived_files() :: [map()]
+  def archived_files do
+    case File.read(Path.join(ring_dir(), "archive.index")) do
+      {:ok, text} ->
+        for line <- String.split(text, "\n", trim: true),
+            [name, size] <- [String.split(line, "\t")],
+            [_, stamp] <- [Regex.run(@ring_name, name)],
+            {:ok, started} <- [stamp_time(stamp)],
+            {bytes, ""} <- [Integer.parse(size)] do
+          at = DateTime.to_iso8601(started)
+          %{name: name, started_at: at, size: bytes, modified_at: at}
+        end
 
       {:error, _} ->
         []
@@ -232,7 +261,40 @@ defmodule Sms.Switch.Commands.Pcap do
     |> Enum.filter(fn {{_f, next}, start} ->
       DateTime.compare(start, to) == :lt and (next == nil or DateTime.compare(next, from) == :gt)
     end)
-    |> Enum.map(fn {{f, _}, _} -> Path.join(ring_dir(), f.name) end)
+    |> Enum.map(fn {{f, _}, _} -> f.name end)
+  end
+
+  # A recording file on this server: in the recording folder (gzipped since it was listed, maybe), or fetched back
+  # from off-site storage into the captures folder, where the archive job removes it after a day.
+  defp recording_path(name) do
+    local = Path.join(ring_dir(), name)
+    cached = Path.join([capture_dir(), "archive", name])
+
+    cond do
+      File.exists?(local) -> {:ok, local}
+      File.exists?(local <> ".gz") -> {:ok, local <> ".gz"}
+      File.exists?(cached) -> {:ok, cached}
+      Enum.any?(archived_files(), &(&1.name == name)) -> fetch(name, cached)
+      true -> {:error, {:not_found, "the file is not on #{Commands.node_id()}"}}
+    end
+  end
+
+  # Under another name until complete, so a fetch that fails never leaves half a file to read.
+  defp fetch(name, dest) do
+    part = dest <> ".part"
+    File.mkdir_p!(Path.dirname(dest))
+
+    case run_tool("sms-pcap-fetch", [name, part]) do
+      {_, 0} ->
+        File.rename!(part, dest)
+        {:ok, dest}
+
+      {out, code} ->
+        _ = File.rm(part)
+
+        {:error,
+         "could not fetch #{name} from off-site storage (#{code}): #{String.slice(out, 0, 200)}"}
+    end
   end
 
   # An extract that fails leaves no file and never takes the server down with it.
@@ -250,7 +312,14 @@ defmodule Sms.Switch.Commands.Pcap do
 
     try do
       parts =
-        for {file, i} <- Enum.with_index(files) do
+        for {name, i} <- Enum.with_index(files) do
+          file =
+            case recording_path(name) do
+              {:ok, path} -> path
+              {:error, {_, reason}} -> raise reason
+              {:error, reason} -> raise reason
+            end
+
           out = Path.join(tmp, "#{i}.pcapng")
           ok!(run_tool("tshark", ["-r", file, "-Y", filter, "-w", out]), "tshark")
           out
@@ -291,7 +360,7 @@ defmodule Sms.Switch.Commands.Pcap do
   defp readable(name) when is_binary(name) do
     cond do
       Regex.match?(@capture_name, name) -> {:ok, Path.join(capture_dir(), name)}
-      Regex.match?(@ring_name, name) -> {:ok, Path.join(ring_dir(), name)}
+      Regex.match?(@ring_name, name) -> recording_path(name)
       true -> {:error, {:bad_input, "no such capture or recording file"}}
     end
   end

@@ -16,7 +16,10 @@ const ent = 5_000_000 + Math.floor(Math.random() * 900_000);
 const ISO = "XQ";
 
 after(async () => {
-  if (store) await chQuery(`ALTER TABLE edr DELETE WHERE c_enterprise_id = ${ent} SETTINGS mutations_sync = 1`);
+  if (store)
+    // edr and the long-term totals that took their copy on insert (ClickHouse 008).
+    for (const t of ["edr", "edr_totals", "edr_sender_daily"])
+      await chQuery(`ALTER TABLE ${t} DELETE WHERE c_enterprise_id = ${ent} SETTINGS mutations_sync = 1`);
   await closeDb();
 });
 
