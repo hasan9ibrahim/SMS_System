@@ -112,7 +112,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     title: "Revenue − cost (platform currency)",
     fmt: "money",
     shown: true,
-    group: "Money",
+    group: "Billing",
   },
   {
     metric: "revenue",
@@ -120,7 +120,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     title: "Customer charges (platform currency)",
     fmt: "money",
     shown: true,
-    group: "Money",
+    group: "Billing",
   },
   {
     metric: "cost",
@@ -128,7 +128,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     title: "Vendor charges (platform currency)",
     fmt: "money",
     shown: true,
-    group: "Money",
+    group: "Billing",
   },
   {
     metric: "delivered",
@@ -144,7 +144,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     title: "Average customer rate per message",
     fmt: "rate",
     shown: true,
-    group: "Money",
+    group: "Billing",
   },
   {
     metric: "avgRateVendor",
@@ -152,7 +152,7 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     title: "Average vendor rate per message",
     fmt: "rate",
     shown: true,
-    group: "Money",
+    group: "Billing",
   },
   {
     metric: "deliveryDelayS",
@@ -160,7 +160,8 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     title: "Average delivery delay in seconds",
     fmt: "sec",
     shown: true,
-    group: "Quality",
+    // Under Network, with the HLR and TPS figures (team trial round 6).
+    group: "Network",
   },
   { metric: "hlrTotal", label: "HLR/MNP", title: "HLR / MNP lookups", fmt: "int", shown: true, group: "HLR/MNP" },
   {
@@ -214,14 +215,14 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
     shown: false,
     group: "HLR/MNP",
   },
-  { metric: "marginPct", label: "Margin %", title: "Margin / revenue", fmt: "pct", shown: false, group: "Money" },
+  { metric: "marginPct", label: "Margin %", title: "Margin / revenue", fmt: "pct", shown: false, group: "Billing" },
   {
     metric: "costAvg",
     label: "Avg cost",
     title: "Average cost per billable message (platform currency)",
     fmt: "rate",
     shown: false,
-    group: "Money",
+    group: "Billing",
   },
   {
     metric: "successful",
@@ -283,14 +284,14 @@ export const ALL_COLUMNS: (Column & { shown: boolean; group: string })[] = [
 ];
 /** The default columns, in order. */
 /**
- * Header bands over the columns (team trial round 5): Traffic, Quality, Money, Network. A band's columns sit
- * together, in the catalogue's order within the band.
+ * Header bands over the columns (team trial round 5): Traffic, Quality, Billing (Money until round 6), Network. A
+ * band's columns sit together, in the catalogue's order within the band; the column chooser groups by band too.
  */
 export type Band = "traffic" | "quality" | "money" | "network";
 export const BANDS: { key: Band; label: string }[] = [
   { key: "traffic", label: "Traffic" },
   { key: "quality", label: "Quality" },
-  { key: "money", label: "Money" },
+  { key: "money", label: "Billing" },
   { key: "network", label: "Network" },
 ];
 const NETWORK = new Set<string>([
@@ -307,7 +308,7 @@ const NETWORK = new Set<string>([
 export function bandOf(c: Pick<Column, "metric" | "fmt">): Band {
   if (NETWORK.has(c.metric)) return "network";
   const g = ALL_COLUMNS.find((x) => x.metric === c.metric)?.group;
-  return g === "Quality" ? "quality" : g === "Money" || g === "HLR/MNP" ? "money" : "traffic";
+  return g === "Quality" ? "quality" : g === "Billing" || g === "HLR/MNP" ? "money" : "traffic";
 }
 const bandIndex = (c: Column) => BANDS.findIndex((b) => b.key === bandOf(c));
 /** Consecutive columns of one band, for the band row of the header. */

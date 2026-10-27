@@ -726,20 +726,45 @@
   border-top: var(--border-width) solid var(--color-border);
 }
 /* The detail panel on the right of the table (team trial round 3). */
+/* The detail panel sits below the table (team trial round 6; beside it in round 3), resized by the bar between. */
 .la-body {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
 }
 .la-body > .la-wrap {
   flex: 1 1 auto;
-  min-width: 0;
+  min-height: 120px;
 }
 .la-body > .la-detail {
-  flex: 0 0 min(40%, 620px);
-  min-width: 360px;
+  flex: 0 0 38%;
+  min-height: 160px;
   margin-top: 0;
+}
+.la-hsplit {
+  flex: none;
+  height: 8px;
+  cursor: row-resize;
+  position: relative;
+}
+.la-hsplit::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 40px;
+  height: 2px;
+  margin-left: -20px;
+  border-radius: 1px;
+  background: var(--color-border);
+}
+.la-hsplit:hover::after {
+  background: var(--color-accent);
+}
+body.resizing-split-h {
+  cursor: row-resize;
+  user-select: none;
 }
 /* Network status (team trial round 4): two-line cells, IP chips with sessions, a connections bar. */
 .two-line {

@@ -17,8 +17,9 @@ import {
   SEVERITY_LABEL,
 } from "../pages/monitoring/alerts/alertsModel";
 
-/** Pages that show live traffic get the alert dot while incidents are open (§13.5). */
-const ALERT_PAGES = ["/dashboard", "/live", "/monitoring/incidents"];
+/** The Incidents tab gets the alert dot while incidents are open (§13.5); Dashboard and Live tabs show the live light
+ * instead (team trial round 6). */
+const ALERT_PAGES = ["/monitoring/incidents"];
 
 export function useTabAlertDots() {
   const open = useLive((s) => openIncidents(s).length > 0);

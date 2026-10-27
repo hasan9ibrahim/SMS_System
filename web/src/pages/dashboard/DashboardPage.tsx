@@ -212,6 +212,8 @@ export function DashboardPage() {
             onOpen={open}
             volumes={{ customer: saved.customerMinMessages ?? 100, vendor: saved.vendorMinMessages ?? 100 }}
             onVolume={(kind, n) => save(kind === "customer" ? { customerMinMessages: n } : { vendorMinMessages: n })}
+            windowMinutes={saved.windowMinutes}
+            onWindow={(windowMinutes) => save({ windowMinutes })}
           />
         );
       case "chart":
@@ -249,19 +251,6 @@ export function DashboardPage() {
             {/* Online now sits in the page header, left of the controls (team trial round 2). */}
             <OnlineNowCard />
             <label className="dash-control">
-              Movers window
-              <select
-                value={saved.windowMinutes}
-                onChange={(e) => save({ windowMinutes: Number(e.target.value) as DashboardSettings["windowMinutes"] })}
-              >
-                {[5, 15, 30, 60].map((m) => (
-                  <option key={m} value={m}>
-                    {m === 60 ? "Last hour" : `Last ${m} minutes`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="dash-control">
               Refresh
               <select
                 value={refreshSeconds}
@@ -285,13 +274,22 @@ export function DashboardPage() {
                 })
               }
             />
-            <span className={`dash-live${feed.connected && refreshSeconds ? " on" : ""}`} role="status">
-              <span className="dot" /> {!feed.connected ? "Offline" : refreshSeconds ? "Live" : "Paused"}
-            </span>
+            {/* No Live light here (team trial round 6): the tab's light shows the live connection. */}
           </>
         }
       />
-      <div className="dash-body">
+      <div
+        className="dash-body"
+        // Dragging a panel near the top or bottom edge scrolls the dashboard (team trial round 6).
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("text/x-dash-panel")) return;
+          const box = e.currentTarget.getBoundingClientRect();
+          const edge = 80;
+          if (e.clientY < box.top + edge) e.currentTarget.scrollBy(0, -Math.ceil((box.top + edge - e.clientY) / 3));
+          else if (e.clientY > box.bottom - edge)
+            e.currentTarget.scrollBy(0, Math.ceil((e.clientY - box.bottom + edge) / 3));
+        }}
+      >
         {/* Panels in the user's order and sizes (team trial round 2): drag the grip to move, the corner to resize. */}
         <div className="dash-grid">
           {layout
@@ -398,6 +396,14 @@ function PanelFrame({
       onDragStart={(e) => {
         e.dataTransfer.setData("text/x-dash-panel", item.panel);
         e.dataTransfer.effectAllowed = "move";
+        // A filled chip follows the pointer instead of a faded copy of the panel, which was white on white in the
+        // light theme (team trial round 6).
+        const chip = document.createElement("div");
+        chip.className = "dash-drag-chip";
+        chip.textContent = label;
+        document.body.appendChild(chip);
+        e.dataTransfer.setDragImage(chip, 12, 12);
+        setTimeout(() => chip.remove(), 0);
       }}
       onDragEnd={() => setDrag(false)}
       onDragOver={(e) => {
@@ -777,11 +783,15 @@ function MoversPanel({
   onOpen,
   volumes,
   onVolume,
+  windowMinutes,
+  onWindow,
 }: {
   movers: DashboardMoversEvent | null;
   onOpen: Open;
   volumes: { customer: number; vendor: number };
   onVolume: (kind: "customer" | "vendor", n: number) => void;
+  windowMinutes: DashboardSettings["windowMinutes"];
+  onWindow: (m: DashboardSettings["windowMinutes"]) => void;
 }) {
   // Started rows not in the previous push get the "new" badge and a pulse.
   const prev = useRef<Set<string>>(new Set());
@@ -797,11 +807,20 @@ function MoversPanel({
       title="Traffic movers"
       className="dash-movers"
       extra={
-        movers && (
-          <span className="muted small">
-            Last {movers.windowMinutes} min vs the {movers.windowMinutes} min before
-          </span>
-        )
+        // The window is chosen here, in the panel it changes (team trial round 6; was in the page header).
+        <label className="dash-control" title="Compared with the same length of time just before">
+          <select
+            value={windowMinutes}
+            onChange={(e) => onWindow(Number(e.target.value) as DashboardSettings["windowMinutes"])}
+            aria-label="Movers window"
+          >
+            {[5, 15, 30, 60].map((m) => (
+              <option key={m} value={m}>
+                {m === 60 ? "Last hour" : `Last ${m} min`} vs before
+              </option>
+            ))}
+          </select>
+        </label>
       }
     >
       <div className="dash-mover-groups">

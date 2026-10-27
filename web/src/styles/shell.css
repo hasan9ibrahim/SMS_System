@@ -688,6 +688,18 @@ a.btn {
   border-radius: 50%;
   background: var(--color-error);
 }
+/* Live light on Dashboard and Live tabs (team trial round 6): green while connected, red while not. */
+.tab-live {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+.tab-live.on {
+  background: var(--color-good);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-good) 25%, transparent);
+}
 .tab-dirty {
   width: 7px;
   height: 7px;

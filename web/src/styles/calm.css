@@ -19,11 +19,18 @@
 .la-grid td.la-pos {
   color: var(--color-good);
 }
+/* The total row tinted like the reference screenshot (team trial round 6), a shade darker while its detail is open
+   (double-click). */
 .la-grid .la-total td,
 .la-grid .la-total td.num,
 .la-grid .la-total td.num.la-strong {
   font-weight: 600;
-  background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-panel));
+}
+.la-grid .la-total.la-selected td,
+.la-grid .la-total.la-selected td.num,
+.la-grid .la-total.la-selected td.num.la-strong {
+  background: color-mix(in srgb, var(--color-accent) 24%, var(--color-panel));
 }
 /* Amber and red figures sit in a filled, softly rounded chip like the reference platform (team trial round 5, third
    pass): amber with dark text, red with white text. Good figures stay green text. */
@@ -72,6 +79,30 @@
   font-weight: 600;
   box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--band) 35%, transparent);
 }
+/* Headers coloured by their band (team trial round 6): Traffic blue, Quality green, Billing amber, Network violet;
+   the band row a shade deeper than the column titles under it. */
+.la-grid thead th[class*="la-band-"] {
+  background: color-mix(in srgb, var(--band) 11%, var(--color-panel));
+  color: color-mix(in srgb, var(--band) 80%, var(--color-text));
+}
+.la-grid .la-bands th.la-band {
+  background: color-mix(in srgb, var(--band) 20%, var(--color-panel));
+}
+.la-cols fieldset[class*="la-band-"] legend {
+  color: color-mix(in srgb, var(--band) 80%, var(--color-text));
+}
+.la-cols .la-band-traffic {
+  --band: var(--color-accent);
+}
+.la-cols .la-band-quality {
+  --band: var(--color-good);
+}
+.la-cols .la-band-money {
+  --band: var(--color-warning);
+}
+.la-cols .la-band-network {
+  --band: #7c3aed;
+}
 @keyframes la-flash-up {
   from {
     background: color-mix(in srgb, var(--color-good) 10%, transparent);
@@ -104,7 +135,7 @@
 
 /* No sideways scrolling (team trial round 5): Live analytics fits its columns to the window, headers centred. */
 .la-grid col.la-col-name {
-  width: 9.5%;
+  width: 13%;
 }
 .la-grid col.la-col-act {
   width: 5.5%;
@@ -281,5 +312,12 @@ table th.num,
 .vt-head .vt-cell {
   text-align: left !important;
   justify-content: flex-start !important;
+}
+
+/* Live analytics spacing (team trial round 6): a wider name column and figures a size smaller. */
+.la-grid td.num:not(.la-strong),
+.la-grid td.num.la-strong,
+.la-grid td.num.la-strong .la-pill {
+  font-size: 10.5px;
 }
 
