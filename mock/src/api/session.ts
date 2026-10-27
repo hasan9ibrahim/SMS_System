@@ -50,6 +50,7 @@ export const demoUser: CurrentUser = {
     dashboard: DEFAULT_DASHBOARD,
     alertSounds: DEFAULT_ALERT_SOUNDS,
     liveAnalytics: { columns: [] },
+    favouritePages: [],
   },
   permissions: ["*"],
   hiddenTabs: [],
@@ -57,7 +58,7 @@ export const demoUser: CurrentUser = {
 
 export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser | null> {
   const { rows } = await pool.query(
-    `SELECT u.id, u.username, u.first_name, u.last_name, u.is_admin, u.theme, u.open_in_new_tab, u.animations, u.dashboard_settings, u.alert_sounds, u.analytics_settings,
+    `SELECT u.id, u.username, u.first_name, u.last_name, u.is_admin, u.theme, u.open_in_new_tab, u.animations, u.dashboard_settings, u.alert_sounds, u.analytics_settings, u.favourite_pages,
             g.name AS access_group, g.permissions, g.hidden_tabs, u.permission_overrides, u.tab_overrides,
             bc.name AS business_company
        FROM users u
@@ -89,6 +90,8 @@ export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser |
       alertSounds: { ...DEFAULT_ALERT_SOUNDS, ...(r.alert_sounds ?? {}) },
       // Live analytics columns (team trial round 3, §13.4); empty = the default set.
       liveAnalytics: { columns: Array.isArray(r.analytics_settings?.columns) ? r.analytics_settings.columns : [] },
+      // Ctrl K favourites (team trial round 6, §15.1).
+      favouritePages: r.favourite_pages ?? [],
     },
     // GUI Access Group keys "page:action"; "*" = everything (§1). The user's own overrides apply on top;
     // "!page" = no access to that page whatever the group gives (team trial round 2).
@@ -138,7 +141,7 @@ export function updatePreferences(request: FastifyRequest, reply: FastifyReply) 
       `UPDATE users SET theme = COALESCE($2, theme), open_in_new_tab = COALESCE($3, open_in_new_tab),
               animations = COALESCE($4, animations), dashboard_settings = COALESCE($5, dashboard_settings),
               alert_sounds = COALESCE($6, alert_sounds), analytics_settings = COALESCE($7, analytics_settings),
-              updated_at = now() WHERE id = $1`,
+              favourite_pages = COALESCE($8, favourite_pages), updated_at = now() WHERE id = $1`,
       [
         currentUserId(),
         body.theme ?? null,
@@ -147,6 +150,7 @@ export function updatePreferences(request: FastifyRequest, reply: FastifyReply) 
         body.dashboard ? JSON.stringify(body.dashboard) : null,
         body.alertSounds ? JSON.stringify(body.alertSounds) : null,
         body.liveAnalytics ? JSON.stringify(body.liveAnalytics) : null,
+        body.favouritePages ?? null,
       ],
     );
     return (await loadUser(pool, currentUserId())) ?? demoUser;

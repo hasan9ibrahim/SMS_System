@@ -234,10 +234,10 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
       <select
         className="range-chip plain chip-select"
         aria-label="EDR Template"
-        value={templates.data?.find((t) => state.visible && t.columns.join() === state.visible.join())?.id ?? ""}
+        value={templates.data?.find((t) => state.visible && t.columns?.join() === state.visible.join())?.id ?? ""}
         onChange={(e) => {
           const t = templates.data?.find((x) => x.id === Number(e.target.value));
-          setState({ ...state, visible: t ? t.columns : null });
+          setState({ ...state, visible: t?.columns ?? null });
         }}
       >
         <option value="">Template: default columns</option>

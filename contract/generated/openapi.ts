@@ -10537,10 +10537,10 @@ export type components = {
       backend: "mock" | "elixir";
     };
     /**
-     * @description Colour theme (§15.2).
+     * @description Colour theme (§15.2); blue-grey added in team trial round 6.
      * @enum {string}
      */
-    Theme: "light" | "dark";
+    Theme: "light" | "dark" | "bluegrey";
     SignInInput: {
       username: string;
       password: string;
@@ -10597,6 +10597,7 @@ export type components = {
         dashboard: components["schemas"]["DashboardSettings"];
         alertSounds?: components["schemas"]["AlertSoundPrefs"];
         liveAnalytics?: components["schemas"]["LiveAnalyticsSettings"];
+        favouritePages?: components["schemas"]["FavouritePages"];
       };
       /** @description GUI Access Group permission keys ("page:action"; "*" = everything) after the user's own overrides; pages without view are hidden from the menu and blocked, buttons not covered are hidden (§1). */
       permissions: string[];
@@ -10610,7 +10611,10 @@ export type components = {
       dashboard?: components["schemas"]["DashboardSettings"];
       alertSounds?: components["schemas"]["AlertSoundPrefs"];
       liveAnalytics?: components["schemas"]["LiveAnalyticsSettings"];
+      favouritePages?: components["schemas"]["FavouritePages"];
     };
+    /** @description Pages the user marked with the heart in Search or jump to (Ctrl K, team trial round 6, §15.1), by page key, in the order they were added. Shown first when the search box is empty. */
+    FavouritePages: string[];
     /** @description Live analytics columns, saved per user (team trial round 3): the metrics shown, in order. An empty list is the default set; the client adds or removes columns like dashboard panels. */
     LiveAnalyticsSettings: {
       columns: components["schemas"]["ReportMetric"][];

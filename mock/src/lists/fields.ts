@@ -217,6 +217,79 @@ export const RECORD_TYPE_LABELS: Record<string, string> = {
   migration: "Migration import",
 };
 
+// EDR Search default columns (team trial round 6, §9.1), in this order: the times, both legs' partners, trunks, IPs
+// and settings, the message, rates, routing, states, errors, money and HLR. Every other field is still in the column
+// chooser. EDR templates can start from this list.
+export const EDR_DEFAULT_COLUMNS = [
+  "startTime",
+  "submitTime",
+  "submitRespTime",
+  "deliveryTime",
+  "id",
+  "customerEnterprise",
+  "customerEnterpriseId",
+  "customerTrunk",
+  "customerTrunkId",
+  "customerIp",
+  "customerPort",
+  "customerMsgId",
+  "srcTon",
+  "srcNpi",
+  "dstTon",
+  "dstNpi",
+  "coding",
+  "senderId",
+  "dnid",
+  "messageText",
+  "customerMccmnc",
+  "country",
+  "customerRate",
+  "customerSysRate",
+  "customerCurrency",
+  "vendorEnterprise",
+  "vendorEnterpriseId",
+  "vendorTrunk",
+  "vendorTrunkId",
+  "vendorIp",
+  "vendorPort",
+  "vendorSrcTon",
+  "vendorSrcNpi",
+  "vendorDstTon",
+  "vendorDstNpi",
+  "vendorMsgId",
+  "vendorMccmnc",
+  "vendorRate",
+  "vendorSysRate",
+  "vendorCurrency",
+  "routeRuleId",
+  "customerMsgStatus",
+  "msgStatus",
+  "causeCode",
+  "causeText",
+  "deliveryError",
+  "customerDeliveryError",
+  "networkError",
+  "msgCount",
+  "udh",
+  "deliveryDelaySeconds",
+  "revenue",
+  "cost",
+  "hlrProvider",
+  "hlrIsPorted",
+  "hlrErrorCode",
+];
+
+function edrDefaults(fields: FieldDescriptor[]): FieldDescriptor[] {
+  const at = (f: FieldDescriptor) => {
+    const i = EDR_DEFAULT_COLUMNS.indexOf(f.field);
+    return i < 0 ? EDR_DEFAULT_COLUMNS.length : i;
+  };
+  return fields
+    .map((f, i) => ({ f: { ...f, hidden: !EDR_DEFAULT_COLUMNS.includes(f.field) }, i }))
+    .sort((a, b) => at(a.f) - at(b.f) || a.i - b.i)
+    .map(({ f }) => f);
+}
+
 export const listFields: Record<ListId, ListFields> = {
   // Enterprise list and selector (§5, §5.1)
   enterprises: {
@@ -1634,7 +1707,7 @@ export const listFields: Record<ListId, ListFields> = {
   edrs: {
     list: "edrs",
     defaultSort: [{ field: "startTime", dir: "desc" }],
-    fields: [
+    fields: edrDefaults([
       field({ field: "startTime", label: "Start Time", type: "datetime", defaultOperator: "between" }),
       field({ field: "submitTime", label: "Submit Time", type: "datetime", defaultOperator: "between", hidden: true }),
       field({
@@ -1945,7 +2018,7 @@ export const listFields: Record<ListId, ListFields> = {
       }),
       field({ field: "hlrErrorCode", label: "HLR Error Code", type: "integer", defaultOperator: "eq", hidden: true }),
       field({ field: "hlrCostSys", label: "HLR Cost", type: "decimal", defaultOperator: "gte", hidden: true }),
-    ],
+    ]),
   },
 
   // Failed EDR Search (§9.2): messages rejected before routing.

@@ -1493,8 +1493,40 @@ a.btn {
   text-align: left;
   cursor: pointer;
 }
-.palette-item.selected {
+.palette-item.selected,
+.palette-row.selected {
   background: var(--accent-soft);
+}
+/* Favourites (team trial round 6): the heart at the end of a page row; filled red when the page is a favourite. */
+.palette-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+.palette-row .palette-item {
+  flex: 1;
+  min-width: 0;
+}
+.palette-fav {
+  flex: none;
+  display: inline-flex;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+}
+.palette-row:hover .palette-fav,
+.palette-row.selected .palette-fav,
+.palette-fav.on {
+  opacity: 1;
+}
+.palette-fav.on {
+  color: var(--color-error);
+}
+.palette-fav.on svg path {
+  fill: currentColor;
 }
 .palette-label {
   font-weight: 600;

@@ -649,3 +649,15 @@ ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS content_number_min_digits
 
 -- Warm-up Reset (migration 083, team trial round 6): when a route rule vendor's warm-up count was last restarted.
 ALTER TABLE route_rule_vendors ADD COLUMN IF NOT EXISTS warmup_reset_at timestamptz;
+
+-- EDR template "All message details": the EDR Search default columns (team trial round 6, §9.1).
+INSERT INTO edr_templates (name, columns, inserted_at, updated_at)
+SELECT 'All message details', ARRAY['startTime', 'submitTime', 'submitRespTime', 'deliveryTime', 'id', 'customerEnterprise', 'customerEnterpriseId', 'customerTrunk', 'customerTrunkId', 'customerIp', 'customerPort', 'customerMsgId', 'srcTon', 'srcNpi', 'dstTon', 'dstNpi', 'coding', 'senderId', 'dnid', 'messageText', 'customerMccmnc', 'country', 'customerRate', 'customerSysRate', 'customerCurrency', 'vendorEnterprise', 'vendorEnterpriseId', 'vendorTrunk', 'vendorTrunkId', 'vendorIp', 'vendorPort', 'vendorSrcTon', 'vendorSrcNpi', 'vendorDstTon', 'vendorDstNpi', 'vendorMsgId', 'vendorMccmnc', 'vendorRate', 'vendorSysRate', 'vendorCurrency', 'routeRuleId', 'customerMsgStatus', 'msgStatus', 'causeCode', 'causeText', 'deliveryError', 'customerDeliveryError', 'networkError', 'msgCount', 'udh', 'deliveryDelaySeconds', 'revenue', 'cost', 'hlrProvider', 'hlrIsPorted', 'hlrErrorCode'], now(), now()
+ WHERE NOT EXISTS (SELECT 1 FROM edr_templates WHERE lower(name) = 'all message details' AND deleted_at IS NULL);
+
+-- Blue-grey theme (migration 084, §15.2).
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_theme_check;
+ALTER TABLE users ADD CONSTRAINT users_theme_check CHECK (theme IN ('light', 'dark', 'bluegrey'));
+
+-- Favourite pages in Ctrl K (migration 085, §15.1).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS favourite_pages text[] NOT NULL DEFAULT '{}';

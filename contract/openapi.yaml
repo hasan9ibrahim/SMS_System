@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.105.0
+  version: 0.106.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -15671,8 +15671,8 @@ components:
 
     Theme:
       type: string
-      enum: [light, dark]
-      description: Colour theme (§15.2).
+      enum: [light, dark, bluegrey]
+      description: Colour theme (§15.2); blue-grey added in team trial round 6.
 
     SignInInput:
       type: object
@@ -15774,6 +15774,8 @@ components:
               $ref: "#/components/schemas/AlertSoundPrefs"
             liveAnalytics:
               $ref: "#/components/schemas/LiveAnalyticsSettings"
+            favouritePages:
+              $ref: "#/components/schemas/FavouritePages"
         permissions:
           type: array
           description: >-
@@ -15804,6 +15806,19 @@ components:
           $ref: "#/components/schemas/AlertSoundPrefs"
         liveAnalytics:
           $ref: "#/components/schemas/LiveAnalyticsSettings"
+        favouritePages:
+          $ref: "#/components/schemas/FavouritePages"
+
+    FavouritePages:
+      type: array
+      description: >-
+        Pages the user marked with the heart in Search or jump to (Ctrl K, team trial round 6, §15.1), by page key, in
+        the order they were added. Shown first when the search box is empty.
+      maxItems: 60
+      uniqueItems: true
+      items:
+        type: string
+        maxLength: 60
 
     LiveAnalyticsSettings:
       type: object

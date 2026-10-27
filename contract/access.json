@@ -746,7 +746,8 @@
       ],
       "fields": [
         "id",
-        "name"
+        "name",
+        "columns"
       ]
     },
     "email_templates": {
