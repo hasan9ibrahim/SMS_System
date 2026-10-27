@@ -775,6 +775,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
             match_case: w["matchCase"]
           }
         end),
+      content_number_format: r.content_number_format,
+      content_number_min_digits: r.content_number_min_digits,
       sender_min_length: r.sender_min_len,
       sender_max_length: r.sender_max_len,
       receiver_min_length: r.receiver_min_len,

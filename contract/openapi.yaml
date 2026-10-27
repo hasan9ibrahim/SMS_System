@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.100.0
+  version: 0.101.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -20866,6 +20866,21 @@ components:
             (team trial round 1). An empty replacement removes the word. Missing = none.
           items:
             $ref: "#/components/schemas/ContentWordRule"
+        contentNumberFormat:
+          type: [string, "null"]
+          maxLength: 40
+          pattern: "#"
+          description: >-
+            Number format for the content (team trial round 6): every run of digits in the text (at least
+            contentNumberMinDigits long) is written out through this pattern, # being one digit and anything else
+            kept as typed, e.g. "### ### ###" turns 210271019 into 210 271 019 and "(###) ###-####" makes
+            (210) 271-0190. A longer number repeats the pattern's last group; a shorter one stops after its last digit.
+            Applied after the word replacements, before the regex rewrite. Missing or null = off.
+        contentNumberMinDigits:
+          type: [integer, "null"]
+          minimum: 2
+          maximum: 20
+          description: The shortest run of digits the number format touches (null = 6), so short numbers stay as they are.
         senderMinLength:
           type: integer
           minimum: 0

@@ -1402,3 +1402,20 @@
   flex: 1;
   min-width: 0;
 }
+
+/* Unassign before delete (team trial round 6). */
+.unassign-box {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-page-bg);
+}
+.unassign-names {
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}

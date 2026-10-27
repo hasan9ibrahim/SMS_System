@@ -12905,6 +12905,10 @@ export type components = {
       msgTemplate?: string | null;
       /** @description Words or phrases to replace in the content, in order, before the regex rewrite and the template (team trial round 1). An empty replacement removes the word. Missing = none. */
       contentWords?: components["schemas"]["ContentWordRule"][];
+      /** @description Number format for the content (team trial round 6): every run of digits in the text (at least contentNumberMinDigits long) is written out through this pattern, # being one digit and anything else kept as typed, e.g. "### ### ###" turns 210271019 into 210 271 019 and "(###) ###-####" makes (210) 271-0190. A longer number repeats the pattern's last group; a shorter one stops after its last digit. Applied after the word replacements, before the regex rewrite. Missing or null = off. */
+      contentNumberFormat?: string | null;
+      /** @description The shortest run of digits the number format touches (null = 6), so short numbers stay as they are. */
+      contentNumberMinDigits?: number | null;
       senderMinLength?: number;
       senderMaxLength?: number;
       receiverMinLength?: number;

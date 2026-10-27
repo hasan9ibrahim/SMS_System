@@ -1759,3 +1759,59 @@ svg.flip {
   flex: 1;
   margin: 0;
 }
+
+/* Number format in translation rule content (team trial round 6). */
+.numfmt {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+}
+.numfmt-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.numfmt-presets button {
+  height: 26px;
+  padding: 0 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.numfmt-presets button:hover {
+  border-color: var(--color-accent);
+}
+.numfmt-presets button.on {
+  border-color: var(--color-accent);
+  background: var(--color-head-tint);
+  color: var(--color-accent);
+}
+.numfmt-min {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+.numfmt-min input {
+  width: 64px;
+}
+.numfmt-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-page-bg);
+}
+.numfmt-preview input {
+  flex: 1;
+  min-width: 0;
+}

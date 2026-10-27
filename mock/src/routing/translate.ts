@@ -224,8 +224,48 @@ export function replaceWords(text: string, words: readonly ContentWordRule[] | n
   return out;
 }
 
+/**
+ * One number through a digit pattern (team trial round 6): # takes the next digit, anything else is kept as typed.
+ * A longer number repeats the pattern's last group with the separator before it; a shorter one stops after its last
+ * digit. What follows the last # (e.g. a closing bracket) is added when the pattern was filled to the end.
+ * "### ### ###" + 210271019 → "210 271 019"; "(###) ###-####" + 2102710190 → "(210) 271-0190".
+ */
+export function formatNumber(digits: string, pattern: string): string {
+  const last = pattern.lastIndexOf("#");
+  if (last < 0) return digits;
+  let groupStart = last;
+  while (groupStart > 0 && pattern[groupStart - 1] === "#") groupStart--;
+  let sepStart = groupStart;
+  while (sepStart > 0 && pattern[sepStart - 1] !== "#") sepStart--;
+  const head = pattern.slice(0, last + 1);
+  const repeat = pattern.slice(sepStart, last + 1);
+  const tail = pattern.slice(last + 1);
+  let out = "";
+  let i = 0;
+  let filled = false;
+  for (let part = head; i < digits.length; part = repeat) {
+    let complete = true;
+    for (const ch of part) {
+      if (i >= digits.length) {
+        complete = false;
+        break;
+      }
+      out += ch === "#" ? digits[i++] : ch;
+    }
+    filled = i >= digits.length && complete && part.endsWith("#");
+  }
+  return filled ? out + tail : out;
+}
+
+/** Every run of at least minDigits digits in the text, through the number format (null = off). */
+export function formatNumbers(text: string, pattern: string | null | undefined, minDigits: number | null | undefined) {
+  if (!pattern || !pattern.includes("#")) return text;
+  const min = Math.max(2, minDigits ?? 6);
+  return text.replace(/\d+/g, (run) => (run.length >= min ? formatNumber(run, pattern) : run));
+}
+
 export function rewriteText(rule: EngineRule, text: string): string {
-  let out = replaceWords(text, rule.contentWords);
+  let out = formatNumbers(replaceWords(text, rule.contentWords), rule.contentNumberFormat, rule.contentNumberMinDigits);
   if (rule.contentRegex && rule.contentReplacement !== null) {
     const re = compile(rule.contentRegex, "g");
     if (re) {

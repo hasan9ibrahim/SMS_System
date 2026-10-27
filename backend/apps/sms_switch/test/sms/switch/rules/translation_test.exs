@@ -47,6 +47,19 @@ defmodule Sms.Switch.Rules.TranslationTest do
     assert Translation.convert(:regex_replace, "[^0-9]", "+44 7123", "") == "447123"
   end
 
+  test "number format in content: any length, short numbers untouched (team trial round 6)" do
+    r = rule(3, content_number_format: "### ### ###", content_number_min_digits: 6)
+
+    assert Translation.rewrite_text(r, "Call 210271019 or code 1234") ==
+             "Call 210 271 019 or code 1234"
+
+    assert Translation.rewrite_text(r, "Ref 210271019123") == "Ref 210 271 019 123"
+    assert Translation.rewrite_text(r, "Ref 21027101") == "Ref 210 271 01"
+    assert Translation.format_number("2102710190", "(###) ###-####") == "(210) 271-0190"
+    assert Translation.format_number("210271019", "###-###") == "210-271-019"
+    assert Translation.rewrite_text(rule(4), "210271019") == "210271019"
+  end
+
   test "content rewrite: regex group, whole match, template" do
     r =
       rule(1,

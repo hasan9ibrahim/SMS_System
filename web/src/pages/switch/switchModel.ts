@@ -131,6 +131,8 @@ export function blankRule(): TranslationRuleInput {
     contentReplacement: null,
     msgTemplate: null,
     contentWords: [],
+    contentNumberFormat: null,
+    contentNumberMinDigits: null,
     senderMinLength: 0,
     senderMaxLength: 20,
     receiverMinLength: 0,

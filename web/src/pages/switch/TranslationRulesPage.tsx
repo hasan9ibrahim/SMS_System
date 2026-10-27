@@ -5,6 +5,8 @@
 // the number of trunks it touches; "Duplicate to trunk" makes a variant for one partner.
 import { useCan } from "../../api/access";
 import { useEffect, useState, type ReactNode } from "react";
+import { formatNumbers } from "./numberFormat";
+import { api, unwrap } from "../../api/client";
 import type {
   ContentWordRule,
   DlrMapEntry,
@@ -39,7 +41,7 @@ import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { useMe } from "../../api/hooks";
 import { useRestore } from "../../api/records";
-import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord, type Unassign } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { HoverList } from "../../ui/HoverList";
@@ -352,16 +354,96 @@ type Side = "customer" | "vendor";
 type TargetType = TranslationTargetInput["type"];
 
 /** Applies To (§13.2): trunks, enterprises, categories or all trunks, per side. */
+/**
+ * Number format for the content (team trial round 6): a digit pattern (# = one digit) applied to every number of at
+ * least N digits, with a live preview. Numbers of any length work: a longer one repeats the last group.
+ */
+function NumberFormatField({
+  pattern,
+  minDigits,
+  error,
+  onChange,
+}: {
+  pattern: string;
+  minDigits: number | null;
+  error?: string;
+  onChange: (pattern: string, minDigits: number | null) => void;
+}) {
+  const [sample, setSample] = useState("Your number is 210271019");
+  const PRESETS = ["### ### ###", "###-###-####", "(###) ###-####", "## ## ## ##"];
+  return (
+    <FormField label="Format numbers" wide error={error} hint="# = one digit · longer numbers repeat the last group">
+      <div className="numfmt">
+        <input
+          className="input"
+          aria-label="Number pattern"
+          placeholder="Off · e.g. ### ### ###"
+          maxLength={40}
+          value={pattern}
+          onChange={(e) => onChange(e.target.value, minDigits)}
+        />
+        <div className="numfmt-presets" role="group" aria-label="Common patterns">
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={pattern === p ? "on" : undefined}
+              onClick={() => onChange(pattern === p ? "" : p, minDigits)}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <label className="numfmt-min">
+          From
+          <input
+            className="input num"
+            type="number"
+            min={2}
+            max={20}
+            aria-label="Shortest number to format"
+            value={minDigits ?? 6}
+            disabled={!pattern}
+            onChange={(e) => onChange(pattern, e.target.value ? Number(e.target.value) : null)}
+          />
+          digits
+        </label>
+        {pattern && (
+          <div className="numfmt-preview">
+            <input
+              className="input"
+              aria-label="Sample text"
+              value={sample}
+              onChange={(e) => setSample(e.target.value)}
+            />
+            <span aria-hidden="true">→</span>
+            <strong className="num">{formatNumbers(sample, pattern, minDigits)}</strong>
+          </div>
+        )}
+      </div>
+    </FormField>
+  );
+}
+
 function TargetsEditor({
   value,
+  direction,
   labels,
   onChange,
 }: {
   value: TranslationTargetInput[];
   labels: Map<string, string>;
+  direction: "ingress" | "egress" | null;
   onChange: (next: TranslationTargetInput[]) => void;
 }) {
-  const [side, setSide] = useState<Side>(value[0]?.trunkKind ?? "customer");
+  // Team trial round 6: ingress shows customer trunks only, egress vendor trunks only; implied by the trunk can mix
+  // both. Switching the type drops targets of the other side.
+  const fixed: Side | null = direction === "ingress" ? "customer" : direction === "egress" ? "vendor" : null;
+  const [picked0, setSide] = useState<Side>(value[0]?.trunkKind ?? "customer");
+  const side = fixed ?? picked0;
+  useEffect(() => {
+    if (fixed && value.some((t) => t.trunkKind !== fixed)) onChange(value.filter((t) => t.trunkKind === fixed));
+  }, [fixed]); // eslint-disable-line react-hooks/exhaustive-deps
   const [type, setType] = useState<TargetType>("trunk");
   const [names, setNames] = useState(labels);
   const of = (t: TargetType) => value.filter((v) => v.trunkKind === side && v.type === t);
@@ -382,7 +464,7 @@ function TargetsEditor({
     <div className="targets">
       <div className="targets-bar">
         <div className="segmented small" role="radiogroup" aria-label="Side">
-          {(["customer", "vendor"] as const).map((s) => (
+          {(fixed ? [fixed] : (["customer", "vendor"] as const)).map((s) => (
             <button
               key={s}
               type="button"
@@ -750,7 +832,12 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
 
         <Section title="Applies to" columns={1} note="Saving applies the rule everywhere it targets (§13.2)">
           <FormField label="Targets" wide error={form.error("targets")}>
-            <TargetsEditor value={v.targets} labels={labels} onChange={(t) => form.set("targets", t)} />
+            <TargetsEditor
+              value={v.targets}
+              labels={labels}
+              direction={v.direction}
+              onChange={(t) => form.set("targets", t)}
+            />
           </FormField>
           <SelectField
             form={form}
@@ -894,6 +981,15 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               >
                 <ContentWordsEditor value={v.contentWords ?? []} onChange={(w) => form.set("contentWords", w)} />
               </FormField>
+              <NumberFormatField
+                pattern={v.contentNumberFormat ?? ""}
+                minDigits={v.contentNumberMinDigits ?? null}
+                error={form.error("contentNumberFormat")}
+                onChange={(pattern, minDigits) => {
+                  form.set("contentNumberFormat", pattern || null);
+                  form.set("contentNumberMinDigits", minDigits);
+                }}
+              />
               <TextField
                 form={form}
                 path="contentRegex"
@@ -1166,6 +1262,20 @@ function MccmncCell({ row }: { row: TranslationRuleRow }) {
   );
 }
 
+/** Takes a rule off the trunks and enterprises it is assigned to, keeping category and all-trunk targets (round 6). */
+function unassignRule(id: number): Unassign {
+  const detail = () => unwrap(api.GET("/translation-rules/{id}", { params: { path: { id } } }));
+  const direct = (t: { type: string }) => t.type === "trunk" || t.type === "enterprise";
+  return {
+    load: async () => (await detail()).targets.filter(direct).map((t) => t.label),
+    run: async () => {
+      const d = await detail();
+      const input = toSave({ ...inputFromDetail(d), targets: inputFromDetail(d).targets.filter((t) => !direct(t)) });
+      return unwrap(api.PUT("/translation-rules/{id}", { params: { path: { id } }, body: input }));
+    },
+  };
+}
+
 export function TranslationRulesPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
   const deleteOne = useDeleteRecord();
@@ -1238,7 +1348,7 @@ export function TranslationRulesPage() {
               label: "Delete",
               icon: "trash",
               danger: true,
-              onSelect: () => void deleteOne("translation_rule", r.id, `rule ${r.name}`),
+              onSelect: () => void deleteOne("translation_rule", r.id, `rule ${r.name}`, unassignRule(r.id)),
             },
       ]}
       actions={<CleanupBadge kinds={["translation_rule_unassigned"]} />}

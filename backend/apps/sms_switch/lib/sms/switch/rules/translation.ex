@@ -57,6 +57,8 @@ defmodule Sms.Switch.Rules.Translation do
       content_replacement: nil,
       msg_template: nil,
       content_words: [],
+      content_number_format: nil,
+      content_number_min_digits: nil,
       sender_min_length: 0,
       sender_max_length: 20,
       receiver_min_length: 0,
@@ -632,10 +634,77 @@ defmodule Sms.Switch.Rules.Translation do
     |> String.trim()
   end
 
-  @doc "Content rewrite: words, then the Regex Index group (or the whole match) replaced, then the MSG Template."
+  @doc """
+  One number through a digit pattern (team trial round 6): `#` takes the next digit, anything else is kept as typed.
+  A longer number repeats the pattern's last group with the separator before it; a shorter one stops after its last
+  digit. What follows the last `#` (e.g. a closing bracket) is added when the pattern was filled to the end. Same as
+  formatNumber in mock/src/routing/translate.ts.
+  """
+  @spec format_number(String.t(), String.t()) :: String.t()
+  def format_number(digits, pattern) do
+    chars = String.graphemes(pattern)
+
+    case Enum.find_index(Enum.reverse(chars), &(&1 == "#")) do
+      nil ->
+        digits
+
+      rev ->
+        last = length(chars) - 1 - rev
+        group_start = back_while(chars, last, &(&1 == "#"))
+        sep_start = back_while(chars, group_start, &(&1 != "#"))
+        head = Enum.slice(chars, 0..last)
+        repeat = Enum.slice(chars, sep_start..last)
+        tail = chars |> Enum.drop(last + 1) |> Enum.join()
+        {out, filled} = fill(head, repeat, String.graphemes(digits), [])
+        if filled, do: out <> tail, else: out
+    end
+  end
+
+  # The index where a run of characters matching `pred` ends, walking left from `i` (exclusive).
+  defp back_while(chars, i, pred) do
+    if i > 0 and pred.(Enum.at(chars, i - 1)), do: back_while(chars, i - 1, pred), else: i
+  end
+
+  # Walks the pattern part by part (the head, then the repeated last group), consuming digits; says whether the last
+  # part was filled to its end, so the tail is added.
+  defp fill(_part, _repeat, [], acc), do: {acc |> Enum.reverse() |> Enum.join(), false}
+
+  defp fill(part, repeat, digits, acc) do
+    {acc, rest, complete} =
+      Enum.reduce_while(part, {acc, digits, true}, fn
+        _ch, {acc, [], _} -> {:halt, {acc, [], false}}
+        "#", {acc, [d | ds], _} -> {:cont, {[d | acc], ds, true}}
+        ch, {acc, ds, _} -> {:cont, {[ch | acc], ds, true}}
+      end)
+
+    if rest == [],
+      do: {acc |> Enum.reverse() |> Enum.join(), complete and List.last(part) == "#"},
+      else: fill(repeat, repeat, rest, acc)
+  end
+
+  @doc "Every run of at least `min_digits` (nil = 6) digits in the text, through the number format (nil = off)."
+  @spec format_numbers(String.t(), String.t() | nil, integer() | nil) :: String.t()
+  def format_numbers(text, nil, _min), do: text
+
+  def format_numbers(text, pattern, min) do
+    if String.contains?(pattern, "#") do
+      min = max(2, min || 6)
+
+      Regex.replace(~r/\d+/, text, fn run ->
+        if String.length(run) >= min, do: format_number(run, pattern), else: run
+      end)
+    else
+      text
+    end
+  end
+
+  @doc "Content rewrite: words, the number format, then the Regex Index group (or the whole match), then the MSG Template."
   @spec rewrite_text(Rule.t(), String.t()) :: String.t()
   def rewrite_text(%Rule{} = rule, text) do
-    out = replace_words(text, rule.compiled.words)
+    out =
+      text
+      |> replace_words(rule.compiled.words)
+      |> format_numbers(rule.content_number_format, rule.content_number_min_digits)
 
     out =
       if rule.content_regex && rule.content_replacement != nil,
