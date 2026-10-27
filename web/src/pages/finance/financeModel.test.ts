@@ -27,9 +27,9 @@ describe("finance model (§7, §13.33)", () => {
   });
 
   test("balance in words", () => {
-    assert.deepEqual(balanceWords(-400, "customer"), { text: "owes us", tone: "tone-warning" });
-    assert.deepEqual(balanceWords(500, "customer"), { text: "in credit", tone: "" });
-    assert.deepEqual(balanceWords(-300, "vendor"), { text: "we owe", tone: "tone-warning" });
+    assert.deepEqual(balanceWords(-400, "customer"), { text: "owes us", tone: "tone-error" });
+    assert.deepEqual(balanceWords(500, "customer"), { text: "in credit", tone: "tone-good" });
+    assert.deepEqual(balanceWords(-300, "vendor"), { text: "we owe", tone: "tone-error" });
     assert.equal(balanceWords(0.001, "customer").text, "settled");
     assert.equal(netWords(-100), "partner owes us (net)");
   });

@@ -305,7 +305,7 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "vendor", label: "Vendor (buy)" },
         ],
       }),
-      field({ field: "enterpriseNames", label: "Clients", type: "text", defaultOperator: "like", sortable: false }),
+      field({ field: "enterpriseNames", label: "Clients", type: "text", defaultOperator: "like", sortable: false, hidden: true }),
       field({ field: "trunkNames", label: "Trunks", type: "text", defaultOperator: "like", sortable: false }),
       field({ field: "category", label: "Product Category", type: "text", defaultOperator: "like" }),
       field({ field: "categoryId", label: "Category ID", type: "integer", defaultOperator: "eq", hidden: true }),

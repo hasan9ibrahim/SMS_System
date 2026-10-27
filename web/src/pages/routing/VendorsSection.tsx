@@ -463,8 +463,9 @@ export function VendorsSection({
                               n
                                 ? {
                                     warmupCount: n,
-                                    warmupPer: v.warmupPer ?? "rule",
-                                    warmupReset: v.warmupReset ?? null,
+                                    // Defaults (team trial round 6): counted per customer trunk, reset daily.
+                                    warmupPer: v.warmupPer ?? "customer_trunk",
+                                    warmupReset: v.warmupReset ?? "day",
                                   }
                                 : { warmupCount: null, warmupPer: null, warmupReset: null, warmupResetHours: null },
                             );

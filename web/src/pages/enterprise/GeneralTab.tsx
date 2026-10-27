@@ -43,7 +43,7 @@ function blank(): Form {
     tier: "tier2",
     status: "active",
     businessCompanyId: 0,
-    bindAlert: true,
+    bindAlert: false,
     creditAlert: false, // ticked when a non-zero credit limit is set (team trial round 2)
     creditAlertPercent: { notice: 50, warning: 70, critical: 90 },
     address: { line1: "", line2: null, city: null, state: null, countryId: null, zip: null },
@@ -67,6 +67,17 @@ function blank(): Form {
 }
 
 /** The editable part of a record, in the shape PUT expects. */
+/** Why a saved enterprise can't switch to this type, or null when it can (team trial rounds 4 and 6). */
+function typeLock(
+  record: { type: "customer" | "vendor" | "reciprocal"; trunkCounts: { customer: number; vendor: number } } | null | undefined,
+  t: "customer" | "vendor" | "reciprocal",
+): string | null {
+  if (!record || t === record.type || t === "reciprocal") return null;
+  if (record.type !== "reciprocal") return "A customer or a vendor can only be changed to Bilateral";
+  const other = t === "customer" ? record.trunkCounts.vendor : record.trunkCounts.customer;
+  return other > 0 ? `Has ${other} ${t === "customer" ? "vendor" : "customer"} trunks; archive them first` : null;
+}
+
 export function toInput(e: EnterpriseDetail): Form {
   return {
     name: e.name,
@@ -329,13 +340,12 @@ export function GeneralTab({
             label="Type"
             required
             variant="cards"
-            // A saved customer or vendor can only become Bilateral (team trial round 4).
+            // A saved customer or vendor can only become Bilateral (team trial round 4); a Bilateral partner can
+            // become a customer without vendor trunks, or a vendor without customer trunks (round 6).
             options={(["customer", "vendor", "reciprocal"] as const).map((t) => ({
               value: t,
               label: { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" }[t],
-              ...(record && t !== record.type && t !== "reciprocal"
-                ? { disabled: true, hint: "A customer or a vendor can only be changed to Bilateral" }
-                : {}),
+              ...(typeLock(record, t) ? { disabled: true, hint: typeLock(record, t)! } : {}),
             }))}
           />
           <ChoiceField

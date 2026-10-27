@@ -75,12 +75,13 @@ export function balanceEffect(t: Pick<TransactionInput, "side" | "paymentType" |
 export function balanceWords(
   balance: number | null,
   side: "customer" | "vendor",
-): { text: string; tone: "" | "tone-warning" } {
+): { text: string; tone: "" | "tone-good" | "tone-error" } {
   // Withheld by the viewer's visibility policy (§13.17).
   if (balance === null) return { text: "", tone: "" };
   if (Math.abs(balance) < 0.005) return { text: "settled", tone: "" };
-  if (balance > 0) return { text: side === "customer" ? "in credit" : "vendor in credit", tone: "" };
-  return { text: side === "customer" ? "owes us" : "we owe", tone: "tone-warning" };
+  // Positive green, negative red (team trial round 6).
+  if (balance > 0) return { text: side === "customer" ? "in credit" : "vendor in credit", tone: "tone-good" };
+  return { text: side === "customer" ? "owes us" : "we owe", tone: "tone-error" };
 }
 
 /** Net balance (customer − vendor) in words: negative = the partner owes us after offsetting. */
@@ -97,6 +98,12 @@ export const money = (v: number | null | undefined, currency?: string | null) =>
   v === null || v === undefined
     ? "—"
     : `${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}${currency ? ` ${currency}` : ""}`;
+
+/** Enterprise Balance amounts: 6 decimals by default (team trial round 6). */
+export const money6 = (v: number | null | undefined, currency?: string | null) =>
+  v === null || v === undefined
+    ? "—"
+    : `${v.toLocaleString("en-US", { minimumFractionDigits: 6, maximumFractionDigits: 6 })}${currency ? ` ${currency}` : ""}`;
 
 /** Inclusive day count of a period, for the Charges Calculator header. */
 export const periodDays = (from: string, to: string) =>

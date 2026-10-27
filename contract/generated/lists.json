@@ -19193,7 +19193,7 @@
    },
    {
     "sortable": false,
-    "hidden": false,
+    "hidden": true,
     "field": "enterpriseNames",
     "label": "Clients",
     "type": "text",

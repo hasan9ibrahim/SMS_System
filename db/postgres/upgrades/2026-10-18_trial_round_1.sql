@@ -633,3 +633,9 @@ ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_t
 
 -- RN reminders (§13.13 A): when the reminder e-mail of a flagged pending RN went out.
 ALTER TABLE rate_notifications ADD COLUMN IF NOT EXISTS reminded_at timestamptz;
+
+-- Team trial round 6 defaults (migration 081): loop detection and the Bind Down alert off, any destination TON/NPI.
+ALTER TABLE customer_trunks ALTER COLUMN loop_detection SET DEFAULT false;
+ALTER TABLE enterprises ALTER COLUMN bind_alert SET DEFAULT false;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_ton SET DEFAULT NULL;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_npi SET DEFAULT NULL;

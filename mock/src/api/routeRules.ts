@@ -331,7 +331,7 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
       warmupCount: v.warmupCount ?? null,
       warmupReset: v.warmupCount ? (v.warmupReset ?? "day") : null,
       ...(v.warmupCount && v.warmupReset === "custom" ? { warmupResetHours: v.warmupResetHours ?? null } : {}),
-      warmupPer: v.warmupCount ? (v.warmupPer ?? "rule") : null,
+      warmupPer: v.warmupCount ? (v.warmupPer ?? "customer_trunk") : null,
     }))
     .sort(
       (a, b) => a.level - b.level || Number(a.isBackup) - Number(b.isBackup) || (b.sharePct ?? 0) - (a.sharePct ?? 0),

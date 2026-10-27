@@ -1205,7 +1205,7 @@ function TopDestinations({ tops, onOpen }: { tops: DashboardTopsEvent | null; on
       <div className="dash-cols dash-dest-row head" aria-hidden="true">
         <span>#</span>
         <span>Country</span>
-        <span>Networks</span>
+        <span>Network count</span>
         <span className="r">Volume</span>
         <span className="r">Revenue</span>
         <span className="r">Margin</span>

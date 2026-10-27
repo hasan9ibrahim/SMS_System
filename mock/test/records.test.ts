@@ -167,6 +167,13 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     const same = await ok("updateEnterprise", call("PUT", `/enterprises/${id}`, input));
     assert.equal(same.change, null, "saving without changes records nothing");
 
+    // Team trial round 6: a Bilateral partner without vendor trunks can go back to customer.
+    const back2 = await ok("updateEnterprise", call("PUT", `/enterprises/${id}`, { ...input, type: "customer" }));
+    assert.equal(back2.record.type, "customer");
+    const toVendor = await call("PUT", `/enterprises/${id}`, { ...input, type: "vendor" });
+    assert.equal(toVendor.statusCode, 400, "a customer still can't become a vendor");
+    await ok("undoChange", call("POST", `/changes/${back2.change.id}/undo`, {}));
+
     await ok("undoChange", call("POST", `/changes/${edited.change.id}/undo`, {}));
     const back = await ok("getEnterprise", call("GET", `/enterprises/${id}`));
     assert.equal(back.address.city, null);
