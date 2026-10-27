@@ -47,10 +47,13 @@ export interface ListScreenProps<Row extends { id: number }> {
   detail?: (row: Row) => DetailContent;
   onOpen?: (row: Row, e: MouseEvent | KeyboardEvent) => void;
   /**
-   * "double": a click only highlights the row; double-click or Enter opens the detail panel, which then follows the
-   * highlighted row until closed (Route rules, team trial round 3). Default: a click opens it.
+   * "double": a click only highlights the row (and leaves text free to select and copy); double-click, Enter or
+   * `openRef` opens the detail panel on that row, and only those change it (Route rules, team trial rounds 3 and 6).
+   * Default: a click opens it.
    */
   detailOpensOn?: "click" | "double";
+  /** Set by the list: opens the detail panel on a row, like a double-click (the page's own Edit, round 6). */
+  openRef?: RefObject<((row: Row) => void) | null>;
   /** The detail panel opens under the grid instead of beside it (Market moves, team trial round 6). */
   detailBelow?: boolean;
   /** Shows only these columns, whatever the saved choice (Rate manager's list beside an open table, round 6). */
@@ -519,7 +522,16 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   const [state, setState] = useGridUrlState(initialState);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
   const [detailOpen, setDetailOpen] = useState(detailOpensOn === "click");
-  const showDetail = !!detail && !!activeRow && detailOpen;
+  // "double": the panel keeps the row it was opened on; a click elsewhere only moves the highlight.
+  const [panelRow, setPanelRow] = useState<Row | null>(null);
+  const detailRow = detailOpensOn === "double" ? panelRow : activeRow;
+  const showDetail = !!detail && !!detailRow && detailOpen;
+  const openPanel = useCallback((row: Row) => {
+    setActiveRow(row);
+    setPanelRow(row);
+    setDetailOpen(true);
+  }, []);
+  if (props.openRef) (props.openRef as { current: ((row: Row) => void) | null }).current = openPanel;
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // The open detail section stays the same while the user moves between rows.
   const ownSection = useState<string | null>(null);
@@ -559,9 +571,12 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
       if (wanted) {
         applied.current = selectId;
         // A row picked from outside (a new rule, the simulator) opens its panel.
-        setDetailOpen(true);
-        return setActiveRow(wanted);
+        return openPanel(wanted);
       }
+    }
+    if (panelRow) {
+      const freshPanel = rows.find((r) => r.id === panelRow.id);
+      if (freshPanel && freshPanel !== panelRow) setPanelRow(freshPanel);
     }
     if (!activeRow) return;
     const fresh = rows.find((r) => r.id === activeRow.id);
@@ -767,8 +782,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               {...(onOpen || detailOpensOn === "double"
                 ? {
                     onOpen: (row: Row, e: MouseEvent | KeyboardEvent) => {
-                      setActiveRow(row);
-                      setDetailOpen(true);
+                      openPanel(row);
                       onOpen?.(row, e);
                     },
                   }
@@ -800,10 +814,10 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
           ) : (
             <DetailSplitter width={detailWidth} onChange={setDetailWidth} container={bodyRef} />
           ))}
-        {showDetail && activeRow && (
+        {showDetail && detailRow && (
           <DetailPanel
-            key={activeRow.id}
-            content={detail(activeRow)}
+            key={detailRow.id}
+            content={detail(detailRow)}
             section={section}
             setSection={setSection}
             onClose={() => (detailOpensOn === "double" ? setDetailOpen(false) : setActiveRow(null))}

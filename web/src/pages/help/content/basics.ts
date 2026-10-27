@@ -1708,7 +1708,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Live / Paused / Offline",
-                what: "The state of the feed. **Live** (green dot) is updating, **Paused** when Refresh is Paused, **Offline** when the live connection is lost (it reconnects by itself).",
+                what: "The state of the feed. **Live** (green dot) is updating, **Paused** when Refresh is Paused, **Offline** when the live connection is lost (it reconnects by itself). The dot on the page's tab is green while live and turns red while paused, showing a past period, or offline.",
               },
             ],
           },

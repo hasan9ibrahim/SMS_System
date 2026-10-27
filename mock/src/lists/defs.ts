@@ -1072,7 +1072,7 @@ function vendorList(all: { n: string; s: number | null; l: number; b: boolean }[
   const main = all
     .filter((v) => !v.b)
     .map(
-      (v) => `${levels.size > 1 ? `L${v.l} · ` : ""}${v.n}${hunt === "percentage" && v.s != null ? ` (${v.s}%)` : ""}`,
+      (v) => `${levels.size > 1 ? `L${v.l} · ` : ""}${v.n}${hunt === "percentage" && v.s != null && v.s !== 100 ? ` (${v.s}%)` : ""}`,
     );
   return [...main, ...all.filter((v) => v.b).map((v) => `Backup · ${v.n}`)];
 }
@@ -1221,7 +1221,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
               ? "Quality · all vendors"
               : "No vendor"
             : level1.length === 1
-              ? `${level1[0]!.n} 100%`
+              ? level1[0]!.n // one vendor takes everything: no "100%" (team trial round 6)
               : hunt === "percentage"
                 ? level1.map((v) => `${v.n} ${v.s ?? 0}`).join(" · ")
                 : level1.map((v) => v.n).join(hunt === "round_robin" ? " / " : " › ");

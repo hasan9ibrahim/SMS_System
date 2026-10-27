@@ -20,7 +20,7 @@ import { encodeState, type GridState } from "../../grid/filterModel";
 import { LiveSocket, socketUrl } from "../../live/socket";
 import { pageForPath } from "../../nav/registry";
 import { PageHeader } from "../../page/PageHeader";
-import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
+import { TabContext, usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { ask } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { HoursChip, PeriodTabs, RangeChip } from "../../ui/DateRange";
@@ -28,6 +28,7 @@ import { Button, Modal, Popover } from "../../ui/primitives";
 import { fetchEdrs } from "../monitoring/EdrSearchPage";
 import { RequestDialog } from "../monitoring/parts";
 import { edrGridState } from "../reports/masterModel";
+import { useReportLive } from "../../shell/livePause";
 import { problemText } from "../routing/dialogs";
 import {
   ALL_COLUMNS,
@@ -780,6 +781,8 @@ export function LiveAnalyticsPage() {
   // Pause stops the live refresh without losing the chosen interval (team trial round 1).
   const [paused, setPaused] = useState(false);
   const running = live && !!refresh && !paused;
+  // The tab's light turns red while the figures are not updating (team trial round 6).
+  useReportLive(useContext(TabContext)?.tab.id, running);
   const tick = useLiveTick(refresh, live && !paused);
   const problem = rangeProblem(draft);
   // No Search button: every change of period or hours applies at once while it is valid (team trial round 1).

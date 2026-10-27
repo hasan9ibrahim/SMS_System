@@ -10,6 +10,7 @@ import { usePalette } from "./CommandPalette";
 import { TAB_DRAG_TYPE } from "./channel";
 import { HOME_TAB_ID, useTabs, type Tab } from "./tabs";
 import { useLive } from "../live/store";
+import { useTabPaused } from "./livePause";
 
 /** Opens a tab in its own browser window (second monitor) and removes it from the strip. */
 export function popOutTab(tab: Tab, at?: { x: number; y: number }) {
@@ -112,7 +113,7 @@ function TabButton({ tab, active, index }: { tab: Tab; active: boolean; index: n
       title={tab.title}
     >
       <Icon name={page?.icon ?? "file"} size={14} />
-      {isLivePath(tab.path) ? <LiveLight /> : tab.alert && <span className="tab-alert" aria-label="Alert" />}
+      {isLivePath(tab.path) ? <LiveLight tab={tab.id} /> : tab.alert && <span className="tab-alert" aria-label="Alert" />}
       {!isHome && <span className="tab-title">{tab.title}</span>}
       {tab.dirty && <span className="tab-dirty" aria-label="Unsaved changes" title="Unsaved changes" />}
       {!isHome && !tab.pinned && (
@@ -251,16 +252,11 @@ export function TabStrip() {
 export const isLivePath = (path: string) =>
   ["/dashboard", "/live"].some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`));
 
-/** Green while live data arrives, red while the connection is down. */
-function LiveLight() {
+/** Green while live data arrives; red while the connection is down or the page is paused / not live (round 6). */
+function LiveLight({ tab }: { tab: string }) {
   const connected = useLive((s) => s.connected);
-  return (
-    <span
-      className={`tab-live${connected ? " on" : ""}`}
-      role="img"
-      aria-label={connected ? "Live" : "Live data disconnected"}
-      title={connected ? "Live" : "Live data disconnected"}
-    />
-  );
+  const paused = useTabPaused(tab);
+  const label = !connected ? "Live data disconnected" : paused ? "Not live (paused or a past period)" : "Live";
+  return <span className={`tab-live${connected && !paused ? " on" : ""}`} role="img" aria-label={label} title={label} />;
 }
 

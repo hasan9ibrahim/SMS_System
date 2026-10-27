@@ -11,7 +11,7 @@ import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { chRows } from "../src/edr.js";
 import { chIso } from "../src/lists/chEngine.js";
-import { describeFilter, startEdrDownloads } from "../src/api/edrDownloads.js";
+import { describeFilter, downloadFileName, startEdrDownloads } from "../src/api/edrDownloads.js";
 import { buildPcap, diagnose, syncBinds, validIpFilter } from "../src/api/network.js";
 import { listFields } from "../src/lists/fields.js";
 import { causeName, messageEncoding } from "../src/smpp.js";
@@ -87,8 +87,19 @@ describe("§9 helpers", () => {
     });
     assert.equal(
       text,
-      "Start Time between 2026-10-16 00:00 and 2026-10-16 01:00 · Final = Yes · Cause Code in 88 Throttling error",
+      "Start Time 2026-10-16 00:00 – 01:00 UTC · Final: Yes · Cause Code: 88 Throttling error",
     );
+    // IDs read as names once looked up (team trial round 6).
+    const named = describeFilter(
+      listFields.edrs.fields,
+      { logic: "and", conditions: [{ field: "customerEnterpriseId", op: "eq", value: 7 }] },
+      undefined,
+      new Map([["customerEnterpriseId:7", "ALDEX"]]),
+    );
+    assert.equal(named, "Customer Enterprise: ALDEX");
+    // The file name carries the template it was downloaded with (team trial round 6).
+    assert.equal(downloadFileName({ kind: "edr", template_name: "NOC daily / short" }, 12, false), "EDR_12_NOC_daily_short.csv");
+    assert.equal(downloadFileName({ kind: "failed_edr", template_name: null }, 3, true), "Failed_EDR_3.xls");
     assert.ok(validIpFilter("192.0.2.10") && validIpFilter("192.0.2.0/24") && validIpFilter("2001:db8::/32"));
     assert.ok(!validIpFilter("192.0.2.0/33") && !validIpFilter("not-an-ip"));
   });

@@ -514,6 +514,8 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
   const onRowClick = useCallback(
     (row: Row, e: MouseEvent) => {
       if ((e.ctrlKey || e.metaKey) && onOpen) return onOpen(row, e);
+      // Text being selected to copy is not a click on the row (team trial round 6).
+      if (window.getSelection()?.toString()) return;
       onActiveChange(row);
       scrollRef.current?.focus({ preventScroll: true });
     },

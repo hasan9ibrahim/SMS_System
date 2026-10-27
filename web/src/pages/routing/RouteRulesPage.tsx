@@ -26,7 +26,7 @@ import { Button, Modal, Popover, StatusDot } from "../../ui/primitives";
 import { qualityClass, qualityTone } from "../../ui/quality";
 import { formatPct } from "../rates/format";
 import { AddCondition, ConditionsSection, DraftRuleContext, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
-import { BulkDialog, DEFAULT_PRIORITY, RuleDialog, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
+import { BulkDialog, DEFAULT_PRIORITY, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
 import { InlineCondition } from "./ConditionEditor";
 import { codesText, useDestinationTree } from "../rates/DestinationTree";
 import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, toInput, type ConditionKey } from "./ruleModel";
@@ -391,6 +391,7 @@ export function RouteRulesPage() {
   const ccy = usePlatformCurrency();
   const [selectId, setSelectId] = useState<number | null>(null);
   const sectionState = useState<string | null>(null);
+  const openRule = useRef<((row: RouteRuleRow) => void) | null>(null);
   const [, setSection] = sectionState;
   const win = (state.columns.window?.value as TrafficWindow | undefined) ?? "24h";
 
@@ -428,16 +429,6 @@ export function RouteRulesPage() {
       const from = await loadRule(row.id);
       const id = await ask<number | null>((done) => <NewRuleDialog done={done} from={from} />);
       if (id) showRule(id);
-    } catch (e) {
-      toast({ tone: "error", message: problemText(e) });
-    }
-  };
-
-  const edit = async (row: RouteRuleRow) => {
-    try {
-      const rule = await loadRule(row.id);
-      if (rule.archived) return toast({ tone: "info", message: "Restore the rule to edit it." });
-      await ask<number>((done) => <RuleDialog rule={rule} done={done} />);
     } catch (e) {
       toast({ tone: "error", message: problemText(e) });
     }
@@ -579,6 +570,7 @@ export function RouteRulesPage() {
     <ListScreen<RouteRuleRow>
       // A click highlights the rule; double-click or Enter opens the panel on Edit (team trial round 3).
       detailOpensOn="double"
+      openRef={openRule}
       onOpen={() => setSection("edit")}
       list="route_rules"
       page={page}
@@ -630,7 +622,11 @@ export function RouteRulesPage() {
           main: true,
           disabled: r.archived,
           hint: r.archived ? "Restore the rule to edit it" : undefined,
-          onSelect: () => void edit(r),
+          // Like a double-click: the rule's panel, on its Edit section (team trial round 6).
+          onSelect: () => {
+            setSection("edit");
+            openRule.current?.(r);
+          },
         },
         {
           label: "Clone",
@@ -744,7 +740,13 @@ export function RouteRulesPage() {
       }}
       onKey={(key, row) => {
         if (!row) return false;
-        if (key === "e" || key === "E") return (void edit(row), true);
+        if (key === "e" || key === "E") {
+          // E is the Edit button: the rule's panel on its Edit section (team trial round 6).
+          if (row.archived) return false;
+          setSection("edit");
+          openRule.current?.(row);
+          return true;
+        }
         if (key === "d" || key === "D") return (void duplicate(row), true);
         return false;
       }}
