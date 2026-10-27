@@ -54,33 +54,104 @@ const OP_WORDS: Record<string, string> = {
 };
 const shortTime = (v: unknown) => String(v).replace("T", " ").slice(0, 16);
 
-/** "Start Time between 2026-10-15 00:00 and 2026-10-16 00:00 · Final = Yes" */
-export function describeFilter(fields: FieldDescriptor[], group: FilterGroup | undefined, search?: string): string {
+/** A period in words: "2026-10-16 00:00 – 01:00 UTC", or both dates when it spans days (team trial round 6). */
+const period = (a: unknown, b: unknown) => {
+  const [x, y] = [shortTime(a), shortTime(b)];
+  return `${x} – ${x.slice(0, 10) === y.slice(0, 10) ? y.slice(11) : y} UTC`;
+};
+
+/** ID fields of the EDR lists and where their names live, so the Filters column shows names (team trial round 6). */
+const NAMED: Record<string, { table: string; name: string }> = {
+  customerEnterpriseId: { table: "enterprises", name: "name" },
+  vendorEnterpriseId: { table: "enterprises", name: "name" },
+  enterpriseId: { table: "enterprises", name: "name" },
+  customerTrunkId: { table: "customer_trunks", name: "name" },
+  vendorTrunkId: { table: "vendor_trunks", name: "name" },
+  routeRuleId: { table: "route_rules", name: "name" },
+  customerRateTableId: { table: "rate_tables", name: "name" },
+  vendorRateTableId: { table: "rate_tables", name: "name" },
+  productCategoryId: { table: "product_categories", name: "name" },
+  businessCompanyId: { table: "business_companies", name: "name" },
+  hlrProviderId: { table: "hlr_providers", name: "name" },
+};
+
+/** Names of the IDs a filter uses, keyed "field:id". */
+export async function filterNames(c: pg.Pool, group: FilterGroup | undefined): Promise<Map<string, string>> {
+  const wanted = new Map<string, Set<number>>();
+  const walk = (g: FilterGroup) =>
+    g.conditions.forEach((n) => {
+      if ("logic" in n) return walk(n);
+      const cond = n as FilterCondition;
+      if (!NAMED[cond.field]) return;
+      for (const v of cond.values ?? [cond.value])
+        if (Number.isInteger(Number(v))) wanted.set(cond.field, (wanted.get(cond.field) ?? new Set()).add(Number(v)));
+    });
+  if (group) walk(group);
+  const out = new Map<string, string>();
+  for (const [field, ids] of wanted) {
+    const { table, name } = NAMED[field]!;
+    const { rows } = await c.query(`SELECT id, ${name} AS name FROM ${table} WHERE id = ANY($1)`, [[...ids]]);
+    for (const r of rows) out.set(`${field}:${r.id}`, String(r.name));
+  }
+  return out;
+}
+
+/**
+ * The filter in words for the downloads list (§9.2): "Start Time 2026-10-15 00:00 – 2026-10-16 00:00 UTC · Final:
+ * Yes · Customer Enterprise: ALDEX". IDs show as names when `names` has them (team trial round 6).
+ */
+export function describeFilter(
+  fields: FieldDescriptor[],
+  group: FilterGroup | undefined,
+  search?: string,
+  names: Map<string, string> = new Map(),
+): string {
   const byName = new Map(fields.map((f) => [f.field, f]));
-  const value = (f: FieldDescriptor | undefined, v: unknown) =>
-    f?.type === "datetime" || f?.type === "date"
+  const value = (f: FieldDescriptor | undefined, field: string, v: unknown) =>
+    names.get(`${field}:${v}`) ??
+    (f?.type === "datetime" || f?.type === "date"
       ? shortTime(v)
       : typeof v === "boolean"
         ? v
           ? "Yes"
           : "No"
-        : (f?.enumValues?.find((e) => e.value === String(v))?.label ?? String(v));
+        : (f?.enumValues?.find((e) => e.value === String(v))?.label ?? String(v)));
   const walk = (g: FilterGroup): string =>
     g.conditions
       .map((n) => {
         if ("logic" in n) return `(${walk(n)})`;
         const c = n as FilterCondition;
         const f = byName.get(c.field);
-        const label = f?.label ?? c.field;
+        // "Customer Enterprise ID" reads "Customer Enterprise" once its IDs are names.
+        const named = [c.value, ...(c.values ?? [])].some((v) => names.has(`${c.field}:${v}`));
+        const label = (f?.label ?? c.field).replace(named ? / ID$/ : /$^/, "");
         if (c.op === "empty" || c.op === "not_empty") return `${label} ${OP_WORDS[c.op]}`;
-        if (c.op === "between") return `${label} between ${value(f, c.values?.[0])} and ${value(f, c.values?.[1])}`;
-        if (c.op === "in" || c.op === "not_in")
-          return `${label} ${OP_WORDS[c.op]} ${(c.values ?? []).map((v) => value(f, v)).join(", ")}`;
-        return `${label} ${OP_WORDS[c.op]} ${value(f, c.value)}`;
+        if (c.op === "between")
+          return f?.type === "datetime"
+            ? `${label} ${period(c.values?.[0], c.values?.[1])}`
+            : `${label} ${value(f, c.field, c.values?.[0])} to ${value(f, c.field, c.values?.[1])}`;
+        if (c.op === "in") return `${label}: ${(c.values ?? []).map((v) => value(f, c.field, v)).join(", ")}`;
+        if (c.op === "not_in") return `${label} not ${(c.values ?? []).map((v) => value(f, c.field, v)).join(", ")}`;
+        if (c.op === "eq") return `${label}: ${value(f, c.field, c.value)}`;
+        return `${label} ${OP_WORDS[c.op]} ${value(f, c.field, c.value)}`;
       })
       .join(g.logic === "or" ? " or " : " · ");
   const parts = [group?.conditions.length ? walk(group) : "", search?.trim() ? `search "${search.trim()}"` : ""];
   return parts.filter(Boolean).join(" · ") || "All EDRs";
+}
+
+/**
+ * The file's name: the kind, the request number and the EDR template it was made with (team trial round 6), e.g.
+ * "EDR_42_All_message_details.csv"; without a template, "EDR_42.csv".
+ */
+export function downloadFileName(raw: Record<string, unknown>, id: number, xlsx: boolean): string {
+  const kind = raw.kind === "failed_edr" ? "Failed_EDR" : "EDR";
+  const template = String(raw.template_name ?? "")
+    .normalize("NFKD")
+    .replace(/[^\w-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60);
+  return `${kind}_${id}${template ? `_${template}` : ""}.${xlsx ? "xls" : "csv"}`;
 }
 
 // ---------------------------------------------------------------- request / cancel / file
@@ -126,7 +197,7 @@ export function requestEdrDownload(request: FastifyRequest, reply: FastifyReply)
         columns,
         b.templateId,
         templateName,
-        describeFilter(fields.fields, b.query.filter, b.query.search),
+        describeFilter(fields.fields, b.query.filter, b.query.search, await filterNames(pool, b.query.filter)),
         me.id,
       ],
     );
@@ -303,7 +374,7 @@ async function tick() {
     await pool.query(
       `UPDATE edr_downloads SET status = 'success', progress = 100, file_name = $2, finished_at = now()
         WHERE id = $1 AND status = 'inprogress'`,
-      [id, `${raw.kind}_${id}.${xlsx ? "xls" : "csv"}`],
+      [id, downloadFileName(raw, id, xlsx)],
     );
     void out;
   } catch (err) {

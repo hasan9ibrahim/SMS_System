@@ -784,3 +784,10 @@
   overflow: auto;
   margin-top: 8px;
 }
+
+/* Beside an open table the list is names only (team trial round 6): no header actions or filter card; the Name
+   filter under its title is the search. Close the table for the full list and its tools. */
+.rate-list-pane .page-actions,
+.rate-list-pane .filter-card {
+  display: none;
+}

@@ -101,7 +101,8 @@ export function RequestDialog({
                   onSuccess: (d) => {
                     toast({ tone: "good", message: `Request ${d.id} queued · ${d.filterSummary}` });
                     done();
-                    navigate(target);
+                    // A new tab, so the page the request came from keeps its period and filters (team trial round 6).
+                    navigate(target, { newTab: true });
                   },
                   onError: (e) => toast({ tone: "error", message: problemText(e) }),
                 },

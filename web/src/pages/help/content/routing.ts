@@ -417,7 +417,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A single click on a rule only highlights it. **Double-click** a rule (or press Enter) to open the detail panel on **Edit**; while the panel is open, clicking another rule shows that one, and closing it (×) goes back to highlighting only: its general settings, saved in place with **Save**. The panel then has **Configuration** (Category, Customer trunks and Destination, each a block with **Edit**, and the Vendors), **Conditions** (sender, receiver, content, TPS, revenue, time, HLR, multipart), Traffic, History and Test.",
+            text: "A single click on a rule only highlights it, so you can select and copy text in the grid. **Double-click** a rule (or press Enter, E, or the row's **Edit** action) to open the detail panel on **Edit**: its general settings, saved in place with **Save**. While the panel is open, a single click on another rule does not change it; double-click that rule to show it instead. Closing it (×) goes back to highlighting only. The panel then has **Configuration** (Category, Customer trunks and Destination, each a block with **Edit**, and the Vendors), **Conditions** (sender, receiver, content, TPS, revenue, time, HLR, multipart), Traffic, History and Test.",
           },
           {
             kind: "text",

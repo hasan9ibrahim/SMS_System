@@ -321,16 +321,18 @@ table th.num,
   font-size: 10.5px;
 }
 
-/* Live analytics columns fit their longest figure (team trial round 6): every figure column shrinks to its content
-   and the space left goes to the name column, so nothing is wider than it needs to be. */
+/* Live analytics columns (team trial round 6): the name column takes about the first third, so the figures start
+   near the names; the figure columns share the rest, never narrower than their longest figure. */
 .la-grid {
   table-layout: auto;
 }
 .la-grid col.la-col-name {
-  width: auto;
+  width: 30%;
 }
 .la-grid td.num,
-.la-grid thead .la-col-titles th,
+.la-grid thead .la-col-titles th {
+  white-space: nowrap;
+}
 .la-grid col.la-col-act,
 .la-grid td.la-actions {
   width: 1%;
