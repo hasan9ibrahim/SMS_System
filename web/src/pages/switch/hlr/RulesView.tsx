@@ -122,11 +122,7 @@ function HlrTargets({
           )}
         </>
       )}
-      <p className="muted small">
-        {value.length === 0
-          ? "Not assigned: the rule runs on no trunk until it applies to something."
-          : "Trunks added later to a targeted enterprise or category get the rule too."}
-      </p>
+      {value.length === 0 && <p className="muted small">Not assigned: the rule runs on no trunk.</p>}
     </div>
   );
 }
@@ -209,9 +205,9 @@ function RuleEditor({ detail, done }: { detail: HlrRuleDetail | null; done: (id:
             required
             maxLength={200}
             nullable={false}
-            hint="Regular expression on the receiver after translation, e.g. ^44"
+            hint="Regex on the receiver, e.g. ^44"
           />
-          <FormField label="Try a number" hint={sample ? undefined : "Checks the pattern as you type"}>
+          <FormField label="Try a number">
             <span className="input-suffix">
               <input value={sample} placeholder="447700900123" onChange={(e) => setSample(e.target.value.trim())} />
               {sample && (
@@ -242,7 +238,7 @@ function RuleEditor({ detail, done }: { detail: HlrRuleDetail | null; done: (id:
             ]}
           />
         </Section>
-        <Section title="Applies to" columns={1} note="Saving applies the rule everywhere it targets (§13.2)">
+        <Section title="Applies to" columns={1}>
           <FormField label="Targets" wide error={form.error("targets")}>
             <HlrTargets value={v.targets} labels={labels} onChange={(t) => form.set("targets", t)} />
           </FormField>
@@ -396,7 +392,7 @@ export function RulesView() {
         icon: "plus",
         onClick: () => void openEditor(null).then((id) => id && setSelectId(id)),
       }}
-      above={<ViewSwitch note="On a customer trunk the first rule whose DNID pattern matches decides the provider." />}
+      above={<ViewSwitch />}
       columns={{
         id: { width: 60 },
         name: { width: 280, render: (r) => <strong>{r.name}</strong> },

@@ -171,15 +171,16 @@ export const enterpriseList: ListDef<Enterprise> = {
  * its enterprise, its category or all trunks of the kind, active, and not switched off here.
  */
 /** The same rules by name, for the hover list (team trial round 1). */
-const ruleNamesSql = (kind: "customer" | "vendor") => `ARRAY(SELECT DISTINCT r.name
+// One name per rule (two rules may share a name), so the list always matches the count.
+const ruleNamesSql = (kind: "customer" | "vendor") => `ARRAY(SELECT x.name FROM (SELECT DISTINCT r.id, r.name
     FROM translation_rule_targets tg JOIN translation_rules r ON r.id = tg.translation_rule_id
    WHERE tg.trunk_kind = '${kind}' AND r.deleted_at IS NULL AND r.status = 'active'
      AND (tg.target_type = 'all' OR (tg.target_type = 'trunk' AND tg.target_id = t.id)
           OR (tg.target_type = 'enterprise' AND tg.target_id = t.enterprise_id)
           OR (tg.target_type = 'category' AND tg.target_id = t.product_category_id))
      AND NOT EXISTS (SELECT 1 FROM translation_rule_trunk_settings s
-                      WHERE s.translation_rule_id = r.id AND s.trunk_kind = '${kind}' AND s.trunk_id = t.id AND NOT s.enabled)
-   ORDER BY r.name LIMIT 100)`;
+                      WHERE s.translation_rule_id = r.id AND s.trunk_kind = '${kind}' AND s.trunk_id = t.id AND NOT s.enabled)) x
+   ORDER BY x.name LIMIT 100)`;
 const rulesCountSql = (kind: "customer" | "vendor") => `(SELECT count(DISTINCT r.id)::int
     FROM translation_rule_targets tg JOIN translation_rules r ON r.id = tg.translation_rule_id
    WHERE tg.trunk_kind = '${kind}' AND r.deleted_at IS NULL AND r.status = 'active'
@@ -1105,7 +1106,20 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
         return parts.length ? `(${parts.join(" OR ")})` : "FALSE";
       },
     },
-    customerTrunks: { sql: `(CASE WHEN r.customer_trunk_mode = 'all' THEN 'All trunks' ELSE ${trunkNamesSql} END)` },
+    // A trunk search finds every rule that applies to a matching trunk (team trial round 6): rules on all trunks,
+    // lists naming it, and exclusions that leave it in.
+    customerTrunks: {
+      sql: `(CASE WHEN r.customer_trunk_mode = 'all' THEN 'All trunks' ELSE ${trunkNamesSql} END)`,
+      where: (op, c, p) => {
+        const v = p(op === "eq" ? String(c.value).replace(/[%_\\]/g, "\\$&") : String(c.value));
+        const match = `(${ruleTrunkName}) ILIKE ${v}`;
+        const hit = `(r.customer_trunk_mode = 'all'
+          OR (r.customer_trunk_mode = 'inclusive' AND EXISTS (SELECT 1 FROM customer_trunks t WHERE t.id = ANY(r.customer_trunk_ids) AND ${match}))
+          OR (r.customer_trunk_mode = 'exclusive' AND EXISTS (SELECT 1 FROM customer_trunks t
+                WHERE t.deleted_at IS NULL AND NOT t.id = ANY(r.customer_trunk_ids) AND ${match})))`;
+        return op === "not_like" ? `(NOT ${hit})` : hit;
+      },
+    },
     // "505" finds rules on 505 (All networks) and its networks (50501…); "50501" finds rules on 50501 only
     // (a 3-digit code is the All networks entry, not the whole country; team trial round 1).
     destination: {
@@ -1125,7 +1139,22 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
           : `(EXISTS (SELECT 1 FROM unnest(r.mccmncs) m WHERE m LIKE ${v} || '%'))`;
       },
     },
-    vendors: { sql: vendorNamesSql },
+    // Likewise for vendors (team trial round 6): the rule's own vendors, and least cost / quality rules whose scope
+    // is every vendor trunk or a list naming a matching one.
+    vendors: {
+      sql: vendorNamesSql,
+      where: (op, c, p) => {
+        const v = p(op === "eq" ? String(c.value).replace(/[%_\\]/g, "\\$&") : String(c.value));
+        const match = `(${ruleVendorName}) ILIKE ${v}`;
+        const hit = `(EXISTS (SELECT 1 FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
+              WHERE v.route_rule_id = r.id AND ${match})
+          OR (r.route_type IN ('dynamic', 'qbr') AND (r.vendor_trunk_mode = 'all'
+            OR (r.vendor_trunk_mode = 'inclusive' AND EXISTS (SELECT 1 FROM vendor_trunks vt WHERE vt.id = ANY(r.vendor_trunk_ids) AND ${match}))
+            OR (r.vendor_trunk_mode = 'exclusive' AND EXISTS (SELECT 1 FROM vendor_trunks vt
+                  WHERE vt.deleted_at IS NULL AND NOT vt.id = ANY(r.vendor_trunk_ids) AND ${match})))))`;
+        return op === "not_like" ? `(NOT ${hit})` : hit;
+      },
+    },
     messages: visCol(hide("traffic", "tr.messages", ownedRule)),
     asr: { sql: "tr.asr" },
     dlr: { sql: "tr.dlr" },
@@ -2319,6 +2348,7 @@ export const edrTemplateList: ListDef<EdrTemplateRow> = {
     id: { sql: "t.id" },
     name: { sql: "t.name" },
     columnCount: { sql: "cardinality(t.columns)" },
+    columns: { sql: "array_to_string(t.columns, ',')" },
     updatedBy: { sql: "u.username" },
     updatedAt: { sql: "t.updated_at" },
     archived: { sql: "(t.deleted_at IS NOT NULL)" },

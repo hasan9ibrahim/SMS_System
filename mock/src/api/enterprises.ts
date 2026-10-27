@@ -292,9 +292,10 @@ export function updateEnterprise(request: FastifyRequest, reply: FastifyReply) {
     if (await refuseMasked(reply, id)) return reply;
     if (before.archived) return sendProblem(reply, 400, "This enterprise is archived; restore it before editing");
     const errors = await checkInput(pool, input, id);
-    if (input.type !== before.type && input.type !== "reciprocal")
-      // Team trial round 4: a customer or a vendor can only become Bilateral, never the other side (and a
-      // Bilateral partner stays Bilateral).
+    if (input.type !== before.type && input.type !== "reciprocal" && before.type !== "reciprocal")
+      // Team trial round 4: a customer or a vendor can only become Bilateral, never the other side. Round 6: a
+      // Bilateral partner can become a customer when it has no vendor trunks, or a vendor with no customer trunks
+      // (checked below).
       errors.push({ path: "/type", message: "a customer or a vendor can only be changed to Bilateral" });
     if (input.type !== before.type) {
       // A side that has trunks can't disappear (§5.3: trunks need their billing side).

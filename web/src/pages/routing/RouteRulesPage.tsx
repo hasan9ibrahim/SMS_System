@@ -11,7 +11,6 @@ import { useMe } from "../../api/hooks";
 import { useRestore } from "../../api/records";
 import {
   useBulkRouteRules,
-  useCloneRouteRule,
   useDiscardRouteRule,
   exportRouteRules,
   useRouteRule,
@@ -30,7 +29,7 @@ import { AddCondition, ConditionsSection, DraftRuleContext, RuleTitle, useRuleSa
 import { BulkDialog, DEFAULT_PRIORITY, RuleDialog, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
 import { InlineCondition } from "./ConditionEditor";
 import { codesText, useDestinationTree } from "../rates/DestinationTree";
-import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, type ConditionKey } from "./ruleModel";
+import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, toInput, type ConditionKey } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
 import { TrafficAside, TrafficHover, TrafficSection, money, usePlatformCurrency } from "./Traffic";
 import { VendorsSection, VendorsView } from "./VendorsSection";
@@ -93,12 +92,23 @@ export function readyToRun(r: RouteRuleDetail): boolean {
   return customers && vendors;
 }
 
+type Collect = () => Partial<RouteRuleInput> | string;
+
 /**
  * Configuration (team trial round 2): Category, Customer trunks and Destination, each a block like the vendors,
  * then the vendors. In the detail panel a block opens its editor in place; in New rule (`expanded`) every block is
- * open and the vendors are edited in place too. Each save is one change (§13.10).
+ * open, the vendors are edited in place too, and the blocks have no Save of their own: the window's one Save gathers
+ * them through `bind` (team trial round 6). Each save is one change (§13.10).
  */
-function ConfigurationSection({ id, expanded = false }: { id: number; expanded?: boolean }) {
+function ConfigurationSection({
+  id,
+  expanded = false,
+  bind,
+}: {
+  id: number;
+  expanded?: boolean;
+  bind?: (key: string, collect: Collect) => void;
+}) {
   const rule = useRouteRule(id);
   const { save, saving } = useSaver(rule.data);
   const [open, setOpen] = useState<ConditionKey | null>(null);
@@ -131,16 +141,21 @@ function ConfigurationSection({ id, expanded = false }: { id: number; expanded?:
           </div>
           {(expanded || open === k) && !locked && (
             <InlineCondition
-              key={`${k}${r.updatedAt}`}
+              // In New rule the edits wait for the window's Save, so a saved "other condition" must not reset them.
+              key={expanded ? k : `${k}${r.updatedAt}`}
               conditionKey={k}
               rule={r}
               saving={saving}
-              onSave={async (patch) => {
-                const err = await save(patch, `${LABEL[k]} saved`);
-                if (!err && !expanded) setOpen(null);
-                return err;
-              }}
-              {...(expanded ? {} : { onCancel: () => setOpen(null) })}
+              {...(expanded
+                ? { bind: (c: Collect) => bind?.(k, c) }
+                : {
+                    onSave: async (patch: Partial<RouteRuleInput>) => {
+                      const err = await save(patch, `${LABEL[k]} saved`);
+                      if (!err) setOpen(null);
+                      return err;
+                    },
+                    onCancel: () => setOpen(null),
+                  })}
             />
           )}
         </section>
@@ -150,7 +165,7 @@ function ConfigurationSection({ id, expanded = false }: { id: number; expanded?:
           <strong>Vendors</strong>
         </div>
         {expanded ? (
-          <VendorsSection key={r.updatedAt} rule={r} saving={saving} onSave={(patch) => save(patch, "Vendors saved")} />
+          <VendorsSection rule={r} saving={saving} bind={(c) => bind?.("vendors", c)} />
         ) : (
           <VendorsSectionFor id={id} />
         )}
@@ -165,7 +180,9 @@ function ConfigurationSection({ id, expanded = false }: { id: number; expanded?:
  * outside or Escape does nothing. "Rule on" ticks itself once the rule has customer trunks and vendors, unless
  * switched by hand.
  */
-function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
+const copyName = (name: string) => `${name} (copy)`.slice(0, 120);
+
+function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from?: RouteRuleDetail }) {
   const [id, setId] = useState<number | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const create = useSaveRouteRule();
@@ -177,7 +194,10 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
     create
       .mutateAsync({
         id: null,
-        input: { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
+        // Clone (team trial round 6): the draft starts as a full copy of the rule, named "… (copy)".
+        input: from
+          ? toInput(from, { name: copyName(from.name), status: "inactive" })
+          : { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
       })
       .then((r) => setId(r.record.id))
       .catch((e) => setCreateError(problemText(e)));
@@ -186,9 +206,10 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
   const [manual, setManual] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitGeneral = useRef<((patch?: Partial<RouteRuleInput>) => Promise<string | null>) | null>(null);
+  const blocks = useRef(new Map<string, Collect>());
   const r = id !== null ? rule.data : undefined;
-  const ready = r ? readyToRun(r) : false;
-  const on = manual ?? ready;
+  // Unless switched by hand, Save turns the rule on when it has what it needs to run.
+  const on = manual ?? true;
   const [busy, setBusy] = useState(false);
   const close = async () => {
     setBusy(true);
@@ -197,32 +218,32 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
   };
   const saveRule = async () => {
     if (!submitGeneral.current) return;
+    // One Save for the whole window (team trial round 6): every block's edits and Rule on, as one change.
+    const patches = [...blocks.current.values()].map((c) => c());
+    const bad = patches.find((p): p is string => typeof p === "string");
+    if (bad) return setError(bad);
+    setError(null);
+    const merged: Partial<RouteRuleInput> = Object.assign({}, ...patches);
+    const run = manual ?? (r ? readyToRun({ ...r, ...merged } as RouteRuleDetail) : false);
     setBusy(true);
-    const err = await submitGeneral.current({ status: on ? "active" : "inactive" });
+    const err = await submitGeneral.current({ ...merged, status: run ? "active" : "inactive" });
     setBusy(false);
     if (err) return setError(err);
     done(id);
   };
   return (
     <Modal
-      title="New route rule"
+      title={from ? `Clone of ${from.name}` : "New route rule"}
       width={1180}
       onClose={() => void close()}
       onlyCloseButton
       footer={
         <>
-          <label className="toggle-inline" title="On by default once the rule has customer trunks and vendors">
+          <label className="toggle-inline" title="Saved on when it has customer trunks and vendors (unless switched off); × discards the rule">
             <input type="checkbox" checked={on} disabled={!r} onChange={(e) => setManual(e.target.checked)} />
             Rule on
           </label>
-          {r && !ready && (
-            <span className="muted small">
-              Choose the customer trunks{r.routeType === "block" ? "" : " and the vendors"}; the rule then turns on by
-              default.
-            </span>
-          )}
           <span className="fb-spacer" />
-          <span className="muted small">× discards the rule</span>
           <Button variant="primary" icon="save" onClick={() => void saveRule()} disabled={!r || busy}>
             Save
           </Button>
@@ -242,12 +263,13 @@ function NewRuleDialog({ done }: { done: (id: number | null) => void }) {
                 <RuleGeneralForm
                   rule={r}
                   draft
+                  {...(from ? { draftName: copyName(from.name) } : {})}
                   hideStatus
                   onSaved={() => undefined}
                   bindSubmit={(fn) => (submitGeneral.current = fn)}
                 />
               </section>
-              <ConfigurationSection id={r.id} expanded />
+              <ConfigurationSection id={r.id} expanded bind={(k, c) => blocks.current.set(k, c)} />
               <section className="cfg-block">
                 <div className="cfg-head">
                   <strong>Other conditions</strong>
@@ -361,7 +383,6 @@ export function RouteRulesPage() {
   const qc = useQueryClient();
   const [state, setState] = useGridUrlState();
   const bulk = useBulkRouteRules();
-  const clone = useCloneRouteRule();
   const notifySaved = useNotifySaved();
   const deleteRecord = useDeleteRecord();
   const { data: me } = useMe();
@@ -401,16 +422,16 @@ export function RouteRulesPage() {
       },
     );
 
-  const duplicate = (row: RouteRuleRow) =>
-    clone.mutate(row.id, {
-      onSuccess: (r) => {
-        if (r.change) notifySaved(r.change, `Duplicated as #${r.record.id} (off)`);
-        showRule(r.record.id);
-        // The copy opens in the editor right away so it can be renamed (team trial round 1).
-        void ask<number>((done) => <RuleDialog rule={r.record} done={done} />);
-      },
-      onError: (e) => toast({ tone: "error", message: problemText(e) }),
-    });
+  // Clone (team trial round 6): the New rule window filled from the rule, nothing saved until Save; × discards it.
+  const duplicate = async (row: RouteRuleRow) => {
+    try {
+      const from = await loadRule(row.id);
+      const id = await ask<number | null>((done) => <NewRuleDialog done={done} from={from} />);
+      if (id) showRule(id);
+    } catch (e) {
+      toast({ tone: "error", message: problemText(e) });
+    }
+  };
 
   const edit = async (row: RouteRuleRow) => {
     try {
@@ -614,7 +635,7 @@ export function RouteRulesPage() {
         {
           label: "Clone",
           icon: "copy",
-          disabled: r.archived || clone.isPending,
+          disabled: r.archived,
           hint: r.archived ? "Deleted rule" : "A copy, turned off",
           onSelect: () => duplicate(r),
         },

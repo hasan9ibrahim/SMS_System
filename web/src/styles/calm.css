@@ -19,11 +19,18 @@
 .la-grid td.la-pos {
   color: var(--color-good);
 }
+/* The total row tinted like the reference screenshot (team trial round 6), a shade darker while its detail is open
+   (double-click). */
 .la-grid .la-total td,
 .la-grid .la-total td.num,
 .la-grid .la-total td.num.la-strong {
   font-weight: 600;
-  background: color-mix(in srgb, var(--color-text) 3%, var(--color-panel));
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-panel));
+}
+.la-grid .la-total.la-selected td,
+.la-grid .la-total.la-selected td.num,
+.la-grid .la-total.la-selected td.num.la-strong {
+  background: color-mix(in srgb, var(--color-accent) 24%, var(--color-panel));
 }
 /* Amber and red figures sit in a filled, softly rounded chip like the reference platform (team trial round 5, third
    pass): amber with dark text, red with white text. Good figures stay green text. */
@@ -72,6 +79,30 @@
   font-weight: 600;
   box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--band) 35%, transparent);
 }
+/* Headers coloured by their band (team trial round 6): Traffic blue, Quality green, Billing amber, Network violet;
+   the band row a shade deeper than the column titles under it. */
+.la-grid thead th[class*="la-band-"] {
+  background: color-mix(in srgb, var(--band) 11%, var(--color-panel));
+  color: color-mix(in srgb, var(--band) 80%, var(--color-text));
+}
+.la-grid .la-bands th.la-band {
+  background: color-mix(in srgb, var(--band) 20%, var(--color-panel));
+}
+.la-cols fieldset[class*="la-band-"] legend {
+  color: color-mix(in srgb, var(--band) 80%, var(--color-text));
+}
+.la-cols .la-band-traffic {
+  --band: var(--color-accent);
+}
+.la-cols .la-band-quality {
+  --band: var(--color-good);
+}
+.la-cols .la-band-money {
+  --band: var(--color-warning);
+}
+.la-cols .la-band-network {
+  --band: #7c3aed;
+}
 @keyframes la-flash-up {
   from {
     background: color-mix(in srgb, var(--color-good) 10%, transparent);
@@ -104,19 +135,19 @@
 
 /* No sideways scrolling (team trial round 5): Live analytics fits its columns to the window, headers centred. */
 .la-grid col.la-col-name {
-  width: 9.5%;
+  width: 13%;
 }
 .la-grid col.la-col-act {
   width: 5.5%;
 }
 .la-grid thead th,
 .la-grid thead th.num {
-  text-align: center;
+  text-align: left;
 }
 .la-grid thead th .la-sort {
   display: block;
-  margin: 0 auto;
-  text-align: center;
+  margin: 0;
+  text-align: left;
 }
 .la-grid td {
   overflow: hidden;
@@ -124,12 +155,12 @@
   white-space: nowrap;
 }
 
-/* Grid headers centred in their cells (team trial round 5). */
+/* Grid headers read from the left in their cells (team trial round 6; centred in round 5). */
 .gh-cell,
 .gh-cell.align-right,
 .gh-cell.align-center {
-  justify-content: center;
-  text-align: center;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 /* Status: "Active" is the normal state, so plain text with a small green dot; "Inactive" is greyed. */
@@ -252,3 +283,57 @@
 .la-grid td.la-actions .la-act + .la-act {
   margin-left: 3px;
 }
+
+/* Team trial round 6: column lines in the data grids (route rules, rates, EDRs …), so wide rows read across. The
+   body's lines are one overlay (DataGrid .g-lines), so cells keep their own layout. */
+.grid:not(.mobile) .gh-cell,
+.grid:not(.mobile) .gf-cell {
+  border-right: var(--border-width) solid var(--color-border);
+}
+.g-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.g-lines span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: var(--border-width) solid color-mix(in srgb, var(--color-border) 75%, var(--color-panel));
+}
+
+/* Team trial round 6: every table header reads from the left, whatever its column's alignment. */
+th,
+thead th.num,
+table th.num,
+.vt-head .vt-cell {
+  text-align: left !important;
+  justify-content: flex-start !important;
+}
+
+/* Live analytics spacing (team trial round 6): a wider name column and figures a size smaller. */
+.la-grid td.num:not(.la-strong),
+.la-grid td.num.la-strong,
+.la-grid td.num.la-strong .la-pill {
+  font-size: 10.5px;
+}
+
+/* Live analytics columns fit their longest figure (team trial round 6): every figure column shrinks to its content
+   and the space left goes to the name column, so nothing is wider than it needs to be. */
+.la-grid {
+  table-layout: auto;
+}
+.la-grid col.la-col-name {
+  width: auto;
+}
+.la-grid td.num,
+.la-grid thead .la-col-titles th,
+.la-grid col.la-col-act,
+.la-grid td.la-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+

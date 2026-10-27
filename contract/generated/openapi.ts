@@ -10020,6 +10020,28 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/route-rules/{id}/warmup-reset": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start a vendor's warm-up count again (§13.27)
+     * @description Team trial round 6: the warm-up count of one vendor of the rule starts again from 0 now, for every customer
+     *     trunk, as when its period (warmupReset) turns over. Editing or saving the rule never restarts a count; only
+     *     this and the period do. Not a change of the rule: nothing to undo (change is null).
+     */
+    post: operations["resetRouteRuleWarmup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/route-rules/{id}/restore": {
     parameters: {
       query?: never;
@@ -10515,10 +10537,10 @@ export type components = {
       backend: "mock" | "elixir";
     };
     /**
-     * @description Colour theme (§15.2).
+     * @description Colour theme (§15.2); blue-grey added in team trial round 6.
      * @enum {string}
      */
-    Theme: "light" | "dark";
+    Theme: "light" | "dark" | "bluegrey";
     SignInInput: {
       username: string;
       password: string;
@@ -10575,6 +10597,7 @@ export type components = {
         dashboard: components["schemas"]["DashboardSettings"];
         alertSounds?: components["schemas"]["AlertSoundPrefs"];
         liveAnalytics?: components["schemas"]["LiveAnalyticsSettings"];
+        favouritePages?: components["schemas"]["FavouritePages"];
       };
       /** @description GUI Access Group permission keys ("page:action"; "*" = everything) after the user's own overrides; pages without view are hidden from the menu and blocked, buttons not covered are hidden (§1). */
       permissions: string[];
@@ -10588,7 +10611,10 @@ export type components = {
       dashboard?: components["schemas"]["DashboardSettings"];
       alertSounds?: components["schemas"]["AlertSoundPrefs"];
       liveAnalytics?: components["schemas"]["LiveAnalyticsSettings"];
+      favouritePages?: components["schemas"]["FavouritePages"];
     };
+    /** @description Pages the user marked with the heart in Search or jump to (Ctrl K, team trial round 6, §15.1), by page key, in the order they were added. Shown first when the search box is empty. */
+    FavouritePages: string[];
     /** @description Live analytics columns, saved per user (team trial round 3): the metrics shown, in order. An empty list is the default set; the client adds or removes columns like dashboard panels. */
     LiveAnalyticsSettings: {
       columns: components["schemas"]["ReportMetric"][];
@@ -11647,6 +11673,8 @@ export type components = {
     RateLineChangesSaved: {
       /** @description Rate notification e-mails written (when sendNotification was set). */
       notificationsSent?: number;
+      /** @description Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not. */
+      notifications?: components["schemas"]["RateNoticeOutcome"][];
       change: components["schemas"]["Change"] | null;
       /** @description Edits that changed something. */
       applied: number;
@@ -11822,6 +11850,8 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Team trial round 6: a change that would start sooner than its client's notice period starts when the notice ends instead, counted from this save, so time spent reviewing the preview never makes a breach. */
+      respectNotice?: boolean;
       /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
       notificationNote?: string | null;
       /**
@@ -11833,6 +11863,8 @@ export type components = {
     RateBulkSaved: {
       /** @description Rate notification e-mails written (when sendNotification was set). */
       notificationsSent?: number;
+      /** @description Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not. */
+      notifications?: components["schemas"]["RateNoticeOutcome"][];
       change: components["schemas"]["Change"] | null;
       applied: number;
       skipped: number;
@@ -12251,12 +12283,14 @@ export type components = {
       total: number;
     };
     MarketTopVendorInput: {
+      /** @description Any number of destinations (team trial round 6 lifted the 2,000 cap). */
       mccmncs: string[];
-      /** @description May be empty when `includeTier1` is true (Tier 1 vendors only). */
+      /** @description May be empty when `includeTier1` is true (Tier 1 vendors only). Any number of vendor trunks (team trial round 6 lifted the 50 cap). */
       vendorTrunkIds: components["schemas"]["Id"][];
       includeTier1: boolean;
     };
     MarketTopVendorRemove: {
+      /** @description Any number of destinations (team trial round 6 lifted the 2,000 cap). */
       mccmncs: string[];
     };
     MarketTopVendorCandidates: {
@@ -12905,6 +12939,10 @@ export type components = {
       msgTemplate?: string | null;
       /** @description Words or phrases to replace in the content, in order, before the regex rewrite and the template (team trial round 1). An empty replacement removes the word. Missing = none. */
       contentWords?: components["schemas"]["ContentWordRule"][];
+      /** @description Number format for the content (team trial round 6): every run of digits in the text (at least contentNumberMinDigits long) is written out through this pattern, # being one digit and anything else kept as typed, e.g. "### ### ###" turns 210271019 into 210 271 019 and "(###) ###-####" makes (210) 271-0190. A longer number repeats the pattern's last group; a shorter one stops after its last digit. Applied after the word replacements, before the regex rewrite. Missing or null = off. */
+      contentNumberFormat?: string | null;
+      /** @description The shortest run of digits the number format touches (null = 6), so short numbers stay as they are. */
+      contentNumberMinDigits?: number | null;
       senderMinLength?: number;
       senderMaxLength?: number;
       receiverMinLength?: number;
@@ -14735,6 +14773,17 @@ export type components = {
       fileType: "excel" | "csv";
       /** @description False = nothing is e-mailed; the page downloads the sheets instead (View Rate). */
       sendEmail: boolean;
+    };
+    /** @description One rate notification e-mail (team trial round 6, §8) - one per enterprise and customer rate table. */
+    RateNoticeOutcome: {
+      enterpriseId: components["schemas"]["Id"];
+      enterprise: string;
+      rateTable: string;
+      trunks: string[];
+      to: string[];
+      /** @enum {string} */
+      status: "sent" | "failed";
+      reason?: string | null;
     };
     NotificationResult: {
       sent: number;
@@ -18071,6 +18120,11 @@ export type components = {
       warmupResetHours?: number | null;
       /** @enum {string|null} */
       warmupPer?: "rule" | "customer_trunk" | null;
+      /**
+       * Format: date-time
+       * @description When Reset last started this vendor's warm-up count again (team trial round 6); ignored on save, where the count carries on.
+       */
+      readonly warmupResetAt?: string | null;
     };
     /** @description Numbers pinned to one vendor of the rule (§13.27); checked before warm-up and split. */
     RouteWhitelist: {
@@ -18665,6 +18719,8 @@ export type components = {
       sortable: boolean;
       /** @description Not shown as a column by default, but still filterable (§13.25). */
       hidden: boolean;
+      /** @description Plain text in the column filter box matches anywhere in the value instead of from the start (team trial round 6: route rule names). */
+      matchAnywhere?: boolean;
       /**
        * @description A filter with no column of its own (never offered as a column or in column templates), e.g. EDR Search's
        *     `numberOrMsgId` (team trial round 2).
@@ -34163,6 +34219,39 @@ export interface operations {
           "application/problem+json": components["schemas"]["ArchiveBlocked"];
         };
       };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  resetRouteRuleWarmup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          vendorTrunkId: components["schemas"]["Id"];
+        };
+      };
+    };
+    responses: {
+      /** @description Count restarted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RouteRuleSaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

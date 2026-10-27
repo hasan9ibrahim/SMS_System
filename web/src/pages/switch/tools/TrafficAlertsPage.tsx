@@ -90,11 +90,7 @@ function AlertEditor({ row, done }: { row: TrafficAlertRow | null; done: (id: nu
           ]}
         />
       </Section>
-      <Section
-        title="Thresholds"
-        columns={4}
-        note="Alert when ASR, DLR or margin is at or below, or the delay at or above"
-      >
+      <Section title="Thresholds" columns={4}>
         <NumberField
           form={form}
           path="asrThreshold"

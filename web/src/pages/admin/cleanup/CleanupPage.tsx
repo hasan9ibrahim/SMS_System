@@ -113,7 +113,6 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
         <span>Weekly summary to (rules owners)</span>
         <input value={emails ?? s.summaryEmails.join(", ")} onChange={(e) => setEmails(e.target.value)} />
       </label>
-      <p className="muted small">The scan runs nightly; the summary goes out once a week while findings are open.</p>
     </Modal>
   );
 }

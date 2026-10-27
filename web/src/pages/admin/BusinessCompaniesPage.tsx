@@ -141,7 +141,7 @@ function MailboxBlock({
               ? `Last read failed: ${stored.imapLastError}`
               : stored?.imapLastReadAt
                 ? `Read ${new Date(stored.imapLastReadAt).toLocaleString()}`
-                : "Read with the SMTP login over SSL; on the Rates mailbox, rate sheets become Incoming RNs"
+                : "Read over SSL with the SMTP login"
           }
         />
         <NumberField form={form} path={`${p}.imapPort`} label="IMAP Port" min={1} max={65535} step={1} />
@@ -469,10 +469,6 @@ function CompanyDialog({ record, done }: { record: BusinessCompanyRecord | null;
         )}
         {part === "senders" && (
           <>
-            <p className="muted small">
-              Which mailbox each kind of e-mail is sent from, for partners of this company. When the chosen department
-              has no mailbox, its default department&apos;s mailbox is used.
-            </p>
             <div className="fgrid cols-3">
               {SENDER_SLOTS.map((x) => (
                 <SelectField

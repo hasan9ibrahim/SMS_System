@@ -1,4 +1,4 @@
-// Light and dark themes (§15.2): tokens in styles/tokens.css, switched with data-theme on
+// Light, dark and blue-grey themes (§15.2; blue-grey from team trial round 6): tokens in styles/tokens.css, switched with data-theme on
 // <html>. The choice is a user preference saved through PATCH /me/preferences.
 import { useEffect } from "react";
 import type { Theme } from "@sms/contract";
@@ -19,11 +19,16 @@ export function useThemeSync() {
   useEffect(() => channel.on((m) => m.type === "theme" && applyTheme(m.theme)), []);
 }
 
-export function useToggleTheme() {
-  const { data: me } = useMe();
+export const THEMES: { value: Theme; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "bluegrey", label: "Blue-grey" },
+];
+
+/** Switches to `next` here, in the other windows, and in the user's preferences. */
+export function useSetTheme() {
   const update = useUpdatePreferences();
-  return () => {
-    const next: Theme = (me?.preferences.theme ?? "light") === "light" ? "dark" : "light";
+  return (next: Theme) => {
     applyTheme(next);
     channel.post({ type: "theme", theme: next });
     update.mutate({ theme: next });

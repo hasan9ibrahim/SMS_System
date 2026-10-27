@@ -9,6 +9,7 @@ import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import {
+  formatNumber,
   convert,
   entryMatches,
   fillContentTemplate,
@@ -145,6 +146,15 @@ describe("translation engine (§6.4)", () => {
     const tpl = { ...pin, contentReplacement: "$1", msgTemplate: "PIN {text} for you" };
     assert.equal(rewriteText(tpl, "Your code is 482913. FREE gift at bit.ly/x"), "PIN 482913 for you");
     assert.equal(rewriteText(rule(2, { msgTemplate: "[ACME] {text}" }), "hi"), "[ACME] hi");
+  });
+
+  test("number format in content: any length, short numbers untouched (team trial round 6)", () => {
+    const r = rule(3, { contentNumberFormat: "### ### ###", contentNumberMinDigits: 6 });
+    assert.equal(rewriteText(r, "Call 210271019 or code 1234"), "Call 210 271 019 or code 1234");
+    assert.equal(rewriteText(r, "Ref 210271019123"), "Ref 210 271 019 123", "a longer number repeats the last group");
+    assert.equal(rewriteText(r, "Ref 21027101"), "Ref 210 271 01");
+    assert.equal(formatNumber("2102710190", "(###) ###-####"), "(210) 271-0190");
+    assert.equal(rewriteText(rule(4, { contentNumberFormat: null }), "210271019"), "210271019", "off");
   });
 
   test("rules run in order, Not Match, lists, network, Stop and block", () => {

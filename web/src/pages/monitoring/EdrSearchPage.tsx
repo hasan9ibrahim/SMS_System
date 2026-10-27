@@ -234,10 +234,10 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
       <select
         className="range-chip plain chip-select"
         aria-label="EDR Template"
-        value={templates.data?.find((t) => state.visible && t.columns.join() === state.visible.join())?.id ?? ""}
+        value={templates.data?.find((t) => state.visible && t.columns?.join() === state.visible.join())?.id ?? ""}
         onChange={(e) => {
           const t = templates.data?.find((x) => x.id === Number(e.target.value));
-          setState({ ...state, visible: t ? t.columns : null });
+          setState({ ...state, visible: t?.columns ?? null });
         }}
       >
         <option value="">Template: default columns</option>
@@ -340,7 +340,7 @@ function TroubleTicketDialog({ rows, done }: { rows: EdrGridRow[]; done: () => v
       onClose={done}
       footer={
         <>
-          <span className="muted small">{missing ?? "The EDRs go in the body and as a CSV attachment."}</span>
+          <span className="muted small">{missing}</span>
           <span className="fb-spacer" />
           <Button onClick={done}>Cancel</Button>
           <Button disabled={!!missing} onClick={showPreview}>
@@ -487,8 +487,7 @@ export function RepushDialog({ ids, eligible, done }: { ids: string[]; eligible:
         />
       </div>
       <p className="muted small">
-        {eligible} of {ids.length} can be re-sent: only final attempts that were not delivered. Each becomes a new
-        attempt on this trunk, marked with the repush request.
+        {eligible} of {ids.length} can be re-sent (undelivered final attempts only).
       </p>
     </Modal>
   );

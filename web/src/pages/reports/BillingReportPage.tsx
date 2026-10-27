@@ -84,10 +84,6 @@ export function BillingReportPage() {
               })
             }
           />
-          <span className="muted small">
-            Amounts in each enterprise's billing currency; negative margin in {ccy}. Balance and credit use are as of
-            today.
-          </span>
         </div>
       }
       columns={{
@@ -246,7 +242,7 @@ export function BillingReportPage() {
           },
         ],
       })}
-      shortcuts="Filters under each column (e.g. Balance < 0, Credit Used % ≥ 90) · click a row for the finance links"
+      shortcuts="Click a row for the finance links"
     />
   );
 }

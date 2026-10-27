@@ -90,7 +90,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "The status bar reminds you that filters on group-by fields apply before grouping and filters on metrics after.",
+            text: "Column filters on group-by fields apply before grouping; filters on metrics apply after, e.g. Margin `< 0`.",
           },
         ],
       },
@@ -269,7 +269,7 @@ export const topics: HelpTopic[] = [
             items: [
               "Set up the report and sort it the way you want the file sorted.",
               "Press **Export**.",
-              "Choose **Excel**, **CSV** or **PDF**. The file has every row (up to 100,000) and the totals.",
+              "Choose **Excel**, **CSV** or **PDF**. The file has every row (up to 100,000) and the totals, in the current sort.",
             ],
           },
           {

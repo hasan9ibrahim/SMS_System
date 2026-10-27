@@ -395,7 +395,6 @@ function RuleDialog({ row, done }: { row: AlertRuleRow | null; done: () => void 
                   error={
                     badEmails.length ? `Not an e-mail address: ${badEmails.join(", ")}` : form.error("emailAddresses")
                   }
-                  hint="Critical goes at once, Warning in a 15-minute digest, Info in the daily summary"
                 >
                   <input value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="noc@company.example" />
                 </FormField>
@@ -561,7 +560,7 @@ function AlertKpis() {
     { label: "Critical", value: count((r) => r.severity === "critical"), tone: "red" },
     { label: "Warning", value: count((r) => r.severity === "warning"), tone: "amber" },
     { label: "Info", value: count((r) => r.severity === "info"), tone: "blue" },
-    { label: "Never triggered", value: count((r) => !r.lastTriggeredAt), note: "Worth checking they still fit" },
+    { label: "Never triggered", value: count((r) => !r.lastTriggeredAt) },
   ];
   return (
     <div className="kpi-tiles">
@@ -572,7 +571,6 @@ function AlertKpis() {
             {rules.data ? t.value : "…"}
             {t.note && t.label === "Rules" && <small> · {t.note}</small>}
           </span>
-          {t.note && t.label !== "Rules" && <span className="muted small">{t.note}</span>}
         </div>
       ))}
     </div>

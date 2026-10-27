@@ -4893,6 +4893,17 @@
  },
  {
   "method": "POST",
+  "path": "/route-rules/{id}/warmup-reset",
+  "operationId": "resetRouteRuleWarmup",
+  "tag": "routing",
+  "module": "route-rules",
+  "action": "edit",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
   "path": "/route-rules/bulk",
   "operationId": "bulkRouteRules",
   "tag": "routing",

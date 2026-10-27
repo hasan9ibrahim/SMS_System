@@ -74,6 +74,8 @@ const COLUMNS: [keyof Fields, string][] = [
   ["contentReplacement", "content_replacement"],
   ["msgTemplate", "msg_template"],
   ["contentWords", "content_words"],
+  ["contentNumberFormat", "content_number_format"],
+  ["contentNumberMinDigits", "content_number_min_digits"],
   ["senderMinLength", "sender_min_len"],
   ["senderMaxLength", "sender_max_len"],
   ["receiverMinLength", "receiver_min_len"],
@@ -202,6 +204,12 @@ async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldErro
     if (!input.receiverConversionValue) err("/receiverConversionValue", "the pattern to replace");
     else if (!compile(input.receiverConversionValue)) err("/receiverConversionValue", "not a valid regular expression");
   }
+  // Team trial round 6: an ingress rule runs on customer trunks only, an egress rule on vendor trunks only; implied
+  // by the trunk can target both.
+  if (input.direction === "ingress" && input.targets.some((t) => t.trunkKind === "vendor"))
+    err("/targets", "an ingress rule applies to customer trunks only");
+  if (input.direction === "egress" && input.targets.some((t) => t.trunkKind === "customer"))
+    err("/targets", "an egress rule applies to vendor trunks only");
   if (input.senderMinLength > input.senderMaxLength) err("/senderMinLength", "must not exceed the maximum");
   if (input.receiverMinLength > input.receiverMaxLength) err("/receiverMinLength", "must not exceed the maximum");
   if (input.startsAt && input.stopsAt && input.startsAt >= input.stopsAt) err("/stopsAt", "must be after the start");

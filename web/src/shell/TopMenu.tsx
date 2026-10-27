@@ -9,7 +9,7 @@ import { Menu, Popover } from "../ui/primitives";
 import { openIncidents, useLive } from "../live/store";
 import { useTabs } from "./tabs";
 import { useOpener } from "./useOpener";
-import { useToggleTheme } from "./theme";
+import { THEMES, useSetTheme } from "./theme";
 import { usePalette } from "./CommandPalette";
 import { openMyPassword } from "../pages/admin/parts";
 import { openAlertSounds } from "../pages/monitoring/alerts/parts";
@@ -127,7 +127,7 @@ function AlertBell() {
           </button>
         </div>
         {live.incidents.length === 0 && (
-          <p className="muted pad">No incidents yet. They appear here as alert rules fire.</p>
+          <p className="muted pad">No incidents yet.</p>
         )}
         <ul className="bell-list">
           {live.incidents.slice(0, 12).map((i) => (
@@ -152,12 +152,12 @@ function AlertBell() {
 
 function Avatar() {
   const { data: me } = useMe();
-  const toggleTheme = useToggleTheme();
+  const setTheme = useSetTheme();
   const prefs = useUpdatePreferences();
   const open = useOpener();
   const [shown, setShown] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  const dark = me?.preferences.theme === "dark";
+  const theme = me?.preferences.theme ?? "light";
   return (
     <>
       <button ref={ref} type="button" className="avatar" aria-label="User menu" onClick={() => setShown((v) => !v)}>
@@ -173,7 +173,12 @@ function Avatar() {
         <Menu
           onClose={() => setShown(false)}
           items={[
-            { label: dark ? "Light theme" : "Dark theme", icon: dark ? "sun" : "moon", onSelect: toggleTheme },
+            // The two themes not in use (blue-grey added in team trial round 6).
+            ...THEMES.filter((t) => t.value !== theme).map((t) => ({
+              label: `${t.label} theme`,
+              icon: t.value === "light" ? ("sun" as const) : ("moon" as const),
+              onSelect: () => setTheme(t.value),
+            })),
             {
               label:
                 me?.preferences.openInNewTab === false ? "Open pages in a new tab" : "Open pages in the current tab",

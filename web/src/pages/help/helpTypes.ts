@@ -19,7 +19,30 @@ export type HelpBlock =
   | { kind: "list"; title?: string; items: string[] }
   | { kind: "fields"; title?: string; fields: HelpField[] }
   | { kind: "tip"; text: string }
-  | { kind: "warning"; text: string };
+  | { kind: "warning"; text: string }
+  | { kind: "figure"; figure: HelpFigure };
+
+/** One numbered arrow on a help picture; positions are % of the picture (spot `x`,`y`; bubble `bx`,`by`). */
+export interface HelpMark {
+  label: string;
+  text: string;
+  x: number;
+  y: number;
+  bx: number;
+  by: number;
+}
+
+/**
+ * A screenshot with numbered arrows (team trial round 6). Made by web/scripts/help-figures.mjs into
+ * content/figures.json; the arrows are drawn over the picture so they stay sharp.
+ */
+export interface HelpFigure {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  marks: HelpMark[];
+}
 
 export interface HelpSection {
   /** Unique within the topic; used in links (#id). */

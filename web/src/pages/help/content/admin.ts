@@ -551,7 +551,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Tabs and sections",
-                what: "Untick a tab or form section to hide it from the group, e.g. the Enterprise **Docs** tab or the vendor trunk **Connection** section. Pages without View are hidden from the menu and Ctrl K; opening one by link shows **No access**.",
+                what: "Untick a tab or form section to hide it from the group, e.g. the Enterprise **Docs** tab or the vendor trunk **Connection** section. A single user can be given an exception with **Access exceptions** on [[users|Users]]. Pages without View are hidden from the menu and Ctrl K; opening one by link shows **No access**.",
               },
             ],
           },
@@ -1157,6 +1157,11 @@ export const topics: HelpTopic[] = [
                 name: "SMTP Password",
                 what: "Write-only. A stored password shows as dots; leave it empty to keep it, type to replace it.",
               },
+              {
+                name: "IMAP Host (incoming)",
+                what: "Optional. The mailbox is read over SSL with the SMTP login. On the **Rates** mailbox, rate sheets that arrive become Incoming RNs. Under the field you see when it was last read, or the last read error.",
+              },
+              { name: "IMAP Port", what: "Optional.", values: "1 to 65535" },
               { name: "Extension Number", what: "Optional phone extension." },
               { name: "Skype Name", what: "Optional." },
               { name: "Client ID", what: "Required. The OAuth client ID for the mail service." },
@@ -1594,7 +1599,7 @@ export const topics: HelpTopic[] = [
               'Left: **Password policy** card with the settings and a one-line summary, e.g. "Expires every 30 days · reminders 7, 3 and 1 days before".',
               "Right, top: **Passwords now**: active staff and portal users per state (OK, Expiring (7 days), Expired, Temporary, Must change). Click a staff number to open Users filtered on that state in a new tab.",
               "Right, middle: **Staff without 2FA** (amber when not zero), **Failed changes, 24 h** (red when not zero; wrong password or 2FA code), **Reminders, 7 days** with the last run time, and **Send due reminders now**.",
-              "Right, bottom: **Latest security events**: When, User (portal users marked), What and IP. Green dot = changed, red = failed, amber = forced or temporary, hollow = reminder or settings.",
+              "Right, bottom: **Latest security events**: When, User (portal users marked), What and IP. Green dot = changed, red = failed, amber = forced or temporary, hollow = reminder or settings. The same events show on each person's Team activity. Passwords are never stored or shown.",
             ],
           },
         ],
@@ -1973,7 +1978,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Package / Package password",
-                what: "For Export package: pick a finished export package and type the password it was made with.",
+                what: "For Export package: pick a finished export package (made by a Migration export of another installation, system to system) and type the password it was made with.",
               },
               {
                 name: "Create trunks inactive (go live per partner later)",
@@ -2159,6 +2164,10 @@ export const topics: HelpTopic[] = [
               { name: "Email", what: "Required.", values: "e.g. `ops@acme-mobile.example`" },
               { name: "UserName", what: "Required, up to 60 characters." },
               { name: "Status", what: "Required.", values: "Active (default), Inactive" },
+              {
+                name: "Sign-in code",
+                what: "Two-factor sign-in for the portal. By default a code is e-mailed at every portal sign-in. Turn it off only when the customer asks.",
+              },
               {
                 name: "Temporary password",
                 what: "Only when adding. Valid 24 hours; the customer changes it at first sign-in. The rules tick as they are met.",

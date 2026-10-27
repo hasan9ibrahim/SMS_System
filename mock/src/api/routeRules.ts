@@ -234,14 +234,30 @@ async function labels(db: Db, rule: RuleCore): Promise<RouteRuleDetail["labels"]
   return { customerTrunks, categories, vendorTrunks, numberLists, hlrPolicies };
 }
 
-export async function loadRule(db: Db, id: number): Promise<RouteRuleDetail | null> {
+/** `resets: false` leaves out the warm-up Reset times, for comparing with an input (they are never a change). */
+export async function loadRule(db: Db, id: number, { resets = true } = {}): Promise<RouteRuleDetail | null> {
   const { rows } = await db.query(`${ruleSelect} WHERE r.id = $1`, [id]);
   const r = rows[0];
   if (!r) return null;
   const { vendors, whitelists } = await vendorsOf(db, [id]);
   const core = rowToRule(r, vendors.get(id) ?? [], whitelists.get(id) ?? []);
+  // When Reset last restarted each vendor's warm-up count (team trial round 6); not part of the rule's own fields,
+  // so it never shows as a change.
+  const resetAt = new Map<number, string>(
+    !resets
+      ? []
+      : (
+          await db.query(
+            "SELECT vendor_trunk_id, warmup_reset_at FROM route_rule_vendors WHERE route_rule_id = $1 AND warmup_reset_at IS NOT NULL",
+            [id],
+          )
+        ).rows.map((x) => [Number(x.vendor_trunk_id), iso(x.warmup_reset_at)!]),
+  );
   return {
     ...core,
+    vendors: !resets
+      ? core.vendors
+      : core.vendors.map((v) => (v.warmupCount ? { ...v, warmupResetAt: resetAt.get(v.vendorTrunkId) ?? null } : v)),
     labels: await labels(db, core),
     archived: archivedInfo(r.deleted_at, r.deleted_by),
     createdBy: r.created_by ?? null,
@@ -328,10 +344,12 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
       vendorTrunkId: v.vendorTrunkId,
       sharePct: v.sharePct ?? null,
       isBackup: v.isBackup ?? false,
+      // The vendor a backup stands in for (team trial round 1); it was lost on save until team trial round 6.
+      ...(v.isBackup && v.backupForVendorTrunkId ? { backupForVendorTrunkId: v.backupForVendorTrunkId } : {}),
       warmupCount: v.warmupCount ?? null,
       warmupReset: v.warmupCount ? (v.warmupReset ?? "day") : null,
       ...(v.warmupCount && v.warmupReset === "custom" ? { warmupResetHours: v.warmupResetHours ?? null } : {}),
-      warmupPer: v.warmupCount ? (v.warmupPer ?? "rule") : null,
+      warmupPer: v.warmupCount ? (v.warmupPer ?? "customer_trunk") : null,
     }))
     .sort(
       (a, b) => a.level - b.level || Number(a.isBackup) - Number(b.isBackup) || (b.sharePct ?? 0) - (a.sharePct ?? 0),
@@ -459,12 +477,21 @@ async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
 // ---------------------------------------------------------------- writing (and undo)
 
 async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]) {
+  // A save or undo never restarts a warm-up count (team trial round 6): each vendor keeps its last Reset time.
+  const resets = new Map<number, Date>(
+    (
+      await c.query(
+        "SELECT vendor_trunk_id, max(warmup_reset_at) AS at FROM route_rule_vendors WHERE route_rule_id = $1 GROUP BY 1",
+        [id],
+      )
+    ).rows.map((x) => [Number(x.vendor_trunk_id), x.at]),
+  );
   await c.query("DELETE FROM route_rule_vendors WHERE route_rule_id = $1", [id]);
   for (const v of vendors)
     await c.query(
       `INSERT INTO route_rule_vendors (route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per,
-                                       backup_for_vendor_trunk_id, warmup_reset_hours)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                                       backup_for_vendor_trunk_id, warmup_reset_hours, warmup_reset_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         id,
         v.level,
@@ -476,6 +503,7 @@ async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]
         v.warmupPer ?? null,
         v.isBackup ? (v.backupForVendorTrunkId ?? null) : null,
         v.warmupReset === "custom" ? (v.warmupResetHours ?? null) : null,
+        resets.get(v.vendorTrunkId) ?? null,
       ],
     );
 }
@@ -612,7 +640,7 @@ export function updateRouteRule(request: FastifyRequest, reply: FastifyReply) {
   const input = request.body as RouteRuleInput;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
-    const before = await loadRule(pool, id);
+    const before = await loadRule(pool, id, { resets: false });
     if (!before) return notFound(reply, id);
     if (before.archived) return sendProblem(reply, 400, "This rule is archived; restore it before editing");
     const after = complete(input, before);
@@ -707,7 +735,7 @@ export function archiveRouteRule(request: FastifyRequest, reply: FastifyReply) {
   const body = (request.body ?? {}) as ArchiveRequest;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
-    const before = await loadRule(pool, id);
+    const before = await loadRule(pool, id, { resets: false });
     if (!before) return notFound(reply, id);
     if (before.archived) return { record: before, change: null };
     const gate = await archiveGate(reply, body, await ruleDependencies(pool, id));
@@ -791,6 +819,31 @@ export function restoreRouteRule(request: FastifyRequest, reply: FastifyReply) {
       });
     });
     return { record: await loadRule(pool, id), change };
+  });
+}
+
+/**
+ * Reset (team trial round 6, §13.27): one vendor's warm-up count starts again from 0 now. The switch keys each count
+ * by its period and this time (`Sms.Switch.Pipeline.Warmup`), so only this or the period restarts it, never a save.
+ * Not a change of the rule, so nothing to undo; the audit trail logs the call.
+ */
+export function resetRouteRuleWarmup(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: number };
+  const { vendorTrunkId } = request.body as { vendorTrunkId: number };
+  return withDb(reply, async (pool) => {
+    const { rows } = await pool.query("SELECT deleted_at FROM route_rules WHERE id = $1", [id]);
+    if (!rows[0]) return notFound(reply, id);
+    if (rows[0].deleted_at) return sendProblem(reply, 400, "Restore the rule first");
+    const { rowCount } = await pool.query(
+      `UPDATE route_rule_vendors SET warmup_reset_at = now()
+        WHERE route_rule_id = $1 AND vendor_trunk_id = $2 AND warmup_count > 0`,
+      [id, vendorTrunkId],
+    );
+    if (!rowCount)
+      return sendProblem(reply, 400, "Invalid warm-up reset", {
+        errors: [{ path: "/vendorTrunkId", message: "this vendor of the rule has no warm-up threshold" }],
+      });
+    return { record: await loadRule(pool, id), change: null };
   });
 }
 
@@ -1131,6 +1184,26 @@ export function routeThrough(
     }
     if (!decision.matched) continue;
     if (decision.outcome === "no_vendor" && rule.continueRouting === "yes") continue;
+    // Rules further down that would also match are listed as shadowed (team trial round 6), so a new rule hiding
+    // an older one shows it; they are never reached for this message.
+    if (keep > 0) {
+      let shadowed = 0;
+      for (const later of rules.slice(rules.indexOf(rule) + 1)) {
+        if (shadowed >= 20) break;
+        if (!quickMatch(later, m)) continue;
+        const d = decide(later, m, options);
+        if (!d.matched) continue;
+        shadowed++;
+        tried.push({
+          ruleId: later.id,
+          name: later.name,
+          priority: later.priority,
+          matched: false,
+          reason: `shadowed: would match too, but rule #${rule.id} decides first`,
+        });
+      }
+      return { tried: tried.slice(-(keep + shadowed)), decision };
+    }
     return { tried: tried.slice(-keep), decision };
   }
   return { tried: tried.slice(-keep), decision: null };

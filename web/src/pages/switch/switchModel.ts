@@ -10,13 +10,6 @@ export const LIST_TYPES: { value: NumberList["listType"]; label: string }[] = [
 
 export const listTypeLabel = (t: NumberList["listType"]) => LIST_TYPES.find((x) => x.value === t)?.label ?? t;
 
-export function listTypeHint(t: NumberList["listType"]): string {
-  if (t === "random") return "Numbers of 3-20 digits a Random Number conversion picks from.";
-  if (t === "sender_id_template")
-    return "A Sender ID (up to 11 characters, each {n} one random digit) and, after a |, the text the message becomes: {code} is the code found in the original text, {text} the original text.";
-  return "Numbers or sender IDs that rules match (Sender / Receiver ID List, whitelists).";
-}
-
 /** Pasted text → distinct trimmed values (lines, commas, semicolons or tabs). */
 export function splitValues(text: string): string[] {
   return [
@@ -49,7 +42,7 @@ export function conversionHint(kind: string | null): string | undefined {
   if (kind === "prepend") return "Text added in front";
   if (kind === "append") return "Text added at the end";
   if (kind === "translation")
-    return 'The new value only: what the conditions match becomes it ("from=to" still swaps a prefix)';
+    return 'The new value ("from=to" swaps a prefix)';
   if (kind === "regex_replace") return "Regular expression, e.g. ^0(\\d+)";
   return undefined;
 }
@@ -131,6 +124,8 @@ export function blankRule(): TranslationRuleInput {
     contentReplacement: null,
     msgTemplate: null,
     contentWords: [],
+    contentNumberFormat: null,
+    contentNumberMinDigits: null,
     senderMinLength: 0,
     senderMaxLength: 20,
     receiverMinLength: 0,

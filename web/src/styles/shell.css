@@ -688,6 +688,18 @@ a.btn {
   border-radius: 50%;
   background: var(--color-error);
 }
+/* Live light on Dashboard and Live tabs (team trial round 6): green while connected, red while not. */
+.tab-live {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+.tab-live.on {
+  background: var(--color-good);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-good) 25%, transparent);
+}
 .tab-dirty {
   width: 7px;
   height: 7px;
@@ -1481,8 +1493,40 @@ a.btn {
   text-align: left;
   cursor: pointer;
 }
-.palette-item.selected {
+.palette-item.selected,
+.palette-row.selected {
   background: var(--accent-soft);
+}
+/* Favourites (team trial round 6): the heart at the end of a page row; filled red when the page is a favourite. */
+.palette-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+.palette-row .palette-item {
+  flex: 1;
+  min-width: 0;
+}
+.palette-fav {
+  flex: none;
+  display: inline-flex;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+}
+.palette-row:hover .palette-fav,
+.palette-row.selected .palette-fav,
+.palette-fav.on {
+  opacity: 1;
+}
+.palette-fav.on {
+  color: var(--color-error);
+}
+.palette-fav.on svg path {
+  fill: currentColor;
 }
 .palette-label {
   font-weight: 600;
@@ -2586,3 +2630,39 @@ select.chip-select {
   overflow: visible;
   row-gap: 6px;
 }
+
+/* A bar to drag a panel below a table up or down (team trial round 6: Live analytics, Market moves). */
+.h-splitter {
+  flex: none;
+  height: 8px;
+  cursor: row-resize;
+  position: relative;
+}
+.h-splitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 40px;
+  height: 2px;
+  margin-left: -20px;
+  border-radius: 1px;
+  background: var(--color-border);
+}
+.h-splitter:hover::after {
+  background: var(--color-accent);
+}
+body.resizing-split-h {
+  cursor: row-resize;
+  user-select: none;
+}
+.list-body.detail-below {
+  flex-direction: column;
+  gap: 0;
+}
+.list-body.detail-below > .detail.below {
+  flex: 0 0 42%;
+  min-width: 0;
+  min-height: 200px;
+}
+

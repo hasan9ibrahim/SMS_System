@@ -342,6 +342,12 @@ export function Withheld({ text }: { text: string }) {
   );
 }
 
+/** The x of each column's right edge, after the 40 px check column. */
+function lineOffsets(cells: { width: number }[]): number[] {
+  let x = 40;
+  return cells.map((c) => (x += c.width) - 1);
+}
+
 export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) {
   const {
     list,
@@ -486,7 +492,9 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     return naturalCells.map((c) => ({ ...c, width: Math.max(FIT_MIN, Math.floor(c.width * scale)) }));
   }, [naturalCells, boxWidth, trailing?.width]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
-  const mobile = boxWidth > 0 && boxWidth < CARD_BELOW;
+  // Cards on a phone-sized window only (team trial round 6): a narrow pane on a desktop (Rate manager beside an open
+  // table) keeps the table and scrolls sideways.
+  const mobile = boxWidth > 0 && window.innerWidth < CARD_BELOW;
 
   const virtualizer = useVirtualizer({
     count: rows.length + (result.hasNextPage ? 1 : 0),
@@ -704,6 +712,14 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
               />
             );
           })}
+          {/* Column lines (team trial round 6): one overlay over the rows, at each column's right edge. */}
+          {!mobile && (
+            <div className="g-lines" style={{ height: virtualizer.getTotalSize() }} aria-hidden>
+              {lineOffsets(cells).map((x) => (
+                <span key={x} style={{ left: x }} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

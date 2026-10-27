@@ -492,7 +492,7 @@ export function EasyLookup({
         <div className="lk-hint muted">
           {text.trim() && resolve.data && destinations.length === 0
             ? "No destination matches. Try a country, a network, an MCCMNC such as 50501 or a number with its country code."
-            : "Type a country, network, MCCMNC, dial code or phone number. Vendor costs and client rates appear as you type."}
+            : "Type a country, network, MCCMNC, dial code or phone number."}
         </div>
       )}
 

@@ -130,15 +130,28 @@ export function ArchivedBanner({
 
 // ---------------------------------------------------------------- safe delete (§13.29)
 
+/**
+ * Unassign before delete (team trial round 6): a rule still assigned to trunks or enterprises lists them in the delete
+ * dialog, with a button that takes it off all of them (one undoable save); then it can be deleted.
+ */
+export interface Unassign {
+  /** The trunks and enterprises the record is assigned to, as names. */
+  load: () => Promise<string[]>;
+  /** Takes it off all of them. */
+  run: () => Promise<unknown>;
+}
+
 function DeleteDialog({
   kind,
   id,
   name,
+  unassign,
   done,
 }: {
   kind: RecordKind;
   id: number;
   name: string;
+  unassign?: Unassign;
   done: (r: Saved<unknown> | null) => void;
 }) {
   const { data: me } = useMe();
@@ -149,6 +162,27 @@ function DeleteDialog({
     retry: false,
   });
   const archive = useArchive(kind);
+  const assignedBlock = (deps.data?.items ?? []).some(
+    (d) => d.key.startsWith("assigned_") && d.blocking && d.noOverride && d.count,
+  );
+  const assigned = useQuery({
+    queryKey: ["deps", kind, id, "assigned"],
+    queryFn: () => unassign!.load(),
+    enabled: !!unassign && assignedBlock,
+    staleTime: 0,
+  });
+  const [unassigning, setUnassigning] = useState(false);
+  const runUnassign = async () => {
+    setUnassigning(true);
+    try {
+      await unassign!.run();
+      await deps.refetch();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setUnassigning(false);
+    }
+  };
   const [reason, setReason] = useState("");
   const [override, setOverride] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -206,6 +240,17 @@ function DeleteDialog({
               );
             })}
           </ul>
+          {hard.length > 0 && unassign && assignedBlock && (
+            <div className="unassign-box">
+              <span className="strong">Assigned to</span>
+              <span className="unassign-names">
+                {assigned.isPending ? "Loading…" : (assigned.data ?? []).join(", ") || "—"}
+              </span>
+              <Button small icon="x" disabled={unassigning || assigned.isPending} onClick={() => void runUnassign()}>
+                Unassign from all
+              </Button>
+            </div>
+          )}
           {hard.length > 0 ? (
             <p className="error-text">
               {name} cannot be deleted while it has {hard.map((d) => d.label.toLowerCase()).join(" or ")}. Delete or
@@ -378,9 +423,9 @@ export function useBulkDelete() {
 /** Opens the delete dialog; resolves with the archive result (with its change for Undo), or null. */
 export function useDeleteRecord() {
   const notifySaved = useNotifySaved();
-  return async (kind: RecordKind, id: number, name: string) => {
+  return async (kind: RecordKind, id: number, name: string, unassign?: Unassign) => {
     const result = await ask<Saved<unknown>>((resolve) => (
-      <DeleteDialog kind={kind} id={id} name={name} done={resolve} />
+      <DeleteDialog kind={kind} id={id} name={name} unassign={unassign} done={resolve} />
     ));
     if (result?.change) notifySaved(result.change, `Deleted ${name}`);
     return result;

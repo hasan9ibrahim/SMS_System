@@ -107,7 +107,7 @@ function EditDialog({ initial, done }: { initial: Draft; done: (saved: boolean) 
       <h3 className="part-title">Vendor trunks that count</h3>
       {d.mccmncs.length > 1 && (
         <p className="muted small">
-          The list shows the vendor trunks pricing {d.mccmncs[0]}; the same choice is saved for every destination.
+          Trunks pricing {d.mccmncs[0]}; the choice is saved for every destination.
         </p>
       )}
       <input
@@ -200,9 +200,7 @@ function TopVendorsDialog({ done }: { done: () => void }) {
       onClose={done}
       footer={
         <>
-          <span className="muted small fb-spacer">
-            Destinations not listed use the settings (cheapest N, or not watched).
-          </span>
+          <span className="fb-spacer" />
           <Button onClick={done}>Close</Button>
           <Button variant="primary" icon="plus" onClick={() => void editTopVendors()}>
             Add destinations…
@@ -273,8 +271,8 @@ function TopVendorsDialog({ done }: { done: () => void }) {
             {search ? "No destination matches." : "No destination has a hand-picked list yet."}
           </p>
         )}
-        {q.data && q.data.total > rows.length && limit < 500 && (
-          <Button small onClick={() => setLimit(limit + 100)}>
+        {q.data && q.data.total > rows.length && (
+          <Button small onClick={() => setLimit(limit + 500)}>
             Show more
           </Button>
         )}

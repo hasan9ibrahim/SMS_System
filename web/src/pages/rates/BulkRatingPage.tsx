@@ -3,6 +3,7 @@
 // Rate Manager), Step 2 one action (fixed rate, change by % or amount, cost + margin, close, block),
 // Step 3 review grid (type over a rate or a formula such as =cost*1.15, exclude rows with one click),
 // Step 4 impact on the last 7 days of traffic, Step 5 apply as ONE undoable change (§13.10).
+import { showRnSummary } from "./SendRatesDialog";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -83,6 +84,34 @@ const CHANGE_LABEL: Record<string, string> = {
 };
 
 // Picker rows come from the rate-table lookup (names-only for pickers, step 10): only its fields are there.
+/** Field names for the bulk form's errors (team trial round 6: the preview said only "Check the highlighted fields"). */
+const BULK_FIELD: Record<string, string> = {
+  rateTableIds: "Clients' rate tables",
+  mccmncs: "Destinations",
+  effectiveFrom: "Effective from",
+  action: "Change",
+  value: "Value",
+  round: "Rounding",
+  costSource: "Cost from",
+  vendorTrunkId: "Vendor trunk",
+  overrides: "Rates",
+  items: "Rates",
+};
+
+/** What is wrong, field by field ("Destinations: pick at least one"), else the problem's title. */
+export function bulkProblem(err: unknown): string {
+  if (!(err instanceof ApiError)) return String(err);
+  const errors = (err.problem.errors ?? []) as { path: string; message: string }[];
+  if (!errors.length) return err.problem.detail ? `${err.message}: ${err.problem.detail}` : err.message;
+  return errors
+    .map((x) => {
+      const parts = x.path.replace(/^\//, "").split("/");
+      const name = BULK_FIELD[parts.find((p) => BULK_FIELD[p]) ?? ""] ?? (parts.join(" ") || "Form");
+      return `${name}: ${x.message}`;
+    })
+    .join(" · ");
+}
+
 type TablePick = Pick<RateTableRow, "id" | "name" | "category" | "currency">;
 
 /**
@@ -150,9 +179,12 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
                 className="sr-only"
                 checked={mode === m}
                 onChange={() => {
+                  // The ticked tables stay ticked when switching (team trial round 6): the chosen ones become the
+                  // excluded ones and back.
+                  if (m === mode) return;
                   setMode(m);
-                  if (m === "inclusive") onChange([]);
-                  else setExcluded([]);
+                  if (m === "inclusive") onChange(excluded);
+                  else setExcluded(ids);
                 }}
               />
               {m === "inclusive" ? "Inclusive" : "Exclusive"}
@@ -244,7 +276,7 @@ function PasteDialog({ done }: { done: (v: { mccmncs: string[]; countries: strin
       }
     >
       <label className="field">
-        <span>MCCMNC codes or country ISO codes, one per line or comma separated (e.g. from Excel)</span>
+        <span>MCCMNC or country ISO codes, one per line or comma separated</span>
         <textarea autoFocus rows={8} value={text} onChange={(e) => setText(e.target.value)} />
       </label>
       <p className="muted small">
@@ -282,8 +314,7 @@ function ApplyDialog({
       }
     >
       <p>
-        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change in History, undone as one (§13.10).
-        New rates open new versions; traffic already sent keeps its rate.
+        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change (§13.10).
       </p>
       <label className="field">
         <span>Note (optional, shown in History)</span>
@@ -418,7 +449,7 @@ export function BulkRatingPage() {
       setEdits(noEdits());
       setShow("all");
     } catch (err) {
-      toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
+      toast({ tone: "error", message: bulkProblem(err) });
     } finally {
       setLoading(false);
     }
@@ -428,6 +459,7 @@ export function BulkRatingPage() {
     try {
       const r = await apply.mutateAsync({
         items,
+        respectNotice,
         sendNotification: sendRn,
         ...(sendRn && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
@@ -436,8 +468,9 @@ export function BulkRatingPage() {
       if (r.change) {
         notifySaved(
           r.change,
-          `Applied ${r.applied} change${r.applied === 1 ? "" : "s"} on ${r.tables} tables${r.notificationsSent ? ` · RN sent to ${r.notificationsSent} client${r.notificationsSent === 1 ? "" : "s"}` : ""}`,
+          `Applied ${r.applied} change${r.applied === 1 ? "" : "s"} on ${r.tables} tables`,
         );
+        showRnSummary(r.notifications);
         if (move)
           void actOnMove(move.id, {
             action: "handled",
@@ -454,7 +487,7 @@ export function BulkRatingPage() {
         if (ok) return runApply(note, sendRn, true, rnNote);
         return;
       }
-      toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });
+      toast({ tone: "error", message: bulkProblem(err) });
     }
   };
 
@@ -633,8 +666,7 @@ export function BulkRatingPage() {
           <strong>
             {move.country} · {move.network} ({move.mccmnc})
           </strong>{" "}
-          {moveLabel(move)} for {overrides.length} client table{overrides.length === 1 ? "" : "s"}: review, adjust and
-          apply. The move is marked handled after applying.
+          {moveLabel(move)} for {overrides.length} client table{overrides.length === 1 ? "" : "s"}.
         </div>
       )}
       <div className="bulk-setup">
@@ -765,7 +797,7 @@ export function BulkRatingPage() {
           <div className="bulk-row">
             <label className="toggle-inline">
               <input type="checkbox" checked={respectNotice} onChange={(e) => setRespectNotice(e.target.checked)} />
-              Respect notice periods (increases start when each client's notice ends)
+              Respect notice periods
             </label>
             {(type === "set" || costPlus) && (
               <label className="toggle-inline">
@@ -908,8 +940,7 @@ export function BulkRatingPage() {
       )}
       {!preview && (
         <div className="grid-message muted bulk-empty">
-          Choose the clients' tables and destinations, pick an action and press Preview. Nothing changes until you
-          apply.
+          Choose the clients' tables and destinations, pick an action and press Preview.
         </div>
       )}
     </div>

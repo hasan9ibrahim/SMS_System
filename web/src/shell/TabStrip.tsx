@@ -9,6 +9,7 @@ import { Menu, Popover, type MenuItem } from "../ui/primitives";
 import { usePalette } from "./CommandPalette";
 import { TAB_DRAG_TYPE } from "./channel";
 import { HOME_TAB_ID, useTabs, type Tab } from "./tabs";
+import { useLive } from "../live/store";
 
 /** Opens a tab in its own browser window (second monitor) and removes it from the strip. */
 export function popOutTab(tab: Tab, at?: { x: number; y: number }) {
@@ -111,7 +112,7 @@ function TabButton({ tab, active, index }: { tab: Tab; active: boolean; index: n
       title={tab.title}
     >
       <Icon name={page?.icon ?? "file"} size={14} />
-      {tab.alert && <span className="tab-alert" aria-label="Alert" />}
+      {isLivePath(tab.path) ? <LiveLight /> : tab.alert && <span className="tab-alert" aria-label="Alert" />}
       {!isHome && <span className="tab-title">{tab.title}</span>}
       {tab.dirty && <span className="tab-dirty" aria-label="Unsaved changes" title="Unsaved changes" />}
       {!isHome && !tab.pinned && (
@@ -245,3 +246,21 @@ export function TabStrip() {
     </div>
   );
 }
+
+/** Pages fed by the live connection (Dashboard, Live analytics …) show its light on their tab (team trial round 6). */
+export const isLivePath = (path: string) =>
+  ["/dashboard", "/live"].some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`));
+
+/** Green while live data arrives, red while the connection is down. */
+function LiveLight() {
+  const connected = useLive((s) => s.connected);
+  return (
+    <span
+      className={`tab-live${connected ? " on" : ""}`}
+      role="img"
+      aria-label={connected ? "Live" : "Live data disconnected"}
+      title={connected ? "Live" : "Live data disconnected"}
+    />
+  );
+}
+

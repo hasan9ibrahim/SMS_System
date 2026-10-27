@@ -51,6 +51,10 @@ export interface ListScreenProps<Row extends { id: number }> {
    * highlighted row until closed (Route rules, team trial round 3). Default: a click opens it.
    */
   detailOpensOn?: "click" | "double";
+  /** The detail panel opens under the grid instead of beside it (Market moves, team trial round 6). */
+  detailBelow?: boolean;
+  /** Shows only these columns, whatever the saved choice (Rate manager's list beside an open table, round 6). */
+  onlyColumns?: string[];
   /** Taller grid rows for two-line cells (team trial round 4). */
   rowHeight?: number;
   /** Records this page edits; enables the header Undo and History buttons (§13.10). */
@@ -261,23 +265,69 @@ function DetailSplitter({
   );
 }
 
+/** The drag bar between the grid and a detail panel below it: drag up or down; double-click for the default height. */
+function BelowSplitter({
+  height,
+  onChange,
+  container,
+}: {
+  height: number | null;
+  onChange: (h: number | null) => void;
+  container: RefObject<HTMLDivElement | null>;
+}) {
+  const start = (e: PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const panel = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null;
+    const startY = e.clientY;
+    const startH = panel?.offsetHeight ?? height ?? 320;
+    const max = Math.max(200, (container.current?.clientHeight ?? 800) - 200);
+    const move = (ev: globalThis.PointerEvent) => onChange(Math.min(max, Math.max(200, startH + startY - ev.clientY)));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing-split-h");
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    document.body.classList.add("resizing-split-h");
+  };
+  return (
+    <div
+      className="h-splitter"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize the details"
+      title="Drag to resize · double-click: default height"
+      onPointerDown={start}
+      onDoubleClick={() => onChange(null)}
+    />
+  );
+}
+
 function DetailPanel({
   content,
   onClose,
   section,
   setSection,
   width,
+  below = false,
 }: {
   content: DetailContent;
   onClose: () => void;
   section: string | null;
   setSection: (key: string) => void;
+  /** Its width beside the grid, or its height below it. */
   width: number | null;
+  below?: boolean;
 }) {
   const current = content.sections.find((s) => s.key === section) ?? content.sections[0];
   // On the right (team trial round 3): title, the sections as tabs, the section, then the aside facts.
   return (
-    <section className="detail" aria-label="Details" style={width ? { flex: `0 0 ${width}px` } : undefined}>
+    <section
+      className={`detail${below ? " below" : ""}`}
+      aria-label="Details"
+      style={width ? { flex: `0 0 ${width}px` } : undefined}
+    >
       <div className="detail-title">
         {content.title}
         <span className="fb-spacer" />
@@ -454,10 +504,13 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     idleMessage,
     noSelection,
     detailOpensOn = "click",
+    detailBelow = false,
+    onlyColumns,
     rowHeight,
   } = props;
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [detailWidth, setDetailWidth] = useDetailWidth(list);
+  // Below the grid the remembered size is a height (its own key).
+  const [detailWidth, setDetailWidth] = useDetailWidth(detailBelow ? `${list}.below` : list);
   // No "⋯" menu at the end of each row any more (team trial round 4): the record actions in the header act on the
   // highlighted row or on the selected rows.
   const trailing = trailingProp;
@@ -695,7 +748,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
           <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
         </div>
       </div>
-      <div className={`list-body${showDetail ? " with-detail" : ""}`} ref={bodyRef}>
+      <div className={`list-body${showDetail ? " with-detail" : ""}${detailBelow ? " detail-below" : ""}`} ref={bodyRef}>
         {/* The grid in a Records card (design refresh); the count in the footer. */}
         <section className="records-card">
           {fields.data ? (
@@ -703,8 +756,8 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               list={list}
               {...(rowHeight ? { rowHeight } : {})}
               fields={fields.data}
-              state={state}
-              onStateChange={setState}
+              state={onlyColumns ? { ...state, visible: onlyColumns } : state}
+              onStateChange={(next) => setState(onlyColumns ? { ...next, visible: state.visible } : next)}
               {...(columns ? { columns } : {})}
               {...(trailing ? { trailing } : {})}
               activeId={activeRow?.id ?? null}
@@ -741,7 +794,12 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             {total !== null && meta.loaded < total && <span>&nbsp;· scroll for more</span>}
           </div>
         </section>
-        {showDetail && <DetailSplitter width={detailWidth} onChange={setDetailWidth} container={bodyRef} />}
+        {showDetail &&
+          (detailBelow ? (
+            <BelowSplitter height={detailWidth} onChange={setDetailWidth} container={bodyRef} />
+          ) : (
+            <DetailSplitter width={detailWidth} onChange={setDetailWidth} container={bodyRef} />
+          ))}
         {showDetail && activeRow && (
           <DetailPanel
             key={activeRow.id}
@@ -750,6 +808,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             setSection={setSection}
             onClose={() => (detailOpensOn === "double" ? setDetailOpen(false) : setActiveRow(null))}
             width={detailWidth}
+            below={detailBelow}
           />
         )}
       </div>

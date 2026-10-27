@@ -11,7 +11,7 @@ import { useTabNavigate } from "../../shell/tabContext";
 import { toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
-import { balanceWords, money, netWords } from "./financeModel";
+import { balanceWords, money6 as money, netWords } from "./financeModel";
 import { soaLink } from "./soaModel";
 
 const page = pageForPath("/finance/balances")!;
@@ -39,14 +39,6 @@ export function BalancesPage() {
           onSelect: () => navigate(`/finance/transactions`),
         },
       ]}
-      above={
-        <div className="rm-trunk">
-          <span className="muted small">
-            Balance = opening + payments − usage: positive = the partner&apos;s credit, negative = owed (amber). Net =
-            customer − vendor in the customer currency. Payments left off the SOA still count (§13.33).
-          </span>
-        </div>
-      }
       onExport={(s) =>
         void downloadCsv("/enterprise-balances/export", toListQuery(s)).catch((e) =>
           toast({ tone: "error", message: problemText(e) }),
@@ -88,7 +80,7 @@ export function BalancesPage() {
           width: 160,
           align: "right",
           render: (r) => (
-            <strong className={`num${(r.netBalance ?? 0) < 0 ? " tone-warning" : ""}`} title={netWords(r.netBalance)}>
+            <strong className={`num ${(r.netBalance ?? 0) < 0 ? "tone-error" : (r.netBalance ?? 0) > 0 ? "tone-good" : ""}`} title={netWords(r.netBalance)}>
               {money(r.netBalance, r.currency)}
             </strong>
           ),

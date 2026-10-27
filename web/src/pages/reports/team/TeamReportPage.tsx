@@ -702,7 +702,7 @@ function TargetsDialog({ done }: { done: (v: null) => void }) {
           </tbody>
         </table>
       </div>
-      <p className="muted small">Platform currency. A period's target is the months' targets prorated by day.</p>
+      <p className="muted small">Platform currency.</p>
     </Modal>
   );
 }

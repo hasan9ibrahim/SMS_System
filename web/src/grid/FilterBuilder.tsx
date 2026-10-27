@@ -397,9 +397,7 @@ export function FilterBuilder({
       }
     >
       <p className="muted small fb-help">
-        Text is case-insensitive. In "matches", <code>%</code> stands for any text and <code>_</code> for one character:{" "}
-        <code>re%</code> starts with re, <code>%re</code> ends with re. These conditions combine with the filters under
-        the column headers.
+        Case-insensitive. In &quot;matches&quot;, <code>%</code> is any text, <code>_</code> one character.
       </p>
       <GroupEditor fields={filterable} group={draft} depth={0} onChange={setDraft} />
       {tried && problems.length > 0 && (

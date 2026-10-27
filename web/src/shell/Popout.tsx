@@ -72,7 +72,6 @@ export function Popout() {
           <span>{title}</span>
         </span>
         <span className="fb-spacer" />
-        <span className="muted small hide-narrow">Drag the title onto the main window's tabs to dock</span>
         <Button small icon="dock" onClick={dock}>
           Dock back
         </Button>

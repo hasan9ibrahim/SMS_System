@@ -1,0 +1,506 @@
+{
+  "layout": {
+    "src": "/help-img/layout.jpg",
+    "alt": "The window: menu bar, page tabs, page header and status bar",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Main menu",
+        "text": "Every page, by area. Hover a heading to see its pages.",
+        "x": 16.4,
+        "y": 2.91,
+        "bx": 16.4,
+        "by": 10.35
+      },
+      {
+        "label": "Search or jump to (Ctrl K)",
+        "text": "Type a page, enterprise, trunk, rate table, rule or user. Your favourite pages come first.",
+        "x": 74.43,
+        "y": 2.91,
+        "bx": 74.43,
+        "by": 10.35
+      },
+      {
+        "label": "Live TPS",
+        "text": "Messages per second right now, over the whole platform.",
+        "x": 81.52,
+        "y": 2.91,
+        "bx": 81.52,
+        "by": 10.35
+      },
+      {
+        "label": "Alerts",
+        "text": "Open incidents. A red count means something needs a look.",
+        "x": 94.51,
+        "y": 2.91,
+        "bx": 94.51,
+        "by": 15.7
+      },
+      {
+        "label": "Your menu",
+        "text": "Theme (light, dark, blue-grey), My changes, password, alert sounds and sign out.",
+        "x": 97.57,
+        "y": 2.91,
+        "bx": 97.57,
+        "by": 9.42
+      },
+      {
+        "label": "Page tabs",
+        "text": "Each page opens in a tab. Drag a tab out to give it its own window.",
+        "x": 20.42,
+        "y": 8.26,
+        "bx": 23.97,
+        "by": 14.21
+      },
+      {
+        "label": "Split view",
+        "text": "Two pages side by side in one window.",
+        "x": 89.94,
+        "y": 7.97,
+        "bx": 86.39,
+        "by": 13.92
+      },
+      {
+        "label": "Help for this page",
+        "text": "Opens the help topic of the page you are on.",
+        "x": 12.25,
+        "y": 13.49,
+        "bx": 16.69,
+        "by": 20.93
+      },
+      {
+        "label": "Status bar",
+        "text": "Rows shown, keyboard shortcuts, and live/autosave state.",
+        "x": 4.17,
+        "y": 98.37,
+        "bx": 4.17,
+        "by": 90.93
+      }
+    ]
+  },
+  "grids": {
+    "src": "/help-img/grids.jpg",
+    "alt": "A list page: quick search, column filters, views and columns",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Quick search",
+        "text": "Type to search. Pick a field from the list to turn your text into a filter pill.",
+        "x": 30.59,
+        "y": 19.65,
+        "bx": 30.59,
+        "by": 27.09
+      },
+      {
+        "label": "Column filter",
+        "text": "Every column has a filter under its title. `%` matches anything, `_` one character.",
+        "x": 14.34,
+        "y": 31.22,
+        "bx": 14.34,
+        "by": 38.66
+      },
+      {
+        "label": "Pick-list filter",
+        "text": "Columns with fixed values filter with a checklist.",
+        "x": 27.36,
+        "y": 31.22,
+        "bx": 27.36,
+        "by": 38.66
+      },
+      {
+        "label": "Views",
+        "text": "Save the filters, sorting and columns you use often, and open them again in one click.",
+        "x": 86.83,
+        "y": 19.65,
+        "bx": 83.27,
+        "by": 25.6
+      },
+      {
+        "label": "Columns",
+        "text": "Show, hide and reorder columns.",
+        "x": 94.17,
+        "y": 19.65,
+        "bx": 90.62,
+        "by": 25.6
+      },
+      {
+        "label": "Sort",
+        "text": "Click a column title to sort; click again to reverse.",
+        "x": 14.38,
+        "y": 26.34,
+        "bx": 10.82,
+        "by": 32.29
+      },
+      {
+        "label": "Select rows",
+        "text": "Tick rows for the actions in the header (Clone, Delete, Edit, More).",
+        "x": 3.16,
+        "y": 40.99,
+        "bx": 7.6,
+        "by": 40.99
+      }
+    ]
+  },
+  "route-rules": {
+    "src": "/help-img/route-rules.jpg",
+    "alt": "Route rules page",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "New rule",
+        "text": "Opens the full rule window: general, configuration, conditions and vendors, saved with one Save.",
+        "x": 74.88,
+        "y": 13.49,
+        "bx": 74.88,
+        "by": 20.93
+      },
+      {
+        "label": "Simulate",
+        "text": "Test which rule and vendor a message would take, before or after a change.",
+        "x": 67.63,
+        "y": 13.49,
+        "bx": 67.63,
+        "by": 20.93
+      },
+      {
+        "label": "Undo and History",
+        "text": "Undo your last save, or see every change to rules.",
+        "x": 43.86,
+        "y": 13.49,
+        "bx": 43.86,
+        "by": 20.93
+      },
+      {
+        "label": "Row actions",
+        "text": "Clone, Delete, Edit and More act on the ticked rules. Clone opens a prefilled New rule window.",
+        "x": 81.39,
+        "y": 13.49,
+        "bx": 77.84,
+        "by": 19.44
+      },
+      {
+        "label": "Trunk filters",
+        "text": "A trunk search also finds rules that apply to all trunks.",
+        "x": 43.4,
+        "y": 31.22,
+        "bx": 43.4,
+        "by": 38.66
+      },
+      {
+        "label": "On / off",
+        "text": "Click the dot to turn a rule on or off.",
+        "x": 96.67,
+        "y": 36.1,
+        "bx": 92.22,
+        "by": 36.1
+      },
+      {
+        "label": "Vendors",
+        "text": "Hover for each vendor's share, cost and live volume. Click a row to open its detail panel.",
+        "x": 70.45,
+        "y": 31.22,
+        "bx": 70.45,
+        "by": 38.66
+      }
+    ]
+  },
+  "rate-manager": {
+    "src": "/help-img/rate-manager.jpg",
+    "alt": "Rate manager list of rate tables",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Customer or vendor",
+        "text": "Switch between customer (selling) and vendor (buying) rate tables.",
+        "x": 45.65,
+        "y": 19.65,
+        "bx": 45.65,
+        "by": 27.09
+      },
+      {
+        "label": "New rate table",
+        "text": "Create an empty table, then add rates or import a sheet.",
+        "x": 71.65,
+        "y": 13.49,
+        "bx": 71.65,
+        "by": 20.93
+      },
+      {
+        "label": "Send rates",
+        "text": "E-mail the current rate sheet to every live customer trunk using the ticked tables. A summary shows who got it.",
+        "x": 89.94,
+        "y": 13.49,
+        "bx": 86.39,
+        "by": 19.44
+      },
+      {
+        "label": "Open a table",
+        "text": "Click a name to open the table: rates, history, and editable rate cells (dashed boxes).",
+        "x": 13.18,
+        "y": 40.99,
+        "bx": 17.63,
+        "by": 40.99
+      },
+      {
+        "label": "Negative margin",
+        "text": "Filter tables that sell below cost somewhere.",
+        "x": 64.69,
+        "y": 36.1,
+        "bx": 64.69,
+        "by": 43.55
+      }
+    ]
+  },
+  "rate-lookup": {
+    "src": "/help-img/rate-lookup.jpg",
+    "alt": "Rate lookup with customer and vendor sides",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Search both sides",
+        "text": "One search for destination, country or MCCMNC on both sides at once.",
+        "x": 44.06,
+        "y": 19.49,
+        "bx": 44.06,
+        "by": 26.93
+      },
+      {
+        "label": "Layouts",
+        "text": "Side by side, one destination at a time, or the advanced lookup.",
+        "x": 80.08,
+        "y": 13.23,
+        "bx": 80.08,
+        "by": 20.67
+      },
+      {
+        "label": "Side filters",
+        "text": "Narrow each side by product, trunk, country or network.",
+        "x": 36,
+        "y": 27.5,
+        "bx": 36,
+        "by": 34.94
+      },
+      {
+        "label": "Expand a destination",
+        "text": "Click a destination row to see every table's rate for it.",
+        "x": 5.76,
+        "y": 37.31,
+        "bx": 5.76,
+        "by": 44.75
+      }
+    ]
+  },
+  "live-analytics": {
+    "src": "/help-img/live-analytics.jpg",
+    "alt": "Live analytics report",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Live / Pause",
+        "text": "Figures stream in place. Pause to read them still; the tab shows a light while live.",
+        "x": 84.39,
+        "y": 13.37,
+        "bx": 84.39,
+        "by": 20.81
+      },
+      {
+        "label": "Period",
+        "text": "Today, yesterday, last 7 days, months, or any range with the date chip.",
+        "x": 5.21,
+        "y": 19.88,
+        "bx": 5.21,
+        "by": 27.33
+      },
+      {
+        "label": "Columns",
+        "text": "Pick the figures to show, grouped by Traffic, Quality, Billing and Network.",
+        "x": 93.89,
+        "y": 19.88,
+        "bx": 90.34,
+        "by": 25.84
+      },
+      {
+        "label": "Search rows",
+        "text": "Starts-with search on the names in the first column.",
+        "x": 11.23,
+        "y": 29.51,
+        "bx": 11.23,
+        "by": 36.95
+      },
+      {
+        "label": "Sort",
+        "text": "Click any column title to sort high to low; again for low to high.",
+        "x": 55.41,
+        "y": 29.87,
+        "bx": 55.41,
+        "by": 37.31
+      },
+      {
+        "label": "Expand a row",
+        "text": "Click a name to break it down (by trunk, vendor, country…). Double-click for its detail.",
+        "x": 5.9,
+        "y": 43.29,
+        "bx": 13.54,
+        "by": 43.29
+      }
+    ]
+  },
+  "dashboard": {
+    "src": "/help-img/dashboard.jpg",
+    "alt": "Live dashboard",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Today's figures",
+        "text": "Attempts, submitted and delivered, money, ASR/DLR, TPS, who is online, and market moves.",
+        "x": 8.38,
+        "y": 25.39,
+        "bx": 8.38,
+        "by": 32.84
+      },
+      {
+        "label": "Refresh",
+        "text": "How often the dashboard updates. Live = every second.",
+        "x": 87.51,
+        "y": 13.31,
+        "bx": 83.95,
+        "by": 19.27
+      },
+      {
+        "label": "Panels",
+        "text": "Show or hide panels. Drag a panel by its corner handle to rearrange.",
+        "x": 95.44,
+        "y": 13.31,
+        "bx": 91.88,
+        "by": 19.27
+      },
+      {
+        "label": "Top lists",
+        "text": "Click a row to open its Live analytics view in a new tab.",
+        "x": 24.86,
+        "y": 43.72,
+        "bx": 29.31,
+        "by": 43.72
+      }
+    ]
+  },
+  "edr-search": {
+    "src": "/help-img/edr-search.jpg",
+    "alt": "EDR search",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Template",
+        "text": "Switch the columns in one click. \"All message details\" shows everything about each message.",
+        "x": 88.54,
+        "y": 19.19,
+        "bx": 88.54,
+        "by": 26.63
+      },
+      {
+        "label": "Period",
+        "text": "The time range searched. Today by default.",
+        "x": 54.04,
+        "y": 19.19,
+        "bx": 54.04,
+        "by": 26.63
+      },
+      {
+        "label": "Number or message ID",
+        "text": "Type a phone number or a message ID, or pick a field to filter on.",
+        "x": 29.07,
+        "y": 24.07,
+        "bx": 29.07,
+        "by": 31.51
+      },
+      {
+        "label": "Columns",
+        "text": "Add or remove single columns on top of the template.",
+        "x": 94.17,
+        "y": 24.07,
+        "bx": 90.62,
+        "by": 30.02
+      },
+      {
+        "label": "Open a message",
+        "text": "Click a row for every detail of that message and its receipts.",
+        "x": 14.24,
+        "y": 40.52,
+        "bx": 14.24,
+        "by": 47.97
+      }
+    ]
+  },
+  "enterprises": {
+    "src": "/help-img/enterprises.jpg",
+    "alt": "Enterprises list",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "New enterprise",
+        "text": "Add a partner. Customer and vendor trunks are added inside its record.",
+        "x": 83.35,
+        "y": 13.49,
+        "bx": 83.35,
+        "by": 20.93
+      },
+      {
+        "label": "Open the record",
+        "text": "General info, documents, billing, contacts, trunks and rules, in tabs.",
+        "x": 16.84,
+        "y": 36.1,
+        "bx": 21.28,
+        "by": 36.1
+      },
+      {
+        "label": "Search",
+        "text": "Find by name, brand or ID, or pick a field to filter on.",
+        "x": 30.59,
+        "y": 19.65,
+        "bx": 30.59,
+        "by": 27.09
+      }
+    ]
+  },
+  "simulator": {
+    "src": "/help-img/simulator.jpg",
+    "alt": "Route simulator",
+    "width": 1440,
+    "height": 860,
+    "marks": [
+      {
+        "label": "Customer trunk",
+        "text": "The trunk the test message comes in on.",
+        "x": 16.22,
+        "y": 26.3,
+        "bx": 16.22,
+        "by": 33.74
+      },
+      {
+        "label": "Receivers",
+        "text": "One or more numbers, or switch to destination mode to pick networks.",
+        "x": 16.22,
+        "y": 44.62,
+        "bx": 16.22,
+        "by": 52.07
+      },
+      {
+        "label": "Simulate",
+        "text": "Shows the matching rule, every vendor with why it would or would not get the message, and shadowed rules.",
+        "x": 78.83,
+        "y": 48.83,
+        "bx": 78.83,
+        "by": 56.27
+      }
+    ]
+  }
+}

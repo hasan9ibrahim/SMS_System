@@ -15,7 +15,6 @@ export function EdrDownloadPage() {
       page={page}
       above={
         <div className="deck-above">
-          <span className="muted small">New requests: EDR Search → set the filters → Export (EDR Request).</span>
           <span className="fb-spacer" />
           <Button small icon="search" onClick={() => navigate("/monitoring/edr")}>
             EDR Search

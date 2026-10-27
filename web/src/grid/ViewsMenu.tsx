@@ -167,7 +167,6 @@ function SaveViewDialog({
         <span>Share read-only with</span>
         <UserPicker value={shared} onChange={setShared} />
       </div>
-      <p className="muted small">The view keeps the current filters, quick search, sort and columns.</p>
       {error && <p className="error-text">{error}</p>}
     </Modal>
   );

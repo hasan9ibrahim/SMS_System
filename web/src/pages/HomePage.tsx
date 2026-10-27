@@ -90,9 +90,6 @@ export function HomePage() {
               <kbd>Ctrl Z</kbd> undoes your last change on the page; History lists every change with Undo.
             </li>
           </ul>
-          <p className="muted small">
-            The open tabs and the theme are saved to your profile and come back after you sign in again.
-          </p>
         </section>
       </div>
     </div>

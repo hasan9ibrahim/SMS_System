@@ -751,6 +751,7 @@ export async function applyLineEdits(
   now: Date,
   diff: DiffEntry[],
   breaches: Breach[],
+  opts: { respectNotice?: boolean } = {},
 ): Promise<number> {
   const id = table.id;
   const nowMs = now.getTime();
@@ -764,7 +765,7 @@ export async function applyLineEdits(
       const ref = it.lineId !== undefined ? await lineById(it.lineId) : undefined;
       const mccmncId = ref ? (ref.mccmnc_id as number) : mccmncIds.get(it.mccmnc!)!;
       const senderId = ref ? ((ref.sender_id as string | null) ?? null) : it.senderId?.trim() || null;
-      const from = it.effectiveFrom ? new Date(Math.max(Date.parse(it.effectiveFrom), nowMs)) : now;
+      let from = it.effectiveFrom ? new Date(Math.max(Date.parse(it.effectiveFrom), nowMs)) : now;
       // A past start applies from now; the date asked for stays on the line as its stated date (§13.32).
       const stated =
         it.effectiveFrom && Date.parse(it.effectiveFrom) < nowMs - SKEW_MS ? new Date(it.effectiveFrom) : null;
@@ -774,7 +775,7 @@ export async function applyLineEdits(
         `SELECT ${LINE_COLS} FROM rate_lines WHERE ${keySql} AND valid_from <= $4 AND (valid_to IS NULL OR valid_to > $4)`,
         [...key, from],
       );
-      const cur = curRows[0];
+      let cur = curRows[0];
       const rate = Math.round(it.rate! * 1e6) / 1e6;
       const note = it.rateNote === undefined ? null : it.rateNote?.trim() || null;
       if (cur && Number(cur.rate) === rate && (it.rateNote === undefined || note === cur.rate_note)) {
@@ -791,7 +792,17 @@ export async function applyLineEdits(
       const period = kind ? notice?.[kind] : undefined;
       if (period) {
         const earliest = nowMs + period.days * 86_400_000;
-        if (from.getTime() < earliest - SKEW_MS)
+        // Respect notice periods (bulk rating, team trial round 6): the change starts when the notice ends, counted
+        // from this save, instead of being a breach. The rate in force on that day is the one it replaces.
+        if (from.getTime() < earliest - SKEW_MS && opts.respectNotice) {
+          from = new Date(earliest);
+          cur = (
+            await c.query(
+              `SELECT ${LINE_COLS} FROM rate_lines WHERE ${keySql} AND valid_from <= $4 AND (valid_to IS NULL OR valid_to > $4)`,
+              [...key, from],
+            )
+          ).rows[0];
+        } else if (from.getTime() < earliest - SKEW_MS)
           breaches.push({
             mccmnc: cur ? String(cur.mccmnc) : ref ? String(ref.mccmnc) : it.mccmnc!,
             change: kind!,
@@ -986,9 +997,10 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
       );
     if (result.change && table.kind === "vendor") scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
-    const notificationsSent =
-      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : 0;
-    return { change: result.change, applied: result.applied, skipped, notificationsSent };
+    const notifications =
+      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : [];
+    const notificationsSent = notifications.filter((n) => n.status === "sent").length;
+    return { change: result.change, applied: result.applied, skipped, notificationsSent, notifications };
   });
 }
 

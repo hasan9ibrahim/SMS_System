@@ -5,6 +5,8 @@
 // the number of trunks it touches; "Duplicate to trunk" makes a variant for one partner.
 import { useCan } from "../../api/access";
 import { useEffect, useState, type ReactNode } from "react";
+import { formatNumbers } from "./numberFormat";
+import { api, unwrap } from "../../api/client";
 import type {
   ContentWordRule,
   DlrMapEntry,
@@ -39,7 +41,7 @@ import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { useMe } from "../../api/hooks";
 import { useRestore } from "../../api/records";
-import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
+import { isAdminUser, ListLookup, useDeleteRecord, type Unassign } from "../../records/parts";
 import { useTabNavigate } from "../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../ui/feedback";
 import { HoverList } from "../../ui/HoverList";
@@ -295,7 +297,6 @@ function NetworksCell({ form }: { form: FormApi<TranslationRuleInput> }) {
  * columns Pattern (regex), Number list, Length. Every condition keeps its Match / Not Match switch.
  */
 function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
-  const v = form.values;
   return (
     <div className="match-grid">
       <span className="mg-head" />
@@ -336,14 +337,6 @@ function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
       <Negate form={form} path="mccmncNegate" />
       <span />
 
-      <small className="mg-foot muted">
-        {"Sender ID keywords: \\Numeric = numeric, \\Alpha = with a letter. "}
-        {v.senderMatchCase === false
-          ? "Any capitals match (Case sensitive is off). "
-          : "Exact capitals (Case sensitive is on). "}
-        A network matches when it is picked or matches the MCCMNC pattern; a 3-digit MCC is only the country&apos;s All
-        networks entry.
-      </small>
     </div>
   );
 }
@@ -352,16 +345,96 @@ type Side = "customer" | "vendor";
 type TargetType = TranslationTargetInput["type"];
 
 /** Applies To (§13.2): trunks, enterprises, categories or all trunks, per side. */
+/**
+ * Number format for the content (team trial round 6): a digit pattern (# = one digit) applied to every number of at
+ * least N digits, with a live preview. Numbers of any length work: a longer one repeats the last group.
+ */
+function NumberFormatField({
+  pattern,
+  minDigits,
+  error,
+  onChange,
+}: {
+  pattern: string;
+  minDigits: number | null;
+  error?: string;
+  onChange: (pattern: string, minDigits: number | null) => void;
+}) {
+  const [sample, setSample] = useState("Your number is 210271019");
+  const PRESETS = ["### ### ###", "###-###-####", "(###) ###-####", "## ## ## ##"];
+  return (
+    <FormField label="Format numbers" wide error={error} hint="# = one digit">
+      <div className="numfmt">
+        <input
+          className="input"
+          aria-label="Number pattern"
+          placeholder="Off · e.g. ### ### ###"
+          maxLength={40}
+          value={pattern}
+          onChange={(e) => onChange(e.target.value, minDigits)}
+        />
+        <div className="numfmt-presets" role="group" aria-label="Common patterns">
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={pattern === p ? "on" : undefined}
+              onClick={() => onChange(pattern === p ? "" : p, minDigits)}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <label className="numfmt-min">
+          From
+          <input
+            className="input num"
+            type="number"
+            min={2}
+            max={20}
+            aria-label="Shortest number to format"
+            value={minDigits ?? 6}
+            disabled={!pattern}
+            onChange={(e) => onChange(pattern, e.target.value ? Number(e.target.value) : null)}
+          />
+          digits
+        </label>
+        {pattern && (
+          <div className="numfmt-preview">
+            <input
+              className="input"
+              aria-label="Sample text"
+              value={sample}
+              onChange={(e) => setSample(e.target.value)}
+            />
+            <span aria-hidden="true">→</span>
+            <strong className="num">{formatNumbers(sample, pattern, minDigits)}</strong>
+          </div>
+        )}
+      </div>
+    </FormField>
+  );
+}
+
 function TargetsEditor({
   value,
+  direction,
   labels,
   onChange,
 }: {
   value: TranslationTargetInput[];
   labels: Map<string, string>;
+  direction: "ingress" | "egress" | null;
   onChange: (next: TranslationTargetInput[]) => void;
 }) {
-  const [side, setSide] = useState<Side>(value[0]?.trunkKind ?? "customer");
+  // Team trial round 6: ingress shows customer trunks only, egress vendor trunks only; implied by the trunk can mix
+  // both. Switching the type drops targets of the other side.
+  const fixed: Side | null = direction === "ingress" ? "customer" : direction === "egress" ? "vendor" : null;
+  const [picked0, setSide] = useState<Side>(value[0]?.trunkKind ?? "customer");
+  const side = fixed ?? picked0;
+  useEffect(() => {
+    if (fixed && value.some((t) => t.trunkKind !== fixed)) onChange(value.filter((t) => t.trunkKind === fixed));
+  }, [fixed]); // eslint-disable-line react-hooks/exhaustive-deps
   const [type, setType] = useState<TargetType>("trunk");
   const [names, setNames] = useState(labels);
   const of = (t: TargetType) => value.filter((v) => v.trunkKind === side && v.type === t);
@@ -382,7 +455,7 @@ function TargetsEditor({
     <div className="targets">
       <div className="targets-bar">
         <div className="segmented small" role="radiogroup" aria-label="Side">
-          {(["customer", "vendor"] as const).map((s) => (
+          {(fixed ? [fixed] : (["customer", "vendor"] as const)).map((s) => (
             <button
               key={s}
               type="button"
@@ -469,7 +542,7 @@ function TargetsEditor({
       <p className="muted small">
         {value.length === 0
           ? "Not assigned: the rule runs nowhere until it applies to something."
-          : `Applies to ${value.map(label).join(", ")}. Trunks added later to a targeted enterprise or category get the rule too.`}
+          : `Applies to ${value.map(label).join(", ")}.`}
       </p>
     </div>
   );
@@ -702,7 +775,6 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               { value: "ingress", label: "Ingress" },
               { value: "egress", label: "Egress" },
             ]}
-            hint="Override only: a customer trunk means ingress, a vendor trunk egress"
           />
           <SelectField
             form={form}
@@ -728,7 +800,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
             form={form}
             path="continueAfter"
             label="Is Continue"
-            hint="Apply further rules after this one (a trunk can override)"
+            hint="Apply further rules after this one"
           />
           <FormField label="Start" hint="Empty = now">
             <DateTimeInput
@@ -748,9 +820,14 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
           </FormField>
         </Section>
 
-        <Section title="Applies to" columns={1} note="Saving applies the rule everywhere it targets (§13.2)">
+        <Section title="Applies to" columns={1}>
           <FormField label="Targets" wide error={form.error("targets")}>
-            <TargetsEditor value={v.targets} labels={labels} onChange={(t) => form.set("targets", t)} />
+            <TargetsEditor
+              value={v.targets}
+              labels={labels}
+              direction={v.direction}
+              onChange={(t) => form.set("targets", t)}
+            />
           </FormField>
           <SelectField
             form={form}
@@ -761,11 +838,10 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               { value: "bottom", label: "After the ordered rules" },
               { value: "top", label: "Before the ordered rules" },
             ]}
-            hint="Where the rule runs on a trunk that has not ordered it yet"
           />
         </Section>
 
-        <Section title="Match conditions" note="All set conditions must hold">
+        <Section title="Match conditions">
           {/* Compact grid (team trial round 5): a row per field, the pattern and the list each with Match / Not Match,
               the lengths last; the networks open in a dialog instead of a tree on the page. */}
           <MatchGrid form={form} />
@@ -773,11 +849,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
 
         {!blocks && (
           <>
-            <Section
-              title="Sender and receiver conversion"
-              columns={3}
-              note="Translation swaps a prefix; Regex Replace rewrites any part"
-            >
+            <Section title="Sender and receiver conversion" columns={3}>
               <SelectField
                 form={form}
                 path="senderConversion"
@@ -808,7 +880,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                   path="senderConversionReplacement"
                   label="Replace with"
                   maxLength={100}
-                  hint="$1..$9 insert the pattern's groups; empty removes the match"
+                  hint="$1..$9 = groups; empty removes the match"
                 />
               ) : (
                 <div />
@@ -835,13 +907,13 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                   label="Replace with"
                   maxLength={100}
                   placeholder="44$1"
-                  hint="$1..$9 insert the pattern's groups; empty removes the match"
+                  hint="$1..$9 = groups; empty removes the match"
                 />
               ) : (
                 <div />
               )}
             </Section>
-            <Section title="SMPP field overrides" columns={3} note="Empty = keep what the message has">
+            <Section title="SMPP field overrides" columns={3}>
               <SelectField form={form} path="senderTon" label="Sender TON" placeholder="Keep" options={TON_OPTIONS} />
               <SelectField form={form} path="senderNpi" label="Sender NPI" placeholder="Keep" options={NPI_OPTIONS} />
               <SelectField
@@ -876,11 +948,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                 ]}
               />
             </Section>
-            <Section
-              title="DLR Status & Error Code Convert"
-              columns={1}
-              note="The vendor's stat and error as the customer gets them"
-            >
+            <Section title="DLR Status & Error Code Convert" columns={1}>
               <FormField label="Conversions" wide error={form.error("dlrMap")}>
                 <DlrMapEditor value={v.dlrMap} onChange={(m) => form.set("dlrMap", m)} />
               </FormField>
@@ -889,11 +957,19 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               <FormField
                 label="Replace or remove words"
                 wide
-                hint="Done first, as typed (no regex); then the regex rewrite and the template"
                 error={form.error("contentWords")}
               >
                 <ContentWordsEditor value={v.contentWords ?? []} onChange={(w) => form.set("contentWords", w)} />
               </FormField>
+              <NumberFormatField
+                pattern={v.contentNumberFormat ?? ""}
+                minDigits={v.contentNumberMinDigits ?? null}
+                error={form.error("contentNumberFormat")}
+                onChange={(pattern, minDigits) => {
+                  form.set("contentNumberFormat", pattern || null);
+                  form.set("contentNumberMinDigits", minDigits);
+                }}
+              />
               <TextField
                 form={form}
                 path="contentRegex"
@@ -916,7 +992,7 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
                 label="Message Text"
                 maxLength={1000}
                 disabled={!v.contentRegex}
-                hint="$1..$9 insert the pattern's groups, $0 the whole match"
+                hint="$1..$9 = groups, $0 = whole match"
               />
               <TextField
                 form={form}
@@ -1001,10 +1077,7 @@ function DuplicateDialog({ rule, done }: { rule: TranslationRuleDetail; done: (i
         </>
       }
     >
-      <p className="muted">
-        An independent copy for one trunk only (§13.2): the trunk runs the copy where it ran this rule, and this rule no
-        longer runs there. Edit the copy afterwards; the other trunks keep this rule.
-      </p>
+      <p className="muted">An independent copy for one trunk only.</p>
       <label className="field">
         <span>Trunk</span>
         <select value={pick} onChange={(e) => setPick(e.target.value)} autoFocus>
@@ -1166,6 +1239,20 @@ function MccmncCell({ row }: { row: TranslationRuleRow }) {
   );
 }
 
+/** Takes a rule off the trunks and enterprises it is assigned to, keeping category and all-trunk targets (round 6). */
+function unassignRule(id: number): Unassign {
+  const detail = () => unwrap(api.GET("/translation-rules/{id}", { params: { path: { id } } }));
+  const direct = (t: { type: string }) => t.type === "trunk" || t.type === "enterprise";
+  return {
+    load: async () => (await detail()).targets.filter(direct).map((t) => t.label),
+    run: async () => {
+      const d = await detail();
+      const input = toSave({ ...inputFromDetail(d), targets: inputFromDetail(d).targets.filter((t) => !direct(t)) });
+      return unwrap(api.PUT("/translation-rules/{id}", { params: { path: { id } }, body: input }));
+    },
+  };
+}
+
 export function TranslationRulesPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
   const deleteOne = useDeleteRecord();
@@ -1238,7 +1325,7 @@ export function TranslationRulesPage() {
               label: "Delete",
               icon: "trash",
               danger: true,
-              onSelect: () => void deleteOne("translation_rule", r.id, `rule ${r.name}`),
+              onSelect: () => void deleteOne("translation_rule", r.id, `rule ${r.name}`, unassignRule(r.id)),
             },
       ]}
       actions={<CleanupBadge kinds={["translation_rule_unassigned"]} />}
@@ -1318,10 +1405,7 @@ export function TranslationRulesPage() {
             key: "test",
             label: "Test",
             content: (
-              <TranslationTest
-                run={(m) => testTranslationRule(r.id, m)}
-                note="Runs the saved rule on a sample message, whatever its status and targets."
-              />
+              <TranslationTest run={(m) => testTranslationRule(r.id, m)} />
             ),
           },
           {

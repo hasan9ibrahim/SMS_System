@@ -68,7 +68,7 @@ function CountryDialog({ row, regions, done }: { row: Country | null; regions: s
         label="Region"
         required
         wide
-        hint="Region set in the destination picker (§13.21)"
+        hint="Region set in the destination picker"
         options={regions.map((r) => ({ value: r, label: r }))}
       />
     </RecordDialog>

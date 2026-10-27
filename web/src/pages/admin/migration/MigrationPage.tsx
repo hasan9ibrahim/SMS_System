@@ -120,8 +120,7 @@ function ExportDialog({ done }: { done: (x: MigrationExport | null) => void }) {
       }
     >
       <p className="small muted">
-        One encrypted file with every entity as its own CSV and a manifest of record counts and links. It opens only
-        with the password below, which is not stored: keep it safe.
+        The package opens only with the password below, which is not stored: keep it safe.
       </p>
       <div className="form-grid cols-2">
         <label className="field">
@@ -229,7 +228,7 @@ function LinkDialog({ x, done }: { x: MigrationExport; done: (v: boolean | null)
       }
     >
       <p className="small">
-        A single-use link is made and used at once; it expires after 15 minutes. {fmtBytes(x.sizeBytes)}.
+        Single-use link, expires after 15 minutes. {fmtBytes(x.sizeBytes)}.
       </p>
       {x.includesCredentials && (
         <label className="field narrow">
@@ -366,8 +365,7 @@ function ExportsView({ id, select }: { id: number | null; select: (id: number) =
           <ExportPanel x={current} />
         ) : (
           <div className="team-card small muted">
-            Pick an export to see its manifest and download it. Packages are encrypted with their own password and hold
-            every entity as its own CSV; EDRs stay in the reporting store and link through the old IDs.
+            Pick an export to see its manifest and download it.
           </div>
         )}
       </aside>
@@ -471,7 +469,6 @@ function ImportDialog({
               <option key={s} value={s} />
             ))}
           </datalist>
-          <small>Old IDs are kept per source system, so a second run updates instead of duplicating.</small>
         </label>
         <div className="field">
           <span>From</span>
@@ -582,7 +579,6 @@ function ImportDialog({
                   </option>
                 ))}
             </select>
-            <small>A package made by a Migration export of another installation (system to system).</small>
           </label>
           <label className="field">
             <span>Package password</span>

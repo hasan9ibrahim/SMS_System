@@ -1,13 +1,16 @@
 // Search or jump to (Ctrl K, §15.1): pages from the menu registry, and records (enterprises,
-// trunks, rate tables, route rules, users) from GET /search.
+// trunks, rate tables, route rules, users) from GET /search. Team trial round 6: the heart marks a page as a
+// favourite (saved in the user's preferences); with an empty box favourites come first, then the pages the user's
+// role uses most (nav/roleOrder.ts).
 import { can } from "../api/accessCore";
-import { useMe } from "../api/hooks";
+import { useMe, useUpdatePreferences } from "../api/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { create } from "zustand";
 import type { SearchHit } from "@sms/contract";
 import { useRecordSearch } from "../api/hooks";
 import { PAGES, SECTIONS, HOME, type PageDef } from "../nav/registry";
+import { rolePages } from "../nav/roleOrder";
 import { Icon, type IconName } from "../ui/Icon";
 import { useOpener } from "./useOpener";
 
@@ -58,14 +61,29 @@ interface Item {
   label: string;
   detail: string;
   path: string;
-  group: "Pages" | "Records";
+  group: "Favourites" | "Pages" | "Records";
+  /** The page key, for the heart. */
+  page?: string;
 }
 
 const sectionLabel = (pg: PageDef) => SECTIONS.find((s) => s.key === pg.section)!.label;
 
-function matchPages(q: string, permissions: readonly string[] | undefined): Item[] {
+function matchPages(
+  q: string,
+  permissions: readonly string[] | undefined,
+  role: string | undefined,
+  favourites: readonly string[],
+): Item[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const all = [HOME, ...PAGES].filter((pg) => can(permissions, pg.key)); // §11: only pages the user may open
+  const important = rolePages(role);
+  // Favourites first, then the role's pages in their order, then the rest.
+  const rank = (key: string) => {
+    const f = favourites.indexOf(key);
+    if (f >= 0) return f;
+    const r = important.indexOf(key);
+    return r >= 0 ? 100 + r : 1000;
+  };
   const scored = all
     .map((pg) => {
       const hay = `${pg.label} ${sectionLabel(pg)} ${pg.summary} ${pg.spec}`.toLowerCase();
@@ -75,14 +93,16 @@ function matchPages(q: string, permissions: readonly string[] | undefined): Item
       return { pg, score };
     })
     .filter((x): x is { pg: PageDef; score: number } => x !== null)
-    .sort((a, b) => b.score - a.score || a.pg.label.localeCompare(b.pg.label));
-  return scored.slice(0, words.length ? 8 : 10).map(({ pg }) => ({
+    .sort((a, b) => b.score - a.score || rank(a.pg.key) - rank(b.pg.key) || a.pg.label.localeCompare(b.pg.label));
+  const limit = words.length ? 8 : Math.max(10, favourites.length + 6);
+  return scored.slice(0, limit).map(({ pg }) => ({
     key: `page:${pg.key}`,
     icon: pg.icon,
     label: pg.label,
     detail: `${sectionLabel(pg)} · ${pg.summary}`,
     path: pg.path,
-    group: "Pages",
+    group: !words.length && favourites.includes(pg.key) ? "Favourites" : "Pages",
+    page: pg.key,
   }));
 }
 
@@ -94,7 +114,14 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const records = useRecordSearch(debounced);
-  const permissions = useMe().data?.permissions;
+  const me = useMe().data;
+  const permissions = me?.permissions;
+  const favourites = useMemo(() => me?.preferences.favouritePages ?? [], [me?.preferences.favouritePages]);
+  const prefs = useUpdatePreferences();
+  const toggleFavourite = (page: string) =>
+    prefs.mutate({
+      favouritePages: favourites.includes(page) ? favourites.filter((f) => f !== page) : [...favourites, page],
+    });
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 150);
@@ -109,7 +136,7 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
   }, [open]);
 
   const items = useMemo<Item[]>(() => {
-    const pages = matchPages(q, permissions);
+    const pages = matchPages(q, permissions, me?.role, favourites);
     const hits: Item[] = (q.trim() && records.data ? records.data.hits : []).map((h) => ({
       key: `${h.kind}:${h.id}`,
       icon: KIND[h.kind].icon,
@@ -119,7 +146,7 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
       group: "Records",
     }));
     return [...pages, ...hits];
-  }, [q, records.data, permissions]);
+  }, [q, records.data, permissions, me?.role, favourites]);
 
   useEffect(() => setIndex((i) => Math.min(i, Math.max(0, items.length - 1))), [items.length]);
 
@@ -168,18 +195,30 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
           {items.map((item, i) => (
             <div key={item.key}>
               {(i === 0 || items[i - 1]!.group !== item.group) && <div className="palette-group">{item.group}</div>}
-              <button
-                type="button"
-                role="option"
-                aria-selected={i === index}
-                className={`palette-item${i === index ? " selected" : ""}`}
-                onMouseEnter={() => setIndex(i)}
-                onClick={(e) => choose(item, e.ctrlKey || e.metaKey)}
-              >
-                <Icon name={item.icon} size={15} />
-                <span className="palette-label">{item.label}</span>
-                <span className="palette-detail">{item.detail}</span>
-              </button>
+              <div className={`palette-row${i === index ? " selected" : ""}`} onMouseEnter={() => setIndex(i)}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={i === index}
+                  className="palette-item"
+                  onClick={(e) => choose(item, e.ctrlKey || e.metaKey)}
+                >
+                  <Icon name={item.icon} size={15} />
+                  <span className="palette-label">{item.label}</span>
+                  <span className="palette-detail">{item.detail}</span>
+                </button>
+                {item.page && (
+                  <button
+                    type="button"
+                    className={`palette-fav${favourites.includes(item.page) ? " on" : ""}`}
+                    aria-label={favourites.includes(item.page) ? `Remove ${item.label} from favourites` : `Add ${item.label} to favourites`}
+                    title={favourites.includes(item.page) ? "Remove from favourites" : "Add to favourites"}
+                    onClick={() => toggleFavourite(item.page!)}
+                  >
+                    <Icon name="heart" size={15} />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

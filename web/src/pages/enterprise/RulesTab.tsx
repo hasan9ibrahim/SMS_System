@@ -126,10 +126,8 @@ export function EnterpriseRulesTab({ enterprise, slot, onDirty }: SectionProps &
       </HeaderAction>
       <div className="rules-top">
         <p className="muted small">
-          <Icon name="route" size={13} /> The rules that run on this enterprise&apos;s{" "}
-          {kind === "customer" ? "customer" : "vendor"} trunks
-          {q.data ? ` (${q.data.trunkCount})` : ""}. Saving sets this order on every one of them; a trunk can still
-          change its own order on its Rules tab.
+          <Icon name="route" size={13} /> {kind === "customer" ? "Customer" : "Vendor"} trunks
+          {q.data ? ` (${q.data.trunkCount})` : ""}
         </p>
         {kinds.length > 1 && (
           <div className="segmented" role="tablist" aria-label="Trunks">

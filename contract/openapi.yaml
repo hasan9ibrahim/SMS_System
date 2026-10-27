@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.100.0
+  version: 0.107.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -2489,7 +2489,7 @@ paths:
         schema:
           type: integer
           minimum: 1
-          maximum: 500
+          maximum: 50000
           default: 100
       - name: offset
         in: query
@@ -14753,6 +14753,46 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /route-rules/{id}/warmup-reset:
+    post:
+      tags: [routing]
+      operationId: resetRouteRuleWarmup
+      summary: "Start a vendor's warm-up count again (§13.27)"
+      description: |
+        Team trial round 6: the warm-up count of one vendor of the rule starts again from 0 now, for every customer
+        trunk, as when its period (warmupReset) turns over. Editing or saving the rule never restarts a count; only
+        this and the period do. Not a change of the rule: nothing to undo (change is null).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorTrunkId]
+              additionalProperties: false
+              properties:
+                vendorTrunkId:
+                  $ref: "#/components/schemas/Id"
+      responses:
+        "200":
+          description: Count restarted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteRuleSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
   /route-rules/{id}/restore:
     post:
       tags: [routing]
@@ -15631,8 +15671,8 @@ components:
 
     Theme:
       type: string
-      enum: [light, dark]
-      description: Colour theme (§15.2).
+      enum: [light, dark, bluegrey]
+      description: Colour theme (§15.2); blue-grey added in team trial round 6.
 
     SignInInput:
       type: object
@@ -15734,6 +15774,8 @@ components:
               $ref: "#/components/schemas/AlertSoundPrefs"
             liveAnalytics:
               $ref: "#/components/schemas/LiveAnalyticsSettings"
+            favouritePages:
+              $ref: "#/components/schemas/FavouritePages"
         permissions:
           type: array
           description: >-
@@ -15764,6 +15806,19 @@ components:
           $ref: "#/components/schemas/AlertSoundPrefs"
         liveAnalytics:
           $ref: "#/components/schemas/LiveAnalyticsSettings"
+        favouritePages:
+          $ref: "#/components/schemas/FavouritePages"
+
+    FavouritePages:
+      type: array
+      description: >-
+        Pages the user marked with the heart in Search or jump to (Ctrl K, team trial round 6, §15.1), by page key, in
+        the order they were added. Shown first when the search box is empty.
+      maxItems: 60
+      uniqueItems: true
+      items:
+        type: string
+        maxLength: 60
 
     LiveAnalyticsSettings:
       type: object
@@ -17947,6 +18002,11 @@ components:
         notificationsSent:
           type: integer
           description: Rate notification e-mails written (when sendNotification was set).
+        notifications:
+          type: array
+          description: Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not.
+          items:
+            $ref: "#/components/schemas/RateNoticeOutcome"
         change:
           oneOf:
             - $ref: "#/components/schemas/Change"
@@ -18342,6 +18402,11 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        respectNotice:
+          type: boolean
+          description: >-
+            Team trial round 6: a change that would start sooner than its client's notice period starts when the
+            notice ends instead, counted from this save, so time spent reviewing the preview never makes a breach.
         notificationNote:
           type: [string, "null"]
           maxLength: 2000
@@ -18364,6 +18429,11 @@ components:
         notificationsSent:
           type: integer
           description: Rate notification e-mails written (when sendNotification was set).
+        notifications:
+          type: array
+          description: Team trial round 6 (§8) - each rate notification e-mail, so the page can show who got it and who did not.
+          items:
+            $ref: "#/components/schemas/RateNoticeOutcome"
         change:
           oneOf:
           - $ref: '#/components/schemas/Change'
@@ -19442,16 +19512,17 @@ components:
         mccmncs:
           type: array
           minItems: 1
-          maxItems: 2000
           items:
             type: string
             pattern: ^[0-9]{3,6}$
+          description: Any number of destinations (team trial round 6 lifted the 2,000 cap).
         vendorTrunkIds:
           type: array
-          maxItems: 50
           items:
             $ref: '#/components/schemas/Id'
-          description: May be empty when `includeTier1` is true (Tier 1 vendors only).
+          description: >-
+            May be empty when `includeTier1` is true (Tier 1 vendors only). Any number of vendor trunks (team trial
+            round 6 lifted the 50 cap).
         includeTier1:
           type: boolean
     MarketTopVendorRemove:
@@ -19463,10 +19534,10 @@ components:
         mccmncs:
           type: array
           minItems: 1
-          maxItems: 2000
           items:
             type: string
             pattern: ^[0-9]{3,6}$
+          description: Any number of destinations (team trial round 6 lifted the 2,000 cap).
     MarketTopVendorCandidates:
       type: object
       required:
@@ -20866,6 +20937,21 @@ components:
             (team trial round 1). An empty replacement removes the word. Missing = none.
           items:
             $ref: "#/components/schemas/ContentWordRule"
+        contentNumberFormat:
+          type: [string, "null"]
+          maxLength: 40
+          pattern: "#"
+          description: >-
+            Number format for the content (team trial round 6): every run of digits in the text (at least
+            contentNumberMinDigits long) is written out through this pattern, # being one digit and anything else
+            kept as typed, e.g. "### ### ###" turns 210271019 into 210 271 019 and "(###) ###-####" makes
+            (210) 271-0190. A longer number repeats the pattern's last group; a shorter one stops after its last digit.
+            Applied after the word replacements, before the regex rewrite. Missing or null = off.
+        contentNumberMinDigits:
+          type: [integer, "null"]
+          minimum: 2
+          maximum: 20
+          description: The shortest run of digits the number format touches (null = 6), so short numbers stay as they are.
         senderMinLength:
           type: integer
           minimum: 0
@@ -24291,6 +24377,31 @@ components:
         sendEmail:
           type: boolean
           description: False = nothing is e-mailed; the page downloads the sheets instead (View Rate).
+
+    RateNoticeOutcome:
+      type: object
+      description: One rate notification e-mail (team trial round 6, §8) - one per enterprise and customer rate table.
+      required: [enterpriseId, enterprise, rateTable, trunks, to, status]
+      properties:
+        enterpriseId:
+          $ref: "#/components/schemas/Id"
+        enterprise:
+          type: string
+        rateTable:
+          type: string
+        trunks:
+          type: array
+          items:
+            type: string
+        to:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [sent, failed]
+        reason:
+          type: [string, "null"]
 
     NotificationResult:
       type: object
@@ -32380,6 +32491,13 @@ components:
         warmupPer:
           type: [string, "null"]
           enum: [rule, customer_trunk, null]
+        warmupResetAt:
+          type: [string, "null"]
+          format: date-time
+          readOnly: true
+          description: >-
+            When Reset last started this vendor's warm-up count again (team trial round 6); ignored on save, where the
+            count carries on.
 
     RouteWhitelist:
       type: object
@@ -33243,6 +33361,11 @@ components:
         hidden:
           type: boolean
           description: Not shown as a column by default, but still filterable (§13.25).
+        matchAnywhere:
+          type: boolean
+          description: >-
+            Plain text in the column filter box matches anywhere in the value instead of from the start (team trial
+            round 6: route rule names).
         filterOnly:
           type: boolean
           description: |

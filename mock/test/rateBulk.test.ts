@@ -217,6 +217,26 @@ describe("bulk rating apply (§13.11 Step 5, §13.10)", { skip }, () => {
     assert.equal(res.statusCode, 409, res.body);
     check("applyRateBulk", res);
     assert.equal(res.json().breaches[0].rateTableId, id);
+    // Respect notice periods on apply (team trial round 6): a preview date that fell short while the user reviewed
+    // it starts when the notice ends, counted from the save, instead of a 409.
+    const late = new Date(Date.parse(m.effectiveFrom) - 10 * 60_000).toISOString();
+    const saved = await ok(
+      "applyRateBulk",
+      post("/rate-bulk/apply", {
+        items: [{ rateTableId: id, action: "set", lineId: m.lineId, rate: m.newRate, effectiveFrom: late }],
+        respectNotice: true,
+      }),
+    );
+    assert.ok(saved.change, "saved without a breach");
+    const { rows: added } = await db().query(
+      "SELECT valid_from FROM rate_lines WHERE rate_table_id = $1 AND rate = $2 ORDER BY id DESC LIMIT 1",
+      [id, m.newRate],
+    );
+    assert.ok(added[0].valid_from.getTime() > Date.parse(late), "moved to the end of the notice");
+    await ok(
+      "undoChange",
+      app.inject({ method: "POST", url: `${API_PREFIX}/changes/${saved.change.id}/undo`, payload: {} }),
+    );
   });
 
   test("apply rejects rows of unknown tables or lines", async () => {

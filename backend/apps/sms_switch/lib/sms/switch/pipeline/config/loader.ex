@@ -181,7 +181,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       route_rules:
         "SELECT * FROM route_rules WHERE deleted_at IS NULL ORDER BY priority DESC, id",
       route_vendors: """
-      SELECT route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, backup_for_vendor_trunk_id
+      SELECT route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_reset_hours,
+             warmup_per, extract(epoch FROM warmup_reset_at)::bigint AS warmup_reset_at, backup_for_vendor_trunk_id
         FROM route_rule_vendors ORDER BY route_rule_id, level, is_backup, share_pct DESC NULLS LAST, id
       """,
       route_whitelists:
@@ -353,6 +354,10 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
           share_pct: v.share_pct,
           is_backup: v.is_backup,
           warmup_count: v.warmup_count,
+          warmup_reset: v[:warmup_reset],
+          warmup_reset_hours: v[:warmup_reset_hours],
+          warmup_per: v[:warmup_per],
+          warmup_reset_at: v[:warmup_reset_at],
           backup_for_vendor_trunk_id: v.backup_for_vendor_trunk_id
         }
       end)
@@ -775,6 +780,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
             match_case: w["matchCase"]
           }
         end),
+      content_number_format: r[:content_number_format],
+      content_number_min_digits: r[:content_number_min_digits],
       sender_min_length: r.sender_min_len,
       sender_max_length: r.sender_max_len,
       receiver_min_length: r.receiver_min_len,

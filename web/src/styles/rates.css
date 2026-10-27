@@ -745,3 +745,42 @@
 .two-line.right > .chip-tag {
   align-self: flex-end;
 }
+
+/* Editable rates look editable (team trial round 6): a light input-like box with a dashed outline, no hover needed. */
+.cell-edit.num:not(:disabled) {
+  display: block;
+  width: 100%;
+  padding: 2px 6px;
+  border: var(--border-width) dashed color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  border-radius: var(--radius-sm, 5px);
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-panel));
+  cursor: text;
+}
+.cell-edit.num:not(:disabled):hover {
+  border-style: solid;
+  border-color: var(--color-accent);
+}
+.cell-edit.num.changed:not(:disabled) {
+  border-style: solid;
+  border-color: var(--color-accent);
+  background: var(--accent-softer);
+}
+
+/* Rate tables list beside an open table (team trial round 6): the full list, narrower. */
+.rate-list-pane {
+  flex: 0 0 340px;
+  min-width: 300px;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.rate-list-pane > .page {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.notice-list {
+  max-height: 46vh;
+  overflow: auto;
+  margin-top: 8px;
+}

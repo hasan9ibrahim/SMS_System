@@ -1,6 +1,7 @@
 // Help center (§15.1 help): a guide to every page, what each field means and how things work, with
 // search. Topics are static text; the URL keeps the open topic, section and search (?topic=&s=&q=).
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "react-router";
 import { HOME, PAGES } from "../../nav/registry";
 import { PageHeader } from "../../page/PageHeader";
@@ -9,7 +10,7 @@ import { useOpener } from "../../shell/useOpener";
 import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { GROUPS, TOPICS, TOPIC_BY_ID } from "./content";
-import type { HelpBlock, HelpTopic } from "./helpTypes";
+import type { HelpBlock, HelpFigure, HelpTopic } from "./helpTypes";
 import { buildIndex, search, tokens } from "./search";
 
 const PAGE = PAGES.find((p) => p.key === "help")!;
@@ -64,6 +65,67 @@ function Inline({ text, hl, go }: { text: string; hl: RegExp | null; go: (topic:
   }
   if (last < text.length) out.push(<Marked key={last} text={text.slice(last)} hl={hl} />);
   return <>{out}</>;
+}
+
+/**
+ * A help picture with numbered arrows (team trial round 6): each bubble points at its spot, and the legend under the
+ * picture says what it is. Hovering a number in either place lights up both; clicking the picture opens it full size.
+ */
+function Figure({ f, hl, go }: { f: HelpFigure; hl: RegExp | null; go: (topic: string, s?: string) => void }) {
+  const [on, setOn] = useState<number | null>(null);
+  const [big, setBig] = useState(false);
+  const pic = (large: boolean) => (
+    <div className={`help-fig-pic${large ? " large" : ""}`}>
+      <img src={f.src} alt={f.alt} width={f.width} height={f.height} loading="lazy" />
+      <svg viewBox={`0 0 ${f.width} ${f.height}`} aria-hidden="true">
+        <defs>
+          <marker id="help-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" />
+          </marker>
+        </defs>
+        {f.marks.map((m, i) => {
+          const [x, y, bx, by] = [m.x, m.y, m.bx, m.by].map((v, k) => (v / 100) * (k % 2 ? f.height : f.width));
+          // The arrow starts at the bubble's edge and stops just short of the spot.
+          const len = Math.hypot(x! - bx!, y! - by!) || 1;
+          const [ux, uy] = [(x! - bx!) / len, (y! - by!) / len];
+          return (
+            <g key={i} className={on === i ? "on" : ""} onMouseEnter={() => setOn(i)} onMouseLeave={() => setOn(null)}>
+              <line x1={bx! + ux * 15} y1={by! + uy * 15} x2={x! - ux * 4} y2={y! - uy * 4} markerEnd="url(#help-arrow)" />
+              <circle cx={x} cy={y} r="5" className="help-fig-spot" />
+              <circle cx={bx} cy={by} r="14" />
+              <text x={bx} y={by! + 5} textAnchor="middle">
+                {i + 1}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+  return (
+    <figure className="help-fig">
+      <button type="button" className="help-fig-open" title="Open full size" onClick={() => setBig(true)}>
+        {pic(false)}
+      </button>
+      <ol className="help-fig-legend">
+        {f.marks.map((m, i) => (
+          <li key={i} className={on === i ? "on" : ""} onMouseEnter={() => setOn(i)} onMouseLeave={() => setOn(null)}>
+            <span className="help-fig-num">{i + 1}</span>
+            <span>
+              <strong>{m.label}</strong> <Inline text={m.text} hl={hl} go={go} />
+            </span>
+          </li>
+        ))}
+      </ol>
+      {big &&
+        createPortal(
+          <div className="help-fig-zoom" role="dialog" aria-label={f.alt} onClick={() => setBig(false)}>
+            {pic(true)}
+          </div>,
+          document.body,
+        )}
+    </figure>
+  );
 }
 
 function Block({ b, hl, go }: { b: HelpBlock; hl: RegExp | null; go: (topic: string, s?: string) => void }) {
@@ -124,6 +186,8 @@ function Block({ b, hl, go }: { b: HelpBlock; hl: RegExp | null; go: (topic: str
         </>
       );
     }
+    case "figure":
+      return <Figure f={b.figure} hl={hl} go={go} />;
   }
 }
 

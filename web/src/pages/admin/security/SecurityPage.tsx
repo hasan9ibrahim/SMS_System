@@ -114,7 +114,7 @@ function PolicyCard() {
       <div className="form-grid cols-2">
         <NumberField
           label="Password lifetime"
-          hint="Everyone changes their password this often. It can't be turned off."
+          hint="Can't be turned off."
           value={d.passwordLifetimeDays}
           range={LIMITS.passwordLifetimeDays}
           unit="days"
@@ -123,7 +123,7 @@ function PolicyCard() {
         />
         <NumberField
           label="Temporary password"
-          hint="An admin-set password works this long and must be changed at first login."
+          hint="How long an admin-set password works."
           value={d.tempPasswordHours}
           range={LIMITS.tempPasswordHours}
           unit="hours"
@@ -141,7 +141,7 @@ function PolicyCard() {
         />
         <NumberField
           label="Password history"
-          hint="Not one of the last N passwords (never below 12)."
+          hint="The last N can't be reused. Never below 12."
           value={d.passwordHistory}
           range={LIMITS.passwordHistory}
           unit="passwords"
@@ -182,7 +182,7 @@ function PolicyCard() {
             Add
           </Button>
         </div>
-        <small>A top-bar banner and an e-mail on each day. The e-mail never holds a password or a sign-in link.</small>
+        <small>The e-mail never holds a password or a sign-in link.</small>
       </div>
       <div className="field">
         <span>Always on</span>
@@ -355,7 +355,7 @@ function EventsCard() {
       <div className="team-card-head">
         <strong>Latest security events</strong>
         <span className="muted small">
-          also on each person&apos;s Team activity (§13.18); passwords are never stored or shown
+          passwords are never stored or shown
         </span>
       </div>
       <VirtualTable<SecurityEvent>

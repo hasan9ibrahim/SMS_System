@@ -35,7 +35,7 @@ defmodule Sms.Api.MixProject do
     [
       {:sms_core, in_umbrella: true},
       {:phoenix, "~> 1.8"},
-      {:bandit, "~> 1.13"},
+      {:bandit, "~> 1.14"},
       {:finch, "~> 0.24"},
       {:jason, "~> 1.4"}
     ]

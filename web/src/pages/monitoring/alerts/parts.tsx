@@ -70,7 +70,6 @@ function AlertSoundsDialog({ done }: { done: () => void }) {
           </div>
         ))}
       </div>
-      <p className="muted small">Critical repeats every 15 s until someone acknowledges the incident.</p>
     </Modal>
   );
 }

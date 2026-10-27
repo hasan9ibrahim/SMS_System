@@ -728,20 +728,34 @@ defmodule Sms.Switch.Rules.Route do
     end
   end
 
-  # 2. Warm-up threshold: the first N messages go to that vendor.
+  # 2. Warm-up threshold: the first N messages go to that vendor. `warmup_sent` is a number (the Route Simulator) or a
+  # function of the rule and the vendor giving that vendor's own count, nil when unknown (the switch,
+  # `Sms.Switch.Pipeline.Warmup`); an unknown count is treated as warmed up.
   defp warmup(%{rule: rule, m: m} = ctx) do
-    sent = m[:warmup_sent] || 0
+    sent_of = fn v ->
+      case m[:warmup_sent] do
+        f when is_function(f, 2) -> f.(rule, v)
+        n -> n || 0
+      end
+    end
 
     warm =
       rule.vendors
       |> Enum.sort_by(& &1.level)
-      |> Enum.find(&(&1[:warmup_count] not in [nil, 0] and sent < &1.warmup_count))
+      |> Enum.find_value(fn v ->
+        with n when n not in [nil, 0] <- v[:warmup_count],
+             sent when is_integer(sent) and sent < n <- sent_of.(v) do
+          {v, sent}
+        else
+          _ -> nil
+        end
+      end)
 
     case warm do
       nil ->
         :none
 
-      v ->
+      {v, sent} ->
         {:route, candidate(ctx, v.vendor_trunk_id, v.level, "warm-up #{sent}/#{v.warmup_count}"),
          :warmup}
     end

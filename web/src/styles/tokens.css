@@ -58,3 +58,32 @@
 
   color-scheme: dark;
 }
+
+/* Blue-grey (team trial round 6, option F picked by the team): a navy header and status bar over light grey pages
+   with white cards. */
+:root[data-theme="bluegrey"] {
+  --color-page-bg: #e9ecf0;
+  --color-panel: #ffffff;
+  --color-text: #1d2633;
+  --color-text-secondary: #5d6878;
+  --color-border: #d6dbe2;
+  --color-accent: #2b63c6;
+  --color-good: #16a34a;
+  --color-warning: #b45309;
+  --color-error: #dc2626;
+  --color-menu-bar: #1f3350;
+  --color-header: #1f3350;
+  --color-strong: #1f3350;
+  --color-on-strong: #ffffff;
+  --color-head-tint: color-mix(in srgb, var(--color-accent) 7%, var(--color-panel));
+
+  color-scheme: light;
+}
+/* Light text on the navy header and status bar. */
+:root[data-theme="bluegrey"] .topbar,
+:root[data-theme="bluegrey"] .statusbar {
+  --color-text: #e8eef6;
+  --color-text-secondary: #a9b8cc;
+  --color-border: #2d4566;
+  --color-page-bg: #2a4263;
+}

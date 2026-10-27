@@ -244,7 +244,7 @@ ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_t
   'check_smtp','bind_down_alert','otp','forgot_password','auto_upload_rate','credit_alert','balance_alert','schedule_report_alert',
   'traffic_alert','auto_upload_rejected','daily_report','broadcast','trouble_ticket','send_soa','payment_confirmation',
   'invoice_acceptance','invoice_rejection','monitoring_alert','cleanup_summary','credential_transfer','password_reminder',
-  'template_test','currency_alert','am_handover'));
+  'template_test','currency_alert','am_handover','rn_reminder')); -- rn_reminder too, so this step never fails once RN reminders exist
 
 -- The shared AM handover template (every business company uses it until it has its own).
 INSERT INTO email_templates (business_company_id, name, email_type, subject, body)
@@ -633,3 +633,31 @@ ALTER TABLE email_logs ADD CONSTRAINT email_logs_email_type_check CHECK (email_t
 
 -- RN reminders (§13.13 A): when the reminder e-mail of a flagged pending RN went out.
 ALTER TABLE rate_notifications ADD COLUMN IF NOT EXISTS reminded_at timestamptz;
+
+-- Team trial round 6 defaults (migration 081): loop detection and the Bind Down alert off, any destination TON/NPI.
+ALTER TABLE customer_trunks ALTER COLUMN loop_detection SET DEFAULT false;
+ALTER TABLE enterprises ALTER COLUMN bind_alert SET DEFAULT false;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_ton SET DEFAULT NULL;
+ALTER TABLE vendor_trunks ALTER COLUMN allowed_dst_npi SET DEFAULT NULL;
+
+-- Number format in translation rule content (team trial round 6, §13.2): every run of at least
+-- content_number_min_digits digits (null = 6) is written out through the pattern, # = one digit.
+ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS content_number_format text
+  CHECK (content_number_format IS NULL OR (length(content_number_format) <= 40 AND content_number_format LIKE '%#%'));
+ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS content_number_min_digits smallint
+  CHECK (content_number_min_digits BETWEEN 2 AND 20);
+
+-- Warm-up Reset (migration 083, team trial round 6): when a route rule vendor's warm-up count was last restarted.
+ALTER TABLE route_rule_vendors ADD COLUMN IF NOT EXISTS warmup_reset_at timestamptz;
+
+-- EDR template "All message details": the EDR Search default columns (team trial round 6, §9.1).
+INSERT INTO edr_templates (name, columns, inserted_at, updated_at)
+SELECT 'All message details', ARRAY['startTime', 'submitTime', 'submitRespTime', 'deliveryTime', 'id', 'customerEnterprise', 'customerEnterpriseId', 'customerTrunk', 'customerTrunkId', 'customerIp', 'customerPort', 'customerMsgId', 'srcTon', 'srcNpi', 'dstTon', 'dstNpi', 'coding', 'senderId', 'dnid', 'messageText', 'customerMccmnc', 'country', 'customerRate', 'customerSysRate', 'customerCurrency', 'vendorEnterprise', 'vendorEnterpriseId', 'vendorTrunk', 'vendorTrunkId', 'vendorIp', 'vendorPort', 'vendorSrcTon', 'vendorSrcNpi', 'vendorDstTon', 'vendorDstNpi', 'vendorMsgId', 'vendorMccmnc', 'vendorRate', 'vendorSysRate', 'vendorCurrency', 'routeRuleId', 'customerMsgStatus', 'msgStatus', 'causeCode', 'causeText', 'deliveryError', 'customerDeliveryError', 'networkError', 'msgCount', 'udh', 'deliveryDelaySeconds', 'revenue', 'cost', 'hlrProvider', 'hlrIsPorted', 'hlrErrorCode'], now(), now()
+ WHERE NOT EXISTS (SELECT 1 FROM edr_templates WHERE lower(name) = 'all message details' AND deleted_at IS NULL);
+
+-- Blue-grey theme (migration 084, §15.2).
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_theme_check;
+ALTER TABLE users ADD CONSTRAINT users_theme_check CHECK (theme IN ('light', 'dark', 'bluegrey'));
+
+-- Favourite pages in Ctrl K (migration 085, §15.1).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS favourite_pages text[] NOT NULL DEFAULT '{}';

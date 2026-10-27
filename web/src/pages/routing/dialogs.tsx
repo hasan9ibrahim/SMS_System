@@ -47,6 +47,7 @@ export function RuleGeneralForm({
   hint,
   hideStatus = false,
   draft = false,
+  draftName,
   bindSubmit,
 }: {
   rule: RouteRuleDetail | null;
@@ -61,6 +62,8 @@ export function RuleGeneralForm({
    * be picked, and there is no button of its own: the window's Save calls the function given to `bindSubmit`.
    */
   draft?: boolean;
+  /** The name a draft starts with (Clone: "… (copy)", team trial round 6); empty otherwise. */
+  draftName?: string;
   bindSubmit?: (submit: (patch?: Partial<RouteRuleInput>) => Promise<string | null>) => void;
 }) {
   const save = useSaveRouteRule();
@@ -69,7 +72,7 @@ export function RuleGeneralForm({
   const [g, setG] = useState<General>(
     rule
       ? {
-          name: draft ? "" : rule.name,
+          name: draft ? (draftName ?? "") : rule.name,
           priority: rule.priority,
           status: rule.status,
           routeType: rule.routeType,
@@ -304,7 +307,6 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
             value={shift}
             onChange={(e) => setShift(Number(e.target.value))}
           />
-          <small className="muted">Results are kept between 1 and 100.</small>
         </label>
       )}
       {kind === "set_lcr_profile" && (
@@ -318,7 +320,6 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
             detailOf={(r) => `${r.vendorCount} vendors`}
             placeholder="Profile…"
           />
-          <small className="muted">The rules become Least cost with this profile. One Undo restores them all.</small>
         </div>
       )}
       {kind === "replace_vendor" && (
@@ -345,9 +346,6 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
               placeholder="Vendor trunk…"
             />
           </div>
-          <p className="muted small" style={{ gridColumn: "1 / -1" }}>
-            Swaps the vendor on every level, in the vendor scope and in number whitelists of the chosen rules.
-          </p>
         </div>
       )}
       <label className="field">

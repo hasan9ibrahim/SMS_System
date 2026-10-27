@@ -1,7 +1,7 @@
 // Editor for one condition of a route rule (§6.3 General Information, §13.8 TPS, §13.9
 // revenue, §13.24 HLR action). Opened from a condition chip or "+ Add condition"; Save
 // writes the whole rule once, so every edit is one undoable change (§13.10).
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type {
   CompareOp,
   HlrAction,
@@ -87,7 +87,6 @@ function PatternBuilder({
   setValues,
   pattern,
   setPattern,
-  matchCase,
 }: {
   field: ConditionKey;
   kinds: PatternKind[];
@@ -97,8 +96,6 @@ function PatternBuilder({
   setValues: (v: string[]) => void;
   pattern: string;
   setPattern: (p: string) => void;
-  /** Sender only: Case sensitive (team trial round 1); receiver and content always ignore case. */
-  matchCase?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   // Sender IDs and numbers can be pasted as a list; content phrases keep their commas.
@@ -179,9 +176,6 @@ function PatternBuilder({
             />
             <Button small icon="plus" onClick={add} disabled={!draft.trim()} aria-label={`Add ${noun}`} />
           </div>
-          <small className="muted">
-            {matchCase ? "Capitals must match exactly." : "Upper and lower case match alike."}
-          </small>
         </>
       )}
     </div>
@@ -412,7 +406,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
           <>
             <Mode value={mode} onChange={setMode} allowAll />
             {mode === "all" ? (
-              <p className="muted small">Every destination, including ones added later. A pattern below narrows it.</p>
+              <p className="muted small">Every destination, including ones added later.</p>
             ) : (
               <DestinationPick value={codes} onChange={setCodes} />
             )}
@@ -471,7 +465,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
               setValues={setPatternValues}
               pattern={pattern}
               setPattern={setPattern}
-              matchCase={key === "sender" && matchCase}
             />
             {key !== "content" && (
               <div className="cond-list">
@@ -554,9 +547,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                 onChange={(v) => setTps({ ...tps, holdS: v ?? 0 })}
               />
             </div>
-            <p className="muted small">
-              The rule applies while live TPS meets the condition. Release and hold stop it flapping (§13.8).
-            </p>
           </>
         ),
         patch: () =>
@@ -633,7 +623,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                 onChange={(m) => setRevenue({ ...revenue, minMargin: m.value, minMarginUnit: m.type })}
               />
             </div>
-            <p className="muted small">Revenue in the base currency, from the customer rate at send time (§13.9).</p>
           </>
         ),
         patch: () =>
@@ -695,7 +684,6 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                 detailOf={(p) => `${p.destinations} destinations${p.hasCatchAll ? " + catch-all" : ""} · ${p.status}`}
                 placeholder="Choose a policy…"
               />
-              <small className="muted">Which providers are asked per destination: Switch › HLR › Policies.</small>
             </div>
             <div className="field">
               <span>For the rule's customer trunks</span>
@@ -722,7 +710,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
                   ))}
                 </div>
               )}
-              <small className="muted">None ticked = all of the rule's trunks (§13.24).</small>
+              <small className="muted">None ticked = all</small>
             </div>
           </>
         ),
@@ -781,7 +769,8 @@ export function ConditionEditor({
 
 /**
  * One condition edited in place (team trial round 2): Category, Customer trunks and Destination under
- * Configuration, in the detail panel and in New rule. Save writes it as one change.
+ * Configuration, in the detail panel and in New rule. Save writes it as one change. With `bind` (New rule, team trial
+ * round 6) it has no button of its own: the window's one Save collects the patch.
  */
 export function InlineCondition({
   conditionKey,
@@ -789,30 +778,49 @@ export function InlineCondition({
   saving,
   onSave,
   onCancel,
+  bind,
 }: {
   conditionKey: ConditionKey;
   rule: RouteRuleDetail;
   saving: boolean;
-  onSave: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
+  onSave?: (patch: Partial<RouteRuleInput>) => Promise<string | null>;
   onCancel?: () => void;
+  bind?: (collect: () => Partial<RouteRuleInput> | string) => void;
 }) {
   const { form, patch } = useConditionForm(conditionKey, rule);
   const [error, setError] = useState<string | null>(null);
+  // With `bind`, a block left as it was adds nothing to the window's Save.
+  // A ref: re-rendering in the middle of a click would undo a controlled checkbox's toggle.
+  const touched = useRef(false);
   const submit = async () => {
     const p = patch();
     if (typeof p === "string") return setError(p);
-    setError(await onSave(p));
+    setError((await onSave?.(p)) ?? null);
   };
+  bind?.(() => {
+    if (!touched.current) return {};
+    const p = patch();
+    setError(typeof p === "string" ? p : null);
+    return p;
+  });
   return (
-    <div className="cond-form inline-cond">
+    <div
+      className="cond-form inline-cond"
+      onChangeCapture={() => (touched.current = true)}
+      onClickCapture={(e) => {
+        if ((e.target as HTMLElement).closest("button, input, select")) touched.current = true;
+      }}
+    >
       {form}
       {error && <p className="error-text">{error}</p>}
-      <div className="inline-cond-foot">
-        {onCancel && <Button onClick={onCancel}>Cancel</Button>}
-        <Button variant="primary" small onClick={() => void submit()} disabled={saving}>
-          Save {CONDITION_LABELS[conditionKey].toLowerCase()}
-        </Button>
-      </div>
+      {!bind && (
+        <div className="inline-cond-foot">
+          {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+          <Button variant="primary" small onClick={() => void submit()} disabled={saving}>
+            Save {CONDITION_LABELS[conditionKey].toLowerCase()}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

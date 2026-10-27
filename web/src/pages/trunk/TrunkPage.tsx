@@ -140,7 +140,7 @@ function GeneralSection({
               label="Enterprise"
               required
               error={form.error("enterpriseId")}
-              hint={isNew ? undefined : "A trunk stays with its enterprise; clone it to move it"}
+              hint={isNew ? undefined : "Clone the trunk to move it"}
             >
               {isNew ? (
                 <EnterprisePicker
@@ -165,7 +165,7 @@ function GeneralSection({
               </FormField>
             )}
             {kind === "vendor" && record?.ownRateTableId && (
-              <FormField label="Buy rate table" hint="Every vendor trunk owns one (§13.12)">
+              <FormField label="Buy rate table">
                 <div className="ff-readonly">
                   <button
                     type="button"

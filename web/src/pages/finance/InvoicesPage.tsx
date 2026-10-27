@@ -73,10 +73,6 @@ function ViewSwitch() {
           </button>
         ))}
       </div>
-      <span className="muted small">
-        Balances: positive = the client&apos;s credit, negative = owed (amber). Due amount = what the closing balance
-        owes.
-      </span>
     </div>
   );
 }
@@ -160,7 +156,7 @@ function GenerateDialog({ done }: { done: (rows: InvoiceRequestRow[] | null) => 
           void submit();
         }}
       >
-        <Section title="Request" columns={3} note="§12.3 · runs in the background">
+        <Section title="Request" columns={3}>
           <FormField label="Invoice Type" required>
             <div className="segmented small" role="radiogroup" aria-label="Invoice type">
               {(["traffic", "proforma"] as const).map((k) => (
@@ -194,7 +190,7 @@ function GenerateDialog({ done }: { done: (rows: InvoiceRequestRow[] | null) => 
             label="Timezone"
             options={tzOptions(ref?.timezones ?? ["UTC"])}
             placeholder="Each enterprise's billing time zone"
-            hint="Usage days are cut at midnight here (§13.31)"
+            hint="Usage days are cut at midnight here"
           />
           <FormField label="Usage Start Date" required error={form.error("usageStart")}>
             <input type="date" value={v.usageStart} onChange={(e) => form.set("usageStart", e.target.value)} />
@@ -251,11 +247,6 @@ function GenerateDialog({ done }: { done: (rows: InvoiceRequestRow[] | null) => 
           )}
           <TextField form={form} path="remarks" label="Remarks" wide maxLength={500} />
         </Section>
-        <p className="muted small">
-          {proforma
-            ? "A proforma invoice asks for the amount in advance; it does not count as usage in balances."
-            : "Usage comes from the EDRs for the period. An enterprise already invoiced for an overlapping period fails: use Regenerate on that invoice."}
-        </p>
         <button type="submit" hidden />
       </form>
     </Modal>
@@ -394,7 +385,6 @@ function EditDialog({ inv, done }: { inv: InvoiceDetail; done: () => void }) {
         <span>Remarks</span>
         <input value={remarks} maxLength={500} onChange={(e) => setRemarks(e.target.value)} />
       </label>
-      <p className="muted small">Amounts come from the usage; use Regenerate to compute them again.</p>
     </Modal>
   );
 }

@@ -10,6 +10,9 @@ import type { Profile } from "./profiles.js";
 import type { Rng } from "./rng.js";
 import type { TableSink } from "./sink.js";
 import { DAY, type World } from "./world.js";
+import { EDR_DEFAULT_COLUMNS } from "../lists/fields.js";
+
+export const EDR_FULL_TEMPLATE = "All message details";
 
 export const EDR_TEMPLATES: { name: string; columns: string[] }[] = [
   {
@@ -132,6 +135,18 @@ export async function generateObservationExtras(
       updated_at: new Date(world.anchor - rng.int(1, 50) * DAY),
       deleted_at: null,
     });
+
+  // The full message view (team trial round 6): the EDR Search default columns, as a template to start from. Added
+  // after the others without drawing from the stream, so the rest of the seed is unchanged.
+  await sink.insert("edr_templates", {
+    id: EDR_TEMPLATES.length + 1,
+    name: EDR_FULL_TEMPLATE,
+    columns: EDR_DEFAULT_COLUMNS,
+    updated_by_id: noc[0]!.id,
+    inserted_at: new Date(world.anchor - 30 * DAY),
+    updated_at: new Date(world.anchor - DAY),
+    deleted_at: null,
+  });
 
   // ----- past downloads: short windows, one trunk or enterprise each -----
   const downloads = profile.name === "full" ? 48 : 12;

@@ -5355,6 +5355,25 @@
    },
    {
     "sortable": true,
+    "hidden": true,
+    "field": "columns",
+    "label": "Column names",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
     "hidden": false,
     "field": "updatedBy",
     "label": "Updated By",
@@ -5433,7 +5452,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "submitTime",
     "label": "Submit Time",
     "type": "datetime",
@@ -5450,7 +5469,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "submitRespTime",
     "label": "SubmitResp Time",
     "type": "datetime",
@@ -5467,7 +5486,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "deliveryTime",
     "label": "Delivery Time",
     "type": "datetime",
@@ -5484,7 +5503,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "id",
     "label": "UUID",
     "type": "text",
@@ -5499,30 +5518,6 @@
      "empty",
      "not_empty",
      "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "type",
-    "label": "Type",
-    "type": "enum",
-    "defaultOperator": "in",
-    "enumValues": [
-     {
-      "value": "MT",
-      "label": "MT"
-     },
-     {
-      "value": "MO",
-      "label": "MO"
-     }
-    ],
-    "operators": [
-     "in",
-     "not_in",
-     "eq",
-     "neq"
     ]
    },
    {
@@ -5546,7 +5541,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "customerEnterpriseId",
     "label": "Customer Enterprise ID",
     "type": "integer",
@@ -5586,7 +5581,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "customerTrunkId",
     "label": "Customer Trunk ID",
     "type": "integer",
@@ -5607,7 +5602,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "customerIp",
     "label": "Customer IP",
     "type": "text",
@@ -5626,7 +5621,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "customerPort",
     "label": "Customer Port",
     "type": "integer",
@@ -5643,77 +5638,6 @@
      "not_in",
      "empty",
      "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "customerSessionId",
-    "label": "Session ID",
-    "type": "text",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "customerBindType",
-    "label": "Bind Type",
-    "type": "enum",
-    "defaultOperator": "in",
-    "enumValues": [
-     {
-      "value": "TX",
-      "label": "TX"
-     },
-     {
-      "value": "RX",
-      "label": "RX"
-     },
-     {
-      "value": "TR",
-      "label": "TR"
-     }
-    ],
-    "operators": [
-     "in",
-     "not_in",
-     "eq",
-     "neq"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "protocol",
-    "label": "Protocol",
-    "type": "enum",
-    "defaultOperator": "in",
-    "enumValues": [
-     {
-      "value": "smpp",
-      "label": "SMPP"
-     },
-     {
-      "value": "http",
-      "label": "HTTP"
-     }
-    ],
-    "operators": [
-     "in",
-     "not_in",
-     "eq",
-     "neq"
     ]
    },
    {
@@ -5737,7 +5661,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "srcTon",
     "label": "SRC TON (C)",
     "type": "integer",
@@ -5758,7 +5682,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "srcNpi",
     "label": "SRC NPI (C)",
     "type": "integer",
@@ -5779,7 +5703,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "dstTon",
     "label": "DST TON (C)",
     "type": "integer",
@@ -5800,7 +5724,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "dstNpi",
     "label": "DST NPI (C)",
     "type": "integer",
@@ -5821,114 +5745,9 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "coding",
     "label": "Coding (C)",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "vendorSrcTon",
-    "label": "SRC TON (V)",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "vendorSrcNpi",
-    "label": "SRC NPI (V)",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "vendorDstTon",
-    "label": "DST TON (V)",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "vendorDstNpi",
-    "label": "DST NPI (V)",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "vendorCoding",
-    "label": "Coding (V)",
     "type": "integer",
     "defaultOperator": "eq",
     "operators": [
@@ -5966,25 +5785,6 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "vendorSenderId",
-    "label": "Vendor Sender ID",
-    "type": "text",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
     "hidden": false,
     "field": "dnid",
     "label": "DNID (C)",
@@ -6004,47 +5804,9 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "routedDnid",
-    "label": "DNID (V)",
-    "type": "prefix",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "messageText",
     "label": "Message Text (C)",
-    "type": "text",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "vendorMessageText",
-    "label": "Message Text (V)",
     "type": "text",
     "defaultOperator": "like",
     "operators": [
@@ -6080,45 +5842,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "mcc",
-    "label": "MCC",
-    "type": "text",
-    "defaultOperator": "eq",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "mnc",
-    "label": "MNC",
-    "type": "text",
-    "defaultOperator": "eq",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "country",
     "label": "Country",
     "type": "text",
@@ -6137,108 +5861,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "productCategory",
-    "label": "Product Category",
-    "type": "text",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "productCategoryId",
-    "label": "Product Category ID",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "businessCompanyId",
-    "label": "Business Company ID",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "customerBillingType",
-    "label": "Customer Billing Type",
-    "type": "text",
-    "defaultOperator": "eq",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "customerRateTableId",
-    "label": "Rate Table ID",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "customerRate",
     "label": "Rate",
     "type": "decimal",
@@ -6259,26 +5882,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "customerCurrency",
-    "label": "Currency",
-    "type": "text",
-    "defaultOperator": "eq",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "customerSysRate",
     "label": "Sys Rate",
     "type": "decimal",
@@ -6298,31 +5902,10 @@
     ]
    },
    {
-    "sortable": false,
-    "hidden": true,
-    "field": "translationRuleIds",
-    "label": "Translation Rule IDs",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
     "sortable": true,
-    "hidden": true,
-    "field": "customerMsgStatus",
-    "label": "Customer Msg Status",
+    "hidden": false,
+    "field": "customerCurrency",
+    "label": "Currency",
     "type": "text",
     "defaultOperator": "eq",
     "operators": [
@@ -6358,7 +5941,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "vendorEnterpriseId",
     "label": "Vendor Enterprise ID",
     "type": "integer",
@@ -6398,7 +5981,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "vendorTrunkId",
     "label": "Vendor Trunk ID",
     "type": "integer",
@@ -6419,7 +6002,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "vendorIp",
     "label": "Vendor IP",
     "type": "text",
@@ -6438,9 +6021,93 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "vendorPort",
     "label": "Vendor Port",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "vendorSrcTon",
+    "label": "SRC TON (V)",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "vendorSrcNpi",
+    "label": "SRC NPI (V)",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "vendorDstTon",
+    "label": "DST TON (V)",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "vendorDstNpi",
+    "label": "DST NPI (V)",
     "type": "integer",
     "defaultOperator": "eq",
     "operators": [
@@ -6477,21 +6144,8 @@
     ]
    },
    {
-    "sortable": false,
-    "hidden": true,
-    "field": "numberOrMsgId",
-    "label": "Number, sender or Msg ID",
-    "type": "text",
-    "operators": [
-     "in",
-     "eq"
-    ],
-    "defaultOperator": "in",
-    "filterOnly": true
-   },
-   {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "vendorMccmnc",
     "label": "Vendor MCCMNC",
     "type": "mccmnc",
@@ -6510,47 +6164,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "vendorBillingType",
-    "label": "Vendor Billing Type",
-    "type": "text",
-    "defaultOperator": "eq",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "vendorRateTableId",
-    "label": "Vendor Rate Table ID",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "vendorRate",
     "label": "Vendor Rate",
     "type": "decimal",
@@ -6571,26 +6185,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "vendorCurrency",
-    "label": "Vendor Currency",
-    "type": "text",
-    "defaultOperator": "eq",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "vendorSysRate",
     "label": "Vendor Sys Rate",
     "type": "decimal",
@@ -6611,49 +6206,26 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "vendorExRate",
-    "label": "ExRate",
-    "type": "decimal",
-    "defaultOperator": "gte",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": false,
-    "hidden": true,
-    "field": "vendorTranslationRuleIds",
-    "label": "Vendor Translation Rule IDs",
-    "type": "integer",
+    "hidden": false,
+    "field": "vendorCurrency",
+    "label": "Vendor Currency",
+    "type": "text",
     "defaultOperator": "eq",
     "operators": [
+     "like",
+     "not_like",
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
-     "not_empty"
+     "not_empty",
+     "regex"
     ]
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "routeRuleId",
     "label": "Route Rule ID",
     "type": "integer",
@@ -6674,9 +6246,9 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "routeDecidedBy",
-    "label": "Decided By",
+    "hidden": false,
+    "field": "customerMsgStatus",
+    "label": "Customer Msg Status",
     "type": "text",
     "defaultOperator": "eq",
     "operators": [
@@ -6693,81 +6265,61 @@
    },
    {
     "sortable": true,
-    "hidden": true,
-    "field": "dlrReroute",
-    "label": "DLR ReRoute",
-    "type": "boolean",
-    "defaultOperator": "eq",
-    "operators": [
-     "in",
-     "not_in",
-     "eq",
-     "neq"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "repushRequestId",
-    "label": "Repush Request ID",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "attemptNo",
-    "label": "Attempt No",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "isFinalAttempt",
-    "label": "Final",
-    "type": "boolean",
-    "defaultOperator": "eq",
-    "operators": [
-     "in",
-     "not_in",
-     "eq",
-     "neq"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "isSubmitSuccess",
-    "label": "Submit Success",
-    "type": "boolean",
-    "defaultOperator": "eq",
+    "hidden": false,
+    "field": "msgStatus",
+    "label": "Message Status",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "",
+      "label": "(none yet)"
+     },
+     {
+      "value": "DELIVRD",
+      "label": "DELIVRD"
+     },
+     {
+      "value": "ACCEPTD",
+      "label": "ACCEPTD"
+     },
+     {
+      "value": "EXPIRED",
+      "label": "EXPIRED"
+     },
+     {
+      "value": "DELETED",
+      "label": "DELETED"
+     },
+     {
+      "value": "UNDELIV",
+      "label": "UNDELIV"
+     },
+     {
+      "value": "UNKNOWN",
+      "label": "UNKNOWN"
+     },
+     {
+      "value": "REJECTD",
+      "label": "REJECTD"
+     },
+     {
+      "value": "SENT",
+      "label": "SENT"
+     },
+     {
+      "value": "ACKED",
+      "label": "ACKED"
+     },
+     {
+      "value": "BUFFRED",
+      "label": "BUFFRED"
+     },
+     {
+      "value": "ENROUTE",
+      "label": "ENROUTE"
+     }
+    ],
     "operators": [
      "in",
      "not_in",
@@ -6945,7 +6497,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "causeText",
     "label": "Cause",
     "type": "text",
@@ -6965,70 +6517,6 @@
    {
     "sortable": true,
     "hidden": false,
-    "field": "msgStatus",
-    "label": "Message Status",
-    "type": "enum",
-    "defaultOperator": "in",
-    "enumValues": [
-     {
-      "value": "",
-      "label": "(none yet)"
-     },
-     {
-      "value": "DELIVRD",
-      "label": "DELIVRD"
-     },
-     {
-      "value": "ACCEPTD",
-      "label": "ACCEPTD"
-     },
-     {
-      "value": "EXPIRED",
-      "label": "EXPIRED"
-     },
-     {
-      "value": "DELETED",
-      "label": "DELETED"
-     },
-     {
-      "value": "UNDELIV",
-      "label": "UNDELIV"
-     },
-     {
-      "value": "UNKNOWN",
-      "label": "UNKNOWN"
-     },
-     {
-      "value": "REJECTD",
-      "label": "REJECTD"
-     },
-     {
-      "value": "SENT",
-      "label": "SENT"
-     },
-     {
-      "value": "ACKED",
-      "label": "ACKED"
-     },
-     {
-      "value": "BUFFRED",
-      "label": "BUFFRED"
-     },
-     {
-      "value": "ENROUTE",
-      "label": "ENROUTE"
-     }
-    ],
-    "operators": [
-     "in",
-     "not_in",
-     "eq",
-     "neq"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
     "field": "deliveryError",
     "label": "Delivery Error (V)",
     "type": "text",
@@ -7047,7 +6535,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "customerDeliveryError",
     "label": "Delivery Error (C)",
     "type": "text",
@@ -7066,7 +6554,7 @@
    },
    {
     "sortable": true,
-    "hidden": true,
+    "hidden": false,
     "field": "networkError",
     "label": "Network Error",
     "type": "integer",
@@ -7083,6 +6571,694 @@
      "not_in",
      "empty",
      "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "msgCount",
+    "label": "MSG Count",
+    "type": "integer",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "udh",
+    "label": "UDH",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "deliveryDelaySeconds",
+    "label": "Delivery Delay (s)",
+    "type": "decimal",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "revenue",
+    "label": "Revenue",
+    "type": "decimal",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "cost",
+    "label": "Cost",
+    "type": "decimal",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "hlrProvider",
+    "label": "HLR Provider",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "hlrIsPorted",
+    "label": "HLR Is Ported",
+    "type": "boolean",
+    "defaultOperator": "eq",
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "hlrErrorCode",
+    "label": "HLR Error Code",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "type",
+    "label": "Type",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "MT",
+      "label": "MT"
+     },
+     {
+      "value": "MO",
+      "label": "MO"
+     }
+    ],
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "customerSessionId",
+    "label": "Session ID",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "customerBindType",
+    "label": "Bind Type",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "TX",
+      "label": "TX"
+     },
+     {
+      "value": "RX",
+      "label": "RX"
+     },
+     {
+      "value": "TR",
+      "label": "TR"
+     }
+    ],
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "protocol",
+    "label": "Protocol",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "smpp",
+      "label": "SMPP"
+     },
+     {
+      "value": "http",
+      "label": "HTTP"
+     }
+    ],
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "vendorCoding",
+    "label": "Coding (V)",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "vendorSenderId",
+    "label": "Vendor Sender ID",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "routedDnid",
+    "label": "DNID (V)",
+    "type": "prefix",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "vendorMessageText",
+    "label": "Message Text (V)",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "mcc",
+    "label": "MCC",
+    "type": "text",
+    "defaultOperator": "eq",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "mnc",
+    "label": "MNC",
+    "type": "text",
+    "defaultOperator": "eq",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "productCategory",
+    "label": "Product Category",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "productCategoryId",
+    "label": "Product Category ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "businessCompanyId",
+    "label": "Business Company ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "customerBillingType",
+    "label": "Customer Billing Type",
+    "type": "text",
+    "defaultOperator": "eq",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "customerRateTableId",
+    "label": "Rate Table ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": false,
+    "hidden": true,
+    "field": "translationRuleIds",
+    "label": "Translation Rule IDs",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": false,
+    "hidden": true,
+    "field": "numberOrMsgId",
+    "label": "Number, sender or Msg ID",
+    "type": "text",
+    "operators": [
+     "in",
+     "eq"
+    ],
+    "defaultOperator": "in",
+    "filterOnly": true
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "vendorBillingType",
+    "label": "Vendor Billing Type",
+    "type": "text",
+    "defaultOperator": "eq",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "vendorRateTableId",
+    "label": "Vendor Rate Table ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "vendorExRate",
+    "label": "ExRate",
+    "type": "decimal",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": false,
+    "hidden": true,
+    "field": "vendorTranslationRuleIds",
+    "label": "Vendor Translation Rule IDs",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "routeDecidedBy",
+    "label": "Decided By",
+    "type": "text",
+    "defaultOperator": "eq",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "dlrReroute",
+    "label": "DLR ReRoute",
+    "type": "boolean",
+    "defaultOperator": "eq",
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "repushRequestId",
+    "label": "Repush Request ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "attemptNo",
+    "label": "Attempt No",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "isFinalAttempt",
+    "label": "Final",
+    "type": "boolean",
+    "defaultOperator": "eq",
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "isSubmitSuccess",
+    "label": "Submit Success",
+    "type": "boolean",
+    "defaultOperator": "eq",
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
     ]
    },
    {
@@ -7113,67 +7289,6 @@
     "label": "Registered Delivery (V)",
     "type": "integer",
     "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "msgCount",
-    "label": "MSG Count",
-    "type": "integer",
-    "defaultOperator": "gte",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "udh",
-    "label": "UDH",
-    "type": "text",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": false,
-    "field": "deliveryDelaySeconds",
-    "label": "Delivery Delay (s)",
-    "type": "decimal",
-    "defaultOperator": "gte",
     "operators": [
      "eq",
      "neq",
@@ -7233,48 +7348,6 @@
    {
     "sortable": true,
     "hidden": true,
-    "field": "revenue",
-    "label": "Revenue",
-    "type": "decimal",
-    "defaultOperator": "gte",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "cost",
-    "label": "Cost",
-    "type": "decimal",
-    "defaultOperator": "gte",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
     "field": "revenueSys",
     "label": "Revenue (base)",
     "type": "decimal",
@@ -7312,25 +7385,6 @@
      "not_in",
      "empty",
      "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "hlrProvider",
-    "label": "HLR Provider",
-    "type": "text",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
     ]
    },
    {
@@ -7385,20 +7439,6 @@
    {
     "sortable": true,
     "hidden": true,
-    "field": "hlrIsPorted",
-    "label": "HLR Is Ported",
-    "type": "boolean",
-    "defaultOperator": "eq",
-    "operators": [
-     "in",
-     "not_in",
-     "eq",
-     "neq"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
     "field": "hlrIsAccomplished",
     "label": "HLR Is Accomplished",
     "type": "boolean",
@@ -7408,27 +7448,6 @@
      "not_in",
      "eq",
      "neq"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "hlrErrorCode",
-    "label": "HLR Error Code",
-    "type": "integer",
-    "defaultOperator": "eq",
-    "operators": [
-     "eq",
-     "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty"
     ]
    },
    {
@@ -19193,7 +19212,7 @@
    },
    {
     "sortable": false,
-    "hidden": false,
+    "hidden": true,
     "field": "enterpriseNames",
     "label": "Clients",
     "type": "text",
@@ -20995,6 +21014,7 @@
     "label": "Rule",
     "type": "text",
     "defaultOperator": "like",
+    "matchAnywhere": true,
     "operators": [
      "like",
      "not_like",
@@ -21087,13 +21107,7 @@
     "operators": [
      "like",
      "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
+     "eq"
     ]
    },
    {
@@ -21120,13 +21134,7 @@
     "operators": [
      "like",
      "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
+     "eq"
     ]
    },
    {

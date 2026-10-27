@@ -68,7 +68,6 @@ function RnTile({
     <div className="kpi-tile">
       <span className={`kpi-label${t.tone ? ` tone-dot ${t.tone}` : ""}`}>{t.label}</span>
       <span className="kpi-value">{q.data?.total === undefined ? "…" : q.data.total.toLocaleString("en-US")}</span>
-      {t.note && <span className="muted small">{t.note}</span>}
     </div>
   );
 }
@@ -81,7 +80,6 @@ const RN_TILES = [
     label: "With live traffic flags",
     conditions: [PENDING, { field: "flagged", op: "gte", value: 1 }],
     tone: "red",
-    note: "Pending RNs touching sent traffic",
   },
   {
     key: "notice",
@@ -96,7 +94,7 @@ const RN_TILES = [
     conditions: [{ field: "status", op: "in", values: ["accepted", "partly_accepted"] }],
     tone: "green",
   },
-] satisfies { key: string; label: string; conditions: FilterCondition[]; tone?: string; note?: string }[];
+] satisfies { key: string; label: string; conditions: FilterCondition[]; tone?: string }[];
 
 /** Summary tiles over the queue (team trial round 5). */
 function RnKpis() {
@@ -207,7 +205,7 @@ function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
       </div>
       {mode === "upload" ? (
         <div className="field">
-          <span>Vendor trunk (empty = find it from the file's username column or name)</span>
+          <span>Vendor trunk</span>
           <ListLookup<{ id: number; name: string; enterprise?: string }>
             list="vendor_trunks"
             value={trunkId}
@@ -223,7 +221,7 @@ function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
             <input value={from} placeholder="rates@vendor.example" onChange={(e) => setFrom(e.target.value)} />
           </label>
           <label className="field">
-            <span>Subject (the trunk's username or name is found here)</span>
+            <span>Subject</span>
             <input value={subject} placeholder="Rate update – account …" onChange={(e) => setSubject(e.target.value)} />
           </label>
           <label className="field rn-span">
@@ -233,10 +231,7 @@ function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
         </div>
       )}
       <label className="field">
-        <span>
-          Rate sheet: Excel (.xlsx, first sheet; protected sheets are read) or CSV, semicolon or tab separated (paste
-          from Excel). Columns are found by their headers.
-        </span>
+        <span>Rate sheet (Excel or CSV, or paste below)</span>
         <input
           type="file"
           accept=".xlsx,.csv,.txt,.tsv"
@@ -259,7 +254,7 @@ function UploadDialog({ done }: { done: (rnId: number | null) => void }) {
         />
       </label>
       <label className="field rn-header-row">
-        <span>Header row (empty = find it: the first row with a rate and a destination column)</span>
+        <span>Header row</span>
         <input
           type="number"
           min={1}
@@ -314,10 +309,9 @@ function ReasonDialog({ count: n, done }: { count: number; done: (reason: string
       }
     >
       <label className="field">
-        <span>Reason (required; it goes in the Rejected reply to the vendor)</span>
+        <span>Reason (sent to the vendor)</span>
         <textarea autoFocus rows={3} value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} />
       </label>
-      <p className="muted small">Rejected rates are not loaded.</p>
     </Modal>
   );
 }
@@ -410,7 +404,7 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
                 checked={s.autoAccept}
                 onChange={(e) => setDraft({ ...s, autoAccept: e.target.checked })}
               />
-              Auto-accept RNs with no flagged rate (no live increase or close, no notice breach, no errors)
+              Auto-accept RNs with no flagged rate
             </label>
             {(["successful", "failed", "rejected"] as const).map((k) => (
               <label key={k} className="field">
@@ -503,7 +497,7 @@ function VendorSettings({ id }: { id: number }) {
           </label>
         ))}
       <label className="field rn-span">
-        <span>Also reply to (comma separated; the RN's sender always gets the reply)</span>
+        <span>Also reply to (comma separated)</span>
         <input
           value={v.replyTo.join(", ")}
           onChange={(e) =>
@@ -525,7 +519,7 @@ function VendorSettings({ id }: { id: number }) {
               ? Object.entries(v.mapping)
                   .map(([h, f]) => `${h} → ${f}`)
                   .join(" · ")
-              : "None yet: learnt from the vendor's first file"}
+              : "None yet"}
           </span>
           {v.mapping && (
             <Button small variant="ghost" onClick={() => setD({ ...v, mapping: null })}>
@@ -1232,7 +1226,6 @@ function RnReview({ id }: { id: number }) {
         <div className="stat-card">
           <span className="stat-label">Back-dated</span>
           <span className={`stat-value${rn.backdated ? " tone-warning" : ""}`}>{rn.backdated}</span>
-          <span className="muted small">applied from receipt, never earlier</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">File errors</span>

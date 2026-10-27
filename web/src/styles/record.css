@@ -1402,3 +1402,42 @@
   flex: 1;
   min-width: 0;
 }
+
+/* Unassign before delete (team trial round 6). */
+.unassign-box {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-page-bg);
+}
+.unassign-names {
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Checklist filter chips (team trial round 6): compact rows, box beside its label, the popover only as wide as needed. */
+.picker-pop:has(.check-list) {
+  width: auto;
+  min-width: 200px;
+  max-width: 360px;
+}
+.check-list .toggle-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.check-list .toggle-inline:hover {
+  background: var(--accent-soft);
+}
+.picker-pop .check-list input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}

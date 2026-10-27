@@ -31,6 +31,7 @@ import { edrGridState } from "../reports/masterModel";
 import { problemText } from "../routing/dialogs";
 import {
   ALL_COLUMNS,
+  BANDS,
   bandOf,
   bandSpans,
   cellTone,
@@ -94,11 +95,6 @@ const BY: Record<string, ReportDimension> = {
 };
 
 const metricsOf = (cols: Column[]) => cols.map((c) => c.metric);
-/** Money and rates (6 decimals) get wider columns than counts (team trial round 3). */
-const WEIGHT: Record<Fmt, number> = { money: 1.95, rate: 1.33, int: 1.14, pct: 1, sec: 0.88, tps: 0.88 };
-const weightOf = (cols: Column[]) => cols.reduce((n, c) => n + WEIGHT[c.fmt], 0);
-/** The figures share what the name (9.5 %) and EDRs (5.5 %) columns leave, so the table always fits (no sideways scroll). */
-const colWidth = (cols: Column[], c: Column) => `${((WEIGHT[c.fmt] / weightOf(cols)) * 85).toFixed(2)}%`;
 
 /**
  * Add or remove columns, like dashboard panels (team trial round 3): grouped checkboxes, saved in the user's
@@ -109,7 +105,7 @@ function ColumnsPicker({ shown }: { shown: Column[] }) {
   const [open, setOpen] = useState(false);
   const prefs = useUpdatePreferences();
   const on = new Set(shown.map((c) => c.metric));
-  const groups = [...new Set(ALL_COLUMNS.map((c) => c.group))];
+  // Grouped like the header bands (team trial round 6), so Delay sits under Network.
   const save = (next: Set<string>) => {
     if (next.size === 0) return;
     const list = ALL_COLUMNS.filter((c) => next.has(c.metric)).map((c) => c.metric);
@@ -130,10 +126,10 @@ function ColumnsPicker({ shown }: { shown: Column[] }) {
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="end" className="la-cols-pop">
         <div className="la-cols">
-          {groups.map((g) => (
-            <fieldset key={g}>
-              <legend>{g}</legend>
-              {ALL_COLUMNS.filter((c) => c.group === g).map((c) => (
+          {BANDS.map((b) => (
+            <fieldset key={b.key} className={`la-band-${b.key}`}>
+              <legend>{b.label}</legend>
+              {ALL_COLUMNS.filter((c) => bandOf(c) === b.key).map((c) => (
                 <label key={c.metric} className="check" title={c.title}>
                   <input
                     type="checkbox"
@@ -185,7 +181,7 @@ interface Detail {
 
 /** Under the table: the double-clicked row's traffic per second, minute, 15 minutes, hour or day. */
 function DetailPanel({
-  width,
+  height,
   settings,
   by,
   setBy,
@@ -194,7 +190,7 @@ function DetailPanel({
   onPick,
   onClose,
 }: {
-  width: number | null;
+  height: number | null;
   settings: Settings;
   by: ReportDimension;
   setBy: (d: ReportDimension) => void;
@@ -215,11 +211,11 @@ function DetailPanel({
     <section
       className="la-detail"
       aria-label={`Traffic over time: ${detail.title}`}
-      style={width ? { flex: `0 0 ${width}px` } : undefined}
+      style={height ? { flex: `0 0 ${height}px` } : undefined}
     >
       <div className="la-detail-head">
         <strong>{detail.title}</strong>
-        <span className="muted small">over time · click a time to see all traffic at that moment above</span>
+        <span className="muted small">over time</span>
         <span className="fb-spacer" />
         <label className="field inline">
           <span>Period</span>
@@ -240,7 +236,7 @@ function DetailPanel({
           <colgroup>
             <col className="la-col-name" />
             {cols.map((c) => (
-              <col key={c.metric} style={{ width: colWidth(cols, c) }} />
+              <col key={c.metric} />
             ))}
             <col className="la-col-act" />
           </colgroup>
@@ -298,32 +294,35 @@ function DetailPanel({
   );
 }
 
-/** The bar between the table and the detail panel: drag sideways to resize, double-click for the default width. */
-function SideSplitter({ width, onChange }: { width: number | null; onChange: (w: number | null) => void }) {
+/**
+ * The bar between the table and the detail panel below it (back below in team trial round 6): drag up or down to
+ * resize, double-click for the default height.
+ */
+function DetailSplitter({ height, onChange }: { height: number | null; onChange: (h: number | null) => void }) {
   const start = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const panel = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null;
     const host = (e.currentTarget as HTMLElement).parentElement;
-    const startX = e.clientX;
-    const startW = panel?.offsetWidth ?? width ?? 520;
-    const max = Math.max(360, (host?.clientWidth ?? 1200) - 420);
-    const move = (ev: PointerEvent) => onChange(Math.min(max, Math.max(360, startW + startX - ev.clientX)));
+    const startY = e.clientY;
+    const startH = panel?.offsetHeight ?? height ?? 320;
+    const max = Math.max(160, (host?.clientHeight ?? 800) - 180);
+    const move = (ev: PointerEvent) => onChange(Math.min(max, Math.max(160, startH + startY - ev.clientY)));
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      document.body.classList.remove("resizing-split");
+      document.body.classList.remove("resizing-split-h");
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-    document.body.classList.add("resizing-split");
+    document.body.classList.add("resizing-split-h");
   };
   return (
     <div
-      className="detail-splitter"
+      className="h-splitter"
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation="horizontal"
       aria-label="Resize the detail panel"
-      title="Drag to resize · double-click: default width"
+      title="Drag to resize · double-click: default height"
       onPointerDown={start}
       onDoubleClick={() => onChange(null)}
     />
@@ -396,7 +395,7 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
       footer={
         <>
           <span className="muted small la-cdr-note">
-            The hours-of-day filter is not applied here · loaded {loadedAt.toISOString().slice(11, 19)} UTC
+            Loaded {loadedAt.toISOString().slice(11, 19)} UTC
           </span>
           <Button
             icon="refresh"
@@ -460,7 +459,8 @@ function Cells({ metrics }: { metrics: Record<string, number | null> }) {
         return (
           <td
             key={c.metric}
-            className={`num${TONED.has(c.metric) ? " la-strong" : ""}${c.fmt === "pct" && TONED.has(c.metric) ? " la-center" : ""}${t ? ` la-${t}` : ""}`}
+            // Coloured figures (ASR, DLRs, margin) centred, plain or in a chip (team trial round 6: margin too).
+            className={`num${TONED.has(c.metric) ? " la-strong la-center" : ""}${t ? ` la-${t}` : ""}`}
           >
             {/* Amber and red in a filled chip (team trial round 5, third pass). */}
             {t === "warn" || t === "bad" ? <span className="la-pill">{fmt(v, c.fmt)}</span> : fmt(v, c.fmt)}
@@ -775,7 +775,7 @@ export function LiveAnalyticsPage() {
   const [refresh, setRefresh] = useState(30);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailBy, setDetailBy] = useState<ReportDimension>("minute");
-  const [detailWidth, setDetailWidth] = useState<number | null>(null);
+  const [detailHeight, setDetailHeight] = useState<number | null>(null);
   const live = includesToday(settings, reportToday);
   // Pause stops the live refresh without losing the chosen interval (team trial round 1).
   const [paused, setPaused] = useState(false);
@@ -815,22 +815,25 @@ export function LiveAnalyticsPage() {
           page={page}
           actions={
             <>
-              <span
-                className={`la-live${running ? " on" : ""}`}
-                title={live ? "Refreshes while the period includes today" : "The period is over, so nothing changes"}
-              >
-                <span className="la-live-dot" /> {running ? "Live" : live ? "Paused" : "Not live"}
-              </span>
-              {/* Pause right after Live, the refresh interval after them (team trial round 3). */}
-              <Button
-                variant="primary"
-                icon={paused ? "play" : "pause"}
+              {/* Live and Pause are one button (team trial round 6): the light says what is happening, a click
+                  pauses or resumes. */}
+              <button
+                type="button"
+                className={`btn btn-default la-live${running ? " on" : ""}`}
                 disabled={!live || !refresh}
-                title={!live ? "The period does not include today" : undefined}
+                aria-pressed={paused}
+                title={
+                  !live
+                    ? "The period is over, so nothing changes"
+                    : paused
+                      ? "Paused · click to resume the live refresh"
+                      : "Live · click to pause the refresh"
+                }
                 onClick={() => setPaused((p) => !p)}
               >
-                {paused ? "Resume" : "Pause"}
-              </Button>
+                <span className="la-live-dot" /> {running ? "Live" : live ? "Paused" : "Not live"}
+                {live && refresh ? <Icon name={paused ? "play" : "pause"} size={12} /> : null}
+              </button>
               <label className="field inline">
                 <span>Refresh</span>
                 <select value={refresh} onChange={(e) => setRefresh(Number(e.target.value))}>
@@ -871,7 +874,6 @@ export function LiveAnalyticsPage() {
         {settings.at && (
           <div className="la-at" role="status">
             <strong>Showing only {settings.at.label}</strong>
-            <span className="muted small">picked in the detail panel; levels and totals are for that moment</span>
             <Button
               onClick={() => {
                 setSettings({ ...settings, at: null });
@@ -889,12 +891,12 @@ export function LiveAnalyticsPage() {
               <colgroup>
                 <col className="la-col-name" />
                 {cols.map((c) => (
-                  <col key={c.metric} style={{ width: colWidth(cols, c) }} />
+                  <col key={c.metric} />
                 ))}
                 <col className="la-col-act" />
               </colgroup>
               <thead>
-                {/* Header bands (team trial round 5): Traffic, Quality, Money (currency), Network. */}
+                {/* Header bands (team trial round 5): Traffic, Quality, Billing (currency), Network; coloured by band (round 6). */}
                 <tr className="la-bands">
                   <th className="la-th-name" rowSpan={2} title="Use + on a row to break it down by any level">
                     {top ? (
@@ -1002,10 +1004,10 @@ export function LiveAnalyticsPage() {
               </tbody>
             </table>
           </div>
-          {detail && <SideSplitter width={detailWidth} onChange={setDetailWidth} />}
+          {detail && <DetailSplitter height={detailHeight} onChange={setDetailHeight} />}
           {detail && (
             <DetailPanel
-              width={detailWidth}
+              height={detailHeight}
               settings={settings}
               by={detailBy}
               setBy={setDetailBy}

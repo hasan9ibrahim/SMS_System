@@ -296,8 +296,7 @@ function RequestDialog({ row, done }: { row: ReratingDetail | null; done: () => 
       {preview && (
         <div className="rr-preview">
           <p>
-            <strong className="num">{preview.totalEdrs.toLocaleString("en-US")}</strong> EDRs in scope. Amounts at the
-            table&apos;s rates valid at send time (back-dated lines count from their stated date):
+            <strong className="num">{preview.totalEdrs.toLocaleString("en-US")}</strong> EDRs in scope.
           </p>
           <SummaryTable rows={preview.rows} />
         </div>

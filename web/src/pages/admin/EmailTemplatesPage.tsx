@@ -91,18 +91,11 @@ function TestDialog({ input, done }: { input: EmailTemplatePreviewInput; done: (
         </>
       }
     >
-      <p className="small">
-        Sends this template with sample values (and the picked business company&apos;s logo, address and bank) so you
-        can open it in Outlook on Windows, Outlook on the web and your phone.
-      </p>
       <label className="ff wide">
         <span className="ff-label">To (up to 5 addresses)</span>
         <input type="text" value={to} placeholder="you@company.example" onChange={(e) => setTo(e.target.value)} />
       </label>
-      <p className="muted small">
-        Trial phase: e-mails are not sent yet; the test is written to Email Logs, where you can open it as it would
-        arrive.
-      </p>
+      <p className="muted small">Trial: written to Email Logs, not sent.</p>
     </Modal>
   );
 }

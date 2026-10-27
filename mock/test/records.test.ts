@@ -167,6 +167,13 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     const same = await ok("updateEnterprise", call("PUT", `/enterprises/${id}`, input));
     assert.equal(same.change, null, "saving without changes records nothing");
 
+    // Team trial round 6: a Bilateral partner without vendor trunks can go back to customer.
+    const back2 = await ok("updateEnterprise", call("PUT", `/enterprises/${id}`, { ...input, type: "customer" }));
+    assert.equal(back2.record.type, "customer");
+    const toVendor = await call("PUT", `/enterprises/${id}`, { ...input, type: "vendor" });
+    assert.equal(toVendor.statusCode, 400, "a customer still can't become a vendor");
+    await ok("undoChange", call("POST", `/changes/${back2.change.id}/undo`, {}));
+
     await ok("undoChange", call("POST", `/changes/${edited.change.id}/undo`, {}));
     const back = await ok("getEnterprise", call("GET", `/enterprises/${id}`));
     assert.equal(back.address.city, null);
@@ -474,7 +481,7 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(saved.record.allowedSrcTon, null);
     assert.equal(saved.record.allowedSrcNpi, null);
     assert.equal(saved.record.maxMsgLen, null);
-    assert.deepEqual(saved.record.allowedDstTon, [1]);
+    assert.equal(saved.record.allowedDstTon, null); // any destination TON on new vendor trunks (team trial round 6)
     assert.equal(saved.record.supportMultipart, true);
     const restricted = await ok(
       "updateVendorTrunk",

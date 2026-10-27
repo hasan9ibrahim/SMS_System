@@ -1,7 +1,7 @@
 // A trunk's Rules (§13.2): every translation rule (and, on customer trunks, HLR rule) that
 // runs on the trunk, where it comes from (this trunk, its enterprise, its category or all
-// trunks) and its order. Order, on/off and "continue" belong to this trunk only; a rule
-// attached directly can be detached here, inherited ones are changed on the rule itself. Rows are dragged to reorder
+// trunks) and its order. Order, on/off and "continue" belong to this trunk only; which trunks a rule is attached to is
+// changed on the rule itself (team trial round 6: no Remove here). Rows are dragged to reorder
 // and the two kinds sit side by side (team trial round 4).
 import { useEffect, useState } from "react";
 import type { TrunkRule, TrunkRulesInput } from "@sms/contract";
@@ -10,7 +10,6 @@ import { testTrunkRules } from "../../api/switchRules";
 import { useNotifySaved } from "../../history/undo";
 import { HeaderAction, type SectionProps } from "../../records/parts";
 import { toast } from "../../ui/feedback";
-import { Icon } from "../../ui/Icon";
 import { Button } from "../../ui/primitives";
 import { TranslationTest } from "../switch/TranslationTest";
 import { useDragOrder } from "../../records/dragOrder";
@@ -57,7 +56,6 @@ function RuleTable({
               <th>Rule</th>
               <th>On</th>
               {withContinue && <th title="Run the next rule after this one matches">Continue</th>}
-              <th />
             </tr>
           </thead>
           <tbody>
@@ -106,20 +104,6 @@ function RuleTable({
                       />
                     </td>
                   )}
-                  <td className="actions">
-                    {r.source.type === "trunk" && (
-                      <Button
-                        small
-                        variant="ghost"
-                        icon={r.detach ? "undo" : "x"}
-                        disabled={disabled}
-                        title={r.detach ? "Keep the rule on this trunk" : "Remove the rule's direct link to this trunk"}
-                        onClick={() => patch(i, { detach: !r.detach })}
-                      >
-                        {r.detach ? "Keep" : "Detach"}
-                      </Button>
-                    )}
-                  </td>
                 </tr>
               );
             })}
@@ -197,10 +181,6 @@ export function RulesTab({
           </Button>
         )}
       </HeaderAction>
-      <p className="muted small">
-        <Icon name="route" size={13} /> Rules reach a trunk through what they apply to (§13.2). Order and on/off here
-        change this trunk only; to change where an inherited rule applies, edit the rule.
-      </p>
       {/* Translation and HLR rules side by side (team trial round 4); vendor trunks have translation rules only. */}
       <div className={`rules-split${kind === "customer" ? " two" : ""}`}>
         <RuleTable
@@ -217,9 +197,6 @@ export function RulesTab({
       <section className="fsection">
         <header>
           <h2>Test</h2>
-          <span className="muted small">
-            A sample message through this trunk&apos;s rules{kind === "customer" ? " and HLR rules" : ""} (§13.2)
-          </span>
         </header>
         <TranslationTest
           run={(m) => testTrunkRules(kind, id, m)}

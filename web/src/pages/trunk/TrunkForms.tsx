@@ -122,7 +122,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
       sendBind: false,
       dlrSessionAffinity: "strict",
       dlrHoldHours: 72,
-      loopDetection: true,
+      loopDetection: false,
       reassemblyTimeoutS: 120,
       duplicateWindowS: 60,
       allowEmptyMessages: false,
@@ -171,9 +171,9 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     allowedDataCodings: null,
     rerouteOn: [],
     allowedSrcTon: null,
-    allowedDstTon: [1],
+    allowedDstTon: null,
     allowedSrcNpi: null,
-    allowedDstNpi: [1],
+    allowedDstNpi: null,
     maxMsgLen: null,
     supportMultipart: true,
     multipartFormat: "udh8",
@@ -228,7 +228,7 @@ function PasswordField({
       nullable={false}
       autoComplete="new-password"
       placeholder={!isNew && passwordSet ? "•••••••• (set; type to change)" : ""}
-      hint="Never shown again after saving (§13.22). SMPP allows 9 characters."
+      hint="Never shown again after saving. Max 9 characters."
     />
   );
 }
@@ -310,7 +310,7 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
       label="Rate tables"
       wide
       error={form.error("rateTableIds")}
-      hint="In order: the first table with a rate for the destination prices the message (§5.4). Drag ⠿ to reorder."
+      hint="The first table with a rate wins. Drag ⠿ to reorder."
     >
       <ol className="ordered-list">
         {ids.map((id, i) => (
@@ -425,7 +425,7 @@ export function CustomerTrunkFields({
         <CommonTrunkFields form={form} kind="customer" />
       </Section>
       {shown("customer-trunks.connection") && (
-        <Section title="Connection" subtitle="What the client binds with." columns={4}>
+        <Section title="Connection" columns={4}>
           <SubHead>Access</SubHead>
           <ListField
             form={form}
@@ -455,7 +455,7 @@ export function CustomerTrunkFields({
         </Section>
       )}
       {shown("customer-trunks.receipts") && (
-        <Section title="Delivery receipts" note="§13.1 session affinity">
+        <Section title="Delivery receipts">
           <SelectField
             form={form}
             path="dlrSessionAffinity"
@@ -466,7 +466,7 @@ export function CustomerTrunkFields({
               { value: "same_ip", label: "Any session from the same IP" },
               { value: "same_trunk", label: "Any session of the trunk" },
             ]}
-            hint="Receipts go at once on the session the message came from; if it is gone, on another bound receiver session of the trunk, else they wait until the customer binds again (SMPP 3.4). This setting only picks which session first."
+            hint="Which session is tried first"
           />
           <NumberField
             form={form}
@@ -522,7 +522,7 @@ export function CustomerTrunkFields({
           />
           <FormField
             label="Express vendor trunk"
-            hint="Bypasses routing for every message (§5.4)"
+            hint="Bypasses routing for every message"
             error={form.error("expressVendorTrunkId")}
           >
             <ListLookup<TrunkListRow>
@@ -550,7 +550,7 @@ export function CustomerTrunkFields({
         </Section>
       )}
       {shown("customer-trunks.capacity") && (
-        <Section title="Capacity and limits" note="§13.26">
+        <Section title="Capacity and limits">
           <NumberField
             form={form}
             path="tps"
@@ -603,7 +603,7 @@ export function VendorTrunkFields({
         <CommonTrunkFields form={form} kind="vendor" />
       </Section>
       {shown("vendor-trunks.connection") && (
-        <Section title="Connection" subtitle="How we bind to the vendor." columns={4}>
+        <Section title="Connection" columns={4}>
           <BindLine
             from={`Us · ${v.sourceHost || "any address"}`}
             to={`Vendor · ${v.host || "host"}:${v.port ?? ""}`}
@@ -625,7 +625,7 @@ export function VendorTrunkFields({
               form={form}
               path="tlsSkipVerify"
               label="Skip certificate check"
-              hint="Only for a vendor with a self-signed certificate (Q3)"
+              hint="Only for a self-signed certificate"
             />
           )}
           <SubHead>Credentials</SubHead>
@@ -645,7 +645,7 @@ export function VendorTrunkFields({
       )}
       {v.protocol === "http"
         ? shown("vendor-trunks.http") && (
-            <Section title="HTTP API" note="Generic HTTP adapter (§5.5)">
+            <Section title="HTTP API">
               <TextField form={form} path="http.url" label="Submit URL" required wide type="url" maxLength={1000} />
               <TextField form={form} path="http.successRegex" label="Success regex" />
               <TextField form={form} path="http.messageIdRegex" label="Message ID regex" />
@@ -719,7 +719,7 @@ export function VendorTrunkFields({
                 max={1440}
                 step={1}
                 suffix="min"
-                hint="Short reconnects cause no alert; a refused login alerts at once"
+                hint="A refused login alerts at once"
               />
               <NumberField
                 form={form}
@@ -729,7 +729,7 @@ export function VendorTrunkFields({
                 max={1440}
                 step={1}
                 suffix="min"
-                hint="Wrong password or system ID: wait, don't lock the account. Saving retries at once."
+                hint="Saving retries at once"
               />
               <SelectField
                 form={form}
@@ -795,7 +795,7 @@ export function VendorTrunkFields({
         </Section>
       )}
       {shown("vendor-trunks.capacity") && (
-        <Section title="Capacity and limits" note="§13.26">
+        <Section title="Capacity and limits">
           <NumberField
             form={form}
             path="tps"

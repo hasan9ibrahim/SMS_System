@@ -127,7 +127,7 @@ function SideSection({
   return (
     <Section
       title={title}
-      subtitle={`How and when we settle with this partner${saved ? "" : " · not saved yet"}.`}
+      subtitle={saved ? undefined : "Not saved yet"}
       columns={4}
     >
       <SelectField
@@ -180,7 +180,7 @@ function SideSection({
         form={form}
         path={p("sendPaymentConfirmation")}
         label="Send payment confirmation"
-        hint="Default for new payments (§13.33)"
+        hint="Default for new payments"
       />
       {side === "vendor" && v.billingType === "prepaid" && (
         <>
@@ -369,7 +369,7 @@ export function BillingTab({ enterprise, slot, onDirty }: SectionProps & { enter
         {sides.map((s) => (
           <SideSection key={s} form={form} side={s} saved={q.data?.[s] ?? null} enterprise={enterprise} />
         ))}
-        <Section title="Beneficiary" subtitle="Bank details for payments to this partner." columns={1}>
+        <Section title="Beneficiary" columns={1}>
           <SubHead>Account holder</SubHead>
           <div className="fgrid cols-2">
             <TextField form={form} path="beneficiary.beneficiaryName" label="Beneficiary name" />

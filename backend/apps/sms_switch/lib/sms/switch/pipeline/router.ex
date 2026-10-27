@@ -13,7 +13,7 @@ defmodule Sms.Switch.Pipeline.Router do
   Vendors already tried for this message (a refusal, a timeout, no connection) are skipped the same way, so a re-route
   (S-5.2, D4) follows the rules' own order to the next vendor.
   """
-  alias Sms.Switch.Pipeline.{Config, LiveTps, Revenue}
+  alias Sms.Switch.Pipeline.{Config, LiveTps, Revenue, Warmup}
   alias Sms.Switch.Rules.{Route, Translation}
   alias Sms.Switch.Vendor
 
@@ -77,7 +77,10 @@ defmodule Sms.Switch.Pipeline.Router do
       end,
       # §13.24: the HLR result's ported flag, for rules with an HLR Ported condition.
       hlr_ported: input[:hlr_ported],
-      warmup_sent: 0,
+      # §13.27: each warm-up vendor's own count (team trial round 6).
+      warmup_sent: fn rule, v ->
+        Warmup.sent(rule.id, v, input.customer_trunk.id, input.now_ms)
+      end,
       list_has?: &Config.list_has?/3
     }
 
@@ -94,6 +97,21 @@ defmodule Sms.Switch.Pipeline.Router do
       LiveTps.count(["r:#{rule.id}"], input[:parts] || 1)
     end
   end
+
+  # A message routed by a vendor's warm-up threshold counts towards it (§13.27).
+  defp count_warmup(
+         rules,
+         %{rule_id: rule_id, vendor: %{decided_by: :warmup, vendor_trunk_id: vt}},
+         input
+       ) do
+    with %{vendors: vendors} <- Enum.find(rules, &(&1.id == rule_id)),
+         %{} = v <-
+           Enum.find(vendors, &(&1.vendor_trunk_id == vt and &1[:warmup_count] not in [nil, 0])) do
+      Warmup.count(rule_id, v, input.customer_trunk.id, input.now_ms, input[:parts] || 1)
+    end
+  end
+
+  defp count_warmup(_rules, _decision, _input), do: :ok
 
   defp bound?(vendor_trunk_id) do
     check = Application.get_env(:sms_switch, __MODULE__, [])[:bound?] || (&Vendor.bound?/1)
@@ -123,6 +141,7 @@ defmodule Sms.Switch.Pipeline.Router do
         cond do
           not egress.blocked and bound?(vt) ->
             cost = Config.vendor_rate(vt, context.mccmnc, input.now_ms)
+            _ = count_warmup(rules, decision, input)
             {:ok, %{decision: decision, vendor_trunk_id: vt, cost: cost, egress: egress}}
 
           tries > 1 ->

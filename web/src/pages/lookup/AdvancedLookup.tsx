@@ -853,8 +853,7 @@ export function AdvancedLookup({
       {applied && matrix.isPending && <div className="lk-hint muted">Looking up…</div>}
       {!applied && (
         <div className="lk-hint muted">
-          Choose countries or paste MCCMNCs or numbers, pick a view and press Look up. Filters narrow clients and
-          vendors; “As of” shows rates charged on a past date or scheduled for a future one.
+          Choose countries or paste MCCMNCs or numbers, pick a view and press Look up.
         </div>
       )}
       {first && (

@@ -92,7 +92,7 @@ function OverrideDialog({ row, done }: { row: QbrStat | null; done: () => void }
         <FormField
           key={label}
           label={label}
-          hint={`Empty keeps the traffic figure${traffic != null ? ` (${traffic})` : ""}`}
+          hint={`Empty = traffic figure${traffic != null ? ` (${traffic})` : ""}`}
         >
           <input className="num" inputMode="decimal" value={value} onChange={(e) => setter(e.target.value)} />
         </FormField>
@@ -190,9 +190,6 @@ export function QbrStatsPage() {
               </button>
             ))}
           </div>
-          <span className="muted small">
-            Last 24 hours of EDRs, refreshed every 5 minutes. Filter Trunk for one trunk.
-          </span>
         </div>
       }
       columns={{

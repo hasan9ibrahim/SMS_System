@@ -220,11 +220,6 @@ function RulesView({ list }: { list: "banned" | "trusted" }) {
         <div className="fw-above">
           <div className="rm-trunk">
             <Tabs />
-            <span className="muted small">
-              {list === "banned"
-                ? "Blocked at the listeners of the filter. Automatic bans come from the brute-force protection and lift by themselves."
-                : "Always let through, even after failed attempts. Trusted beats banned."}
-            </span>
             <span className="fb-spacer" />
             <IpCheck />
           </div>
@@ -385,9 +380,6 @@ function FiltersView() {
       above={
         <div className="rm-trunk">
           <Tabs />
-          <span className="muted small">
-            A filter says which listener a rule guards and when the brute-force protection bans.
-          </span>
         </div>
       }
       primary={{ label: "Add filter", icon: "plus", onClick: () => void open(null) }}
