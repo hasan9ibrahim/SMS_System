@@ -348,7 +348,7 @@ If no code arrives, check `vault_smtp_url`, the e-mail DNS records (step 3.3), a
 On the server every service must be **active**:
 
 ```sh
-systemctl status sms-switch sms-service nginx patroni redis-server nats clickhouse-server --no-pager | grep -E "●|Active"
+systemctl status sms-switch sms-service nginx sms-patroni redis-server nats clickhouse-server --no-pager | grep -E "●|Active"
 ```
 
 **Grafana:** `http://203.0.113.11:3000`, only from the `admin_cidrs` addresses. The user is `admin`; the password is
