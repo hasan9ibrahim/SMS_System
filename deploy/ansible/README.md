@@ -100,6 +100,13 @@ traffic: at about 150 million messages a month, look again at the disks or the m
 
 ## Deploying a new version
 
+**From a release bundle (the single server, docs/DEPLOY_SINGLE_SERVER.md):** after CI passes on `main`, GitHub builds
+the bundle (`build-bundle.sh`: the three release files plus this folder's playbooks and roles, no source code) and
+publishes it as the release `platform-<id>` (`.github/workflows/release.yml`). On the server, `sms-update` downloads
+the newest bundle and runs `deploy.yml` from it (`--setup` runs `site.yml` first; `sms-update <id>` rolls back).
+
+**From a working copy (the lab, or a build machine):**
+
 ```sh
 ./build-release.sh                       # on Ubuntu 24.04 with Node.js 22; prints the release id, e.g. 1a2b3c4d5e
 ansible-playbook -i inventories/production deploy.yml -e release=1a2b3c4d5e --ask-vault-pass
