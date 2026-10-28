@@ -1476,17 +1476,13 @@ textarea.mono {
    the DLR target; the comment. */
 .rule-general-grid {
   display: grid;
-  /* Team trial round 8: name narrow and two lines high, priority, the STOP / YES switch, comment takes the rest. */
+  /* Team trial round 8: name, priority, the STOP / YES switch, comment takes the rest; all one line. */
   grid-template-columns: minmax(200px, 320px) 96px auto minmax(0, 1fr);
   gap: 10px 12px;
-  align-items: start;
+  align-items: end;
 }
 .rule-general-grid .field {
   margin: 0;
-}
-.rule-general-grid textarea {
-  resize: vertical;
-  min-height: 52px;
 }
 @media (max-width: 1100px) {
   .rule-general-grid {

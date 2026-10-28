@@ -117,20 +117,19 @@ export function RuleGeneralForm({
   bindSubmit?.(submitAsync);
   return (
     <div className="rule-general">
-      {/* Compact (team trial round 8): one row; the name is two lines high but narrow, STOP / YES is a small switch,
+      {/* Compact (team trial round 8): one row of one-line fields; STOP / YES is a small switch,
           and the DLR target is kept as it is (set on the MCCMNC codes page). The route type is set in Configuration. */}
       <div className="rule-general-grid">
         <label className="field rg-name">
           <span>
             Name<span className="req">*</span>
           </span>
-          <textarea
+          <input
             autoFocus
-            rows={2}
             value={g.name}
             maxLength={120}
             onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => set({ name: e.target.value.replace(/\n/g, " ") })}
+            onChange={(e) => set({ name: e.target.value })}
           />
         </label>
         <label
@@ -174,8 +173,7 @@ export function RuleGeneralForm({
         </div>
         <label className="field rg-comment">
           <span>Comment</span>
-          <textarea
-            rows={2}
+          <input
             maxLength={1000}
             value={g.comment ?? ""}
             placeholder="Optional"
