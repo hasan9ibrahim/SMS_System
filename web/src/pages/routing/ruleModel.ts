@@ -1,6 +1,6 @@
 // Route rule model for the Route Rules page (§6.3, §13.8, §13.9, §13.24, §13.27, §15.4):
 // the editable input from a record, and the condition chips of the Conditions section.
-import type { FilterCondition, RouteRuleDetail, RouteRuleInput, RouteVendor } from "@sms/contract";
+import type { FilterCondition, RouteRuleDetail, RouteRuleInput, RouteVendor, ValueMatch } from "@sms/contract";
 
 const INPUT_KEYS = [
   "name",
@@ -23,6 +23,8 @@ const INPUT_KEYS = [
   "senderMatchCase",
   "receiverPattern",
   "receiverPatternNegate",
+  "senderValues",
+  "receiverValues",
   "contentPattern",
   "contentPatternNegate",
   "senderListId",
@@ -188,18 +190,21 @@ export function conditionChips(
     listId?: number | null,
     anyCase = false,
     listNegate = false,
+    rows: readonly ValueMatch[] = [],
   ) => {
     const list = listId ? nameOf(l.numberLists, listId) : "";
-    if (!p && !list) return;
+    if (!p && !list && !rows.length) return;
     // A pattern built from a value list reads as that list ("is one of BANK, OTP"; team trial round 1).
     const parsed = p ? parsePattern(p) : null;
     const listed = parsed && parsed.kind !== "regex";
     chips.push({
       key,
       field: CONDITION_LABELS[key],
-      op: listed ? `${negate ? "not " : ""}${PATTERN_KINDS[parsed.kind]}` : negate ? "not" : "matches",
+      op: listed ? `${negate ? "not " : ""}${PATTERN_KINDS[parsed.kind]}` : negate ? "not" : rows.length ? "" : "matches",
       value: [
         listed ? parsed.values.join(", ") : p,
+        // Value rows (team trial round 8): each with its own match and case.
+        rows.length > 0 && valuesSummary(rows, key === "sender"),
         list && `${listNegate ? "not in " : ""}list ${list}`,
         anyCase && "any case",
       ]
@@ -215,6 +220,7 @@ export function conditionChips(
     rule.senderListId,
     rule.senderMatchCase === false,
     !!rule.senderListNegate,
+    rule.senderValues,
   );
   pattern(
     "receiver",
@@ -223,6 +229,7 @@ export function conditionChips(
     rule.receiverListId,
     false,
     !!rule.receiverListNegate,
+    rule.receiverValues,
   );
   pattern("content", rule.contentPattern, rule.contentPatternNegate);
   if (rule.tps) {
@@ -285,9 +292,16 @@ export function clearCondition(key: ConditionKey, rule: RouteRuleDetail): Partia
         senderListId: null,
         senderListNegate: false,
         senderMatchCase: true,
+        senderValues: [],
       };
     case "receiver":
-      return { receiverPattern: null, receiverPatternNegate: false, receiverListId: null, receiverListNegate: false };
+      return {
+        receiverPattern: null,
+        receiverPatternNegate: false,
+        receiverListId: null,
+        receiverListNegate: false,
+        receiverValues: [],
+      };
     case "content":
       return { contentPattern: null, contentPatternNegate: false };
     case "tps":
@@ -452,6 +466,38 @@ export function parsePattern(pattern: string): { kind: PatternKind; values: stri
     if (values && values.every((v, i) => v !== "" && escapeRe(v) === parts![i])) return { kind, values };
   }
   return { kind: "regex", values: [] };
+}
+
+/**
+ * Sender ID / receiver values as rows (team trial round 8, §6.3, §6.4): each value with its own match and case.
+ * A pattern from the older value list (is one of / starts with / contains) opens as rows, so the switch to rows
+ * needs no data migration; any other pattern stays a regex.
+ */
+export const VALUE_MATCHES: { value: ValueMatch["match"]; label: string }[] = [
+  { value: "is", label: "Is" },
+  { value: "starts", label: "Starts with" },
+  { value: "contains", label: "Contains" },
+];
+
+export function rowsFromPattern(pattern: string | null, matchCase: boolean): ValueMatch[] | null {
+  if (!pattern) return null;
+  const parsed = parsePattern(pattern);
+  if (parsed.kind === "regex") return null;
+  return parsed.values.map((value) => ({ value, match: parsed.kind as ValueMatch["match"], matchCase }));
+}
+
+/** "is BANK, OTP (any case) · starts with 44" for a chip or a grid cell. */
+export function valuesSummary(rows: readonly ValueMatch[], showCase: boolean): string {
+  const groups = new Map<string, string[]>();
+  for (const r of rows) {
+    const word = r.match === "is" ? "is" : r.match === "starts" ? "starts with" : "contains";
+    const key = `${word}${showCase && !r.matchCase ? " (any case)" : ""}`;
+    groups.set(key, [...(groups.get(key) ?? []), r.value]);
+  }
+  return [...groups].map(([k, vs]) => {
+    const [word, note = ""] = k.split(" (");
+    return `${word} ${vs.join(", ")}${note ? ` (${note}` : ""}`;
+  }).join(" · ");
 }
 
 /** Trunk pickers follow the rule's product categories (team trial round 1): only Promo trunks for a Promo rule. */

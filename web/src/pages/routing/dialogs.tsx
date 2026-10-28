@@ -49,6 +49,7 @@ export function RuleGeneralForm({
   draft = false,
   draftName,
   bindSubmit,
+  windowed = false,
 }: {
   rule: RouteRuleDetail | null;
   onSaved: (id: number) => void;
@@ -65,6 +66,8 @@ export function RuleGeneralForm({
   /** The name a draft starts with (Clone: "… (copy)", team trial round 6); empty otherwise. */
   draftName?: string;
   bindSubmit?: (submit: (patch?: Partial<RouteRuleInput>) => Promise<string | null>) => void;
+  /** In the Edit window (team trial round 8): no button of its own, the window's Save calls `bindSubmit`. */
+  windowed?: boolean;
 }) {
   const save = useSaveRouteRule();
   const notifySaved = useNotifySaved();
@@ -114,22 +117,24 @@ export function RuleGeneralForm({
   bindSubmit?.(submitAsync);
   return (
     <div className="rule-general">
-      {/* Compact (team trial round 4): two rows; the route type is set in Configuration with the vendors. */}
+      {/* Compact (team trial round 8): one row; the name is two lines high but narrow, STOP / YES is a small switch,
+          and the DLR target is kept as it is (set on the MCCMNC codes page). The route type is set in Configuration. */}
       <div className="rule-general-grid">
         <label className="field rg-name">
           <span>
             Name<span className="req">*</span>
           </span>
-          <input
+          <textarea
             autoFocus
+            rows={2}
             value={g.name}
             maxLength={120}
             onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => set({ name: e.target.value })}
+            onChange={(e) => set({ name: e.target.value.replace(/\n/g, " ") })}
           />
         </label>
         <label
-          className="field"
+          className="field rg-prio"
           title={`1–100, 100 tried first${maxPriority < 100 ? "; 98–100 only by an administrator" : ""}`}
         >
           <span>
@@ -152,39 +157,25 @@ export function RuleGeneralForm({
         </label>
         {/* R3 (2026-10-24): a matched rule with a working vendor always wins; this only applies when none can
             take the message. Groups and NEXT were removed (R4). */}
-        <label
+        <div
           className="field rg-cont"
-          title="What happens when this rule matches but none of its vendors can take the message"
+          title="When this rule matches but none of its vendors can take the message: STOP fails it here, YES tries the next matching rule"
         >
-          <span>If no vendor can take it</span>
-          <select
-            value={g.continueRouting}
-            onChange={(e) => set({ continueRouting: e.target.value as General["continueRouting"] })}
-          >
-            <option value="stop">STOP – fail the message here</option>
-            <option value="yes">YES – try the next matching rule</option>
-          </select>
-        </label>
-        <label
-          className="field"
-          title="Empty = the destinations' targets (MCCMNC codes page). The grid shows the rule's DLR in amber below it."
-        >
-          <span>DLR target %</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={0.5}
-            placeholder="Destinations'"
-            value={g.dlrTargetPct ?? ""}
-            onChange={(e) =>
-              set({ dlrTargetPct: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })
-            }
-          />
-        </label>
+          <span>No vendor can take it</span>
+          <label className="mini-switch">
+            <input
+              type="checkbox"
+              checked={g.continueRouting === "yes"}
+              onChange={(e) => set({ continueRouting: e.target.checked ? "yes" : "stop" })}
+            />
+            <span className="mini-switch-track" aria-hidden="true" />
+            <span className="mini-switch-text">{g.continueRouting === "yes" ? "YES · next rule" : "STOP"}</span>
+          </label>
+        </div>
         <label className="field rg-comment">
           <span>Comment</span>
-          <input
+          <textarea
+            rows={2}
             maxLength={1000}
             value={g.comment ?? ""}
             placeholder="Optional"
@@ -205,7 +196,7 @@ export function RuleGeneralForm({
         hint && <p className="muted small">{hint}</p>
       )}
       {error && <p className="error-text">{error}</p>}
-      {!draft && (
+      {!draft && !windowed && (
         <div className="form-actions">
           {onCancel && <Button onClick={onCancel}>Cancel</Button>}
           <Button variant="primary" onClick={submit} disabled={save.isPending}>
@@ -381,11 +372,15 @@ export function VendorSplitEditor({
         <p className="small">
           {r.routeType === "block"
             ? "A block rule has no vendors."
-            : "Least cost and quality rules rank the vendors in scope; edit the scope in the Vendors section."}
+            : r.routeType === "dynamic"
+              ? "Least cost: the vendors in scope are ranked by the rule's LCR profile."
+              : "Quality: the vendors in scope are ranked by their quality."}
         </p>
-        <Button small onClick={onMore}>
-          Open Vendors section
-        </Button>
+        {r.routeType !== "block" && (
+          <Button small onClick={onMore}>
+            {r.routeType === "dynamic" ? "Open LCR settings" : "Open vendor settings"}
+          </Button>
+        )}
       </div>
     );
   const level1 = split ?? r.vendors.filter((v) => v.level === 1 && !v.isBackup);

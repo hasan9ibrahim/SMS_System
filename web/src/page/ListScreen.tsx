@@ -62,6 +62,8 @@ export interface ListScreenProps<Row extends { id: number }> {
   defaultHidden?: string[];
   /** Columns as wide as their longest value, no truncation (team trial round 7: EDR Search). */
   autoFit?: boolean;
+  /** The detail panel's width until dragged, as CSS (team trial round 8: Route rules open it at half the page). */
+  detailDefaultWidth?: string;
   /** Taller grid rows for two-line cells (team trial round 4). */
   rowHeight?: number;
   /** Records this page edits; enables the header Undo and History buttons (§13.10). */
@@ -317,6 +319,7 @@ function DetailPanel({
   section,
   setSection,
   width,
+  defaultWidth,
   below = false,
 }: {
   content: DetailContent;
@@ -325,6 +328,8 @@ function DetailPanel({
   setSection: (key: string) => void;
   /** Its width beside the grid, or its height below it. */
   width: number | null;
+  /** Width while not dragged, as CSS (e.g. "50%": half the page, team trial round 8 Route rules). */
+  defaultWidth?: string | undefined;
   below?: boolean;
 }) {
   const current = content.sections.find((s) => s.key === section) ?? content.sections[0];
@@ -333,7 +338,7 @@ function DetailPanel({
     <section
       className={`detail${below ? " below" : ""}`}
       aria-label="Details"
-      style={width ? { flex: `0 0 ${width}px` } : undefined}
+      style={width ? { flex: `0 0 ${width}px` } : defaultWidth && !below ? { flex: `0 0 ${defaultWidth}` } : undefined}
     >
       <div className="detail-title">
         {content.title}
@@ -515,6 +520,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     onlyColumns,
     defaultHidden,
     autoFit,
+    detailDefaultWidth,
     rowHeight,
   } = props;
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -839,6 +845,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             setSection={setSection}
             onClose={() => (detailOpensOn === "double" ? setDetailOpen(false) : setActiveRow(null))}
             width={detailWidth}
+            defaultWidth={detailDefaultWidth}
             below={detailBelow}
           />
         )}

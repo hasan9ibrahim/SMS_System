@@ -1,17 +1,14 @@
-// Advanced LCR (§13.23): one page with four views kept in the tab URL (?view=).
+// Advanced LCR (§13.23): one page with three views (Client view removed, team trial round 8) kept in the tab URL (?view=).
 // - LCR table: every vendor trunk for a destination ranked by cost (or a quality-weighted score), at
 //   a point in time, with a profile's filters and picks, and a what-if.
-// - Client view: a client's or account manager's sell rates against the LCR positions.
 // - Profiles: named rule sets reused by Least cost route rules.
 // - Changes: top vendor changes and cheapest cost moves, with the alert settings.
 import { HoverList } from "../../../ui/HoverList";
 import { useMemo, useState } from "react";
 import { useLocation } from "react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type {
   LcrChangeRow,
-  LcrClientQuery,
-  LcrClientRow,
   LcrProfileInput,
   LcrProfileRow,
   LcrQuery,
@@ -19,14 +16,12 @@ import type {
   LcrWeights,
 } from "@sms/contract";
 import {
-  fetchClientView,
   useLcrAlertSettings,
   useLcrProfile,
   useLcrTable,
   useSaveLcrAlertSettings,
   useSaveLcrProfile,
 } from "../../../api/lcr";
-import { useReference } from "../../../api/records";
 import { useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
@@ -486,175 +481,6 @@ function TableView() {
   );
 }
 
-// ---------------------------------------------------------------- client view
-
-function ClientView() {
-  const ref = useReference();
-  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
-  const [amId, setAmId] = useState<number | null>(null);
-  const [profileId, setProfileId] = useState<number | null>(null);
-  const [below, setBelow] = useState(false);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<NonNullable<LcrClientQuery["sort"]>>("margin");
-  const query: LcrClientQuery = { enterpriseId, accountManagerId: amId, profileId, onlyBelowCost: below, search, sort };
-  const q = useInfiniteQuery({
-    queryKey: ["lcr", "clients", query],
-    queryFn: ({ pageParam }) => fetchClientView({ ...query, limit: 200, offset: pageParam }),
-    enabled: enterpriseId !== null || amId !== null,
-    initialPageParam: 0,
-    getNextPageParam: (last, all) => {
-      const loaded = all.reduce((s, p) => s + p.rows.length, 0);
-      return loaded < last.total ? loaded : undefined;
-    },
-  });
-  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.rows) ?? [], [q.data]);
-  const first = q.data?.pages[0];
-  usePageStatus({
-    rows: first
-      ? `${first.total.toLocaleString("en-US")} rates · ${rows.length.toLocaleString("en-US")} loaded`
-      : "Choose a client or account manager",
-    shortcuts: `Sell rate against the three cheapest eligible vendors · ${first?.currency ?? ""}`,
-  });
-  const columns: VColumn<LcrClientRow>[] = [
-    {
-      key: "trunk",
-      header: "Client trunk",
-      width: 180,
-      sticky: true,
-      render: (r) => <span title={r.enterprise}>{r.customerTrunk}</span>,
-    },
-    { key: "country", header: "Country", width: 130, render: (r) => r.country ?? "—" },
-    { key: "network", header: "Network", width: 150, render: (r) => r.network ?? "—" },
-    { key: "mccmnc", header: "MCCMNC", width: 80, align: "right", render: (r) => r.mccmnc },
-    {
-      key: "sell",
-      header: "Sell",
-      width: 90,
-      align: "right",
-      render: (r) => <span className="num strong">{formatRate(r.sellRate)}</span>,
-    },
-    ...([1, 2, 3] as const).flatMap((n): VColumn<LcrClientRow>[] => [
-      {
-        key: `c${n}`,
-        header: `LCR ${n}`,
-        width: 150,
-        render: (r) => (
-          <span title={r[`vendor${n}`] ?? ""}>
-            {formatRate(r[`cost${n}`])} <span className="muted small">{r[`vendor${n}`] ?? ""}</span>
-          </span>
-        ),
-      },
-      {
-        key: `m${n}`,
-        header: `Margin ${n}`,
-        width: 84,
-        align: "right",
-        render: (r) => {
-          const m = r[`margin${n}Pct`];
-          return <span className={m !== null && m < 0 ? "tone-error strong" : undefined}>{formatPct(m)}</span>;
-        },
-      },
-    ]),
-    { key: "msgs", header: "Msgs 7d", width: 84, align: "right", render: (r) => r.messages7d.toLocaleString("en-US") },
-  ];
-  return (
-    <div className="page lcr-page">
-      <PageHeader page={page} />
-      <ViewSwitch />
-      <div className="lcr-controls">
-        <div className="field">
-          <span>Client</span>
-          <ListLookup<{ id: number; name: string }>
-            list="enterprises"
-            value={enterpriseId}
-            fixed={[{ field: "type", op: "in", values: ["customer", "both"] }]}
-            onChange={(r) => {
-              setEnterpriseId(r?.id ?? null);
-              if (r) setAmId(null);
-            }}
-            labelOf={(r) => r.name}
-            placeholder="Choose a client…"
-          />
-        </div>
-        <label className="field">
-          <span>or account manager</span>
-          <select
-            value={amId ?? ""}
-            onChange={(e) => {
-              setAmId(e.target.value ? Number(e.target.value) : null);
-              if (e.target.value) setEnterpriseId(null);
-            }}
-          >
-            <option value="">—</option>
-            {ref.data?.accountManagers.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="field">
-          <span>LCR profile</span>
-          <ListLookup<{ id: number; name: string }>
-            list="lcr_profiles"
-            value={profileId}
-            onChange={(r) => setProfileId(r?.id ?? null)}
-            labelOf={(r) => r.name}
-            placeholder="None"
-          />
-        </div>
-        <div className="field">
-          <span>Show</span>
-          <div className="bulk-row">
-            <label className="toggle-inline">
-              <input type="checkbox" checked={below} onChange={(e) => setBelow(e.target.checked)} /> Below cost only
-            </label>
-            <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
-              <option value="margin">Lowest margin first</option>
-              <option value="messages">Most traffic first</option>
-              <option value="destination">By destination</option>
-            </select>
-            <input type="search" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-        </div>
-      </div>
-      {first && (
-        <div className="stat-cards">
-          <div className="stat-card">
-            <span className="stat-label">Rates</span>
-            <span className="stat-value">{first.summary.lines.toLocaleString("en-US")}</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Below cost</span>
-            <span className={`stat-value${first.summary.belowCost ? " tone-error" : ""}`}>
-              {first.summary.belowCost}
-            </span>
-            <span className="muted small">sell rate under LCR 1</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Average margin at LCR 1</span>
-            <span className="stat-value">{formatPct(first.summary.avgMargin1Pct)}</span>
-          </div>
-        </div>
-      )}
-      {enterpriseId !== null || amId !== null ? (
-        <VirtualTable<LcrClientRow>
-          label="Client view"
-          rows={rows}
-          columns={columns}
-          rowKey={(r) => `${r.customerTrunkId}:${r.mccmnc}`}
-          rowClass={(r) => (r.belowCost ? "negative" : undefined)}
-          onEndReached={() => void (q.hasNextPage && q.fetchNextPage())}
-          loadingMore={q.isFetchingNextPage}
-          empty={q.isPending ? "Loading…" : "No rates"}
-        />
-      ) : (
-        <div className="grid-message muted bulk-empty">Choose a client or an account manager.</div>
-      )}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- profiles
 
 function ProfileDialog({ id, done }: { id: number | null; done: (v: boolean | null) => void }) {
@@ -1046,7 +872,6 @@ function ChangesView() {
 
 export function LcrPage() {
   const { view } = useLcrNav();
-  if (view === "clients") return <ClientView />;
   if (view === "profiles") return <ProfilesView />;
   if (view === "changes") return <ChangesView />;
   return <TableView />;

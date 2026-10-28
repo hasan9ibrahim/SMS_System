@@ -2620,9 +2620,10 @@ export const listFields: Record<ListId, ListFields> = {
         sortable: false,
       }),
       field({ field: "messages", label: "24h", type: "integer", defaultOperator: "gte" }),
-      field({ field: "asr", label: "ASR", type: "percent", defaultOperator: "gte" }),
-      field({ field: "dlr", label: "DLR", type: "percent", defaultOperator: "lte" }),
-      field({ field: "margin", label: "Margin", type: "money", defaultOperator: "lt" }),
+      // ASR, DLR and Margin in the column chooser, Updated Time and By after On (team trial round 8).
+      field({ field: "asr", label: "ASR", type: "percent", defaultOperator: "gte", hidden: true }),
+      field({ field: "dlr", label: "DLR", type: "percent", defaultOperator: "lte", hidden: true }),
+      field({ field: "margin", label: "Margin", type: "money", defaultOperator: "lt", hidden: true }),
       field({
         field: "status",
         label: "On",
@@ -2633,6 +2634,8 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "inactive", label: "Off" },
         ],
       }),
+      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between" }),
+      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like" }),
       field({ field: "dlrTarget", label: "DLR target", type: "percent", defaultOperator: "gte", hidden: true }),
       field({
         field: "dlrBelowTarget",
@@ -2672,8 +2675,6 @@ export const listFields: Record<ListId, ListFields> = {
       }),
       field({ field: "startsAt", label: "Start Time", type: "datetime", defaultOperator: "between", hidden: true }),
       field({ field: "stopsAt", label: "Stop Time", type: "datetime", defaultOperator: "between", hidden: true }),
-      field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
-      field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
       ARCHIVED,
     ],
   },

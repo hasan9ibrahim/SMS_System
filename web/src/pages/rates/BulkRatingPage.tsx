@@ -45,7 +45,7 @@ import {
   type Show,
 } from "./bulkModel";
 import { formatPct, formatRate, shortDateTime } from "./format";
-import { NoticeDialog } from "./RateTableView";
+import { NoticeDialog, type NoticeChoice } from "./RateTableView";
 import { SendRnCheck } from "./dialogs";
 import { DestinationPickDialog } from "./DestinationTree";
 import { todayMidnight, usePlatformTz } from "../../ui/zonedTime";
@@ -475,15 +475,20 @@ export function BulkRatingPage() {
     return () => clearTimeout(t);
   }, [job]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runApply = async (note: string, sendRn: boolean, acceptNoticeBreach = false, rnNote = ""): Promise<void> => {
+  const runApply = async (
+    note: string,
+    sendRn: boolean,
+    notice: NoticeChoice | null = null,
+    rnNote = "",
+  ): Promise<void> => {
     try {
       const r = await apply.mutateAsync({
         items,
-        respectNotice,
+        respectNotice: respectNotice || notice === "notice",
         sendNotification: sendRn,
         ...(sendRn && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
-        ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
+        ...(notice === "anyway" ? { acceptNoticeBreach: true } : {}),
       });
       if (r.change) {
         notifySaved(
@@ -504,10 +509,10 @@ export function BulkRatingPage() {
       setEdits(noEdits());
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        const ok = await ask<boolean>((done) => (
+        const choice = await ask<NoticeChoice>((done) => (
           <NoticeDialog breach={err.problem as unknown as NoticeBreach} done={done} />
         ));
-        if (ok) return runApply(note, sendRn, true, rnNote);
+        if (choice) return runApply(note, sendRn, choice, rnNote);
         return;
       }
       toast({ tone: "error", message: bulkProblem(err) });
@@ -518,7 +523,7 @@ export function BulkRatingPage() {
     const v = await ask<{ note: string; sendRn: boolean; rnNote: string }>((done) => (
       <ApplyDialog count={items.length} tables={new Set(items.map((i) => i.rateTableId)).size} done={done} />
     ));
-    if (v) await runApply(v.note, v.sendRn, false, v.rnNote);
+    if (v) await runApply(v.note, v.sendRn, null, v.rnNote);
   };
 
   const setRate = (key: string, v: number | null) => {

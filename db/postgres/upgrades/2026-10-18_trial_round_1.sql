@@ -687,3 +687,9 @@ CREATE INDEX IF NOT EXISTS rn_reports_enterprises_trgm ON rn_reports USING gin (
 UPDATE access_groups
    SET permissions = permissions || '{"rn-report": ["view"]}'::jsonb
  WHERE (permissions ? 'rate-manager' OR permissions ? 'incoming-rns') AND NOT permissions ? 'rn-report';
+
+-- Sender ID and receiver values as rows (migration 087, team trial round 8, §6.3, §6.4).
+ALTER TABLE route_rules ADD COLUMN IF NOT EXISTS sender_values jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE route_rules ADD COLUMN IF NOT EXISTS receiver_values jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS sender_values jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS receiver_values jsonb NOT NULL DEFAULT '[]';

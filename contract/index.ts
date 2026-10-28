@@ -403,6 +403,7 @@ export type TranslationTarget = Schemas["TranslationTarget"];
 export type DlrMapEntry = Schemas["DlrMapEntry"];
 export type TranslationRuleFields = Schemas["TranslationRuleFields"];
 export type ContentWordRule = Schemas["ContentWordRule"];
+export type ValueMatch = Schemas["ValueMatch"];
 export type TranslationRuleInput = Schemas["TranslationRuleInput"];
 export type TranslationRuleDetail = Schemas["TranslationRuleDetail"];
 export type TranslationRuleSaved = Schemas["TranslationRuleSaved"];

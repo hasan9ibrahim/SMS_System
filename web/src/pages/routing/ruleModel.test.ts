@@ -7,6 +7,8 @@ import {
   formatMargin,
   parseMargin,
   parsePattern,
+  rowsFromPattern,
+  valuesSummary,
   vendorSwitches,
   backupProblems,
   clearCondition,
@@ -42,6 +44,8 @@ const rule = (over: Partial<RouteRuleDetail> = {}): RouteRuleDetail => ({
   senderMatchCase: true,
   receiverPattern: null,
   receiverPatternNegate: false,
+  senderValues: [],
+  receiverValues: [],
   contentPattern: null,
   contentPatternNegate: false,
   senderListId: null,
@@ -236,4 +240,21 @@ test("margin as typed: amount, percent, negative (team trial round 1)", () => {
   assert.equal(parseMargin("5%%"), null);
   assert.equal(formatMargin(-2, "percent"), "-2%");
   assert.equal(formatMargin(0.003, "amount"), "0.003");
+});
+
+test("value rows: an older value-list pattern opens as rows; summary groups by match and case (team trial round 8)", () => {
+  assert.deepEqual(rowsFromPattern("^(?:BANK|OTP)$", true), [
+    { value: "BANK", match: "is", matchCase: true },
+    { value: "OTP", match: "is", matchCase: true },
+  ]);
+  assert.deepEqual(rowsFromPattern("^(?:44)", false), [{ value: "44", match: "starts", matchCase: false }]);
+  assert.equal(rowsFromPattern("^(TEST|DEMO)", true), null, "a free regex stays a regex");
+  assert.equal(rowsFromPattern(null, true), null);
+  const rows = [
+    { value: "BANK", match: "is" as const, matchCase: true },
+    { value: "SHOP", match: "is" as const, matchCase: true },
+    { value: "otp", match: "starts" as const, matchCase: false },
+  ];
+  assert.equal(valuesSummary(rows, true), "is BANK, SHOP · starts with otp (any case)");
+  assert.equal(valuesSummary(rows, false), "is BANK, SHOP · starts with otp");
 });

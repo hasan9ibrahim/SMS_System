@@ -278,6 +278,28 @@ test("a vendor whose own egress rules block the message is skipped for the next 
   assert.equal(none.outcome, "no_vendor");
 });
 
+test("sender and receiver value rows: own match and case per row, Negate for the set (team trial round 8)", () => {
+  const rows = [
+    { value: "BANK", match: "is" as const, matchCase: true },
+    { value: "otp", match: "starts" as const, matchCase: false },
+  ];
+  const on = (over: Record<string, unknown>, m: Partial<MessageContext>) => {
+    const r = rule({ senderPattern: null, senderPatternNegate: false, ...over });
+    const got = decide(r, msg(m), options).matched;
+    assert.equal(quickMatch(r, msg(m)), got, "quickMatch agrees with the checks");
+    return got;
+  };
+  assert.equal(on({ senderValues: rows }, { sender: "BANK" }), true);
+  assert.equal(on({ senderValues: rows }, { sender: "Bank" }), false, "the BANK row counts capitals");
+  assert.equal(on({ senderValues: rows }, { sender: "OTPcode" }), true, "the otp row ignores case");
+  assert.equal(on({ senderValues: rows, senderPatternNegate: true }, { sender: "BANK" }), false);
+  const failed = decide(rule({ senderPattern: null, senderPatternNegate: false, senderValues: rows }), msg({ sender: "SHOP" }), options);
+  assert.match(failed.checks.find((c) => !c.ok)!.detail, /is "BANK" or starts with "otp" \(any case\)/);
+  const receiver = [{ value: "614", match: "contains" as const, matchCase: true }];
+  assert.equal(on({ receiverValues: receiver }, {}), true);
+  assert.equal(on({ receiverValues: receiver }, { receiver: "4479000" }), false);
+});
+
 test("Match case for every Sender condition: exact capitals when on, any case when off (team trial round 1)", () => {
   const on = (over: Record<string, unknown>, m: Partial<MessageContext>) => {
     const r = rule({ senderPatternNegate: false, ...over });

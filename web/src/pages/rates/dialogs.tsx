@@ -3,7 +3,7 @@
 import { showRnSummary } from "./SendRatesDialog";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { RateLineEdit, RateTableDetail, TrunkListRow } from "@sms/contract";
+import type { NoticeBreach, RateLineEdit, RateTableDetail, TrunkListRow } from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { fetchListPage } from "../../api/hooks";
 import { usePlatformCurrency, useChangeRateLines, useReference, useSaveRateTable } from "../../api/records";
@@ -12,6 +12,8 @@ import { ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
 import { DestinationTree } from "./DestinationTree";
+import { NoticeDialog, type NoticeChoice } from "./RateTableView";
+import { ask } from "../../ui/feedback";
 import { todayMidnight, usePlatformTz } from "../../ui/zonedTime";
 import { EffectiveFromField, effectiveIso, RnNoteField } from "./EffectiveFrom";
 
@@ -224,7 +226,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   const [rnNote, setRnNote] = useState("");
   const [sendRn, setSendRn] = useState(table.kind === "customer");
   const [error, setError] = useState<string | null>(null);
-  const submit = () => {
+  const submit = (notice: NoticeChoice | null = null) => {
     const value = Number(rate);
     if (!picked.length) return setError("Choose at least one destination.");
     if (!rate || !Number.isFinite(value) || value < 0) return setError("Enter the rate.");
@@ -238,7 +240,12 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
     }));
     const notify = sendRn && table.kind === "customer";
     change.mutate(
-      { items, sendNotification: notify, ...(notify && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}) },
+      {
+        items,
+        sendNotification: notify,
+        ...(notify && rnNote.trim() ? { notificationNote: rnNote.trim() } : {}),
+        ...(notice === "anyway" ? { acceptNoticeBreach: true } : notice === "notice" ? { respectNotice: true } : {}),
+      },
       {
         onSuccess: (r) => {
           if (r.change)
@@ -249,7 +256,17 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
           showRnSummary(r.notifications);
           done();
         },
-        onError: (e) => setError(problemText(e)),
+        onError: (e) => {
+          // Sooner than a client's notice (team trial round 8): warn, then apply anyway or send with notice.
+          if (e instanceof ApiError && e.status === 409) {
+            setError(null);
+            void ask<NoticeChoice>((d) => <NoticeDialog breach={e.problem as unknown as NoticeBreach} done={d} />).then(
+              (choice) => choice && submit(choice),
+            );
+            return;
+          }
+          setError(problemText(e));
+        },
       },
     );
   };
@@ -262,7 +279,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
         <>
           {table.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
           <Button onClick={done}>Cancel</Button>
-          <Button variant="primary" onClick={submit} disabled={change.isPending}>
+          <Button variant="primary" onClick={() => submit()} disabled={change.isPending}>
             Add {picked.length || ""} rate{picked.length === 1 ? "" : "s"}
           </Button>
         </>

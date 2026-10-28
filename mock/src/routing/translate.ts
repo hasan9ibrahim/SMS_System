@@ -2,6 +2,7 @@
 // reports every check and change. Pure: lists, the receiver's network and randomness come in
 // through the context, so the same code serves the rule Test, the trunk Rules tab Test and tests.
 import { keywordPattern } from "./evaluate.js";
+import { valuesHit, valuesText } from "./values.js";
 import type {
   ContentWordRule,
   DlrMapEntry,
@@ -10,6 +11,7 @@ import type {
   TranslationRuleFields,
   TranslationStep,
   TranslationTestResult,
+  ValueMatch,
 } from "@sms/contract";
 
 export type EngineRule = Required<TranslationRuleFields> & { id: number };
@@ -108,6 +110,17 @@ function listCheck(
   };
 }
 
+/** Value rows, each with its own match and case (team trial round 8); Not Match as for the pattern. */
+function valuesCheck(name: string, rows: ValueMatch[] | undefined, negate: boolean, value: string): Check | null {
+  if (!rows?.length) return null;
+  const hit = valuesHit(rows, value);
+  return {
+    condition: name,
+    ok: hit !== negate,
+    detail: `${JSON.stringify(value)} ${hit ? "matches" : "does not match"} ${valuesText(rows)}${negate ? " (Not Match)" : ""}`,
+  };
+}
+
 function lengthCheck(name: string, value: string, min: number, max: number): Check | null {
   if (min <= 0 && max >= 20) return null;
   const n = value.length;
@@ -127,6 +140,8 @@ export function ruleChecks(rule: EngineRule, s: MessageState, ctx: EngineContext
       : null,
     patternCheck("Sender ID", rule.senderPattern, rule.senderPatternNegate, s.sender, senderCase),
     patternCheck("Receiver ID", rule.receiverPattern, rule.receiverPatternNegate, s.receiver),
+    valuesCheck("Sender ID", rule.senderValues, rule.senderPatternNegate, s.sender),
+    valuesCheck("Receiver ID", rule.receiverValues, rule.receiverPatternNegate, s.receiver),
     rule.mccmncs.length || rule.mccmncPattern
       ? (() => {
           const code = s.mccmnc;

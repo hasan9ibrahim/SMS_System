@@ -18,6 +18,7 @@ import {
   SectionTabs,
   type SectionProps,
   enterpriseLabel,
+  useBulkDelete,
   useDeleteRecord,
   useSectionTab,
 } from "../../records/parts";
@@ -241,7 +242,8 @@ export function EnterprisePage() {
         }
         actions={
           <>
-            {e && !e.archived && (
+            {/* The enterprise's Delete is on General only; the trunk tabs' Delete removes ticked trunks (round 8). */}
+            {e && !e.archived && section === "general" && (
               <Button
                 icon="trash"
                 onClick={async () => {
@@ -279,8 +281,9 @@ export function EnterprisePage() {
             hide={["enterpriseName"]}
             columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> }, connection: connectionColumn }}
             onOpen={openTrunk("customer")}
-            toolbar={
+            toolbar={(ticked, clear) => (
               <HeaderAction slot={slot}>
+                <TrunkDelete kind="customer" rows={ticked} done={clear} />
                 <Button
                   variant="primary"
                   icon="plus"
@@ -295,7 +298,7 @@ export function EnterprisePage() {
                   New customer trunk
                 </Button>
               </HeaderAction>
-            }
+            )}
           />
         )}
         {e && section === "vendor-trunks" && (
@@ -306,8 +309,9 @@ export function EnterprisePage() {
             hide={["enterpriseName"]}
             columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> }, connection: connectionColumn }}
             onOpen={openTrunk("vendor")}
-            toolbar={
+            toolbar={(ticked, clear) => (
               <HeaderAction slot={slot}>
+                <TrunkDelete kind="vendor" rows={ticked} done={clear} />
                 <Button
                   variant="primary"
                   icon="plus"
@@ -322,7 +326,7 @@ export function EnterprisePage() {
                   New vendor trunk
                 </Button>
               </HeaderAction>
-            }
+            )}
           />
         )}
         {e && section === "account-managers" && <AccountManagersTab enterprise={e} {...props("account-managers")} />}
@@ -333,5 +337,29 @@ export function EnterprisePage() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Delete on a trunk tab (team trial round 8): the ticked trunk, or all ticked trunks at once. */
+function TrunkDelete({ kind, rows, done }: { kind: "customer" | "vendor"; rows: TrunkListRow[]; done: () => void }) {
+  const deleteOne = useDeleteRecord();
+  const deleteMany = useBulkDelete();
+  const live = rows.filter((r) => !r.archived);
+  const what = kind === "customer" ? "customer trunk" : "vendor trunk";
+  return (
+    <Button
+      icon="trash"
+      disabled={!live.length}
+      title={live.length ? undefined : `Tick the ${what}s to delete`}
+      onClick={async () => {
+        const ok =
+          live.length === 1
+            ? await deleteOne(kind, live[0]!.id, live[0]!.name)
+            : await deleteMany(kind, live, `${what}s`);
+        if (ok) done();
+      }}
+    >
+      {live.length > 1 ? `Delete ${live.length} trunks` : "Delete"}
+    </Button>
   );
 }

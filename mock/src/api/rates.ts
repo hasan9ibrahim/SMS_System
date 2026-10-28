@@ -969,7 +969,9 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
     const diff: DiffEntry[] = [];
     const result = await inTransaction(pool, async (c) => {
       diff.length = 0;
-      skipped = await applyLineEdits(c, table, body.items, mccmncIds, me.id, now, diff, breaches);
+      skipped = await applyLineEdits(c, table, body.items, mccmncIds, me.id, now, diff, breaches, {
+        respectNotice: body.respectNotice ?? false,
+      });
       if (breaches.length && !body.acceptNoticeBreach) throw new NoticeBreachError();
       if (diff.length === 0) return { change: null, applied: 0 };
       await c.query("UPDATE rate_tables SET updated_by_id = $2, updated_at = now() WHERE id = $1", [id, me.id]);

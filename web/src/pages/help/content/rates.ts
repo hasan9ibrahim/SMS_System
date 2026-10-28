@@ -108,7 +108,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             items: [
               "When a table is used by several clients, the longest notice period among them counts.",
-              "If you save a change that starts sooner than the client's notice for that kind (increase, decrease or new destination, set on the enterprise), the platform stops and shows **Changes sooner than the client's notice**, listing each rate, its kind, its current and new rate and the earliest allowed date. You can cancel and change the date, or choose **Apply anyway** (the override is logged with the change).",
+              "If you save a change that starts sooner than the client's notice for that kind (increase, decrease or new destination, set on the enterprise), the platform stops and shows **Changes sooner than the client's notice**, listing each rate, its kind, its current and new rate and the earliest allowed date. You can cancel and change the date, choose **Send with notice** (each of those changes starts when its notice ends, on the Earliest with notice date) or **Apply anyway** (the override is logged with the change). Adding rates works the same way.",
               "Decreases and new destinations can start at once.",
               "In [[bulk|Bulk rating]], **Respect notice periods** moves each increase to the end of its client's notice automatically.",
             ],
@@ -667,7 +667,7 @@ export const topics: HelpTopic[] = [
               "Each new rate starts a new version from its effective date; the version before it ends at that moment. Versions that would start on or after that date are replaced.",
               'A rate equal to the current one is skipped ("Nothing changed").',
               "Blocks are applied first, then rate changes; a new version keeps the block of the rate it replaces.",
-              "On customer tables, changes that start sooner than the clients' notice period for that kind stop the save and open **Changes sooner than the client's notice**: the table lists MCCMNC, Change (with the notice days), Now, New, From and Earliest with notice. Choose **Cancel** and set a later date (for example the Earliest with notice date, with **Effective date…** in the bulk bar), or **Apply anyway** (logged with the change).",
+              "On customer tables, changes that start sooner than the clients' notice period for that kind stop the save and open **Changes sooner than the client's notice**: the table lists MCCMNC, Change (with the notice days), Now, New, From and Earliest with notice. Choose **Cancel** and set a later date (for example the Earliest with notice date, with **Effective date…** in the bulk bar), **Send with notice** (each change starts on its Earliest with notice date) or **Apply anyway** (logged with the change).",
               "If someone else saved the same rates at the same moment, you are asked to reload, review and save again.",
               "Vendor rate changes update best buy and routing costs straight away.",
               "The whole batch is one change: the toast offers Undo, and it appears in **Change log**.",
@@ -1499,7 +1499,7 @@ export const topics: HelpTopic[] = [
               "Click **Apply n changes** in the header.",
               "In **Apply n changes?** add an optional **Note** (shown in History) and keep or untick **Send RN to clients**.",
               "Click **Apply**. All tables change together as one change, undone as one.",
-              "If **Respect notice periods** was off and some increases start too soon, **Changes sooner than the client's notice** opens: **Apply anyway** (logged) or cancel, tick **Respect notice periods** (the review updates by itself) and apply again.",
+              "If **Respect notice periods** was off and some increases start too soon, **Changes sooner than the client's notice** opens: **Send with notice** (each change starts when its notice ends), **Apply anyway** (logged) or cancel.",
             ],
           },
           {

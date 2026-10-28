@@ -148,7 +148,7 @@ export function RouteMapPage() {
             ),
         },
         routeType: { width: 100, render: (r) => (r.routeType ? TYPE[r.routeType] : "") },
-        vendor: { width: 170, render: (r) => r.vendor ?? <span className="muted">—</span> },
+        vendor: { width: 300, render: (r) => <VendorSetup row={r} /> },
         vendorCost: { width: 110, align: "right", render: (r) => <span className="num">{rate(r.vendorCost)}</span> },
         margin: {
           width: 100,
@@ -212,5 +212,45 @@ export function RouteMapPage() {
       })}
       shortcuts="↑↓ move · click a rule to open it · the trunk stays in the tab URL"
     />
+  );
+}
+
+/**
+ * The rule's vendors as configured (team trial round 8), compact: each level in order ("›" to the next), every vendor
+ * with its share, backups marked ↺, the one routed now in bold. Least cost and quality rules show the vendor picked.
+ */
+function VendorSetup({ row }: { row: RouteMapRow }) {
+  if (!row.vendorSetup.length) {
+    if (!row.vendor) return <span className="muted">—</span>;
+    const how = row.routeType === "dynamic" ? "least cost" : row.routeType === "qbr" ? "quality" : null;
+    return (
+      <span>
+        <strong>{row.vendor}</strong>
+        {how && <span className="muted small"> · {how}</span>}
+      </span>
+    );
+  }
+  const levels = [...new Set(row.vendorSetup.map((v) => v.level))].sort((a, b) => a - b);
+  const text = (v: RouteMapRow["vendorSetup"][number]) =>
+    `${v.backup ? "↺ " : ""}${v.name}${v.sharePct !== null ? ` ${v.sharePct}%` : ""}`;
+  const title = levels
+    .map((l) => `Level ${l}: ${row.vendorSetup.filter((v) => v.level === l).map(text).join(", ")}`)
+    .join("\n");
+  return (
+    <span className="rm-setup" title={title}>
+      {levels.map((l, i) => (
+        <span key={l}>
+          {i > 0 && <span className="muted"> › </span>}
+          {row.vendorSetup
+            .filter((v) => v.level === l)
+            .map((v, j) => (
+              <span key={`${v.vendorTrunkId}-${v.backup}`}>
+                {j > 0 && <span className="muted"> · </span>}
+                {v.vendorTrunkId === row.vendorTrunkId ? <strong>{text(v)}</strong> : text(v)}
+              </span>
+            ))}
+        </span>
+      ))}
+    </span>
   );
 }

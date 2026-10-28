@@ -1476,27 +1476,74 @@ textarea.mono {
    the DLR target; the comment. */
 .rule-general-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(96px, 130px);
+  /* Team trial round 8: name narrow and two lines high, priority, the STOP / YES switch, comment takes the rest. */
+  grid-template-columns: minmax(200px, 320px) 96px auto minmax(0, 1fr);
   gap: 10px 12px;
-  align-items: end;
-}
-.rule-general-grid .rg-name,
-.rule-general-grid .rg-cont {
-  grid-column: span 2;
+  align-items: start;
 }
 .rule-general-grid .field {
   margin: 0;
 }
-.rule-general-grid .rg-comment {
-  grid-column: 1 / -1;
+.rule-general-grid textarea {
+  resize: vertical;
+  min-height: 52px;
 }
 @media (max-width: 1100px) {
   .rule-general-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) 96px auto;
   }
   .rule-general-grid .rg-comment {
     grid-column: 1 / -1;
   }
+}
+/* A small on/off switch (team trial round 8: STOP / YES on route and translation rules). */
+.mini-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mini-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.mini-switch-track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-border-strong, var(--color-border));
+  transition: background 0.15s;
+}
+.mini-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-panel);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transition: transform 0.15s;
+}
+.mini-switch input:checked + .mini-switch-track {
+  background: var(--color-accent);
+}
+.mini-switch input:checked + .mini-switch-track::after {
+  transform: translateX(14px);
+}
+.mini-switch input:focus-visible + .mini-switch-track {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.mini-switch-text {
+  font-size: 12.5px;
+  font-weight: 600;
 }
 /* Route simulator in two columns (team trial round 5): numbered input cards on the left; the summary, the run
    button and the route on the right. */
@@ -1672,7 +1719,7 @@ svg.flip {
    length columns, each condition with its Match / Not Match switch. */
 .match-grid {
   display: grid;
-  grid-template-columns: 130px minmax(160px, 1.2fr) auto minmax(200px, 1.3fr) auto 130px;
+  grid-template-columns: 130px minmax(160px, 1.2fr) auto minmax(200px, 1.3fr) auto;
   gap: 8px 10px;
   align-items: center;
 }
@@ -1707,9 +1754,21 @@ svg.flip {
   flex: 1 1 auto;
   min-width: 0;
 }
-.match-grid .mg-len input {
-  width: 52px;
-  flex: none;
+/* Sender ID / receiver value rows under their condition (team trial round 8). */
+.match-grid .mg-sub {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  align-self: start;
+  padding-top: 4px;
+}
+.match-grid .mg-values {
+  grid-column: 2 / -1;
+  min-width: 0;
+}
+.value-rows .mini-table td:first-child input {
+  width: 100%;
+  min-width: 140px;
 }
 .match-grid .mg-span3 {
   grid-column: span 3;
@@ -1737,7 +1796,8 @@ svg.flip {
   .match-grid .mg-head {
     display: none;
   }
-  .match-grid .mg-span3 {
+  .match-grid .mg-span3,
+  .match-grid .mg-values {
     grid-column: auto;
   }
 }
@@ -1814,4 +1874,17 @@ svg.flip {
 .numfmt-preview input {
   flex: 1;
   min-width: 0;
+}
+/* Translation rule form: the name spans two rows, narrower (team trial round 8). */
+.tr-form .tr-name {
+  grid-row: span 2;
+  min-width: 0;
+}
+.tr-form .tr-name textarea {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+}
+.value-rows {
+  margin-bottom: 8px;
 }

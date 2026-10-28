@@ -11655,6 +11655,8 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Team trial round 8 ("send with notice"): a change that would start sooner than its client's notice period starts when the notice ends instead, counted from this save, as in bulk rating. */
+      respectNotice?: boolean;
       /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
       notificationNote?: string | null;
       /**
@@ -12641,8 +12643,20 @@ export type components = {
       marginPct: number | null;
       /** @description How the vendor was chosen (priority, percentage, least cost, quality …). */
       decidedBy: string | null;
+      /** @description The deciding rule's vendors as configured (team trial round 8): level, share and backups, so the Route map shows several vendors and their percentages, not only the one picked. Empty for least cost and quality rules that rank every vendor, and when no rule decides. */
+      vendorSetup: components["schemas"]["RouteMapVendor"][];
       /** @description Platform currency of the converted figures. */
       currency: string;
+    };
+    RouteMapVendor: {
+      vendorTrunkId: components["schemas"]["Id"];
+      name: string;
+      /** @description 1 = first choice, 2 = next when level 1 fails, and so on. */
+      level: number;
+      /** @description Share of the level's traffic; null when the level has one vendor or splits by priority. */
+      sharePct: number | null;
+      /** @description A vendor's own backup. */
+      backup: boolean;
     };
     RouteMapPage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["RouteMapRow"][];
@@ -12883,6 +12897,18 @@ export type components = {
       id: components["schemas"]["Id"] | null;
       label: string;
     };
+    /** @description One Sender ID or receiver value of a rule's condition, as a row of its own (team trial round 8, §6.3, §6.4): the value, how it matches and whether capitals count. The rows of one condition are alternatives (any row matches); the condition's Negate flag turns the whole set into "is not". */
+    ValueMatch: {
+      /** @description As typed (no regex). */
+      value: string;
+      /**
+       * @description The whole value, its start, or anywhere in it.
+       * @enum {string}
+       */
+      match: "is" | "starts" | "contains";
+      /** @description Upper and lower case must match ("BANK" does not match "Bank"). Off, any case matches. */
+      matchCase: boolean;
+    };
     ContentWordRule: {
       /** @description The word or phrase, as typed (no regex). */
       find: string;
@@ -12921,6 +12947,10 @@ export type components = {
       senderMatchCase?: boolean;
       receiverPattern?: string | null;
       receiverPatternNegate?: boolean;
+      /** @description Sender ID values, one row each with its own match and case (team trial round 8). With a sender pattern too, both must match. Records always carry it; missing in the input of a new rule means none (an edit keeps the stored rows). senderMatchCase does not apply to these rows. */
+      senderValues?: components["schemas"]["ValueMatch"][];
+      /** @description Receiver values, one row each with its own match and case (team trial round 8), as senderValues. */
+      receiverValues?: components["schemas"]["ValueMatch"][];
       mccmncs?: string[];
       mccmncNegate?: boolean;
       /** @description Regular expression on the MCCMNC code (team trial round 2), as on route rules: `^415` is every Lebanese network. The destination matches when it is in `mccmncs` or matches this pattern; `mccmncNegate` turns the whole MCCMNC condition around. Missing in an input means none. */
@@ -13058,6 +13088,8 @@ export type components = {
       | "senderMatchCase"
       | "receiverPattern"
       | "receiverPatternNegate"
+      | "senderValues"
+      | "receiverValues"
       | "mccmncs"
       | "mccmncNegate"
       | "mccmncPattern"
@@ -13117,6 +13149,9 @@ export type components = {
       continueAfter: boolean;
       senderPattern: string | null;
       receiverPattern: string | null;
+      /** @description The Sender ID value rows (team trial round 8); the Sender ID column filter also finds their values. */
+      senderValues: components["schemas"]["ValueMatch"][];
+      receiverValues: components["schemas"]["ValueMatch"][];
       mccmncs: string[];
       /** @description The MCCMNC codes by name for the cell and its hover list (up to 100), e.g. "France · Orange (20801)" (team trial round 1). */
       mccmncNames: string[];
@@ -18251,6 +18286,10 @@ export type components = {
       senderMatchCase?: boolean;
       receiverPattern?: string | null;
       receiverPatternNegate?: boolean;
+      /** @description Sender ID values, one row each with its own match and case (team trial round 8). With a sender pattern too, both must match. Records always carry it; missing in the input of a new rule means none (an edit keeps the stored rows). senderMatchCase does not apply to these rows. */
+      senderValues?: components["schemas"]["ValueMatch"][];
+      /** @description Receiver values, one row each with its own match and case (team trial round 8), as senderValues. */
+      receiverValues?: components["schemas"]["ValueMatch"][];
       contentPattern?: string | null;
       contentPatternNegate?: boolean;
       senderListId?: components["schemas"]["Id"] | null;
@@ -18346,6 +18385,8 @@ export type components = {
       | "senderMatchCase"
       | "receiverPattern"
       | "receiverPatternNegate"
+      | "senderValues"
+      | "receiverValues"
       | "contentPattern"
       | "contentPatternNegate"
       | "senderListId"

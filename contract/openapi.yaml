@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.108.0
+  version: 0.110.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -17963,6 +17963,11 @@ components:
         acceptNoticeBreach:
           type: boolean
           description: Apply increases that start sooner than a client's notice period (§13.14).
+        respectNotice:
+          type: boolean
+          description: >-
+            Team trial round 8 ("send with notice"): a change that would start sooner than its client's notice period
+            starts when the notice ends instead, counted from this save, as in bulk rating.
         notificationNote:
           type: [string, "null"]
           maxLength: 2000
@@ -20219,7 +20224,7 @@ components:
 
     RouteMapRow:
       type: object
-      required: [id, mccmnc, country, network, allNetworks, sellRate, sellCurrency, sellRateConverted, rateTableId, rateTableName, status, ruleId, ruleName, rulePriority, routeType, vendorTrunkId, vendor, vendorCost, margin, marginPct, decidedBy, currency]
+      required: [id, mccmnc, country, network, allNetworks, sellRate, sellCurrency, sellRateConverted, rateTableId, rateTableName, status, ruleId, ruleName, rulePriority, routeType, vendorTrunkId, vendor, vendorCost, margin, marginPct, decidedBy, vendorSetup, currency]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -20271,9 +20276,35 @@ components:
         decidedBy:
           type: [string, "null"]
           description: How the vendor was chosen (priority, percentage, least cost, quality …).
+        vendorSetup:
+          type: array
+          description: >-
+            The deciding rule's vendors as configured (team trial round 8): level, share and backups, so the Route map
+            shows several vendors and their percentages, not only the one picked. Empty for least cost and quality
+            rules that rank every vendor, and when no rule decides.
+          items:
+            $ref: "#/components/schemas/RouteMapVendor"
         currency:
           type: string
           description: Platform currency of the converted figures.
+
+    RouteMapVendor:
+      type: object
+      required: [vendorTrunkId, name, level, sharePct, backup]
+      properties:
+        vendorTrunkId:
+          $ref: "#/components/schemas/Id"
+        name:
+          type: string
+        level:
+          type: integer
+          description: 1 = first choice, 2 = next when level 1 fails, and so on.
+        sharePct:
+          type: [integer, "null"]
+          description: Share of the level's traffic; null when the level has one vendor or splits by priority.
+        backup:
+          type: boolean
+          description: A vendor's own backup.
 
     RouteMapPage:
       allOf:
@@ -20794,6 +20825,28 @@ components:
         label:
           type: string
 
+    ValueMatch:
+      type: object
+      additionalProperties: false
+      description: >-
+        One Sender ID or receiver value of a rule's condition, as a row of its own (team trial round 8, §6.3, §6.4):
+        the value, how it matches and whether capitals count. The rows of one condition are alternatives (any row
+        matches); the condition's Negate flag turns the whole set into "is not".
+      required: [value, match, matchCase]
+      properties:
+        value:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: As typed (no regex).
+        match:
+          type: string
+          enum: [is, starts, contains]
+          description: The whole value, its start, or anywhere in it.
+        matchCase:
+          type: boolean
+          description: Upper and lower case must match ("BANK" does not match "Bank"). Off, any case matches.
+
     ContentWordRule:
       type: object
       additionalProperties: false
@@ -20876,6 +20929,21 @@ components:
           maxLength: 200
         receiverPatternNegate:
           type: boolean
+        senderValues:
+          type: array
+          maxItems: 500
+          description: >-
+            Sender ID values, one row each with its own match and case (team trial round 8). With a sender pattern too,
+            both must match. Records always carry it; missing in the input of a new rule means none (an edit keeps the
+            stored rows). senderMatchCase does not apply to these rows.
+          items:
+            $ref: "#/components/schemas/ValueMatch"
+        receiverValues:
+          type: array
+          maxItems: 500
+          description: Receiver values, one row each with its own match and case (team trial round 8), as senderValues.
+          items:
+            $ref: "#/components/schemas/ValueMatch"
         mccmncs:
           type: array
           maxItems: 2000
@@ -21067,7 +21135,7 @@ components:
             archivedAt:
               type: [string, "null"]
               format: date-time
-      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, mccmncs, mccmncNegate, mccmncPattern, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
+      required: [name, direction, action, status, continueAfter, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, senderValues, receiverValues, mccmncs, mccmncNegate, mccmncPattern, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, senderConversion, senderConversionValue, senderConversionReplacement, senderConversionListId, receiverConversion, receiverConversionValue, receiverConversionReplacement, senderTon, senderNpi, destTon, destNpi, billingType, registeredDelivery, dlrMap, contentRegex, contentRegexIndex, contentReplacement, msgTemplate, senderMinLength, senderMaxLength, receiverMinLength, receiverMaxLength, startsAt, stopsAt, insertAt]
 
     TranslationRuleSaved:
       type: object
@@ -21082,7 +21150,7 @@ components:
 
     TranslationRuleRow:
       type: object
-      required: [id, name, direction, action, continueAfter, senderPattern, receiverPattern, mccmncs, mccmncNames, contentPattern, senderConversion, senderConversionValue, status, appliesTo, appliesToNames, appliesToCount, usedBy, updatedBy, updatedAt, archivedAt]
+      required: [id, name, direction, action, continueAfter, senderPattern, receiverPattern, senderValues, receiverValues, mccmncs, mccmncNames, contentPattern, senderConversion, senderConversionValue, status, appliesTo, appliesToNames, appliesToCount, usedBy, updatedBy, updatedAt, archivedAt]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -21100,6 +21168,15 @@ components:
           type: [string, "null"]
         receiverPattern:
           type: [string, "null"]
+        senderValues:
+          type: array
+          description: The Sender ID value rows (team trial round 8); the Sender ID column filter also finds their values.
+          items:
+            $ref: "#/components/schemas/ValueMatch"
+        receiverValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValueMatch"
         mccmncs:
           type: array
           items:
@@ -32723,6 +32800,21 @@ components:
           maxLength: 200
         receiverPatternNegate:
           type: boolean
+        senderValues:
+          type: array
+          maxItems: 500
+          description: >-
+            Sender ID values, one row each with its own match and case (team trial round 8). With a sender pattern too,
+            both must match. Records always carry it; missing in the input of a new rule means none (an edit keeps the
+            stored rows). senderMatchCase does not apply to these rows.
+          items:
+            $ref: "#/components/schemas/ValueMatch"
+        receiverValues:
+          type: array
+          maxItems: 500
+          description: Receiver values, one row each with its own match and case (team trial round 8), as senderValues.
+          items:
+            $ref: "#/components/schemas/ValueMatch"
         contentPattern:
           type: [string, "null"]
           maxLength: 200
@@ -32870,7 +32962,7 @@ components:
           type: string
 
     RouteRuleDetail:
-      required: [name, priority, status, startsAt, stopsAt, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, lcrProfileId, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
+      required: [name, priority, status, startsAt, stopsAt, continueRouting, matchMode, comment, categoryMode, categoryIds, customerTrunkMode, customerTrunkIds, mccmncMode, mccmncs, mccmncPattern, senderPattern, senderPatternNegate, senderMatchCase, receiverPattern, receiverPatternNegate, senderValues, receiverValues, contentPattern, contentPatternNegate, senderListId, senderListNegate, receiverListId, receiverListNegate, tps, revenue, hlrPorted, routeType, huntPolicy, enableBackupRoutes, vendorCategoryMode, vendorCategoryIds, vendorTrunkMode, vendorTrunkIds, maxRouteLevel, margin, qbrFormula, skipVendorAtTpsPct, lcrProfileId, dlrTargetPct, hlrAction, denyMultipart, threshold, thresholdInterval, vendors, whitelists]
       allOf:
         - $ref: "#/components/schemas/RouteRuleFields"
         - type: object

@@ -21516,7 +21516,7 @@
    },
    {
     "sortable": true,
-    "hidden": false,
+    "hidden": true,
     "field": "asr",
     "label": "ASR",
     "type": "percent",
@@ -21537,7 +21537,7 @@
    },
    {
     "sortable": true,
-    "hidden": false,
+    "hidden": true,
     "field": "dlr",
     "label": "DLR",
     "type": "percent",
@@ -21558,7 +21558,7 @@
    },
    {
     "sortable": true,
-    "hidden": false,
+    "hidden": true,
     "field": "margin",
     "label": "Margin",
     "type": "money",
@@ -21599,6 +21599,42 @@
      "not_in",
      "eq",
      "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "updatedAt",
+    "label": "Updated Time",
+    "type": "datetime",
+    "defaultOperator": "between",
+    "operators": [
+     "between",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "updatedBy",
+    "label": "Updated By",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
     ]
    },
    {
@@ -21713,42 +21749,6 @@
     "hidden": true,
     "field": "stopsAt",
     "label": "Stop Time",
-    "type": "datetime",
-    "defaultOperator": "between",
-    "operators": [
-     "between",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "empty",
-     "not_empty"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "updatedBy",
-    "label": "Updated By",
-    "type": "text",
-    "defaultOperator": "like",
-    "operators": [
-     "like",
-     "not_like",
-     "eq",
-     "neq",
-     "in",
-     "not_in",
-     "empty",
-     "not_empty",
-     "regex"
-    ]
-   },
-   {
-    "sortable": true,
-    "hidden": true,
-    "field": "updatedAt",
-    "label": "Updated Time",
     "type": "datetime",
     "defaultOperator": "between",
     "operators": [

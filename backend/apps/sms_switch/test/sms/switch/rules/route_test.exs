@@ -88,6 +88,32 @@ defmodule Sms.Switch.Rules.RouteTest do
     refute decide(rule(status: :inactive, match_mode: :any), msg()).matched
   end
 
+  test "sender and receiver value rows: own match and case per row, Negate for the set (team trial round 8)" do
+    rows = [
+      %{value: "BANK", match: :is, match_case: true},
+      %{value: "otp", match: :starts, match_case: false}
+    ]
+
+    base = [sender_pattern: nil, sender_pattern_negate: false, sender_values: rows]
+    assert decide(rule(base), msg(sender: "BANK")).matched
+    refute decide(rule(base), msg(sender: "Bank")).matched
+    assert decide(rule(base), msg(sender: "OTPcode")).matched
+    refute decide(rule(base ++ [sender_pattern_negate: true]), msg(sender: "BANK")).matched
+
+    t = decide(rule(base), msg(sender: "SHOP"))
+
+    assert Enum.find(t.checks, &(not &1.ok)).detail =~
+             ~s[is "BANK" or starts with "otp" (any case)]
+
+    receiver = [
+      sender_pattern: nil,
+      receiver_values: [%{value: "614", match: :contains, match_case: true}]
+    ]
+
+    assert decide(rule(receiver), msg()).matched
+    refute decide(rule(receiver), msg(receiver: "4479000")).matched
+  end
+
   test "percentage split is stable per number; whitelist and warm-up come first (§13.27)" do
     a = decide(rule(), msg())
     assert vendor_id(decide(rule(), msg())) == vendor_id(a)

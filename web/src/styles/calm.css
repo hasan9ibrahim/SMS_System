@@ -383,3 +383,8 @@ table th.num,
 .gh-cell.sorted {
   color: var(--color-accent);
 }
+
+/* Route rules: ID and priority in bold (team trial round 8). */
+.gc .rr-bold {
+  font-weight: 700;
+}
