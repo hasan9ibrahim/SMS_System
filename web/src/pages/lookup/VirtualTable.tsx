@@ -1,7 +1,7 @@
 // A compact virtualised table for result panels and the lookup matrix (CLAUDE.md rule 3:
 // lists scroll with virtualisation). Sticky header, optional sticky left columns, rows
 // loaded page by page through onEndReached. Rows come from the server in server order.
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 export interface VColumn<Row> {
@@ -20,7 +20,7 @@ export interface VColumn<Row> {
 
 export function VirtualTable<Row>({
   rows,
-  columns,
+  columns: given,
   rowKey,
   rowHeight = 34,
   onEndReached,
@@ -54,6 +54,20 @@ export function VirtualTable<Row>({
   useEffect(() => {
     if (onEndReached && !loadingMore && rows.length > 0 && last >= rows.length - 15) onEndReached();
   }, [last, rows.length, loadingMore, onEndReached]);
+
+  // Columns grow to fill a wider panel, e.g. one side of Rate Lookup on its own (team trial round 7); never shrink.
+  const [boxWidth, setBoxWidth] = useState(0);
+  useEffect(() => {
+    const el = scroll.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBoxWidth(el.clientWidth));
+    ro.observe(el);
+    setBoxWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const natural = given.reduce((s, c) => s + c.width, 0);
+  const grow = natural > 0 && boxWidth > natural ? boxWidth / natural : 1;
+  const columns = grow === 1 ? given : given.map((c) => ({ ...c, width: Math.floor(c.width * grow) }));
 
   let left = 0;
   const offsets = columns.map((c) => {

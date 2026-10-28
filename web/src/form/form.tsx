@@ -442,7 +442,15 @@ export function ListField<T>({
   };
   return (
     <FormField label={label} required={required} error={form.error(path)} hint={hint} wide={wide} htmlFor={id}>
-      <div className={`tag-input${disabled ? " disabled" : ""}`}>
+      {/* A click anywhere in the box puts the cursor in it, so Ctrl+V lands there (team trial round 7). */}
+      <div
+        className={`tag-input${disabled ? " disabled" : ""}`}
+        onMouseDown={(e) => {
+          if (disabled || e.target !== e.currentTarget) return;
+          e.preventDefault();
+          document.getElementById(id)?.focus();
+        }}
+      >
         {list.map((x, i) => (
           <span key={x} className={`chip${form.errors[`${path}.${i}`] ? " invalid" : ""}`}>
             {x}

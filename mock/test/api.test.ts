@@ -336,6 +336,20 @@ describe("preferences and workspace (§13.5, §15.2)", { skip }, () => {
     check("saveWorkspace", saved);
     const loaded = await call("GET", "/me/workspace");
     check("getWorkspace", loaded);
-    assert.deepEqual(loaded.json(), ws);
+    assert.deepEqual(loaded.json(), { ...ws, groups: [] }, "no tab groups saved = none");
+    // Tab groups (team trial round 8): kept with their tabs; a group without tabs is dropped.
+    const grouped = {
+      tabs: [{ ...ws.tabs[0]!, pinned: false, groupId: "g1" }],
+      activeTabId: "t1",
+      groups: [
+        { id: "g1", label: "Ops", color: "blue", collapsed: false },
+        { id: "g2", label: "Empty", color: "red", collapsed: true },
+      ],
+    };
+    check("saveWorkspace", await call("PUT", "/me/workspace", grouped));
+    const back = (await call("GET", "/me/workspace")).json();
+    assert.deepEqual(back.groups, [grouped.groups[0]]);
+    assert.equal(back.tabs[0].groupId, "g1");
+    await call("PUT", "/me/workspace", ws);
   });
 });

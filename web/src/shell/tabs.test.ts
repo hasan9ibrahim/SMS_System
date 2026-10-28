@@ -138,3 +138,37 @@ test("split view: each side picks its tab, the strip fills the focused side (tea
   s().swapSides();
   assert.deepEqual(sides(), [b, c]);
 });
+
+test("tab groups: together, join by opening or dragging in, collapse, saved and restored (team trial round 8)", () => {
+  const a = s().open("/enterprises", { newTab: true });
+  const b = s().open("/admin/changes", { newTab: true });
+  const c = s().open("/rates", { newTab: true });
+  const g = s().newGroup(a);
+  assert.equal(s().groups.length, 1);
+  s().addToGroup(c, g);
+  const order = () => s().tabs.map((t) => t.id).slice(1);
+  assert.deepEqual(order(), [a, c, b], "a group's tabs sit together");
+  // A tab opened from a grouped tab joins its group.
+  s().activate(c);
+  const d = s().open("/routing/rules", { newTab: true });
+  assert.equal(s().tabs.find((t) => t.id === d)!.groupId, g);
+  // Dragged out of the group's span: leaves it; dropped back between two of its tabs: joins.
+  s().move(d, s().tabs.length);
+  assert.equal(s().tabs.find((t) => t.id === d)!.groupId, null);
+  s().move(b, 2);
+  assert.equal(s().tabs.find((t) => t.id === b)!.groupId, g, "dropped between a and c");
+  // Collapsing the group of the open tab moves to a tab outside it; opening a hidden tab expands it.
+  s().activate(a);
+  s().updateGroup(g, { collapsed: true, label: "Ops" });
+  assert.equal(s().activeId, d);
+  s().activate(c);
+  assert.equal(s().groups[0]!.collapsed, false);
+  const ws = toWorkspace(s());
+  assert.deepEqual(ws.groups, [{ id: g, label: "Ops", color: "grey", collapsed: false }]);
+  s().hydrate(1, ws);
+  assert.equal(s().tabs.filter((t) => t.groupId === g).length, 3);
+  // Ungroup keeps the tabs; a group with no tabs left is dropped.
+  s().ungroup(g);
+  assert.equal(s().groups.length, 0);
+  assert.equal(s().tabs.length, 6, "Home, Dashboard and the four tabs");
+});

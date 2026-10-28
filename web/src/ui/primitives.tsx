@@ -121,7 +121,9 @@ export function Popover({
     let left = align === "end" ? r.right - width : r.left;
     left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
     let top = r.bottom + 4;
-    if (top + height > window.innerHeight - 8 && r.top - height - 4 > 8) top = r.top - height - 4;
+    // Above the status bar, not under it (team trial round 8).
+    const status = document.querySelector(".statusbar")?.getBoundingClientRect().height ?? 0;
+    if (top + height > window.innerHeight - status - 8 && r.top - height - 4 > 8) top = r.top - height - 4;
     setPos({ top, left });
   }, [open, anchor, align]);
   if (!open) return null;

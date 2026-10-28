@@ -74,6 +74,8 @@ const COLUMNS: [keyof Fields, string][] = [
   ["contentReplacement", "content_replacement"],
   ["msgTemplate", "msg_template"],
   ["contentWords", "content_words"],
+  ["senderValues", "sender_values"],
+  ["receiverValues", "receiver_values"],
   ["contentNumberFormat", "content_number_format"],
   ["contentNumberMinDigits", "content_number_min_digits"],
   ["senderMinLength", "sender_min_len"],
@@ -85,7 +87,7 @@ const COLUMNS: [keyof Fields, string][] = [
   ["insertAt", "insert_at"],
 ];
 const FIELD_COLUMN = new Map<string, string>(COLUMNS);
-const JSON_FIELDS = new Set(["dlrMap", "contentWords"]);
+const JSON_FIELDS = new Set(["dlrMap", "contentWords", "senderValues", "receiverValues"]);
 const toDb = (field: string, v: unknown) => (JSON_FIELDS.has(field) ? JSON.stringify(v ?? []) : v);
 
 function fieldsOf(r: Record<string, unknown>): Fields {
@@ -351,6 +353,9 @@ async function insertRule(c: pg.PoolClient, input: TranslationRuleInput, userId:
   return id;
 }
 
+const rowsOf = (rows: TranslationRuleInput["senderValues"]) =>
+  rows?.map((r) => ({ value: r.value.trim(), match: r.match, matchCase: r.matchCase })).filter((r) => r.value !== "");
+
 const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
   ...input,
   name: input.name.trim(),
@@ -362,6 +367,9 @@ const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
   targets: plainTargets(input.targets),
   // Missing (older clients) means no words; blank rows are dropped.
   contentWords: (input.contentWords ?? []).filter((w) => w.find.trim() !== ""),
+  // Value rows (team trial round 8): blank rows dropped; missing stays missing (none for a new rule, kept on edit).
+  senderValues: rowsOf(input.senderValues),
+  receiverValues: rowsOf(input.receiverValues),
   // Missing (older clients) means Match case on for the Sender ID conditions (team trial round 1).
   senderMatchCase: input.senderMatchCase ?? true,
   // Missing (older clients) means no MCCMNC regex (team trial round 2).
@@ -370,6 +378,8 @@ const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
 
 export function createTranslationRule(request: FastifyRequest, reply: FastifyReply) {
   const input = normalise(request.body as TranslationRuleInput);
+  input.senderValues ??= [];
+  input.receiverValues ??= [];
   return withDb(reply, async (pool) => {
     const errors = await checkRule(pool, input);
     if (errors.length) return badInput(reply, errors);
@@ -398,6 +408,8 @@ export function updateTranslationRule(request: FastifyRequest, reply: FastifyRep
     const before = await loadTranslationRule(pool, id);
     if (!before) return notFound(reply, "Translation rule", id);
     if (before.archivedAt) return sendProblem(reply, 400, "This rule is deleted; restore it before editing");
+    input.senderValues ??= before.senderValues;
+    input.receiverValues ??= before.receiverValues;
     const diff: DiffEntry[] = [];
     for (const [api] of COLUMNS)
       if (!same(before[api] ?? null, input[api] ?? null))

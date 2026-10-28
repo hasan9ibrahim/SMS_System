@@ -3,7 +3,8 @@
 // The switch evaluates the same way: conditions (all or any must match), then the vendor:
 // number whitelist first, then the warm-up threshold, then the normal split / LCR / QBR.
 import { rankLcr, splitPick, type LcrProfileCore } from "../lcr/rank.js";
-import type { RouteCandidate, RouteCheck, RouteDecision, RouteRuleDetail } from "@sms/contract";
+import type { RouteCandidate, RouteCheck, RouteDecision, RouteRuleDetail, ValueMatch } from "@sms/contract";
+import { valuesHit, valuesText } from "./values.js";
 
 export interface MessageContext {
   now: number;
@@ -124,6 +125,9 @@ type Rule = Pick<
   | "vendorCategoryMode"
   | "vendorCategoryIds"
 > & {
+  /** Sender ID / receiver value rows (team trial round 8); older callers leave them out. */
+  senderValues?: ValueMatch[];
+  receiverValues?: ValueMatch[];
   /** The LCR profile of a Least cost rule, loaded with the rules (§13.23). */
   lcrProfile?: LcrProfileCore | null;
 };
@@ -260,6 +264,17 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
     if (all !== ok) return ok;
     set = true;
   }
+  // Value rows, each with its own match and case (team trial round 8); Negate as for the pattern.
+  if (rule.senderValues?.length) {
+    ok = valuesHit(rule.senderValues, m.sender) !== rule.senderPatternNegate;
+    if (all !== ok) return ok;
+    set = true;
+  }
+  if (rule.receiverValues?.length) {
+    ok = valuesHit(rule.receiverValues, m.receiver) !== rule.receiverPatternNegate;
+    if (all !== ok) return ok;
+    set = true;
+  }
   if (rule.contentPattern) {
     ok = regex(rule.contentPattern, m.content) !== rule.contentPatternNegate;
     if (all !== ok) return ok;
@@ -375,6 +390,13 @@ export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { 
   const anyCase = senderCase(rule) ? "" : " (any case)";
   pattern("Sender", rule.senderPattern, rule.senderPatternNegate, m.sender, senderCase(rule), anyCase);
   pattern("Receiver", rule.receiverPattern, rule.receiverPatternNegate, m.receiver);
+  const rows = (name: string, vs: ValueMatch[] | undefined, negate: boolean, value: string) => {
+    if (!vs?.length) return;
+    const hit = valuesHit(vs, value);
+    add(name, true, negate ? !hit : hit, `"${value}" ${hit ? "matches" : "doesn't match"} ${negate ? "not " : ""}${valuesText(vs)}`);
+  };
+  rows("Sender", rule.senderValues, rule.senderPatternNegate, m.sender);
+  rows("Receiver", rule.receiverValues, rule.receiverPatternNegate, m.receiver);
   pattern("Content", rule.contentPattern, rule.contentPatternNegate, m.content);
   if (rule.senderListId) {
     const hit = m.listHas(rule.senderListId, m.sender, !senderCase(rule));

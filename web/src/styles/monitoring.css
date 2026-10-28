@@ -272,11 +272,12 @@
   gap: 6px;
   color: var(--color-text-secondary);
 }
+/* Red while paused or showing a past period, like the tab's light (team trial round 7). */
 .la-live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-text-secondary);
+  background: var(--color-error);
 }
 .la-live.on .la-live-dot {
   background: var(--color-good);
@@ -1090,4 +1091,40 @@
 .rs-shadowed ul {
   margin: 4px 0 0;
   padding-left: 18px;
+}
+
+/* Simulator: what translation did, before and after (team trial round 7). */
+.rs-xlate {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2px 0 10px;
+  font-size: 12.5px;
+}
+.rs-xlate th,
+.rs-xlate td {
+  padding: 5px 8px;
+  border-bottom: var(--border-width) solid var(--color-border);
+  vertical-align: top;
+}
+.rs-xlate thead th {
+  font-size: 12px;
+}
+.rs-xlate tbody th {
+  width: 130px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.rs-xlate tr.changed td,
+.rs-xlate tr.changed th {
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
+}
+.rs-xlate .rs-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 340px;
+}
+/* Near the right edge the Time list opens to the left (team trial round 8). */
+.la-submenu-list.to-left {
+  left: auto;
+  right: 100%;
 }

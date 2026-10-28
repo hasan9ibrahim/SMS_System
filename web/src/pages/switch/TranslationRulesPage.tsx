@@ -18,6 +18,7 @@ import type {
   TranslationRuleRow,
   TranslationTargetInput,
   TrunkListRow,
+  ValueMatch,
 } from "@sms/contract";
 import {
   testTranslationRule,
@@ -69,6 +70,8 @@ import {
   usesList,
 } from "./switchModel";
 import { TranslationTest } from "./TranslationTest";
+import { ValueRows } from "../routing/ValueRows";
+import { valuesSummary } from "../routing/ruleModel";
 import { CleanupBadge } from "../admin/cleanup/CleanupBadge";
 import { DateTimeInput } from "../../ui/DateTimeInput";
 
@@ -156,7 +159,7 @@ function MatchCase({ form }: { form: FormApi<TranslationRuleInput> }) {
   return (
     <label
       className="toggle-inline match-case"
-      title="On: the Sender ID pattern and Sender ID List must match the exact capitals. Off: any case."
+      title="On: the Sender ID pattern and Sender ID List must match the exact capitals. Off: any case. Each value row has its own."
     >
       <input
         type="checkbox"
@@ -228,41 +231,6 @@ function BareList({
   );
 }
 
-function Lengths({
-  form,
-  min,
-  max,
-  label,
-}: {
-  form: FormApi<TranslationRuleInput>;
-  min: "senderMinLength" | "receiverMinLength";
-  max: "senderMaxLength" | "receiverMaxLength";
-  label: string;
-}) {
-  const num = (k: typeof min | typeof max, lo: number) => (
-    <input
-      type="number"
-      min={lo}
-      max={20}
-      step={1}
-      value={(form.get(k) as number | null) ?? ""}
-      aria-label={`${label} ${k.endsWith("MinLength") ? "min" : "max"} length`}
-      aria-invalid={!!form.error(k)}
-      onChange={(e) => form.set(k, e.target.value === "" ? (null as never) : Number(e.target.value))}
-    />
-  );
-  return (
-    <span className="mg-cell mg-len">
-      {num(min, 0)}
-      <span className="muted">–</span>
-      {num(max, 1)}
-      {(form.error(min) || form.error(max)) && (
-        <small className="error-text">{form.error(min) ?? form.error(max)}</small>
-      )}
-    </span>
-  );
-}
-
 /** The networks as a summary line with a button that opens the tree (team trial round 5). */
 function NetworksCell({ form }: { form: FormApi<TranslationRuleInput> }) {
   const { tree } = useDestinationTree();
@@ -294,9 +262,24 @@ function NetworksCell({ form }: { form: FormApi<TranslationRuleInput> }) {
 
 /**
  * Match conditions as one compact grid (team trial round 5): Sender ID, Receiver ID, Message text and MCCMNC rows;
- * columns Pattern (regex), Number list, Length. Every condition keeps its Match / Not Match switch.
+ * columns Pattern (regex) and Number list. Every condition keeps its Match / Not Match switch. Sender ID and receiver
+ * values are rows of their own, each with its match and case (team trial round 8); the length columns were removed.
  */
 function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
+  const rows = (path: "senderValues" | "receiverValues", noun: string) => (
+    <>
+      <span className="mg-label mg-sub">values</span>
+      <span className="mg-values">
+        <ValueRows
+          value={(form.get(path) as ValueMatch[] | undefined) ?? []}
+          onChange={(v) => form.set(path, v)}
+          noun={noun}
+          showCase={path === "senderValues"}
+        />
+        {form.error(path) && <small className="error-text">{form.error(path)}</small>}
+      </span>
+    </>
+  );
   return (
     <div className="match-grid">
       <span className="mg-head" />
@@ -304,7 +287,6 @@ function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
       <span className="mg-head" />
       <span className="mg-head">Number list / networks</span>
       <span className="mg-head" />
-      <span className="mg-head">Length</span>
 
       <span className="mg-label">
         Sender ID
@@ -314,29 +296,26 @@ function MatchGrid({ form }: { form: FormApi<TranslationRuleInput> }) {
       <Negate form={form} path="senderPatternNegate" />
       <BareList form={form} path="senderListId" label="Sender ID list" />
       <Negate form={form} path="senderListNegate" />
-      <Lengths form={form} min="senderMinLength" max="senderMaxLength" label="Sender ID" />
+      {rows("senderValues", "Sender ID")}
 
       <span className="mg-label">Receiver ID</span>
       <BareText form={form} path="receiverPattern" placeholder="^00" label="Receiver ID pattern" />
       <Negate form={form} path="receiverPatternNegate" />
       <BareList form={form} path="receiverListId" label="Receiver ID list" />
       <Negate form={form} path="receiverListNegate" />
-      <Lengths form={form} min="receiverMinLength" max="receiverMaxLength" label="Receiver ID" />
+      {rows("receiverValues", "Receiver")}
 
       <span className="mg-label">Message text</span>
       <span className="mg-span3">
         <BareText form={form} path="contentPattern" placeholder="bit\.ly" label="Message text pattern" />
       </span>
       <Negate form={form} path="contentPatternNegate" />
-      <span />
 
       <span className="mg-label">MCCMNC</span>
       <BareText form={form} path="mccmncPattern" placeholder="^415 or ^(415|420)" label="MCCMNC pattern" />
       <span className="muted small mg-or">or</span>
       <NetworksCell form={form} />
       <Negate form={form} path="mccmncNegate" />
-      <span />
-
     </div>
   );
 }
@@ -700,8 +679,26 @@ function ContentWordsEditor({
 
 // ---------------------------------------------------------------- editor
 
-function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; done: (id: number | null) => void }) {
-  const form = useForm<TranslationRuleInput>(detail ? inputFromDetail(detail) : blankRule());
+/**
+ * Add, edit, or Clone (team trial round 8, as route rules): `from` opens a new rule filled from that one, named
+ * "… (copy)" and inactive until saved and switched on.
+ */
+function RuleEditor({
+  detail,
+  from,
+  done,
+}: {
+  detail: TranslationRuleDetail | null;
+  from?: TranslationRuleDetail;
+  done: (id: number | null) => void;
+}) {
+  const form = useForm<TranslationRuleInput>(
+    detail
+      ? inputFromDetail(detail)
+      : from
+        ? { ...inputFromDetail(from), name: `${from.name} (copy)`.slice(0, 100), status: "inactive" }
+        : blankRule(),
+  );
   const save = useSaveTranslationRule();
   const notifySaved = useNotifySaved();
   const [error, setError] = useState<string | null>(null);
@@ -738,7 +735,13 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
   const blocks = v.action === "block";
   return (
     <Modal
-      title={detail ? `Edit translation rule · ${detail.name}` : "Add translation rule"}
+      title={
+        detail
+          ? `Edit translation rule · ${detail.name}`
+          : from
+            ? `Clone translation rule · ${from.name}`
+            : "Add translation rule"
+      }
       width={1040}
       onClose={() => done(null)}
       footer={
@@ -765,7 +768,8 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
         }}
       >
         <Section title="Rule" columns={4} note={impliedDirection(v)}>
-          <TextField form={form} path="name" label="Name" required wide maxLength={100} nullable={false} />
+          {/* One line with Type, Status and Action; Is Continue, Start and Stop below (team trial round 8). */}
+          <TextField form={form} path="name" label="Name" required maxLength={100} nullable={false} />
           <SelectField
             form={form}
             path="direction"
@@ -796,12 +800,17 @@ function RuleEditor({ detail, done }: { detail: TranslationRuleDetail | null; do
               { value: "block", label: "Block" },
             ]}
           />
-          <CheckField
-            form={form}
-            path="continueAfter"
-            label="Is Continue"
-            hint="Apply further rules after this one"
-          />
+          <FormField label="Is Continue" hint="Apply further rules after this one">
+            <label className="mini-switch">
+              <input
+                type="checkbox"
+                checked={v.continueAfter}
+                onChange={(e) => form.set("continueAfter", e.target.checked)}
+              />
+              <span className="mini-switch-track" aria-hidden="true" />
+              <span className="mini-switch-text">{v.continueAfter ? "YES · next rules" : "STOP"}</span>
+            </label>
+          </FormField>
           <FormField label="Start" hint="Empty = now">
             <DateTimeInput
               value={v.startsAt ? v.startsAt.slice(0, 16) : ""}
@@ -1143,8 +1152,6 @@ function UsedByList({ id }: { id: number }) {
 
 function RuleDetail({ row, select }: { row: TranslationRuleRow; select: (id: number) => void }) {
   const q = useTranslationRule(row.id);
-  const clone = useCloneTranslationRule();
-  const notifySaved = useNotifySaved();
   const d = q.data;
   if (!d) return <p className="muted">{q.isError ? problemText(q.error) : "Loading…"}</p>;
   const input = inputFromDetail(d);
@@ -1164,17 +1171,9 @@ function RuleDetail({ row, select }: { row: TranslationRuleRow; select: (id: num
             <Button
               small
               icon="copy"
-              disabled={clone.isPending}
               onClick={() =>
-                clone.mutate(
-                  { id: d.id, body: {} },
-                  {
-                    onSuccess: (r) => {
-                      if (r.change) notifySaved(r.change, `Cloned to ${r.record.name} (inactive)`);
-                      select(r.record.id);
-                    },
-                    onError: (e) => toast({ tone: "error", message: problemText(e) }),
-                  },
+                void ask<number>((done) => <RuleEditor detail={null} from={d} done={done} />).then(
+                  (id) => id && select(id),
                 )
               }
             >
@@ -1231,7 +1230,7 @@ function MccmncCell({ row }: { row: TranslationRuleRow }) {
   const rest = row.mccmncs.length - 2;
   return (
     <HoverList items={names} more={Math.max(0, row.mccmncs.length - names.length)}>
-      <span className="rr-strong rr-label num">
+      <span className="rr-label num">
         <span className="rr-main">{names.slice(0, 2).join(", ")}</span>
         {rest > 0 && <span className="muted">+{rest}</span>}
       </span>
@@ -1256,7 +1255,6 @@ function unassignRule(id: number): Unassign {
 export function TranslationRulesPage() {
   const [selectId, setSelectId] = useState<number | null>(null);
   const deleteOne = useDeleteRecord();
-  const clone = useCloneTranslationRule();
   const notifySaved = useNotifySaved();
   const { data: me } = useMe();
   const restore = useRestore("translation_rule");
@@ -1283,19 +1281,13 @@ export function TranslationRulesPage() {
         {
           label: "Clone",
           icon: "copy",
-          disabled: !!r.archivedAt || clone.isPending,
+          disabled: !!r.archivedAt,
           hint: r.archivedAt ? "Deleted rule" : undefined,
+          // Opens a new rule filled from this one (team trial round 8, as route rules).
           onSelect: () =>
-            clone.mutate(
-              { id: r.id, body: {} },
-              {
-                onSuccess: (res) => {
-                  if (res.change) notifySaved(res.change, `Cloned to ${res.record.name} (inactive)`);
-                  setSelectId(res.record.id);
-                },
-                onError: (e) => toast({ tone: "error", message: problemText(e) }),
-              },
-            ),
+            void ask<number>((done) => (
+              <WithRule id={r.id} done={done} render={(d) => <RuleEditor detail={null} from={d} done={done} />} />
+            )).then((id) => id && setSelectId(id)),
         },
         {
           label: "Duplicate to trunk…",
@@ -1346,11 +1338,9 @@ export function TranslationRulesPage() {
           render: (r) => (r.action === "block" ? <span className="tone-error strong">Block</span> : "Allow"),
         },
         continueAfter: { width: 90, render: (r) => (r.continueAfter ? "Yes" : <span className="strong">No</span>) },
-        senderPattern: { width: 140, render: (r) => (r.senderPattern ? <code>{r.senderPattern}</code> : muted("—")) },
-        receiverPattern: {
-          width: 120,
-          render: (r) => (r.receiverPattern ? <code>{r.receiverPattern}</code> : muted("—")),
-        },
+        // The pattern and the value rows (team trial round 8).
+        senderPattern: { width: 160, render: (r) => matchCell(r.senderPattern, r.senderValues, true) },
+        receiverPattern: { width: 140, render: (r) => matchCell(r.receiverPattern, r.receiverValues, false) },
         mccmncs: {
           width: 220,
           render: (r) => (r.mccmncs.length ? <MccmncCell row={r} /> : muted("—")),
@@ -1375,7 +1365,7 @@ export function TranslationRulesPage() {
               <span className="tone-warning">Not assigned</span>
             ) : (
               <HoverList items={r.appliesToNames} more={r.appliesToCount - r.appliesToNames.length}>
-                <span className="rr-strong rr-label">
+                <span className="rr-label">
                   <span className="rr-main">{r.appliesTo}</span>
                 </span>
               </HoverList>
@@ -1417,6 +1407,18 @@ export function TranslationRulesPage() {
       })}
       shortcuts="↑↓ move · Enter edits · Ctrl+Z undo · a Sender ID filter like ^TEST finds patterns"
     />
+  );
+}
+
+function matchCell(pattern: string | null, rows: ValueMatch[], showCase: boolean) {
+  if (!pattern && !rows.length) return <span className="muted">—</span>;
+  const text = rows.length ? valuesSummary(rows, showCase) : "";
+  return (
+    <span title={[pattern, text].filter(Boolean).join(" · ")}>
+      {pattern && <code>{pattern}</code>}
+      {pattern && text && " · "}
+      {text}
+    </span>
   );
 }
 

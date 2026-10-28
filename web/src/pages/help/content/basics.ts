@@ -42,7 +42,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The header is one top bar: the logo, then the main menu (the current section is underlined), then search and live status on the right. A menu with several pages opens a drop-down; a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
+            text: "The header is one top bar: the logo, then the main menu (the current section is underlined), then search and live status on the right. A menu with several pages shows its drop-down as soon as the mouse is over it (no click needed; moving to the next menu swaps the drop-down, and it closes when the mouse leaves; a click or a tap still opens and closes it); a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
           },
           {
             kind: "list",
@@ -365,7 +365,8 @@ export const topics: HelpTopic[] = [
             items: [
               "Close a tab with its ✕, or **middle-click** it.",
               "Drag a tab left or right to reorder it. Pinned tabs always stay on the left, after Home.",
-              "**Right-click** a tab for its menu: **Pin** / **Unpin**, **Duplicate** (a second copy of the same page), **Open in new window**, **Close** and **Close other tabs**. On Home only **Close other tabs** is offered.",
+              "**Right-click** a tab for its menu: **Add tab to new group**, **Add to group “…”**, **Remove from group**, **Pin** / **Unpin**, **Duplicate** (a second copy of the same page), **Open in new window**, **Close** and **Close other tabs**. On Home only **Close other tabs** is offered.",
+              "**Tab groups** work as in Chrome: **Add tab to new group** puts the tab under a coloured label and opens the group's editor; type a name and pick one of nine colours. The group's tabs stay together with a line in its colour under them. **Click the label** to fold the group (only the label and its tab count show) or unfold it; **right-click the label** to rename it, change the colour, open **New tab in group**, **Ungroup** (the tabs stay) or **Close group** (closes its tabs). Drag a tab between two tabs of a group, or onto its label, to add it; drag it away from the group to take it out. A page opened from a grouped tab joins the group. A pinned tab leaves its group. Groups are saved with your tabs.",
               "A pinned tab has no ✕; unpin it to close it.",
               "Closing a tab with unsaved changes asks first: **Close tab with unsaved changes?**",
               "**N tabs** at the right of the strip lists every open tab; pick one to jump to it.",
@@ -1387,7 +1388,11 @@ export const topics: HelpTopic[] = [
               { name: "Middle-click a tab", what: "Close the tab." },
               {
                 name: "Right-click a tab",
-                what: "Tab menu: Pin, Duplicate, Open in new window, Close, Close other tabs.",
+                what: "Tab menu: tab groups (new group, add to a group, remove from group), Pin, Duplicate, Open in new window, Close, Close other tabs.",
+              },
+              {
+                name: "Click / right-click a group label",
+                what: "Fold or unfold the group / rename it, change its colour, new tab in group, Ungroup, Close group.",
               },
               { name: "Drag a tab", what: "Reorder it; drop it outside the window to open it in its own window." },
               { name: "Click a column header", what: "Sort by it (ascending, descending, off)." },

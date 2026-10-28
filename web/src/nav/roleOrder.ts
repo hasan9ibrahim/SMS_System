@@ -26,6 +26,7 @@ const BY_ROLE: { match: RegExp; pages: string[] }[] = [
     pages: [
       "rate-manager",
       "incoming-rns",
+      "rn-report",
       "rate-lookup",
       "bulk",
       "market-moves",
@@ -66,6 +67,7 @@ const BY_ROLE: { match: RegExp; pages: string[] }[] = [
       "customer-trunks",
       "dashboard",
       "incoming-rns",
+      "rn-report",
       "margin-calculator",
       "edr-search",
     ],

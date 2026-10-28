@@ -58,7 +58,7 @@ export const topics: HelpTopic[] = [
               "Each condition is one chip on the rule (Trunk, Category, Destination, Sender, Receiver, Content, TPS, Revenue/msg, HLR ported). Conditions the rule does not set are ignored.",
               "**all must match** (the default): every condition must pass. **any one matches**: one passing condition is enough. Click the words next to the rule title to switch.",
               "A rule with no conditions at all matches every message. That is why a new rule starts off.",
-              "Sender conditions match the exact capitals unless the rule's **Case sensitive** box is cleared (then any case matches). Receiver, content and the MCCMNC pattern ignore upper and lower case.",
+              "Each Sender ID value row has its own **Case sensitive** box; the Sender regex and list follow **Case sensitive (pattern and list)**. Receiver, content and the MCCMNC pattern ignore upper and lower case.",
               "A destination list matches exact codes only. A 3-digit code is the country's All networks entry, not the whole country. To cover a whole country, tick all its networks, or use **All**.",
             ],
           },
@@ -548,39 +548,27 @@ export const topics: HelpTopic[] = [
                 what: "Match messages whose value fits, or messages whose value does not fit.",
               },
               {
-                name: "Case sensitive",
-                what: 'Sender only. Ticked: the Sender ID values, the regex and the Sender ID list must match the exact capitals (`BANK` does not match "Bank"). Cleared: any mix of capitals matches, and the chip shows **any case**.',
+                name: "Values / Regex",
+                what: "Sender and Receiver. **Values** lists exact values as rows; **Regex** takes a free regular expression instead. A rule saved before rows existed with is one of / starts with values opens as rows.",
+              },
+              {
+                name: "Value rows",
+                what: "Click **Add Sender ID** (or **Add Receiver**) and type the value. Each row has its own **Match** (**Is** = the whole value, **Starts with**, **Contains**) and, for Sender IDs, its own **Case sensitive** box (`BANK` does not match \"Bank\" while ticked). Edit a row in place; × removes it. Any row matching is a hit; **Not match** turns the whole set around. Paste a list (one per line, or separated by commas or semicolons) into a row to get one row each.",
+                values: "e.g. Sender is `BANK` (case) · starts with `otp` (any case). A new row copies the match and case of the row above.",
+              },
+              {
+                name: "Case sensitive (pattern and list)",
+                what: "Sender only, shown in Regex mode or with a list picked. Ticked: the regex and the Sender ID list must match the exact capitals. Cleared: any case, and the chip shows **any case**.",
                 values: "Ticked by default.",
               },
               {
                 name: "Keywords \\Numeric and \\Alpha",
-                what: "Sender only. `\\Numeric` matches numeric Sender IDs (digits, optional +); `\\Alpha` matches Sender IDs with at least one letter. Click the keyword under the Sender buttons to use it; it switches to Regex. Translation rules accept the same keywords.",
+                what: "Sender only. `\\Numeric` matches numeric Sender IDs (digits, optional +); `\\Alpha` matches Sender IDs with at least one letter. Click the keyword to use it; it switches to Regex. Translation rules accept the same keywords.",
               },
               {
-                name: "Is one of",
-                what: "Sender and Receiver. The whole value must be one of the values you add.",
-                values: "e.g. Sender is one of `BANK`, `OTP`.",
-              },
-              {
-                name: "Starts with",
-                what: "The value starts with one of the values you add.",
-                values: "e.g. Receiver starts with `614`.",
-              },
-              {
-                name: "Contains",
-                what: "Content only. The message text contains one of the words or phrases.",
-                values: "e.g. `code`, `verification`.",
-              },
-              {
-                name: "Regex",
-                what: "A free regular expression for anything the value list cannot express. Switching to Regex keeps what the list stood for, so you can fine-tune it.",
-                values: "e.g. `^(TEST|DEMO)` or `code|otp`. Up to 200 characters.",
-              },
-              {
-                name: "Type a … and press + or Enter",
-                what: "Adds a value. Sender IDs and numbers can be pasted as a list separated by commas, semicolons or new lines; content phrases are split by new lines only, so they keep their commas. Click a value's × to remove it.",
-                values:
-                  "Sender: capitals count while Case sensitive is ticked. Receiver and content: upper and lower case match alike.",
+                name: "Content: Contains / Starts with / Regex",
+                what: "The message text contains, or starts with, one of the words or phrases you add (type it and press + or Enter; phrases are split by new lines only, so they keep their commas), or matches a regex. Upper and lower case match alike.",
+                values: "e.g. `code`, `verification`, or `code|otp`. Up to 200 characters for a regex.",
               },
               {
                 name: "Sender ID list / Receiver ID list",
@@ -1233,11 +1221,11 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'LCR (least cost routing) ranks the vendors that can carry a destination. The routing and pricing teams use it to see who is cheapest now or on a future date, test "what if" a vendor is removed or makes an offer, check where client prices sit against vendor costs, and keep the profiles that Least cost route rules use.',
+            text: 'LCR (least cost routing) ranks the vendors that can carry a destination. The routing and pricing teams use it to see who is cheapest now or on a future date, test "what if" a vendor is removed or makes an offer, and keep the profiles that Least cost route rules use.',
           },
           {
             kind: "text",
-            text: "The page has four views, switched at the top: **LCR table**, **Client view**, **Profiles** and **Changes**. The view is kept in the tab.",
+            text: "The page has three views, switched at the top: **LCR table**, **Profiles** and **Changes**. The view is kept in the tab.",
           },
         ],
       },
@@ -1316,31 +1304,6 @@ export const topics: HelpTopic[] = [
                 what: "Opens bulk rating for this destination, to set client rates from cost plus margin. See [[bulk]].",
               },
             ],
-          },
-        ],
-      },
-      {
-        id: "clients",
-        title: "Client view",
-        blocks: [
-          {
-            kind: "fields",
-            fields: [
-              { name: "Client", what: "A customer enterprise." },
-              {
-                name: "or account manager",
-                what: "All clients of one account manager. Choosing one clears the other.",
-              },
-              { name: "LCR profile", what: "Use a profile's picks for the LCR positions.", values: "Optional." },
-              {
-                name: "Show",
-                what: "**Below cost only** shows rates sold under the cheapest vendor. Sort by **Lowest margin first**, **Most traffic first** or **By destination**. Search narrows the rates.",
-              },
-            ],
-          },
-          {
-            kind: "text",
-            text: "Cards show the number of **Rates**, how many are **Below cost** (red) and the **Average margin at LCR 1**. The table lists Client trunk, Country, Network, MCCMNC, **Sell**, then **LCR 1–3** (the three cheapest eligible vendors with their cost) and **Margin 1–3** (red when negative), and **Msgs 7d**. Below-cost rates are highlighted. More rates load as you scroll.",
           },
         ],
       },

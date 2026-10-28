@@ -82,6 +82,57 @@ function MatchedRules({ steps, none }: { steps: Step[]; none: string }) {
   );
 }
 
+
+type MsgState = RouteSimulatorResult["translation"]["before"];
+const XLATE_ROWS: { field: keyof MsgState; label: string; always?: boolean }[] = [
+  { field: "sender", label: "Sender ID", always: true },
+  { field: "receiver", label: "Receiver", always: true },
+  { field: "text", label: "Content", always: true },
+  { field: "senderTon", label: "Sender TON" },
+  { field: "senderNpi", label: "Sender NPI" },
+  { field: "destTon", label: "Receiver TON" },
+  { field: "destNpi", label: "Receiver NPI" },
+  { field: "registeredDelivery", label: "Registered delivery" },
+];
+const shown = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
+
+/**
+ * What translation did to the message (team trial round 7): Sender ID, receiver and content always, other fields when
+ * they changed; each row with the value before, the value after and the rule that changed it.
+ */
+function TranslationTable({ before, after, steps }: { before: MsgState; after: MsgState; steps: Step[] }) {
+  const by = (field: string) =>
+    steps.filter((s) => s.changes.some((c) => c.field === field)).map((s) => s.name).join(", ");
+  const rows = XLATE_ROWS.filter((r) => r.always || before[r.field] !== after[r.field]);
+  return (
+    <table className="rs-xlate">
+      <thead>
+        <tr>
+          <th scope="col" />
+          <th scope="col">Received</th>
+          <th scope="col">Sent on</th>
+          <th scope="col">Changed by</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const changed = before[r.field] !== after[r.field];
+          return (
+            <tr key={r.field} className={changed ? "changed" : undefined}>
+              <th scope="row">{r.label}</th>
+              <td className={r.field === "text" ? "rs-text" : "num"}>{shown(before[r.field])}</td>
+              <td className={r.field === "text" ? "rs-text" : "num"}>
+                {changed ? <strong>{shown(after[r.field])}</strong> : <span className="muted">unchanged</span>}
+              </td>
+              <td className="muted small">{changed ? by(r.field) || "a rule" : ""}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 /**
  * One simulated message (team trial round 6: clearer and simpler): the verdict on one line, then the steps the
  * message goes through, each a row that opens for its details. The route step lists the matching rule's whole split
@@ -91,7 +142,7 @@ function Result({ r }: { r: RouteSimulatorResult }) {
   const d = r.route.decision;
   const forced = r.forcedVendor;
   const t = r.translation;
-  const changed = t.after.sender !== t.before.sender || t.after.receiver !== t.before.receiver;
+  const changed = XLATE_ROWS.some((x) => t.after[x.field] !== t.before[x.field]);
   const margin = r.marginPct === null ? "—" : `${r.marginPct} %`;
   return (
     <div className="rs-result">
@@ -123,11 +174,8 @@ function Result({ r }: { r: RouteSimulatorResult }) {
           tone={t.blocked ? "error" : "good"}
           summary={t.blocked ? "blocked by a translation rule" : changed ? "message changed by translation" : "no change"}
         >
+          <TranslationTable before={t.before} after={t.after} steps={t.steps} />
           <dl className="kv">
-            <dt>Sender</dt>
-            <dd>{change(t.before.sender, t.after.sender)}</dd>
-            <dt>Receiver</dt>
-            <dd>{change(t.before.receiver, t.after.receiver)}</dd>
             <dt>Translation rules</dt>
             <dd>
               <MatchedRules steps={t.steps} none="none on this trunk" />
@@ -243,18 +291,6 @@ function Result({ r }: { r: RouteSimulatorResult }) {
   );
 }
 
-const change = (a: string, b: string) => (
-  <>
-    {a || "—"}
-    {b !== a && (
-      <>
-        {" "}
-        → <strong>{b || "—"}</strong>
-      </>
-    )}
-  </>
-);
-
 /** A step of the message's path: a row with its outcome that opens for the details. */
 function Step({
   n,
@@ -347,19 +383,8 @@ function VendorTranslation({ v }: { v: NonNullable<RouteSimulatorResult["vendorT
   const { before, after, steps } = v.result;
   return (
     <>
+      <TranslationTable before={before} after={after} steps={steps} />
       <dl className="kv">
-        <dt>Sender</dt>
-        <dd>{change(before.sender, after.sender)}</dd>
-        <dt>Receiver</dt>
-        <dd>{change(before.receiver, after.receiver)}</dd>
-        {after.text !== before.text && (
-          <>
-            <dt>Text</dt>
-            <dd>
-              <strong>{after.text}</strong>
-            </dd>
-          </>
-        )}
         <dt>Rules</dt>
         <dd>
           <MatchedRules steps={steps} none="none on this vendor trunk" />

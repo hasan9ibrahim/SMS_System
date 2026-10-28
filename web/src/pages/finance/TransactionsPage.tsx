@@ -97,9 +97,18 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
     enabled: v.enterpriseId > 0 && v.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(v.paymentDate),
   });
   const sideBilling = billing.data?.[v.side] ?? null;
+  const setSide = (side: "customer" | "vendor") => {
+    const b = blankTransaction(side);
+    form.set("side", side);
+    form.set("paymentType", b.paymentType);
+    form.set("transactionType", b.transactionType);
+    form.set("invoiceId", null);
+  };
   const pickEnterprise = (e: Enterprise | null) => {
     form.set("enterpriseId", e?.id ?? 0);
     form.set("invoiceId", null);
+    // A customer's payment is a credit, a vendor's a debit (team trial round 7); a bilateral partner keeps the side.
+    if (e && (e.type === "customer" || e.type === "vendor") && e.type !== v.side) setSide(e.type);
   };
   // A new payment takes the side's billing currency and confirmation default once they load.
   const [seeded, setSeeded] = useState<string | null>(null);
@@ -109,13 +118,6 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
     form.set("currency", sideBilling.currency);
     form.set("sendConfirmation", sideBilling.sendPaymentConfirmation ?? false);
   }
-  const setSide = (side: "customer" | "vendor") => {
-    const b = blankTransaction(side);
-    form.set("side", side);
-    form.set("paymentType", b.paymentType);
-    form.set("transactionType", b.transactionType);
-    form.set("invoiceId", null);
-  };
   const submit = () => {
     if (!v.enterpriseId) return setError("Choose the enterprise.");
     save.mutate(
@@ -159,7 +161,7 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
           <span className="fb-spacer" />
           <Button onClick={() => done(null)}>Cancel</Button>
           <Button variant="primary" icon="save" disabled={save.isPending} onClick={submit}>
-            {detail ? "Save" : v.sendConfirmation ? "Add and send confirmation" : "Add transaction"}
+            {detail ? "Save" : v.sendConfirmation ? (v.side === "vendor" ? "Add and send payment" : "Add and send confirmation") : "Add transaction"}
           </Button>
         </>
       }
@@ -286,7 +288,7 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
                 checked={v.sendConfirmation}
                 onChange={(e) => form.set("sendConfirmation", e.target.checked)}
               />
-              Send payment confirmation
+              {v.side === "vendor" ? "Send payment" : "Send payment confirmation"}
             </label>
             <span className="ff-hint">
               {detail

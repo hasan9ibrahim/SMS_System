@@ -2666,3 +2666,104 @@ body.resizing-split-h {
   min-height: 200px;
 }
 
+
+/* Tab groups, Chrome style (team trial round 8, §13.5): a coloured label before the group's tabs, a line in the
+   group's colour under them; a folded group shows the label and its tab count only. */
+.tg-grey { --tg: var(--tg-grey); }
+.tg-blue { --tg: var(--tg-blue); }
+.tg-red { --tg: var(--tg-red); }
+.tg-yellow { --tg: var(--tg-yellow); }
+.tg-green { --tg: var(--tg-green); }
+.tg-pink { --tg: var(--tg-pink); }
+.tg-purple { --tg: var(--tg-purple); }
+.tg-cyan { --tg: var(--tg-cyan); }
+.tg-orange { --tg: var(--tg-orange); }
+.tab.grouped::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--tg);
+}
+.tab-group {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+  height: 22px;
+  margin: 4px 2px 0 6px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--tg);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+:root[data-theme="dark"] .tab-group {
+  color: #111827;
+}
+.tab-group.empty {
+  padding: 0 6px;
+}
+.tab-group-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tab-group-count {
+  font-weight: 500;
+  opacity: 0.85;
+}
+.tab-group.collapsed {
+  opacity: 0.85;
+}
+.tab-group.drop {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.tab-group-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 230px;
+  padding: 10px 10px 4px;
+}
+.tab-group-editor input {
+  width: 100%;
+}
+.tab-group-colors {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tab-group-swatch {
+  width: 18px;
+  height: 18px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--tg);
+  cursor: pointer;
+}
+.tab-group-swatch.on {
+  border-color: var(--color-panel);
+  box-shadow: 0 0 0 2px var(--tg);
+}
+.tab-group-editor .menu {
+  margin: 0 -10px;
+  border: 0;
+  box-shadow: none;
+}

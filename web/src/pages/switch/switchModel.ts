@@ -1,5 +1,6 @@
 // Pure helpers for the Switch pages (§6.4, §13.2): number list types, the blank translation
 // rule, form ↔ API mapping, option lists and the one-line rule summary.
+import { valuesSummary } from "../routing/ruleModel";
 import type { NumberList, TranslationRuleDetail, TranslationRuleInput, TranslationTargetInput } from "@sms/contract";
 
 export const LIST_TYPES: { value: NumberList["listType"]; label: string }[] = [
@@ -96,6 +97,8 @@ export function blankRule(): TranslationRuleInput {
     senderMatchCase: true,
     receiverPattern: null,
     receiverPatternNegate: false,
+    senderValues: [],
+    receiverValues: [],
     mccmncs: [],
     mccmncNegate: false,
     mccmncPattern: null,
@@ -163,9 +166,14 @@ export function toSave(v: TranslationRuleInput): TranslationRuleInput {
     contentReplacement: v.contentRegex ? (v.contentReplacement ?? "") : null,
     // Blank rows are left out (team trial round 1).
     contentWords: (v.contentWords ?? []).filter((w) => w.find.trim() !== ""),
+    senderValues: cleanRows(v.senderValues),
+    receiverValues: cleanRows(v.receiverValues),
     senderMatchCase: v.senderMatchCase !== false,
   };
 }
+
+const cleanRows = (rows: TranslationRuleInput["senderValues"]) =>
+  (rows ?? []).map((r) => ({ ...r, value: r.value.trim() })).filter((r) => r.value !== "");
 
 export const targetKey = (t: TranslationTargetInput) => `${t.trunkKind}:${t.type}:${t.id ?? ""}`;
 
@@ -186,6 +194,8 @@ export function ruleSummary(v: TranslationRuleInput): string {
   const when = [
     v.senderPattern && `sender ${not(v.senderPatternNegate)}~ ${v.senderPattern}${anyCase}`,
     v.receiverPattern && `receiver ${not(v.receiverPatternNegate)}~ ${v.receiverPattern}`,
+    v.senderValues?.length && `sender ${not(v.senderPatternNegate)}${valuesSummary(v.senderValues, true)}`,
+    v.receiverValues?.length && `receiver ${not(v.receiverPatternNegate)}${valuesSummary(v.receiverValues, false)}`,
     v.mccmncs.length &&
       `MCCMNC ${not(v.mccmncNegate)}in ${v.mccmncs.slice(0, 3).join(", ")}${v.mccmncs.length > 3 ? "…" : ""}`,
     v.contentPattern && `text ${not(v.contentPatternNegate)}~ ${v.contentPattern}`,

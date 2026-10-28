@@ -16,7 +16,7 @@ defmodule Sms.Switch.Rules.Route do
   Pure: the caller loads rules (`Rule.new/1` compiles their patterns), the message context and the vendor options.
   """
   import Bitwise
-  alias Sms.Switch.Rules.{Lcr, Pattern}
+  alias Sms.Switch.Rules.{Lcr, Pattern, Values}
 
   @qbr_weights %{asr: 35, dlr: 35, delay: 20, cost: 10}
 
@@ -35,6 +35,8 @@ defmodule Sms.Switch.Rules.Route do
               sender_match_case: true,
               receiver_pattern: nil,
               receiver_pattern_negate: false,
+              sender_values: [],
+              receiver_values: [],
               content_pattern: nil,
               content_pattern_negate: false,
               sender_list_id: nil,
@@ -298,6 +300,8 @@ defmodule Sms.Switch.Rules.Route do
       destination: destination_set?(c),
       sender: c.sender_pattern,
       receiver: c.receiver_pattern,
+      sender_values: c.sender_values != [],
+      receiver_values: c.receiver_values != [],
       content: c.content_pattern,
       sender_list: c.sender_list_id,
       receiver_list: c.receiver_list_id,
@@ -329,6 +333,13 @@ defmodule Sms.Switch.Rules.Route do
 
   defp condition_ok?(:content, c, m),
     do: Pattern.match?(c.compiled.content, m.content) != c.content_pattern_negate
+
+  # Value rows, each with its own match and case (team trial round 8); Negate as for the pattern.
+  defp condition_ok?(:sender_values, c, m),
+    do: Values.hit?(c.sender_values, m.sender) != c.sender_pattern_negate
+
+  defp condition_ok?(:receiver_values, c, m),
+    do: Values.hit?(c.receiver_values, m.receiver) != c.receiver_pattern_negate
 
   # Number lists match or, negated, must not match (R2, §6.3).
   defp condition_ok?(:sender_list, c, m),
@@ -470,6 +481,12 @@ defmodule Sms.Switch.Rules.Route do
         ""
       )
 
+  defp detailed(:sender_values, c, m),
+    do: values_check("Sender", c.sender_values, c.sender_pattern_negate, m.sender)
+
+  defp detailed(:receiver_values, c, m),
+    do: values_check("Receiver", c.receiver_values, c.receiver_pattern_negate, m.receiver)
+
   defp detailed(:content, c, m),
     do:
       pattern_check(
@@ -547,6 +564,16 @@ defmodule Sms.Switch.Rules.Route do
       end
 
     check("HLR ported", condition_ok?(:hlr, c, m), detail)
+  end
+
+  defp values_check(name, rows, negate, value) do
+    hit = Values.hit?(rows, value)
+
+    check(
+      name,
+      if(negate, do: not hit, else: hit),
+      "\"#{value}\" #{if hit, do: "matches", else: "doesn't match"} #{if negate, do: "not ", else: ""}#{Values.text(rows)}"
+    )
   end
 
   defp pattern_check(name, pattern, re, negate, value, note) do

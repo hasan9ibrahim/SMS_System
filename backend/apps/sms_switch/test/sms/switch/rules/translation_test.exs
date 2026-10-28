@@ -2,7 +2,7 @@ defmodule Sms.Switch.Rules.TranslationTest do
   # The translation engine (§6.4, §13.2): the mock's engine tests (mock/test/translationRules.test.ts) ported one for
   # one, so both engines give the same answers.
   use ExUnit.Case, async: true
-  alias Sms.Switch.Rules.{Pattern, Translation}
+  alias Sms.Switch.Rules.{Pattern, Translation, Values}
   alias Sms.Switch.Rules.Translation.{Context, Rule}
 
   defp rule(id, fields \\ []), do: Rule.new([id: id, name: "R#{id}"] ++ fields)
@@ -176,6 +176,31 @@ defmodule Sms.Switch.Rules.TranslationTest do
              %{@msg | sender: "BRAND07"},
              ctx()
            ).blocked
+  end
+
+  test "value rows from the stored jsonb, each with its own match and case (team trial round 8)" do
+    rows =
+      Values.from_json([
+        %{"value" => "BANK", "match" => "is", "matchCase" => true},
+        %{"value" => "promo", "match" => "contains", "matchCase" => false},
+        %{"value" => "", "match" => "is", "matchCase" => true}
+      ])
+
+    assert length(rows) == 2
+
+    blocked = fn fields, sender ->
+      Translation.run([rule(1, [action: :block] ++ fields)], %{@msg | sender: sender}, ctx()).blocked
+    end
+
+    assert blocked.([sender_values: rows], "BANK")
+    refute blocked.([sender_values: rows], "bank")
+    assert blocked.([sender_values: rows], "BIG-PROMO")
+    refute blocked.([sender_values: rows, sender_pattern_negate: true], "BIG-PROMO")
+
+    assert blocked.(
+             [receiver_values: Values.from_json([%{"value" => "0044", "match" => "starts"}])],
+             "x"
+           )
   end
 
   test "Match case for the Sender ID conditions: exact capitals when on, any case when off (team trial round 1)" do

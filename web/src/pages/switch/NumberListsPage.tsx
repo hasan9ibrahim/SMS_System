@@ -208,7 +208,7 @@ function Lists({ open }: { open: (id: number) => void }) {
           align: "right",
           render: (r) => (
             <HoverList items={r.entryValues} more={r.entries - r.entryValues.length} heading="Entries">
-              <span className="rr-strong num">{r.entries}</span>
+              <span className="num">{r.entries}</span>
             </HoverList>
           ),
         },
@@ -218,7 +218,7 @@ function Lists({ open }: { open: (id: number) => void }) {
           render: (r) =>
             r.usedBy ? (
               <HoverList items={r.usedByNames} more={r.usedBy - r.usedByNames.length} heading="Used by">
-                <span className="rr-strong num">{r.usedBy}</span>
+                <span className="num">{r.usedBy}</span>
               </HoverList>
             ) : (
               <span className="muted">—</span>

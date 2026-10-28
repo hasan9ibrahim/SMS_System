@@ -13,7 +13,7 @@ defmodule Sms.Switch.Rules.Translation do
   then the content rewrite (words, regex, template). A matched rule set to Stop ends the run; Continue goes on with
   the changed message (S-4.8).
   """
-  alias Sms.Switch.Rules.Pattern
+  alias Sms.Switch.Rules.{Pattern, Values}
 
   defmodule Rule do
     @moduledoc "One translation rule, with its patterns compiled."
@@ -29,6 +29,8 @@ defmodule Sms.Switch.Rules.Translation do
       sender_match_case: true,
       receiver_pattern: nil,
       receiver_pattern_negate: false,
+      sender_values: [],
+      receiver_values: [],
       mccmncs: [],
       mccmnc_negate: false,
       mccmnc_pattern: nil,
@@ -253,6 +255,8 @@ defmodule Sms.Switch.Rules.Translation do
         s.receiver,
         true
       ),
+      values_check("Sender ID", rule.sender_values, rule.sender_pattern_negate, s.sender),
+      values_check("Receiver ID", rule.receiver_values, rule.receiver_pattern_negate, s.receiver),
       mccmnc_check(rule, s.mccmnc),
       pattern_check(
         "Message Body Text",
@@ -318,6 +322,21 @@ defmodule Sms.Switch.Rules.Translation do
       detail:
         "#{Jason.encode!(value)} #{if hit, do: "matches", else: "does not match"} #{if negate, do: "not ", else: ""}" <>
           "#{pattern}#{if match_case, do: "", else: " (any case)"}"
+    }
+  end
+
+  # Value rows, each with its own match and case (team trial round 8); Not Match as for the pattern.
+  defp values_check(_name, [], _negate, _value), do: nil
+
+  defp values_check(name, rows, negate, value) do
+    hit = Values.hit?(rows, value)
+
+    %{
+      condition: name,
+      ok: hit != negate,
+      detail:
+        "#{Jason.encode!(value)} #{if hit, do: "matches", else: "does not match"} #{Values.text(rows)}" <>
+          if(negate, do: " (Not Match)", else: "")
     }
   end
 

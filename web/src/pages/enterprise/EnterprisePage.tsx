@@ -18,6 +18,7 @@ import {
   SectionTabs,
   type SectionProps,
   enterpriseLabel,
+  useBulkDelete,
   useDeleteRecord,
   useSectionTab,
 } from "../../records/parts";
@@ -32,7 +33,6 @@ import { AccountManagersTab } from "./AccountManagersTab";
 import { BillingTab } from "./BillingTab";
 import { DocsTab } from "./DocsTab";
 import { GeneralTab } from "./GeneralTab";
-import { EnterpriseRulesTab } from "./RulesTab";
 
 const page = pageForPath("/enterprises")!;
 const SECTIONS = [
@@ -176,7 +176,7 @@ export function EnterprisePage() {
       : []),
     ...(hasVendor ? [{ key: "vendor-trunks", label: "Vendor trunks", count: e?.trunkCounts.vendor ?? null }] : []),
     // Rule order over the enterprise's trunks (team trial round 4).
-    { key: "rules", label: "Rules", disabled: id === null },
+    // No Rules tab (team trial round 7): each trunk's Rules tab assigns and removes its rules.
     { key: "account-managers", label: "Account managers", disabled: id === null },
     { key: "history", label: "History", disabled: id === null },
   ].filter((t) => shownTab(`enterprises.${t.key}`)); // tabs an access group can hide (§11, trial round 2)
@@ -242,7 +242,8 @@ export function EnterprisePage() {
         }
         actions={
           <>
-            {e && !e.archived && (
+            {/* The enterprise's Delete is on General only; the trunk tabs' Delete removes ticked trunks (round 8). */}
+            {e && !e.archived && section === "general" && (
               <Button
                 icon="trash"
                 onClick={async () => {
@@ -280,8 +281,9 @@ export function EnterprisePage() {
             hide={["enterpriseName"]}
             columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> }, connection: connectionColumn }}
             onOpen={openTrunk("customer")}
-            toolbar={
+            toolbar={(ticked, clear) => (
               <HeaderAction slot={slot}>
+                <TrunkDelete kind="customer" rows={ticked} done={clear} />
                 <Button
                   variant="primary"
                   icon="plus"
@@ -296,7 +298,7 @@ export function EnterprisePage() {
                   New customer trunk
                 </Button>
               </HeaderAction>
-            }
+            )}
           />
         )}
         {e && section === "vendor-trunks" && (
@@ -307,8 +309,9 @@ export function EnterprisePage() {
             hide={["enterpriseName"]}
             columns={{ name: { width: 220, render: (r) => <strong>{r.name}</strong> }, connection: connectionColumn }}
             onOpen={openTrunk("vendor")}
-            toolbar={
+            toolbar={(ticked, clear) => (
               <HeaderAction slot={slot}>
+                <TrunkDelete kind="vendor" rows={ticked} done={clear} />
                 <Button
                   variant="primary"
                   icon="plus"
@@ -323,10 +326,9 @@ export function EnterprisePage() {
                   New vendor trunk
                 </Button>
               </HeaderAction>
-            }
+            )}
           />
         )}
-        {e && section === "rules" && <EnterpriseRulesTab enterprise={e} {...props("rules")} />}
         {e && section === "account-managers" && <AccountManagersTab enterprise={e} {...props("account-managers")} />}
         {e && section === "history" && (
           <div className="card">
@@ -335,5 +337,29 @@ export function EnterprisePage() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Delete on a trunk tab (team trial round 8): the ticked trunk, or all ticked trunks at once. */
+function TrunkDelete({ kind, rows, done }: { kind: "customer" | "vendor"; rows: TrunkListRow[]; done: () => void }) {
+  const deleteOne = useDeleteRecord();
+  const deleteMany = useBulkDelete();
+  const live = rows.filter((r) => !r.archived);
+  const what = kind === "customer" ? "customer trunk" : "vendor trunk";
+  return (
+    <Button
+      icon="trash"
+      disabled={!live.length}
+      title={live.length ? undefined : `Tick the ${what}s to delete`}
+      onClick={async () => {
+        const ok =
+          live.length === 1
+            ? await deleteOne(kind, live[0]!.id, live[0]!.name)
+            : await deleteMany(kind, live, `${what}s`);
+        if (ok) done();
+      }}
+    >
+      {live.length > 1 ? `Delete ${live.length} trunks` : "Delete"}
+    </Button>
   );
 }

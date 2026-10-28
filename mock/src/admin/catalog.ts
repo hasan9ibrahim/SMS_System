@@ -101,6 +101,8 @@ export const MODULES: AccessCatalog["modules"] = [
   m("billing-cycles", "Billing cycles", "finance", CRUD),
   m("rate-manager", "Rate manager", "rates", [...CRUD, "import", "send"]),
   m("incoming-rns", "Incoming RNs", "rates", ["view", "edit", "import", "approve"]),
+  // Sent RNs, one row per send (team trial round 7).
+  m("rn-report", "RN report", "rates", ["view"]),
   m("market-moves", "Market moves", "rates", READ),
   m("bulk", "Bulk workspace", "rates", ["view", "edit", "import"]),
   m("categories", "Product categories", "rates", CRUD),

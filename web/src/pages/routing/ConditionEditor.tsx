@@ -1,7 +1,7 @@
 // Editor for one condition of a route rule (§6.3 General Information, §13.8 TPS, §13.9
 // revenue, §13.24 HLR action). Opened from a condition chip or "+ Add condition"; Save
 // writes the whole rule once, so every edit is one undoable change (§13.10).
-import { useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   CompareOp,
   HlrAction,
@@ -11,6 +11,7 @@ import type {
   RouteRuleDetail,
   RouteRuleInput,
   TpsCondition,
+  ValueMatch,
 } from "@sms/contract";
 import { useReference } from "../../api/records";
 import { ListLookup } from "../../records/parts";
@@ -22,9 +23,11 @@ import {
   CONDITION_LABELS,
   parsePattern,
   PATTERN_KINDS,
+  rowsFromPattern,
   type ConditionKey,
   type PatternKind,
 } from "./ruleModel";
+import { ValueRows } from "./ValueRows";
 import { Icon } from "../../ui/Icon";
 import { DestinationPick, TrunkPick, type Picked } from "./pickers";
 import { MarginInput } from "./MarginInput";
@@ -75,8 +78,8 @@ export function SenderKeywords({ setPattern }: { setPattern: (p: string) => void
 }
 
 /**
- * Values instead of a regex (team trial round 1): type a Sender ID, receiver or phrase and press + (or
- * Enter); "Regex" keeps the free pattern for anything else.
+ * Values instead of a regex (team trial round 1): type a phrase and press + (or Enter); "Regex" keeps the free
+ * pattern for anything else. Content only since Sender IDs and receivers became rows (team trial round 8).
  */
 function PatternBuilder({
   field,
@@ -122,14 +125,6 @@ function PatternBuilder({
           </button>
         ))}
       </div>
-      {field === "sender" && (
-        <SenderKeywords
-          setPattern={(p) => {
-            setKind("regex");
-            setPattern(p);
-          }}
-        />
-      )}
       {kind === "regex" ? (
         <label className="field">
           <span>{CONDITION_LABELS[field]} pattern (regular expression)</span>
@@ -304,6 +299,18 @@ function Select<T extends string | number>({
   );
 }
 
+/**
+ * The categories picked in the rule window but not saved yet (team trial round 8), so the customer trunk list follows
+ * them at once. Null outside the window: there the saved categories count.
+ */
+export const PendingCategoryContext = createContext<{
+  mode: MatchMode;
+  ids: number[];
+  set: (mode: MatchMode, ids: number[]) => void;
+} | null>(null);
+/** True in New rule (a draft): the destination starts Inclusive with nothing picked (team trial round 8). */
+export const NewDraftContext = createContext(false);
+
 const toLocal = (iso: string) => iso.slice(0, 16);
 const fromLocal = (v: string) => new Date(`${v}:00Z`).toISOString();
 
@@ -312,8 +319,16 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   const ref = useReference();
   const named = (ids: number[], list: { id: number; name: string }[]) =>
     ids.map((id) => ({ key: id, label: list.find((x) => x.id === id)?.name ?? `#${id}` }));
+  const newDraft = useContext(NewDraftContext);
+  const pendingCategory = useContext(PendingCategoryContext);
   const [mode, setMode] = useState<MatchMode>(
-    key === "trunk" ? rule.customerTrunkMode : key === "category" ? rule.categoryMode : rule.mccmncMode,
+    key === "trunk"
+      ? rule.customerTrunkMode
+      : key === "category"
+        ? rule.categoryMode
+        : newDraft && rule.mccmncMode === "all" && !rule.mccmncs.length
+          ? "inclusive"
+          : rule.mccmncMode,
   );
   const [trunks, setTrunks] = useState<Picked<number>[]>(named(rule.customerTrunkIds, rule.labels.customerTrunks));
   const [categories, setCategories] = useState<number[]>(rule.categoryIds);
@@ -328,6 +343,14 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
     kinds.includes(initial.kind) ? initial.kind : pattern ? "regex" : kinds[0]!,
   );
   const [patternValues, setPatternValues] = useState<string[]>(kinds.includes(initial.kind) ? initial.values : []);
+  // Sender ID / receiver values as rows, each with its own match and case (team trial round 8). A pattern from the
+  // older value list opens as rows; any other pattern stays a regex.
+  const stored = key === "sender" ? rule.senderValues : key === "receiver" ? rule.receiverValues : [];
+  const fromPattern = rowsFromPattern(pattern || null, key === "sender" && rule.senderMatchCase !== false);
+  const [rows, setRows] = useState<ValueMatch[]>(stored?.length ? stored : (fromPattern ?? []));
+  const [rowMode, setRowMode] = useState<"values" | "regex">(
+    stored?.length || fromPattern || !pattern ? "values" : "regex",
+  );
   const [negate, setNegate] = useState(rule[`${pat}PatternNegate`]);
   // Case sensitive for the Sender conditions, on unless switched off (team trial round 1).
   const [matchCase, setMatchCase] = useState(rule.senderMatchCase !== false);
@@ -350,6 +373,13 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   // policyId 0 = not chosen yet
   const [hlr, setHlr] = useState<HlrAction>(rule.hlrAction ?? { policyId: 0, customerTrunkIds: [] });
 
+  // The category block tells the trunk block what is picked (rule window, team trial round 8).
+  useEffect(() => {
+    if (key === "category") pendingCategory?.set(categories.length ? mode : "all", categories);
+  }, [key, mode, categories]); // eslint-disable-line react-hooks/exhaustive-deps
+  const catMode = pendingCategory ? pendingCategory.mode : rule.categoryMode;
+  const catIds = pendingCategory ? pendingCategory.ids : rule.categoryIds;
+
   const between = (op: CompareOp) => op === "between";
   switch (key) {
     case "trunk":
@@ -357,20 +387,20 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
         form: (
           <>
             <Mode value={mode === "all" ? "inclusive" : mode} onChange={setMode} />
-            {rule.categoryMode !== "all" && rule.categoryIds.length > 0 && (
+            {catMode !== "all" && catIds.length > 0 && (
               <p className="muted small">
-                Showing the trunks {rule.categoryMode === "exclusive" ? "outside" : "of"} the rule's categories:{" "}
-                {rule.labels.categories
-                  .filter((c) => rule.categoryIds.includes(c.id))
-                  .map((c) => c.name)
+                Showing the trunks {catMode === "exclusive" ? "outside" : "of"} the rule's categories:{" "}
+                {catIds
+                  .map((id) => (ref.data?.productCategories ?? []).find((c) => c.id === id)?.name ?? `#${id}`)
                   .join(", ")}
               </p>
             )}
             <TrunkPick
+              key={`${catMode}:${catIds.join(",")}`}
               kind="customer"
               value={trunks}
               onChange={setTrunks}
-              fixed={categoryFilter(rule.categoryMode, rule.categoryIds)}
+              fixed={categoryFilter(catMode, catIds)}
             />
           </>
         ),
@@ -395,10 +425,11 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
             />
           </>
         ),
+        // Optional (team trial round 8): none picked = every category.
         patch: () =>
           categories.length
             ? { categoryMode: mode === "all" ? "inclusive" : mode, categoryIds: categories }
-            : "Choose at least one category.",
+            : { categoryMode: "all", categoryIds: [] },
       };
     case "destination":
       return {
@@ -433,23 +464,98 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
         },
       };
     case "sender":
-    case "receiver":
-    case "content": {
+    case "receiver": {
       const lists = ref.data?.numberLists ?? [];
+      const noun = key === "sender" ? "Sender ID" : "Receiver";
       return {
         form: (
           <>
             <div className="cond-head">
               <Negate value={negate} onChange={setNegate} />
-              {key === "sender" && (
+              <div className="segmented small" role="radiogroup" aria-label={`${noun} match`}>
+                {(["values", "regex"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={rowMode === m}
+                    className={rowMode === m ? "on" : ""}
+                    onClick={() => setRowMode(m)}
+                  >
+                    {m === "values" ? "Values" : "Regex"}
+                  </button>
+                ))}
+              </div>
+              {/* The rows have their own case; this one is for the pattern and the list (team trial round 8). */}
+              {key === "sender" && (rowMode === "regex" || !!listId) && (
                 <label
                   className="toggle-inline"
-                  title="On: the Sender ID values, pattern and list must match the exact capitals. Off: any case."
+                  title="On: the Sender ID pattern and list must match the exact capitals. Off: any case."
                 >
                   <input type="checkbox" checked={matchCase} onChange={(e) => setMatchCase(e.target.checked)} />
-                  Case sensitive
+                  Case sensitive (pattern and list)
                 </label>
               )}
+            </div>
+            {key === "sender" && (
+              <SenderKeywords
+                setPattern={(p) => {
+                  setRowMode("regex");
+                  setPattern(p);
+                }}
+              />
+            )}
+            {rowMode === "values" ? (
+              <ValueRows value={rows} onChange={setRows} noun={noun} showCase={key === "sender"} />
+            ) : (
+              <label className="field">
+                <span>{CONDITION_LABELS[key]} pattern (regular expression)</span>
+                <input
+                  autoFocus
+                  value={pattern}
+                  maxLength={200}
+                  placeholder="e.g. ^(TEST|DEMO)"
+                  onChange={(e) => setPattern(e.target.value)}
+                />
+                {regexError(pattern) && <small className="error-text">{regexError(pattern)}</small>}
+              </label>
+            )}
+            <div className="cond-list">
+              <label className="field">
+                <span>{key === "sender" ? "Sender ID list" : "Receiver ID list"}</span>
+                <select value={listId ?? ""} onChange={(e) => setListId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">—</option>
+                  {lists.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Negate value={listNegate} onChange={setListNegate} disabled={!listId} />
+            </div>
+          </>
+        ),
+        patch: () => {
+          const values = rowMode === "values" ? rows.map((r) => ({ ...r, value: r.value.trim() })).filter((r) => r.value) : [];
+          const built = rowMode === "regex" ? pattern.trim() || null : null;
+          if (rowMode === "regex" && regexError(pattern)) return "Fix the pattern.";
+          if (!built && !values.length && !listId)
+            return rowMode === "regex" ? "Enter a pattern or choose a list." : "Add at least one value or choose a list.";
+          const p = { [`${key}Pattern`]: built, [`${key}PatternNegate`]: negate, [`${key}Values`]: values };
+          const neg = !!listId && listNegate;
+          return key === "sender"
+            ? { ...p, senderListId: listId, senderListNegate: neg, senderMatchCase: matchCase }
+            : { ...p, receiverListId: listId, receiverListNegate: neg };
+        },
+      };
+    }
+    case "content":
+      return {
+        form: (
+          <>
+            <div className="cond-head">
+              <Negate value={negate} onChange={setNegate} />
             </div>
             <PatternBuilder
               field={key}
@@ -466,42 +572,15 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
               pattern={pattern}
               setPattern={setPattern}
             />
-            {key !== "content" && (
-              <div className="cond-list">
-                <label className="field">
-                  <span>{key === "sender" ? "Sender ID list" : "Receiver ID list"}</span>
-                  <select
-                    value={listId ?? ""}
-                    onChange={(e) => setListId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">—</option>
-                    {lists.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Negate value={listNegate} onChange={setListNegate} disabled={!listId} />
-              </div>
-            )}
           </>
         ),
         patch: () => {
           const built = patternKind === "regex" ? pattern.trim() || null : buildPattern(patternKind, patternValues);
           if (patternKind === "regex" && regexError(pattern)) return "Fix the pattern.";
-          if (!built && !listId)
-            return patternKind === "regex"
-              ? "Enter a pattern or choose a list."
-              : "Add at least one value or choose a list.";
-          const p = { [`${key}Pattern`]: built, [`${key}PatternNegate`]: negate };
-          const neg = !!listId && listNegate;
-          if (key === "sender")
-            return { ...p, senderListId: listId, senderListNegate: neg, senderMatchCase: matchCase };
-          return key === "content" ? p : { ...p, receiverListId: listId, receiverListNegate: neg };
+          if (!built) return patternKind === "regex" ? "Enter a pattern." : "Add at least one value.";
+          return { contentPattern: built, contentPatternNegate: negate };
         },
       };
-    }
     case "tps":
       return {
         form: (

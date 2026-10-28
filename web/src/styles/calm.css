@@ -327,7 +327,7 @@ table th.num,
   table-layout: auto;
 }
 .la-grid col.la-col-name {
-  width: 30%;
+  width: 22%;
 }
 .la-grid td.num,
 .la-grid thead .la-col-titles th {
@@ -339,3 +339,52 @@ table th.num,
   white-space: nowrap;
 }
 
+
+/* A cell's text on one line, cut with … at the column's edge (team trial round 7: trunk names). */
+.cell-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Every table's values read from the left, figures included (team trial round 7); Live analytics keeps its own
+   alignment. Headers already do (round 6). */
+:is(td, th):not(.la-grid *, .la-table *),
+:is(td, th).num:not(.la-grid *, .la-table *),
+:is(td, th) .num:not(.la-grid *, .la-table *),
+.gc.align-right,
+.gc.align-center,
+.vt-cell.align-right,
+.vt-cell.align-center,
+.cell-input,
+.two-line.right {
+  text-align: left;
+}
+.gc.align-right,
+.gc.align-center,
+.vt-cell.align-right,
+.vt-cell.align-center {
+  justify-content: flex-start;
+}
+.two-line.right,
+.two-line.right > .chip-tag {
+  align-items: flex-start;
+  align-self: flex-start;
+}
+
+/* Table headers bold (team trial round 7); values stay normal weight except each page's key column. */
+.gh-cell,
+.vt-head .vt-cell,
+:is(thead th, th[scope="col"]):not(.la-grid *, .la-table *) {
+  font-weight: 700;
+  color: var(--color-text);
+}
+.gh-cell.sorted {
+  color: var(--color-accent);
+}
+
+/* Route rules: ID and priority in bold (team trial round 8). */
+.gc .rr-bold {
+  font-weight: 700;
+}

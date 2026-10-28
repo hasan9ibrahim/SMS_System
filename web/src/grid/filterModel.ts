@@ -6,6 +6,11 @@ import type { FieldDescriptor, FilterCondition, FilterGroup, FilterOperator, Lis
 export interface GridState {
   /** One condition per column, from the box under the header. */
   columns: Record<string, FilterCondition>;
+  /**
+   * Quick-search pills, one per field, kept apart from the header boxes (team trial round 7): both apply (AND), so a
+   * header box narrows the rows a pill on the same field already picked.
+   */
+  pills?: Record<string, FilterCondition>;
   /** Multi-field builder (AND/OR groups); null when unused. */
   builder: FilterGroup | null;
   search: string;
@@ -18,6 +23,7 @@ export interface GridState {
 
 export const emptyState = (): GridState => ({
   columns: {},
+  pills: {},
   builder: null,
   search: "",
   sort: [],
@@ -248,8 +254,8 @@ export function countConditions(g: FilterGroup | null): number {
 }
 
 /** Column filters AND the builder tree, as one contract filter. */
-export function buildFilter(state: Pick<GridState, "columns" | "builder">): FilterGroup | undefined {
-  const conditions: FilterGroup["conditions"] = Object.values(state.columns);
+export function buildFilter(state: Pick<GridState, "columns" | "builder" | "pills">): FilterGroup | undefined {
+  const conditions: FilterGroup["conditions"] = [...Object.values(state.pills ?? {}), ...Object.values(state.columns)];
   if (state.builder && countConditions(state.builder) > 0) conditions.push(state.builder);
   return conditions.length ? { logic: "and", conditions } : undefined;
 }
@@ -273,7 +279,12 @@ export function nextSort(sort: SortKey[], field: string, additive: boolean): Sor
 }
 
 export function isFiltered(state: GridState): boolean {
-  return Object.keys(state.columns).length > 0 || countConditions(state.builder) > 0 || state.search.trim() !== "";
+  return (
+    Object.keys(state.columns).length > 0 ||
+    Object.keys(state.pills ?? {}).length > 0 ||
+    countConditions(state.builder) > 0 ||
+    state.search.trim() !== ""
+  );
 }
 
 // ---- URL round-trip: ?g=<base64url(JSON)> in the tab path ----
@@ -281,6 +292,7 @@ export function isFiltered(state: GridState): boolean {
 export function encodeState(state: GridState): string {
   const compact = {
     ...(Object.keys(state.columns).length ? { c: state.columns } : {}),
+    ...(Object.keys(state.pills ?? {}).length ? { p: state.pills } : {}),
     ...(state.builder && countConditions(state.builder) ? { b: state.builder } : {}),
     ...(state.search ? { q: state.search } : {}),
     ...(state.sort.length ? { s: state.sort } : {}),
@@ -302,6 +314,7 @@ export function decodeState(encoded: string | null): GridState {
     const json = new TextDecoder().decode(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)));
     const o = JSON.parse(json) as {
       c?: GridState["columns"];
+      p?: GridState["columns"];
       b?: FilterGroup;
       q?: string;
       s?: SortKey[];
@@ -310,6 +323,7 @@ export function decodeState(encoded: string | null): GridState {
     };
     return {
       columns: o.c ?? {},
+      pills: o.p ?? {},
       builder: o.b ?? null,
       search: o.q ?? "",
       sort: o.s ?? [],

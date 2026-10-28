@@ -13,6 +13,7 @@ import { LiveAnalyticsPage } from "./live/LiveAnalyticsPage";
 import { BulkRatingPage } from "./rates/BulkRatingPage";
 import { MarginCalculatorPage } from "./rates/MarginCalculatorPage";
 import { IncomingRnsPage } from "./rates/incoming/IncomingRnsPage";
+import { RnReportPage } from "./rates/RnReportPage";
 import { MarketMovesPage } from "./rates/market/MarketMovesPage";
 import { LcrPage } from "./routing/lcr/LcrPage";
 import { VisibilityPage } from "./admin/visibility/VisibilityPage";
@@ -92,6 +93,7 @@ const BUILT = new Set([
   "/rates/manager",
   "/rates/bulk",
   "/rates/incoming",
+  "/rates/rn-report",
   "/rates/market-moves",
   "/routing/lcr",
   "/admin/visibility",
@@ -275,6 +277,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/live/analytics" element={<LiveAnalyticsPage />} />
       <Route path="/rates/bulk" element={<BulkRatingPage />} />
       <Route path="/rates/incoming" element={<IncomingRnsPage />} />
+      <Route path="/rates/rn-report" element={<RnReportPage />} />
       <Route path="/rates/market-moves" element={<MarketMovesPage />} />
       <Route path="/routing/lcr" element={<LcrPage />} />
       <Route path="/admin/visibility" element={<VisibilityPage />} />

@@ -73,6 +73,25 @@ export async function routeMapFor(db: Db, trunkId: number): Promise<RouteMapRow[
     ruleIds,
   ]);
   const ruleById = new Map(rules.map((r) => [Number(r.id), r]));
+  // Each rule's vendors as configured (team trial round 8): the Route map shows the whole split, not one vendor.
+  const { rows: rv } = await db.query(
+    `SELECT v.route_rule_id, v.vendor_trunk_id, vt.name, v.level, v.share_pct, v.is_backup
+       FROM route_rule_vendors v JOIN vendor_trunks vt ON vt.id = v.vendor_trunk_id
+      WHERE v.route_rule_id = ANY($1) ORDER BY v.route_rule_id, v.level, v.is_backup, v.share_pct DESC NULLS LAST, vt.name`,
+    [ruleIds],
+  );
+  const setupOf = new Map<number, RouteMapRow["vendorSetup"]>();
+  for (const v of rv)
+    setupOf.set(Number(v.route_rule_id), [
+      ...(setupOf.get(Number(v.route_rule_id)) ?? []),
+      {
+        vendorTrunkId: Number(v.vendor_trunk_id),
+        name: String(v.name),
+        level: Number(v.level),
+        sharePct: v.share_pct === null ? null : Number(v.share_pct),
+        backup: !!v.is_backup,
+      },
+    ]);
   const rows = lines.map((l) => {
     const d = byCode.get(l.req)!;
     const key = `${l.req}|${trunkId}`;
@@ -110,6 +129,7 @@ export async function routeMapFor(db: Db, trunkId: number): Promise<RouteMapRow[
       margin,
       marginPct: margin === null || l.conv <= 0 ? null : round((margin / l.conv) * 100, 1),
       decidedBy: r?.decidedBy ?? null,
+      vendorSetup: rule && rule.route_type === "static" ? (setupOf.get(Number(rule.id)) ?? []) : [],
     };
   });
   return rows as RouteMapRow[];

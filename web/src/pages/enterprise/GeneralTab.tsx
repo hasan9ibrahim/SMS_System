@@ -35,6 +35,19 @@ type Form = EnterpriseInput;
 
 const blankContact = () => ({ name: null, phone: null, emails: [] as string[] });
 
+
+/** Credit bar colours from the alert levels (% of the credit limit), so each band starts where its level is set. */
+export function levelBands(l: { notice: number; warning: number; critical: number }): string {
+  const at = (n: number) => `${Math.max(0, Math.min(100, Number(n) || 0))}%`;
+  const tint = (c: string, pct: number) => `color-mix(in srgb, var(${c}) ${pct}%, var(--color-panel))`;
+  return `linear-gradient(90deg, ${tint("--color-good", 25)} 0 ${at(l.notice)}, ${tint("--color-accent", 30)} ${at(
+    l.notice,
+  )} ${at(l.warning)}, ${tint("--color-warning", 40)} ${at(l.warning)} ${at(l.critical)}, ${tint(
+    "--color-error",
+    45,
+  )} ${at(l.critical)} 100%)`;
+}
+
 function blank(): Form {
   return {
     name: "",
@@ -359,7 +372,7 @@ export function GeneralTab({
               { value: "tier3", label: "Tier 3" },
             ]}
           />
-          <StatusField form={form} path="status" required onText="Active · can send and receive traffic" />
+          <StatusField form={form} path="status" required onText="Active" />
           {/* The account manager is picked once, when adding; afterwards it lives on the Account managers tab only
                 (team trial round 3), where Hand over keeps past results with the AM who earned them (§13.30). */}
           {isNew && (
@@ -378,12 +391,12 @@ export function GeneralTab({
           <TextField
             form={form}
             path="address.line1"
-            label="Address line 1"
+            label="Legal address"
             required
             nullable={false}
             maxLength={200}
           />
-          <TextField form={form} path="address.line2" label="Address line 2" maxLength={200} />
+          <TextField form={form} path="address.line2" label="Physical address" maxLength={200} />
           <TextField form={form} path="address.city" label="City" maxLength={100} />
           <TextField form={form} path="address.state" label="State / region" maxLength={100} placeholder="Optional" />
           <SelectField
@@ -447,7 +460,8 @@ export function GeneralTab({
               <span className="strong">Credit alert levels</span>
               <span className="muted small">% of the credit limit</span>
             </div>
-            <div className="credit-bar" aria-hidden="true">
+            {/* Bands follow the levels set (team trial round 7): clear up to Notice, then notice, warning and critical. */}
+            <div className="credit-bar" aria-hidden="true" style={{ background: levelBands(levels) }}>
               <span className="cb-notice" style={{ left: `${Math.min(100, levels.notice)}%` }} />
               <span className="cb-warning" style={{ left: `${Math.min(100, levels.warning)}%` }} />
               <span className="cb-critical" style={{ left: `${Math.min(100, levels.critical)}%` }} />

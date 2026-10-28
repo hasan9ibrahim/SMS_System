@@ -381,7 +381,7 @@ export const topics: HelpTopic[] = [
                 name: "Payment Type",
                 what: "**Credit** or **Debit**. This decides whether the balance goes up or down. The hint under the field says it in words, e.g. “Raises the customer's balance by 5,000.00 EUR”.",
                 values:
-                  "Customer side: Credit raises the balance, Debit lowers it. Vendor side: Debit raises it, Credit lowers it.",
+                  "Customer side: Credit raises the balance, Debit lowers it. Vendor side: Debit raises it, Credit lowers it. A new customer transaction starts as Credit and a vendor one as Debit; picking a customer or vendor enterprise switches the side to match.",
               },
               {
                 name: "Payment Date",
@@ -425,7 +425,7 @@ export const topics: HelpTopic[] = [
             title: "Confirmation and SOA",
             fields: [
               {
-                name: "Send payment confirmation",
+                name: "Send payment confirmation (vendor: Send payment)",
                 what: "On a new transaction, e-mails a confirmation to the partner's billing contacts when you save. The save button then reads **Add and send confirmation**. When editing, the tick box is stored but does not send; use **Send confirmation** in the detail panel instead.",
                 values:
                   "Default comes from the side's billing settings. **Preview** shows the recipients, subject and text, including the balance after this payment.",
@@ -456,7 +456,7 @@ export const topics: HelpTopic[] = [
               "For a customer payment against an invoice, pick the invoice in **Invoice Number**. The list shows each invoice's date, due amount and payment status.",
               "Check **Transaction Type**, **Mode of Payment** and **Payment Type**. Read the hint under Payment Type to be sure the balance moves the right way.",
               "Enter the **Payment Date**, **Amount** and **Source Currency**. Check the converted **Final Amount**.",
-              "Tick **Send payment confirmation** if the partner should get an e-mail, and click **Preview** to check it.",
+              "Tick **Send payment confirmation** (**Send payment** for a vendor) if the partner should get an e-mail, and click **Preview** to check it.",
               "Click **Add transaction** (or **Add and send confirmation**). A message confirms the save and whether the confirmation was sent or failed.",
             ],
           },

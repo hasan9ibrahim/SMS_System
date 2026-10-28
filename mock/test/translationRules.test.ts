@@ -209,6 +209,20 @@ describe("translation engine (§6.4)", () => {
     assert.equal(res.blocked, true);
   });
 
+  test("value rows, each with its own match and case (team trial round 8)", () => {
+    const blocked = (over: Partial<EngineRule>, sender: string) =>
+      runRules([{ rule: rule(1, { action: "block", ...over }) }], { ...msg, sender }, ctx).blocked;
+    const rows = [
+      { value: "BANK", match: "is" as const, matchCase: true },
+      { value: "promo", match: "contains" as const, matchCase: false },
+    ];
+    assert.equal(blocked({ senderValues: rows }, "BANK"), true);
+    assert.equal(blocked({ senderValues: rows }, "bank"), false);
+    assert.equal(blocked({ senderValues: rows }, "BIG-PROMO"), true);
+    assert.equal(blocked({ senderValues: rows, senderPatternNegate: true }, "BIG-PROMO"), false);
+    assert.equal(blocked({ receiverValues: [{ value: "0044", match: "starts", matchCase: false }] }, "x"), true);
+  });
+
   test("Match case for the Sender ID conditions: exact capitals when on, any case when off (team trial round 1)", () => {
     const lists: EngineContext = { ...ctx, lists: new Map([[3, ["BANK", "SHOP{n}"]]]) };
     const blocked = (over: Partial<EngineRule>, sender: string) =>
@@ -372,6 +386,7 @@ describe("translation rules API", { skip }, () => {
     const id = created.record.id as number;
     assert.equal(created.record.usedBy, 1);
     assert.equal(created.record.senderMatchCase, true, "missing in the input = Match case on");
+    assert.deepEqual(created.record.senderValues, [], "missing in the input = no value rows");
     const usedBy = await ok("getTranslationRuleUsedBy", call("GET", `/translation-rules/${id}/used-by`));
     assert.equal(usedBy.trunks[0].id, t1);
 
@@ -471,6 +486,41 @@ describe("translation rules API", { skip }, () => {
     await undo(edited.change);
     const restored = await ok("getTranslationRule", call("GET", `/translation-rules/${id}`));
     assert.equal(restored.senderMatchCase, true);
+    await undo(created.change);
+  });
+
+  test("Sender ID value rows: saved trimmed, kept when left out, tested, undone (team trial round 8)", async () => {
+    const input: TranslationRuleInput = { ...BLANK, name: `Block rows ${run}`, action: "block", targets: [] };
+    const created = await ok("createTranslationRule", call("POST", "/translation-rules", input), 201);
+    const id = created.record.id as number;
+    assert.deepEqual(created.record.senderValues, [], "missing in the input = no rows");
+    const edited = await ok(
+      "updateTranslationRule",
+      call("PUT", `/translation-rules/${id}`, {
+        ...input,
+        senderValues: [{ value: " BANK ", match: "is", matchCase: false }],
+      }),
+    );
+    assert.deepEqual(edited.record.senderValues, [{ value: "BANK", match: "is", matchCase: false }]);
+    const kept = await ok("updateTranslationRule", call("PUT", `/translation-rules/${id}`, input));
+    assert.equal(kept.change, null, "rows left out of an edit are kept");
+    const test = (sender: string) =>
+      ok(
+        "testTranslationRule",
+        call("POST", `/translation-rules/${id}/test`, { message: { sender, receiver: "447123456", text: "hi" } }),
+      );
+    assert.equal((await test("bank")).blocked, true, "the row ignores case");
+    assert.equal((await test("BANKS")).blocked, false, "is = the whole value");
+    const found = await ok(
+      "queryTranslationRules",
+      call("POST", "/translation-rules/query", {
+        limit: 50,
+        filter: { logic: "and", conditions: [{ field: "senderPattern", op: "like", value: "BANK" }] },
+      }),
+    );
+    assert.ok(found.rows.some((r: { id: number }) => r.id === id), "the Sender ID filter finds row values");
+    await undo(edited.change);
+    assert.deepEqual((await ok("getTranslationRule", call("GET", `/translation-rules/${id}`))).senderValues, []);
     await undo(created.change);
   });
 

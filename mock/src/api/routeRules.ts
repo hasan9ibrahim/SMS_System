@@ -18,6 +18,7 @@ import type {
   RouteVendor,
   RouteWhitelist,
   TrafficWindow,
+  ValueMatch,
 } from "@sms/contract";
 import { toPlatformSql } from "../currency.js";
 import { withDb } from "../db.js";
@@ -108,6 +109,9 @@ const JSONS: FieldSpec[] = [
   { api: "revenue", col: "revenue_condition", cast: "::jsonb" },
   { api: "hlrAction", col: "hlr_action", cast: "::jsonb" },
   { api: "qbrWeights", col: "qbr_weights", cast: "::jsonb" },
+  // Value rows keep their camelCase keys (arrays are stored as given, team trial round 8).
+  { api: "senderValues", col: "sender_values", cast: "::jsonb" },
+  { api: "receiverValues", col: "receiver_values", cast: "::jsonb" },
 ];
 const ARRAY_FIELDS = new Set(["categoryIds", "customerTrunkIds", "vendorCategoryIds", "vendorTrunkIds"]);
 const FIELD_PATHS = [...SCALARS, ...JSONS].map((s) => s.api).concat(["vendors", "whitelists"]);
@@ -301,6 +305,8 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     senderMatchCase: true,
     receiverPattern: null,
     receiverPatternNegate: false,
+    senderValues: [],
+    receiverValues: [],
     contentPattern: null,
     contentPatternNegate: false,
     senderListId: null,
@@ -337,6 +343,11 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     if (v !== undefined) out[k] = typeof v === "string" && k !== "name" && v.trim() === "" ? null : v;
   out.name = String(out.name).trim();
   out.mccmncs = [...new Set(out.mccmncs as string[])];
+  // Value rows (team trial round 8): trimmed, blank rows dropped.
+  for (const k of ["senderValues", "receiverValues"])
+    out[k] = ((out[k] as ValueMatch[]) ?? [])
+      .map((r) => ({ value: r.value.trim(), match: r.match, matchCase: r.matchCase }))
+      .filter((r) => r.value !== "");
   // Vendors keep a stable order so an unchanged list never shows as a change.
   out.vendors = [...(out.vendors as RouteVendor[])]
     .map((v) => ({

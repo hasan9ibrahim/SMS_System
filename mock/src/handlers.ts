@@ -2,6 +2,7 @@
 // Data comes from the PostgreSQL database seeded by the generator (npm run seed:small);
 // without it, data operations answer 503 and /me falls back to a demo user.
 import { invalidateLiveRoutes } from "./live/routing.js";
+import { getRnReport } from "./api/rnReports.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Health, ListId, operations } from "@sms/contract";
 import { contractVersion } from "./contract.js";
@@ -995,6 +996,8 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryEmailTemplates: queryList("email_templates"),
   // Switch utilities (§8)
   queryEmailLogs: queryList("email_logs"),
+  queryRnReports: queryList("rn_reports"),
+  getRnReport,
   exportEmailLogs,
   getEmailLog,
   sendRateNotifications,

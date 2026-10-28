@@ -1,8 +1,8 @@
 // A trunk's Rules (§13.2): every translation rule (and, on customer trunks, HLR rule) that
 // runs on the trunk, where it comes from (this trunk, its enterprise, its category or all
-// trunks) and its order. Order, on/off and "continue" belong to this trunk only; which trunks a rule is attached to is
-// changed on the rule itself (team trial round 6: no Remove here). Rows are dragged to reorder
-// and the two kinds sit side by side (team trial round 4).
+// trunks) and its order. Order, on/off and "continue" belong to this trunk only. A rule attached to this trunk directly
+// can be removed here (team trial round 7); one that reaches it through its enterprise, category or all trunks is
+// switched off here or changed on the rule. Rows are dragged to reorder and the two kinds sit side by side (round 4).
 import { useEffect, useState } from "react";
 import type { TrunkRule, TrunkRulesInput } from "@sms/contract";
 import { useSaveTrunkRules, useTrunkRules, type TrunkKind } from "../../api/records";
@@ -11,6 +11,7 @@ import { useNotifySaved } from "../../history/undo";
 import { HeaderAction, type SectionProps } from "../../records/parts";
 import { toast } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
+import { Icon } from "../../ui/Icon";
 import { TranslationTest } from "../switch/TranslationTest";
 import { useDragOrder } from "../../records/dragOrder";
 
@@ -56,6 +57,7 @@ function RuleTable({
               <th>Rule</th>
               <th>On</th>
               {withContinue && <th title="Run the next rule after this one matches">Continue</th>}
+              <th aria-label="Remove" />
             </tr>
           </thead>
           <tbody>
@@ -80,7 +82,7 @@ function RuleTable({
                       </span>
                       {r.source.type !== "trunk" && <span className="muted small">{r.source.label}</span>}
                       {!r.ruleActive && <span className="tag">Rule inactive</span>}
-                      {r.detach && <span className="tag">Detach on save</span>}
+                      {r.detach && <span className="tag">Removed on save</span>}
                     </div>
                     {r.detail && <div className="muted small rule-detail">{r.detail}</div>}
                   </td>
@@ -104,6 +106,24 @@ function RuleTable({
                       />
                     </td>
                   )}
+                  <td className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      disabled={disabled || r.source.type !== "trunk"}
+                      aria-label={r.detach ? `Keep ${r.name}` : `Remove ${r.name} from this trunk`}
+                      title={
+                        r.source.type !== "trunk"
+                          ? `Reaches this trunk through ${SOURCE_LABEL[r.source.type].toLowerCase()} ${r.source.label}: untick On to stop it here, or change the rule's trunks`
+                          : r.detach
+                            ? "Keep it on this trunk"
+                            : "Remove from this trunk (on save)"
+                      }
+                      onClick={() => patch(i, { detach: !r.detach })}
+                    >
+                      <Icon name={r.detach ? "undo" : "trash"} size={14} />
+                    </button>
+                  </td>
                 </tr>
               );
             })}

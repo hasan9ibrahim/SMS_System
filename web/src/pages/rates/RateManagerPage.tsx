@@ -78,10 +78,14 @@ const KINDS: { value: Kind; label: string }[] = [
 
 /**
  * Customer (sell) tables by default; vendor tables are also shown in each vendor trunk (team trial
- * round 1). The switch sets the Type column filter, so it travels in the URL like any filter.
+ * round 1). The switch keeps its Type condition under its own key: it applies and travels in the URL like any
+ * filter, but does not fill the Type box under the header (team trial round 7).
  */
+const KIND_KEY = "kindSwitch";
+const kindCondition = (kind: Kind) => ({ field: "kind", op: "in" as const, values: [kind] });
+
 function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
-  const c = state.columns.kind;
+  const c = state.columns[KIND_KEY];
   const list = c?.values ?? (c?.value !== undefined ? [c.value] : []);
   // Neither is lit when the Type filter was cleared or set to both from the filter bar.
   const kind: Kind | null = list.length === 1 ? (list[0] as Kind) : null;
@@ -94,7 +98,7 @@ function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridS
           className={kind === k.value ? "on" : ""}
           aria-pressed={kind === k.value}
           onClick={() => {
-            setState({ ...state, columns: { ...state.columns, kind: { field: "kind", op: "in", values: [k.value] } } });
+            setState({ ...state, columns: { ...state.columns, [KIND_KEY]: kindCondition(k.value) } });
           }}
         >
           {k.label}
@@ -113,11 +117,12 @@ function FullList({ compact = false }: { compact?: boolean }) {
   const restore = useRestore("rate_table");
   const notifySaved = useNotifySaved();
   const isAdmin = isAdminUser(me?.permissions);
-  // The first two names in bold, then "+N"; pointing at the cell lists them all (team trial round 1).
+  // The first two names, then "+N"; pointing at the cell lists them all (team trial round 1). Normal weight: only the
+  // table name is the key column (team trial round 7).
   const names = (list: string[], total: number) =>
     list.length ? (
       <HoverList items={list} more={Math.max(0, total - list.length)}>
-        <span className="rr-strong rr-label">
+        <span className="rr-label">
           <span className="rr-main">{list.slice(0, 2).join(", ")}</span>
           {total > 2 ? <span className="muted">+{total - 2}</span> : null}
         </span>
@@ -130,6 +135,8 @@ function FullList({ compact = false }: { compact?: boolean }) {
       list="rate_tables"
       page={page}
       {...(compact ? { onlyColumns: ["name"] } : {})}
+      // Average margin on request (team trial round 7): Columns shows it.
+      defaultHidden={["avgMarginPct"]}
       historyScope={{ entityTypes: ["rate_table"] }}
       rowActions={(r) => [
         // Editing the rates opens the table beside the list (§13.12).
@@ -203,7 +210,7 @@ function FullList({ compact = false }: { compact?: boolean }) {
         ],
       }}
       primary={{ label: "New rate table", onClick: () => void newRateTable((id) => open(id)) }}
-      initialState={{ columns: { kind: { field: "kind", op: "in", values: ["customer"] } } }}
+      initialState={{ columns: { [KIND_KEY]: kindCondition("customer") } }}
       toolbar={(state, setState) => {
         const c = state.columns.accountManagerId;
         return (

@@ -101,7 +101,7 @@ const COND_SQL = (withTrunks: boolean) => `concat_ws('|', r.status, r.match_mode
   (SELECT array_agg(x ORDER BY x) FROM unnest(r.category_ids) x)::text, r.customer_trunk_mode,
   ${withTrunks ? "(SELECT array_agg(x ORDER BY x) FROM unnest(r.customer_trunk_ids) x)::text" : "''"},
   r.mccmnc_mode, (SELECT array_agg(x ORDER BY x) FROM unnest(r.mccmncs) x)::text, r.mccmnc_pattern,
-  r.sender_pattern, r.sender_pattern_negate, r.sender_match_case, r.receiver_pattern, r.receiver_pattern_negate, r.content_pattern,
+  r.sender_pattern, r.sender_pattern_negate, r.sender_match_case, r.receiver_pattern, r.receiver_pattern_negate, r.sender_values::text, r.receiver_values::text, r.content_pattern,
   r.content_pattern_negate, r.sender_list_id, r.sender_list_negate, r.receiver_list_id, r.receiver_list_negate, r.tps_condition::text, r.revenue_condition::text,
   r.starts_at, r.stops_at, r.hlr_action, r.hlr_ported, r.deny_multipart)`;
 const ROUTE_SQL = `concat_ws('|', r.route_type, r.hunt_policy, r.enable_backup_routes, r.vendor_category_mode,
@@ -1234,7 +1234,9 @@ export function checkDuplicate(request: FastifyRequest, reply: FastifyReply) {
           x.categoryMode === (r.categoryMode ?? "all") &&
           set(x.categoryIds) === set(r.categoryIds ?? []) &&
           (x.senderPattern ?? null) === (r.senderPattern ?? null) &&
-          (x.receiverPattern ?? null) === (r.receiverPattern ?? null);
+          (x.receiverPattern ?? null) === (r.receiverPattern ?? null) &&
+          JSON.stringify(x.senderValues ?? []) === JSON.stringify(r.senderValues ?? []) &&
+          JSON.stringify(x.receiverValues ?? []) === JSON.stringify(r.receiverValues ?? []);
         if (!same) continue;
         const sameVendors =
           x.routeType === (r.routeType ?? "static") && vendors(x.vendors) === vendors(r.vendors ?? []);

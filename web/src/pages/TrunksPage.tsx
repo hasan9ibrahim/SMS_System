@@ -101,7 +101,7 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
           render: (r) =>
             r.rulesCount ? (
               <HoverList items={r.ruleNames} more={r.rulesCount - r.ruleNames.length} heading="Rules running">
-                <span className="rr-strong num">{r.rulesCount}</span>
+                <span className="num">{r.rulesCount}</span>
               </HoverList>
             ) : (
               <span className="muted">—</span>

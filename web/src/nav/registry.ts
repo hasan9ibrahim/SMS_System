@@ -226,6 +226,16 @@ export const PAGES: PageDef[] = [
   ),
   p(
     "rates",
+    "rn-report",
+    "RN report",
+    "/rates/rn-report",
+    "mail",
+    "§8, §13.10",
+    "R7",
+    "Every rate notification sent: who got it and who did not",
+  ),
+  p(
+    "rates",
     "market-moves",
     "Market moves",
     "/rates/market-moves",

@@ -33,6 +33,7 @@ import { Button } from "../../ui/primitives";
 import { HeaderAction, type SectionProps } from "../../records/parts";
 import { balanceWords } from "../finance/financeModel";
 import { tzOptions } from "../../ui/timezones";
+import { levelBands } from "./GeneralTab";
 
 type Side = "customer" | "vendor";
 interface Form {
@@ -179,7 +180,8 @@ function SideSection({
       <CheckField
         form={form}
         path={p("sendPaymentConfirmation")}
-        label="Send payment confirmation"
+        // To a vendor it is the payment itself (team trial round 7).
+        label={side === "vendor" ? "Send payment" : "Send payment confirmation"}
         hint="Default for new payments"
       />
       {side === "vendor" && v.billingType === "prepaid" && (
@@ -191,6 +193,14 @@ function SideSection({
             label="Balance alert"
             hint="Alert as the prepaid funds are used up"
           />
+          {/* The same coloured bands as the credit alert levels (team trial round 7). */}
+          {v.balanceAlert && v.balanceAlertPercent && (
+            <div className="credit-bar wide" aria-hidden="true" style={{ background: levelBands(v.balanceAlertPercent) }}>
+              {(["notice", "warning", "critical"] as const).map((k) => (
+                <span key={k} className={`cb-${k}`} style={{ left: `${Math.min(100, v.balanceAlertPercent![k])}%` }} />
+              ))}
+            </div>
+          )}
           {v.balanceAlert &&
             (["notice", "warning", "critical"] as const).map((k) => (
               <NumberField

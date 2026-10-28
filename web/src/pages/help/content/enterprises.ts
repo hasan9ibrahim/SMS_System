@@ -158,7 +158,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Click **New enterprise**. An empty record opens in a new tab on the **General** tab.",
-              "Fill in at least **Full Legal Name**, **Brand Name**, **Business company**, **Account manager** (picked once here; later changes go through **Hand over**), **Address line 1** and one e-mail address for each of the four contacts (Commercial, Technical, Rates, Finance).",
+              "Fill in at least **Full Legal Name**, **Brand Name**, **Business company**, **Account manager** (picked once here; later changes go through **Hand over**), **Legal address** and one e-mail address for each of the four contacts (Commercial, Technical, Rates, Finance).",
               "Pick the **Type**: Customer, Vendor or Bilateral (both).",
               "Click **Add enterprise**. The record saves and the other tabs (Docs, Billing, trunks, Account managers, History) become available.",
               "Go to **Billing** and click **Set up customer billing** and/or **Set up vendor billing**, then **Save billing**.",
@@ -355,10 +355,10 @@ export const topics: HelpTopic[] = [
             kind: "fields",
             title: "Address",
             fields: [
-              { name: "Address line 1", what: "Street address. Required.", values: "Up to 200 characters." },
+              { name: "Legal address", what: "The registered address. Required.", values: "Up to 200 characters." },
               {
-                name: "Address line 2",
-                what: "Extra address line (building, floor).",
+                name: "Physical address",
+                what: "Where the partner actually operates, when it differs from the legal address.",
                 values: "Optional, up to 200 characters.",
               },
               { name: "City", what: "City.", values: "Optional, up to 100 characters." },
@@ -600,8 +600,8 @@ export const topics: HelpTopic[] = [
                 values: "Tick box. On by default.",
               },
               {
-                name: "Send payment confirmation",
-                what: "The default for new payments: whether a payment confirmation e-mail is sent to the partner. It can still be changed per payment.",
+                name: "Send payment confirmation / Send payment",
+                what: "The default for new payments: whether the payment e-mail is sent to the partner (a confirmation to a customer, the payment to a vendor). It can still be changed per payment.",
                 values: "Tick box.",
               },
               { name: "Description", what: "Free notes about the billing arrangement.", values: "Optional text." },
@@ -654,23 +654,6 @@ export const topics: HelpTopic[] = [
           {
             kind: "text",
             text: "Every trunk field is explained in [[trunk-record|Trunk record]].",
-          },
-        ],
-      },
-      {
-        id: "rules",
-        title: "Rules tab",
-        blocks: [
-          {
-            kind: "text",
-            text: "The translation rules (and, for customer trunks, the HLR rules) that run on this enterprise's trunks, side by side, in one order. A bilateral partner switches between **Customer trunks** and **Vendor trunks**. **Trunks** says how many of its trunks each rule runs on.",
-          },
-          {
-            kind: "steps",
-            items: [
-              "Drag a rule by its handle (⠿) to its new place, or focus a row and press **Alt+↑** / **Alt+↓**.",
-              "Click **Save order**. Every trunk of that kind gets this order for the rules that reach it, as one change you can undo. A trunk can still change its own order on its Rules tab.",
-            ],
           },
         ],
       },
@@ -1716,7 +1699,7 @@ export const topics: HelpTopic[] = [
             title: "Rule table columns",
             fields: [
               { name: "#", what: "Run order on this trunk." },
-              { name: "Rule", what: "Rule name. Tags show **Rule inactive** or **Detach on save**." },
+              { name: "Rule", what: "Rule name. Tags show **Rule inactive** or **Removed on save**." },
               {
                 name: "Applies through",
                 what: "Why the rule reaches this trunk: **Direct** (attached to this trunk), **Enterprise**, **Category** or **All trunks**.",
@@ -1728,8 +1711,8 @@ export const topics: HelpTopic[] = [
                 what: "Translation rules only. When ticked, the next rule also runs after this one matches.",
               },
               {
-                name: "⠿ / Detach",
-                what: "Drag the handle to change the order (or Alt+↑ / Alt+↓ on a focused row). **Detach** (direct rules only) removes the rule's link to this trunk on save; **Keep** undoes that before saving.",
+                name: "⠿ / Remove",
+                what: "Drag the handle to change the order (or Alt+↑ / Alt+↓ on a focused row). The bin (**Remove**) takes a rule attached to this trunk directly off it on save; click it again to keep the rule. A rule that reaches the trunk through its enterprise, category or all trunks cannot be removed here: untick **On** to stop it on this trunk, or change the rule's trunks.",
               },
             ],
           },
@@ -1737,7 +1720,7 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "How to change the rules on a trunk",
             items: [
-              "Drag rules to reorder them (translation and HLR rules sit side by side), tick or untick **On** and **Continue**, or click **Detach**.",
+              "Drag rules to reorder them (translation and HLR rules sit side by side), tick or untick **On** and **Continue**, or click the bin to remove a direct rule.",
               "Click **Save rules**. **Discard** drops your edits.",
             ],
           },

@@ -75,6 +75,7 @@ export const TABLE_ORDER = [
   "firewall_filters",
   "firewall_rules",
   "email_logs",
+  "rn_reports",
   "traffic_alerts",
   "sms_voice_rules",
   "broadcasts",

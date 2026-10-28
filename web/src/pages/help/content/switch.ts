@@ -152,8 +152,8 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Is Continue",
-                what: "When ticked, the trunk carries on with its next rule after this one matches. When cleared, this rule is the last one to run for a matching message. A trunk can override this for itself on its Rules tab.",
-                values: "Cleared by default for a new rule.",
+                what: "A small switch: **YES · next rules** carries on with the trunk's next rule after this one matches; **STOP** makes this rule the last one to run for a matching message. A trunk can override this for itself on its Rules tab.",
+                values: "STOP by default for a new rule.",
               },
               {
                 name: "Start",
@@ -225,7 +225,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "The section is one compact grid: a row each for **Sender ID** (with **Case sensitive** under its name), **Receiver ID**, **Message text** and **MCCMNC**; columns **Pattern (regex)**, **Number list / networks** and **Length** (min – max). Each pattern and list has its own Match / Not Match switch. For MCCMNC, type a pattern or click **Pick networks…** to tick countries and networks in a window (the row then shows how many and which; **Clear** empties it).",
+            text: "The section is one compact grid: a row each for **Sender ID** (with **Case sensitive** under its name), **Receiver ID**, **Message text** and **MCCMNC**; columns **Pattern (regex)** and **Number list / networks**. Each pattern and list has its own Match / Not Match switch. Under Sender ID and Receiver ID, **values** lists exact values as rows: click **Add Sender ID** (or **Add Receiver**), type the value, pick **Is**, **Starts with** or **Contains**, and for Sender IDs tick **Case sensitive** per row. Any row matching is a hit; the Match / Not Match after the pattern applies to the rows too. Paste a list (one per line or comma separated) into a row to get one row each. **Case sensitive** under the Sender ID name is for the pattern and the list only. For MCCMNC, type a pattern or click **Pick networks…** to tick countries and networks in a window (the row then shows how many and which; **Clear** empties it).",
           },
           {
             kind: "fields",
@@ -278,14 +278,9 @@ export const topics: HelpTopic[] = [
                 values: "For example `^415` (every Lebanese network) or `^(415|420)`. Empty = not used.",
               },
               {
-                name: "Sender ID Min Length / Sender ID Max Length",
-                what: "Allowed length of the Sender ID in characters.",
-                values: "Min 0–20 (default 0), Max 1–20 (default 20). Min must not exceed Max.",
-              },
-              {
-                name: "Receiver ID Min Length / Receiver ID Max Length",
-                what: "Allowed length of the receiver number in characters.",
-                values: "Min 0–20 (default 0), Max 1–20 (default 20).",
+                name: "Sender ID values / Receiver values",
+                what: "Exact values as rows, each with its own match and (Sender ID only) its own case. Any row matching is a hit.",
+                values: "Match: **Is** (the whole value), **Starts with** or **Contains**. Case sensitive on by default for a new Sender ID row; a new row copies the match and case of the row above.",
               },
             ],
           },
@@ -586,9 +581,9 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             title: "Clone",
             items: [
-              "Select the rule and click **Clone** in the detail panel.",
-              "A copy named “… (copy)” is created as **Inactive** and with no targets, so it does not touch traffic.",
-              "Edit the copy, add its targets and set it Active.",
+              "Select the rule and click **Clone** in the detail panel (or Clone in the row's menu).",
+              "A new rule window opens filled from the rule, named “… (copy)” and **Inactive**; nothing is saved yet.",
+              "Change what differs, check its targets and click **Add rule**. Set it Active when ready; Cancel saves nothing.",
             ],
           },
           {

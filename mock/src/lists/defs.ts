@@ -19,6 +19,7 @@ import { lcrChangeList, lcrProfileList } from "../api/lcr.js";
 import { visibilityAssignmentList, visibilityGrantList, visibilityPolicyList } from "../api/visibility.js";
 import { teamTimelineList } from "../api/team.js";
 import { cleanupFindingList } from "../api/cleanup.js";
+import { rnReportList } from "../api/rnReports.js";
 import { money, PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import type {
   PcapTraceRow,
@@ -804,6 +805,7 @@ const ROUTE_MAP_COLUMNS: [string, string][] = [
   ["margin", "numeric"],
   ["marginPct", "numeric"],
   ["decidedBy", "text"],
+  ["vendorSetup", "jsonb"],
 ];
 
 /** The trunk of a route map query (a top-level customerTrunkId eq condition), or null. */
@@ -850,6 +852,7 @@ export const routeMapList: ListDef<RouteMapRow> = {
     margin: r.margin == null ? null : Number(r.margin),
     marginPct: r.marginPct == null ? null : Number(r.marginPct),
     decidedBy: (r.decidedBy as string | null) ?? null,
+    vendorSetup: (r.vendorSetup as RouteMapRow["vendorSetup"] | null) ?? [],
     currency: PLATFORM_CURRENCY,
   }),
 };
@@ -1436,6 +1439,9 @@ const trTargetNames = `ARRAY(SELECT CASE trt.target_type
         || COALESCE((SELECT pc.name FROM product_categories pc WHERE pc.id = trt.target_id), '#' || trt.target_id) END
     FROM translation_rule_targets trt WHERE trt.translation_rule_id = tr.id
     ORDER BY trt.trunk_kind, array_position(ARRAY['all','category','enterprise','trunk'], trt.target_type), 1 LIMIT 100)`;
+/** The pattern and the value rows' values as one text, for the Sender ID / Receiver ID filters (team trial round 8). */
+const trValuesText = (side: "sender" | "receiver") =>
+  `concat_ws(' ', tr.${side}_pattern, (SELECT string_agg(v->>'value', ' ') FROM jsonb_array_elements(tr.${side}_values) v))`;
 const trConversionValue = `CASE WHEN tr.sender_conversion IN ('random_number','sender_id_template') THEN cl.name
     ELSE tr.sender_conversion_value END`;
 
@@ -1451,8 +1457,9 @@ export const translationRuleList: ListDef<TranslationRuleRow> = {
     direction: { sql: "tr.direction" },
     action: { sql: "tr.action" },
     continueAfter: { sql: "tr.continue_after" },
-    senderPattern: { sql: "tr.sender_pattern" },
-    receiverPattern: { sql: "tr.receiver_pattern" },
+    // The pattern and the value rows' values (team trial round 8): "BANK" finds a rule with a BANK row.
+    senderPattern: { sql: trValuesText("sender") },
+    receiverPattern: { sql: trValuesText("receiver") },
     // Codes or names: "208" finds rules listing 208…, "France" or "Orange" rules listing a matching code.
     mccmncs: {
       sql: "array_to_string(tr.mccmncs, ',')",
@@ -1480,7 +1487,7 @@ export const translationRuleList: ListDef<TranslationRuleRow> = {
   },
   search: ["name", "senderPattern", "receiverPattern", "contentPattern"],
   idSql: "tr.id",
-  select: `tr.id, tr.name, tr.direction, tr.action, tr.continue_after, tr.sender_pattern, tr.receiver_pattern, tr.mccmncs,
+  select: `tr.id, tr.name, tr.direction, tr.action, tr.continue_after, tr.sender_pattern, tr.receiver_pattern, tr.sender_values, tr.receiver_values, tr.mccmncs,
     tr.content_pattern, tr.sender_conversion, ${trConversionValue} AS sender_conversion_value, tr.status,
     ${appliesToSql} AS applies_to, ${trTargetNames} AS target_names, ${trMccmncNames} AS mccmnc_names,
     (SELECT count(*)::int FROM translation_rule_targets x WHERE x.translation_rule_id = tr.id) AS target_count,
@@ -1494,6 +1501,8 @@ export const translationRuleList: ListDef<TranslationRuleRow> = {
     continueAfter: r.continue_after as boolean,
     senderPattern: (r.sender_pattern as string | null) ?? null,
     receiverPattern: (r.receiver_pattern as string | null) ?? null,
+    senderValues: (r.sender_values as TranslationRuleRow["senderValues"]) ?? [],
+    receiverValues: (r.receiver_values as TranslationRuleRow["receiverValues"]) ?? [],
     mccmncs: (r.mccmncs as string[]) ?? [],
     mccmncNames: (r.mccmnc_names as string[]) ?? [],
     contentPattern: (r.content_pattern as string | null) ?? null,
@@ -3219,6 +3228,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   visibility_grants: visibilityGrantList as ListDef<unknown>,
   team_timeline: teamTimelineList as ListDef<unknown>,
   cleanup_findings: cleanupFindingList as ListDef<unknown>,
+  rn_reports: rnReportList as ListDef<unknown>,
   pcap_traces: pcapTraceList as ListDef<unknown>,
 };
 

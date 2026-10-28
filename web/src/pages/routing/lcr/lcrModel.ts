@@ -3,10 +3,9 @@
 import type { LcrProfileInput, LcrTable } from "@sms/contract";
 import { emptyState, encodeState } from "../../../grid/filterModel";
 
-export type LcrView = "table" | "clients" | "profiles" | "changes";
+export type LcrView = "table" | "profiles" | "changes";
 export const VIEWS: { key: LcrView; label: string }[] = [
   { key: "table", label: "LCR table" },
-  { key: "clients", label: "Client view" },
   { key: "profiles", label: "Profiles" },
   { key: "changes", label: "Changes" },
 ];

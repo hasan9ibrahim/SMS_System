@@ -533,19 +533,26 @@ export function ChildGrid<Row extends { id: number }>({
   hide?: string[];
   columns?: Partial<Record<string, ColumnOverride<Row>>>;
   onOpen: (row: Row, e: MouseEvent | KeyboardEvent) => void;
-  toolbar?: ReactNode;
+  /** Header actions; a function gets the ticked rows (team trial round 8: Delete on the trunk tabs). */
+  toolbar?: ReactNode | ((selected: Row[], clear: () => void) => ReactNode);
 }) {
   const fields = useListFields(list);
   const [state, setState] = useState<GridState>(() => ({ ...emptyState(), columns: { ...fixed } }));
   const [active, setActive] = useState<Row | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [rows, setRows] = useState<Row[]>([]);
   const visible = fields.data?.fields.filter((f) => !f.hidden && !hide.includes(f.field)).map((f) => f.field) ?? null;
   if (!fields.data)
     return <div className="grid-message muted">{fields.isError ? "Fields unavailable" : "Loading…"}</div>;
   return (
     <>
       <div className="filter-row">
-        {toolbar}
+        {typeof toolbar === "function"
+          ? toolbar(
+              rows.filter((r) => selected.has(r.id)),
+              () => setSelected(new Set()),
+            )
+          : toolbar}
         <span className="fb-spacer" />
         {/* Only lists with deleted (archived) records offer it (§13.29). */}
         {fields.data.fields.some((f) => f.field === "archived") && <ShowDeleted state={state} onChange={setState} />}
@@ -560,6 +567,7 @@ export function ChildGrid<Row extends { id: number }>({
         onActiveChange={setActive}
         selected={selected}
         onSelectedChange={setSelected}
+        onRows={setRows}
         onOpen={onOpen}
       />
     </>

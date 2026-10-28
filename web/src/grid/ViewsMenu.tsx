@@ -40,6 +40,7 @@ export function fromViewState(view: SavedView): GridState {
         : { logic: f!.logic, conditions: rest };
   return {
     columns,
+    pills: {},
     builder,
     search: view.state.search ?? "",
     sort: view.state.sort ?? [],

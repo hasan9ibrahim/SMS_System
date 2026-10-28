@@ -1171,6 +1171,48 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rn-reports/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List sent RN operations (server-side filter, sort and paging)
+     * @description RN report (team trial round 7, §8, §13.10): one row per rate notification send, from a rate table save or a
+     *     bulk rating. A send to one enterprise and table shows that e-mail in the row (enterprise, table, trunks,
+     *     recipients, result); a bulk send shows its totals and opens as the same report shown after the send.
+     */
+    post: operations["queryRnReports"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rn-reports/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One RN send with every e-mail it sent
+     * @description The report shown after the send (team trial round 7), one line per enterprise and rate table.
+     */
+    get: operations["getRnReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-notifications/query": {
     parameters: {
       query?: never;
@@ -10659,10 +10701,23 @@ export type components = {
       path: string;
       title: string;
       pinned: boolean;
+      /** @description The tab group it belongs to (team trial round 8, §13.5); missing or null = none. */
+      groupId?: string | null;
+    };
+    /** @description A named, coloured group of tabs, as in Chrome (team trial round 8, §13.5). Its tabs sit next to each other; collapsed hides them behind the group's label. */
+    TabGroup: {
+      id: string;
+      /** @description May be empty (the group shows as a coloured dot). */
+      label: string;
+      /** @enum {string} */
+      color: "grey" | "blue" | "red" | "yellow" | "green" | "pink" | "purple" | "cyan" | "orange";
+      collapsed: boolean;
     };
     Workspace: {
       tabs: components["schemas"]["WorkspaceTab"][];
       activeTabId: string | null;
+      /** @description Tab groups (team trial round 8); missing = none. A group without tabs is dropped on save. */
+      groups?: components["schemas"]["TabGroup"][];
     };
     SearchHit: {
       /** @enum {string} */
@@ -11613,6 +11668,8 @@ export type components = {
       note?: string;
       /** @description Apply increases that start sooner than a client's notice period (§13.14). */
       acceptNoticeBreach?: boolean;
+      /** @description Team trial round 8 ("send with notice"): a change that would start sooner than its client's notice period starts when the notice ends instead, counted from this save, as in bulk rating. */
+      respectNotice?: boolean;
       /** @description Text added to each rate notification e-mail and sheet sent by this save (team trial round 2). */
       notificationNote?: string | null;
       /**
@@ -12599,8 +12656,20 @@ export type components = {
       marginPct: number | null;
       /** @description How the vendor was chosen (priority, percentage, least cost, quality …). */
       decidedBy: string | null;
+      /** @description The deciding rule's vendors as configured (team trial round 8): level, share and backups, so the Route map shows several vendors and their percentages, not only the one picked. Empty for least cost and quality rules that rank every vendor, and when no rule decides. */
+      vendorSetup: components["schemas"]["RouteMapVendor"][];
       /** @description Platform currency of the converted figures. */
       currency: string;
+    };
+    RouteMapVendor: {
+      vendorTrunkId: components["schemas"]["Id"];
+      name: string;
+      /** @description 1 = first choice, 2 = next when level 1 fails, and so on. */
+      level: number;
+      /** @description Share of the level's traffic; null when the level has one vendor or splits by priority. */
+      sharePct: number | null;
+      /** @description A vendor's own backup. */
+      backup: boolean;
     };
     RouteMapPage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["RouteMapRow"][];
@@ -12841,6 +12910,18 @@ export type components = {
       id: components["schemas"]["Id"] | null;
       label: string;
     };
+    /** @description One Sender ID or receiver value of a rule's condition, as a row of its own (team trial round 8, §6.3, §6.4): the value, how it matches and whether capitals count. The rows of one condition are alternatives (any row matches); the condition's Negate flag turns the whole set into "is not". */
+    ValueMatch: {
+      /** @description As typed (no regex). */
+      value: string;
+      /**
+       * @description The whole value, its start, or anywhere in it.
+       * @enum {string}
+       */
+      match: "is" | "starts" | "contains";
+      /** @description Upper and lower case must match ("BANK" does not match "Bank"). Off, any case matches. */
+      matchCase: boolean;
+    };
     ContentWordRule: {
       /** @description The word or phrase, as typed (no regex). */
       find: string;
@@ -12879,6 +12960,10 @@ export type components = {
       senderMatchCase?: boolean;
       receiverPattern?: string | null;
       receiverPatternNegate?: boolean;
+      /** @description Sender ID values, one row each with its own match and case (team trial round 8). With a sender pattern too, both must match. Records always carry it; missing in the input of a new rule means none (an edit keeps the stored rows). senderMatchCase does not apply to these rows. */
+      senderValues?: components["schemas"]["ValueMatch"][];
+      /** @description Receiver values, one row each with its own match and case (team trial round 8), as senderValues. */
+      receiverValues?: components["schemas"]["ValueMatch"][];
       mccmncs?: string[];
       mccmncNegate?: boolean;
       /** @description Regular expression on the MCCMNC code (team trial round 2), as on route rules: `^415` is every Lebanese network. The destination matches when it is in `mccmncs` or matches this pattern; `mccmncNegate` turns the whole MCCMNC condition around. Missing in an input means none. */
@@ -13016,6 +13101,8 @@ export type components = {
       | "senderMatchCase"
       | "receiverPattern"
       | "receiverPatternNegate"
+      | "senderValues"
+      | "receiverValues"
       | "mccmncs"
       | "mccmncNegate"
       | "mccmncPattern"
@@ -13075,6 +13162,9 @@ export type components = {
       continueAfter: boolean;
       senderPattern: string | null;
       receiverPattern: string | null;
+      /** @description The Sender ID value rows (team trial round 8); the Sender ID column filter also finds their values. */
+      senderValues: components["schemas"]["ValueMatch"][];
+      receiverValues: components["schemas"]["ValueMatch"][];
       mccmncs: string[];
       /** @description The MCCMNC codes by name for the cell and its hover list (up to 100), e.g. "France · Orange (20801)" (team trial round 1). */
       mccmncNames: string[];
@@ -14774,6 +14864,42 @@ export type components = {
       /** @description False = nothing is e-mailed; the page downloads the sheets instead (View Rate). */
       sendEmail: boolean;
     };
+    /**
+     * @description One RN send (team trial round 7). For a send with one e-mail, enterprise, rateTable, trunks, to and reason are
+     *     that e-mail's; for a bulk send they summarise (e.g. "12 enterprises").
+     */
+    RnReportRow: {
+      id: components["schemas"]["Id"];
+      sentAt: components["schemas"]["Timestamp"];
+      sentBy: string | null;
+      /**
+       * @description A save on one rate table, or a bulk rating job.
+       * @enum {string}
+       */
+      source: "rate_table" | "bulk_rating";
+      /** @description The change (History, §13.10) that sent it. */
+      changeId: number | null;
+      /** @description E-mails in the send (one per enterprise and rate table). */
+      noticeCount: number;
+      sent: number;
+      failed: number;
+      /** @enum {string} */
+      status: "sent" | "partial" | "failed";
+      enterprise: string;
+      rateTable: string;
+      trunks: string;
+      to: string;
+      /** @description Why a one-e-mail send failed. */
+      reason: string | null;
+      /** @description The note typed for the RN. */
+      note: string | null;
+    };
+    RnReportPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RnReportRow"][];
+    };
+    RnReport: components["schemas"]["RnReportRow"] & {
+      notices: components["schemas"]["RateNoticeOutcome"][];
+    };
     /** @description One rate notification e-mail (team trial round 6, §8) - one per enterprise and customer rate table. */
     RateNoticeOutcome: {
       enterpriseId: components["schemas"]["Id"];
@@ -15120,6 +15246,10 @@ export type components = {
       mnc: string;
       /** @description ISO code. */
       country: string;
+      /** @description Destination of the customer's MCCMNC, "Country · Network" from the MCCMNC master (team trial round 7); empty when unknown. Filters match the name. */
+      customerDestination: string;
+      /** @description Destination of the vendor's MCCMNC (after HLR or porting), as customerDestination (team trial round 7). */
+      vendorDestination: string;
       customerBillingType: string;
       customerRateTableId: number;
       customerRate: number;
@@ -15188,6 +15318,8 @@ export type components = {
       hlrIsPorted: boolean;
       hlrIsAccomplished: boolean;
       hlrErrorCode: number;
+      /** @description HLR error in words (team trial round 7): "Timeout" for 408, "No result" for a lookup without an answer, "Error <code>" for a provider's code; empty when the lookup succeeded or none ran. */
+      hlrErrorText: string;
       hlrCostSys: number;
     };
     EdrPage: components["schemas"]["ListPageMeta"] & {
@@ -18167,6 +18299,10 @@ export type components = {
       senderMatchCase?: boolean;
       receiverPattern?: string | null;
       receiverPatternNegate?: boolean;
+      /** @description Sender ID values, one row each with its own match and case (team trial round 8). With a sender pattern too, both must match. Records always carry it; missing in the input of a new rule means none (an edit keeps the stored rows). senderMatchCase does not apply to these rows. */
+      senderValues?: components["schemas"]["ValueMatch"][];
+      /** @description Receiver values, one row each with its own match and case (team trial round 8), as senderValues. */
+      receiverValues?: components["schemas"]["ValueMatch"][];
       contentPattern?: string | null;
       contentPatternNegate?: boolean;
       senderListId?: components["schemas"]["Id"] | null;
@@ -18262,6 +18398,8 @@ export type components = {
       | "senderMatchCase"
       | "receiverPattern"
       | "receiverPatternNegate"
+      | "senderValues"
+      | "receiverValues"
       | "contentPattern"
       | "contentPatternNegate"
       | "senderListId"
@@ -18597,7 +18735,8 @@ export type components = {
       | "cleanup_findings"
       | "pcap_traces"
       | "portal_rates"
-      | "portal_messages";
+      | "portal_messages"
+      | "rn_reports";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -21355,6 +21494,58 @@ export interface operations {
           "application/problem+json": components["schemas"]["NoticeBreach"];
         };
       };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRnReports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of RN sends */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnReportPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRnReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The RN send */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnReport"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

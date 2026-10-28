@@ -67,12 +67,16 @@ export type NoticeOutcome = {
   reason: string | null;
 };
 
-/** Logs the notifications (customer tables only), one e-mail per enterprise and table; returns each e-mail's outcome. */
+/**
+ * Logs the notifications (customer tables only), one e-mail per enterprise and table; returns each e-mail's outcome.
+ * The send is kept for the RN report (team trial round 7) when `report` says where it came from.
+ */
 export async function sendRateNotices(
   db: Db,
   diff: DiffEntry[],
   userId: number,
   note?: string | null,
+  report?: { source: "rate_table" | "bulk_rating"; changeId: number | null },
 ): Promise<NoticeOutcome[]> {
   const byTable = noticeLines(diff);
   if (!byTable.size) return [];
@@ -128,5 +132,41 @@ export async function sendRateNotices(
       reason: status === "failed" ? "No rates or commercial contact e-mail for this enterprise" : null,
     });
   }
+  if (report && out.length) await saveRnReport(db, out, userId, report.source, report.changeId, note ?? null);
   return out;
+}
+
+const distinct = (xs: string[]) => [...new Set(xs)].join(", ");
+
+/** One row of the RN report (team trial round 7): the send's e-mails and the summary its list filters on. */
+export async function saveRnReport(
+  db: Db,
+  notices: NoticeOutcome[],
+  userId: number | null,
+  source: "rate_table" | "bulk_rating",
+  changeId: number | null,
+  note: string | null,
+  sentAt: Date = new Date(),
+): Promise<void> {
+  const sent = notices.filter((n) => n.status === "sent").length;
+  await db.query(
+    `INSERT INTO rn_reports (sent_at, user_id, source, change_id, note, notices, notice_count, sent_count, failed_count,
+                             enterprise_names, rate_table_names, trunk_names, to_addresses)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    [
+      sentAt,
+      userId,
+      source,
+      changeId,
+      note?.trim() || null,
+      JSON.stringify(notices),
+      notices.length,
+      sent,
+      notices.length - sent,
+      distinct(notices.map((n) => n.enterprise)),
+      distinct(notices.map((n) => n.rateTable)),
+      distinct(notices.flatMap((n) => n.trunks)),
+      distinct(notices.flatMap((n) => n.to)),
+    ],
+  );
 }

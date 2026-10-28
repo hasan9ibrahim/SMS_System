@@ -264,7 +264,10 @@ function DateForm({ value, onApply }: { value: string | null; onApply: (iso: str
  * Changes that start sooner than a client's notice period allows (§13.14). Team trial round 6: every breach is listed
  * (scroll), with a search by client table or MCCMNC, instead of the first twelve and "+N more".
  */
-export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok: boolean | null) => void }) {
+/** How to go on with changes that start too soon: as asked (logged), or each when its notice ends (round 8). */
+export type NoticeChoice = "anyway" | "notice";
+
+export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (choice: NoticeChoice | null) => void }) {
   const byTable = breach.breaches.some((b) => b.table);
   const [q, setQ] = useState("");
   const needle = q.trim().toLowerCase();
@@ -284,8 +287,15 @@ export function NoticeDialog({ breach, done }: { breach: NoticeBreach; done: (ok
             {byTable ? ` on ${tables.size} client table${tables.size === 1 ? "" : "s"}` : ""} · applying anyway is logged
           </span>
           <Button onClick={() => done(null)}>Cancel</Button>
-          <Button variant="danger" onClick={() => done(true)}>
+          <Button variant="danger" onClick={() => done("anyway")}>
             Apply anyway
+          </Button>
+          <Button
+            variant="primary"
+            title="Each of these changes starts when its client's notice ends (the Earliest with notice date)"
+            onClick={() => done("notice")}
+          >
+            Send with notice
           </Button>
         </>
       }
@@ -658,11 +668,11 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     ));
     if (!v) return;
     setSendRn(v.sendRn);
-    return save(false, v);
+    return save(null, v);
   };
 
   const save = async (
-    acceptNoticeBreach = false,
+    notice: NoticeChoice | null = null,
     rn: { sendRn: boolean; note: string } = { sendRn, note: "" },
   ): Promise<void> => {
     const items = buildItems(pending, rowsById.current, effectiveFrom, Date.now(), fromChosen);
@@ -675,7 +685,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
         items,
         sendNotification: rn.sendRn && t?.kind === "customer",
         ...(rn.note.trim() ? { notificationNote: rn.note.trim() } : {}),
-        ...(acceptNoticeBreach ? { acceptNoticeBreach: true } : {}),
+        ...(notice === "anyway" ? { acceptNoticeBreach: true } : notice === "notice" ? { respectNotice: true } : {}),
       });
       setPending(new Map());
       setSelected(new Set());
@@ -690,10 +700,10 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
       showRnSummary(r.notifications);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        const ok = await ask<boolean>((done) => (
+        const choice = await ask<NoticeChoice>((done) => (
           <NoticeDialog breach={err.problem as unknown as NoticeBreach} done={done} />
         ));
-        if (ok) return save(true, rn);
+        if (choice) return save(choice, rn);
         return;
       }
       toast({ tone: "error", message: err instanceof ApiError ? err.message : String(err) });

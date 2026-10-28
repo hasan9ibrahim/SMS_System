@@ -407,7 +407,7 @@ export function RulesView() {
               <span className="tone-warning">Not assigned</span>
             ) : (
               <HoverList items={r.appliesToNames} more={r.appliesToCount - r.appliesToNames.length}>
-                <span className="rr-strong rr-label">
+                <span className="rr-label">
                   <span className="rr-main">{r.appliesTo}</span>
                 </span>
               </HoverList>

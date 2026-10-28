@@ -126,6 +126,8 @@ export function fetchListPage<Row>(list: ListId, body: ListQuery): Promise<ListP
       return unwrap(api.POST("/vendor-invoices/query", { body })) as Promise<ListPage<Row>>;
     case "email_logs":
       return unwrap(api.POST("/email-logs/query", { body })) as Promise<ListPage<Row>>;
+    case "rn_reports":
+      return unwrap(api.POST("/rn-reports/query", { body })) as Promise<ListPage<Row>>;
     case "firewall_rules":
       return unwrap(api.POST("/firewall-rules/query", { body })) as Promise<ListPage<Row>>;
     case "firewall_filters":

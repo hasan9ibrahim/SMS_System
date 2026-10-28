@@ -8,7 +8,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
   """
   require Logger
   alias Sms.Core.Repo
-  alias Sms.Switch.Rules.{Pattern, Route, Translation}
+  alias Sms.Switch.Rules.{Pattern, Route, Translation, Values}
 
   @timeout 30_000
 
@@ -407,6 +407,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       sender_match_case: r.sender_match_case,
       receiver_pattern: r.receiver_pattern,
       receiver_pattern_negate: r.receiver_pattern_negate,
+      # Value rows (team trial round 8); r[...] so an older schema without the columns still loads.
+      sender_values: Values.from_json(r[:sender_values]),
+      receiver_values: Values.from_json(r[:receiver_values]),
       content_pattern: r.content_pattern,
       content_pattern_negate: r.content_pattern_negate,
       sender_list_id: r.sender_list_id,
@@ -735,6 +738,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       sender_match_case: r.sender_match_case,
       receiver_pattern: r.receiver_pattern,
       receiver_pattern_negate: r.receiver_pattern_negate,
+      # Value rows (team trial round 8); r[...] so an older schema without the columns still loads.
+      sender_values: Values.from_json(r[:sender_values]),
+      receiver_values: Values.from_json(r[:receiver_values]),
       mccmncs: r.mccmncs || [],
       mccmnc_negate: r.mccmnc_negate,
       mccmnc_pattern: r.mccmnc_pattern,

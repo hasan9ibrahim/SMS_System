@@ -5,7 +5,7 @@
 import { HoverList } from "../../ui/HoverList";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { RouteRuleDetail, RouteRuleInput, RouteRuleRow, TrafficWindow } from "@sms/contract";
+import type { MatchMode, RouteRuleDetail, RouteRuleInput, RouteRuleRow, TrafficWindow } from "@sms/contract";
 import { api, unwrap } from "../../api/client";
 import { useMe } from "../../api/hooks";
 import { useRestore } from "../../api/records";
@@ -27,7 +27,7 @@ import { qualityClass, qualityTone } from "../../ui/quality";
 import { formatPct } from "../rates/format";
 import { AddCondition, ConditionsSection, DraftRuleContext, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
 import { BulkDialog, DEFAULT_PRIORITY, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
-import { InlineCondition } from "./ConditionEditor";
+import { InlineCondition, NewDraftContext, PendingCategoryContext } from "./ConditionEditor";
 import { codesText, useDestinationTree } from "../rates/DestinationTree";
 import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, toInput, type ConditionKey } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
@@ -114,6 +114,20 @@ function ConfigurationSection({
   const [open, setOpen] = useState<ConditionKey | null>(null);
   const { tree } = useDestinationTree();
   const r = rule.data;
+  // In the rule window the trunk list follows the categories picked there before Save (team trial round 8).
+  const [pendingCat, setPendingCat] = useState<{ mode: MatchMode; ids: number[] } | null>(null);
+  const catCtx = useMemo(
+    () =>
+      expanded && r
+        ? {
+            mode: pendingCat?.mode ?? r.categoryMode,
+            ids: pendingCat?.ids ?? r.categoryIds,
+            set: (mode: MatchMode, ids: number[]) =>
+              setPendingCat((p) => (p && p.mode === mode && p.ids.join() === ids.join() ? p : { mode, ids })),
+          }
+        : null,
+    [expanded, r, pendingCat],
+  );
   if (rule.isError) return <p className="error-text">{(rule.error as Error).message}</p>;
   if (!r) return <p className="muted">Loading…</p>;
   const locked = !!r.archived;
@@ -124,6 +138,7 @@ function ConfigurationSection({
   };
   const LABEL: Record<string, string> = { category: "Category", trunk: "Customer trunks", destination: "Destination" };
   return (
+    <PendingCategoryContext.Provider value={catCtx}>
     <div className={`cfg${expanded ? " cfg-expanded" : ""}`}>
       {CONFIG_KEYS.map((k) => (
         <section key={k} className={`cfg-block cfg-${k}`}>
@@ -171,6 +186,7 @@ function ConfigurationSection({
         )}
       </section>
     </div>
+    </PendingCategoryContext.Provider>
   );
 }
 
@@ -251,6 +267,7 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
       }
     >
       <DraftRuleContext.Provider value={true}>
+        <NewDraftContext.Provider value={!from}>
         <div className="new-rule">
           {createError && <p className="error-text">{createError}</p>}
           {!r && !createError && <p className="muted">Preparing the rule…</p>}
@@ -282,7 +299,81 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
           )}
           {error && <p className="error-text">{error}</p>}
         </div>
+        </NewDraftContext.Provider>
       </DraftRuleContext.Provider>
+    </Modal>
+  );
+}
+
+/**
+ * Edit (team trial round 8): the rule in the same window as New rule, with every section; Save applies the general
+ * fields and the configuration blocks as one change (conditions save as they are added, as in the panel). × or
+ * Cancel closes without saving the open edits.
+ */
+function EditRuleDialog({ id, done }: { id: number; done: () => void }) {
+  const rule = useRouteRule(id);
+  const submitGeneral = useRef<((patch?: Partial<RouteRuleInput>) => Promise<string | null>) | null>(null);
+  const blocks = useRef(new Map<string, Collect>());
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const r = rule.data;
+  const saveRule = async () => {
+    if (!submitGeneral.current) return;
+    const patches = [...blocks.current.values()].map((c) => c());
+    const bad = patches.find((p): p is string => typeof p === "string");
+    if (bad) return setError(bad);
+    setError(null);
+    setBusy(true);
+    const err = await submitGeneral.current(Object.assign({}, ...patches) as Partial<RouteRuleInput>);
+    setBusy(false);
+    if (err) return setError(err);
+    done();
+  };
+  return (
+    <Modal
+      title={r ? `Rule #${id} · ${r.name}` : `Rule #${id}`}
+      width={1180}
+      onClose={done}
+      onlyCloseButton
+      footer={
+        <>
+          <span className="fb-spacer" />
+          <Button onClick={done}>Cancel</Button>
+          <Button variant="primary" icon="save" onClick={() => void saveRule()} disabled={!r || busy}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <div className="new-rule">
+        {!r && <p className="muted">Loading…</p>}
+        {r && (
+          <>
+            <section className="cfg-block">
+              <div className="cfg-head">
+                <strong>General</strong>
+              </div>
+              <RuleGeneralForm
+                key={r.id}
+                rule={r}
+                windowed
+                onSaved={() => undefined}
+                bindSubmit={(fn) => (submitGeneral.current = fn)}
+              />
+            </section>
+            <ConfigurationSection id={r.id} expanded bind={(k, c) => blocks.current.set(k, c)} />
+            <section className="cfg-block">
+              <div className="cfg-head">
+                <strong>Other conditions</strong>
+                <span className="fb-spacer" />
+                <AddCondition id={r.id} />
+              </div>
+              <ConditionsSection id={r.id} />
+            </section>
+          </>
+        )}
+        {error && <p className="error-text">{error}</p>}
+      </div>
     </Modal>
   );
 }
@@ -469,9 +560,15 @@ export function RouteRulesPage() {
 
   const columns = useMemo(
     () => ({
-      id: { width: 70, render: (r: RouteRuleRow) => <span className="muted num">{r.id}</span> },
+      // ID and priority in bold (team trial round 8).
+      id: { width: 70, render: (r: RouteRuleRow) => <strong className="num rr-bold">{r.id}</strong> },
       name: { width: 200, render: (r: RouteRuleRow) => <span className="strong">{r.name}</span> },
-      priority: { width: 80 },
+      priority: { width: 80, render: (r: RouteRuleRow) => <strong className="num rr-bold">{r.priority}</strong> },
+      updatedAt: {
+        width: 140,
+        render: (r: RouteRuleRow) => <span className="num">{r.updatedAt.slice(0, 16).replace("T", " ")}</span>,
+      },
+      updatedBy: { width: 120, render: (r: RouteRuleRow) => r.updatedBy ?? <span className="muted">—</span> },
       routeType: {
         width: 110,
         render: (r: RouteRuleRow) => {
@@ -497,10 +594,8 @@ export function RouteRulesPage() {
           ) : (
             <VendorsCell
               row={r}
-              onMore={() => {
-                setSelectId(null);
-                setSection("configuration");
-              }}
+              // The rule's vendor and LCR settings in their window (team trial round 8: it did nothing before).
+              onMore={() => void ask<void>((d) => <VendorsDialog id={r.id} done={() => d()} />)}
             />
           ),
       },
@@ -570,6 +665,8 @@ export function RouteRulesPage() {
     <ListScreen<RouteRuleRow>
       // A click highlights the rule; double-click or Enter opens the panel on Edit (team trial round 3).
       detailOpensOn="double"
+      // Half the page until dragged (team trial round 8).
+      detailDefaultWidth="50%"
       openRef={openRule}
       onOpen={() => setSection("edit")}
       list="route_rules"
@@ -622,11 +719,8 @@ export function RouteRulesPage() {
           main: true,
           disabled: r.archived,
           hint: r.archived ? "Restore the rule to edit it" : undefined,
-          // Like a double-click: the rule's panel, on its Edit section (team trial round 6).
-          onSelect: () => {
-            setSection("edit");
-            openRule.current?.(r);
-          },
+          // The rule in its own window, like New rule (team trial round 8); double-click opens the panel.
+          onSelect: () => void ask<void>((d) => <EditRuleDialog id={r.id} done={() => d()} />),
         },
         {
           label: "Clone",
@@ -741,10 +835,9 @@ export function RouteRulesPage() {
       onKey={(key, row) => {
         if (!row) return false;
         if (key === "e" || key === "E") {
-          // E is the Edit button: the rule's panel on its Edit section (team trial round 6).
+          // E is the Edit button: the rule in its own window (team trial round 8).
           if (row.archived) return false;
-          setSection("edit");
-          openRule.current?.(row);
+          void ask<void>((d) => <EditRuleDialog id={row.id} done={() => d()} />);
           return true;
         }
         if (key === "d" || key === "D") return (void duplicate(row), true);

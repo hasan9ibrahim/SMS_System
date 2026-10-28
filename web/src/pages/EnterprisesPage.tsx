@@ -72,11 +72,16 @@ function EnterpriseEmails({ id }: { id: number }) {
 const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" } as const;
 const TYPE_TONE = { customer: "blue", vendor: "amber", reciprocal: "violet" } as const;
 
+/** The trunks by name, one after another (team trial round 7); pointing at the cell lists them all. */
 function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[] }) {
   if (!count) return <span className="muted">—</span>;
+  const more = count - names.length;
   return (
-    <HoverList items={names} more={count - names.length}>
-      <span className="rr-strong num">{count}</span>
+    <HoverList items={names} more={more}>
+      <span className="cell-ellipsis">
+        {names.join(", ")}
+        {more > 0 ? <span className="muted"> +{more}</span> : null}
+      </span>
     </HoverList>
   );
 }
@@ -147,13 +152,11 @@ export function EnterprisesPage() {
         businessCompany: { render: (r) => r.businessCompanyName },
         // Pointing at a count lists the trunks by name (team trial round 1).
         customerTrunkCount: {
-          width: 140,
-          align: "right",
+          width: 220,
           render: (r) => <TrunkCount count={r.customerTrunkCount} names={r.customerTrunkNames} />,
         },
         vendorTrunkCount: {
-          width: 120,
-          align: "right",
+          width: 220,
           render: (r) => <TrunkCount count={r.vendorTrunkCount} names={r.vendorTrunkNames} />,
         },
       }}

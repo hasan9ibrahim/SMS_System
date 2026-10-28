@@ -80,6 +80,11 @@ export interface DataGridProps<Row extends { id: number }> {
   rowHeight?: number;
   /** Shown instead of "Loading…" while the query is held (what to choose or press first). */
   idleMessage?: ReactNode;
+  /**
+   * Each column as wide as its header and longest loaded value, never cut off; the grid scrolls sideways when they
+   * do not fit (team trial round 7, EDR Search and the Live analytics EDR window).
+   */
+  autoFit?: boolean;
 }
 
 /** Default cell text by field type. */
@@ -97,6 +102,49 @@ export function defaultCell(f: FieldDescriptor, value: unknown): ReactNode {
   if (f.type === "percent") return `${Number(value).toFixed(1)}%`;
   if (Array.isArray(value)) return value.join(", ");
   return String(value);
+}
+
+/** Widest an auto-fitted column gets (a long message text). */
+const AUTO_FIT_MAX = 1600;
+/** Rows measured for auto-fit: the first pages, so widths settle instead of growing while scrolling. */
+const AUTO_FIT_ROWS = 400;
+let measureCanvas: HTMLCanvasElement | null = null;
+
+/** The text a cell shows, near enough to measure its width (renders add at most a dot or icon). */
+function fitText(f: FieldDescriptor, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (isTime(f)) return String(value).slice(0, 19).replace("T", " ");
+  if (typeof value === "number") return value.toLocaleString("en-US", { maximumFractionDigits: 6 });
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+/** Header and cell widths from the loaded rows, measured in the grid's own fonts. */
+function fitWidths(
+  el: HTMLElement | null,
+  fields: FieldDescriptor[],
+  rows: object[],
+  labels: (f: FieldDescriptor) => string,
+): Map<string, number> {
+  measureCanvas ??= document.createElement("canvas");
+  const ctx = measureCanvas.getContext("2d");
+  const out = new Map<string, number>();
+  if (!ctx) return out;
+  const style = el ? getComputedStyle(el) : null;
+  const family = style?.fontFamily || "Inter, sans-serif";
+  const size = style?.fontSize || "14px";
+  const sample = rows.slice(0, AUTO_FIT_ROWS) as Record<string, unknown>[];
+  for (const f of fields) {
+    // Header: bold label, sort arrow and padding; cells: text, a status dot or icon and padding.
+    ctx.font = `700 13px ${family}`;
+    let w = ctx.measureText(labels(f)).width + 34;
+    ctx.font = `400 ${size} ${family}`;
+    // Figures use tabular digits, as wide as "0" (the canvas measures proportional ones).
+    for (const r of sample) w = Math.max(w, ctx.measureText(fitText(f, r[f.field]).replace(/\d/g, "0")).width + 34);
+    out.set(f.field, Math.min(AUTO_FIT_MAX, Math.ceil(w)));
+  }
+  return out;
 }
 
 // Widths for the roomier design refresh (13.5 px text, 12 px cell padding).
@@ -369,6 +417,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     queryScope = null,
     enabled = true,
     idleMessage = "Choose the settings above to see rows.",
+    autoFit = false,
     rowHeight = ROW_HEIGHT,
   } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -431,17 +480,28 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     return names.map((n) => byName.get(n)).filter((f): f is FieldDescriptor => !!f && !f.filterOnly);
   }, [fields, state.visible]);
 
+  // Auto-fit (team trial round 7): measured again when more of the first rows load or the columns change.
+  const fitRows = Math.min(rows.length, AUTO_FIT_ROWS);
+  const fitted = useMemo(
+    () =>
+      autoFit && fitRows
+        ? fitWidths(scrollRef.current, visibleFields, rows, (f) => columns[f.field]?.label ?? f.label)
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [autoFit, fitRows, rows[0], visibleFields, columns],
+  );
+
   // TanStack Table holds the column model and widths; data stays server-side (manual mode).
   const [sizing, setSizing] = useState<ColumnSizingState>({});
   const columnDefs = useMemo<ColumnDef<Row>[]>(
     () =>
       visibleFields.map((f) => ({
         id: f.field,
-        size: columns[f.field]?.width ?? defaultWidth(f),
+        size: fitted?.get(f.field) ?? columns[f.field]?.width ?? defaultWidth(f),
         minSize: 48,
-        maxSize: 800,
+        maxSize: autoFit ? AUTO_FIT_MAX : 800,
       })),
-    [visibleFields, columns],
+    [visibleFields, columns, fitted, autoFit],
   );
   const table = useReactTable({
     data: rows,
@@ -488,9 +548,10 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     const fixed = 40 + (trailing?.width ?? 0);
     const sum = naturalCells.reduce((n, c) => n + c.width, 0);
     if (boxWidth <= 0 || sum <= 0) return naturalCells;
-    const scale = (boxWidth - fixed - 2) / sum;
+    // Auto-fitted columns only grow to fill the width, never shrink (no truncation; the grid scrolls sideways).
+    const scale = autoFit ? Math.max(1, (boxWidth - fixed - 2) / sum) : (boxWidth - fixed - 2) / sum;
     return naturalCells.map((c) => ({ ...c, width: Math.max(FIT_MIN, Math.floor(c.width * scale)) }));
-  }, [naturalCells, boxWidth, trailing?.width]);
+  }, [naturalCells, boxWidth, trailing?.width, autoFit]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
   // Cards on a phone-sized window only (team trial round 6): a narrow pane on a desktop (Rate manager beside an open
   // table) keeps the table and scrolls sideways.

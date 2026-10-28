@@ -9,6 +9,14 @@ const CUSTOMER_TRUNKS: NameSource = { table: "customer_trunks t", name: "t.name"
 const VENDOR_TRUNKS: NameSource = { table: "vendor_trunks t", name: "t.name", id: "t.id" };
 const HLR_PROVIDERS: NameSource = { table: "hlr_providers p", name: "p.name", id: "p.id" };
 const CATEGORIES: NameSource = { table: "product_categories c", name: "c.name", id: "c.id" };
+// Destinations by MCCMNC code (team trial round 7): the code is all digits, so it serves as the ID.
+const DESTINATIONS: NameSource = {
+  table: `(SELECT m.mccmnc::bigint AS code,
+             CASE WHEN m.is_all_networks THEN co.name || ' · All networks' ELSE co.name || ' · ' || m.network END AS name
+           FROM mccmnc m JOIN countries co ON co.id = m.country_id WHERE m.deleted_at IS NULL) d`,
+  name: "d.name",
+  id: "d.code",
+};
 
 const named = (src: NameSource, idSql: string): ChColumn => ({ sql: idSql, names: { ...src, idSql } });
 const has = (arr: string) => (c: { op: string; value?: unknown; values?: unknown[] }) => {
@@ -60,6 +68,10 @@ const numberOrMsgIdWhere = (c: { op: string; value?: unknown; values?: unknown[]
 const VENDOR_FINAL = "msg_status != ''";
 const CAUSE_TEXT = `transform(command_status, [${CAUSE_CODES.map((c) => c.code).join(",")}], [${CAUSE_CODES.map((c) => lit(c.name)).join(",")}], '')`;
 
+// HLR error in words (team trial round 7): the switch writes 408 when the provider timed out, else the provider's code.
+const HLR_ERROR_TEXT = `multiIf(hlr_fetch_type = 'none' OR hlr_is_accomplished = 1, '', hlr_error_code = 408, 'Timeout',
+  hlr_error_code = 0, 'No result', concat('Error ', toString(hlr_error_code)))`;
+
 export const EDR_COLUMNS: Record<string, ChColumn> = {
   startTime: { sql: "start_time" },
   submitTime: { sql: "submit_time" },
@@ -101,6 +113,8 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   mcc: { sql: "c_mcc" },
   mnc: { sql: "c_mnc" },
   country: { sql: "c_country_iso" },
+  customerDestination: named(DESTINATIONS, "toUInt64OrZero(c_mccmnc)"),
+  vendorDestination: named(DESTINATIONS, "toUInt64OrZero(v_mccmnc)"),
   customerBillingType: { sql: "c_billing_type" },
   customerRateTableId: { sql: "c_rate_table_id" },
   customerRate: { sql: "toFloat64(c_rate)" },
@@ -162,6 +176,7 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   hlrIsPorted: { sql: "hlr_is_ported" },
   hlrIsAccomplished: { sql: "hlr_is_accomplished" },
   hlrErrorCode: { sql: "hlr_error_code" },
+  hlrErrorText: { sql: HLR_ERROR_TEXT },
   hlrCostSys: { sql: "toFloat64(hlr_cost_sys)" },
 };
 
@@ -177,7 +192,9 @@ export function edrValues(
     const col = cols[f.field]!;
     if (col.names) {
       const id = Number(r[`_${f.field}`] ?? 0);
-      out[f.field] = id ? (names.get(f.field)?.get(id) ?? `#${id}`) : null;
+      // A destination code missing from the master shows empty, like an unknown MCCMNC elsewhere.
+      if (f.field.endsWith("Destination")) out[f.field] = (id && names.get(f.field)?.get(id)) || "";
+      else out[f.field] = id ? (names.get(f.field)?.get(id) ?? `#${id}`) : null;
       continue;
     }
     const v = r[f.field];

@@ -115,8 +115,8 @@ export function previewRateBulk(request: FastifyRequest, reply: FastifyReply) {
       errors.push({ path: "/onlyExisting", message: "adding new rates needs a list of destinations" });
     if (!onlyExisting && a.type !== "set" && !costPlus)
       errors.push({ path: "/onlyExisting", message: "only a fixed rate or cost + margin can add new rates" });
-    if (body.effectiveFrom && Date.parse(body.effectiveFrom) < now - SKEW_MS)
-      errors.push({ path: "/effectiveFrom", message: "can't be in the past (traffic already sent keeps its rate)" });
+    // A past start (the default "today 00:00") applies from now, as on a rate table save: traffic already sent keeps
+    // its rate (§13.32). Team trial round 7: rejecting it left the review empty and Apply never enabled.
     const tables = await loadTables(pool, body.rateTableIds);
     errors.push(...tableErrors(body.rateTableIds, tables, (i) => `/rateTableIds/${i}`));
     if (costPlus && [...tables.values()].some((t) => t.kind !== "customer"))
@@ -506,7 +506,9 @@ export function applyRateBulk(request: FastifyRequest, reply: FastifyReply) {
     if (result.change && [...tables.values()].some((t) => t.kind === "vendor")) scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
     const notifications =
-      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : [];
+      result.change && body.sendNotification
+        ? await sendRateNotices(pool, diff, me.id, body.notificationNote, { source: "bulk_rating", changeId: result.change.id })
+        : [];
     const notificationsSent = notifications.filter((n) => n.status === "sent").length;
     return { ...result, skipped, notificationsSent, notifications };
   });
