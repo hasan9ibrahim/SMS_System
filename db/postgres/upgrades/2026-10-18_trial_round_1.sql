@@ -693,3 +693,6 @@ ALTER TABLE route_rules ADD COLUMN IF NOT EXISTS sender_values jsonb NOT NULL DE
 ALTER TABLE route_rules ADD COLUMN IF NOT EXISTS receiver_values jsonb NOT NULL DEFAULT '[]';
 ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS sender_values jsonb NOT NULL DEFAULT '[]';
 ALTER TABLE translation_rules ADD COLUMN IF NOT EXISTS receiver_values jsonb NOT NULL DEFAULT '[]';
+
+-- Tab groups (migration 088, team trial round 8, §13.5).
+ALTER TABLE user_workspaces ADD COLUMN IF NOT EXISTS tab_groups jsonb NOT NULL DEFAULT '[]';

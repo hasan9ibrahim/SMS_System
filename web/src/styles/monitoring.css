@@ -1123,3 +1123,8 @@
   word-break: break-word;
   max-width: 340px;
 }
+/* Near the right edge the Time list opens to the left (team trial round 8). */
+.la-submenu-list.to-left {
+  left: auto;
+  right: 100%;
+}

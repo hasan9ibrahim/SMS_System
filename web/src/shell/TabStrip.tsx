@@ -1,14 +1,15 @@
 // Page tab strip (§15.1, §13.5): icon, title and close per tab, pinned Home, red dot on
 // tabs with an alert, "+" for a new tab, open-tabs list on the right. Tabs reorder by drag;
 // dragging a tab out of the window opens it in its own window, dragging it back docks it.
+// Tabs can be grouped under a label and colour, Chrome style (team trial round 8).
 import { useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from "react";
-import type { WorkspaceTab } from "@sms/contract";
+import type { TabGroup, WorkspaceTab } from "@sms/contract";
 import { pageForPath } from "../nav/registry";
 import { Icon } from "../ui/Icon";
 import { Menu, Popover, type MenuItem } from "../ui/primitives";
 import { usePalette } from "./CommandPalette";
 import { TAB_DRAG_TYPE } from "./channel";
-import { HOME_TAB_ID, useTabs, type Tab } from "./tabs";
+import { GROUP_COLORS, HOME_TAB_ID, useTabs, type Tab } from "./tabs";
 import { useLive } from "../live/store";
 import { useTabPaused } from "./livePause";
 
@@ -33,8 +34,20 @@ const outsideWindow = (e: DragEvent) =>
   e.screenY < window.screenY ||
   e.screenY > window.screenY + window.outerHeight;
 
-function TabButton({ tab, active, index }: { tab: Tab; active: boolean; index: number }) {
+function TabButton({
+  tab,
+  active,
+  index,
+  editGroup,
+}: {
+  tab: Tab;
+  active: boolean;
+  index: number;
+  editGroup: (id: string) => void;
+}) {
   const { activate, close, move, togglePin, duplicate, closeOthers } = useTabs.getState();
+  const groups = useTabs((s) => s.groups);
+  const group = groups.find((g) => g.id === tab.groupId);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropSide, setDropSide] = useState<"left" | "right" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -83,6 +96,19 @@ function TabButton({ tab, active, index }: { tab: Tab; active: boolean; index: n
   const items: (MenuItem | "separator")[] = isHome
     ? [{ label: "Close other tabs", icon: "x", onSelect: () => void closeOthers(tab.id) }]
     : [
+        // Tab groups (team trial round 8).
+        { label: "Add tab to new group", icon: "plus", onSelect: () => editGroup(useTabs.getState().newGroup(tab.id)) },
+        ...groups
+          .filter((g) => g.id !== tab.groupId)
+          .map((g) => ({
+            label: `Add to group “${g.label || colorName(g.color)}”`,
+            icon: "folder" as const,
+            onSelect: () => useTabs.getState().addToGroup(tab.id, g.id),
+          })),
+        ...(tab.groupId
+          ? [{ label: "Remove from group", icon: "x" as const, onSelect: () => useTabs.getState().removeFromGroup(tab.id) }]
+          : []),
+        "separator",
         { label: tab.pinned ? "Unpin" : "Pin", icon: "pin", onSelect: () => togglePin(tab.id) },
         { label: "Duplicate", icon: "copy", onSelect: () => duplicate(tab.id) },
         { label: "Open in new window", icon: "external", onSelect: () => popOutTab(tab) },
@@ -97,7 +123,9 @@ function TabButton({ tab, active, index }: { tab: Tab; active: boolean; index: n
       role="tab"
       aria-selected={active}
       tabIndex={active ? 0 : -1}
-      className={`tab${active ? " active" : ""}${tab.pinned ? " pinned" : ""}${dropSide ? ` drop-${dropSide}` : ""}`}
+      className={`tab${active ? " active" : ""}${tab.pinned ? " pinned" : ""}${group ? ` grouped tg-${group.color}` : ""}${
+        dropSide ? ` drop-${dropSide}` : ""
+      }`}
       draggable={!isHome}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -132,6 +160,125 @@ function TabButton({ tab, active, index }: { tab: Tab; active: boolean; index: n
       <Popover anchor={ref} open={menuOpen} onClose={() => setMenuOpen(false)}>
         <Menu items={items} onClose={() => setMenuOpen(false)} />
       </Popover>
+    </div>
+  );
+}
+
+const colorName = (c: TabGroup["color"]) => c[0]!.toUpperCase() + c.slice(1);
+
+/**
+ * The group's label in its colour, before its tabs (Chrome style, team trial round 8): click folds or unfolds the
+ * group; right-click (or a new group) opens the editor: name, colour, new tab in the group, ungroup, close group.
+ */
+function GroupChip({
+  group,
+  count,
+  editing,
+  setEditing,
+}: {
+  group: TabGroup;
+  count: number;
+  editing: boolean;
+  setEditing: (on: boolean) => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const { updateGroup } = useTabs.getState();
+  const [dropOver, setDropOver] = useState(false);
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        className={`tab-group tg-${group.color}${group.collapsed ? " collapsed" : ""}${group.label ? "" : " empty"}${
+          dropOver ? " drop" : ""
+        }`}
+        aria-expanded={!group.collapsed}
+        title={`${group.label || "Unnamed group"} · ${count} tab${count === 1 ? "" : "s"} · click to ${
+          group.collapsed ? "show" : "hide"
+        } them, right-click to edit`}
+        onClick={() => updateGroup(group.id, { collapsed: !group.collapsed })}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setEditing(true);
+        }}
+        // A tab dropped on the label joins the group.
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+          e.preventDefault();
+          setDropOver(true);
+        }}
+        onDragLeave={() => setDropOver(false)}
+        onDrop={(e) => {
+          setDropOver(false);
+          const raw = e.dataTransfer.getData(TAB_DRAG_TYPE);
+          if (!raw) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const dragged = JSON.parse(raw) as WorkspaceTab;
+          if (useTabs.getState().tabs.some((t) => t.id === dragged.id))
+            useTabs.getState().addToGroup(dragged.id, group.id);
+        }}
+      >
+        {group.label ? <span className="tab-group-label">{group.label}</span> : <span className="tab-group-dot" />}
+        {group.collapsed && <span className="tab-group-count">{count}</span>}
+      </button>
+      <Popover anchor={ref} open={editing} onClose={() => setEditing(false)}>
+        <GroupEditor group={group} done={() => setEditing(false)} />
+      </Popover>
+    </>
+  );
+}
+
+function GroupEditor({ group, done }: { group: TabGroup; done: () => void }) {
+  const s = useTabs.getState();
+  const openPalette = usePalette((p) => p.show);
+  const [label, setLabel] = useState(group.label);
+  const save = (next: string) => s.updateGroup(group.id, { label: next.slice(0, 40) });
+  return (
+    <div className="tab-group-editor" role="dialog" aria-label="Tab group">
+      <input
+        autoFocus
+        value={label}
+        maxLength={40}
+        placeholder="Name this group"
+        aria-label="Group name"
+        onChange={(e) => {
+          setLabel(e.target.value);
+          save(e.target.value);
+        }}
+        onKeyDown={(e) => e.key === "Enter" && done()}
+      />
+      <div className="tab-group-colors" role="radiogroup" aria-label="Colour">
+        {GROUP_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            role="radio"
+            aria-checked={group.color === c}
+            aria-label={colorName(c)}
+            title={colorName(c)}
+            className={`tab-group-swatch tg-${c}${group.color === c ? " on" : ""}`}
+            onClick={() => s.updateGroup(group.id, { color: c })}
+          />
+        ))}
+      </div>
+      <Menu
+        onClose={done}
+        items={[
+          {
+            label: "New tab in group",
+            icon: "plus",
+            // From the group's last tab, the page picker's new tab lands next to it and joins the group.
+            onSelect: () => {
+              const last = [...s.tabs].reverse().find((t) => t.groupId === group.id);
+              if (last) s.activate(last.id);
+              openPalette({ newTab: true });
+            },
+          },
+          { label: "Ungroup", icon: "x", onSelect: () => s.ungroup(group.id) },
+          { label: "Close group", icon: "x", danger: true, onSelect: () => void s.closeGroup(group.id) },
+        ]}
+      />
     </div>
   );
 }
@@ -209,6 +356,8 @@ function SplitButton() {
 export function TabStrip() {
   const tabs = useTabs((s) => s.tabs);
   const activeId = useTabs((s) => s.activeId);
+  const groups = useTabs((s) => s.groups);
+  const [editing, setEditing] = useState<string | null>(null);
   const openPalette = usePalette((s) => s.show);
   // Dropping a tab from another window on the empty part of the strip docks it at the end.
   const onDrop = (e: DragEvent) => {
@@ -227,9 +376,31 @@ export function TabStrip() {
       onDrop={onDrop}
     >
       <div className="tabs" role="tablist" aria-label="Open pages">
-        {tabs.map((t, i) => (
-          <TabButton key={t.id} tab={t} active={t.id === activeId} index={i} />
-        ))}
+        {tabs.map((t, i) => {
+          const group = groups.find((g) => g.id === t.groupId);
+          // The group's label goes before its first tab; a folded group hides its tabs.
+          const first = group && tabs[i - 1]?.groupId !== group.id;
+          return [
+            first && (
+              <GroupChip
+                key={`g-${group.id}`}
+                group={group}
+                count={tabs.filter((x) => x.groupId === group.id).length}
+                editing={editing === group.id}
+                setEditing={(on) => setEditing(on ? group.id : null)}
+              />
+            ),
+            !group?.collapsed && (
+              <TabButton
+                key={t.id}
+                tab={t}
+                active={t.id === activeId}
+                index={i}
+                editGroup={(id) => setEditing(id)}
+              />
+            ),
+          ];
+        })}
         <button
           type="button"
           className="tab-new"

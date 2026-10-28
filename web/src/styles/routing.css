@@ -1875,16 +1875,6 @@ svg.flip {
   flex: 1;
   min-width: 0;
 }
-/* Translation rule form: the name spans two rows, narrower (team trial round 8). */
-.tr-form .tr-name {
-  grid-row: span 2;
-  min-width: 0;
-}
-.tr-form .tr-name textarea {
-  width: 100%;
-  min-height: 60px;
-  resize: vertical;
-}
 .value-rows {
   margin-bottom: 8px;
 }

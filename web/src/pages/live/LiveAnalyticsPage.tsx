@@ -9,7 +9,7 @@
 // Each row opens its EDRs in a window, exports them, or opens EDR Search. Every breakdown has its own
 // search box; changes apply at once (no Search button) and Pause stops the live refresh (team trial round 1).
 import { useCan, useCanExportEdrs } from "../../api/access";
-import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FilterCondition, ListQuery, MasterReportRow, ReportDimension } from "@sms/contract";
@@ -1081,6 +1081,18 @@ function LevelMenu({
   onPick: (d: ReportDimension) => void;
 }) {
   const [timeOpen, setTimeOpen] = useState(false);
+  // The Time list stays on screen (team trial round 8): near the status bar it opens upwards, near the right edge to
+  // the left. It went under the status bar before, and the pointer leaving it there made it flicker.
+  const list = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState<{ up: number; left: boolean }>({ up: 0, left: false });
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!timeOpen || !el) return setShift({ up: 0, left: false });
+    const r = el.getBoundingClientRect();
+    const status = document.querySelector(".statusbar")?.getBoundingClientRect().height ?? 0;
+    const bottom = window.innerHeight - status - 6;
+    setShift({ up: Math.max(0, r.bottom - bottom), left: r.right > window.innerWidth - 6 });
+  }, [timeOpen]);
   const plain = options.filter((o) => !o.time);
   const times = options.filter((o) => o.time);
   return (
@@ -1107,7 +1119,12 @@ function LevelMenu({
             <Icon name="chevronRight" size={12} />
           </button>
           {timeOpen && (
-            <div className="menu la-submenu-list" role="menu">
+            <div
+              ref={list}
+              className={`menu la-submenu-list${shift.left ? " to-left" : ""}`}
+              role="menu"
+              style={shift.up ? { top: -4 - shift.up } : undefined}
+            >
               {times.map((o) => (
                 <button
                   key={o.value}

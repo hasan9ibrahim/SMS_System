@@ -31,6 +31,17 @@
   --border-width: 1px;
   --card-shadow: 0 1px 2px color-mix(in srgb, #101828 5%, transparent);
 
+  /* Tab group colours, Chrome style (team trial round 8): the user picks them, so they carry the user's meaning. */
+  --tg-grey: #5f6368;
+  --tg-blue: #1a73e8;
+  --tg-red: #d93025;
+  --tg-yellow: #e37400;
+  --tg-green: #188038;
+  --tg-pink: #d01884;
+  --tg-purple: #9334e6;
+  --tg-cyan: #007b83;
+  --tg-orange: #fa7b17;
+
   --menu-bar-height: 96px;
   --tab-strip-height: 40px;
   --grid-row-height: 42px;
@@ -55,6 +66,15 @@
   --color-on-strong: #111827;
   --color-head-tint: color-mix(in srgb, var(--color-accent) 6%, var(--color-panel));
   --card-shadow: none;
+  --tg-grey: #bdc1c6;
+  --tg-blue: #8ab4f8;
+  --tg-red: #f28b82;
+  --tg-yellow: #fdd663;
+  --tg-green: #81c995;
+  --tg-pink: #ff8bcb;
+  --tg-purple: #c58af9;
+  --tg-cyan: #78d9ec;
+  --tg-orange: #fcad70;
 
   color-scheme: dark;
 }

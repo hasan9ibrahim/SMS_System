@@ -768,18 +768,8 @@ function RuleEditor({
         }}
       >
         <Section title="Rule" columns={4} note={impliedDirection(v)}>
-          {/* Taller but narrower name, compact section (team trial round 8). */}
-          <div className="tr-name">
-            <FormField label="Name" required error={form.error("name")}>
-              <textarea
-                rows={2}
-                maxLength={100}
-                value={v.name}
-                aria-label="Name"
-                onChange={(e) => form.set("name", e.target.value.replace(/\n/g, " "))}
-              />
-            </FormField>
-          </div>
+          {/* One line with Type, Status and Action; Is Continue, Start and Stop below (team trial round 8). */}
+          <TextField form={form} path="name" label="Name" required maxLength={100} nullable={false} />
           <SelectField
             form={form}
             path="direction"

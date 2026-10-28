@@ -24,6 +24,7 @@ export type EnterprisePage = Schemas["EnterprisePage"];
 export type PreferencesUpdate = Schemas["PreferencesUpdate"];
 export type Workspace = Schemas["Workspace"];
 export type WorkspaceTab = Schemas["WorkspaceTab"];
+export type TabGroup = Schemas["TabGroup"];
 export type SearchHit = Schemas["SearchHit"];
 export type SearchResults = Schemas["SearchResults"];
 export type FieldType = Schemas["FieldType"];

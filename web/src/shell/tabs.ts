@@ -3,7 +3,7 @@
 // re-login; a localStorage copy covers the case where the API is unreachable.
 // Page state (filters, sort) lives in each tab's path, so it survives restore and pop-out.
 import { create } from "zustand";
-import type { Workspace, WorkspaceTab } from "@sms/contract";
+import type { TabGroup, Workspace, WorkspaceTab } from "@sms/contract";
 import { api, unwrap } from "../api/client";
 import { HOME, pageForPath } from "../nav/registry";
 import { confirmDialog } from "../ui/feedback";
@@ -18,7 +18,22 @@ export interface Tab {
   dirty: boolean;
   /** An incident concerns the data on this tab (§13.5, §13.6). */
   alert: boolean;
+  /** Its tab group, Chrome style (team trial round 8); null = none. */
+  groupId?: string | null;
 }
+
+/** Chrome's group colours (team trial round 8). */
+export const GROUP_COLORS: TabGroup["color"][] = [
+  "grey",
+  "blue",
+  "red",
+  "yellow",
+  "green",
+  "pink",
+  "purple",
+  "cyan",
+  "orange",
+];
 
 export const HOME_TAB_ID = "home";
 const homeTab = (): Tab => ({
@@ -73,6 +88,17 @@ interface TabsState {
   detach: (id: string) => Tab | undefined;
   /** Adds a tab coming back from a window (drag back or Dock button). */
   dock: (tab: WorkspaceTab, atIndex?: number) => void;
+  /** Tab groups with a label and colour, Chrome style (team trial round 8, §13.5). */
+  groups: TabGroup[];
+  /** Puts the tab in a new group (next free colour) and returns the group's id. */
+  newGroup: (tabId: string) => string;
+  /** Moves the tab into the group, after the group's last tab. */
+  addToGroup: (tabId: string, groupId: string) => void;
+  removeFromGroup: (tabId: string) => void;
+  updateGroup: (groupId: string, patch: Partial<Omit<TabGroup, "id">>) => void;
+  /** Keeps the tabs, drops the group. */
+  ungroup: (groupId: string) => void;
+  closeGroup: (groupId: string) => Promise<void>;
   /** Per tab: the pages opened before in it, and the tab it was opened from (Back, trial round 1). */
   back: Record<string, { paths: string[]; opener?: string }>;
   /** Back to the previous page of the tab, or to the tab it was opened from. False when there is none. */
@@ -94,10 +120,40 @@ export function canGoBack(state: Pick<TabsState, "back" | "tabs">, id: string): 
   return !!b && (b.paths.length > 0 || (!!b.opener && state.tabs.some((t) => t.id === b.opener)));
 }
 
-/** Pinned tabs stay left of the others, Home first. */
+/** Pinned tabs stay left of the others, Home first; the tabs of a group stay together, where its first tab is. */
 function ordered(tabs: Tab[]): Tab[] {
   const home = tabs.filter((t) => t.id === HOME_TAB_ID);
-  return [...home, ...tabs.filter((t) => t.pinned && t.id !== HOME_TAB_ID), ...tabs.filter((t) => !t.pinned)];
+  const rest = tabs.filter((t) => !t.pinned);
+  const grouped: Tab[] = [];
+  const seen = new Set<string>();
+  for (const t of rest) {
+    if (!t.groupId) grouped.push(t);
+    else if (!seen.has(t.groupId)) {
+      seen.add(t.groupId);
+      grouped.push(...rest.filter((x) => x.groupId === t.groupId));
+    }
+  }
+  return [...home, ...tabs.filter((t) => t.pinned && t.id !== HOME_TAB_ID), ...grouped];
+}
+
+/** Drops groups that have no tab left. */
+const pruned = (groups: TabGroup[], tabs: Tab[]) => groups.filter((g) => tabs.some((t) => t.groupId === g.id));
+
+/**
+ * After a drag (Chrome style): a tab dropped between two tabs of a group joins it; one dropped away from the rest of
+ * its group leaves it (a group's only tab keeps its group).
+ */
+export function regroupAfterMove(tabs: Tab[], id: string): Tab[] {
+  const i = tabs.findIndex((t) => t.id === id);
+  const tab = tabs[i];
+  if (!tab || tab.pinned) return tabs;
+  const left = tabs[i - 1]?.groupId ?? null;
+  const right = tabs[i + 1]?.groupId ?? null;
+  let groupId = tab.groupId ?? null;
+  if (left && left === right) groupId = left;
+  else if (groupId && left !== groupId && right !== groupId && tabs.some((t) => t.id !== id && t.groupId === groupId))
+    groupId = null;
+  return groupId === (tab.groupId ?? null) ? tabs : tabs.map((t) => (t.id === id ? { ...t, groupId } : t));
 }
 
 export const useTabs = create<TabsState>((set, get) => ({
@@ -107,11 +163,20 @@ export const useTabs = create<TabsState>((set, get) => ({
   splitLeft: false,
   userId: null,
   back: {},
+  groups: [],
 
   hydrate: (userId, ws) => {
+    const groups = ws?.groups ?? [];
     const restored = (ws?.tabs ?? [])
       .filter((t) => t.id !== HOME_TAB_ID)
-      .map((t): Tab => ({ ...t, dirty: false, alert: false }));
+      .map(
+        (t): Tab => ({
+          ...t,
+          groupId: t.groupId && groups.some((g) => g.id === t.groupId) ? t.groupId : null,
+          dirty: false,
+          alert: false,
+        }),
+      );
     // Signing in shows the Dashboard (team trial round 3): its saved tab if there is one, else a new tab right
     // after the pinned ones. Home stays the pinned first tab.
     let dashboard = restored.find((t) => t.path.split("?")[0] === DASHBOARD_PATH);
@@ -126,7 +191,8 @@ export const useTabs = create<TabsState>((set, get) => ({
       };
       restored.splice(restored.filter((t) => t.pinned).length, 0, dashboard);
     }
-    set({ tabs: ordered([homeTab(), ...restored]), activeId: dashboard.id, userId });
+    const tabs = ordered([homeTab(), ...restored]);
+    set({ tabs, activeId: dashboard.id, userId, groups: pruned(groups, tabs) });
   },
 
   open: (path, opts = {}) => {
@@ -152,6 +218,8 @@ export const useTabs = create<TabsState>((set, get) => ({
       });
       return active.id;
     }
+    const at = Math.max(tabs.findIndex((t) => t.id === activeId) + 1, tabs.filter((t) => t.pinned).length);
+    // Opened next to a grouped tab (Chrome style): it joins that group.
     const tab: Tab = {
       id: newId(),
       path,
@@ -159,8 +227,8 @@ export const useTabs = create<TabsState>((set, get) => ({
       pinned: false,
       dirty: false,
       alert: false,
+      groupId: active && !active.pinned && tabs[at - 1]?.id === active.id ? (active.groupId ?? null) : null,
     };
-    const at = Math.max(tabs.findIndex((t) => t.id === activeId) + 1, tabs.filter((t) => t.pinned).length);
     const next = [...tabs.slice(0, at), tab, ...tabs.slice(at)];
     set({
       tabs: ordered(next),
@@ -174,6 +242,10 @@ export const useTabs = create<TabsState>((set, get) => ({
     const { splitId, activeId, splitLeft } = get();
     // The other split tab takes the focus and both stay on their side; any other tab replaces
     // the focused side.
+    // A tab in a collapsed group opens the group (Chrome style).
+    const groupId = get().tabs.find((t) => t.id === id)?.groupId;
+    if (groupId && get().groups.some((g) => g.id === groupId && g.collapsed))
+      set({ groups: get().groups.map((g) => (g.id === groupId ? { ...g, collapsed: false } : g)) });
     if (splitId === id) return set({ activeId: id, splitId: activeId, splitLeft: !splitLeft });
     set({ activeId: id });
   },
@@ -220,7 +292,12 @@ export const useTabs = create<TabsState>((set, get) => ({
     const next = tabs.filter((t) => t.id !== id);
     const nextActive = activeId === id ? (next[Math.min(idx, next.length - 1)] ?? next[0]!).id : activeId;
     const splitId = get().splitId;
-    set({ tabs: next, activeId: nextActive, splitId: splitId === id || splitId === nextActive ? null : splitId });
+    set({
+      tabs: next,
+      activeId: nextActive,
+      splitId: splitId === id || splitId === nextActive ? null : splitId,
+      groups: pruned(get().groups, next),
+    });
     return true;
   },
 
@@ -238,7 +315,9 @@ export const useTabs = create<TabsState>((set, get) => ({
 
   togglePin: (id) => {
     if (id === HOME_TAB_ID) return;
-    set({ tabs: ordered(get().tabs.map((t) => (t.id === id ? { ...t, pinned: !t.pinned } : t))) });
+    // A pinned tab leaves its group (Chrome style).
+    const tabs = ordered(get().tabs.map((t) => (t.id === id ? { ...t, pinned: !t.pinned, groupId: null } : t)));
+    set({ tabs, groups: pruned(get().groups, tabs) });
   },
 
   move: (id, toIndex) => {
@@ -247,7 +326,8 @@ export const useTabs = create<TabsState>((set, get) => ({
     if (from < 0 || id === HOME_TAB_ID) return;
     const [tab] = tabs.splice(from, 1);
     tabs.splice(Math.max(1, Math.min(toIndex, tabs.length)), 0, tab!);
-    set({ tabs: ordered(tabs) });
+    const next = ordered(regroupAfterMove(tabs, id));
+    set({ tabs: next, groups: pruned(get().groups, next) });
   },
 
   setPath: (id, path) => {
@@ -298,16 +378,69 @@ export const useTabs = create<TabsState>((set, get) => ({
     const next = tabs.filter((t) => t.id !== id);
     const nextActive = activeId === id ? (next[Math.max(0, idx - 1)] ?? next[0]!).id : activeId;
     const splitId = get().splitId;
-    set({ tabs: next, activeId: nextActive, splitId: splitId === id || splitId === nextActive ? null : splitId });
+    set({
+      tabs: next,
+      activeId: nextActive,
+      splitId: splitId === id || splitId === nextActive ? null : splitId,
+      groups: pruned(get().groups, next),
+    });
     return tab;
   },
 
   dock: (tab, atIndex) => {
     const tabs = get().tabs.filter((t) => t.id !== tab.id);
-    const docked: Tab = { ...tab, dirty: false, alert: false };
+    const docked: Tab = { ...tab, groupId: null, dirty: false, alert: false };
     const at = atIndex ?? tabs.length;
     tabs.splice(Math.max(1, Math.min(at, tabs.length)), 0, docked);
-    set({ tabs: ordered(tabs), activeId: docked.id });
+    set({ tabs: ordered(regroupAfterMove(tabs, docked.id)), activeId: docked.id });
+  },
+
+  newGroup: (tabId) => {
+    const { groups, tabs } = get();
+    const used = new Set(groups.map((g) => g.color));
+    const color = GROUP_COLORS.find((c) => !used.has(c)) ?? GROUP_COLORS[groups.length % GROUP_COLORS.length]!;
+    const group: TabGroup = { id: newId(), label: "", color, collapsed: false };
+    const next = ordered(tabs.map((t) => (t.id === tabId ? { ...t, pinned: false, groupId: group.id } : t)));
+    set({ tabs: next, groups: pruned([...groups, group], next) });
+    return group.id;
+  },
+  addToGroup: (tabId, groupId) => {
+    const tabs = get().tabs.filter((t) => t.id !== tabId);
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab || tabId === HOME_TAB_ID) return;
+    const last = tabs.map((t) => t.groupId).lastIndexOf(groupId);
+    tabs.splice(last >= 0 ? last + 1 : tabs.length, 0, { ...tab, pinned: false, groupId });
+    const next = ordered(tabs);
+    set({ tabs: next, groups: pruned(get().groups, next) });
+  },
+  removeFromGroup: (tabId) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab?.groupId) return;
+    // Out of the group, to its right.
+    const tabs = get().tabs.filter((t) => t.id !== tabId);
+    const last = tabs.map((t) => t.groupId).lastIndexOf(tab.groupId);
+    tabs.splice(last >= 0 ? last + 1 : tabs.length, 0, { ...tab, groupId: null });
+    const next = ordered(tabs);
+    set({ tabs: next, groups: pruned(get().groups, next) });
+  },
+  updateGroup: (groupId, patch) => {
+    const { groups, tabs, activeId } = get();
+    // Collapsing the group of the open tab moves to the nearest tab outside it (Chrome style).
+    if (patch.collapsed && tabs.find((t) => t.id === activeId)?.groupId === groupId) {
+      const i = tabs.findIndex((t) => t.id === activeId);
+      const outside = [...tabs.slice(i + 1), ...tabs.slice(0, i).reverse()].find((t) => t.groupId !== groupId);
+      if (!outside) return;
+      set({ activeId: outside.id, splitId: get().splitId === outside.id ? null : get().splitId });
+    }
+    set({ groups: groups.map((g) => (g.id === groupId ? { ...g, ...patch } : g)) });
+  },
+  ungroup: (groupId) =>
+    set({
+      tabs: get().tabs.map((t) => (t.groupId === groupId ? { ...t, groupId: null } : t)),
+      groups: get().groups.filter((g) => g.id !== groupId),
+    }),
+  closeGroup: async (groupId) => {
+    for (const t of get().tabs.filter((x) => x.groupId === groupId)) await get().close(t.id);
   },
 }));
 
@@ -315,13 +448,18 @@ export const useTabs = create<TabsState>((set, get) => ({
 
 const storageKey = (userId: number) => `sms.workspace.${userId}`;
 
-export function toWorkspace(state: Pick<TabsState, "tabs" | "activeId">): Workspace {
+export function toWorkspace(state: Pick<TabsState, "tabs" | "activeId"> & { groups?: TabGroup[] }): Workspace {
+  const tabs = state.tabs.filter((t) => t.id !== HOME_TAB_ID).slice(0, 50);
   return {
-    tabs: state.tabs
-      .filter((t) => t.id !== HOME_TAB_ID)
-      .slice(0, 50)
-      .map(({ id, path, title, pinned }) => ({ id, path, title: title.slice(0, 200), pinned })),
+    tabs: tabs.map(({ id, path, title, pinned, groupId }) => ({
+      id,
+      path,
+      title: title.slice(0, 200),
+      pinned,
+      groupId: groupId ?? null,
+    })),
     activeTabId: state.activeId,
+    groups: pruned(state.groups ?? [], tabs).slice(0, 25),
   };
 }
 

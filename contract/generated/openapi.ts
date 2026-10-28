@@ -10701,10 +10701,23 @@ export type components = {
       path: string;
       title: string;
       pinned: boolean;
+      /** @description The tab group it belongs to (team trial round 8, §13.5); missing or null = none. */
+      groupId?: string | null;
+    };
+    /** @description A named, coloured group of tabs, as in Chrome (team trial round 8, §13.5). Its tabs sit next to each other; collapsed hides them behind the group's label. */
+    TabGroup: {
+      id: string;
+      /** @description May be empty (the group shows as a coloured dot). */
+      label: string;
+      /** @enum {string} */
+      color: "grey" | "blue" | "red" | "yellow" | "green" | "pink" | "purple" | "cyan" | "orange";
+      collapsed: boolean;
     };
     Workspace: {
       tabs: components["schemas"]["WorkspaceTab"][];
       activeTabId: string | null;
+      /** @description Tab groups (team trial round 8); missing = none. A group without tabs is dropped on save. */
+      groups?: components["schemas"]["TabGroup"][];
     };
     SearchHit: {
       /** @enum {string} */

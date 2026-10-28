@@ -159,20 +159,27 @@ export function updatePreferences(request: FastifyRequest, reply: FastifyReply) 
 
 export function getWorkspace(_request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool): Promise<Workspace> => {
-    const { rows } = await pool.query("SELECT tabs, active_tab_id FROM user_workspaces WHERE user_id = $1", [
-      currentUserId(),
-    ]);
-    return rows[0] ? { tabs: rows[0].tabs, activeTabId: rows[0].active_tab_id } : { tabs: [], activeTabId: null };
+    const { rows } = await pool.query(
+      "SELECT tabs, active_tab_id, tab_groups FROM user_workspaces WHERE user_id = $1",
+      [currentUserId()],
+    );
+    return rows[0]
+      ? { tabs: rows[0].tabs, activeTabId: rows[0].active_tab_id, groups: rows[0].tab_groups ?? [] }
+      : { tabs: [], activeTabId: null, groups: [] };
   });
 }
 
 export function saveWorkspace(request: FastifyRequest, reply: FastifyReply) {
-  const ws = request.body as Workspace;
+  const body = request.body as Workspace;
+  // A group without tabs is dropped (team trial round 8, §13.5).
+  const used = new Set(body.tabs.map((t) => t.groupId).filter(Boolean));
+  const ws: Workspace = { ...body, groups: (body.groups ?? []).filter((g) => used.has(g.id)) };
   return withDb(reply, async (pool): Promise<Workspace> => {
     await pool.query(
-      `INSERT INTO user_workspaces (user_id, tabs, active_tab_id, updated_at) VALUES ($1, $2, $3, now())
-       ON CONFLICT (user_id) DO UPDATE SET tabs = EXCLUDED.tabs, active_tab_id = EXCLUDED.active_tab_id, updated_at = now()`,
-      [currentUserId(), JSON.stringify(ws.tabs), ws.activeTabId],
+      `INSERT INTO user_workspaces (user_id, tabs, active_tab_id, tab_groups, updated_at) VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (user_id) DO UPDATE SET tabs = EXCLUDED.tabs, active_tab_id = EXCLUDED.active_tab_id,
+         tab_groups = EXCLUDED.tab_groups, updated_at = now()`,
+      [currentUserId(), JSON.stringify(ws.tabs), ws.activeTabId, JSON.stringify(ws.groups)],
     );
     return ws;
   });

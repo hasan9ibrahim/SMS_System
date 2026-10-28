@@ -1,7 +1,8 @@
 // Top menu bar (§15.1): logo, main menu with dropdowns, search / jump-to (Ctrl K), system clock, live TPS
 // pill, alert bell with count, user avatar.
 import { useCanView } from "../api/access";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { create } from "zustand";
 import { useMe, useUpdatePreferences } from "../api/hooks";
 import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
 import { Icon } from "../ui/Icon";
@@ -20,9 +21,38 @@ import { signOut } from "./SignIn";
 
 const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n < 100 ? 1 : 0 });
 
+/**
+ * The open main-menu dropdown. The mouse opens a section by hovering it, no click needed (team trial round 8); moving
+ * to another section swaps the dropdown at once, leaving both the button and its dropdown closes it after a moment.
+ * Clicks and touch still open and close it.
+ */
+const useOpenSection = create<{ open: SectionKey | null; set: (s: SectionKey | null) => void }>((set) => ({
+  open: null,
+  set: (open) => set({ open }),
+}));
+let closeTimer: ReturnType<typeof setTimeout> | null = null;
+const cancelClose = () => {
+  if (closeTimer) clearTimeout(closeTimer);
+  closeTimer = null;
+};
+const closeSoon = (section: SectionKey) => {
+  cancelClose();
+  closeTimer = setTimeout(() => {
+    if (useOpenSection.getState().open === section) useOpenSection.getState().set(null);
+  }, 220);
+};
+const isMouse = (e: ReactPointerEvent) => e.pointerType === "mouse";
+
 function SectionMenu({ section, current }: { section: SectionKey; current: boolean }) {
   const open = useOpener();
-  const [shown, setShown] = useState(false);
+  const shown = useOpenSection((s) => s.open === section);
+  const setOpen = useOpenSection((s) => s.set);
+  const setShown = (v: boolean | ((was: boolean) => boolean)) => {
+    cancelClose();
+    const next = typeof v === "function" ? v(useOpenSection.getState().open === section) : v;
+    if (next) setOpen(section);
+    else if (useOpenSection.getState().open === section) setOpen(null);
+  };
   const ref = useRef<HTMLButtonElement>(null);
   const canView = useCanView();
   const pages = pagesOf(section).filter((pg) => canView(pg.key)); // §11: pages the access group allows
@@ -36,6 +66,10 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
         className={`menu-top${current ? " current" : ""}`}
         onClick={(e) => open(only.path, e)}
         onAuxClick={(e) => e.button === 1 && open(only.path, e)}
+        // Hovering a one-page section closes another section's dropdown.
+        onPointerEnter={(e) => {
+          if (isMouse(e)) useOpenSection.getState().set(null);
+        }}
       >
         {label}
       </button>
@@ -50,12 +84,19 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
         aria-haspopup="menu"
         aria-expanded={shown}
         onClick={() => setShown((v) => !v)}
+        onPointerEnter={(e) => isMouse(e) && setShown(true)}
+        onPointerLeave={(e) => isMouse(e) && closeSoon(section)}
       >
         {label}
         <Icon name="chevronDown" size={12} />
       </button>
       <Popover anchor={ref} open={shown} onClose={() => setShown(false)} className="menu-drop">
-        <div className="menu" role="menu">
+        <div
+          className="menu"
+          role="menu"
+          onPointerEnter={(e) => isMouse(e) && cancelClose()}
+          onPointerLeave={(e) => isMouse(e) && closeSoon(section)}
+        >
           {pages.map((pg) => (
             <button
               key={pg.key}

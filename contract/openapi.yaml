@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.110.0
+  version: 0.111.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -15968,6 +15968,31 @@ components:
           maxLength: 200
         pinned:
           type: boolean
+        groupId:
+          type: [string, "null"]
+          maxLength: 64
+          description: The tab group it belongs to (team trial round 8, §13.5); missing or null = none.
+
+    TabGroup:
+      type: object
+      description: >-
+        A named, coloured group of tabs, as in Chrome (team trial round 8, §13.5). Its tabs sit next to each other;
+        collapsed hides them behind the group's label.
+      required: [id, label, color, collapsed]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          maxLength: 64
+        label:
+          type: string
+          maxLength: 40
+          description: May be empty (the group shows as a coloured dot).
+        color:
+          type: string
+          enum: [grey, blue, red, yellow, green, pink, purple, cyan, orange]
+        collapsed:
+          type: boolean
 
     Workspace:
       type: object
@@ -15981,6 +16006,12 @@ components:
             $ref: "#/components/schemas/WorkspaceTab"
         activeTabId:
           type: [string, "null"]
+        groups:
+          type: array
+          maxItems: 25
+          description: Tab groups (team trial round 8); missing = none. A group without tabs is dropped on save.
+          items:
+            $ref: "#/components/schemas/TabGroup"
 
     SearchHit:
       type: object
