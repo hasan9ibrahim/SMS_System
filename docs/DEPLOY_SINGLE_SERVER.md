@@ -35,10 +35,25 @@ later with no code change (last section).
 ## 1. Install the server
 
 1. In the OVH control panel open the server, then **Reinstall** (or **Install**).
-2. Choose **Ubuntu Server 24.04 LTS**.
-3. Choose **software RAID 1** across the two NVMe disks. This is OVH's default layout for two disks: every file is
-   on both disks, so one disk failing loses nothing.
-4. Paste your **SSH public key**:
+2. Step 1 of the OVH dialog:
+   - **Type of OS:** Basic.
+   - Open the **LINUX** list and choose **Ubuntu Server 24.04 LTS**.
+   - **Target disk group:** leave the 2 × NVMe (JBOD). JBOD only means the server has no RAID card, so the RAID is
+     done in software, and "Customise the hardware RAID" stays greyed out.
+   - Tick **Customise the partition configuration**, then **Next**.
+3. Step 2, the partitions. Every partition must be **RAID 1** (on both disks, so one disk failing loses nothing),
+   and `/` must take the rest of the disk, because the databases live under `/var/lib`:
+
+   | Mount point | File system | RAID | Size |
+   | --- | --- | --- | --- |
+   | `/boot` | ext4 | 1 | 1 GiB |
+   | `swap` | swap | – | 8 GiB |
+   | `/` | ext4 | 1 | the rest (tick "use the remaining space") |
+
+   - Leave the EFI partition OVH adds (`/boot/efi`) as it is.
+   - Delete any other partition the template proposes (`/home`, `/var/lib/vz`, a large `/data` and so on), then
+     grow `/` to the remaining space.
+4. Paste your **SSH public key** (step 3 of the dialog), then confirm the installation (step 4):
    - If you have none, run `ssh-keygen -t ed25519` on the build machine.
    - Then paste the contents of `~/.ssh/id_ed25519.pub`.
 5. Wait for the installation e-mail. Then, from the build machine:
