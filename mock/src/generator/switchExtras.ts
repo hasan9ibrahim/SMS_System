@@ -7,8 +7,8 @@
 import { usersOf } from "./admin.js";
 import { domainOf } from "./names.js";
 import type { Profile } from "./profiles.js";
-import type { Rng } from "./rng.js";
-import type { TableSink } from "./sink.js";
+import { Rng } from "./rng.js";
+import { json, type TableSink } from "./sink.js";
 import { DAY, type World } from "./world.js";
 
 const FAILURES = [
@@ -224,6 +224,56 @@ export async function generateSwitchExtras(world: World, rng: Rng, sink: TableSi
             ? rng.pick(kind.type === "send_rate" ? rates : noc).id
             : null,
         inserted_at: new Date(at),
+      });
+    }
+  }
+
+  // ----- RN report (team trial round 7): rate notification sends of the last 90 days, from rate table saves (one
+  // client's table) and bulk ratings (many). Its own random stream, so the data generated after it stays the same.
+  {
+    const rr = new Rng(`rn-reports:${world.anchor}`);
+    const custTables = world.rateTables.filter((t) => t.kind === "customer");
+    const trunksOf = new Map<number, typeof custTrunks>();
+    for (const t of custTrunks)
+      for (const id of t.rateTableIds) trunksOf.set(id, [...(trunksOf.get(id) ?? []), t]);
+    const used = custTables.filter((t) => trunksOf.has(t.id));
+    const notice = (tableId: number) =>
+      [...new Set((trunksOf.get(tableId) ?? []).map((t) => t.enterpriseId))].map((entId) => {
+        const e = world.enterpriseById.get(entId)!;
+        const failed = rr.chance(0.04);
+        return {
+          enterpriseId: e.id,
+          enterprise: e.name,
+          rateTable: world.rateTableById.get(tableId)!.name,
+          trunks: (trunksOf.get(tableId) ?? []).filter((t) => t.enterpriseId === e.id).map((t) => t.name),
+          to: failed ? [] : [`rates@${domainOf(e.name)}`],
+          status: failed ? "failed" : "sent",
+          reason: failed ? "No rates or commercial contact e-mail for this enterprise" : null,
+        };
+      });
+    const sends = profile.name === "full" ? 420 : 80;
+    const distinct = (xs: string[]) => [...new Set(xs)].join(", ");
+    for (let i = 0; i < sends && used.length; i++) {
+      const bulkSend = rr.chance(0.25);
+      const tables = bulkSend ? rr.sample(used, Math.min(used.length, rr.int(2, 25))) : [rr.pick(used)];
+      const notices = tables.flatMap((t) => notice(t.id));
+      if (!notices.length) continue;
+      const sent = notices.filter((n) => n.status === "sent").length;
+      await sink.insert("rn_reports", {
+        id: i + 1,
+        sent_at: new Date(world.anchor - rr.int(0, 90 * DAY - 1)),
+        user_id: rr.pick(rates).id,
+        source: bulkSend ? "bulk_rating" : "rate_table",
+        change_id: null,
+        note: rr.chance(0.2) ? rr.pick(["Price update", "Supplier increase", "New routes", "Monthly review"]) : null,
+        notices: json(notices),
+        notice_count: notices.length,
+        sent_count: sent,
+        failed_count: notices.length - sent,
+        enterprise_names: distinct(notices.map((n) => n.enterprise)),
+        rate_table_names: distinct(notices.map((n) => n.rateTable)),
+        trunk_names: distinct(notices.flatMap((n) => n.trunks)),
+        to_addresses: distinct(notices.flatMap((n) => n.to)),
       });
     }
   }

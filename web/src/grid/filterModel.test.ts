@@ -2,6 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { FieldDescriptor } from "@sms/contract";
+import type { GridState } from "./filterModel";
 import {
   buildFilter,
   conditionLabel,
@@ -186,4 +187,17 @@ test("grid state survives the URL, including non-ASCII text", () => {
   assert.deepEqual(decodeState(encoded), state);
   assert.equal(encodeState(emptyState()), "");
   assert.deepEqual(decodeState("%%%garbage"), emptyState());
+});
+
+test("pills and header boxes on the same field both apply (team trial round 7)", () => {
+  const state: GridState = {
+    ...emptyState(),
+    pills: { customer: { field: "customer", op: "like", value: "acme%" } },
+    columns: { customer: { field: "customer", op: "like", value: "%uk%" } },
+  };
+  assert.deepEqual(buildFilter(state), {
+    logic: "and",
+    conditions: [state.pills!.customer, state.columns.customer],
+  });
+  assert.deepEqual(decodeState(encodeState(state)), state);
 });

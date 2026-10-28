@@ -1171,6 +1171,48 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/rn-reports/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List sent RN operations (server-side filter, sort and paging)
+     * @description RN report (team trial round 7, §8, §13.10): one row per rate notification send, from a rate table save or a
+     *     bulk rating. A send to one enterprise and table shows that e-mail in the row (enterprise, table, trunks,
+     *     recipients, result); a bulk send shows its totals and opens as the same report shown after the send.
+     */
+    post: operations["queryRnReports"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/rn-reports/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One RN send with every e-mail it sent
+     * @description The report shown after the send (team trial round 7), one line per enterprise and rate table.
+     */
+    get: operations["getRnReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/rate-notifications/query": {
     parameters: {
       query?: never;
@@ -14774,6 +14816,42 @@ export type components = {
       /** @description False = nothing is e-mailed; the page downloads the sheets instead (View Rate). */
       sendEmail: boolean;
     };
+    /**
+     * @description One RN send (team trial round 7). For a send with one e-mail, enterprise, rateTable, trunks, to and reason are
+     *     that e-mail's; for a bulk send they summarise (e.g. "12 enterprises").
+     */
+    RnReportRow: {
+      id: components["schemas"]["Id"];
+      sentAt: components["schemas"]["Timestamp"];
+      sentBy: string | null;
+      /**
+       * @description A save on one rate table, or a bulk rating job.
+       * @enum {string}
+       */
+      source: "rate_table" | "bulk_rating";
+      /** @description The change (History, §13.10) that sent it. */
+      changeId: number | null;
+      /** @description E-mails in the send (one per enterprise and rate table). */
+      noticeCount: number;
+      sent: number;
+      failed: number;
+      /** @enum {string} */
+      status: "sent" | "partial" | "failed";
+      enterprise: string;
+      rateTable: string;
+      trunks: string;
+      to: string;
+      /** @description Why a one-e-mail send failed. */
+      reason: string | null;
+      /** @description The note typed for the RN. */
+      note: string | null;
+    };
+    RnReportPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["RnReportRow"][];
+    };
+    RnReport: components["schemas"]["RnReportRow"] & {
+      notices: components["schemas"]["RateNoticeOutcome"][];
+    };
     /** @description One rate notification e-mail (team trial round 6, §8) - one per enterprise and customer rate table. */
     RateNoticeOutcome: {
       enterpriseId: components["schemas"]["Id"];
@@ -15120,6 +15198,10 @@ export type components = {
       mnc: string;
       /** @description ISO code. */
       country: string;
+      /** @description Destination of the customer's MCCMNC, "Country · Network" from the MCCMNC master (team trial round 7); empty when unknown. Filters match the name. */
+      customerDestination: string;
+      /** @description Destination of the vendor's MCCMNC (after HLR or porting), as customerDestination (team trial round 7). */
+      vendorDestination: string;
       customerBillingType: string;
       customerRateTableId: number;
       customerRate: number;
@@ -15188,6 +15270,8 @@ export type components = {
       hlrIsPorted: boolean;
       hlrIsAccomplished: boolean;
       hlrErrorCode: number;
+      /** @description HLR error in words (team trial round 7): "Timeout" for 408, "No result" for a lookup without an answer, "Error <code>" for a provider's code; empty when the lookup succeeded or none ran. */
+      hlrErrorText: string;
       hlrCostSys: number;
     };
     EdrPage: components["schemas"]["ListPageMeta"] & {
@@ -18597,7 +18681,8 @@ export type components = {
       | "cleanup_findings"
       | "pcap_traces"
       | "portal_rates"
-      | "portal_messages";
+      | "portal_messages"
+      | "rn_reports";
     /**
      * @description Operators from §13.25. All text comparisons are case-insensitive.
      *
@@ -21355,6 +21440,58 @@ export interface operations {
           "application/problem+json": components["schemas"]["NoticeBreach"];
         };
       };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryRnReports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of RN sends */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnReportPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getRnReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The RN send */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RnReport"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
   };

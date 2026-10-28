@@ -1231,7 +1231,7 @@ function MccmncCell({ row }: { row: TranslationRuleRow }) {
   const rest = row.mccmncs.length - 2;
   return (
     <HoverList items={names} more={Math.max(0, row.mccmncs.length - names.length)}>
-      <span className="rr-strong rr-label num">
+      <span className="rr-label num">
         <span className="rr-main">{names.slice(0, 2).join(", ")}</span>
         {rest > 0 && <span className="muted">+{rest}</span>}
       </span>
@@ -1375,7 +1375,7 @@ export function TranslationRulesPage() {
               <span className="tone-warning">Not assigned</span>
             ) : (
               <HoverList items={r.appliesToNames} more={r.appliesToCount - r.appliesToNames.length}>
-                <span className="rr-strong rr-label">
+                <span className="rr-label">
                   <span className="rr-main">{r.appliesTo}</span>
                 </span>
               </HoverList>

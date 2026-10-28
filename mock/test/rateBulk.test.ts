@@ -85,10 +85,14 @@ describe("bulk rating preview (§13.11)", { skip }, () => {
     };
     await bad({ rateTableIds: ids, action: { type: "set" } }, "/action/value");
     await bad({ rateTableIds: ids, action: { type: "set", value: 0.01 }, onlyExisting: false }, "/onlyExisting");
-    await bad(
-      { rateTableIds: ids, action: { type: "close" }, effectiveFrom: "2020-01-01T00:00:00Z" },
-      "/effectiveFrom",
-    );
+    // A past start is not an error: it applies from now (team trial round 7, §13.32).
+    const past = await post("/rate-bulk/preview", {
+      rateTableIds: ids,
+      action: { type: "close" },
+      effectiveFrom: "2020-01-01T00:00:00Z",
+    });
+    assert.equal(past.statusCode, 200, past.body);
+    for (const row of past.json().rows) assert.ok(Date.parse(row.effectiveFrom) > Date.now() - 120_000, row.effectiveFrom);
     await bad({ rateTableIds: [99_999_999], action: { type: "close" } }, "/rateTableIds/0");
     await bad({ rateTableIds: ids, mccmncs: ["99999"], action: { type: "close" } }, "/mccmncs/0");
     await bad(

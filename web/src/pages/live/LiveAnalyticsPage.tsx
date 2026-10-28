@@ -437,6 +437,7 @@ function EdrWindow({ title, state, done }: { title: string; state: GridState; do
             state={grid}
             onStateChange={setGrid}
             fetchPage={(b: ListQuery) => fetchEdrs(b)}
+            autoFit
             activeId={active}
             onActiveChange={(r) => setActive(r?.id ?? null)}
             selected={new Set()}

@@ -53,6 +53,7 @@ export const ACCESS_GROUPS: { name: string; description: string; permissions: Re
       enterprises: ["view", "edit"],
       "customer-trunks": ["view", "send"],
       "rate-manager": ["view", "edit", "export", "send"],
+      "rn-report": ["view"],
       "market-moves": ["view", "export"],
       "rate-lookup": ["view", "export"],
       "margin-calculator": ["view", "add", "edit", "delete", "export"],
@@ -90,6 +91,7 @@ export const ACCESS_GROUPS: { name: string; description: string; permissions: Re
     permissions: {
       "rate-manager": ["view", "add", "edit", "export", "import", "send"],
       "incoming-rns": ["view", "edit", "import"],
+      "rn-report": ["view"],
       "route-rules": ["view", "edit"],
       lcr: ["view", "add", "export"],
       mccmnc: ["view", "export"],

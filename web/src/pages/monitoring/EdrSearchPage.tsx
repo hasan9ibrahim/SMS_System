@@ -594,6 +594,7 @@ export function EdrSearchPage() {
       noQuickSearch
       toolbarFields={["startTime", "numberOrMsgId", "customerMccmnc", "msgStatus", "isFinalAttempt"]}
       noRecordBar
+      autoFit
       exportPrimary
       onExport={(s) => void openDownload(s)}
       actions={(targets) => (

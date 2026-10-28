@@ -713,6 +713,45 @@ export const topics: HelpTopic[] = [
 
   // ------------------------------------------------------------------ Incoming RNs
   {
+    id: "rn-report",
+    pageKey: "rn-report",
+    title: "RN report",
+    group: "Rates",
+    summary:
+      "Every rate notification (RN) the platform sent to clients, newest first: who got it and who did not, for each rate table save and each bulk rating.",
+    keywords: ["rate notification", "RN", "sent RN", "send rates", "bulk rating", "who got", "failed e-mail", "report"],
+    sections: [
+      {
+        id: "overview",
+        title: "What this page is for",
+        blocks: [
+          {
+            kind: "text",
+            text: "When a rate table save or a bulk rating has **Send RN** ticked, each client using a changed table gets one e-mail, and a report shows who got it and who did not. This page keeps every one of those sends, so the report can be opened again later.",
+          },
+          {
+            kind: "text",
+            text: "One row is one send. A send with **one e-mail** shows it in the row: **Enterprise**, **Rate table**, **Customer trunks**, **To** and **Result** (with the reason when it failed). A **bulk** send (several e-mails) shows its totals instead, such as \"12 enterprises\": click one of them, double-click the row or choose **Report…** to open the same window that appeared after the send, one line per enterprise and rate table.",
+          },
+          {
+            kind: "fields",
+            fields: [
+              { name: "Sent", what: "When the RNs went out (UTC)." },
+              { name: "Operation", what: "**Rate table save** (one table) or **Bulk rating**." },
+              { name: "E-mails / Sent OK / Failed", what: "How many e-mails the send had and how they went." },
+              { name: "Result", what: "**Sent**, **n of m failed**, or the reason a one-e-mail send failed." },
+              { name: "Sent by", what: "Who saved the change. The note typed for the RN is in the **Note** column (Columns)." },
+            ],
+          },
+          {
+            kind: "text",
+            text: "Filters, sorting and search run on the server like every list. A filter on Enterprise, Rate table, Customer trunks or To also finds the bulk sends that include it.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "incoming-rns",
     pageKey: "incoming-rns",
     title: "Incoming RNs",
@@ -1371,7 +1410,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Click **Preview**. Rates the action cannot price (no current rate for a % change, no cost for Cost +) are shown with a note and skipped.",
+            text: "There is no Preview button: half a second after the form is complete, the rates the job changes appear below to review (the review shows below-cost rates, notice dates and the 7-day impact, and lets you edit or exclude rows before **Apply**). Rates the action cannot price (no current rate for a % change, no cost for Cost +) are shown with a note and skipped.",
           },
         ],
       },
@@ -1460,7 +1499,7 @@ export const topics: HelpTopic[] = [
               "Click **Apply n changes** in the header.",
               "In **Apply n changes?** add an optional **Note** (shown in History) and keep or untick **Send RN to clients**.",
               "Click **Apply**. All tables change together as one change, undone as one.",
-              "If **Respect notice periods** was off and some increases start too soon, **Changes sooner than the client's notice** opens: **Apply anyway** (logged) or cancel, tick **Respect notice periods** and preview again.",
+              "If **Respect notice periods** was off and some increases start too soon, **Changes sooner than the client's notice** opens: **Apply anyway** (logged) or cancel, tick **Respect notice periods** (the review updates by itself) and apply again.",
             ],
           },
           {

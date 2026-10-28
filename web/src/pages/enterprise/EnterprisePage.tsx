@@ -32,7 +32,6 @@ import { AccountManagersTab } from "./AccountManagersTab";
 import { BillingTab } from "./BillingTab";
 import { DocsTab } from "./DocsTab";
 import { GeneralTab } from "./GeneralTab";
-import { EnterpriseRulesTab } from "./RulesTab";
 
 const page = pageForPath("/enterprises")!;
 const SECTIONS = [
@@ -176,7 +175,7 @@ export function EnterprisePage() {
       : []),
     ...(hasVendor ? [{ key: "vendor-trunks", label: "Vendor trunks", count: e?.trunkCounts.vendor ?? null }] : []),
     // Rule order over the enterprise's trunks (team trial round 4).
-    { key: "rules", label: "Rules", disabled: id === null },
+    // No Rules tab (team trial round 7): each trunk's Rules tab assigns and removes its rules.
     { key: "account-managers", label: "Account managers", disabled: id === null },
     { key: "history", label: "History", disabled: id === null },
   ].filter((t) => shownTab(`enterprises.${t.key}`)); // tabs an access group can hide (§11, trial round 2)
@@ -326,7 +325,6 @@ export function EnterprisePage() {
             }
           />
         )}
-        {e && section === "rules" && <EnterpriseRulesTab enterprise={e} {...props("rules")} />}
         {e && section === "account-managers" && <AccountManagersTab enterprise={e} {...props("account-managers")} />}
         {e && section === "history" && (
           <div className="card">

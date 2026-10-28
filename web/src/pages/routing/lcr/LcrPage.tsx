@@ -899,7 +899,7 @@ function ProfilesView() {
           render: (r) =>
             r.ruleCount ? (
               <HoverList items={r.ruleNames} more={r.ruleCount - r.ruleNames.length} heading="Route rules">
-                <span className="rr-strong num">{r.ruleCount}</span>
+                <span className="num">{r.ruleCount}</span>
               </HoverList>
             ) : (
               <span className="muted">—</span>
@@ -912,7 +912,7 @@ function ProfilesView() {
               items={r.vendorScopeNames}
               heading={r.vendorScope.startsWith("All but") ? "All vendors except:" : undefined}
             >
-              <span className={r.vendorScopeNames.length ? "rr-strong" : undefined}>{r.vendorScope}</span>
+              <span>{r.vendorScope}</span>
             </HoverList>
           ),
         },

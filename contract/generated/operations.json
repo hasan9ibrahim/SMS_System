@@ -4760,6 +4760,28 @@
   "alsoOn": []
  },
  {
+  "method": "GET",
+  "path": "/rn-reports/{id}",
+  "operationId": "getRnReport",
+  "tag": "rates",
+  "module": "rn-report",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/rn-reports/query",
+  "operationId": "queryRnReports",
+  "tag": "rates",
+  "module": "rn-report",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
   "method": "POST",
   "path": "/route-map/export",
   "operationId": "exportRouteMap",

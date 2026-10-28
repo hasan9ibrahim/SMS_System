@@ -58,6 +58,10 @@ export interface ListScreenProps<Row extends { id: number }> {
   detailBelow?: boolean;
   /** Shows only these columns, whatever the saved choice (Rate manager's list beside an open table, round 6). */
   onlyColumns?: string[];
+  /** Columns left out until someone picks them in Columns (team trial round 7: Rate manager's Avg Margin). */
+  defaultHidden?: string[];
+  /** Columns as wide as their longest value, no truncation (team trial round 7: EDR Search). */
+  autoFit?: boolean;
   /** Taller grid rows for two-line cells (team trial round 4). */
   rowHeight?: number;
   /** Records this page edits; enables the header Undo and History buttons (§13.10). */
@@ -509,6 +513,8 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     detailOpensOn = "click",
     detailBelow = false,
     onlyColumns,
+    defaultHidden,
+    autoFit,
     rowHeight,
   } = props;
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -550,6 +556,16 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   useUndoShortcut(historyScope, active);
 
   const byName = useMemo(() => new Map((fields.data?.fields ?? []).map((f) => [f.field, f])), [fields.data]);
+  // The columns shown before anyone chooses: every column the list offers, less those hidden by default.
+  const shownState: GridState =
+    onlyColumns
+      ? { ...state, visible: onlyColumns }
+      : state.visible === null && defaultHidden?.length && fields.data
+        ? {
+            ...state,
+            visible: fields.data.fields.filter((f) => !f.hidden && !defaultHidden.includes(f.field)).map((f) => f.field),
+          }
+        : state;
   const total = meta.total;
   usePageStatus({
     rows:
@@ -584,7 +600,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   }, [rows, selectId]); // eslint-disable-line react-hooks/exhaustive-deps
   // A new filter or search changes the rows: drop a selection the user can no longer see,
   // so the selection actions never act on hidden rows.
-  const filterKey = JSON.stringify([state.columns, state.builder, state.search]);
+  const filterKey = JSON.stringify([state.columns, state.pills, state.builder, state.search]);
   useEffect(() => setSelected(new Set()), [filterKey]);
   const onActive = useCallback((row: Row | null) => setActiveRow(row), []);
   const builderCount = countConditions(state.builder);
@@ -594,8 +610,8 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     <PillSearch
       fields={fields.data?.fields}
       visible={state.visible}
-      columns={state.columns}
-      onColumns={(columns) => setState({ ...state, columns })}
+      columns={state.pills ?? {}}
+      onColumns={(pills) => setState({ ...state, pills })}
       search={state.search}
       onSearch={(search) => setState({ ...state, search })}
       freeText={!noQuickSearch}
@@ -760,7 +776,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               </button>
             </>
           )}
-          <ColumnsMenu fields={fields.data} state={state} onChange={setState} />
+          <ColumnsMenu fields={fields.data} state={shownState} onChange={setState} />
         </div>
       </div>
       <div className={`list-body${showDetail ? " with-detail" : ""}${detailBelow ? " detail-below" : ""}`} ref={bodyRef}>
@@ -770,8 +786,9 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             <DataGrid<Row>
               list={list}
               {...(rowHeight ? { rowHeight } : {})}
+              {...(autoFit ? { autoFit } : {})}
               fields={fields.data}
-              state={onlyColumns ? { ...state, visible: onlyColumns } : state}
+              state={shownState}
               onStateChange={(next) => setState(onlyColumns ? { ...next, visible: state.visible } : next)}
               {...(columns ? { columns } : {})}
               {...(trailing ? { trailing } : {})}

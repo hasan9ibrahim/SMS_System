@@ -134,6 +134,9 @@
       "import",
       "approve"
     ],
+    "rn-report": [
+      "view"
+    ],
     "market-moves": [
       "view",
       "export"
@@ -518,6 +521,7 @@
     "reports": "master-report",
     "repush-requests": "repush",
     "rerating-requests": "re-rating",
+    "rn-reports": "rn-report",
     "route-map": "route-map",
     "route-rules": "route-rules",
     "route-simulator": "simulator",

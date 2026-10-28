@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.107.0
+  version: 0.108.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1960,6 +1960,57 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/NoticeBreach'
+
+  /rn-reports/query:
+    post:
+      tags: [rates]
+      operationId: queryRnReports
+      summary: "List sent RN operations (server-side filter, sort and paging)"
+      description: |
+        RN report (team trial round 7, §8, §13.10): one row per rate notification send, from a rate table save or a
+        bulk rating. A send to one enterprise and table shows that e-mail in the row (enterprise, table, trunks,
+        recipients, result); a bulk send shows its totals and opens as the same report shown after the send.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of RN sends
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RnReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /rn-reports/{id}:
+    get:
+      tags: [rates]
+      operationId: getRnReport
+      summary: One RN send with every e-mail it sent
+      description: The report shown after the send (team trial round 7), one line per enterprise and rate table.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The RN send
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RnReport"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
   /rate-notifications/query:
     post:
@@ -24378,6 +24429,73 @@ components:
           type: boolean
           description: False = nothing is e-mailed; the page downloads the sheets instead (View Rate).
 
+    RnReportRow:
+      type: object
+      description: |
+        One RN send (team trial round 7). For a send with one e-mail, enterprise, rateTable, trunks, to and reason are
+        that e-mail's; for a bulk send they summarise (e.g. "12 enterprises").
+      required: [id, sentAt, sentBy, source, changeId, noticeCount, sent, failed, status, enterprise, rateTable, trunks, to, reason, note]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        sentAt:
+          $ref: "#/components/schemas/Timestamp"
+        sentBy:
+          type: [string, "null"]
+        source:
+          type: string
+          enum: [rate_table, bulk_rating]
+          description: A save on one rate table, or a bulk rating job.
+        changeId:
+          type: [integer, "null"]
+          description: The change (History, §13.10) that sent it.
+        noticeCount:
+          type: integer
+          description: E-mails in the send (one per enterprise and rate table).
+        sent:
+          type: integer
+        failed:
+          type: integer
+        status:
+          type: string
+          enum: [sent, partial, failed]
+        enterprise:
+          type: string
+        rateTable:
+          type: string
+        trunks:
+          type: string
+        to:
+          type: string
+        reason:
+          type: [string, "null"]
+          description: Why a one-e-mail send failed.
+        note:
+          type: [string, "null"]
+          description: The note typed for the RN.
+
+    RnReportPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/RnReportRow"
+
+    RnReport:
+      allOf:
+        - $ref: "#/components/schemas/RnReportRow"
+        - type: object
+          required: [notices]
+          properties:
+            notices:
+              type: array
+              items:
+                $ref: "#/components/schemas/RateNoticeOutcome"
+
     RateNoticeOutcome:
       type: object
       description: One rate notification e-mail (team trial round 6, §8) - one per enterprise and customer rate table.
@@ -25059,7 +25177,7 @@ components:
     EdrRow:
       type: object
       description: "One message attempt with both legs (§9.1 EDR schema)."
-      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, vendorSrcTon, vendorSrcNpi, vendorDstTon, vendorDstNpi, vendorCoding, senderId, vendorSenderId, dnid, routedDnid, messageText, vendorMessageText, customerMccmnc, mcc, mnc, country, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, customerDeliveryError, networkError, registeredDelivery, vendorRegisteredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrCostSys]
+      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, vendorSrcTon, vendorSrcNpi, vendorDstTon, vendorDstNpi, vendorCoding, senderId, vendorSenderId, dnid, routedDnid, messageText, vendorMessageText, customerMccmnc, mcc, mnc, country, customerDestination, vendorDestination, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, customerDeliveryError, networkError, registeredDelivery, vendorRegisteredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrErrorText, hlrCostSys]
       properties:
         id:
           type: string
@@ -25160,6 +25278,12 @@ components:
         country:
           type: string
           description: "ISO code."
+        customerDestination:
+          type: string
+          description: "Destination of the customer's MCCMNC, \"Country · Network\" from the MCCMNC master (team trial round 7); empty when unknown. Filters match the name."
+        vendorDestination:
+          type: string
+          description: "Destination of the vendor's MCCMNC (after HLR or porting), as customerDestination (team trial round 7)."
         customerBillingType:
           type: string
         customerRateTableId:
@@ -25285,6 +25409,9 @@ components:
           type: boolean
         hlrErrorCode:
           type: integer
+        hlrErrorText:
+          type: string
+          description: "HLR error in words (team trial round 7): \"Timeout\" for 408, \"No result\" for a lookup without an answer, \"Error <code>\" for a provider's code; empty when the lookup succeeded or none ran."
         hlrCostSys:
           type: number
 
@@ -33201,7 +33328,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings, pcap_traces, portal_rates, portal_messages]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings, pcap_traces, portal_rates, portal_messages, rn_reports]
 
     FilterOperator:
       type: string

@@ -1,7 +1,7 @@
 // Quick search with field pills (team trial round 3, §13.25): typing searches the list's text columns as before;
 // clicking the box opens a card of the page's fields by category. Picking one adds a pill "Field = …" whose value
-// takes the column filter shorthand (% and _ wildcards, >5, 5..10, dates, =exact, !not, /regex/). Pills are column
-// filters, so they show under the headers too and all apply together (AND). × on a pill removes it.
+// takes the column filter shorthand (% and _ wildcards, >5, 5..10, dates, =exact, !not, /regex/). Pills are kept apart
+// from the boxes under the headers (team trial round 7); pills and boxes all apply together (AND). × removes a pill.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldDescriptor, FilterCondition } from "@sms/contract";
 import { Icon } from "../ui/Icon";

@@ -998,7 +998,9 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
     if (result.change && table.kind === "vendor") scheduleBestBuyRefresh();
     // Rate notifications to the customers using the changed tables (team trial round 1).
     const notifications =
-      result.change && body.sendNotification ? await sendRateNotices(pool, diff, me.id, body.notificationNote) : [];
+      result.change && body.sendNotification
+        ? await sendRateNotices(pool, diff, me.id, body.notificationNote, { source: "rate_table", changeId: result.change.id })
+        : [];
     const notificationsSent = notifications.filter((n) => n.status === "sent").length;
     return { change: result.change, applied: result.applied, skipped, notificationsSent, notifications };
   });

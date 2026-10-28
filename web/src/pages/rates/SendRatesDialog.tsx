@@ -151,8 +151,16 @@ export function openSendRates(tables: Pick<RateTableRow, "id" | "name" | "trunkC
 }
 
 // Who got the rate notification and who did not (team trial round 6, §8): shown after a save or bulk rating that
-// sent RNs, one row per enterprise and rate table.
-function RnSummaryDialog({ rows, done }: { rows: RateNoticeOutcome[]; done: () => void }) {
+// sent RNs, one row per enterprise and rate table; the RN report opens the same window for a past send (round 7).
+export function RnSummaryDialog({
+  rows,
+  done,
+  subtitle,
+}: {
+  rows: RateNoticeOutcome[];
+  done: () => void;
+  subtitle?: string;
+}) {
   const sent = rows.filter((r) => r.status === "sent").length;
   const failed = rows.length - sent;
   return (
@@ -166,6 +174,7 @@ function RnSummaryDialog({ rows, done }: { rows: RateNoticeOutcome[]; done: () =
         </Button>
       }
     >
+      {subtitle && <p className="muted small">{subtitle}</p>}
       <div className={`send-summary ${failed ? (sent ? "partial" : "bad") : "good"}`}>
         <Icon name={failed && !sent ? "alert" : "check"} />
         <span>

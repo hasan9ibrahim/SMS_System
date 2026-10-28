@@ -2,9 +2,10 @@
 // destinations in one job. Step 1 scope (tables × destinations, from the URL when opened from the
 // Rate Manager), Step 2 one action (fixed rate, change by % or amount, cost + margin, close, block),
 // Step 3 review grid (type over a rate or a formula such as =cost*1.15, exclude rows with one click),
-// Step 4 impact on the last 7 days of traffic, Step 5 apply as ONE undoable change (§13.10).
+// Step 4 impact on the last 7 days of traffic, Step 5 apply as ONE undoable change (§13.10). The review grid fills in by
+// itself as the scope and action are chosen (team trial round 7: no Preview button to press before Apply).
 import { showRnSummary } from "./SendRatesDialog";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -372,6 +373,7 @@ export function BulkRatingPage() {
         setMove(m);
         setOverrides(ov);
         setType("none");
+        setSkipNew(true);
         setMccmncs([m.mccmnc]);
         void previewWith({
           rateTableIds: initial.tables,
@@ -410,22 +412,19 @@ export function BulkRatingPage() {
   const items = useMemo(() => applyItems(reviewed), [reviewed]);
   const currency = preview?.summary.currency ?? "";
 
+  /** The job as the form stands; null while it is incomplete. */
   const scope = (): RateBulkScope | null => {
-    if (!tables.length) {
-      toast({ tone: "warning", message: "Choose at least one client's rate table" });
-      return null;
-    }
+    if (!tables.length) return null;
     const needsValue = !!action.valueLabel;
     const v = Number(value.replace(",", "."));
-    if (needsValue && (value.trim() === "" || !Number.isFinite(v))) {
-      toast({ tone: "warning", message: `Enter the ${action.valueLabel!.toLowerCase()}` });
-      return null;
-    }
+    if (needsValue && (value.trim() === "" || !Number.isFinite(v))) return null;
+    if (costPlus && costSource === "vendor_trunk" && !vendorTrunkId) return null;
     return {
       rateTableIds: tables,
       ...(mccmncs.length ? { mccmncs } : {}),
       ...(countries.length ? { countryIsos: countries } : {}),
-      onlyExisting: skipNew,
+      // New rates need destinations to add; for "every destination they price" only existing rates change.
+      onlyExisting: skipNew || (!mccmncs.length && !countries.length),
       respectNotice,
       effectiveFrom: effectiveIso(from, tz),
       ...(overrides.length ? { overrides } : {}),
@@ -438,22 +437,43 @@ export function BulkRatingPage() {
     };
   };
 
-  const runPreview = async () => {
-    const body = scope();
-    if (body) await previewWith(body);
-  };
+  // Only the newest review counts when the form changes while one is loading.
+  const previewSeq = useRef(0);
   const previewWith = async (body: RateBulkScope) => {
+    const seq = ++previewSeq.current;
     setLoading(true);
     try {
-      setPreview(await previewRateBulk(body));
+      const p = await previewRateBulk(body);
+      if (seq !== previewSeq.current) return;
+      setPreview(p);
       setEdits(noEdits());
       setShow("all");
     } catch (err) {
-      toast({ tone: "error", message: bulkProblem(err) });
+      if (seq === previewSeq.current) toast({ tone: "error", message: bulkProblem(err) });
     } finally {
-      setLoading(false);
+      if (seq === previewSeq.current) setLoading(false);
     }
   };
+  // The review follows the form (team trial round 7): half a second after the last change, once it is complete.
+  const job = JSON.stringify(scope());
+  const firstJob = useRef(true);
+  useEffect(() => {
+    // Opened from a market move: that effect runs the first review with the suggested rates.
+    if (firstJob.current && new URLSearchParams(location.search).get("move")) {
+      firstJob.current = false;
+      return;
+    }
+    firstJob.current = false;
+    const body = JSON.parse(job) as RateBulkScope | null;
+    if (!body) {
+      previewSeq.current++;
+      setPreview(null);
+      setLoading(false);
+      return;
+    }
+    const t = setTimeout(() => void previewWith(body), 500);
+    return () => clearTimeout(t);
+  }, [job]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runApply = async (note: string, sendRn: boolean, acceptNoticeBreach = false, rnNote = ""): Promise<void> => {
     try {
@@ -477,7 +497,10 @@ export function BulkRatingPage() {
             note: `Rates updated on ${r.tables} client table${r.tables === 1 ? "" : "s"} (change #${r.change.id})`,
           }).catch(() => undefined);
       } else toast({ tone: "info", message: "Nothing changed" });
-      setPreview(null);
+      // Review the same job again: the tables now hold the new rates.
+      const body = scope();
+      if (body) void previewWith(body);
+      else setPreview(null);
       setEdits(noEdits());
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -806,9 +829,7 @@ export function BulkRatingPage() {
               </label>
             )}
             <span className="fb-spacer" />
-            <Button icon="search" disabled={loading} onClick={() => void runPreview()}>
-              {loading ? "Working…" : "Preview"}
-            </Button>
+            {loading && <span className="muted small">Updating the rates to review…</span>}
           </div>
         </section>
       </div>
@@ -940,7 +961,9 @@ export function BulkRatingPage() {
       )}
       {!preview && (
         <div className="grid-message muted bulk-empty">
-          Choose the clients' tables and destinations, pick an action and press Preview.
+          {loading
+            ? "Finding the rates…"
+            : "Choose the clients' tables and destinations and an action: the rates it changes show here to review, then Apply."}
         </div>
       )}
     </div>

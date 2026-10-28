@@ -1,5 +1,6 @@
 // "Send RN" on rating saves (team trial round 1): a customer table change e-mails each client using the
-// table (logged as send_rate, never sent), a vendor table change never does, and the change undoes.
+// table (logged as send_rate, never sent), a vendor table change never does, and the change undoes. Each send is kept
+// for the RN report (team trial round 7).
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { buildServer, API_PREFIX } from "../src/server.js";
@@ -91,6 +92,21 @@ test(
     assert.ok(entry, "the save is in the table's change log");
     assert.equal(entry.items[0].kind, "decrease");
     assert.ok(Math.abs(entry.items[0].changePct + 10) < 0.01);
+    // The send is in the RN report (team trial round 7), found by its change, with every e-mail it sent.
+    const list = await app.inject({
+      method: "POST",
+      url: `${API_PREFIX}/rn-reports/query`,
+      payload: { limit: 5, filter: { logic: "and", conditions: [{ field: "changeId", op: "eq", value: body.change.id }] } },
+    });
+    assert.equal(list.statusCode, 200, list.body);
+    const sendRow = list.json().rows[0];
+    assert.ok(sendRow, "the send is in the RN report");
+    assert.equal(sendRow.source, "rate_table");
+    assert.equal(sendRow.noticeCount, body.notifications.length);
+    assert.equal(sendRow.note, note);
+    const report = await app.inject({ method: "GET", url: `${API_PREFIX}/rn-reports/${sendRow.id}` });
+    assert.equal(report.statusCode, 200, report.body);
+    assert.deepEqual(report.json().notices, body.notifications);
     const undo = await app.inject({ method: "POST", url: `${API_PREFIX}/changes/${body.change.id}/undo`, payload: {} });
     assert.equal(undo.statusCode, 200, undo.body);
   },
