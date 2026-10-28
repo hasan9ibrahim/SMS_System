@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Installs the platform on this server from a bundle on the repository's GitHub releases (docs/DEPLOY_SINGLE_SERVER.md).
+# The server holds no source code and no build tools: only the bundles (built by .github/workflows/release.yml once CI
+# passed on main) and your inventory.
+#
+#   sms-update                   the newest release: download it, then deploy it
+#   sms-update <id>              a given release, e.g. 1a2b3c4d5e (also how to roll back)
+#   sms-update --setup [<id>]    run the setup (site.yml) first: the first install, or after an inventory change
+#   sms-update --list            the releases on GitHub, newest first
+#   sms-update --download [<id>] only download it (to /root/sms-platform/<id>), e.g. to copy the example inventory
+#
+# Settings (environment variables; the defaults suit docs/DEPLOY_SINGLE_SERVER.md):
+#   SMS_REPO                 hasan9ibrahim/SMS_System
+#   SMS_TOKEN_FILE           /root/.config/sms/github-token  a fine-grained token: this repository, Contents read-only
+#   SMS_INVENTORY            /root/sms-inventory
+#   SMS_BUNDLES              /root/sms-platform              downloaded bundles; the last five are kept
+#   SMS_VAULT_PASSWORD_FILE  a file holding the vault password (otherwise it is asked once)
+#   SMS_GITHUB_API           https://api.github.com           (tests point it elsewhere)
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+
+repo="${SMS_REPO:-hasan9ibrahim/SMS_System}"
+api_base="${SMS_GITHUB_API:-https://api.github.com}"
+token_file="${SMS_TOKEN_FILE:-/root/.config/sms/github-token}"
+inventory="${SMS_INVENTORY:-/root/sms-inventory}"
+bundles="${SMS_BUNDLES:-/root/sms-platform}"
+
+die() { echo "sms-update: $*" >&2; exit 1; }
+
+setup=false
+list=false
+download=false
+id=""
+for arg in "$@"; do
+  case "$arg" in
+    --setup) setup=true ;;
+    --list) list=true ;;
+    --download) download=true ;;
+    -h | --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) die "unknown option $arg (see --help)" ;;
+    *) id="$arg" ;;
+  esac
+done
+
+[ -r "$token_file" ] || die "no GitHub token in $token_file (docs/DEPLOY_SINGLE_SERVER.md, step 5)"
+token="$(tr -d '[:space:]' < "$token_file")"
+
+api() {
+  curl -fsSL -H "Authorization: Bearer $token" -H "Accept: application/vnd.github+json" \
+    "$api_base/repos/$repo/$1" || die "GitHub refused $1: no such release, or the token is wrong or expired"
+}
+
+if $list; then
+  api "releases?per_page=20" | python3 -c '
+import json, sys
+for r in json.load(sys.stdin):
+    print(r["tag_name"].removeprefix("platform-"), r["published_at"][:16].replace("T", " "), sep="  ")'
+  exit 0
+fi
+
+if [ -n "$id" ]; then release="$(api "releases/tags/platform-$id")"; else release="$(api releases/latest)"; fi
+read -r id asset_url < <(python3 -c '
+import json, sys
+r = json.load(sys.stdin)
+tag = r["tag_name"].removeprefix("platform-")
+url = next(a["url"] for a in r["assets"] if a["name"] == f"sms-platform-{tag}.tar.gz")
+print(tag, url)' <<< "$release") || die "the release has no bundle"
+
+dir="$bundles/$id"
+if [ ! -f "$dir/VERSION" ]; then
+  echo "Downloading release $id"
+  mkdir -p "$bundles"
+  tmp="$(mktemp -d -p "$bundles")"
+  trap 'rm -rf "$tmp"' EXIT
+  # The asset's API address redirects to the file; curl does not send the token on to the other host.
+  curl -fL --progress-bar -H "Authorization: Bearer $token" -H "Accept: application/octet-stream" "$asset_url" \
+    -o "$tmp/bundle.tar.gz" || die "download failed"
+  mkdir "$tmp/unpacked"
+  tar -xzf "$tmp/bundle.tar.gz" -C "$tmp/unpacked"
+  [ "$(cat "$tmp/unpacked/VERSION")" = "$id" ] || die "the bundle is not release $id"
+  rm -rf "$dir"
+  mv "$tmp/unpacked" "$dir"
+fi
+
+# This command updates itself with each bundle.
+install -m 0755 "$dir/sms-update" /usr/local/bin/sms-update
+
+if $download; then
+  echo "Release $id is in $dir"
+  exit 0
+fi
+
+[ -d "$inventory" ] || die "no inventory in $inventory (docs/DEPLOY_SINGLE_SERVER.md, step 6)"
+vault=()
+if [ -n "${SMS_VAULT_PASSWORD_FILE:-}" ]; then
+  vault=(--vault-password-file "$SMS_VAULT_PASSWORD_FILE")
+else
+  # Asked once for both playbooks; kept in memory-backed /dev/shm and removed at exit.
+  pass="$(mktemp -p /dev/shm)"
+  trap 'rm -f "$pass"; rm -rf "${tmp:-}"' EXIT
+  read -rsp "Vault password: " vault_password && echo
+  printf '%s\n' "$vault_password" > "$pass"
+  vault=(--vault-password-file "$pass")
+fi
+
+cd "$dir/ansible"
+if $setup; then
+  ansible-playbook -i "$inventory" site.yml "${vault[@]}"
+fi
+ansible-playbook -i "$inventory" deploy.yml -e "release=$id" "${vault[@]}"
+
+# Keep the last five bundles, never the one just installed (the folder names are release ids).
+# shellcheck disable=SC2012
+ls -1t "$bundles" | { grep -vx "$id" || true; } | tail -n +5 | while read -r old; do rm -rf "${bundles:?}/$old"; done
+echo "Release $id installed."

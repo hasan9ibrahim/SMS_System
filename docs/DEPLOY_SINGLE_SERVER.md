@@ -10,8 +10,10 @@ It assumes:
 - the domain is `example.net`, registered at GoDaddy;
 - the screens will live at `https://sms.example.net`;
 - partners will connect over SMPP to `smpp.example.net`;
-- the server builds and installs the code itself, from GitHub. Your laptop only needs a web browser and PowerShell
-  (built into Windows 10 and 11); nothing is installed on it.
+- the server holds **no source code and no build tools**. GitHub builds the platform after every change merged into
+  `main` (once all checks pass) and publishes it as one file, a *release bundle*. The server downloads and installs
+  bundles with one command, `sms-update`;
+- your laptop only needs a web browser and PowerShell (built into Windows 10 and 11); nothing is installed on it.
 
 Replace `example.net`, `203.0.113.11` (the server's public IP) and the other example values with yours.
 
@@ -29,7 +31,7 @@ Everything runs on this one machine. A second server and the witness VM can be a
 | --- | --- | --- |
 | The OVH server | It runs everything | OVH panel → Bare Metal Cloud → Dedicated servers |
 | Access to the GoDaddy DNS of `example.net` | To point the names at the server | godaddy.com → My Products |
-| Admin access to the GitHub repository | To give the server a read-only key | github.com/hasan9ibrahim/SMS_System |
+| Admin access to the GitHub repository | To give the server a read-only token for the release bundles | github.com/hasan9ibrahim/SMS_System |
 | An **S3-compatible bucket at another provider** | Off-site backups, and old EDRs and recordings | Backblaze B2, Wasabi, or OVH Object Storage in another region |
 | An **SMTP account** for platform e-mail | Sign-in codes are e-mailed; without e-mail nobody can sign in | Microsoft 365, Google Workspace, Amazon SES, Mailgun |
 | A **Telegram bot** (optional, recommended) | Alerts to your phone | @BotFather in Telegram |
@@ -157,63 +159,64 @@ sudo -i
 apt update && apt -y full-upgrade && reboot
 ```
 
-Wait two minutes, log in again (`ssh ubuntu@203.0.113.11`, then `sudo -i`), and install the tools that build the
-release and run the installation:
+Wait two minutes, log in again (`ssh ubuntu@203.0.113.11`, then `sudo -i`), and install Ansible, the only tool the
+server needs (it installs everything else itself in step 7):
 
 ```sh
-apt install -y git curl build-essential autoconf libssl-dev libncurses-dev unzip pipx
+apt install -y pipx
 pipx install ansible-core && pipx ensurepath
-
-# Node.js 22
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt install -y nodejs
-
-# Erlang 28 and Elixir 1.19 (the versions in backend/.tool-versions). Erlang compiles once: 10-20 minutes.
-curl https://mise.run | sh
-echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc
 exec bash
-mise use -g erlang@28.5.0.8 elixir@1.19.6-otp-28
+ansible-playbook --version        # prints a version
 ```
-
-Check: `node -v` prints v22, `elixir -v` prints 1.19, `ansible-playbook --version` prints a version.
 
 ---
 
-## 5. GitHub: let the server read the code
+## 5. GitHub: a read-only token for the server
 
-The repository is private. The server gets its own **read-only** key, so it can pull the code but never change it.
+The repository is private. The server gets a **token that can only read** it, which it uses to download the release
+bundles. It cannot change anything on GitHub.
 
-1. **On the server**, make the key and print it:
-
-   ```sh
-   ssh-keygen -t ed25519 -C "srv-a deploy key"      # press Enter three times
-   cat ~/.ssh/id_ed25519.pub
-   ```
-
-2. **On GitHub** (browser), open `github.com/hasan9ibrahim/SMS_System`, then **Settings → Deploy keys → Add deploy
-   key**:
-   - Title: `srv-a`;
-   - Key: paste the line from the server;
-   - leave **Allow write access** off;
-   - **Add key**.
-3. **On the server**, test and clone:
+1. **On GitHub** (browser), click your photo (top right) → **Settings** → **Developer settings** (bottom of the left
+   menu) → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**:
+   - Token name: `srv-a releases`;
+   - Expiration: 1 year (put a reminder in your calendar to renew it; step 12 says how);
+   - Repository access: **Only select repositories** → `SMS_System`;
+   - Permissions → Repository permissions → **Contents: Read-only** (Metadata: Read-only is added by itself);
+   - **Generate token**, and copy it (it starts with `github_pat_`; GitHub shows it only once).
+2. **On the server**, store it where only root can read it:
 
    ```sh
-   ssh -T git@github.com            # type "yes" the first time; it answers "Hi hasan9ibrahim/SMS_System!"
-   cd /root
-   git clone git@github.com:hasan9ibrahim/SMS_System.git
+   mkdir -p /root/.config/sms && chmod 700 /root/.config/sms
+   nano /root/.config/sms/github-token        # paste the token, save with Ctrl+O, Enter, then Ctrl+X
+   chmod 600 /root/.config/sms/github-token
    ```
 
-The code lives in `/root/SMS_System`. Do not edit it on the server: changes are made on GitHub and pulled (step 12).
+3. **Install the `sms-update` command** (one small script, the only file taken from the repository itself):
+
+   ```sh
+   curl -fsSL -H "Authorization: Bearer $(cat /root/.config/sms/github-token)" \
+     -H "Accept: application/vnd.github.raw" -o /usr/local/bin/sms-update \
+     https://api.github.com/repos/hasan9ibrahim/SMS_System/contents/deploy/ansible/sms-update
+   chmod 755 /usr/local/bin/sms-update
+   sms-update --list                # the releases on GitHub, newest first
+   sms-update --download            # downloads the newest one to /root/sms-platform/<id>
+   ```
+
+   If `--list` shows nothing, no release was built yet: on GitHub open **Actions** → **Release** → **Run workflow**
+   (on `main`), wait about 10 minutes, then try again.
+
+`/root/sms-platform/<id>/` holds the bundle: the built platform and its install scripts. `sms-update` keeps the last
+five.
 
 ---
 
 ## 6. The server: your settings and secrets (the inventory)
 
-Your settings live **outside** the code folder, in `/root/sms-inventory`, so that pulling new code never touches
-them, and your secrets never go to GitHub.
+Your settings live in `/root/sms-inventory`, apart from the bundles, so a new release never touches them, and your
+secrets never go to GitHub. Start from the example in the bundle you just downloaded:
 
 ```sh
-cp -r /root/SMS_System/deploy/ansible/inventories/single.example /root/sms-inventory
+cp -r /root/sms-platform/*/ansible/inventories/single.example /root/sms-inventory
 cd /root/sms-inventory
 ```
 
@@ -279,11 +282,10 @@ To change a secret later: `ansible-vault edit /root/sms-inventory/group_vars/all
 ## 7. The server: install everything
 
 ```sh
-cd /root/SMS_System/deploy/ansible
-ansible-playbook -i /root/sms-inventory site.yml --ask-vault-pass
+sms-update --setup
 ```
 
-It takes 15–30 minutes the first time. In order, it installs:
+It asks for the vault password once. Then it installs, in order (15–30 minutes the first time):
 
 1. the firewall;
 2. PostgreSQL;
@@ -296,6 +298,9 @@ It takes 15–30 minutes the first time. In order, it installs:
 9. monitoring;
 10. backups and traffic recording.
 
+Then it installs the platform itself: the switch, the API, the TypeScript service and the screens. It runs the
+database migrations, starts each part and waits until each one answers.
+
 It is safe to run again after any change to the inventory.
 
 If it stops, read the last red lines:
@@ -304,6 +309,7 @@ If it stops, read the last red lines:
 | --- | --- |
 | certbot fails | The DNS does not point at the server yet (step 3) |
 | `vault_smtp_url` or S3 errors | A secret is wrong (step 6.3) |
+| GitHub refused … | The token is wrong or expired (step 5) |
 
 > The firewall comes first. Your current SSH session stays open, but a new login only works from an `admin_cidrs`
 > address. Before closing this window, open a **second** PowerShell and check that `ssh ubuntu@203.0.113.11` still
@@ -311,18 +317,9 @@ If it stops, read the last red lines:
 
 ---
 
-## 8. The server: build and start the application
+## 8. The server: the first administrator
 
-```sh
-cd /root/SMS_System/deploy/ansible
-./build-release.sh                 # 5-10 minutes; the last line is the release id, e.g. 1a2b3c4d5e
-ansible-playbook -i /root/sms-inventory deploy.yml -e release=1a2b3c4d5e --ask-vault-pass
-```
-
-This installs the switch, the API, the TypeScript service and the screens, runs the database migrations, then starts
-each part and waits until each one answers.
-
-Then create the first administrator, once:
+Once:
 
 ```sh
 sudo -u sms bash -c 'set -a; . /etc/sms/service.env; set +a; cd /opt/sms/service/current; node bootstrap.mjs \
@@ -388,21 +385,21 @@ Partner IPs must be in `smpp_cidrs` (if you restricted it) and in the trunk's al
 
 ---
 
-## 12. Updating: change on GitHub, pull on the server
+## 12. Updating
 
-Changes are made on GitHub (pull requests merged into `main`). To install them:
+Changes are made on GitHub (pull requests merged into `main`). Once its checks pass, GitHub builds a new release
+bundle by itself (Actions → Release, about 10 minutes). To install it:
 
 ```sh
-cd /root/SMS_System && git checkout main && git pull
-cd deploy/ansible
-./build-release.sh                       # prints the new release id
-ansible-playbook -i /root/sms-inventory deploy.yml -e release=<id> --ask-vault-pass
+sms-update                     # the newest release
 ```
 
-- **Only `main`** goes to the server, never an unfinished branch.
-- **Roll back:** run the same `deploy.yml` command with the previous id. The last five releases stay on the server.
-- **A setting changed** in `/root/sms-inventory`: run step 7 again.
-- **New database migrations** run by themselves during `deploy.yml`.
+- **Roll back:** `sms-update --list`, then `sms-update <previous id>`. The last five bundles stay on the server, and
+  the switch keeps its last five releases.
+- **A setting changed** in `/root/sms-inventory`: `sms-update --setup`.
+- **New database migrations** run by themselves during the update.
+- **Renew the GitHub token** before it expires: generate a new one (step 5.1) and replace the line in
+  `/root/.config/sms/github-token`.
 
 | What | How |
 | --- | --- |
@@ -425,7 +422,8 @@ before you do it. The outline:
 
    Give each a `private_ip` reachable from the others, either the vRack or a VPN to the witness.
 2. **Inventory:**
-   - Copy `inventories/production.example/hosts.yml`'s layout into `/root/sms-inventory/hosts.yml`.
+   - Copy the layout of `/root/sms-platform/<id>/ansible/inventories/production.example/hosts.yml` into
+     `/root/sms-inventory/hosts.yml`.
    - Keep `srv-a` as it is, and add `srv-b` and `witness`. Remove `ansible_connection: local` from `srv-a` once the
      installation runs from one place for all three (srv-a logs in to the others over SSH).
    - On the two new machines set `etcd_initial_state: existing`.
@@ -437,12 +435,12 @@ before you do it. The outline:
       first);
    2. let the queues drain (Grafana);
    3. stop NATS and move its store aside.
-5. Run `site.yml` with the new inventory. It does the following:
+5. Run `sms-update --setup` with the new inventory. It does the following:
    - PostgreSQL gets its standby on srv-b (copied from srv-a);
    - Redis gets a replica, and Sentinel moves to 3 votes;
    - ClickHouse Keeper grows to three voters and srv-b copies the EDRs;
    - NATS becomes the cluster, and each event is kept 3 times;
    - the switch gets the witness quorum;
    - monitoring moves to the witness, with the cluster alerts.
-6. Run `deploy.yml` (step 8). Point DNS `sms` and `smpp` at both servers, or at the provider's failover IP.
+6. Run `sms-update`. Point DNS `sms` and `smpp` at both servers, or at the provider's failover IP.
 7. Run the failover drill from `docs/FAILOVER_DRILLS.md` before relying on it.

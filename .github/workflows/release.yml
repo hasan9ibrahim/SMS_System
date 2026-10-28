@@ -1,0 +1,55 @@
+name: Release
+
+# Builds the platform bundle the servers install (deploy/ansible/build-bundle.sh, docs/DEPLOY_SINGLE_SERVER.md) once
+# CI passed on main, and publishes it as a GitHub release: tag platform-<id>, file sms-platform-<id>.tar.gz. The
+# servers download it with sms-update; they hold no source code. Built on Ubuntu 24.04, like the servers (the Elixir
+# release carries the Erlang runtime, linked against its libraries).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: backend/.tool-versions
+          version-type: strict
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Build the bundle
+        id: build
+        run: echo "id=$(deploy/ansible/build-bundle.sh | tail -n 1)" >> "$GITHUB_OUTPUT"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ steps.build.outputs.id }}
+        run: |
+          if gh release view "platform-$ID" > /dev/null 2>&1; then
+            echo "platform-$ID is already published"
+            exit 0
+          fi
+          gh release create "platform-$ID" "deploy/ansible/dist/sms-platform-$ID.tar.gz" \
+            --target "$SHA" --title "Platform $ID" \
+            --notes "Install on the server with \`sms-update $ID\` (docs/DEPLOY_SINGLE_SERVER.md)."
