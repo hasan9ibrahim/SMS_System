@@ -20,6 +20,7 @@ prom=/var/lib/prometheus/node-exporter/pcap.prom
 # A file dumpcap still writes changes every few seconds; one untouched for longer than a file's span is finished.
 find "$dir" -maxdepth 1 -name 'smpp_*.pcapng' -mmin +{{ pcap_minutes | int + 5 }} -exec gzip -6 {} +
 
+{% if s3_enabled %}
 list=$(mktemp)
 trap 'rm -f "$list"' EXIT
 find "$dir" -maxdepth 1 -name 'smpp_*.pcapng.gz' -mmin +{{ pcap_local_days | int * 1440 }} -printf '%f\n' > "$list"
@@ -32,6 +33,13 @@ rclone lsf "$remote" --files-only --format ps --separator $'\t' > "$dir/archive.
 chgrp {{ switch_user }} "$dir/archive.index.new"
 chmod 0640 "$dir/archive.index.new"
 mv -f "$dir/archive.index.new" "$dir/archive.index"
+{% else %}
+# No off-site bucket yet (s3_enabled): the recording is kept here {{ pcap_local_days }} days, then deleted.
+find "$dir" -maxdepth 1 -name 'smpp_*.pcapng.gz' -mmin +{{ pcap_local_days | int * 1440 }} -delete
+: > "$dir/archive.index"
+chgrp {{ switch_user }} "$dir/archive.index"
+chmod 0640 "$dir/archive.index"
+{% endif %}
 
 find "$dir" -maxdepth 1 -name 'smpp_*' -mmin +{{ (pcap_local_days | int + 14) * 1440 }} -delete
 find "$dir/captures/archive" -type f -mmin +1440 -delete 2>/dev/null || true

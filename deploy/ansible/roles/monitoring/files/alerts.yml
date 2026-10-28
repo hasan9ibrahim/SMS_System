@@ -115,22 +115,9 @@ groups:
           summary: "NATS JetStream on {{ $labels.machine }} is unhealthy or has no leader"
           runbook: "RUNBOOKS.md#nats"
 
-  - name: backups
+  # The off-site backup alerts are in alerts-backup.yml (only once there is a bucket, s3_enabled).
+  - name: recording
     rules:
-      - alert: BackupMissing
-        expr: time() - max by (kind) (sms_backup_last_success_timestamp_seconds) > 26 * 3600
-        for: 30m
-        labels: {severity: warning}
-        annotations:
-          summary: "No successful {{ $labels.kind }} backup for {{ $value | humanizeDuration }}"
-          runbook: "RUNBOOKS.md#backupfailed"
-      - alert: BackupNeverRan
-        expr: absent(sms_backup_last_success_timestamp_seconds{kind="postgres"})
-        for: 26h
-        labels: {severity: warning}
-        annotations:
-          summary: "No PostgreSQL backup has been recorded yet"
-          runbook: "RUNBOOKS.md#backupfailed"
       - alert: PcapArchiveFailing
         expr: time() - max by (machine) (sms_pcap_archive_last_success_timestamp_seconds) > 3 * 3600
         for: 15m

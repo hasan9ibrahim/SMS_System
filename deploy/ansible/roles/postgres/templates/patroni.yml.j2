@@ -70,6 +70,11 @@ postgresql:
       password: "{{ vault_pg_superuser_password }}"
   parameters:
     unix_socket_directories: /var/run/postgresql
+{% if not s3_enabled %}
+    # No off-site bucket yet (s3_enabled): each WAL file counts as archived, so none piles up on the disk. This local
+    # value wins over the cluster-wide pgBackRest one above, which applies again once the bucket is set.
+    archive_command: /bin/true
+{% endif %}
   # A standby that fell too far behind is rebuilt from the archive.
   recovery_conf:
     restore_command: pgbackrest --stanza=sms archive-get %f "%p"
