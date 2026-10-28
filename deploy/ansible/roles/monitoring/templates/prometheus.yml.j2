@@ -8,7 +8,7 @@ alerting:
   alertmanagers:
     - static_configs: [{targets: ["127.0.0.1:{{ ports.alertmanager }}"]}]
 
-rule_files: [/etc/prometheus/sms-alerts.yml]
+rule_files: [/etc/prometheus/sms-alerts.yml{{ '' if single_server else ', /etc/prometheus/sms-alerts-cluster.yml' }}]
 
 scrape_configs:
   - job_name: node

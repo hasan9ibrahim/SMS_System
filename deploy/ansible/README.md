@@ -6,6 +6,11 @@ machine over SSH. Everything here was rehearsed on three local machines (`deploy
 
 Fake data only until the go-live (CLAUDE.md rule 1).
 
+**Starting on one server:** `inventories/single.example` runs everything on one machine (each piece of data stored
+once, no witness, monitoring on the server itself, no cluster alerts). The step-by-step guide, including pointing a
+domain at it and adding the second server and the witness later, is `docs/DEPLOY_SINGLE_SERVER.md`. Any other mix
+(two servers without the witness) is refused by the playbook.
+
 ## What runs where
 
 | | srv-a | srv-b | witness VM |

@@ -274,7 +274,9 @@ defmodule Sms.Switch.Pipeline.Edr do
 
     %{
       "edr_id" => r.edr_id,
-      "row_key" => "#{r.kind}:#{r.part}:#{r.at}",
+      # The bus drops a second publish with the same key (a replay). Two receipts for one part can arrive in the same
+      # millisecond (ENROUTE then DELIVRD), so the status is part of the key.
+      "row_key" => "#{r.kind}:#{r.part}:#{r.at}:#{r[:status]}",
       "kind" => r.kind,
       "receipt_time" => time(r.at),
       "start_time" => time(msg.received_at),

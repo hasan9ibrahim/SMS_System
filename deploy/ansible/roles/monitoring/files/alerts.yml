@@ -48,27 +48,6 @@ groups:
         annotations:
           summary: "{{ $labels.machine }} refuses new messages (0x58): accepted ones wait over 10 s for the sender"
           runbook: "RUNBOOKS.md#switchoverloaded"
-      - alert: VendorSideMinority
-        expr: sms_vendor_nodes{role="server"} == 0
-        for: 30s
-        labels: {severity: critical}
-        annotations:
-          summary: "{{ $labels.machine }} reaches neither the other server nor the witness: it opens no vendor connection"
-          runbook: "RUNBOOKS.md#clustersplit"
-      - alert: ServerSteppedBack
-        expr: sms_fenced == 1
-        for: 30s
-        labels: {severity: critical}
-        annotations:
-          summary: "{{ $labels.machine }} stepped back: the servers lost each other; all traffic is on the other server"
-          runbook: "RUNBOOKS.md#clustersplit"
-      - alert: ClusterPeerLost
-        expr: sms_cluster_peers_connected < 2
-        for: 1m
-        labels: {severity: warning}
-        annotations:
-          summary: "{{ $labels.machine }} reaches {{ $value }} of its 2 cluster peers"
-          runbook: "RUNBOOKS.md#clustersplit"
       - alert: ConfigNotLoaded
         expr: sms_config_loaded{role="server"} == 0
         for: 2m
@@ -100,13 +79,6 @@ groups:
         annotations:
           summary: "PostgreSQL has no primary (Patroni)"
           runbook: "RUNBOOKS.md#postgresnoprimary"
-      - alert: PostgresStandbyNotStreaming
-        expr: count(patroni_postgres_streaming == 1) < 1
-        for: 5m
-        labels: {severity: warning}
-        annotations:
-          summary: "The PostgreSQL standby is not streaming: a failover now could not happen"
-          runbook: "RUNBOOKS.md#postgresstandby"
       - alert: PostgresArchiveFailing
         expr: rate(pg_stat_archiver_failed_count[15m]) > 0
         for: 15m
@@ -121,20 +93,6 @@ groups:
         annotations:
           summary: "Redis has {{ $value }} primaries (should be exactly 1)"
           runbook: "RUNBOOKS.md#redis"
-      - alert: RedisReplicaMissing
-        expr: max(redis_connected_slaves) < 1
-        for: 5m
-        labels: {severity: warning}
-        annotations:
-          summary: "The Redis primary has no replica"
-          runbook: "RUNBOOKS.md#redis"
-      - alert: ClickHouseReplicaBehind
-        expr: ClickHouseAsyncMetrics_ReplicasMaxAbsoluteDelay > 300
-        for: 10m
-        labels: {severity: warning}
-        annotations:
-          summary: "ClickHouse on {{ $labels.machine }} is {{ $value | humanizeDuration }} behind the other server"
-          runbook: "RUNBOOKS.md#clickhouse"
       - alert: ClickHouseReadonly
         expr: ClickHouseMetrics_ReadonlyReplica > 0
         for: 5m

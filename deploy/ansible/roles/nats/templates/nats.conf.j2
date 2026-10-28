@@ -20,6 +20,7 @@ jetstream {
   # nothing (product owner 2026-10-25, backend step 7).
 }
 
+{% if not single_server %}
 cluster {
   name: sms
   listen: 0.0.0.0:{{ ports.nats_cluster }}
@@ -29,3 +30,7 @@ cluster {
 {% endfor %}
   ]
 }
+{% else %}
+# One server alone (inventories/single.example): JetStream on its own, each event once (NATS refuses a cluster of one).
+# Adding the second server and the witness turns this into the three-machine cluster (docs/DEPLOY_SINGLE_SERVER.md).
+{% endif %}
