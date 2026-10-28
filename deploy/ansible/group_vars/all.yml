@@ -18,6 +18,11 @@ monitoring_host: "{{ witness_hosts[0] if witness_hosts else groups['servers'][0]
 monitoring_ip: "{{ hostvars[monitoring_host].private_ip }}"
 # Copies of each event on the bus (NATS JetStream): three across the cluster, one on a single server.
 nats_replicas: "{{ 1 if single_server else 3 }}"
+# Off-site storage (the S3 bucket: backups, EDRs after edr_hot_months, recordings after pcap_local_days). Until
+# vault_s3_access_key is filled in, everything stays on the server: no off-site backups (PostgreSQL archives nothing,
+# the backup and restore-test timers are off, their alerts too), EDRs and recordings are kept here only. Filling it in
+# and running the setup again turns it all on (docs/DEPLOY_SINGLE_SERVER.md, step 6).
+s3_enabled: "{{ (vault_s3_access_key | default('') | string | length) > 0 }}"
 smpp_cidrs: [0.0.0.0/0]
 
 # --- versions (pinned; upgraded on purpose, one at a time)

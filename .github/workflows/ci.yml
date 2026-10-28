@@ -202,6 +202,7 @@ jobs:
         run: |
           curl -sSfL https://github.com/prometheus/prometheus/releases/download/v2.53.4/prometheus-2.53.4.linux-amd64.tar.gz \
             | tar -xz --strip-components=1 -C /tmp prometheus-2.53.4.linux-amd64/promtool
-          /tmp/promtool check rules roles/monitoring/files/alerts.yml roles/monitoring/files/alerts-cluster.yml
+          /tmp/promtool check rules roles/monitoring/files/alerts.yml roles/monitoring/files/alerts-cluster.yml \
+            roles/monitoring/files/alerts-backup.yml
       # The scripts that build the server bundle and install it there (shellcheck comes with the runner).
       - run: shellcheck build-release.sh build-bundle.sh sms-update

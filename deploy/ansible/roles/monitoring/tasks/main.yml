@@ -91,6 +91,21 @@
       when: single_server
       notify: prometheus reload
 
+    # The off-site backups (no bucket yet: nothing is backed up, so these would always fire).
+    - name: Alert rules of the off-site backups
+      ansible.builtin.copy:
+        src: alerts-backup.yml
+        dest: /etc/prometheus/sms-alerts-backup.yml
+        mode: "0644"
+        validate: promtool check rules %s
+      when: s3_enabled | bool
+      notify: prometheus reload
+
+    - name: No backup alert rules without a bucket
+      ansible.builtin.file: {path: /etc/prometheus/sms-alerts-backup.yml, state: absent}
+      when: not s3_enabled | bool
+      notify: prometheus reload
+
     - name: Prometheus settings
       ansible.builtin.template: {src: prometheus.yml.j2, dest: /etc/prometheus/prometheus.yml, mode: "0644", validate: promtool check config %s}
       notify: prometheus reload

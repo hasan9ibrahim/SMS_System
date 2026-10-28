@@ -1,0 +1,19 @@
+# Off-site backups (roles/backup): loaded only once there is a bucket (s3_enabled); until then nothing is backed up
+# and these would always fire. The rest of the alerts are in alerts.yml.
+groups:
+  - name: backups
+    rules:
+      - alert: BackupMissing
+        expr: time() - max by (kind) (sms_backup_last_success_timestamp_seconds) > 26 * 3600
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "No successful {{ $labels.kind }} backup for {{ $value | humanizeDuration }}"
+          runbook: "RUNBOOKS.md#backupfailed"
+      - alert: BackupNeverRan
+        expr: absent(sms_backup_last_success_timestamp_seconds{kind="postgres"})
+        for: 26h
+        labels: {severity: warning}
+        annotations:
+          summary: "No PostgreSQL backup has been recorded yet"
+          runbook: "RUNBOOKS.md#backupfailed"

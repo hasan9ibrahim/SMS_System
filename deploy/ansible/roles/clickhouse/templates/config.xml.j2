@@ -63,7 +63,9 @@
   <!-- Detailed EDRs after {{ edr_hot_months }} months on the off-site bucket, read through a local cache (product owner
        2026-10-27, docs/BACKEND_PLAN.md §3.7). The release's migrations put edr and edr_receipt on this policy
        (Sms.Core.Release); the volume keeps the name `default` so a table can move onto it. Each server writes its own
-       copy under its name. -->
+       copy under its name. Without a bucket yet (s3_enabled) there is no such policy and the EDRs stay here; the next
+       deploy after the bucket is set moves the tables onto it. -->
+{% if s3_enabled %}
   <storage_configuration>
     <disks>
       <edr_s3>
@@ -96,6 +98,7 @@
       </edr_tiered>
     </policies>
   </storage_configuration>
+{% endif %}
 
   <!-- Backups to the off-site bucket (roles/backup): BACKUP ... TO S3(...). -->
   <backups>

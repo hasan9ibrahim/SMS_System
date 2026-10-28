@@ -32,7 +32,7 @@ Everything runs on this one machine. A second server and the witness VM can be a
 | The OVH server | It runs everything | OVH panel → Bare Metal Cloud → Dedicated servers |
 | Access to the GoDaddy DNS of `example.net` | To point the names at the server | godaddy.com → My Products |
 | Admin access to the GitHub repository | To give the server a read-only token for the release bundles | github.com/hasan9ibrahim/SMS_System |
-| An **S3-compatible bucket at another provider** | Off-site backups, and old EDRs and recordings | Backblaze B2, Wasabi, or OVH Object Storage in another region |
+| An **S3-compatible bucket at another provider** (can wait: see 6.3) | Off-site backups, and old EDRs and recordings | OVH Public Cloud Object Storage in another region, Backblaze B2, Wasabi |
 | An **SMTP account** for platform e-mail | Sign-in codes are e-mailed; without e-mail nobody can sign in | Microsoft 365, Google Workspace, Amazon SES, Mailgun |
 | A **Telegram bot** (optional, recommended) | Alerts to your phone | @BotFather in Telegram |
 | Your **office or home public IP** | Only these addresses may log in to the server | Step 1 |
@@ -259,7 +259,11 @@ nano secrets.yml
 
 Fill in the rest:
 
-- `vault_s3_access_key` / `vault_s3_secret_key`: the bucket's key;
+- `vault_s3_access_key` / `vault_s3_secret_key`: the bucket's key. **No bucket yet?** Set both to `""`. The platform
+  then runs with **no off-site backups**: PostgreSQL archives nothing, the backup and restore-test timers and their
+  alerts are off, and EDRs and recordings stay on the server only (the recordings for `pcap_local_days`). Fill them in
+  later and run `sms-update --setup` again; from the next update the EDRs older than 6 months move to the bucket.
+  Until then, a lost server loses its data;
 - `vault_smtp_url`: for example `smtp://user:password@smtp.office365.com:587` (or `smtps://…:465`);
 - `vault_telegram_bot_token`: from @BotFather (step 9), or leave it for later.
 

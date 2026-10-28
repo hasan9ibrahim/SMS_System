@@ -100,6 +100,7 @@
   delay: 3
   until: stanza.rc == 0
   changed_when: "'already exists' not in stanza.stdout"
+  when: s3_enabled
 
 - name: Both members streaming
   ansible.builtin.uri: {url: "http://{{ private_ip }}:{{ ports.patroni }}/cluster", return_content: true}
