@@ -127,6 +127,37 @@ cd SMS_System/deploy/ansible
 
 Check that it can reach the server: `ssh root@203.0.113.11 true` must return without asking for a password.
 
+### Without a separate build machine: build and deploy on the server itself
+
+If you do not want Ubuntu on your computer (or another machine involved), the server can build the release and run
+Ansible on itself. Your computer then only needs SSH, which Windows 10 and 11 have built in.
+
+1. **Your SSH key, on Windows.** In PowerShell (no administrator needed):
+
+   ```powershell
+   ssh-keygen -t ed25519                         # press Enter three times
+   type $env:USERPROFILE\.ssh\id_ed25519.pub     # paste this line into the OVH install (step 1)
+   ssh root@203.0.113.11                         # how you log in from now on
+   ```
+
+2. **On the server, as root:** run the commands at the top of this step, without `sudo`.
+3. **The code is in a private GitHub repository.** Give the server its own read-only key:
+   - Run `ssh-keygen -t ed25519` on the server and print the key with `cat ~/.ssh/id_ed25519.pub`.
+   - On GitHub, open the repository, then **Settings → Deploy keys → Add deploy key**, and paste it. Leave
+     "Allow write access" off.
+   - Then clone with `git clone git@github.com:hasan9ibrahim/SMS_System.git` (in `/root`, not in `/opt/sms`).
+4. **The inventory (step 4):** add `ansible_connection: local` to the server's line, so Ansible works on this machine
+   instead of logging in to it:
+
+   ```yaml
+   srv-a: {ansible_host: 203.0.113.11, private_ip: 10.0.0.11, node_id: 1, ansible_connection: local}
+   ```
+
+5. Everything else is the same: steps 5 and 6 run in `/root/SMS_System/deploy/ansible` on the server.
+
+`admin_cidrs` (step 4) must still hold your office or home IP: after step 5 the server accepts SSH only from there.
+Ansible itself does not need SSH in this mode.
+
 ---
 
 ## 4. Describe your server (the inventory)
