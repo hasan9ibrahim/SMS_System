@@ -31,7 +31,7 @@
         mode: "0755"
         content: |
           #!/bin/sh
-          # {{ ansible_managed }} (deploy/ansible/roles/web): certbot's deploy hook for {{ web_domain }}.
+          # Managed by Ansible (deploy/ansible/roles/web): certbot's deploy hook for {{ web_domain }}.
           set -eu
           live=/etc/letsencrypt/live/{{ web_domain }}
           install -m 0644 "$live/fullchain.pem" {{ web_tls_certfile }}
