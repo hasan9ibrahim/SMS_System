@@ -6,7 +6,7 @@ delete table inet sms
 
 define cluster = { {{ cluster_ips | join(', ') }} }
 define admin = { {{ admin_cidrs | join(', ') }} }
-define monitoring = { {{ witness_ip }} }
+define monitoring = { {{ monitoring_ip }} }
 
 table inet sms {
   chain input {
@@ -24,7 +24,7 @@ table inet sms {
       ports.redis, ports.sentinel, ports.nats, ports.nats_cluster, ports.ch_native, ports.ch_http, ports.ch_interserver,
       ports.keeper, ports.keeper_raft, ports.epmd, ports.erlang_dist] | join(', ') }} } accept
 
-    # Prometheus on the witness scrapes every machine.
+    # Prometheus (on the witness, or on the one server) scrapes every machine.
     ip saddr $monitoring tcp dport { {{ [ports.node_exporter, ports.pg_exporter, ports.redis_exporter,
       ports.nats_exporter, ports.nats_monitor, ports.ch_metrics, ports.switch_http, ports.patroni,
       ports.etcd_client] | join(', ') }} } accept
@@ -38,7 +38,7 @@ table inet sms {
     # the TypeScript service listen on this server's loopback only, behind nginx.
     ip saddr { {{ web_cidrs | join(', ') }} } tcp dport { 80, 443 } accept
 {% endif %}
-{% if inventory_hostname in groups['witness'] %}
+{% if inventory_hostname == monitoring_host %}
     # Grafana, Prometheus and Alertmanager for the team.
     ip saddr $admin tcp dport { {{ [ports.grafana, ports.prometheus, ports.alertmanager] | join(', ') }} } accept
 {% endif %}

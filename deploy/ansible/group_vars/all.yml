@@ -2,12 +2,22 @@
 # storage, alert targets) and the secrets.
 
 # --- the machines
-cluster_hosts: "{{ groups['servers'] + groups['witness'] }}"
+# Either the full cluster (two servers and the witness VM) or one server alone (inventories/single.example): the same
+# roles, with the parts that need three machines (the NATS cluster, three copies of each event, the witness quorum,
+# the standby alerts) left out. A second server and the witness are added later (docs/DEPLOY_SINGLE_SERVER.md).
+witness_hosts: "{{ groups.get('witness', []) }}"
+cluster_hosts: "{{ groups['servers'] + witness_hosts }}"
 server_hosts: "{{ groups['servers'] }}"
-witness_host: "{{ groups['witness'][0] }}"
+single_server: "{{ cluster_hosts | length == 1 }}"
+witness_host: "{{ witness_hosts[0] if witness_hosts else none }}"
 cluster_ips: "{{ cluster_hosts | map('extract', hostvars, 'private_ip') | list }}"
 server_ips: "{{ server_hosts | map('extract', hostvars, 'private_ip') | list }}"
-witness_ip: "{{ hostvars[witness_host].private_ip }}"
+witness_ip: "{{ hostvars[witness_host].private_ip if witness_hosts else none }}"
+# Prometheus, Alertmanager and Grafana: on the witness (it survives either server failing), else on the one server.
+monitoring_host: "{{ witness_hosts[0] if witness_hosts else groups['servers'][0] }}"
+monitoring_ip: "{{ hostvars[monitoring_host].private_ip }}"
+# Copies of each event on the bus (NATS JetStream): three across the cluster, one on a single server.
+nats_replicas: "{{ 1 if single_server else 3 }}"
 smpp_cidrs: [0.0.0.0/0]
 
 # --- versions (pinned; upgraded on purpose, one at a time)

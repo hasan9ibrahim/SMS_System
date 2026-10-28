@@ -66,14 +66,29 @@
 
 # ---------------------------------------------------------------- the witness: Prometheus, Alertmanager, Grafana
 
-- name: Monitoring server (witness)
-  when: inventory_hostname in groups['witness']
+- name: Monitoring server (the witness, or the one server)
+  when: inventory_hostname == monitoring_host
   block:
     - name: Prometheus and Alertmanager
       ansible.builtin.apt: {name: [prometheus, prometheus-alertmanager]}
 
     - name: Alert rules
       ansible.builtin.copy: {src: alerts.yml, dest: /etc/prometheus/sms-alerts.yml, mode: "0644", validate: promtool check rules %s}
+      notify: prometheus reload
+
+    # The second server, the witness and the standby (single server: not there yet, so these would always fire).
+    - name: Alert rules of the cluster
+      ansible.builtin.copy:
+        src: alerts-cluster.yml
+        dest: /etc/prometheus/sms-alerts-cluster.yml
+        mode: "0644"
+        validate: promtool check rules %s
+      when: not single_server
+      notify: prometheus reload
+
+    - name: No cluster alert rules on a single server
+      ansible.builtin.file: {path: /etc/prometheus/sms-alerts-cluster.yml, state: absent}
+      when: single_server
       notify: prometheus reload
 
     - name: Prometheus settings

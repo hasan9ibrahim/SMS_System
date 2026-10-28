@@ -5,3 +5,8 @@ web_root: "{{ switch_root }}/web"
 # Certificate and key for web_domain (full chain), placed by the team or a certbot hook; the inventory may override.
 web_tls_certfile: /etc/sms/tls/web.crt
 web_tls_keyfile: /etc/sms/tls/web.key
+# Or a free Let's Encrypt certificate for web_domain, renewed by itself (docs/DEPLOY_SINGLE_SERVER.md): needs DNS
+# already pointing web_domain at the server and port 80 open to everyone (web_cidrs). The key is readable by the switch
+# too, so smpp_tls_certfile / smpp_tls_keyfile may point at the same files.
+web_letsencrypt: false
+letsencrypt_email: ""

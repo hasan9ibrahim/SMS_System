@@ -18,6 +18,35 @@
     creates: "{{ web_tls_certfile }}"
   when: lab | default(false)
 
+- name: Let's Encrypt certificate (web_letsencrypt)
+  when: web_letsencrypt | bool and not (lab | default(false))
+  block:
+    - name: certbot
+      ansible.builtin.apt: {name: certbot, state: present}
+
+    # Copies the certificate where nginx and the switch read it, after the first issue and after each renewal.
+    - name: Certificate hook
+      ansible.builtin.copy:
+        dest: /usr/local/bin/sms-cert-deploy
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # {{ ansible_managed }} (deploy/ansible/roles/web): certbot's deploy hook for {{ web_domain }}.
+          set -eu
+          live=/etc/letsencrypt/live/{{ web_domain }}
+          install -m 0644 "$live/fullchain.pem" {{ web_tls_certfile }}
+          install -m 0640 -g {{ switch_user }} "$live/privkey.pem" {{ web_tls_keyfile }}
+          if systemctl is-active --quiet nginx; then systemctl reload nginx; fi
+
+    # nginx steps aside for the few seconds the check on port 80 takes (now and at each renewal, about every 60 days).
+    - name: Certificate issued
+      ansible.builtin.command:
+        cmd: >-
+          certbot certonly --standalone --non-interactive --agree-tos -m {{ letsencrypt_email }} -d {{ web_domain }}
+          --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
+          --deploy-hook /usr/local/bin/sms-cert-deploy
+        creates: /etc/letsencrypt/live/{{ web_domain }}/fullchain.pem
+
 - name: The certificate is in place
   ansible.builtin.stat: {path: "{{ item }}"}
   loop: ["{{ web_tls_certfile }}", "{{ web_tls_keyfile }}"]

@@ -97,6 +97,12 @@ case env.("SWITCH_ROLE", "switch") do
     raise ArgumentError, "SWITCH_ROLE must be switch or witness, got #{inspect(other)}"
 end
 
+# Copies of each event (JetStream replicas): 3 across the cluster (config/prod.exs), 1 on a single server
+# (deploy/ansible single_server). Raising it later updates the existing streams in place.
+if replicas = System.get_env("NATS_REPLICAS") do
+  config :sms_core, Sms.Core.Bus, replicas: int.("NATS_REPLICAS", replicas)
+end
+
 config :sms_core, Sms.Core.Bus.Nats,
   hosts: env.("NATS_HOSTS", "localhost:4222"),
   username: System.get_env("NATS_USER"),

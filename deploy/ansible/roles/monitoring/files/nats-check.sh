@@ -17,7 +17,8 @@ d = json.load(sys.stdin)
 meta = d.get("meta_cluster") or {}
 print("# HELP sms_nats_meta_leader 1 when the JetStream cluster has a leader")
 print("# TYPE sms_nats_meta_leader gauge")
-print("sms_nats_meta_leader", 1 if meta.get("leader") else 0)
+# A single server runs JetStream on its own: no cluster, so nothing to lead (deploy/ansible single_server).
+print("sms_nats_meta_leader", 1 if meta.get("leader") or "meta_cluster" not in d else 0)
 print("# HELP sms_nats_store_bytes JetStream bytes stored on this server")
 print("# TYPE sms_nats_store_bytes gauge")
 print("sms_nats_store_bytes", d.get("storage", 0))

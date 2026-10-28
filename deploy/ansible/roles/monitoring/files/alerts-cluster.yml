@@ -1,0 +1,47 @@
+# Prometheus alert rules that need the full cluster (deploy/ansible/roles/monitoring): the second server, the witness
+# and the standby. Not installed on a single server (inventories/single.example), where they would always fire.
+groups:
+  - name: cluster
+    rules:
+      - alert: VendorSideMinority
+        expr: sms_vendor_nodes{role="server"} == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }} reaches neither the other server nor the witness: it opens no vendor connection"
+          runbook: "RUNBOOKS.md#clustersplit"
+      - alert: ServerSteppedBack
+        expr: sms_fenced == 1
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.machine }} stepped back: the servers lost each other; all traffic is on the other server"
+          runbook: "RUNBOOKS.md#clustersplit"
+      - alert: ClusterPeerLost
+        expr: sms_cluster_peers_connected < 2
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.machine }} reaches {{ $value }} of its 2 cluster peers"
+          runbook: "RUNBOOKS.md#clustersplit"
+      - alert: PostgresStandbyNotStreaming
+        expr: count(patroni_postgres_streaming == 1) < 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The PostgreSQL standby is not streaming: a failover now could not happen"
+          runbook: "RUNBOOKS.md#postgresstandby"
+      - alert: RedisReplicaMissing
+        expr: max(redis_connected_slaves) < 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The Redis primary has no replica"
+          runbook: "RUNBOOKS.md#redis"
+      - alert: ClickHouseReplicaBehind
+        expr: ClickHouseAsyncMetrics_ReplicasMaxAbsoluteDelay > 300
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "ClickHouse on {{ $labels.machine }} is {{ $value | humanizeDuration }} behind the other server"
+          runbook: "RUNBOOKS.md#clickhouse"

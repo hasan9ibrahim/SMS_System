@@ -1,0 +1,28 @@
+# One server alone (inventories/single.example/hosts.yml): the same settings as the cluster.
+lab: false
+# Who may reach SSH and the monitoring pages (office / VPN ranges, Q33).
+admin_cidrs: [192.0.2.0/24]
+# Who may reach the SMPP ports: the partners' IPs (Q33). The Firewall screen's banned / trusted lists apply on top.
+smpp_cidrs: [0.0.0.0/0]
+# Off-site backups (Q31): S3-compatible storage at another provider.
+s3_endpoint: s3.example-provider.com
+s3_port: 443
+s3_region: eu-central-1
+s3_bucket: sms-backups
+s3_verify_tls: true
+# Alerts (Q29): the engineer's and the NOC group's Telegram chat ids.
+telegram_chat_ids: [-1001234567890]
+# The SMPP TLS certificate on the server (S-1.17); the web certificate can be used for both.
+smpp_tls_certfile: /etc/sms/tls/web.crt
+smpp_tls_keyfile: /etc/sms/tls/web.key
+# The screens and the customer portal (backend step 14): the name DNS points at the server (an A record to its public
+# IP), and its certificate (full chain) and key on the server (docs/DEPLOY_SINGLE_SERVER.md, step 6).
+web_domain: sms.example.com
+web_tls_certfile: /etc/sms/tls/web.crt
+web_tls_keyfile: /etc/sms/tls/web.key
+# A free Let's Encrypt certificate instead, issued and renewed by the server itself (DNS must already point
+# web_domain at it). With it, SMPP TLS can use the same certificate.
+web_letsencrypt: true
+letsencrypt_email: admin@example.com
+# Platform e-mail (sign-in codes, alerts): the sender address; the server and login are vault_smtp_url.
+smtp_from: noreply@example.com

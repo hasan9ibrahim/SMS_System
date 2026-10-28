@@ -1,4 +1,13 @@
 # Every machine: packages, names, clock, kernel settings, logs, firewall (backend step 8).
+- name: One server alone, or two servers and the witness
+  ansible.builtin.assert:
+    that: (groups['servers'] | length == 1 and witness_hosts | length == 0) or
+          (groups['servers'] | length == 2 and witness_hosts | length == 1)
+    fail_msg: >-
+      The inventory must have one server and no witness (inventories/single.example) or two servers and one witness
+      (inventories/production.example). Two servers without the witness cannot decide which one keeps the traffic.
+  run_once: true
+
 - name: Packages
   ansible.builtin.apt:
     name: [chrony, nftables, curl, jq, htop, iotop, sysstat, unzip, gnupg, ca-certificates, python3-psycopg2,
