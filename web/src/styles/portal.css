@@ -23,15 +23,10 @@
   display: flex;
   flex-direction: column;
 }
-.portal-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius);
-  background: var(--color-accent);
-  color: #fff;
+.portal-brand-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
 }
 .portal-nav {
   display: flex;

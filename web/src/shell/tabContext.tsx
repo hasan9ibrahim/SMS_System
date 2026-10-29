@@ -59,7 +59,7 @@ export function useTabTitle(title: string | undefined) {
   const { tab, popout } = useTab();
   useEffect(() => {
     if (!title) return;
-    if (popout) document.title = `${title} · SMS Platform`;
+    if (popout) document.title = `${title} · Xpert`;
     else useTabs.getState().setTitle(tab.id, title);
   }, [title, tab.id, popout]);
 }

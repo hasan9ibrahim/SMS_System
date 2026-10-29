@@ -330,14 +330,9 @@ a.btn {
   padding: 0;
   color: var(--color-text);
 }
-.logo-mark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--color-accent);
-  color: #fff;
+/* The Xpert logo; the X alone where the bar is narrow (below). */
+.logo .logo-mark {
+  display: none;
 }
 .menu-bar {
   height: 48px;
@@ -2070,10 +2065,6 @@ select.chip-select {
 .menu-bar {
   height: 42px;
 }
-.logo-mark {
-  width: 30px;
-  height: 30px;
-}
 .jump,
 .bell,
 .avatar {
@@ -2209,9 +2200,12 @@ select.chip-select {
     padding: 0 7px;
     font-size: 13.5px;
   }
-  .logo > span:last-child,
+  .logo > .logo-full,
   .top-clock-tz {
     display: none;
+  }
+  .logo > .logo-mark {
+    display: inline-flex;
   }
 }
 /* Page actions on the right: a step smaller everywhere. */

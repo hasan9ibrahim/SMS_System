@@ -217,7 +217,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "One bar, from left to right",
             items: [
-              "**SMS Platform** logo — opens the Home tab.",
+              "**Xpert** logo — opens the Home tab.",
               "**Main menu** — Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin and Help. The menu of the page you are on is underlined. See [[getting-started#menus]].",
               "**Search or jump to…** — after the menu; finds pages and records. Shortcut **Ctrl K**. See [[search-jump]].",
               "**TPS pill** (on the right, with the clock) — the total messages per second right now across the platform. Its dot is grey and it reads **— TPS** when the live feed is not connected. Click it to open the Dashboard.",

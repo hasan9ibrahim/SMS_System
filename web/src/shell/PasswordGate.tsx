@@ -9,6 +9,7 @@ import { PASSWORD_REQUIRED_EVENT } from "../api/client";
 import { useMe } from "../api/hooks";
 import { useMyPasswordStatus } from "../api/security";
 import { openMyPassword, PasswordChangeForm } from "../pages/admin/parts";
+import { BrandLogo } from "../ui/BrandLogo";
 import { Button } from "../ui/primitives";
 
 /** True while only the Change Password screen may show. A 403 password_change_required refreshes the status at once. */
@@ -37,7 +38,7 @@ export function ChangePasswordScreen() {
   return (
     <div className="pw-gate" role="main">
       <div className="pw-gate-card">
-        <div className="pw-gate-brand">SMS Platform</div>
+        <BrandLogo height={36} className="pw-gate-brand" />
         <h1>Change your password</h1>
         <p>
           {state && state in REASON ? REASON[state as keyof typeof REASON] : "Your password must be changed."} Choose a

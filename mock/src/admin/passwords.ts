@@ -179,7 +179,7 @@ export function totpCode(secret: string, at = Date.now()): string {
 export const verifyTotp = (secret: string, code: string, at = Date.now()) =>
   [-1, 0, 1].some((d) => totpCode(secret, at + d * 30_000) === code);
 export const otpauthUri = (secret: string, account: string) =>
-  `otpauth://totp/SMS%20Platform:${encodeURIComponent(account)}?secret=${secret}&issuer=SMS%20Platform&digits=6&period=30`;
+  `otpauth://totp/Xpert:${encodeURIComponent(account)}?secret=${secret}&issuer=Xpert&digits=6&period=30`;
 
 // ---------------------------------------------------------------- stored secrets
 

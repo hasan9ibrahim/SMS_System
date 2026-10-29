@@ -489,8 +489,8 @@
   margin: 0;
 }
 .pw-gate-brand {
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  align-self: flex-start;
+  margin-bottom: 4px;
 }
 .pw-gate-actions {
   display: flex;

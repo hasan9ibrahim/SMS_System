@@ -4,6 +4,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { SignInResult } from "@sms/contract";
 import { api, ApiError, SIGN_IN_REQUIRED_EVENT, unwrap } from "../api/client";
+import { BrandLogo } from "../ui/BrandLogo";
 import { Button } from "../ui/primitives";
 
 /** True once any call answered 401 sign_in_required (no session, or it ended: idle 8 h, 24 h, signed out elsewhere). */
@@ -82,7 +83,7 @@ export function SignInScreen() {
     <div className="pw-gate" role="main">
       {!step ? (
         <form className="pw-gate-card signin-card" onSubmit={submitPassword}>
-          <div className="pw-gate-brand">SMS Platform</div>
+          <BrandLogo height={36} className="pw-gate-brand" />
           <h1>Sign in</h1>
           <label className="signin-field">
             <span>Username</span>
@@ -107,11 +108,11 @@ export function SignInScreen() {
         </form>
       ) : (
         <form className="pw-gate-card signin-card" onSubmit={submitCode}>
-          <div className="pw-gate-brand">SMS Platform</div>
+          <BrandLogo height={36} className="pw-gate-brand" />
           <h1>Enter your code</h1>
           <p className="muted">
             {step.method === "authenticator"
-              ? "Open your authenticator app and enter the 6-digit code for SMS Platform."
+              ? "Open your authenticator app and enter the 6-digit code for Xpert (shown as SMS Platform if you set it up before the new name)."
               : `We e-mailed a 6-digit code to ${step.sentTo}. It works for 10 minutes.`}
           </p>
           <label className="signin-field">

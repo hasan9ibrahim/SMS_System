@@ -245,7 +245,7 @@ export async function runReminders(c: Db): Promise<PasswordReminderRun> {
         to: [r.email as string],
         subject: `Your password expires ${when}`,
         body:
-          `Hello ${r.name},\n\nYour password for the SMS platform expires ${when}. Sign in as usual and change it under ` +
+          `Hello ${r.name},\n\nYour password for Xpert expires ${when}. Sign in as usual and change it under ` +
           `My password. After it expires, the next sign-in opens only the Change Password screen.\n\n` +
           `This e-mail never contains a password or a sign-in link. If you did not expect it, contact your administrator.`,
       });

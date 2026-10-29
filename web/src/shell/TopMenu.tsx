@@ -1,10 +1,11 @@
-// Top menu bar (§15.1): logo, main menu with dropdowns, search / jump-to (Ctrl K), system clock, live TPS
+// Top menu bar (§15.1): Xpert logo, main menu with dropdowns, search / jump-to (Ctrl K), system clock, live TPS
 // pill, alert bell with count, user avatar.
 import { useCanView } from "../api/access";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { create } from "zustand";
 import { useMe, useUpdatePreferences } from "../api/hooks";
 import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
+import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Menu, Popover } from "../ui/primitives";
 import { openIncidents, useLive } from "../live/store";
@@ -338,10 +339,8 @@ export function TopMenu() {
           <Icon name="list" size={18} />
         </button>
         <button type="button" className="logo" onClick={(e) => open("/", e)} aria-label="Home">
-          <span className="logo-mark">
-            <Icon name="mail" size={14} />
-          </span>
-          <span>SMS Platform</span>
+          <BrandLogo variant="mark" height={26} className="logo-mark" />
+          <BrandLogo height={28} className="logo-full" />
         </button>
         <nav className="menu-bar" aria-label="Main menu">
           {SECTIONS.map((s) => (

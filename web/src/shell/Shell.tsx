@@ -68,7 +68,7 @@ function useUrlSync(ready: boolean) {
   useEffect(() => {
     if (!ready) return;
     if (currentUrl() !== path) history.replaceState(null, "", path);
-    document.title = title && title !== "Home" ? `${title} · SMS Platform` : "SMS Platform";
+    document.title = title && title !== "Home" ? `${title} · Xpert` : "Xpert";
   }, [path, title, ready]);
   // Pages opened feed "pages most used" and the page shown in Online now (§13.18).
   const page = path.split("?")[0]!;
