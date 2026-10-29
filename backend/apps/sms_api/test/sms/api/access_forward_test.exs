@@ -171,4 +171,19 @@ defmodule Sms.Api.AccessTest do
     assert as(admin, :put, "/api/v1/users/#{id}", "{}").status == 200
     assert as(id, :post, "/api/v1/enterprises", "{}").status == 200
   end
+
+  test "a user of an administrator access group is an administrator (team trial round 10)" do
+    id = user(%{"*" => ["view", "edit"]})
+    # The group's every-page grant stops at the Admin pages...
+    assert as(id, :put, "/api/v1/users/#{id}", "{}").status == 403
+
+    Repo.query!(
+      "UPDATE access_groups SET is_admin = true WHERE id = (SELECT access_group_id FROM users WHERE id = $1)",
+      [id]
+    )
+
+    Sms.Api.Access.forget()
+    # ...an administrator group's users may do everything.
+    assert as(id, :put, "/api/v1/users/#{id}", "{}").status == 200
+  end
 end

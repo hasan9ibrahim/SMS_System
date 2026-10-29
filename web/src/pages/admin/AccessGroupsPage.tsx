@@ -1,12 +1,13 @@
 // GUI Access Group (§11): Info ID, Access Group Name, Status, pages and users. The form is a matrix of
 // every menu page against its buttons (View, Add, Edit, Delete, Export, ...): which menus, pages and
-// buttons a role sees. Any button needs View. "Every page" grants actions on all pages at once.
-// Clone copies the matrix; delete is blocked while users have the group (§13.29).
+// buttons a role sees. Any button needs View. "Every page" grants actions on all pages at once, but not the Admin
+// pages: "Administrator" makes the group's users full administrators (team trial round 10), and only an
+// administrator can turn it on. Clone copies the matrix; delete is blocked while users have the group (§13.29).
 import { Fragment, useMemo, useState } from "react";
 import type { AccessCatalog, AccessGroupInput, AccessGroupRow } from "@sms/contract";
 import { useAccessCatalog, useCloneAccessGroup, useSaveAccessGroup } from "../../api/admin";
 import { emptyState, encodeState } from "../../grid/filterModel";
-import { SelectField, TextField, useForm } from "../../form/form";
+import { CheckField, SelectField, TextField, useForm } from "../../form/form";
 import { HistoryList, useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
@@ -61,7 +62,7 @@ export function PermissionMatrix({
         )}
         <span className="muted small">
           {all.length
-            ? `Every page: ${all.join(", ")}`
+            ? `Every page (not the Admin pages): ${all.join(", ")}`
             : `${Object.keys(value).filter((k) => k !== "*").length} pages allowed`}
         </span>
       </div>
@@ -225,6 +226,7 @@ export function TabVisibility({
 
 function GroupDialog({ row, done }: { row: AccessGroupRow | null; done: () => void }) {
   const catalog = useAccessCatalog();
+  const { data: me } = useMe();
   const form = useForm<AccessGroupInput>(
     row
       ? {
@@ -233,9 +235,18 @@ function GroupDialog({ row, done }: { row: AccessGroupRow | null; done: () => vo
           description: row.description,
           permissions: row.permissions,
           hiddenTabs: row.hiddenTabs,
+          administrator: row.administrator,
         }
-      : { name: "", status: "active", description: null, permissions: { dashboard: ["view"] }, hiddenTabs: [] },
+      : {
+          name: "",
+          status: "active",
+          description: null,
+          permissions: { dashboard: ["view"] },
+          hiddenTabs: [],
+          administrator: false,
+        },
   );
+  const administrator = form.values.administrator === true;
   const save = useSaveAccessGroup();
   const notifySaved = useNotifySaved();
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +300,20 @@ function GroupDialog({ row, done }: { row: AccessGroupRow | null; done: () => vo
         />
         <TextField form={form} path="description" label="Description" maxLength={500} />
       </div>
+      <CheckField
+        form={form}
+        path="administrator"
+        label="Administrator"
+        disabled={!isAdminUser(me?.permissions)}
+        hint={
+          isAdminUser(me?.permissions)
+            ? "Full administrator: every page, the Admin pages included, and the actions only administrators have. The pages and buttons below then do not limit the group."
+            : "Full administrator access. Only an administrator can change it."
+        }
+      />
+      {administrator ? (
+        <p className="muted">Administrators see every page and button; the matrix below does not apply to them.</p>
+      ) : null}
       {catalog.data ? (
         <>
           <PermissionMatrix
@@ -394,6 +419,10 @@ export function AccessGroupsPage() {
           render: (r) => (r.fullAccess ? "All" : <span className="num">{r.moduleCount}</span>),
         },
         fullAccess: { width: 110, render: (r) => (r.fullAccess ? "Yes" : <span className="muted">No</span>) },
+        administrator: {
+          width: 120,
+          render: (r) => (r.administrator ? <strong>Yes</strong> : <span className="muted">No</span>),
+        },
         userCount: { width: 90, align: "right", render: (r) => <span className="num">{r.userCount}</span> },
         status: { width: 110, render: (r) => statusCell(r.status) },
       }}
@@ -404,7 +433,8 @@ export function AccessGroupsPage() {
           <>
             <strong>{r.name}</strong>
             <span className="muted">
-              {r.fullAccess ? "every page" : `${r.moduleCount} pages`} · {r.userCount} users
+              {r.administrator ? "administrator" : r.fullAccess ? "every page" : `${r.moduleCount} pages`} · {r.userCount}{" "}
+              users
             </span>
           </>
         ),
@@ -438,6 +468,7 @@ export function AccessGroupsPage() {
               <Kv
                 items={[
                   ["Description", r.description],
+                  ["Administrator", r.administrator ? "Yes: every page, the Admin pages included" : "No"],
                   ["Users", String(r.userCount)],
                   ["Updated", `${fmtWhen(r.updatedAt)}${r.updatedBy ? ` by ${r.updatedBy}` : ""}`],
                 ]}

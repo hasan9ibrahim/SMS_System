@@ -60,7 +60,7 @@ import { sendProblem } from "../problem.js";
 import { archiveGate } from "./enterprises.js";
 import { notFound, setArchived } from "./masterData.js";
 import { dependencies, recordChange, type DiffEntry, type FieldError } from "./records.js";
-import { currentUserId, getCurrentUser } from "./session.js";
+import { adminSql, currentUserId, getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
 import { inTransaction } from "./views.js";
 import { companyDetails, companyPlaceholders, logEmail, senderFor } from "./emailLog.js";
@@ -107,6 +107,8 @@ export interface Spec<I, R> {
   /** Extra writes in the same transaction after a delete, e.g. ending sessions. */
   onArchive?: (c: pg.PoolClient, id: number) => Promise<void>;
   restoreClash?: (c: Db, id: number) => Promise<string | null>;
+  /** Why the current user may not change, delete or restore this record (403), or null. */
+  guard?: (c: Db, id: number) => Promise<string | null>;
 }
 
 export function records<I, R extends { archivedAt: string | null }>(spec: Spec<I, R>) {
@@ -168,6 +170,8 @@ export function records<I, R extends { archivedAt: string | null }>(spec: Spec<I
         if (!before) return notFound(reply, spec.label, id);
         if (before.archivedAt)
           return sendProblem(reply, 409, `This ${spec.label.toLowerCase()} is deleted; restore it first`);
+        const refused = await spec.guard?.(pool, id);
+        if (refused) return sendProblem(reply, 403, refused);
         const errors = await spec.check(pool, b, id);
         if (errors.length) return badInput(reply, errors);
         const changed = spec.fields.filter(([k]) => !same(before[k], b[k]));
@@ -205,6 +209,8 @@ export function records<I, R extends { archivedAt: string | null }>(spec: Spec<I
         const before = await spec.load(pool, id);
         if (!before) return notFound(reply, spec.label, id);
         if (before.archivedAt) return { record: before, change: null };
+        const refused = await spec.guard?.(pool, id);
+        if (refused) return sendProblem(reply, 403, refused);
         const gate = await archiveGate(reply, body, spec.deps ? await spec.deps(pool, id) : dependencies([]));
         if (!gate.ok) return gate.reply;
         const me = await getCurrentUser();
@@ -234,6 +240,8 @@ export function records<I, R extends { archivedAt: string | null }>(spec: Spec<I
         const before = await spec.load(pool, id);
         if (!before) return notFound(reply, spec.label, id);
         if (!before.archivedAt) return sendProblem(reply, 400, `This ${spec.label.toLowerCase()} is not deleted`);
+        const refused = await spec.guard?.(pool, id);
+        if (refused) return sendProblem(reply, 403, refused);
         const r = await setArchived(request, reply, pool, {
           table: spec.table,
           entityType: spec.entityType,
@@ -272,6 +280,23 @@ async function recentHashes(c: Db, column: "user_id" | "portal_user_id", id: num
 
 // ---------------------------------------------------------------- users (§11, §12.5, §13.28)
 
+// Administrators (team trial round 10): the first administrator, or a user of an administrator access group. Only an
+// administrator may make one, or change, delete, restore or set the password of one (a user manager who is not one
+// would otherwise take over an administrator account).
+const iAmAdmin = async () => (await getCurrentUser()).permissions.includes("*");
+async function userIsAdmin(c: Db, id: number): Promise<boolean> {
+  const { rows } = await c.query(`SELECT ${adminSql()} AS admin FROM users u WHERE u.id = $1`, [id]);
+  return !!rows[0]?.admin;
+}
+async function adminUserGuard(c: Db, id: number): Promise<string | null> {
+  return (await userIsAdmin(c, id)) && !(await iAmAdmin()) ? "Only an administrator can change an administrator" : null;
+}
+async function groupIsAdmin(c: Db, id: number | null): Promise<boolean> {
+  if (id == null) return false;
+  const { rows } = await c.query("SELECT is_admin FROM access_groups WHERE id = $1", [id]);
+  return !!rows[0]?.is_admin;
+}
+
 const loadUser = (c: Db, id: number) => one(c, USER_SELECT, USER_FROM, "u.id", id, mapUser);
 const USER_FIELDS: [keyof UserInput & string, string][] = [
   ["username", "username"],
@@ -306,6 +331,8 @@ async function checkUser(c: Db, b: UserInput, id: number | null): Promise<FieldE
     errors.push({ path: "/departmentId", message: "unknown department" });
   if (!(await exists(c, "access_groups", b.accessGroupId)))
     errors.push({ path: "/accessGroupId", message: "unknown GUI access group" });
+  else if ((await groupIsAdmin(c, b.accessGroupId)) && !(await iAmAdmin()))
+    errors.push({ path: "/accessGroupId", message: "only an administrator can give an administrator group" });
   if (!(await exists(c, "business_companies", b.businessCompanyId)))
     errors.push({ path: "/businessCompanyId", message: "unknown business company" });
   if (b.managerId != null && (b.managerId === id || !(await exists(c, "users", b.managerId))))
@@ -385,6 +412,7 @@ const users = records<UserInput, NonNullable<Awaited<ReturnType<typeof loadUser>
   nameOf: (b) => b.username,
   deps: userDeps,
   onArchive: async (c, id) => void (await endSessions(c, "user_id = $1", [id], "forced", currentUserId())),
+  guard: adminUserGuard,
 });
 export const getUser = users.get;
 export const getUserDependencies = users.dependencies;
@@ -446,6 +474,8 @@ export function setUserPassword(request: FastifyRequest, reply: FastifyReply) {
     const u = await loadUser(pool, id);
     if (!u) return notFound(reply, "User", id);
     if (u.archivedAt) return sendProblem(reply, 409, "This user is deleted; restore it first");
+    const refused = await adminUserGuard(pool, id);
+    if (refused) return sendProblem(reply, 403, refused);
     const errors: FieldError[] = [];
     if (b.password !== b.confirmPassword)
       errors.push({ path: "/confirmPassword", message: "the passwords do not match" });
@@ -809,6 +839,8 @@ const loadAccessGroup = (c: Db, id: number) =>
   one(c, ACCESS_GROUP_SELECT, ACCESS_GROUP_FROM, "g.id", id, mapAccessGroup);
 async function checkGroup(c: Db, b: AccessGroupInput, id: number | null): Promise<FieldError[]> {
   const errors = [...checkPermissions(b.permissions), ...checkTabs(b.hiddenTabs ?? [], "/hiddenTabs")];
+  if (b.administrator && !(await iAmAdmin()))
+    errors.push({ path: "/administrator", message: "only an administrator can give administrator access" });
   const { rows } = await c.query(
     "SELECT deleted_at FROM access_groups WHERE lower(name) = lower($1) AND id <> coalesce($2, 0)",
     [b.name, id],
@@ -830,10 +862,12 @@ const groups = records<AccessGroupInput, NonNullable<Awaited<ReturnType<typeof l
     ["description", "description"],
     ["permissions", "permissions"],
     ["hiddenTabs", "hidden_tabs"],
+    ["administrator", "is_admin"],
   ],
   load: loadAccessGroup,
   values: (b) => ({
     ...b,
+    administrator: b.administrator ?? false,
     name: b.name.trim(),
     description: trimOrNull(b.description),
     permissions: normalisePermissions(b.permissions),
@@ -841,6 +875,8 @@ const groups = records<AccessGroupInput, NonNullable<Awaited<ReturnType<typeof l
   }),
   check: checkGroup,
   nameOf: (b) => b.name,
+  guard: async (c, id) =>
+    (await groupIsAdmin(c, id)) && !(await iAmAdmin()) ? "Only an administrator can change an administrator group" : null,
   deps: async (c, id) => {
     const { rows } = await c.query(
       "SELECT count(*)::int AS n FROM users WHERE access_group_id = $1 AND deleted_at IS NULL",
@@ -877,6 +913,7 @@ export function cloneAccessGroup(request: FastifyRequest, reply: FastifyReply) {
       description: src.description,
       permissions: src.permissions,
       hiddenTabs: src.hiddenTabs,
+      administrator: src.administrator,
     };
     const errors = await checkGroup(pool, b, null);
     if (errors.length) return badInput(reply, errors);

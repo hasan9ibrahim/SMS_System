@@ -95,10 +95,11 @@ export async function bootstrap(c: pg.ClientBase, opts: BootstrapOptions = {}): 
     });
     await fill("access_groups", async () => {
       for (const g of ACCESS_GROUPS)
-        await c.query("INSERT INTO access_groups (name, permissions, description) VALUES ($1, $2, $3)", [
+        await c.query("INSERT INTO access_groups (name, permissions, description, is_admin) VALUES ($1, $2, $3, $4)", [
           g.name,
           JSON.stringify(g.permissions),
           g.description,
+          !!g.administrator,
         ]);
       return ACCESS_GROUPS.length;
     });

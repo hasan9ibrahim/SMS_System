@@ -34,7 +34,7 @@ import { inTransaction } from "./views.js";
 import { logEmail } from "./emailLog.js";
 import type { DiffEntry } from "./records.js";
 import { iso, recordChange } from "./records.js";
-import { getCurrentUser } from "./session.js";
+import { adminSql, getCurrentUser } from "./session.js";
 import { KIND_LABELS } from "./cleanupLabels.js";
 import {
   listIdsOf,
@@ -574,8 +574,8 @@ async function enterpriseFindings(c: Db, s: CleanupSettings): Promise<Draft[]> {
 
 async function userFindings(c: Db, s: CleanupSettings): Promise<Draft[]> {
   const { rows } = await c.query(
-    `SELECT id, first_name || ' ' || last_name AS name, last_login_at FROM users
-      WHERE deleted_at IS NULL AND status = 'active' AND NOT is_admin AND inserted_at < now() - make_interval(days => $1)
+    `SELECT id, first_name || ' ' || last_name AS name, last_login_at FROM users u
+      WHERE deleted_at IS NULL AND status = 'active' AND NOT ${adminSql()} AND inserted_at < now() - make_interval(days => $1)
         AND (last_login_at IS NULL OR last_login_at < now() - make_interval(days => $1))`,
     [s.userIdleDays],
   );

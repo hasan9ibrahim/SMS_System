@@ -486,7 +486,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Admin pages (everything under Admin) are for administrators only. **Every page** never includes them; a group gets an Admin page only when that page is ticked on its own.",
+            text: "Admin pages (everything under Admin) are for administrators only. **Every page** never includes them; a group gets an Admin page only when that page is ticked on its own. A group with **Administrator** ticked makes its users full administrators: every page, the Admin pages included, and what only administrators may do. Only an administrator can tick it, change such a group, give it to a user, or change an administrator.",
           },
         ],
       },
@@ -503,6 +503,7 @@ export const topics: HelpTopic[] = [
               { name: "Description", what: "What the role is for." },
               { name: "Pages", what: "How many pages the group may open, or **All** when it has the Every page row." },
               { name: "Every Page", what: "Yes when actions are granted on all pages at once (never the Admin pages)." },
+              { name: "Administrator", what: "Yes when the group makes its users full administrators (the Admin pages included)." },
               { name: "Users", what: "How many users have this group." },
               { name: "Status", what: "Green **Active** or grey **Inactive**." },
             ],
@@ -532,6 +533,10 @@ export const topics: HelpTopic[] = [
               { name: "Access Group Name", what: "Required, up to 80 characters.", values: "e.g. `NOC shift`" },
               { name: "Status", what: "Required.", values: "Active (default), Inactive" },
               { name: "Description", what: "Optional, up to 500 characters." },
+              {
+                name: "Administrator",
+                what: "Full administrator: every page, the Admin pages included, and the actions only administrators have; the matrix then does not limit the group. Only an administrator can change it. The starting **Administrator** group has it.",
+              },
               { name: "Find a page…", what: "Type part of a page name to show only matching rows of the matrix." },
               {
                 name: "Every page row",
@@ -1973,7 +1978,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "If it exists",
-                what: "What to do when a record already exists. Rates and opening balances are always added.",
+                what: "What to do when a record already exists. Rates and opening balances are always added. A user in the file whose username belongs to a deleted user is restored with the file's details (a deleted user keeps its username), whatever this says; the dry run lists it as a warning.",
                 values: "Skip (default), Update, Add new",
               },
               {

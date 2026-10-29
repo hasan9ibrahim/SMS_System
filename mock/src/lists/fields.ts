@@ -3331,6 +3331,7 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "description", label: "Description", type: "text", defaultOperator: "like" }),
       field({ field: "moduleCount", label: "Pages", type: "integer", defaultOperator: "gte" }),
       field({ field: "fullAccess", label: "Every Page", type: "boolean", defaultOperator: "eq" }),
+      field({ field: "administrator", label: "Administrator", type: "boolean", defaultOperator: "eq" }),
       field({ field: "userCount", label: "Users", type: "integer", defaultOperator: "gte" }),
       field({ field: "status", label: "Status", type: "enum", defaultOperator: "in", enumValues: STATUS_VALUES }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),

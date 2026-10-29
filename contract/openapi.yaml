@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.112.0
+  version: 0.113.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -10512,6 +10512,8 @@ paths:
                 $ref: '#/components/schemas/UserSaved'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -10568,6 +10570,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ArchiveBlocked'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -10622,6 +10626,8 @@ paths:
                 $ref: '#/components/schemas/UserSaved'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -11080,6 +11086,8 @@ paths:
                 $ref: '#/components/schemas/AccessGroupSaved'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -11131,6 +11139,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/AccessGroupSaved'
         '409': *id002
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -27676,6 +27686,13 @@ components:
           - string
           - 'null'
           maxLength: 500
+        administrator:
+          type: boolean
+          default: false
+          description: Full administrator (team trial round 10). Its users see every page, the Admin pages included,
+            and may do what only administrators may (restore archived records, credential exports, overrides); the
+            permissions below do not limit them. Only an administrator can turn it on, change such a group or give it
+            to a user.
         hiddenTabs:
           type: array
           default: []
@@ -27707,6 +27724,7 @@ components:
       - type: object
         required:
         - id
+        - administrator
         - userCount
         - moduleCount
         - fullAccess

@@ -16298,6 +16298,11 @@ export type components = {
       status: components["schemas"]["RecordStatus"];
       description: string | null;
       /**
+       * @description Full administrator (team trial round 10). Its users see every page, the Admin pages included, and may do what only administrators may (restore archived records, credential exports, overrides); the permissions below do not limit them. Only an administrator can turn it on, change such a group or give it to a user.
+       * @default false
+       */
+      administrator: boolean;
+      /**
        * @description Tabs and sections the group does not see ("page.tab" keys from the catalogue; team trial round 2).
        * @default []
        */
@@ -29939,6 +29944,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
@@ -29994,6 +30000,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       /** @description Blocked by dependencies that must be settled first */
       409: {
@@ -30060,6 +30067,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
@@ -30554,6 +30562,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
@@ -30609,6 +30618,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       /** @description Blocked by dependencies that must be settled first */
       409: {
